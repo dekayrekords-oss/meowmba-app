@@ -69,9 +69,27 @@ trust channel every later bridge tool rides on:
   replay window. Tampered bodies, stale timestamps, and unsigned requests are
   rejected (smoke-tested).
 - **P6a surface:** `ping` and `status` RPCs, plus a Settings section
-  (pair / ping / unpair). File and build tools are P6b+ and will be confined
+  (pair / ping / unpair). File and build tools are P6b+ and are confined
   to workspace roots declared in the desktop's `config.json` — the no-shell
   security contract holds across the bridge.
+
+### P6b — read-only workspace file tools (complete)
+
+- **Daemon methods:** `list_files` and `read_file`, read-only, confined to
+  the `workspace_roots` declared in `~/.meowmba-bridge/config.json`. Paths
+  are resolved with `realpath` before the confinement check, so `../`,
+  absolute-path tricks, and symlink hops all fail with an honest 403.
+  Sensitive names (`.env`, private keys, certs, `local.properties`, …) are
+  filtered from listings and refused on read; only utf-8 text is served
+  (binary → 415), reads are size-capped (64 KB default, 256 KB max), and
+  listings cap at 500 entries.
+- **Phone:** `DesktopBridgeManager.listFiles` / `readFile` on the signed
+  channel, daemon error messages surfaced verbatim, and a read-only
+  workspace browser in Settings → Desktop Bridge (roots → directories →
+  size-capped file previews).
+- **Verified:** live smoke suite covers pairing, signing, replay/tamper
+  rejection, root listing, denylist filtering, traversal/absolute/symlink
+  escapes, truncation, binary refusal, and missing-path 404s.
 - **Interop is unit-tested:** the Kotlin signing/base64 code is verified
   against CPython-generated vectors (`DesktopBridgeProtocolTest`), and the
   daemon passes a live smoke test covering pairing, single-use tokens,

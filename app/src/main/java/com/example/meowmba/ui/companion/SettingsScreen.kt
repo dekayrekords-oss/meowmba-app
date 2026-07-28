@@ -1,6 +1,7 @@
 package com.example.meowmba.ui.companion
 
 import android.os.Build
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -9,7 +10,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.meowmba.core.bridge.DesktopBridgeManager
 import com.example.meowmba.core.security.SecureStorageManager
 import kotlinx.coroutines.launch
@@ -239,6 +242,9 @@ fun DesktopBridgeSection(secureStorage: SecureStorageManager) {
                 }
             ) { Text("Unpair") }
         }
+
+        Spacer(modifier = Modifier.height(12.dp))
+        BridgeWorkspaceBrowser(bridgeManager)
     } else {
         Text(
             text = "Run `meowmba-bridge.py --pair` on a computer on this network and paste the payload it prints.",
@@ -275,6 +281,148 @@ fun DesktopBridgeSection(secureStorage: SecureStorageManager) {
             style = MaterialTheme.typography.bodySmall,
             color = if (messageIsError) Color(0xFFE57373) else Color(0xFF81C784)
         )
+    }
+}
+
+/**
+ * Read-only browser for the paired desktop's workspace roots (P6b).
+ * Directories descend; files open a size-capped utf-8 preview. Every row the
+ * daemon served is shown — escapes and sensitive names never reach the list.
+ */
+@Composable
+fun BridgeWorkspaceBrowser(bridgeManager: DesktopBridgeManager) {
+    var active by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
+    var roots by remember { mutableStateOf<List<String>>(emptyList()) }
+    var currentPath by remember { mutableStateOf("") }
+    var entries by remember { mutableStateOf<List<DesktopBridgeManager.BridgeFileEntry>>(emptyList()) }
+    var listTruncated by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var preview by remember { mutableStateOf<DesktopBridgeManager.BridgeFileContent?>(null) }
+    val scope = rememberCoroutineScope()
+
+    fun load(path: String) {
+        scope.launch {
+            busy = true
+            error = null
+            bridgeManager.listFiles(path).fold(
+                onSuccess = {
+                    currentPath = it.path
+                    entries = it.entries
+                    listTruncated = it.truncated
+                },
+                onFailure = { error = it.message ?: "list failed" }
+            )
+            busy = false
+        }
+    }
+
+    TextButton(
+        enabled = !busy,
+        onClick = {
+            if (!active) {
+                active = true
+                scope.launch {
+                    busy = true
+                    roots = bridgeManager.status().getOrNull()?.workspaceRoots ?: emptyList()
+                    busy = false
+                    load("")
+                }
+            } else {
+                active = false
+                preview = null
+                error = null
+            }
+        }
+    ) {
+        Text(if (active) "Hide workspace browser" else "Browse workspace (read-only)", color = Color(0xFF58A6FF), fontSize = 13.sp)
+    }
+
+    if (active) {
+        if (roots.isEmpty()) {
+            Text(
+                "No workspace roots declared on the desktop — add them to ~/.meowmba-bridge/config.json",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFFD29922)
+            )
+        }
+        Text(currentPath, style = MaterialTheme.typography.bodySmall, color = Color.Gray, fontFamily = FontFamily.Monospace)
+        Spacer(modifier = Modifier.height(4.dp))
+
+        val floor = roots.firstOrNull()
+        if (floor != null && currentPath != floor) {
+            TextButton(onClick = { preview = null; load(currentPath.substringBeforeLast('/', "/")) }) {
+                Text(".. (up)", color = Color(0xFF58A6FF), fontSize = 12.sp)
+            }
+        }
+
+        error?.let {
+            Text(it, style = MaterialTheme.typography.bodySmall, color = Color(0xFFE57373))
+        }
+
+        entries.forEach { entry ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(enabled = !busy) {
+                        preview = null
+                        if (entry.dir) {
+                            load("$currentPath/${entry.name}")
+                        } else {
+                            scope.launch {
+                                busy = true
+                                error = null
+                                bridgeManager.readFile("$currentPath/${entry.name}", maxBytes = 8192).fold(
+                                    onSuccess = { preview = it },
+                                    onFailure = { error = it.message ?: "read failed" }
+                                )
+                                busy = false
+                            }
+                        }
+                    }
+                    .padding(vertical = 4.dp)
+            ) {
+                Text(
+                    text = if (entry.dir) "[dir] ${entry.name}" else "${entry.name} · ${entry.size / 1024} KB",
+                    color = if (entry.dir) Color(0xFF58A6FF) else Color.White,
+                    fontSize = 12.sp,
+                    fontFamily = if (entry.dir) FontFamily.Default else FontFamily.Monospace
+                )
+            }
+        }
+        if (listTruncated) {
+            Text("…listing capped by the desktop", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+        }
+
+        preview?.let { file ->
+            Spacer(modifier = Modifier.height(8.dp))
+            Surface(color = Color(0xFF161B22), shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            file.path.substringAfterLast('/'),
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            modifier = Modifier.weight(1f)
+                        )
+                        TextButton(onClick = { preview = null }) { Text("Close", fontSize = 11.sp) }
+                    }
+                    Text(
+                        file.content.take(4000),
+                        color = Color(0xFF9ECBFF),
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    if (file.truncated || file.content.length > 4000) {
+                        Text(
+                            "preview capped — full file is ${file.size / 1024} KB on the desktop",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.Gray
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 

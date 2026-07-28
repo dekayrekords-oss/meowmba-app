@@ -12,8 +12,10 @@ What it does (P6a scope):
     TLS channel. The token is single-use and expires after 10 minutes.
   * After pairing, every request must carry a valid HMAC-SHA256 signature
     (method + path + timestamp + body hash) with a 60-second replay window.
-  * v1 methods: "ping" and "status". File/build tools arrive in P6b+ and
-    will only ever touch workspace roots declared in config.json.
+  * P6b file tools: "list_files" and "read_file" — read-only, confined to
+    the workspace roots declared in ~/.meowmba-bridge/config.json. Path
+    escapes (../, absolute tricks, symlink hops) and sensitive names
+    (.env, keys, certs) are refused.
 
 Security contract (same as the phone):
   * No shell execution. Ever.
@@ -48,7 +50,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 CONFIG_DIR = Path.home() / ".meowmba-bridge"
 CERT_PATH = CONFIG_DIR / "cert.pem"
 KEY_PATH = CONFIG_DIR / "key.pem"
@@ -60,6 +62,27 @@ DEFAULT_PORT = 8765
 PAIR_TOKEN_TTL_S = 600
 MAX_SKEW_S = 60
 MAX_BODY_BYTES = 256 * 1024
+MAX_LIST_ENTRIES = 500
+DEFAULT_READ_BYTES = 64 * 1024
+MAX_READ_BYTES = 256 * 1024
+
+# Never listed or read through the bridge, even inside a workspace root.
+DENIED_NAMES = {
+    ".env", ".env.local", ".envrc", "id_rsa", "id_dsa", "id_ecdsa",
+    "id_ed25519", ".pem", ".key", ".crt", ".p12", ".pfx", ".keystore",
+    ".jks", ".netrc", ".pgpass", ".htpasswd", "shadow", "credentials",
+    "secrets.json", "local.properties",
+}
+DENIED_SUFFIXES = (".pem", ".key", ".crt", ".p12", ".pfx")
+
+
+def _is_denied_name(name: str) -> bool:
+    """Sensitive basenames refused by the bridge, incl. .env.* variants."""
+    return (
+        name in DENIED_NAMES
+        or name.startswith(".env.")
+        or name.endswith(DENIED_SUFFIXES)
+    )
 
 # Holds the single-use pairing token in memory only (never written to disk).
 _pair_state: dict = {}
@@ -268,8 +291,121 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 "workspace_roots": self.server.cfg.get("workspace_roots", []),
                 "paired_phone": pairing.get("phone_name"),
             })
+        elif method == "list_files":
+            self._rpc_list_files(data.get("params") or {})
+        elif method == "read_file":
+            self._rpc_read_file(data.get("params") or {})
         else:
-            self._send(400, {"error": f"unknown method '{method}' (P6a supports: ping, status)"})
+            self._send(400, {"error": f"unknown method '{method}' (supports: ping, status, list_files, read_file)"})
+
+    # -- workspace file tools (P6b, read-only) --------------------------------
+
+    def _workspace_roots(self) -> list:
+        roots = []
+        for r in self.server.cfg.get("workspace_roots", []):
+            try:
+                roots.append(os.path.realpath(os.path.expanduser(str(r))))
+            except OSError:
+                continue
+        return roots
+
+    def _resolve_in_workspace(self, raw_path, allow_root=False):
+        """Resolve raw_path inside a declared workspace root.
+
+        Returns (realpath, root) or (None, error-message). Absolute paths must
+        land inside a root; relative paths are tried against each root.
+        realpath() collapses ../ and symlink hops before the confinement check.
+        With allow_root, an empty path means the first workspace root itself.
+        """
+        roots = self._workspace_roots()
+        if not roots:
+            return None, "no workspace_roots declared in ~/.meowmba-bridge/config.json"
+        p = os.path.expanduser(str(raw_path or "").strip())
+        if not p:
+            if allow_root:
+                return roots[0], None
+            return None, "path required"
+        candidates = [p] if os.path.isabs(p) else [os.path.join(r, p) for r in roots]
+        for cand in candidates:
+            real = os.path.realpath(cand)
+            for root in roots:
+                if real == root or real.startswith(root + os.sep):
+                    return real, None
+        return None, "path escapes the declared workspace roots"
+
+    def _rpc_list_files(self, params: dict) -> None:
+        real, err = self._resolve_in_workspace(params.get("path", ""), allow_root=True)
+        if err:
+            self._send(403, {"error": err})
+            return
+        if not os.path.isdir(real):
+            self._send(404, {"error": "not a directory"})
+            return
+        entries = []
+        truncated = False
+        try:
+            with os.scandir(real) as it:
+                for e in it:
+                    if _is_denied_name(e.name):
+                        continue
+                    if len(entries) >= MAX_LIST_ENTRIES:
+                        truncated = True
+                        break
+                    try:
+                        is_dir = e.is_dir(follow_symlinks=False)
+                        size = 0 if is_dir else e.stat(follow_symlinks=False).st_size
+                    except OSError:
+                        continue
+                    entries.append({"name": e.name, "dir": is_dir, "size": size})
+        except OSError as ex:
+            self._send(403, {"error": f"cannot list: {ex.strerror or ex}"})
+            return
+        entries.sort(key=lambda x: (not x["dir"], x["name"].lower()))
+        self._send(200, {
+            "path": real,
+            "entries": entries,
+            "truncated": truncated,
+        })
+
+    def _rpc_read_file(self, params: dict) -> None:
+        raw = str(params.get("path", ""))
+        name = os.path.basename(raw)
+        if _is_denied_name(name):
+            self._send(403, {"error": "denied: sensitive file type"})
+            return
+        real, err = self._resolve_in_workspace(raw)
+        if err:
+            self._send(403, {"error": err})
+            return
+        if not os.path.isfile(real):
+            self._send(404, {"error": "not a file"})
+            return
+        try:
+            max_bytes = int(params.get("max_bytes", DEFAULT_READ_BYTES))
+        except (TypeError, ValueError):
+            max_bytes = DEFAULT_READ_BYTES
+        max_bytes = max(1, min(max_bytes, MAX_READ_BYTES))
+        try:
+            size = os.path.getsize(real)
+            with open(real, "rb") as f:
+                data = f.read(max_bytes + 1)
+        except OSError as ex:
+            self._send(403, {"error": f"cannot read: {ex.strerror or ex}"})
+            return
+        truncated = len(data) > max_bytes
+        if truncated:
+            data = data[:max_bytes]
+        try:
+            content = data.decode("utf-8")
+        except UnicodeDecodeError:
+            self._send(415, {"error": "binary file — only utf-8 text is served"})
+            return
+        self._send(200, {
+            "path": real,
+            "size": size,
+            "content": content,
+            "truncated": truncated,
+        })
 
 
 # --------------------------------------------------------------------------

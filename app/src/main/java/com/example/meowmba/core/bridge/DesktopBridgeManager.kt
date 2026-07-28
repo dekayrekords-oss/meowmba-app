@@ -4,12 +4,15 @@ import com.example.meowmba.core.security.SecureStorageManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonObject
 import java.net.URL
 import java.security.SecureRandom
 import java.security.cert.CertificateException
@@ -51,6 +54,12 @@ class DesktopBridgeManager(
         val workspaceRoots: List<String>,
         val pairedPhone: String
     )
+
+    data class BridgeFileEntry(val name: String, val dir: Boolean, val size: Long)
+
+    data class BridgeDirListing(val path: String, val entries: List<BridgeFileEntry>, val truncated: Boolean)
+
+    data class BridgeFileContent(val path: String, val size: Long, val content: String, val truncated: Boolean)
 
     // ------------------------------------------------------------------
     // Pairing state
@@ -138,8 +147,42 @@ class DesktopBridgeManager(
         )
     }
 
+    // ------------------------------------------------------------------
+    // File tools (P6b): read-only, workspace-confined by the daemon
+    // ------------------------------------------------------------------
+
+    /** List a directory inside the desktop's workspace roots ("" = first root). */
+    suspend fun listFiles(path: String): Result<BridgeDirListing> =
+        rpc("list_files", mapOf("path" to path)).mapCatching { body ->
+            val obj = Json.parseToJsonElement(body).jsonObject
+            BridgeDirListing(
+                path = obj["path"]?.jsonPrimitive?.content ?: path,
+                entries = obj["entries"]?.jsonArray?.map { e ->
+                    val o = e.jsonObject
+                    BridgeFileEntry(
+                        name = o["name"]?.jsonPrimitive?.content ?: "",
+                        dir = o["dir"]?.jsonPrimitive?.boolean ?: false,
+                        size = o["size"]?.jsonPrimitive?.long ?: 0
+                    )
+                } ?: emptyList(),
+                truncated = obj["truncated"]?.jsonPrimitive?.boolean ?: false
+            )
+        }
+
+    /** Read a utf-8 text file inside the workspace (size-capped by the daemon). */
+    suspend fun readFile(path: String, maxBytes: Int = 8192): Result<BridgeFileContent> =
+        rpc("read_file", mapOf("path" to path, "max_bytes" to maxBytes)).mapCatching { body ->
+            val obj = Json.parseToJsonElement(body).jsonObject
+            BridgeFileContent(
+                path = obj["path"]?.jsonPrimitive?.content ?: path,
+                size = obj["size"]?.jsonPrimitive?.long ?: 0,
+                content = obj["content"]?.jsonPrimitive?.content ?: "",
+                truncated = obj["truncated"]?.jsonPrimitive?.boolean ?: false
+            )
+        }
+
     /** Signed POST /rpc. Returns raw response body on HTTP 200. */
-    private suspend fun rpc(method: String): Result<String> = withContext(Dispatchers.IO) {
+    private suspend fun rpc(method: String, params: Map<String, Any?> = emptyMap()): Result<String> = withContext(Dispatchers.IO) {
         val bridge = pairedBridge()
             ?: return@withContext Result.failure(Exception("not paired — pair a desktop bridge first"))
         val secret = try {
@@ -147,7 +190,23 @@ class DesktopBridgeManager(
         } catch (e: Exception) {
             return@withContext Result.failure(Exception("stored bridge secret is corrupt — unpair and re-pair"))
         }
-        val body = """{"method":"$method"}""".toByteArray(Charsets.UTF_8)
+        val body = buildJsonObject {
+            put("method", method)
+            if (params.isNotEmpty()) {
+                putJsonObject("params") {
+                    params.forEach { (k, v) ->
+                        when (v) {
+                            null -> put(k, JsonNull)
+                            is String -> put(k, v)
+                            is Int -> put(k, v)
+                            is Long -> put(k, v)
+                            is Boolean -> put(k, v)
+                            else -> put(k, v.toString())
+                        }
+                    }
+                }
+            }
+        }.toString().toByteArray(Charsets.UTF_8)
         val ts = clock().toString()
         val canonical = DesktopBridgeProtocol.canonicalMessage(
             "POST", "/rpc", ts, DesktopBridgeProtocol.sha256Hex(body)
@@ -165,7 +224,14 @@ class DesktopBridgeManager(
             200 -> Result.success(String(result.second, Charsets.UTF_8))
             401 -> Result.failure(Exception("signature rejected — clocks out of sync or secret mismatch"))
             428 -> Result.failure(Exception("desktop forgot the pairing — re-pair"))
-            else -> Result.failure(Exception("bridge error (http ${result.first}): ${String(result.second, Charsets.UTF_8).take(160)}"))
+            else -> {
+                // The daemon's errors are JSON {"error": "human-readable"} — surface them as-is
+                val daemonMessage = runCatching {
+                    Json.parseToJsonElement(String(result.second, Charsets.UTF_8))
+                        .jsonObject["error"]?.jsonPrimitive?.content
+                }.getOrNull()
+                Result.failure(Exception(daemonMessage ?: "bridge error (http ${result.first})"))
+            }
         }
     }
 
