@@ -1092,7 +1092,19 @@ class CompanionViewModel(
     /** Point the local provider at any bundle present in the models dir (catalog or custom). */
     fun useInstalledModelFile(fileName: String) {
         val file = downloader?.listInstalled()?.firstOrNull { it.name == fileName } ?: return
+        // On-device runtimes need ~the file size again in working RAM; past
+        // ~45% of device RAM the load reliably crashes the app (observed:
+        // 5.3 GB bundle OOM-killed on a 12 GB phone). Warn, don't block.
+        val ramGb = secureStorage?.context?.let { com.example.meowmba.core.utils.SystemUtils.getTotalRamGb(it) }
+        val tooLarge = ramGb != null &&
+            file.length() > (ramGb * 1_073_741_824L * 0.45).toLong()
         installDownloadedModel(file.absolutePath)
+        if (tooLarge) {
+            _uiState.value = _uiState.value.copy(
+                connectionTestResult = "Warning: ${file.name} is ${file.length() / 1_073_741_824L} GB — " +
+                    "likely too large for this phone; expect a crash on first reply"
+            )
+        }
         if (!_uiState.value.selectedModel.contains("(Local)")) {
             onModelSelected("Gemma 2b (Local)")
         }

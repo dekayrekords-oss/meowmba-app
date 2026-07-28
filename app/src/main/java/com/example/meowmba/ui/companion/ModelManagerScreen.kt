@@ -248,6 +248,7 @@ fun ModelManagerScreen(
                 customInstalled.forEach { file ->
                     CustomInstalledItem(
                         file = file,
+                        ramGb = ram,
                         isActive = state.loadedModels.activeSource == ModelSource.LOCAL &&
                             java.io.File(state.loadedModels.localPath).name == file.fileName,
                         onUse = { onUseInstalledFile(file.fileName) },
@@ -477,10 +478,15 @@ fun CatalogModelItem(
 @Composable
 fun CustomInstalledItem(
     file: InstalledModelFile,
+    ramGb: Double,
     isActive: Boolean,
     onUse: () -> Unit,
     onDelete: () -> Unit
 ) {
+    // On-device runtimes need roughly the file size again in working RAM on
+    // top of the system; files past ~45% of device RAM crash phones in practice.
+    val tooLarge = file.sizeBytes > ramGb * 1_073_741_824L * 0.45
+
     Surface(
         color = Color(0xFF161B22),
         shape = RoundedCornerShape(12.dp),
@@ -495,9 +501,21 @@ fun CustomInstalledItem(
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Medium
             )
+            if (tooLarge) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    "Likely too large for this %.0f GB phone — loading it can crash the app.".format(ramGb),
+                    color = Color(0xFFF85149),
+                    fontSize = 11.sp
+                )
+            }
             Spacer(modifier = Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Badge(Color(0xFF3FB950), "INSTALLED")
+                if (tooLarge) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Badge(Color(0xFFF85149), "TOO LARGE")
+                }
                 if (isActive) {
                     Spacer(modifier = Modifier.width(8.dp))
                     Badge(Color(0xFF3FB950), "ACTIVE")
