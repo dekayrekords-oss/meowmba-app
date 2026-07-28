@@ -241,11 +241,13 @@ fun CompanionScreen(
                 conversationMode = uiState.conversationMode,
                 agentBrainEnabled = uiState.agentBrainEnabled,
                 hermesAgentUrl = uiState.hermesAgentUrl,
+                backgroundListeningEnabled = uiState.backgroundListeningEnabled,
                 onCompanionNameChange = { viewModel.renameCompanion(it) },
                 onWakeWordChange = { viewModel.setWakeWordEnabled(it) },
                 onConversationModeChange = { viewModel.setConversationMode(it) },
                 onAgentBrainChange = { viewModel.setAgentBrainEnabled(it) },
                 onHermesUrlChange = { viewModel.setHermesAgentUrl(it) },
+                onBackgroundListeningChange = { viewModel.setBackgroundListeningEnabled(it) },
                 onClose = { viewModel.toggleSettings() }
             )
         }

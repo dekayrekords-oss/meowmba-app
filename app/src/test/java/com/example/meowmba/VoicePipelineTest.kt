@@ -262,4 +262,25 @@ class VoicePipelineTest {
         assertEquals(1, fakeTts.stopCalls)
         assertEquals(InteractionState.LISTENING, viewModel.uiState.value.interactionState)
     }
+
+    @Test
+    fun `background wake command routes through the normal pipeline`() = runTest {
+        viewModel.onExternalWakeCommand("what time is it")
+        assertEquals(InteractionState.THINKING, viewModel.uiState.value.interactionState)
+        advanceUntilIdle()
+        assertEquals(1, fakeTts.spokenTexts.size)
+    }
+
+    @Test
+    fun `blank background wake command is ignored`() = runTest {
+        viewModel.onExternalWakeCommand("   ")
+        assertEquals(InteractionState.IDLE, viewModel.uiState.value.interactionState)
+    }
+
+    @Test
+    fun `background listening toggle updates state`() = runTest {
+        assertEquals(false, viewModel.uiState.value.backgroundListeningEnabled)
+        viewModel.setBackgroundListeningEnabled(true)
+        assertEquals(true, viewModel.uiState.value.backgroundListeningEnabled)
+    }
 }

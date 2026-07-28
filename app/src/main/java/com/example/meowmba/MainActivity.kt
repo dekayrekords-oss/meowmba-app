@@ -1,7 +1,9 @@
 package com.example.meowmba
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -16,6 +18,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.meowmba.core.audio.AudioStreamingManager
 import com.example.meowmba.core.audio.SpeechService
+import com.example.meowmba.core.audio.WakeWordService
 import com.example.meowmba.core.audio.TextToSpeechManager
 import com.example.meowmba.core.database.MeowmbaDatabase
 import com.example.meowmba.core.memory.MemoryRepository
@@ -30,6 +33,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var secureStorage: SecureStorageManager
     private lateinit var memoryRepository: MemoryRepository
     private lateinit var audioStreamingManager: AudioStreamingManager
+    private var companionViewModel: CompanionViewModel? = null
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -71,7 +75,7 @@ class MainActivity : ComponentActivity() {
                                 auditDao = auditDao,
                                 workspaceRoot = workspaceRoot,
                                 modelsDir = modelsDir
-                            ) as T
+                            ).also { companionViewModel = it } as T
                         }
                     }
                 )
@@ -101,6 +105,43 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+
+        consumeWakeCommand(intent)
+    }
+
+    // ── Background wake-word handoff (Phase 2.5) ────────────────────────────
+
+    override fun onResume() {
+        super.onResume()
+        // The in-app engine owns the mic while we are visible
+        WakeWordService.stop(this)
+        consumeWakeCommand(intent)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // Hand the mic to the foreground service only when the user opted in
+        // to BOTH wake phrase and background listening, and mic is granted.
+        val wakeOn = secureStorage.getBooleanPreference("wake_word_enabled", false)
+        val backgroundOn = secureStorage.getBooleanPreference(WakeWordService.PREF_KEY, false)
+        val micGranted = ContextCompat.checkSelfPermission(
+            this, Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+        if (wakeOn && backgroundOn && micGranted) {
+            WakeWordService.start(this)
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        consumeWakeCommand(intent)
+    }
+
+    private fun consumeWakeCommand(source: Intent?) {
+        val command = source?.getStringExtra(WakeWordService.EXTRA_WAKE_COMMAND) ?: return
+        source.removeExtra(WakeWordService.EXTRA_WAKE_COMMAND)
+        companionViewModel?.onExternalWakeCommand(command)
     }
 
     private fun checkPermissions() {
@@ -110,6 +151,13 @@ class MainActivity : ComponentActivity() {
             ) != PackageManager.PERMISSION_GRANTED
         ) {
             requestPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(
+                this, Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
 

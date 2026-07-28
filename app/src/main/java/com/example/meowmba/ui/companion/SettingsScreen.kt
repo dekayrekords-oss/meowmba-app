@@ -23,11 +23,13 @@ fun SettingsScreen(
     conversationMode: Boolean = false,
     agentBrainEnabled: Boolean = true,
     hermesAgentUrl: String = "",
+    backgroundListeningEnabled: Boolean = false,
     onCompanionNameChange: (String) -> Unit = {},
     onWakeWordChange: (Boolean) -> Unit = {},
     onConversationModeChange: (Boolean) -> Unit = {},
     onAgentBrainChange: (Boolean) -> Unit = {},
     onHermesUrlChange: (String) -> Unit = {},
+    onBackgroundListeningChange: (Boolean) -> Unit = {},
     onClose: () -> Unit
 ) {
     var openaiKey by remember { mutableStateOf(secureStorage.getApiKey("openai") ?: "") }
@@ -76,6 +78,14 @@ fun SettingsScreen(
                 description = "Always-on listening for the wake phrase while the app is open. Runs on-device.",
                 checked = wakeWordEnabled,
                 onCheckedChange = onWakeWordChange
+            )
+            VoiceToggle(
+                label = "Background wake phrase",
+                description = "Keeps listening with the screen off via a persistent " +
+                    "notification (foreground service). Uses more battery. Requires " +
+                    "the wake phrase to be enabled.",
+                checked = backgroundListeningEnabled,
+                onCheckedChange = onBackgroundListeningChange
             )
             VoiceToggle(
                 label = "Conversation mode",

@@ -93,6 +93,28 @@ The Hardware page installs real on-device models — no adb required:
 - An installed model is adopted automatically at startup; "Use"/"Delete"
   per model; the "no model installed" banner disappears once one exists.
 
+## Phase 2.5: Background Wake Word (Completed)
+
+The wake phrase now works with the screen off, the way Android allows it:
+
+- **Foreground service** (`WakeWordService`) with
+  `foregroundServiceType="microphone"` — the only sanctioned way to hold the
+  mic in the background. A persistent low-importance notification is always
+  visible, with a **Stop** action that disables background listening.
+- **Explicit opt-in only:** Settings → "Background wake phrase" (off by
+  default, persisted). The service starts when the app goes to background and
+  only when wake phrase + background listening + mic permission all hold.
+- **Clean handoff:** service starts in `onPause`, stops in `onResume` — the
+  in-app engine and the service never hold the mic at once.
+- **Screen-off flow:** say the wake phrase → the companion answers "Yes?"
+  aloud → speak your command → a high-priority notification delivers it;
+  tapping opens Meowmba with the command already streaming through the normal
+  pipeline. (Android 10+ blocks background activity launches, so a
+  notification is the honest, policy-compliant bridge.)
+- Battery note: continuous recognition in the background costs power — the
+  trade-off is stated in the toggle's description, and recognition prefers
+  on-device.
+
 ## Phase 3: Model Routing (Completed)
 
 - **Live streaming inference:** Ollama (NDJSON `/api/generate`) and OpenAI-compatible (SSE `/v1/chat/completions` — also covers llama.cpp/vLLM-style servers), plus on-device MediaPipe LLM Inference. Line parsing lives in pure, unit-tested `StreamParsers`.
@@ -170,9 +192,9 @@ The cat avatar uses the **Memba 2 animation design** (the face that runs on the 
 3. Run the `app` module on an Android emulator or physical device (Min SDK 24).
 
 ## Project Roadmap
-- **Phase 2.5 (planned, not forgotten):** background always-listening — a justified
-  foreground service (`FOREGROUND_SERVICE_MICROPHONE` + persistent notification) so
-  the wake phrase works with the screen off. Currently wake listening runs only
-  while the app is open.
-- **Phase 4:** Long-term Memory (Room/Embeddings).
-- **Phase 5-10:** Agents, Vision, Ecosystem Integration.
+- **Phase 6:** Desktop bridge (paired computers, approved file/build operations).
+- **Phase 7:** Vision (CameraX, face-follow, scene descriptions via multimodal model).
+- **Phase 8:** Advanced avatar (expanded animation registry).
+- **Phase 9:** Desk & car modes.
+- **Phase 10:** Ecosystem.
+- Also queued: llama.cpp provider (run any GGUF on-device).

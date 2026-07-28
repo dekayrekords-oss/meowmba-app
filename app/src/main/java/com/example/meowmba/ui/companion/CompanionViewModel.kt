@@ -154,7 +154,8 @@ class CompanionViewModel(
                 wakeWordEnabled = storage.getBooleanPreference(KEY_WAKE_WORD, false),
                 conversationMode = storage.getBooleanPreference(KEY_CONVERSATION, false),
                 agentBrainEnabled = storage.getBooleanPreference(KEY_AGENT_BRAIN, true),
-                hermesAgentUrl = storage.getPreference(KEY_HERMES_URL) ?: ""
+                hermesAgentUrl = storage.getPreference(KEY_HERMES_URL) ?: "",
+                backgroundListeningEnabled = storage.getBooleanPreference(KEY_BACKGROUND_LISTENING, false)
             )
         }
         matcher = WakePhraseMatcher(_uiState.value.name)
@@ -1069,6 +1070,22 @@ class CompanionViewModel(
         rebuildHermesBrain()
     }
 
+    /** Background wake-phrase listening toggle (persisted; service runs via MainActivity). */
+    fun setBackgroundListeningEnabled(enabled: Boolean) {
+        _uiState.value = _uiState.value.copy(backgroundListeningEnabled = enabled)
+        secureStorage?.saveBooleanPreference(KEY_BACKGROUND_LISTENING, enabled)
+    }
+
+    /**
+     * A command captured by the background wake service: routed through the
+     * exact same pipeline as an in-app utterance.
+     */
+    fun onExternalWakeCommand(command: String) {
+        if (command.isBlank()) return
+        wakeWordEngine?.stop()
+        processUserSpeech(command)
+    }
+
     private fun rebuildHermesBrain() {
         hermesBrain = _uiState.value.hermesAgentUrl
             .takeIf { it.isNotBlank() }
@@ -1149,6 +1166,7 @@ class CompanionViewModel(
         private const val KEY_RETENTION_DAYS = "retention_days"
         private const val KEY_AGENT_BRAIN = "agent_brain_enabled"
         private const val KEY_HERMES_URL = "hermes_agent_url"
+        private const val KEY_BACKGROUND_LISTENING = "background_listening"
         private const val DEFAULT_RETENTION_DAYS = 90
         private const val FOLLOW_UP_TIMEOUT_MS = 8000L
         private const val ERROR_DISPLAY_MS = 3500L

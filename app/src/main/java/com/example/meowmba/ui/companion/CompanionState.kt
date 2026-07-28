@@ -75,7 +75,9 @@ data class CompanionState(
     /** Optional Hermes Agent endpoint (OpenAI-compatible). Blank = on-device only. */
     val hermesAgentUrl: String = "",
     /** Active model downloads by id (catalog option id or "custom:<fileName>"). */
-    val modelDownloads: Map<String, ModelDownloader.DownloadProgress> = emptyMap()
+    val modelDownloads: Map<String, ModelDownloader.DownloadProgress> = emptyMap(),
+    /** Keep listening for the wake phrase in the background (foreground service). */
+    val backgroundListeningEnabled: Boolean = false
 )
 
 /**
