@@ -156,7 +156,13 @@ class CompanionViewModel(
                 conversationMode = storage.getBooleanPreference(KEY_CONVERSATION, false),
                 agentBrainEnabled = storage.getBooleanPreference(KEY_AGENT_BRAIN, true),
                 hermesAgentUrl = storage.getPreference(KEY_HERMES_URL) ?: "",
-                backgroundListeningEnabled = storage.getBooleanPreference(KEY_BACKGROUND_LISTENING, false)
+                backgroundListeningEnabled = storage.getBooleanPreference(KEY_BACKGROUND_LISTENING, false),
+                // Restore the provider picked last session — but only if it is
+                // still a buildable provider; a stale/removed label falls back
+                // to the default instead of producing a silent null provider.
+                selectedModel = storage.getPreference(KEY_SELECTED_MODEL)
+                    ?.takeIf { it in modelProviders }
+                    ?: _uiState.value.selectedModel
             )
         }
         matcher = WakePhraseMatcher(_uiState.value.name)
@@ -949,6 +955,7 @@ class CompanionViewModel(
 
     fun onModelSelected(model: String) {
         _uiState.value = _uiState.value.copy(selectedModel = model)
+        secureStorage?.savePreference(KEY_SELECTED_MODEL, model)
         updateProvider(model)
     }
 
@@ -1244,6 +1251,7 @@ class CompanionViewModel(
         private const val KEY_AGENT_BRAIN = "agent_brain_enabled"
         private const val KEY_HERMES_URL = "hermes_agent_url"
         private const val KEY_BACKGROUND_LISTENING = "background_listening"
+        private const val KEY_SELECTED_MODEL = "selected_model"
         private const val DEFAULT_RETENTION_DAYS = 90
         private const val FOLLOW_UP_TIMEOUT_MS = 8000L
         private const val ERROR_DISPLAY_MS = 3500L

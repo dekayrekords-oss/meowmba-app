@@ -70,11 +70,15 @@ fun ModelItem(name: String, isSelected: Boolean, onClick: () -> Unit) {
     }
 }
 
+/**
+ * Provider picker entries. Honesty contract: only providers that
+ * [CompanionViewModel.updateProvider] can actually build are listed here —
+ * no stub entries that would silently produce a null provider.
+ * ("Phi-3 Mini (Local)", "Anthropic (Cloud)", "Memba Custom (Remote)" were
+ * removed: they were never wired up and trapped users in "no model is ready".)
+ */
 val modelProviders = listOf(
     "Gemma 2b (Local)",
-    "Phi-3 Mini (Local)",
     "Ollama (Local Network)",
     "OpenAI (Cloud)",
-    "Anthropic (Cloud)",
-    "Memba Custom (Remote)"
 )

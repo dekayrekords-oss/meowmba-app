@@ -127,4 +127,34 @@ class ModelStatusTest {
 
         assertEquals(ModelSource.NETWORK, vm.uiState.value.loadedModels.activeSource)
     }
+
+    @Test
+    fun `every provider-picker entry builds a real provider`() = runTest {
+        // Regression net: picker entries that build nothing trap users in
+        // "No model is ready" (the removed Phi-3/Anthropic/Memba-Custom stubs).
+        val vm = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
+        com.example.meowmba.ui.companion.modelProviders.forEach { label ->
+            vm.onModelSelected(label)
+            org.junit.Assert.assertNotNull("picker entry '$label' builds no provider", vm.currentProvider)
+        }
+    }
+
+    @Test
+    fun `provider selection persists across restarts`() = runTest {
+        `when`(mockSecureStorage.getPreference("selected_model")).thenReturn("Ollama (Local Network)")
+        val vm = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
+
+        assertEquals("Ollama (Local Network)", vm.uiState.value.selectedModel)
+        assertEquals(ModelSource.NETWORK, vm.uiState.value.loadedModels.activeSource)
+    }
+
+    @Test
+    fun `stale persisted provider falls back to default honestly`() = runTest {
+        // A label removed in a later version must not resurrect the null-provider trap
+        `when`(mockSecureStorage.getPreference("selected_model")).thenReturn("Phi-3 Mini (Local)")
+        val vm = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
+
+        assertEquals("Gemma 2b (Local)", vm.uiState.value.selectedModel)
+        org.junit.Assert.assertNotNull(vm.currentProvider)
+    }
 }
