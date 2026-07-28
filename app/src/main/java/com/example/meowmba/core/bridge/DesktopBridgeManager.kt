@@ -63,6 +63,14 @@ class DesktopBridgeManager(
 
     data class BridgeWriteResult(val path: String, val size: Long, val created: Boolean, val backup: String?)
 
+    data class BridgeBuildResult(
+        val name: String,
+        val exitCode: Int,
+        val durationSeconds: Double,
+        val timedOut: Boolean,
+        val output: String
+    )
+
     // ------------------------------------------------------------------
     // Pairing state
     // ------------------------------------------------------------------
@@ -196,6 +204,23 @@ class DesktopBridgeManager(
                 size = obj["size"]?.jsonPrimitive?.long ?: 0,
                 created = obj["created"]?.jsonPrimitive?.boolean ?: false,
                 backup = obj["backup"]?.jsonPrimitive?.content
+            )
+        }
+
+    /**
+     * Run a named, pre-declared build command on the desktop (P6d). The
+     * daemon only ever runs fixed argv from its config.json — no shell, no
+     * arbitrary commands. Long-running: the daemon enforces its own timeout.
+     */
+    suspend fun runBuild(name: String): Result<BridgeBuildResult> =
+        rpc("run_build", mapOf("name" to name)).mapCatching { body ->
+            val obj = Json.parseToJsonElement(body).jsonObject
+            BridgeBuildResult(
+                name = obj["name"]?.jsonPrimitive?.content ?: name,
+                exitCode = obj["exit_code"]?.jsonPrimitive?.long?.toInt() ?: -1,
+                durationSeconds = obj["duration_s"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
+                timedOut = obj["timed_out"]?.jsonPrimitive?.boolean ?: false,
+                output = obj["output"]?.jsonPrimitive?.content ?: ""
             )
         }
 

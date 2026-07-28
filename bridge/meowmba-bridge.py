@@ -19,6 +19,10 @@ What it does (P6a scope):
   * P6c: "write_file" — same confinement, utf-8 text only, atomic
     (temp file + rename), existing files are backed up first
     (<name>.bak-<timestamp>), and every write is appended to bridge.log.
+  * P6d: "run_build" — runs ONLY the named commands pre-declared in
+    config.json ("commands": {"name": {"argv": [...], "cwd": "...",
+    "timeout_s": 600}}). No shell, no arbitrary commands, cwd confined
+    to workspace roots, output capped, every run audit-logged.
 
 Security contract (same as the phone):
   * No shell execution. Ever.
@@ -53,7 +57,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 CONFIG_DIR = Path.home() / ".meowmba-bridge"
 CERT_PATH = CONFIG_DIR / "cert.pem"
 KEY_PATH = CONFIG_DIR / "key.pem"
@@ -69,6 +73,8 @@ MAX_LIST_ENTRIES = 500
 DEFAULT_READ_BYTES = 64 * 1024
 MAX_READ_BYTES = 256 * 1024
 MAX_WRITE_BYTES = 256 * 1024
+MAX_BUILD_OUTPUT_BYTES = 32 * 1024
+MAX_BUILD_TIMEOUT_S = 3600
 
 # Never listed or read through the bridge, even inside a workspace root.
 DENIED_NAMES = {
@@ -306,8 +312,10 @@ class BridgeHandler(BaseHTTPRequestHandler):
             self._rpc_read_file(data.get("params") or {})
         elif method == "write_file":
             self._rpc_write_file(data.get("params") or {}, pairing)
+        elif method == "run_build":
+            self._rpc_run_build(data.get("params") or {}, pairing)
         else:
-            self._send(400, {"error": f"unknown method '{method}' (supports: ping, status, list_files, read_file, write_file)"})
+            self._send(400, {"error": f"unknown method '{method}' (supports: ping, status, list_files, read_file, write_file, run_build)"})
 
     # -- workspace file tools (P6b, read-only) --------------------------------
 
@@ -488,6 +496,68 @@ class BridgeHandler(BaseHTTPRequestHandler):
             "size": len(data),
             "created": created,
             "backup": backup,
+        })
+
+    def _rpc_run_build(self, params: dict, pairing: dict) -> None:
+        """Run a named, pre-declared command (P6d). No shell, ever."""
+        name = str(params.get("name", ""))
+        commands = self.server.cfg.get("commands", {})
+        entry = commands.get(name)
+        if not isinstance(entry, dict):
+            available = ", ".join(sorted(commands)) or "none declared"
+            self._send(400, {"error": f"unknown command '{name}' (declared: {available})"})
+            return
+        argv = entry.get("argv")
+        if not isinstance(argv, list) or not argv or not all(isinstance(a, str) for a in argv):
+            self._send(500, {"error": f"command '{name}' has an invalid argv in config.json"})
+            return
+        try:
+            timeout_s = max(1, min(int(entry.get("timeout_s", 600)), MAX_BUILD_TIMEOUT_S))
+        except (TypeError, ValueError):
+            timeout_s = 600
+
+        # cwd: declared cwd or the first workspace root — confined either way.
+        roots = self._workspace_roots()
+        if not roots:
+            self._send(403, {"error": "no workspace_roots declared in ~/.meowmba-bridge/config.json"})
+            return
+        cwd = os.path.realpath(os.path.expanduser(str(entry.get("cwd") or roots[0])))
+        if not any(cwd == r or cwd.startswith(r + os.sep) for r in roots):
+            self._send(403, {"error": f"command '{name}' cwd escapes the declared workspace roots"})
+            return
+        if not os.path.isdir(cwd):
+            self._send(404, {"error": f"command '{name}' cwd does not exist"})
+            return
+
+        started = time.time()
+        timed_out = False
+        try:
+            proc = subprocess.run(
+                argv, cwd=cwd, capture_output=True, timeout=timeout_s, check=False
+            )
+            rc = proc.returncode
+            output = (proc.stdout + proc.stderr).decode("utf-8", errors="replace")
+        except subprocess.TimeoutExpired as ex:
+            rc = -9
+            timed_out = True
+            partial = (ex.stdout or b"") + (ex.stderr or b"")
+            output = partial.decode("utf-8", errors="replace")
+        except OSError as ex:
+            self._send(500, {"error": f"could not start '{name}': {ex}"})
+            return
+        duration = time.time() - started
+        output = output[-MAX_BUILD_OUTPUT_BYTES:]
+
+        _log(
+            f"run_build: {name} exit={rc} dur={duration:.1f}s "
+            f"{'TIMEOUT ' if timed_out else ''}by '{pairing.get('phone_name')}'"
+        )
+        self._send(200, {
+            "name": name,
+            "exit_code": rc,
+            "duration_s": round(duration, 1),
+            "timed_out": timed_out,
+            "output": output,
         })
 
 

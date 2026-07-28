@@ -33,6 +33,7 @@ import com.example.meowmba.core.agent.tools.TaskListTool
 import com.example.meowmba.core.agent.tools.ToolRegistry
 import com.example.meowmba.core.agent.tools.Workspace
 import com.example.meowmba.core.agent.tools.DesktopWriteFileTool
+import com.example.meowmba.core.agent.tools.DesktopRunBuildTool
 import com.example.meowmba.core.audio.AudioStreamingManager
 import com.example.meowmba.core.bridge.DesktopBridgeManager
 import com.example.meowmba.core.audio.RecognizerWakeWordEngine
@@ -265,9 +266,13 @@ class CompanionViewModel(
             toolRegistry.register(FileListTool(workspace))
             toolRegistry.register(ProjectCreateTool(workspace))
         }
-        // Phase 6c: the desktop bridge write tool rides the same registry —
-        // the orchestrator's approval card gates it like any MODERATE tool.
-        secureStorage?.let { toolRegistry.register(DesktopWriteFileTool(DesktopBridgeManager(it))) }
+        // Phase 6c/6d: desktop bridge tools ride the same registry — the
+        // orchestrator's approval card gates them like any MODERATE/DESTRUCTIVE tool.
+        secureStorage?.let {
+            val bridgeManager = DesktopBridgeManager(it)
+            toolRegistry.register(DesktopWriteFileTool(bridgeManager))
+            toolRegistry.register(DesktopRunBuildTool(bridgeManager))
+        }
         if (memoryRepository != null || workspaceRoot != null) {
             agentToolRegistry = toolRegistry
             val orchestrator = AgentOrchestrator(viewModelScope, toolRegistry, agentAuditSink)

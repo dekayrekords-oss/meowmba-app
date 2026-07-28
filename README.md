@@ -104,6 +104,19 @@ trust channel every later bridge tool rides on:
 - Smoke suite now covers create/overwrite/backup/read-back, denylist and
   escape refusals, unicode round-trips, missing parents, and audit-log
   entries; unit tests pin the tool's policy contract.
+
+### P6d — named build triggers + audit (complete)
+
+- **Daemon `run_build`:** runs ONLY commands pre-declared by name in the
+  desktop's own `config.json` (`commands: {name: {argv, cwd, timeout_s}}`).
+  argv is a fixed list (no shell — same contract as the phone), cwd is
+  confined to workspace roots, output is capped (last 32 KB), timeouts
+  kill, and every run lands in `bridge.log` with exit code and duration.
+- **Phone:** `desktop.run_build` — DESTRUCTIVE, approval-card gated, with
+  the exit code and output tail spoken/rendered. Undeclared names fail
+  with the list of what IS declared.
+- Ready on your Mac: `assemble-meowmba` and `test-meowmba` are declared in
+  `~/.meowmba-bridge/config.json`. Add your own the same way.
 - **Interop is unit-tested:** the Kotlin signing/base64 code is verified
   against CPython-generated vectors (`DesktopBridgeProtocolTest`), and the
   daemon passes a live smoke test covering pairing, single-use tokens,
