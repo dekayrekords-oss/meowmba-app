@@ -1,5 +1,6 @@
 package com.example.meowmba.ui.companion
 
+import android.os.Build
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -9,7 +10,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.example.meowmba.core.bridge.DesktopBridgeManager
 import com.example.meowmba.core.security.SecureStorageManager
+import kotlinx.coroutines.launch
 
 /**
  * Settings screen: companion voice (name, wake phrase, conversation mode)
@@ -117,6 +120,11 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            // Desktop Bridge (Phase 6): pair with a computer running meowmba-bridge.py
+            DesktopBridgeSection(secureStorage)
+
+            Spacer(modifier = Modifier.height(24.dp))
+
             // OpenAI Configuration
             Text("OpenAI Cloud", style = MaterialTheme.typography.titleMedium, color = Color.White)
             SettingsTextField(
@@ -182,6 +190,91 @@ fun SettingsScreen(
                 Text("Save and Close")
             }
         }
+    }
+}
+
+@Composable
+fun DesktopBridgeSection(secureStorage: SecureStorageManager) {
+    val bridgeManager = remember { DesktopBridgeManager(secureStorage) }
+    var paired by remember { mutableStateOf(bridgeManager.pairedBridge()) }
+    var payload by remember { mutableStateOf("") }
+    var message by remember { mutableStateOf<String?>(null) }
+    var messageIsError by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    Text("Desktop Bridge", style = MaterialTheme.typography.titleMedium, color = Color.White)
+    Spacer(modifier = Modifier.height(4.dp))
+
+    val current = paired
+    if (current != null) {
+        Text("Paired: ${current.name} (${current.host}:${current.port})", color = Color.White)
+        Text(
+            text = "cert ${current.certSha256.take(16)}… · requests are HMAC-signed, cert pinned",
+            style = MaterialTheme.typography.bodySmall,
+            color = Color.Gray
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Row {
+            OutlinedButton(
+                enabled = !busy,
+                onClick = {
+                    scope.launch {
+                        busy = true
+                        message = bridgeManager.ping().fold(
+                            onSuccess = { messageIsError = false; "Pong — desktop alive (ts $it)" },
+                            onFailure = { messageIsError = true; it.message ?: "ping failed" }
+                        )
+                        busy = false
+                    }
+                }
+            ) { Text(if (busy) "…" else "Ping") }
+            Spacer(modifier = Modifier.width(12.dp))
+            OutlinedButton(
+                enabled = !busy,
+                onClick = {
+                    bridgeManager.unpair()
+                    paired = null
+                    message = null
+                }
+            ) { Text("Unpair") }
+        }
+    } else {
+        Text(
+            text = "Run `meowmba-bridge.py --pair` on a computer on this network and paste the payload it prints.",
+            style = MaterialTheme.typography.bodySmall,
+            color = Color.Gray
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        SettingsTextField(
+            value = payload,
+            onValueChange = { payload = it },
+            label = { Text("Pairing payload") },
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedButton(
+            enabled = !busy && payload.isNotBlank(),
+            onClick = {
+                scope.launch {
+                    busy = true
+                    message = bridgeManager.pair(payload.trim(), Build.MODEL ?: "phone").fold(
+                        onSuccess = { messageIsError = false; paired = bridgeManager.pairedBridge(); "Paired with $it" },
+                        onFailure = { messageIsError = true; it.message ?: "pairing failed" }
+                    )
+                    busy = false
+                }
+            }
+        ) { Text(if (busy) "Pairing…" else "Pair desktop") }
+    }
+
+    message?.let {
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = it,
+            style = MaterialTheme.typography.bodySmall,
+            color = if (messageIsError) Color(0xFFE57373) else Color(0xFF81C784)
+        )
     }
 }
 

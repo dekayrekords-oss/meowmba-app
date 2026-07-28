@@ -49,6 +49,37 @@ Configuration: Settings → "Agent brain" toggle (master switch), "Hermes agent
 endpoint" (blank = on-device only). Everything runs through the
 `AgentBrainRouter` adapter seam — no coupling to any one agent framework.
 
+## Phase 6: Desktop Bridge (P6a — pairing & signed channel, complete)
+
+Meowmba can pair with exactly one computer running `bridge/meowmba-bridge.py`
+(single file, Python 3.9+ stdlib only, no pip installs). P6a establishes the
+trust channel every later bridge tool rides on:
+
+- **Pairing:** run `python3 bridge/meowmba-bridge.py --pair` on the desktop; it
+  prints a one-time payload (10-minute window). Enter it in Meowmba → Settings →
+  Desktop Bridge. The phone generates a 256-bit secret, hands it over once over
+  the pinned TLS channel, and stores it in Keystore-encrypted preferences; the
+  desktop stores it in `~/.meowmba-bridge/paired.json` (chmod 600).
+- **Cert pinning:** the daemon serves HTTPS with a locally generated
+  self-signed cert (openssl, one-time). The phone pins the cert's SHA-256 from
+  the pairing payload and refuses any other certificate.
+- **Signed requests:** every request after pairing carries
+  `X-Meowmba-Timestamp` + `X-Meowmba-Signature` (HMAC-SHA256 over
+  `method + path + timestamp + sha256(body)`); the daemon enforces a 60-second
+  replay window. Tampered bodies, stale timestamps, and unsigned requests are
+  rejected (smoke-tested).
+- **P6a surface:** `ping` and `status` RPCs, plus a Settings section
+  (pair / ping / unpair). File and build tools are P6b+ and will be confined
+  to workspace roots declared in the desktop's `config.json` — the no-shell
+  security contract holds across the bridge.
+- **Interop is unit-tested:** the Kotlin signing/base64 code is verified
+  against CPython-generated vectors (`DesktopBridgeProtocolTest`), and the
+  daemon passes a live smoke test covering pairing, single-use tokens,
+  signature checks, and replay rejection.
+- Honest limits: LAN-direct only (no relay yet); the Settings UI has been
+  built and unit-tested at the protocol layer but still needs an on-device
+  run against a real desktop.
+
 ## Phase 5: Agents & Tools (Completed)
 
 - **Agent runtime:** the companion orchestrates specialist agents — Keeper (memory), Shelve (files), Builder (projects), Forge (coding), Scout (research, marked LIMITED), and email/calendar/desktop/media agents registered but clearly marked UNAVAILABLE until their adapters exist. Every agent has an ID, purpose, model assignment, tool permissions, and a concurrency limit.
@@ -192,7 +223,7 @@ The cat avatar uses the **Memba 2 animation design** (the face that runs on the 
 3. Run the `app` module on an Android emulator or physical device (Min SDK 24).
 
 ## Project Roadmap
-- **Phase 6:** Desktop bridge (paired computers, approved file/build operations).
+- **Phase 6:** Desktop bridge — P6a (pairing, signed channel) done; P6b+ file/build operations next.
 - **Phase 7:** Vision (CameraX, face-follow, scene descriptions via multimodal model).
 - **Phase 8:** Advanced avatar (expanded animation registry).
 - **Phase 9:** Desk & car modes.

@@ -1,0 +1,158 @@
+package com.example.meowmba.core.bridge
+
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import java.security.MessageDigest
+import javax.crypto.Mac
+import javax.crypto.spec.SecretKeySpec
+
+/**
+ * Wire protocol for the Meowmba desktop bridge (Phase 6 P6a).
+ *
+ * Pure Kotlin/JVM — no Android imports — so every function here is unit-tested
+ * on the JVM. Mirrors bridge/meowmba-bridge.py exactly:
+ *
+ *  - Pairing payload: base64url(JSON {v, host, port, name, pair_token, cert_sha256})
+ *  - Request signing: base64-std(HMAC-SHA256(secret, canonical)) where
+ *    canonical = "POST\n/rpc\n{unixSeconds}\n{sha256hex(rawBody)}"
+ *  - Daemon rejects timestamps more than 60 s out (replay window).
+ *
+ * Base64 is hand-rolled: java.util.Base64 needs API 26 (minSdk is 24) and
+ * android.util.Base64 is unavailable in local unit tests.
+ */
+object DesktopBridgeProtocol {
+
+    // ------------------------------------------------------------------
+    // Pairing payload
+    // ------------------------------------------------------------------
+
+    data class PairingPayload(
+        val v: Int,
+        val host: String,
+        val port: Int,
+        val name: String,
+        val pairToken: String,
+        val certSha256: String
+    )
+
+    /** Parse the payload string printed by `meowmba-bridge.py --pair`. */
+    fun decodePairingPayload(blob: String): Result<PairingPayload> {
+        val trimmed = blob.trim()
+        if (trimmed.isEmpty()) return Result.failure(IllegalArgumentException("payload is empty"))
+        val raw = try {
+            b64Decode(trimmed)
+        } catch (e: IllegalArgumentException) {
+            return Result.failure(IllegalArgumentException("payload is not valid base64: ${e.message}"))
+        }
+        // Manual JSON-tree parsing: the project does not apply the kotlinx-serialization
+        // compiler plugin, so no generated serializers exist — JsonObject works everywhere.
+        val obj = try {
+            Json.parseToJsonElement(String(raw, Charsets.UTF_8)).jsonObject
+        } catch (e: Exception) {
+            return Result.failure(IllegalArgumentException("payload is not a bridge pairing payload"))
+        }
+        fun str(key: String): String = obj[key]?.jsonPrimitive?.content ?: ""
+        val parsed = try {
+            PairingPayload(
+                v = obj["v"]?.jsonPrimitive?.int ?: -1,
+                host = str("host"),
+                port = obj["port"]?.jsonPrimitive?.int ?: -1,
+                name = str("name"),
+                pairToken = str("pair_token"),
+                certSha256 = str("cert_sha256")
+            )
+        } catch (e: Exception) {
+            return Result.failure(IllegalArgumentException("payload is not a bridge pairing payload"))
+        }
+        return when {
+            parsed.v != 1 ->
+                Result.failure(IllegalArgumentException("unsupported payload version ${parsed.v} (expected 1)"))
+            parsed.host.isBlank() ->
+                Result.failure(IllegalArgumentException("payload has no host"))
+            parsed.port !in 1..65535 ->
+                Result.failure(IllegalArgumentException("payload port ${parsed.port} is invalid"))
+            parsed.pairToken.isBlank() ->
+                Result.failure(IllegalArgumentException("payload has no pairing token"))
+            !parsed.certSha256.matches(Regex("[0-9a-fA-F]{64}")) ->
+                Result.failure(IllegalArgumentException("payload certificate fingerprint is malformed"))
+            else -> Result.success(parsed)
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Signing
+    // ------------------------------------------------------------------
+
+    /** Canonical string the daemon HMACs: "POST\n/rpc\n{ts}\n{sha256hex(body)}". */
+    fun canonicalMessage(method: String, path: String, timestamp: String, bodySha256Hex: String): String =
+        "$method\n$path\n$timestamp\n$bodySha256Hex"
+
+    fun sha256Hex(bytes: ByteArray): String {
+        val digest = MessageDigest.getInstance("SHA-256").digest(bytes)
+        return digest.joinToString("") { "%02x".format(it) }
+    }
+
+    /** base64-standard HMAC-SHA256 — identical output to Python's hmac+base64.b64encode. */
+    fun signHmacSha256Base64(secret: ByteArray, message: String): String {
+        val mac = Mac.getInstance("HmacSHA256")
+        mac.init(SecretKeySpec(secret, "HmacSHA256"))
+        return b64EncodeStd(mac.doFinal(message.toByteArray(Charsets.UTF_8)))
+    }
+
+    // ------------------------------------------------------------------
+    // Base64 (hand-rolled; see file header)
+    // ------------------------------------------------------------------
+
+    private const val STD_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+
+    /** Standard base64 with padding (matches Python's base64.b64encode). */
+    fun b64EncodeStd(data: ByteArray): String {
+        val out = StringBuilder((data.size + 2) / 3 * 4)
+        var i = 0
+        while (i + 3 <= data.size) {
+            val n = (data[i].toInt() and 0xFF shl 16) or (data[i + 1].toInt() and 0xFF shl 8) or (data[i + 2].toInt() and 0xFF)
+            out.append(STD_ALPHABET[n shr 18 and 0x3F]).append(STD_ALPHABET[n shr 12 and 0x3F])
+                .append(STD_ALPHABET[n shr 6 and 0x3F]).append(STD_ALPHABET[n and 0x3F])
+            i += 3
+        }
+        when (data.size - i) {
+            1 -> {
+                val n = data[i].toInt() and 0xFF shl 16
+                out.append(STD_ALPHABET[n shr 18 and 0x3F]).append(STD_ALPHABET[n shr 12 and 0x3F]).append("==")
+            }
+            2 -> {
+                val n = (data[i].toInt() and 0xFF shl 16) or (data[i + 1].toInt() and 0xFF shl 8)
+                out.append(STD_ALPHABET[n shr 18 and 0x3F]).append(STD_ALPHABET[n shr 12 and 0x3F])
+                    .append(STD_ALPHABET[n shr 6 and 0x3F]).append("=")
+            }
+        }
+        return out.toString()
+    }
+
+    /** Base64 decode accepting standard or URL-safe alphabet; padding optional. */
+    fun b64Decode(s: String): ByteArray {
+        val table = IntArray(128) { -1 }
+        for (idx in STD_ALPHABET.indices) table[STD_ALPHABET[idx].code] = idx
+        table['-'.code] = 62
+        table['_'.code] = 63
+
+        val clean = s.trimEnd('=')
+        if (clean.length % 4 == 1) throw IllegalArgumentException("invalid length ${s.length}")
+        val out = ArrayList<Byte>((clean.length * 3) / 4)
+        var acc = 0
+        var bits = 0
+        for (c in clean) {
+            val v = if (c.code < 128) table[c.code] else -1
+            if (v < 0) throw IllegalArgumentException("invalid character '$c'")
+            acc = (acc shl 6) or v
+            bits += 6
+            if (bits >= 8) {
+                bits -= 8
+                out.add(((acc shr bits) and 0xFF).toByte())
+            }
+        }
+        return out.toByteArray()
+    }
+}
