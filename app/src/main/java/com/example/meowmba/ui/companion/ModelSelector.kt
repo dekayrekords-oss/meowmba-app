@@ -78,7 +78,7 @@ fun ModelItem(name: String, isSelected: Boolean, onClick: () -> Unit) {
  * removed: they were never wired up and trapped users in "no model is ready".)
  */
 val modelProviders = listOf(
-    "Gemma 2b (Local)",
+    "On-device (Local)",
     "Ollama (Local Network)",
     "OpenAI (Cloud)",
 )

@@ -39,7 +39,7 @@ data class CompanionState(
     val showSettings: Boolean = false,
     val showModelManager: Boolean = false,
     val showPrivacyDashboard: Boolean = false,
-    val selectedModel: String = "Gemma 2b (Local)",
+    val selectedModel: String = "On-device (Local)",
     val loadedModels: LoadedModelsInfo = LoadedModelsInfo(),
     /** Always-on wake phrase ("Hey Meow" / "Hey Memba" / "Hey [name]") listening. */
     val wakeWordEnabled: Boolean = false,
@@ -94,7 +94,7 @@ enum class ModelSource { LOCAL, NETWORK, CLOUD }
  */
 data class LoadedModelsInfo(
     /** On-device model (runs on the phone itself) — catalog display name or real file name. */
-    val localName: String = "Gemma 2b",
+    val localName: String = "none",
     val localPath: String = "/data/local/tmp/llm/gemma.bin",
     val localRuntime: String = "MediaPipe LLM Inference",
     /** Cloud server model. */

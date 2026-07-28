@@ -309,7 +309,7 @@ class CompanionViewModel(
         if (secureStorage == null) return
 
         currentProvider = when (modelName) {
-            "Gemma 2b (Local)" -> {
+            "On-device (Local)" -> {
                 MediaPipeProvider(secureStorage.context, resolvedLocalModelPath())
             }
             "Ollama (Local Network)" -> {
@@ -1076,7 +1076,7 @@ class CompanionViewModel(
         val file = downloader?.installedFile(option) ?: return
         installDownloadedModel(file.absolutePath)
         if (!_uiState.value.selectedModel.contains("(Local)")) {
-            onModelSelected("Gemma 2b (Local)")
+            onModelSelected("On-device (Local)")
         }
     }
 
@@ -1106,7 +1106,7 @@ class CompanionViewModel(
             )
         }
         if (!_uiState.value.selectedModel.contains("(Local)")) {
-            onModelSelected("Gemma 2b (Local)")
+            onModelSelected("On-device (Local)")
         }
     }
 

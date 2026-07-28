@@ -85,7 +85,7 @@ class ModelStatusTest {
         `when`(mockSecureStorage.getEndpoint("local")).thenReturn("/sdcard/llm/gemma3.bin")
         val vm = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
 
-        vm.onModelSelected("Gemma 2b (Local)")
+        vm.onModelSelected("On-device (Local)")
 
         val loaded = vm.uiState.value.loadedModels
         assertEquals("/sdcard/llm/gemma3.bin", loaded.localPath)
@@ -100,7 +100,7 @@ class ModelStatusTest {
             .thenReturn("/data/user/0/com.example.meowmba/files/models/qwen2.5-1.5b-instruct-q8.task")
         val vm = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
 
-        vm.onModelSelected("Gemma 2b (Local)")
+        vm.onModelSelected("On-device (Local)")
 
         assertEquals("Qwen 2.5 1.5B Instruct", vm.uiState.value.loadedModels.localName)
     }
@@ -154,7 +154,7 @@ class ModelStatusTest {
         `when`(mockSecureStorage.getPreference("selected_model")).thenReturn("Phi-3 Mini (Local)")
         val vm = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
 
-        assertEquals("Gemma 2b (Local)", vm.uiState.value.selectedModel)
+        assertEquals("On-device (Local)", vm.uiState.value.selectedModel)
         org.junit.Assert.assertNotNull(vm.currentProvider)
     }
 }

@@ -1,9 +1,11 @@
 package com.example.meowmba.core.audio
 
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.speech.RecognitionListener
+import android.speech.RecognitionService
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,12 +18,27 @@ import kotlinx.coroutines.flow.asStateFlow
  * Devices without a recognition service (no Google app / voice typing
  * provider) are detected up front via [isRecognitionAvailable] instead of
  * failing every session with a silent ERROR_CLIENT.
+ *
+ * The recognizer binds to an EXPLICIT service component (Google's service
+ * when present, else the first installed): the platform default binding
+ * picks the system's default voice-input service, which on some devices
+ * (Samsung's intellivoiceservice) fails every session with ERROR_CLIENT
+ * even though recognition is technically "available".
  */
 class SpeechService(context: Context) : SpeechEngine {
     override val isAvailable: Boolean = SpeechRecognizer.isRecognitionAvailable(context)
 
-    private val speechRecognizer: SpeechRecognizer? =
-        if (isAvailable) SpeechRecognizer.createSpeechRecognizer(context) else null
+    private val speechRecognizer: SpeechRecognizer? = run {
+        if (!isAvailable) return@run null
+        val component = resolveRecognitionService(context)
+        runCatching {
+            if (component != null) {
+                SpeechRecognizer.createSpeechRecognizer(context, component)
+            } else {
+                SpeechRecognizer.createSpeechRecognizer(context)
+            }
+        }.getOrNull()
+    }
 
     private val _isListening = MutableStateFlow(false)
     override val isListening = _isListening.asStateFlow()
@@ -88,5 +105,21 @@ class SpeechService(context: Context) : SpeechEngine {
 
     override fun destroy() {
         speechRecognizer?.destroy()
+    }
+
+    private companion object {
+        /** Google's on-device recognition service — the reliable one on most phones. */
+        private const val GOOGLE_RECOGNITION_PACKAGE = "com.google.android.googlequicksearchbox"
+
+        /** Pick the recognition service to bind: Google's when installed, else any installed one. */
+        fun resolveRecognitionService(context: Context): ComponentName? {
+            val services = context.packageManager.queryIntentServices(
+                Intent(RecognitionService.SERVICE_INTERFACE), 0
+            )
+            val chosen = services.firstOrNull {
+                it.serviceInfo.packageName == GOOGLE_RECOGNITION_PACKAGE
+            } ?: services.firstOrNull() ?: return null
+            return ComponentName(chosen.serviceInfo.packageName, chosen.serviceInfo.name)
+        }
     }
 }
