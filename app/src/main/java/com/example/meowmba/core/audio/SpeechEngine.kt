@@ -1,0 +1,55 @@
+package com.example.meowmba.core.audio
+
+import kotlinx.coroutines.flow.StateFlow
+
+/**
+ * Provider-neutral speech abstraction layer.
+ *
+ * The companion never talks to Android's SpeechRecognizer / TextToSpeech
+ * directly. Swapping in Whisper, sherpa-onnx, Vosk, Piper, or a cloud speech
+ * API means providing another implementation of these interfaces — the
+ * ViewModel and avatar never change.
+ */
+
+/** Speech-to-text provider. */
+interface SpeechEngine {
+    /** True while the recognizer is actively capturing audio. */
+    val isListening: StateFlow<Boolean>
+
+    /** Latest partial (in-progress) transcript, empty when none. */
+    val partialResults: StateFlow<String>
+
+    /**
+     * Begin one recognition session.
+     * [onResult] delivers the final transcript, [onError] the platform error code.
+     */
+    fun startListening(onResult: (String) -> Unit, onError: (Int) -> Unit)
+
+    /** Stop the current session early (the result callback may still fire). */
+    fun stopListening()
+
+    /** Release recognizer resources. */
+    fun destroy()
+}
+
+/** Text-to-speech provider. */
+interface SpeechSynthesizer {
+    var onSpeechStarted: (() -> Unit)?
+    var onSpeechFinished: (() -> Unit)?
+
+    /**
+     * Fired at word boundaries while speaking (API 26+; may never fire on
+     * older devices or engines without range callbacks). Used to synchronize
+     * the avatar's mouth with actual speech rhythm.
+     */
+    var onWordBoundary: ((start: Int, end: Int) -> Unit)?
+
+    /** Speak [text], replacing anything currently playing. */
+    fun speak(text: String)
+
+    /** Stop playback immediately (user interruption). */
+    fun stop()
+
+    /** Release engine resources. */
+    fun shutdown()
+}

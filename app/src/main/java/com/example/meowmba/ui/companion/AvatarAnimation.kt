@@ -1,0 +1,200 @@
+package com.example.meowmba.ui.companion
+
+/**
+ * Avatar animation framework (Phase 1 foundation).
+ *
+ * This file is the scalable core of the avatar system described in the Memba
+ * architecture: a state-machine-driven controller that maps the single
+ * observable [CompanionState] into a declarative [AvatarPose], plus a named
+ * [CatAnimationRegistry] so future animation clips (the 100+ expressions and
+ * cat actions from the roadmap) can be registered and resolved by name
+ * instead of being hardcoded in the renderer.
+ *
+ * Everything here is pure Kotlin (no Compose imports) so the animation logic
+ * is unit-testable on the JVM and never coupled to a model provider,
+ * speech engine, or rendering toolkit.
+ */
+
+/** How the mouth should be drawn for the current pose. */
+enum class MouthMode {
+    IDLE,       // gentle closed "w" cat mouth with slow wobble
+    HAPPY,      // raised happy arcs
+    SPEAKING,   // animated open mouth synced to speech energy
+    MUTED       // closed mouth with an explicit muted "X" mark
+}
+
+/**
+ * Declarative, renderer-agnostic description of the cat's face for one frame.
+ * The renderer reads this pose and eases every field toward the latest value,
+ * which makes all expressions interruptible and blendable by construction.
+ */
+data class AvatarPose(
+    /** Vertical eye openness multiplier. 1.0 = neutral, 0.0 = closed, >1 = wide. */
+    val eyeOpen: Float = 1.0f,
+    /** Pupil width as a fraction of eye width (slit pupil). */
+    val pupilSize: Float = 0.28f,
+    /** Extra upward gaze bias (0 = none, 1 = fully looking up), used by THINKING. */
+    val pupilGazeUp: Float = 0f,
+    /** Head tilt in degrees (positive = curious tilt). */
+    val headTiltDeg: Float = 0f,
+    /** Ear perk multiplier. 1.0 = neutral, >1 = perked forward, <1 = flattened. */
+    val earPerk: Float = 1.0f,
+    /** Ear droop rotation in degrees (positive = relaxed/sleepy droop). */
+    val earDroopDeg: Float = 0f,
+    /** Draw eyes as happy "^^" arcs instead of open eyes. */
+    val happyEyes: Boolean = false,
+    /** Fast whisker flutter (talking / purring energy) instead of slow sway. */
+    val whiskerFlutter: Boolean = false,
+    /** Mouth rendering mode. */
+    val mouth: MouthMode = MouthMode.IDLE,
+    /** Show the mic-privacy "X" marks on the ears. */
+    val micOffMark: Boolean = false,
+    /** Show the camera-privacy "X" marks inside the pupils. */
+    val cameraOffMark: Boolean = false,
+    /** Halo glow color (ARGB hex) behind the head. */
+    val glowColorHex: Long = 0xFF58A6FF,
+    /** Whether the halo gently pulses (listening). */
+    val glowPulse: Boolean = false,
+    /** Dim the whole face (privacy-sensitive states). */
+    val dimmed: Boolean = false
+)
+
+/**
+ * Maps [CompanionState] (interaction state x emotion x privacy flags) to an
+ * [AvatarPose]. Pure function: same input always produces the same pose, which
+ * keeps animation decisions deterministic and testable.
+ */
+object CatAvatarStateMachine {
+
+    fun resolvePose(state: CompanionState): AvatarPose {
+        val interaction = state.interactionState
+        val emotion = state.emotion
+        val cameraOn = state.isCameraEnabled
+        val happy = emotion == CompanionEmotion.HAPPY || emotion == CompanionEmotion.PROUD
+
+        val eyeOpen = when {
+            !cameraOn -> 0.30f                       // camera privacy: eyes nearly closed
+            emotion == CompanionEmotion.SLEEPY -> 0.15f
+            interaction == InteractionState.LISTENING -> 1.15f
+            interaction == InteractionState.THINKING -> 0.72f
+            emotion == CompanionEmotion.CURIOUS -> 1.15f
+            emotion == CompanionEmotion.ALERT -> 1.15f
+            happy -> 0.9f
+            else -> 1.0f
+        }
+
+        val pupilSize = when {
+            !cameraOn -> 0.20f
+            interaction == InteractionState.LISTENING -> 0.60f
+            emotion == CompanionEmotion.CURIOUS -> 0.62f
+            emotion == CompanionEmotion.ALERT -> 0.50f
+            emotion == CompanionEmotion.SLEEPY -> 0.22f
+            happy -> 0.45f
+            else -> 0.28f
+        }
+
+        val earPerk = when {
+            interaction == InteractionState.LISTENING -> 1.18f   // ears rotate toward the voice
+            emotion == CompanionEmotion.ALERT -> 1.20f
+            emotion == CompanionEmotion.CURIOUS -> 1.15f
+            emotion == CompanionEmotion.SLEEPY -> 0.55f
+            else -> 1.0f
+        }
+
+        val earDroop = when {
+            emotion == CompanionEmotion.SLEEPY -> 24f
+            happy -> 10f                                          // relaxed, content ears
+            else -> 0f
+        }
+
+        val headTilt = when (emotion) {
+            CompanionEmotion.CURIOUS -> 7f
+            CompanionEmotion.CONFUSED -> 9f
+            else -> 0f
+        }
+
+        val mouth = when {
+            state.isMuted -> MouthMode.MUTED
+            interaction == InteractionState.SPEAKING -> MouthMode.SPEAKING
+            happy -> MouthMode.HAPPY
+            else -> MouthMode.IDLE
+        }
+
+        val glowColor = when {
+            state.errorMessage != null -> 0xFFF85149              // error red
+            interaction == InteractionState.LISTENING -> 0xFF58A6FF
+            interaction == InteractionState.THINKING -> 0xFFD29922
+            interaction == InteractionState.SPEAKING -> 0xFF3FB950
+            interaction == InteractionState.OFFLINE -> 0xFFF85149
+            else -> 0xFF58A6FF
+        }
+
+        return AvatarPose(
+            eyeOpen = eyeOpen,
+            pupilSize = pupilSize,
+            pupilGazeUp = if (interaction == InteractionState.THINKING) 0.55f else 0f,
+            headTiltDeg = headTilt,
+            earPerk = earPerk,
+            earDroopDeg = earDroop,
+            happyEyes = happy && cameraOn,
+            whiskerFlutter = interaction == InteractionState.SPEAKING,
+            mouth = mouth,
+            micOffMark = !state.isMicEnabled,
+            cameraOffMark = !cameraOn,
+            glowColorHex = glowColor,
+            glowPulse = interaction == InteractionState.LISTENING,
+            dimmed = !state.isMicEnabled || interaction == InteractionState.MUTED
+        )
+    }
+}
+
+/**
+ * Named animation registry.
+ *
+ * Names follow the convention `<category>.<action>` (matching the roadmap's
+ * IDLE / EMOTIONS / SPEECH / CAT ACTIONS / SYSTEM STATES categories). The
+ * renderer resolves timing and motion parameters from here so new clips can
+ * be registered without touching drawing code, and so animation timing stays
+ * consistent across the whole app.
+ */
+object CatAnimationRegistry {
+
+    /** Timing/motion parameters for one registered animation. */
+    data class AnimSpec(
+        val name: String,
+        val durationMs: Int,
+        val minDelayMs: Int = 0,      // for randomized idle behaviors
+        val maxDelayMs: Int = 0,
+        val from: Float = 0f,
+        val to: Float = 1f
+    )
+
+    private val specs = mutableMapOf<String, AnimSpec>()
+
+    init {
+        // IDLE
+        register(AnimSpec("idle.breathe", durationMs = 2600, from = 0.98f, to = 1.02f))
+        register(AnimSpec("idle.blink", durationMs = 100, minDelayMs = 2200, maxDelayMs = 5200))
+        register(AnimSpec("idle.ear_twitch", durationMs = 120, minDelayMs = 3000, maxDelayMs = 8000))
+        register(AnimSpec("idle.gaze_drift_x", durationMs = 4800, from = -0.3f, to = 0.3f))
+        register(AnimSpec("idle.gaze_drift_y", durationMs = 3400, from = -0.25f, to = 0.25f))
+        register(AnimSpec("idle.whisker_sway", durationMs = 1500, from = -1f, to = 1f))
+        register(AnimSpec("idle.mouth_wobble", durationMs = 1900, from = 0.88f, to = 1.12f))
+        // SPEECH
+        register(AnimSpec("speech.talk_cycle", durationMs = 160, from = 0.15f, to = 1f))
+        // SYSTEM
+        register(AnimSpec("system.halo_pulse", durationMs = 1000, from = 0.25f, to = 0.6f))
+        register(AnimSpec("system.expression_blend", durationMs = 350))
+    }
+
+    fun register(spec: AnimSpec) {
+        specs[spec.name] = spec
+    }
+
+    /** Look up a registered animation. Unknown names fall back to a 1s spec. */
+    fun spec(name: String): AnimSpec =
+        specs[name] ?: AnimSpec(name, durationMs = 1000)
+
+    /** All currently registered animation names (for tooling/debug UI). */
+    fun registeredNames(): Set<String> = specs.keys
+}
