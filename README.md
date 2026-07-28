@@ -90,6 +90,20 @@ trust channel every later bridge tool rides on:
 - **Verified:** live smoke suite covers pairing, signing, replay/tamper
   rejection, root listing, denylist filtering, traversal/absolute/symlink
   escapes, truncation, binary refusal, and missing-path 404s.
+
+### P6c — approval-gated desktop writes (complete)
+
+- **Daemon `write_file`:** same workspace confinement + denylist, utf-8
+  only (256 KB cap), atomic (temp file + `os.replace`), existing files
+  backed up first (`<name>.bak-<timestamp>`), every write appended to
+  `bridge.log` with the paired phone's name.
+- **Phone:** `desktop.write_file` is a real agent tool — MODERATE risk,
+  `ConfirmationPolicy.ALWAYS`, desktop environment — so the orchestrator's
+  existing approval card gates every write, exactly like phone-side file
+  tools. Unpaired bridge fails honestly; daemon errors surface verbatim.
+- Smoke suite now covers create/overwrite/backup/read-back, denylist and
+  escape refusals, unicode round-trips, missing parents, and audit-log
+  entries; unit tests pin the tool's policy contract.
 - **Interop is unit-tested:** the Kotlin signing/base64 code is verified
   against CPython-generated vectors (`DesktopBridgeProtocolTest`), and the
   daemon passes a live smoke test covering pairing, single-use tokens,

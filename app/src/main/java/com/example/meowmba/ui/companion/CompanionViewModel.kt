@@ -32,7 +32,9 @@ import com.example.meowmba.core.agent.tools.ProjectCreateTool
 import com.example.meowmba.core.agent.tools.TaskListTool
 import com.example.meowmba.core.agent.tools.ToolRegistry
 import com.example.meowmba.core.agent.tools.Workspace
+import com.example.meowmba.core.agent.tools.DesktopWriteFileTool
 import com.example.meowmba.core.audio.AudioStreamingManager
+import com.example.meowmba.core.bridge.DesktopBridgeManager
 import com.example.meowmba.core.audio.RecognizerWakeWordEngine
 import com.example.meowmba.core.audio.SelfVoiceFilter
 import com.example.meowmba.core.audio.SpeechEngine
@@ -259,6 +261,9 @@ class CompanionViewModel(
             toolRegistry.register(FileListTool(workspace))
             toolRegistry.register(ProjectCreateTool(workspace))
         }
+        // Phase 6c: the desktop bridge write tool rides the same registry —
+        // the orchestrator's approval card gates it like any MODERATE tool.
+        secureStorage?.let { toolRegistry.register(DesktopWriteFileTool(DesktopBridgeManager(it))) }
         if (memoryRepository != null || workspaceRoot != null) {
             agentToolRegistry = toolRegistry
             val orchestrator = AgentOrchestrator(viewModelScope, toolRegistry, agentAuditSink)

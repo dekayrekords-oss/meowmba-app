@@ -61,6 +61,8 @@ class DesktopBridgeManager(
 
     data class BridgeFileContent(val path: String, val size: Long, val content: String, val truncated: Boolean)
 
+    data class BridgeWriteResult(val path: String, val size: Long, val created: Boolean, val backup: String?)
+
     // ------------------------------------------------------------------
     // Pairing state
     // ------------------------------------------------------------------
@@ -178,6 +180,22 @@ class DesktopBridgeManager(
                 size = obj["size"]?.jsonPrimitive?.long ?: 0,
                 content = obj["content"]?.jsonPrimitive?.content ?: "",
                 truncated = obj["truncated"]?.jsonPrimitive?.boolean ?: false
+            )
+        }
+
+    /**
+     * Write utf-8 text inside the workspace (P6c). The daemon writes
+     * atomically and backs up any existing file first; the caller is
+     * responsible for user approval (see DesktopWriteFileTool's gate).
+     */
+    suspend fun writeFile(path: String, content: String): Result<BridgeWriteResult> =
+        rpc("write_file", mapOf("path" to path, "content" to content)).mapCatching { body ->
+            val obj = Json.parseToJsonElement(body).jsonObject
+            BridgeWriteResult(
+                path = obj["path"]?.jsonPrimitive?.content ?: path,
+                size = obj["size"]?.jsonPrimitive?.long ?: 0,
+                created = obj["created"]?.jsonPrimitive?.boolean ?: false,
+                backup = obj["backup"]?.jsonPrimitive?.content
             )
         }
 

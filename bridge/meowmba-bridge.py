@@ -16,6 +16,9 @@ What it does (P6a scope):
     the workspace roots declared in ~/.meowmba-bridge/config.json. Path
     escapes (../, absolute tricks, symlink hops) and sensitive names
     (.env, keys, certs) are refused.
+  * P6c: "write_file" — same confinement, utf-8 text only, atomic
+    (temp file + rename), existing files are backed up first
+    (<name>.bak-<timestamp>), and every write is appended to bridge.log.
 
 Security contract (same as the phone):
   * No shell execution. Ever.
@@ -50,7 +53,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 CONFIG_DIR = Path.home() / ".meowmba-bridge"
 CERT_PATH = CONFIG_DIR / "cert.pem"
 KEY_PATH = CONFIG_DIR / "key.pem"
@@ -65,6 +68,7 @@ MAX_BODY_BYTES = 256 * 1024
 MAX_LIST_ENTRIES = 500
 DEFAULT_READ_BYTES = 64 * 1024
 MAX_READ_BYTES = 256 * 1024
+MAX_WRITE_BYTES = 256 * 1024
 
 # Never listed or read through the bridge, even inside a workspace root.
 DENIED_NAMES = {
@@ -77,11 +81,14 @@ DENIED_SUFFIXES = (".pem", ".key", ".crt", ".p12", ".pfx")
 
 
 def _is_denied_name(name: str) -> bool:
-    """Sensitive basenames refused by the bridge, incl. .env.* variants."""
+    """Sensitive basenames refused by the bridge, incl. .env.* variants.
+    Compared case-insensitively: on case-insensitive filesystems (default
+    APFS, NTFS) `.ENV` IS `.env`."""
+    lowered = name.lower()
     return (
-        name in DENIED_NAMES
-        or name.startswith(".env.")
-        or name.endswith(DENIED_SUFFIXES)
+        lowered in DENIED_NAMES
+        or lowered.startswith(".env.")
+        or lowered.endswith(DENIED_SUFFIXES)
     )
 
 # Holds the single-use pairing token in memory only (never written to disk).
@@ -266,6 +273,8 @@ class BridgeHandler(BaseHTTPRequestHandler):
             self._send(400, {"error": "secret must be 32 bytes (base64)"})
             return
         phone_name = str(data.get("phone_name", "unknown phone"))[:80]
+        # Keep the audit log line-per-entry: no CR/LF smuggling via phone_name.
+        phone_name = phone_name.replace("\r", " ").replace("\n", " ")
         _save_pairing({
             "phone_name": phone_name,
             "secret_b64": base64.b64encode(secret).decode(),
@@ -295,8 +304,10 @@ class BridgeHandler(BaseHTTPRequestHandler):
             self._rpc_list_files(data.get("params") or {})
         elif method == "read_file":
             self._rpc_read_file(data.get("params") or {})
+        elif method == "write_file":
+            self._rpc_write_file(data.get("params") or {}, pairing)
         else:
-            self._send(400, {"error": f"unknown method '{method}' (supports: ping, status, list_files, read_file)"})
+            self._send(400, {"error": f"unknown method '{method}' (supports: ping, status, list_files, read_file, write_file)"})
 
     # -- workspace file tools (P6b, read-only) --------------------------------
 
@@ -405,6 +416,78 @@ class BridgeHandler(BaseHTTPRequestHandler):
             "size": size,
             "content": content,
             "truncated": truncated,
+        })
+
+    def _rpc_write_file(self, params: dict, pairing: dict) -> None:
+        raw = str(params.get("path", ""))
+        if "\0" in raw:
+            self._send(400, {"error": "null byte in path"})
+            return
+        if _is_denied_name(os.path.basename(raw)):
+            self._send(403, {"error": "denied: sensitive file type"})
+            return
+        content = params.get("content")
+        if not isinstance(content, str):
+            self._send(400, {"error": "content (utf-8 string) required"})
+            return
+        data = content.encode("utf-8")
+        if len(data) > MAX_WRITE_BYTES:
+            self._send(413, {"error": f"content exceeds {MAX_WRITE_BYTES // 1024} KB write cap"})
+            return
+        real, err = self._resolve_in_workspace(raw)
+        if err:
+            self._send(403, {"error": err})
+            return
+        parent = os.path.dirname(real) or real
+        if not os.path.isdir(parent):
+            self._send(404, {"error": "parent directory does not exist"})
+            return
+
+        backup = None
+        created = not os.path.exists(real)
+        if not created:
+            # Nanosecond suffix: two writes in the same second never share a
+            # backup name (the server is multi-threaded).
+            backup = f"{os.path.basename(real)}.bak-{time.strftime('%Y%m%d-%H%M%S')}-{time.time_ns() % 10**9}"
+            try:
+                with open(real, "rb") as src, open(os.path.join(parent, backup), "wb") as dst:
+                    dst.write(src.read())
+            except OSError as ex:
+                self._send(500, {"error": f"backup failed, refusing to overwrite: {ex}"})
+                return
+
+        # Atomic: temp file in the same directory, then rename over the target.
+        tmp = f"{real}.bridge-tmp-{os.getpid()}"
+        try:
+            with open(tmp, "wb") as f:
+                f.write(data)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, real)
+            # fsync the DIRECTORY so the rename's metadata is durable too
+            dir_fd = os.open(parent, os.O_RDONLY)
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
+        except OSError as ex:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            self._send(500, {"error": f"write failed: {ex}"})
+            return
+
+        _log(
+            f"write_file: {real} ({len(data)} bytes, "
+            f"{'created' if created else 'backup=' + backup}) "
+            f"by '{pairing.get('phone_name')}'"
+        )
+        self._send(200, {
+            "path": real,
+            "size": len(data),
+            "created": created,
+            "backup": backup,
         })
 
 
