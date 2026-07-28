@@ -170,7 +170,11 @@ class CompanionViewModel(
         matcher = WakePhraseMatcher(_uiState.value.name)
 
         if (speechService != null) {
-            wakeWordEngine = RecognizerWakeWordEngine(speechService, matcher, viewModelScope).apply {
+            // The wake loop gets its OWN recognizer instance — a dying loop
+            // session's late error must never land in a mic-tap session.
+            val wakeEngineSource = (speechService as? com.example.meowmba.core.audio.SpeechService)
+                ?.createSessionEngine() ?: speechService
+            wakeWordEngine = RecognizerWakeWordEngine(wakeEngineSource, matcher, viewModelScope).apply {
                 onWake = { command -> onWakeDetected(command) }
                 onFatalError = {
                     // Stop the error loop; the persisted preference is left
@@ -299,6 +303,16 @@ class CompanionViewModel(
                 ?.let { option -> downloader?.installedFile(option)?.absolutePath }
                 ?.let { path -> secureStorage?.saveEndpoint("local", path) }
         }
+
+        // If the configured local model file was deleted outside the app,
+        // re-point at any bundle still on disk — otherwise the banner says
+        // "no model installed" forever while a perfectly good one sits there.
+        secureStorage?.getEndpoint("local")
+            ?.takeIf { !java.io.File(it).exists() }
+            ?.let {
+                downloader?.listInstalled()?.firstOrNull()?.absolutePath
+                    ?.let { path -> secureStorage?.saveEndpoint("local", path) }
+            }
 
         // Load initial provider
         updateProvider(_uiState.value.selectedModel)

@@ -157,4 +157,32 @@ class ModelStatusTest {
         assertEquals("On-device (Local)", vm.uiState.value.selectedModel)
         org.junit.Assert.assertNotNull(vm.currentProvider)
     }
+
+    @Test
+    fun `deleted configured model file is re-pointed at an installed bundle`() = runTest {
+        // The user's gemm4.task was deleted outside the app; qwen sits on disk.
+        // Startup must adopt the installed bundle instead of showing
+        // "no model installed" while the network provider keeps answering.
+        val dir = java.nio.file.Files.createTempDirectory("models").toFile()
+        val bundle = java.io.File(dir, "qwen2.5-1.5b-instruct-q8.task")
+        bundle.writeText("fake bundle")
+        `when`(mockSecureStorage.getEndpoint("local")).thenReturn("/gone/gemm4.task")
+
+        val vm = CompanionViewModel(
+            secureStorage = mockSecureStorage,
+            memoryRepository = mockMemoryRepository,
+            modelsDir = dir
+        )
+
+        // The repoint happened at startup…
+        org.mockito.Mockito.verify(mockSecureStorage)
+            .saveEndpoint("local", bundle.absolutePath)
+
+        // …and once the stored value reflects it, the snapshot is honest
+        `when`(mockSecureStorage.getEndpoint("local")).thenReturn(bundle.absolutePath)
+        vm.onModelSelected("On-device (Local)")
+        assertEquals(bundle.absolutePath, vm.uiState.value.loadedModels.localPath)
+        assertEquals("Qwen 2.5 1.5B Instruct", vm.uiState.value.loadedModels.localName)
+        dir.deleteRecursively()
+    }
 }

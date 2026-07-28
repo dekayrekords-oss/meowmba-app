@@ -32,8 +32,11 @@ class MediaPipeProvider(
             return@callbackFlow
         }
 
+        // Instruct models leak template tokens / drift on a raw flat prompt —
+        // wrap in the model's native chat format (Qwen/Hermes: ChatML, Gemma: turns).
+        val templatedPrompt = ChatTemplate.wrap(modelPath, prompt)
         try {
-            llmInference.generateResponseAsync(prompt) { partialResult, done ->
+            llmInference.generateResponseAsync(templatedPrompt) { partialResult, done ->
                 trySend(ModelResponse.Partial(partialResult))
                 if (done) {
                     trySend(ModelResponse.Complete(partialResult))
@@ -49,7 +52,7 @@ class MediaPipeProvider(
 
     override suspend fun generate(prompt: String): ModelResponse {
         return try {
-            val response = llmInference.generateResponse(prompt)
+            val response = llmInference.generateResponse(ChatTemplate.wrap(modelPath, prompt))
             ModelResponse.Complete(response)
         } catch (e: Exception) {
             ModelResponse.Error(e.message ?: "Inference error")
