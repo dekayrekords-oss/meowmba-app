@@ -139,4 +139,40 @@ class DesktopBridgeProtocolTest {
             DesktopBridgeProtocol.b64Decode("ab\$%")
         }
     }
+
+    // --------------------------------------------------------------
+    // Discovery packets
+    // --------------------------------------------------------------
+
+    @Test
+    fun `parses a real discovery packet`() {
+        val fp = "b".repeat(64)
+        val pkt = """{"v":1,"service":"meowmba-bridge","name":"wyatt-mac","port":8765,"cert_sha256":"$fp","version":"0.5.0","pairing_open":true}"""
+        val d = DesktopBridgeProtocol.parseDiscoveryPacket(pkt, "192.168.1.50")!!
+        assertEquals("192.168.1.50", d.host)
+        assertEquals(8765, d.port)
+        assertEquals("wyatt-mac", d.name)
+        assertEquals(fp, d.certSha256)
+        assertEquals("0.5.0", d.version)
+        assertTrue(d.pairingOpen)
+    }
+
+    @Test
+    fun `rejects non-bridge packets and malformed fingerprints`() {
+        val fp = "b".repeat(64)
+        assertEquals(null, DesktopBridgeProtocol.parseDiscoveryPacket("""{"service":"other"}""", "1.2.3.4"))
+        assertEquals(null, DesktopBridgeProtocol.parseDiscoveryPacket("not json", "1.2.3.4"))
+        assertEquals(null, DesktopBridgeProtocol.parseDiscoveryPacket(
+            """{"service":"meowmba-bridge","port":8765,"cert_sha256":"xyz"}""", "1.2.3.4"))
+        assertEquals(null, DesktopBridgeProtocol.parseDiscoveryPacket(
+            """{"service":"meowmba-bridge","cert_sha256":"$fp"}""", "1.2.3.4")) // no port
+    }
+
+    @Test
+    fun `host always comes from the network not the packet`() {
+        // A packet can't claim to be another machine — sender IP wins
+        val fp = "b".repeat(64)
+        val pkt = """{"service":"meowmba-bridge","name":"x","port":8765,"cert_sha256":"$fp","host":"8.8.8.8"}"""
+        assertEquals("192.168.1.99", DesktopBridgeProtocol.parseDiscoveryPacket(pkt, "192.168.1.99")!!.host)
+    }
 }

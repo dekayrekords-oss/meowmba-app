@@ -246,12 +246,93 @@ fun DesktopBridgeSection(secureStorage: SecureStorageManager) {
         Spacer(modifier = Modifier.height(12.dp))
         BridgeWorkspaceBrowser(bridgeManager)
     } else {
+        var discovered by remember {
+            mutableStateOf<List<com.example.meowmba.core.bridge.DesktopBridgeProtocol.DiscoveredBridge>>(emptyList())
+        }
+        var scanning by remember { mutableStateOf(false) }
+        var selected by remember {
+            mutableStateOf<com.example.meowmba.core.bridge.DesktopBridgeProtocol.DiscoveredBridge?>(null)
+        }
+        var pairCode by remember { mutableStateOf("") }
+        val discovery = remember { com.example.meowmba.core.bridge.BridgeDiscovery() }
+
         Text(
-            text = "Run `meowmba-bridge.py --pair` on a computer on this network and paste the payload it prints.",
+            text = "Run `meowmba-bridge.py --pair` on a computer on this network, then find it here and enter the code it shows.",
             style = MaterialTheme.typography.bodySmall,
             color = Color.Gray
         )
         Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedButton(
+            enabled = !busy && !scanning,
+            onClick = {
+                scope.launch {
+                    scanning = true
+                    message = null
+                    discovered = discovery.discover()
+                    if (discovered.isEmpty()) {
+                        messageIsError = true
+                        message = "No desktops heard — is the daemon running? Is the phone on the same Wi-Fi?"
+                    }
+                    scanning = false
+                }
+            }
+        ) { Text(if (scanning) "Listening…" else "Find desktops") }
+
+        discovered.forEach { d ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { selected = d }
+                    .padding(vertical = 6.dp)
+            ) {
+                RadioButton(selected = selected == d, onClick = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("${d.name} · ${d.host}:${d.port}", color = Color.White, fontSize = 13.sp)
+                    Text(
+                        "cert ${d.certSha256.take(12)}…" + (if (d.pairingOpen) " · pairing open" else ""),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (d.pairingOpen) Color(0xFF81C784) else Color.Gray
+                    )
+                }
+            }
+        }
+
+        selected?.let { d ->
+            Spacer(modifier = Modifier.height(4.dp))
+            SettingsTextField(
+                value = pairCode,
+                onValueChange = { pairCode = it.uppercase().take(9) },
+                label = { Text("Pairing code (e.g. ABCD-1234)") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedButton(
+                enabled = !busy && pairCode.length >= 8,
+                onClick = {
+                    scope.launch {
+                        busy = true
+                        message = bridgeManager.pairWithCode(d, pairCode.trim(), Build.MODEL ?: "phone").fold(
+                            onSuccess = {
+                                messageIsError = false
+                                paired = bridgeManager.pairedBridge()
+                                discovered = emptyList()
+                                selected = null
+                                "Paired with $it"
+                            },
+                            onFailure = { messageIsError = true; it.message ?: "pairing failed" }
+                        )
+                        busy = false
+                    }
+                }
+            ) { Text(if (busy) "Pairing…" else "Pair ${d.name}") }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+        Text("Or paste the full payload manually:", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+        Spacer(modifier = Modifier.height(4.dp))
         SettingsTextField(
             value = payload,
             onValueChange = { payload = it },
@@ -271,7 +352,7 @@ fun DesktopBridgeSection(secureStorage: SecureStorageManager) {
                     busy = false
                 }
             }
-        ) { Text(if (busy) "Pairing…" else "Pair desktop") }
+        ) { Text(if (busy) "Pairing…" else "Pair with payload") }
     }
 
     message?.let {

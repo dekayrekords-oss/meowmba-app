@@ -1,6 +1,7 @@
 package com.example.meowmba.core.bridge
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -79,6 +80,44 @@ object DesktopBridgeProtocol {
                 Result.failure(IllegalArgumentException("payload certificate fingerprint is malformed"))
             else -> Result.success(parsed)
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Discovery packets (UDP broadcast from the daemon)
+    // ------------------------------------------------------------------
+
+    data class DiscoveredBridge(
+        val host: String,
+        val port: Int,
+        val name: String,
+        val certSha256: String,
+        val version: String,
+        val pairingOpen: Boolean
+    )
+
+    /**
+     * Parse one discovery packet. [senderIp] is the UDP source address (the
+     * packet itself carries no host — the network tells the truth).
+     * Returns null for anything that isn't a meowmba-bridge announcement.
+     */
+    fun parseDiscoveryPacket(jsonText: String, senderIp: String): DiscoveredBridge? {
+        val obj = try {
+            Json.parseToJsonElement(jsonText).jsonObject
+        } catch (e: Exception) {
+            return null
+        }
+        if (obj["service"]?.jsonPrimitive?.content != "meowmba-bridge") return null
+        val port = obj["port"]?.jsonPrimitive?.int ?: return null
+        val fp = obj["cert_sha256"]?.jsonPrimitive?.content ?: return null
+        if (!fp.matches(Regex("[0-9a-fA-F]{64}"))) return null
+        return DiscoveredBridge(
+            host = senderIp,
+            port = port,
+            name = obj["name"]?.jsonPrimitive?.content ?: "desktop",
+            certSha256 = fp.lowercase(),
+            version = obj["version"]?.jsonPrimitive?.content ?: "",
+            pairingOpen = obj["pairing_open"]?.jsonPrimitive?.boolean ?: false
+        )
     }
 
     // ------------------------------------------------------------------

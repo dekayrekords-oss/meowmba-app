@@ -4,12 +4,15 @@ meowmba-bridge — desktop companion daemon for the Meowmba Android app (Phase 6
 
 Single file, Python 3.9+ standard library only. No pip installs.
 
-What it does (P6a scope):
+What it does:
   * Serves HTTPS with a locally generated self-signed certificate.
-  * Pairs with exactly one phone: on `--pair` it prints a pairing payload
-    (host, port, one-time token, certificate fingerprint). Entering that
-    payload in Meowmba establishes a shared 256-bit secret over the pinned
-    TLS channel. The token is single-use and expires after 10 minutes.
+  * DISCOVERY: broadcasts a small JSON packet (name, port, cert fingerprint,
+    pairing-window state) over UDP :8766 every 2s, so the phone can find
+    desktops on the LAN instead of you transcribing anything.
+  * PAIRING: `--pair` shows a short 8-character code (single use, 10-minute
+    TTL). The phone discovers this desktop, you type the code, and a shared
+    256-bit secret is established over the pinned TLS channel.
+    (The full payload string is still printed as a manual fallback.)
   * After pairing, every request must carry a valid HMAC-SHA256 signature
     (method + path + timestamp + body hash) with a 60-second replay window.
   * P6b file tools: "list_files" and "read_file" — read-only, confined to
@@ -53,11 +56,12 @@ import socket
 import ssl
 import subprocess
 import sys
+import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-VERSION = "0.4.0"
+VERSION = "0.5.0"
 CONFIG_DIR = Path.home() / ".meowmba-bridge"
 CERT_PATH = CONFIG_DIR / "cert.pem"
 KEY_PATH = CONFIG_DIR / "key.pem"
@@ -66,7 +70,11 @@ CONFIG_PATH = CONFIG_DIR / "config.json"
 LOG_PATH = CONFIG_DIR / "bridge.log"
 
 DEFAULT_PORT = 8765
+DISCOVERY_PORT = 8766
+DISCOVERY_INTERVAL_S = 2.0
 PAIR_TOKEN_TTL_S = 600
+PAIR_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  # no ambiguous chars
+MAX_PAIR_ATTEMPTS = 20
 MAX_SKEW_S = 60
 MAX_BODY_BYTES = 256 * 1024
 MAX_LIST_ENTRIES = 500
@@ -184,6 +192,48 @@ def _log(msg: str) -> None:
 
 
 # --------------------------------------------------------------------------
+# Discovery (LAN broadcast) + short pairing codes
+# --------------------------------------------------------------------------
+
+def _make_pair_code() -> str:
+    """8 human-typable chars (~40 bits), dashed for readability: XXXX-XXXX."""
+    raw = "".join(secrets.choice(PAIR_CODE_ALPHABET) for _ in range(8))
+    return f"{raw[:4]}-{raw[4:]}"
+
+
+def _normalize_code(s: str) -> str:
+    return s.upper().replace("-", "").replace(" ", "")
+
+
+def _discovery_broadcast(cfg: dict, stop: threading.Event) -> None:
+    """Broadcast presence JSON over UDP so phones can find this desktop."""
+    payload = json.dumps({
+        "v": 1,
+        "service": "meowmba-bridge",
+        "name": cfg["name"],
+        "port": cfg["port"],
+        "cert_sha256": _cert_fingerprint(),
+        "version": VERSION,
+        "pairing_open": bool(_pair_state.get("token")) and time.time() < _pair_state.get("expires", 0),
+    }).encode()
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        while not stop.wait(DISCOVERY_INTERVAL_S):
+            # Refresh pairing_open each round, send to limited + subnet broadcast
+            fresh = json.loads(payload)
+            fresh["pairing_open"] = bool(_pair_state.get("token")) and time.time() < _pair_state.get("expires", 0)
+            blob = json.dumps(fresh).encode()
+            for dest in ("255.255.255.255", "192.168.255.255"):
+                try:
+                    sock.sendto(blob, (dest, DISCOVERY_PORT))
+                except OSError:
+                    pass
+    finally:
+        sock.close()
+
+
+# --------------------------------------------------------------------------
 # HTTP handler
 # --------------------------------------------------------------------------
 
@@ -267,9 +317,15 @@ class BridgeHandler(BaseHTTPRequestHandler):
         if not token or time.time() > _pair_state.get("expires", 0):
             self._send(409, {"error": "no active pairing window — restart with --pair"})
             return
-        if not hmac.compare_digest(str(data.get("token", "")), token):
-            _log("pair: rejected (bad token)")
-            self._send(403, {"error": "bad pairing token"})
+        if not hmac.compare_digest(_normalize_code(str(data.get("token", ""))), _normalize_code(token)):
+            _pair_state["attempts"] = _pair_state.get("attempts", 0) + 1
+            if _pair_state["attempts"] >= MAX_PAIR_ATTEMPTS:
+                _pair_state.clear()
+                _log("pair: too many bad attempts — window closed")
+                self._send(409, {"error": "too many attempts — restart with --pair"})
+                return
+            _log("pair: rejected (bad code)")
+            self._send(403, {"error": "bad pairing code"})
             return
         try:
             secret = base64.b64decode(str(data.get("secret", "")))
@@ -583,8 +639,9 @@ def main() -> None:
     _ensure_cert()
 
     if args.pair:
-        _pair_state["token"] = secrets.token_urlsafe(16)
+        _pair_state["token"] = _make_pair_code()
         _pair_state["expires"] = time.time() + PAIR_TOKEN_TTL_S
+        _pair_state["attempts"] = 0
         payload = {
             "v": 1,
             "host": _lan_ip(),
@@ -596,9 +653,13 @@ def main() -> None:
         blob = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode()
         print("═" * 64)
         print("  PAIRING WINDOW OPEN (10 minutes, single use)")
-        print("  Enter this payload in Meowmba → Settings → Desktop bridge:")
         print()
-        print(f"  {blob}")
+        print(f"    CODE: {_pair_state['token']}")
+        print()
+        print("  In Meowmba → Settings → Desktop Bridge → Find desktops,")
+        print("  pick this computer and enter the code.")
+        print()
+        print(f"  Manual fallback payload: {blob}")
         print("═" * 64, flush=True)
     elif not _load_pairing():
         print("warning: not paired — run with --pair to pair a phone", flush=True)
@@ -611,11 +672,19 @@ def main() -> None:
     ctx.load_cert_chain(str(CERT_PATH), str(KEY_PATH))
     server.socket = ctx.wrap_socket(server.socket, server_side=True)
 
-    _log(f"listening on https://0.0.0.0:{cfg['port']} (cert sha256 {_cert_fingerprint()[:16]}…)")
+    stop_broadcast = threading.Event()
+    broadcaster = threading.Thread(
+        target=_discovery_broadcast, args=(cfg, stop_broadcast), daemon=True
+    )
+    broadcaster.start()
+
+    _log(f"listening on https://0.0.0.0:{cfg['port']} (cert sha256 {_cert_fingerprint()[:16]}…, discovery udp:{DISCOVERY_PORT})")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         pass
+    finally:
+        stop_broadcast.set()
 
 
 if __name__ == "__main__":

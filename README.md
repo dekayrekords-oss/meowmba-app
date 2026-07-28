@@ -55,14 +55,18 @@ Meowmba can pair with exactly one computer running `bridge/meowmba-bridge.py`
 (single file, Python 3.9+ stdlib only, no pip installs). P6a establishes the
 trust channel every later bridge tool rides on:
 
-- **Pairing:** run `python3 bridge/meowmba-bridge.py --pair` on the desktop; it
-  prints a one-time payload (10-minute window). Enter it in Meowmba → Settings →
-  Desktop Bridge. The phone generates a 256-bit secret, hands it over once over
-  the pinned TLS channel, and stores it in Keystore-encrypted preferences; the
-  desktop stores it in `~/.meowmba-bridge/paired.json` (chmod 600).
+- **Pairing:** run `python3 bridge/meowmba-bridge.py --pair` on the desktop.
+  The daemon broadcasts its presence over UDP :8766; Meowmba → Settings →
+  Desktop Bridge → **Find desktops** lists every daemon on the LAN — pick
+  it and type the **8-character code** (single use, 10-minute window, 20
+  attempts max). The phone generates a 256-bit secret, hands it over once
+  over the pinned TLS channel, and stores it in Keystore-encrypted
+  preferences; the desktop stores it in `~/.meowmba-bridge/paired.json`
+  (chmod 600). (The full payload string remains as a manual fallback.)
 - **Cert pinning:** the daemon serves HTTPS with a locally generated
-  self-signed cert (openssl, one-time). The phone pins the cert's SHA-256 from
-  the pairing payload and refuses any other certificate.
+  self-signed cert (openssl, one-time). The phone pins the cert's SHA-256
+  learned from the daemon's own discovery broadcast and refuses any other
+  certificate; the code is the human proof of physical access.
 - **Signed requests:** every request after pairing carries
   `X-Meowmba-Timestamp` + `X-Meowmba-Signature` (HMAC-SHA256 over
   `method + path + timestamp + sha256(body)`); the daemon enforces a 60-second

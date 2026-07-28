@@ -99,19 +99,39 @@ class DesktopBridgeManager(
      * Pair with a desktop using the payload printed by `meowmba-bridge.py --pair`.
      * Returns the desktop's name on success.
      */
-    suspend fun pair(payloadBlob: String, phoneName: String): Result<String> = withContext(Dispatchers.IO) {
-        val payload = DesktopBridgeProtocol.decodePairingPayload(payloadBlob).getOrElse {
-            return@withContext Result.failure(it)
-        }
+    suspend fun pair(payloadBlob: String, phoneName: String): Result<String> =
+        DesktopBridgeProtocol.decodePairingPayload(payloadBlob).fold(
+            onSuccess = { pairWith(it.host, it.port, it.name, it.certSha256, it.pairToken, phoneName) },
+            onFailure = { Result.failure(it) }
+        )
+
+    /**
+     * Pair with a discovered desktop using the short 8-char code shown by
+     * `--pair`. The fingerprint came over the wire in the daemon's own
+     * broadcast; the code is the human proof of physical access.
+     */
+    suspend fun pairWithCode(
+        discovered: DesktopBridgeProtocol.DiscoveredBridge,
+        code: String,
+        phoneName: String
+    ): Result<String> = pairWith(
+        discovered.host, discovered.port, discovered.name,
+        discovered.certSha256, code, phoneName
+    )
+
+    private suspend fun pairWith(
+        host: String, port: Int, name: String, certSha256: String,
+        token: String, phoneName: String
+    ): Result<String> = withContext(Dispatchers.IO) {
         val secret = ByteArray(32).also { SecureRandom().nextBytes(it) }
         val body = buildJsonObject {
-            put("token", payload.pairToken)
+            put("token", token)
             put("secret", DesktopBridgeProtocol.b64EncodeStd(secret))
             put("phone_name", phoneName)
         }.toString().toByteArray(Charsets.UTF_8)
 
         val result = runCatching {
-            post(payload.host, payload.port, "/pair", body, payload.certSha256, emptyMap())
+            post(host, port, "/pair", body, certSha256, emptyMap())
         }.getOrElse { return@withContext Result.failure(Exception("desktop unreachable: ${it.message}")) }
 
         when (result.first) {
@@ -123,14 +143,14 @@ class DesktopBridgeManager(
                 if (desktopName == null) {
                     return@withContext Result.failure(Exception("desktop sent an unreadable pairing reply"))
                 }
-                secureStorage.savePreference(KEY_HOST, payload.host)
-                secureStorage.savePreference(KEY_PORT, payload.port.toString())
-                secureStorage.savePreference(KEY_NAME, desktopName.ifBlank { payload.name })
-                secureStorage.savePreference(KEY_CERT, payload.certSha256.lowercase())
+                secureStorage.savePreference(KEY_HOST, host)
+                secureStorage.savePreference(KEY_PORT, port.toString())
+                secureStorage.savePreference(KEY_NAME, desktopName.ifBlank { name })
+                secureStorage.savePreference(KEY_CERT, certSha256.lowercase())
                 secureStorage.savePreference(KEY_SECRET, DesktopBridgeProtocol.b64EncodeStd(secret))
-                Result.success(desktopName.ifBlank { payload.name })
+                Result.success(desktopName.ifBlank { name })
             }
-            403 -> Result.failure(Exception("pairing rejected — wrong or expired token; run --pair again on the desktop"))
+            403 -> Result.failure(Exception("pairing rejected — wrong or expired code; check the desktop"))
             409 -> Result.failure(Exception("desktop has no open pairing window — start it with --pair"))
             else -> Result.failure(Exception("pairing failed (http ${result.first}): ${String(result.second, Charsets.UTF_8).take(160)}"))
         }
