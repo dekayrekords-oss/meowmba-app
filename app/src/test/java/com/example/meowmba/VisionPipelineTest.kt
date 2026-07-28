@@ -17,13 +17,15 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Before
 import org.junit.Test
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.`when`
 
 /**
- * Phase 7a: vision trigger parsing, prompt building, provider selection.
+ * Phase 7a/7b: vision trigger parsing, prompt building, provider selection, OCR routing.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class VisionPipelineTest {
@@ -81,6 +83,41 @@ class VisionPipelineTest {
         assertTrue(focused.contains("Focus on: keyboard."))
     }
 
+    // ── Phase 7b: read queries ──────────────────────────────────────────────
+
+    @Test
+    fun `read this triggers as read query`() {
+        val q = VisionRouter.parse("read this")
+        assertNotNull(q)
+        assertTrue(q!!.isReadQuery)
+    }
+
+    @Test
+    fun `read the screen triggers as read query with focus`() {
+        val q = VisionRouter.parse("read the screen")
+        assertEquals("screen", q?.focus)
+        assertTrue(q?.isReadQuery ?: false)
+    }
+
+    @Test
+    fun `exact look is NOT a read query`() {
+        assertFalse(VisionRouter.parse("what do you see")?.isReadQuery ?: true)
+    }
+
+    @Test
+    fun `prompt for read query uses read instruction`() {
+        val readQuery = VisionRouter.VisionQuery(focus = "label", isReadQuery = true)
+        val prompt = VisionRouter.promptFor(readQuery)
+        assertTrue(prompt.contains("Read any visible text"))
+        assertTrue(prompt.contains("Focus on: label."))
+    }
+
+    @Test
+    fun `look at phrase is not a read query`() {
+        val q = VisionRouter.parse("look at the cup")
+        assertFalse(q?.isReadQuery ?: true)
+    }
+
     // ── Provider selection ─────────────────────────────────────────────────
 
     @Test
@@ -121,6 +158,14 @@ class VisionPipelineTest {
         vm.onUserTextSubmitted("what do you see")
         advanceUntilIdle()
         // It answered out loud rather than hanging or crashing
+        assertEquals(com.example.meowmba.ui.companion.InteractionState.IDLE, vm.uiState.value.interactionState)
+    }
+
+    @Test
+    fun `read request without camera also speaks honestly`() = runTest {
+        val vm = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
+        vm.onUserTextSubmitted("read this")
+        advanceUntilIdle()
         assertEquals(com.example.meowmba.ui.companion.InteractionState.IDLE, vm.uiState.value.interactionState)
     }
 }

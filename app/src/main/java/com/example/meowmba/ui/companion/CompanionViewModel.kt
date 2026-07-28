@@ -136,6 +136,9 @@ class CompanionViewModel(
         }
     }
 
+    /** Last captured JPEG bytes for follow-up focus queries (Phase 7b). */
+    private var lastVisionJpeg: ByteArray? = null
+
     private var responseJob: Job? = null
     private var followUpJob: Job? = null
     private var mouthDecayJob: Job? = null
@@ -797,11 +800,15 @@ class CompanionViewModel(
         }
     }
 
-    // ── Vision (Phase 7a) ───────────────────────────────────────────────────
+    // ── Vision (Phase 7a/7b) ────────────────────────────────────────────────
 
     /**
-     * Look once and describe: permission → capture → vision provider → speak.
-     * Every step fails honestly and out loud.
+     * Look once and describe: permission → capture/reuse → OCR or vision
+     * provider → speak. Every step fails honestly and out loud.
+     *
+     * Phase 7b: persistent frame — follow-up focus queries (e.g. "look at the
+     * cup") reuse the last JPEG instead of recapturing. "read this" / "read the
+     * screen" use a read-focused prompt for the vision provider.
      */
     internal fun lookAround(query: com.example.meowmba.core.vision.VisionRouter.VisionQuery) {
         val vm = visionManager
@@ -816,37 +823,51 @@ class CompanionViewModel(
             return
         }
 
-        val provider = visionProviderFor()
-        if (provider == null) {
-            speak(
-                "I can't see with the on-device model yet — the current runtime is text-only. " +
-                    "Switch to Ollama or OpenAI for vision."
-            )
-            resetState()
-            return
-        }
-
-        _uiState.value = _uiState.value.copy(
-            interactionState = InteractionState.THINKING,
-            captionText = "Looking…",
-            emotion = CompanionEmotion.CURIOUS
-        )
         viewModelScope.launch {
-            val jpeg = vm.captureJpeg().getOrElse {
-                showProviderError("camera: ${it.message}")
-                delay(ERROR_DISPLAY_MS)
+            val jpeg: ByteArray
+            if (lastVisionJpeg == null || query.focus == null) {
+                jpeg = vm.captureJpeg().getOrElse {
+                    showProviderError("camera: ${it.message}")
+                    delay(ERROR_DISPLAY_MS)
+                    resetState()
+                    return@launch
+                }
+                lastVisionJpeg = jpeg
+                val thumb = runCatching {
+                    android.graphics.BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size)
+                }.getOrNull()
+                _uiState.value = _uiState.value.copy(capturedFrame = thumb)
+            } else {
+                jpeg = lastVisionJpeg!!
+            }
+
+            _uiState.value = _uiState.value.copy(
+                interactionState = InteractionState.THINKING,
+                captionText = "Looking…",
+                emotion = CompanionEmotion.CURIOUS
+            )
+
+            val provider = visionProviderFor()
+            if (provider == null) {
+                val msg = if (query.isReadQuery) {
+                    "I can't read with the on-device model — the current runtime is text-only. " +
+                        "Switch to Ollama or OpenAI for reading."
+                } else {
+                    "I can't see with the on-device model yet — the current runtime is text-only. " +
+                        "Switch to Ollama or OpenAI for vision."
+                }
+                speak(msg)
                 resetState()
                 return@launch
             }
-            // Show what the companion is looking at while it thinks
-            val thumb = runCatching {
-                android.graphics.BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size)
-            }.getOrNull()
-            _uiState.value = _uiState.value.copy(capturedFrame = thumb)
 
-            provider.describe(jpeg, com.example.meowmba.core.vision.VisionRouter.promptFor(query)).fold(
+            provider.describe(
+                jpeg, com.example.meowmba.core.vision.VisionRouter.promptFor(query)
+            ).fold(
                 onSuccess = { description ->
-                    memoryRepository?.saveEpisodicCheckpoint("what do you see", "[vision] $description", null)
+                    memoryRepository?.saveEpisodicCheckpoint(
+                        "what do you see", "[vision] $description", null
+                    )
                     speak(description)
                 },
                 onFailure = {
@@ -855,7 +876,6 @@ class CompanionViewModel(
                     resetState()
                 }
             )
-            _uiState.value = _uiState.value.copy(capturedFrame = null)
         }
     }
 
