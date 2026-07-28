@@ -364,13 +364,61 @@ class VoicePipelineTest {
 
         engine.start()
         repeat(3) {
-            fakeStt.simulateError(7) // fewer than the fatal threshold
+            fakeStt.simulateError(5) // infrastructure errors below the fatal threshold
             advanceUntilIdle()
         }
 
         assertFalse(fatalFired)
         assertTrue(engine.isRunning.value)
         assertEquals(4, fakeStt.startListeningCalls) // 1 initial + 3 retries
+        engine.stop()
+    }
+
+    @Test
+    fun `wake loop never gives up on routine no-speech timeouts`() = runTest {
+        // A quiet room means constant ERROR_SPEECH_TIMEOUT / ERROR_NO_MATCH —
+        // those are the loop's normal heartbeat, not a failing recognizer.
+        // (Regression: the fatal guard counted them and disabled the wake
+        // phrase after ~5 idle sessions.)
+        val engine = com.example.meowmba.core.audio.RecognizerWakeWordEngine(
+            fakeStt, com.example.meowmba.core.audio.WakePhraseMatcher("Meow"), this
+        )
+        var fatalFired = false
+        engine.onFatalError = { fatalFired = true }
+
+        engine.start()
+        repeat(12) {
+            fakeStt.simulateError(if (it % 2 == 0) 6 else 7)
+            advanceUntilIdle()
+        }
+
+        assertFalse(fatalFired)
+        assertTrue(engine.isRunning.value)
+        engine.stop()
+    }
+
+    @Test
+    fun `no-speech timeout resets the infrastructure error streak`() = runTest {
+        val engine = com.example.meowmba.core.audio.RecognizerWakeWordEngine(
+            fakeStt, com.example.meowmba.core.audio.WakePhraseMatcher("Meow"), this
+        )
+        var fatalFired = false
+        engine.onFatalError = { fatalFired = true }
+
+        engine.start()
+        repeat(4) { // 4 infra errors (streak just below fatal)…
+            fakeStt.simulateError(5)
+            advanceUntilIdle()
+        }
+        fakeStt.simulateError(6) // …reset by a routine timeout…
+        advanceUntilIdle()
+        repeat(4) { // …so 4 more infra errors still don't reach 5 in a row
+            fakeStt.simulateError(5)
+            advanceUntilIdle()
+        }
+
+        assertFalse(fatalFired)
+        assertTrue(engine.isRunning.value)
         engine.stop()
     }
 }

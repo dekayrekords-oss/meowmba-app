@@ -89,9 +89,16 @@ class RecognizerWakeWordEngine(
                     restart(RESTART_DELAY_MS)
                 }
             },
-            onError = {
+            onError = { code ->
                 if (!running) return@startListening
-                if (++consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+                if (!isInfrastructureError(code)) {
+                    // Quiet room: no-speech timeouts are the loop's NORMAL
+                    // heartbeat, not a failing recognizer. Counting them made
+                    // the engine declare the device broken after ~5 idle
+                    // sessions ("wake phrase stopped…" bug).
+                    consecutiveErrors = 0
+                    restart(RESTART_DELAY_MS)
+                } else if (++consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
                     stop()
                     onFatalError?.invoke()
                 } else {
@@ -112,5 +119,16 @@ class RecognizerWakeWordEngine(
         private const val RESTART_DELAY_MS = 250L
         private const val ERROR_BACKOFF_MS = 700L
         private const val MAX_CONSECUTIVE_ERRORS = 5
+
+        /**
+         * Errors that mean the recognizer itself is broken (service missing,
+         * busy, permission, audio device) — NOT "nothing heard" (6/7), which
+         * is routine for a wake loop in a quiet room.
+         */
+        internal fun isInfrastructureError(code: Int): Boolean = when (code) {
+            android.speech.SpeechRecognizer.ERROR_NO_MATCH,
+            android.speech.SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> false
+            else -> true
+        }
     }
 }
