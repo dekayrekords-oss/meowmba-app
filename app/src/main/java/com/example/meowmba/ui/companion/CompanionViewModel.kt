@@ -3,7 +3,10 @@ package com.example.meowmba.ui.companion
 import androidx.compose.ui.geometry.Offset
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.meowmba.core.agent.LocalModelOption
 import com.example.meowmba.core.agent.MediaPipeProvider
+import com.example.meowmba.core.agent.ModelCatalog
+import com.example.meowmba.core.agent.ModelDownloader
 import com.example.meowmba.core.agent.ModelProvider
 import com.example.meowmba.core.agent.ModelResponse
 import com.example.meowmba.core.agent.RemoteModelProvider
@@ -77,6 +80,10 @@ class CompanionViewModel(
     private val embedder: EmbeddingInterface = LocalHashEmbedder(),
     private val auditDao: AuditDao? = null,
     private val workspaceRoot: java.io.File? = null,
+    /** App-private directory for downloaded on-device models. */
+    private val modelsDir: java.io.File? = null,
+    /** Injectable for tests; defaults to a real downloader over [modelsDir]. */
+    private val modelDownloader: ModelDownloader? = null,
     /** Dispatcher for blocking work (on-device inference). Injected for tests. */
     private val ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO
 ) : ViewModel() {
@@ -88,6 +95,13 @@ class CompanionViewModel(
 
     /** Tools available for agent routing; null when no workspace/repo exists. */
     private var agentToolRegistry: ToolRegistry? = null
+
+    /** Model downloads into app-private storage, HF token from encrypted prefs. */
+    private val downloader: ModelDownloader? by lazy {
+        modelDownloader ?: modelsDir?.let { dir ->
+            ModelDownloader(dir, hfTokenProvider = { secureStorage?.getApiKey("huggingface") })
+        }
+    }
 
     /**
      * Hermes Agent backend, built from [CompanionState.hermesAgentUrl].
@@ -257,6 +271,14 @@ class CompanionViewModel(
 
         rebuildHermesBrain()
 
+        // If no local model path is configured but a catalog model is already
+        // downloaded, adopt it — the app works on-device out of the box.
+        if (secureStorage?.getEndpoint("local") == null) {
+            downloader?.firstInstalledOption()
+                ?.let { option -> downloader?.installedFile(option)?.absolutePath }
+                ?.let { path -> secureStorage?.saveEndpoint("local", path) }
+        }
+
         // Load initial provider
         updateProvider(_uiState.value.selectedModel)
     }
@@ -272,8 +294,7 @@ class CompanionViewModel(
 
         currentProvider = when (modelName) {
             "Gemma 2b (Local)" -> {
-                val path = secureStorage.getEndpoint("local") ?: "/data/local/tmp/llm/gemma.bin"
-                MediaPipeProvider(secureStorage.context, path)
+                MediaPipeProvider(secureStorage.context, resolvedLocalModelPath())
             }
             "Ollama (Local Network)" -> {
                 RemoteModelProvider(
@@ -296,6 +317,18 @@ class CompanionViewModel(
     }
 
     /**
+     * The local model file the provider will actually load: the configured
+     * path, else a downloaded catalog model, else the legacy adb default.
+     */
+    private fun resolvedLocalModelPath(): String {
+        val configured = secureStorage?.getEndpoint("local")
+        if (configured != null) return configured
+        return downloader?.firstInstalledOption()
+            ?.let { option -> downloader?.installedFile(option)?.absolutePath }
+            ?: "/data/local/tmp/llm/gemma.bin"
+    }
+
+    /**
      * Snapshot of what model is loaded on-device vs. on the cloud server,
      * derived from the same configuration used to build the providers.
      * Displayed on the Hardware (LLM Manager) page.
@@ -307,6 +340,7 @@ class CompanionViewModel(
             selected.contains("Network") -> ModelSource.NETWORK
             else -> ModelSource.CLOUD
         }
+        val localPath = resolvedLocalModelPath()
         _uiState.value = _uiState.value.copy(
             loadedModels = LoadedModelsInfo(
                 localName = if (source == ModelSource.LOCAL) {
@@ -314,13 +348,13 @@ class CompanionViewModel(
                 } else {
                     "Gemma 2b"
                 },
-                localPath = secureStorage?.getEndpoint("local")
-                    ?: "/data/local/tmp/llm/gemma.bin",
+                localPath = localPath,
                 localRuntime = "MediaPipe LLM Inference",
                 cloudProvider = "OpenAI",
                 cloudModel = secureStorage?.getModelName("openai") ?: "gpt-4o-mini",
                 cloudEndpoint = "https://api.openai.com",
                 cloudKeyConfigured = !secureStorage?.getApiKey("openai").isNullOrBlank(),
+                localInstalled = java.io.File(localPath).exists(),
                 activeSource = source
             )
         )
@@ -489,7 +523,7 @@ class CompanionViewModel(
 
             if (currentProvider == null) {
                 delay(1500)
-                speak("I am in Phase 3. Please configure a model provider in settings to talk for real!")
+                speak("No model is ready yet. Download one from the Hardware page, or configure a server in Settings.")
                 return@launch
             }
 
@@ -906,15 +940,104 @@ class CompanionViewModel(
 
     /** Hardware page: verify the on-device model file is actually present. */
     fun runLocalModelCheck() {
+        refreshLoadedModels()
         val path = _uiState.value.loadedModels.localPath
-        val exists = java.io.File(path).exists()
+        val exists = _uiState.value.loadedModels.localInstalled
         _uiState.value = _uiState.value.copy(
             connectionTestResult = if (exists) {
                 "Model file present: $path"
             } else {
-                "Model file not found at $path — download it first"
+                "Model file not found at $path — download one below"
             }
         )
+    }
+
+    // ── Model downloads ─────────────────────────────────────────────────────
+
+    /** Download a curated catalog model into app-private storage. */
+    fun downloadModel(option: LocalModelOption) {
+        val dl = downloader ?: run {
+            setDownloadError(option.id, "Downloads are unavailable in this build")
+            return
+        }
+        if (option.requiresHfToken && secureStorage?.getApiKey("huggingface").isNullOrBlank()) {
+            setDownloadError(option.id, "Needs a free Hugging Face token — add it in Settings")
+            return
+        }
+        val existing = _uiState.value.modelDownloads[option.id]
+        if (existing != null && !existing.done && existing.error == null) return  // already running
+
+        viewModelScope.launch {
+            setDownloadProgress(option.id, ModelDownloader.DownloadProgress())
+            try {
+                val file = dl.download(option.downloadUrl, option.fileName) { progress ->
+                    setDownloadProgress(option.id, progress)
+                }
+                installDownloadedModel(file.absolutePath)
+            } catch (e: Exception) {
+                setDownloadError(option.id, e.message ?: "Download failed")
+            }
+        }
+    }
+
+    /** Download any model from a custom URL (must be a MediaPipe .task bundle). */
+    fun downloadCustomModel(url: String, fileName: String) {
+        val id = "custom:$fileName"
+        val dl = downloader ?: run {
+            setDownloadError(id, "Downloads are unavailable in this build")
+            return
+        }
+        when {
+            !url.startsWith("http://") && !url.startsWith("https://") ->
+                return setDownloadError(id, "URL must start with http:// or https://")
+            !ModelCatalog.isValidModelFileName(fileName) ->
+                return setDownloadError(id, "File name must be simple and end in .task")
+        }
+        viewModelScope.launch {
+            setDownloadProgress(id, ModelDownloader.DownloadProgress())
+            try {
+                val file = dl.download(url, fileName) { progress ->
+                    setDownloadProgress(id, progress)
+                }
+                installDownloadedModel(file.absolutePath)
+            } catch (e: Exception) {
+                setDownloadError(id, e.message ?: "Download failed")
+            }
+        }
+    }
+
+    /** Point the local provider at an already-downloaded catalog model. */
+    fun useDownloadedModel(option: LocalModelOption) {
+        val file = downloader?.installedFile(option) ?: return
+        installDownloadedModel(file.absolutePath)
+        if (!_uiState.value.selectedModel.contains("(Local)")) {
+            onModelSelected("Gemma 2b (Local)")
+        }
+    }
+
+    fun deleteDownloadedModel(option: LocalModelOption) {
+        downloader?.delete(option)
+        if (_uiState.value.loadedModels.localPath.endsWith(option.fileName)) {
+            secureStorage?.saveEndpoint("local", "/data/local/tmp/llm/gemma.bin")
+        }
+        refreshLoadedModels()
+        updateProvider(_uiState.value.selectedModel)
+    }
+
+    private fun installDownloadedModel(path: String) {
+        secureStorage?.saveEndpoint("local", path)
+        refreshLoadedModels()
+        updateProvider(_uiState.value.selectedModel)
+    }
+
+    private fun setDownloadProgress(id: String, progress: ModelDownloader.DownloadProgress) {
+        _uiState.value = _uiState.value.copy(
+            modelDownloads = _uiState.value.modelDownloads + (id to progress)
+        )
+    }
+
+    private fun setDownloadError(id: String, message: String) {
+        setDownloadProgress(id, ModelDownloader.DownloadProgress(error = message))
     }
 
     // ── Agent screen & controls ─────────────────────────────────────────────

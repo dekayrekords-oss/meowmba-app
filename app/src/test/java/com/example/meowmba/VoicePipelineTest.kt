@@ -247,7 +247,7 @@ class VoicePipelineTest {
         assertTrue("recognizer is live during playback", fakeStt.startListeningCalls > 0)
 
         // The mic hears the companion's own answer — must NOT interrupt
-        fakeStt.simulatePartial("i am in phase")
+        fakeStt.simulatePartial("no model is ready")
         assertEquals(InteractionState.SPEAKING, viewModel.uiState.value.interactionState)
         assertEquals(0, fakeTts.stopCalls)
     }

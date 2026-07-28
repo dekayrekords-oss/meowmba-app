@@ -31,6 +31,7 @@ fun SettingsScreen(
     onClose: () -> Unit
 ) {
     var openaiKey by remember { mutableStateOf(secureStorage.getApiKey("openai") ?: "") }
+    var hfToken by remember { mutableStateOf(secureStorage.getApiKey("huggingface") ?: "") }
     var ollamaEndpoint by remember { mutableStateOf(secureStorage.getEndpoint("ollama") ?: "http://10.0.2.2:11434") }
     var ollamaModel by remember { mutableStateOf(secureStorage.getModelName("ollama") ?: "gemma2") }
     var localModelPath by remember { mutableStateOf(secureStorage.getEndpoint("local") ?: "/data/local/tmp/llm/gemma.bin") }
@@ -114,6 +115,17 @@ fun SettingsScreen(
                 label = { Text("API Key") },
                 modifier = Modifier.fillMaxWidth()
             )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Hugging Face token (gated model downloads like Gemma)
+            Text("Hugging Face", style = MaterialTheme.typography.titleMedium, color = Color.White)
+            SettingsTextField(
+                value = hfToken,
+                onValueChange = { hfToken = it },
+                label = { Text("Token (for gated models like Gemma — free at huggingface.co/settings/tokens)") },
+                modifier = Modifier.fillMaxWidth()
+            )
             
             Spacer(modifier = Modifier.height(24.dp))
             
@@ -149,6 +161,7 @@ fun SettingsScreen(
             Button(
                 onClick = {
                     secureStorage.saveApiKey("openai", openaiKey)
+                    secureStorage.saveApiKey("huggingface", hfToken)
                     secureStorage.saveEndpoint("ollama", ollamaEndpoint)
                     secureStorage.saveModelName("ollama", ollamaModel)
                     secureStorage.saveEndpoint("local", localModelPath)

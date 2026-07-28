@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.PhoneAndroid
@@ -22,6 +23,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.meowmba.core.agent.LocalModelOption
+import com.example.meowmba.core.agent.ModelCatalog
 import com.example.meowmba.core.utils.SystemUtils
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -31,6 +34,10 @@ fun ModelManagerScreen(
     onModelSelected: (String) -> Unit = {},
     onTestCloud: () -> Unit = {},
     onCheckLocal: () -> Unit = {},
+    onDownloadModel: (LocalModelOption) -> Unit = {},
+    onUseModel: (LocalModelOption) -> Unit = {},
+    onDeleteModel: (LocalModelOption) -> Unit = {},
+    onCustomDownload: (String, String) -> Unit = { _, _ -> },
     onClose: () -> Unit
 ) {
     var showProviderPicker by remember { mutableStateOf(false) }
@@ -51,7 +58,6 @@ fun ModelManagerScreen(
     val context = LocalContext.current
     val ram = remember { SystemUtils.getTotalRamGb(context) }
     val cores = remember { SystemUtils.getCpuCores() }
-    val recommendation = remember { SystemUtils.getRecommendedModel(ram) }
 
     Scaffold(
         topBar = {
@@ -183,29 +189,45 @@ fun ModelManagerScreen(
                 color = Color.White,
                 fontWeight = FontWeight.Bold
             )
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            ModelDownloadItem(
-                name = "Gemma 2b",
-                description = "Lightweight, fast, perfect for most mobile devices.",
-                size = "1.6 GB",
-                isRecommended = recommendation.contains("2b"),
-                onDownload = { /* TODO */ }
-            )
-            
+
             Spacer(modifier = Modifier.height(12.dp))
-            
-            ModelDownloadItem(
-                name = "Gemma 7b",
-                description = "High intelligence, requires 8GB+ RAM.",
-                size = "5.0 GB",
-                isRecommended = recommendation.contains("7b"),
-                onDownload = { /* TODO */ }
-            )
+
+            // Honest state banner when nothing is installed on-device
+            if (!state.loadedModels.localInstalled) {
+                Surface(
+                    color = Color(0xFFD29922).copy(alpha = 0.12f),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, Color(0xFFD29922).copy(alpha = 0.5f))
+                ) {
+                    Text(
+                        "No local model installed. Download one below to chat and " +
+                            "run the agent brain fully on-device — or load a Hermes " +
+                            "fine-tune via a custom URL.",
+                        color = Color(0xFFD29922),
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
+            // Curated catalog
+            ModelCatalog.options.forEach { option ->
+                CatalogModelItem(
+                    option = option,
+                    state = state,
+                    onDownload = { onDownloadModel(option) },
+                    onUse = { onUseModel(option) },
+                    onDelete = { onDeleteModel(option) }
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
+            // Any model via custom URL
+            CustomModelDownload(state = state, onCustomDownload = onCustomDownload)
 
             Spacer(modifier = Modifier.height(32.dp))
-            
+
             Button(
                 onClick = onClose,
                 modifier = Modifier.fillMaxWidth(),
@@ -313,46 +335,194 @@ fun HardwareStatusCard(ram: Double, cores: Int) {
 }
 
 @Composable
-fun ModelDownloadItem(
-    name: String,
-    description: String,
-    size: String,
-    isRecommended: Boolean,
-    onDownload: () -> Unit
+fun CatalogModelItem(
+    option: LocalModelOption,
+    state: CompanionState,
+    onDownload: () -> Unit,
+    onUse: () -> Unit,
+    onDelete: () -> Unit
 ) {
+    val installed = state.loadedModels.localPath.endsWith(option.fileName) ||
+        java.io.File(state.loadedModels.localPath).name == option.fileName
+    val progress = state.modelDownloads[option.id]
+    val isActive = installed && state.loadedModels.activeSource == ModelSource.LOCAL
+
+    Surface(
+        color = Color(0xFF161B22),
+        shape = RoundedCornerShape(12.dp),
+        border = if (isActive) BorderStroke(1.dp, Color(0xFF3FB950).copy(alpha = 0.6f)) else null,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    option.displayName,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
+                )
+                if (option.recommended) {
+                    Badge(Color(0xFF238636), "REC")
+                }
+                if (option.requiresHfToken) {
+                    Badge(Color(0xFFD29922), "HF TOKEN")
+                }
+            }
+            Text(option.description, color = Color.Gray, fontSize = 12.sp)
+            Text(
+                "${option.approxSize} · ${option.minRamGb}GB+ RAM",
+                color = Color(0xFF58A6FF),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            when {
+                installed -> {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Badge(Color(0xFF3FB950), "INSTALLED")
+                        Spacer(modifier = Modifier.width(8.dp))
+                        if (!isActive) {
+                            TextButton(onClick = onUse) {
+                                Text("Use", color = Color(0xFF58A6FF), fontSize = 12.sp)
+                            }
+                        }
+                        Spacer(modifier = Modifier.weight(1f))
+                        IconButton(onClick = onDelete, modifier = Modifier.size(28.dp)) {
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = "Delete model",
+                                tint = Color.Gray,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                }
+                progress != null && !progress.done && progress.error == null -> {
+                    if (progress.fraction != null) {
+                        LinearProgressIndicator(
+                            progress = { progress.fraction!! },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Text(
+                            "${(progress.fraction!! * 100).toInt()}% · ${progress.received / 1_048_576} MB",
+                            color = Color.Gray, fontSize = 11.sp
+                        )
+                    } else {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                        Text(
+                            "${progress.received / 1_048_576} MB…",
+                            color = Color.Gray, fontSize = 11.sp
+                        )
+                    }
+                }
+                progress?.error != null -> {
+                    Text(progress.error, color = Color(0xFFF85149), fontSize = 12.sp)
+                    TextButton(onClick = onDownload) {
+                        Text("Retry", color = Color(0xFF58A6FF), fontSize = 12.sp)
+                    }
+                }
+                else -> {
+                    OutlinedButton(onClick = onDownload, shape = RoundedCornerShape(8.dp)) {
+                        Icon(
+                            Icons.Default.Download,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Download", fontSize = 12.sp)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun Badge(color: Color, label: String) {
+    Surface(color = color.copy(alpha = 0.2f), shape = RoundedCornerShape(4.dp)) {
+        Text(
+            label,
+            color = color,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+        )
+    }
+}
+
+@Composable
+fun CustomModelDownload(
+    state: CompanionState,
+    onCustomDownload: (String, String) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    var url by remember { mutableStateOf("") }
+    var fileName by remember { mutableStateOf("") }
+    val id = "custom:$fileName"
+    val progress = state.modelDownloads[id]
+
     Surface(
         color = Color(0xFF161B22),
         shape = RoundedCornerShape(12.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(name, color = Color.White, fontWeight = FontWeight.Bold)
-                    if (isRecommended) {
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Surface(
-                            color = Color(0xFF238636),
-                            shape = RoundedCornerShape(4.dp)
-                        ) {
-                            Text(
-                                "REC",
-                                color = Color.White,
-                                fontSize = 10.sp,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                            )
-                        }
+        Column(modifier = Modifier.padding(16.dp)) {
+            TextButton(onClick = { expanded = !expanded }) {
+                Text(
+                    if (expanded) "Hide custom download" else "Any model (custom URL)",
+                    color = Color(0xFF58A6FF),
+                    fontSize = 13.sp
+                )
+            }
+            if (expanded) {
+                OutlinedTextField(
+                    value = url,
+                    onValueChange = { url = it },
+                    label = { Text("Download URL (https://…)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = fileName,
+                    onValueChange = { fileName = it },
+                    label = { Text("Save as (e.g. hermes3-3b.task)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Text(
+                    "Only .task bundles run on the current on-device runtime. " +
+                        "Use Wi-Fi — model files are large.",
+                    color = Color.Gray,
+                    fontSize = 11.sp
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                when {
+                    progress != null && !progress.done && progress.error == null -> {
+                        LinearProgressIndicator(
+                            progress = { progress.fraction ?: 0f },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    progress?.error != null -> {
+                        Text(progress.error, color = Color(0xFFF85149), fontSize = 12.sp)
                     }
                 }
-                Text(description, color = Color.Gray, fontSize = 12.sp)
-                Text(size, color = Color(0xFF58A6FF), fontSize = 11.sp, fontWeight = FontWeight.Medium)
-            }
-            
-            IconButton(onClick = onDownload) {
-                Icon(Icons.Default.Download, contentDescription = "Download", tint = Color.White)
+
+                Spacer(modifier = Modifier.height(4.dp))
+                OutlinedButton(
+                    onClick = { onCustomDownload(url.trim(), fileName.trim()) },
+                    enabled = url.isNotBlank() && fileName.isNotBlank() &&
+                        (progress == null || progress.done || progress.error != null),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Download custom model", fontSize = 12.sp)
+                }
             }
         }
     }

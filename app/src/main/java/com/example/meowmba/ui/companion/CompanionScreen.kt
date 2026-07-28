@@ -256,6 +256,10 @@ fun CompanionScreen(
                 onModelSelected = { viewModel.onModelSelected(it) },
                 onTestCloud = { viewModel.runCloudConnectionTest() },
                 onCheckLocal = { viewModel.runLocalModelCheck() },
+                onDownloadModel = { viewModel.downloadModel(it) },
+                onUseModel = { viewModel.useDownloadedModel(it) },
+                onDeleteModel = { viewModel.deleteDownloadedModel(it) },
+                onCustomDownload = { url, name -> viewModel.downloadCustomModel(url, name) },
                 onClose = { viewModel.toggleModelManager() }
             )
         }

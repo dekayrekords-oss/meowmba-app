@@ -1,6 +1,7 @@
 package com.example.meowmba.ui.companion
 
 import androidx.compose.ui.geometry.Offset
+import com.example.meowmba.core.agent.ModelDownloader
 import com.example.meowmba.core.agent.runtime.AgentTask
 import com.example.meowmba.core.agent.runtime.ApprovalRequest
 import com.example.meowmba.core.database.AuditEntryEntity
@@ -72,7 +73,9 @@ data class CompanionState(
     /** On-device agent brain: model-driven tool routing for natural commands. */
     val agentBrainEnabled: Boolean = true,
     /** Optional Hermes Agent endpoint (OpenAI-compatible). Blank = on-device only. */
-    val hermesAgentUrl: String = ""
+    val hermesAgentUrl: String = "",
+    /** Active model downloads by id (catalog option id or "custom:<fileName>"). */
+    val modelDownloads: Map<String, ModelDownloader.DownloadProgress> = emptyMap()
 )
 
 /**
@@ -95,6 +98,8 @@ data class LoadedModelsInfo(
     val cloudModel: String = "gpt-4o-mini",
     val cloudEndpoint: String = "https://api.openai.com",
     val cloudKeyConfigured: Boolean = false,
+    /** True when the local model file actually exists on disk. */
+    val localInstalled: Boolean = false,
     /** Which source is actively serving responses right now. */
     val activeSource: ModelSource = ModelSource.LOCAL
 )

@@ -69,6 +69,30 @@ endpoint" (blank = on-device only). Everything runs through the
 - **Memory screen (Memory tile):** FTS search, per-type badges, per-item delete, clear-all (with confirmation), JSON export via share sheet, retention policy (30d/90d/1y/∞, purged on start and on change), and a pause switch that stops all memory writes.
 - **Meta Memory adapter:** `MetaMemoryConnector` interface with an honest no-op default, ready for the Meta Memory app's sync contract. Local Room stays the source of truth.
 
+## On-device Model Downloads
+
+The Hardware page installs real on-device models — no adb required:
+
+- **Downloads land in app-private storage** (`filesDir/models`) — the only
+  place the app can both write and load from. (The old default
+  `/data/local/tmp/llm/` is adb-only, which is why "no model is installed"
+  could never fix itself.)
+- **Curated catalog (verified against the Hugging Face API):**
+  | Model | Size | Gated? | Best for |
+  |---|---|---|---|
+  | Qwen 2.5 0.5B Instruct | ~0.6 GB | No | Any phone, instant routing |
+  | Qwen 2.5 1.5B Instruct *(recommended)* | ~1.7 GB | No | Best balance, no account |
+  | Qwen 2.5 1.5B (long context) | ~1.8 GB | No | Long memory-recall prompts |
+  | Gemma 3 1B IT int4 | ~0.6 GB | Free HF token | Google's smallest quality model |
+- **Any model via custom URL** — point at your own server or mirror; must be
+  a MediaPipe `.task` bundle (Hermes-3-3B path documented above).
+- Downloads stream with progress to a `.part` file and atomically rename —
+  a failed attempt never leaves a corrupt "installed" model.
+- Gated models (Gemma) use your free Hugging Face token (Settings →
+  Hugging Face) after you accept the license in a browser.
+- An installed model is adopted automatically at startup; "Use"/"Delete"
+  per model; the "no model installed" banner disappears once one exists.
+
 ## Phase 3: Model Routing (Completed)
 
 - **Live streaming inference:** Ollama (NDJSON `/api/generate`) and OpenAI-compatible (SSE `/v1/chat/completions` — also covers llama.cpp/vLLM-style servers), plus on-device MediaPipe LLM Inference. Line parsing lives in pure, unit-tested `StreamParsers`.

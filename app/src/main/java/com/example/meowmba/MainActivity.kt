@@ -52,6 +52,7 @@ class MainActivity : ComponentActivity() {
         memoryRepository = MemoryRepository(database.messageDao(), database.memoryDao())
         val auditDao = database.auditDao()
         val workspaceRoot = java.io.File(filesDir, "memba_workspace")
+        val modelsDir = java.io.File(filesDir, "models")
 
         checkPermissions()
 
@@ -68,7 +69,8 @@ class MainActivity : ComponentActivity() {
                                 memoryRepository,
                                 audioStreamingManager,
                                 auditDao = auditDao,
-                                workspaceRoot = workspaceRoot
+                                workspaceRoot = workspaceRoot,
+                                modelsDir = modelsDir
                             ) as T
                         }
                     }
