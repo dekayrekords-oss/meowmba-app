@@ -33,6 +33,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var secureStorage: SecureStorageManager
     private lateinit var memoryRepository: MemoryRepository
     private lateinit var audioStreamingManager: AudioStreamingManager
+    private lateinit var visionManager: com.example.meowmba.core.vision.VisionManager
     private var companionViewModel: CompanionViewModel? = null
 
     private val requestPermissionLauncher = registerForActivityResult(
@@ -43,6 +44,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private val cameraPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        companionViewModel?.onCameraPermissionResult(isGranted)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -51,6 +58,7 @@ class MainActivity : ComponentActivity() {
         ttsManager = TextToSpeechManager(this)
         secureStorage = SecureStorageManager(this)
         audioStreamingManager = AudioStreamingManager(this)
+        visionManager = com.example.meowmba.core.vision.VisionManager(this, this)
         
         val database = MeowmbaDatabase.getDatabase(this)
         memoryRepository = MemoryRepository(database.messageDao(), database.memoryDao())
@@ -74,14 +82,22 @@ class MainActivity : ComponentActivity() {
                                 audioStreamingManager,
                                 auditDao = auditDao,
                                 workspaceRoot = workspaceRoot,
-                                modelsDir = modelsDir
+                                modelsDir = modelsDir,
+                                visionManager = visionManager
                             ).also { companionViewModel = it } as T
                         }
                     }
                 )
 
                 val uiState by viewModel.uiState.collectAsState()
-                
+
+                // Vision: the VM asks for CAMERA only when a look needs it
+                androidx.compose.runtime.LaunchedEffect(uiState.cameraPermissionRequested) {
+                    if (uiState.cameraPermissionRequested) {
+                        cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                    }
+                }
+
                 // Handle system back button
                 BackHandler(
                     enabled = uiState.showSettings || uiState.showModelManager || uiState.isChatExpanded ||

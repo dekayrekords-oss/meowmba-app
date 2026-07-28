@@ -54,6 +54,8 @@ dependencies {
     ksp(libs.androidx.room.compiler)
     implementation(libs.mediapipe.tasks.genai)
     implementation(libs.androidx.security.crypto)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
     implementation(libs.ktor.client.android)
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)

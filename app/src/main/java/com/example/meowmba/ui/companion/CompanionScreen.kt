@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.meowmba.ui.components.MicButton
@@ -83,15 +84,26 @@ fun CompanionScreen(
                     color = Color.Black.copy(alpha = 0.7f),
                     shape = RoundedCornerShape(16.dp)
                 ) {
-                    Text(
-                        text = uiState.captionText ?: "",
-                        color = Color.White,
-                        modifier = Modifier.padding(16.dp),
-                        style = MaterialTheme.typography.bodyLarge.copy(
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Medium
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        // Vision: the frame the companion is looking at, while it describes it
+                        uiState.capturedFrame?.let { frame ->
+                            androidx.compose.foundation.Image(
+                                bitmap = frame.asImageBitmap(),
+                                contentDescription = "What the companion is looking at",
+                                modifier = Modifier
+                                    .size(96.dp)
+                                    .padding(bottom = 8.dp)
+                            )
+                        }
+                        Text(
+                            text = uiState.captionText ?: "",
+                            color = Color.White,
+                            style = MaterialTheme.typography.bodyLarge.copy(
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Medium
+                            )
                         )
-                    )
+                    }
                 }
             }
 

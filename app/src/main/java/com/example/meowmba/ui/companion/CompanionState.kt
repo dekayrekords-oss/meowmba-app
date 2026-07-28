@@ -79,7 +79,11 @@ data class CompanionState(
     /** Every model bundle actually present in the app-private models dir. */
     val installedModels: List<InstalledModelFile> = emptyList(),
     /** Keep listening for the wake phrase in the background (foreground service). */
-    val backgroundListeningEnabled: Boolean = false
+    val backgroundListeningEnabled: Boolean = false,
+    /** Vision: set when a look request needs the CAMERA runtime permission. */
+    val cameraPermissionRequested: Boolean = false,
+    /** Vision: thumbnail of the last captured frame (shown while describing). */
+    val capturedFrame: android.graphics.Bitmap? = null
 )
 
 /**

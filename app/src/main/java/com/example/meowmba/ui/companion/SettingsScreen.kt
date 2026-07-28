@@ -42,6 +42,7 @@ fun SettingsScreen(
     var hfToken by remember { mutableStateOf(secureStorage.getApiKey("huggingface") ?: "") }
     var ollamaEndpoint by remember { mutableStateOf(secureStorage.getEndpoint("ollama") ?: "http://10.0.2.2:11434") }
     var ollamaModel by remember { mutableStateOf(secureStorage.getModelName("ollama") ?: "gemma2") }
+    var ollamaVisionModel by remember { mutableStateOf(secureStorage.getModelName("ollama_vision") ?: "gemma4:12b-it-qat") }
     var localModelPath by remember { mutableStateOf(secureStorage.getEndpoint("local") ?: "/data/local/tmp/llm/gemma.bin") }
 
     Surface(
@@ -165,6 +166,13 @@ fun SettingsScreen(
                 label = { Text("Model name (e.g. gemma4:12b-it-qat, memba-gemma4, hermes3-memba:8b)") },
                 modifier = Modifier.fillMaxWidth()
             )
+            Spacer(modifier = Modifier.height(8.dp))
+            SettingsTextField(
+                value = ollamaVisionModel,
+                onValueChange = { ollamaVisionModel = it },
+                label = { Text("Vision model for 'what do you see' (multimodal, e.g. gemma4:12b-it-qat)") },
+                modifier = Modifier.fillMaxWidth()
+            )
             
             Spacer(modifier = Modifier.height(24.dp))
             
@@ -185,6 +193,7 @@ fun SettingsScreen(
                     secureStorage.saveApiKey("huggingface", hfToken)
                     secureStorage.saveEndpoint("ollama", ollamaEndpoint)
                     secureStorage.saveModelName("ollama", ollamaModel)
+                    secureStorage.saveModelName("ollama_vision", ollamaVisionModel)
                     secureStorage.saveEndpoint("local", localModelPath)
                     onClose()
                 },

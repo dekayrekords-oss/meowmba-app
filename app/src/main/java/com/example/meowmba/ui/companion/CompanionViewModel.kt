@@ -89,7 +89,9 @@ class CompanionViewModel(
     /** Injectable for tests; defaults to a real downloader over [modelsDir]. */
     private val modelDownloader: ModelDownloader? = null,
     /** Dispatcher for blocking work (on-device inference). Injected for tests. */
-    private val ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO
+    private val ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO,
+    /** CameraX capture for the vision path; null in tests → honest "no camera". */
+    private val visionManager: com.example.meowmba.core.vision.VisionManager? = null
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(CompanionState())
     val uiState = _uiState.asStateFlow()
@@ -590,6 +592,13 @@ class CompanionViewModel(
             // Save user message to memory
             val userMessageId = memoryRepository?.addMessage(MessageRole.USER, text)
 
+            // Vision fast path: "what do you see" is immediate companion
+            // behavior (capture + describe), never an agent tool call.
+            com.example.meowmba.core.vision.VisionRouter.parse(text)?.let { query ->
+                lookAround(query)
+                return@launch
+            }
+
             // Agent routing: keyword fast path, then the on-device model brain.
             // The model only proposes — approval gates still decide.
             val agentIntent = routeAgentIntent(text)
@@ -785,6 +794,100 @@ class CompanionViewModel(
 
             delay(1000)
             resetState()
+        }
+    }
+
+    // ── Vision (Phase 7a) ───────────────────────────────────────────────────
+
+    /**
+     * Look once and describe: permission → capture → vision provider → speak.
+     * Every step fails honestly and out loud.
+     */
+    internal fun lookAround(query: com.example.meowmba.core.vision.VisionRouter.VisionQuery) {
+        val vm = visionManager
+        if (vm == null) {
+            speak("I don't have a camera in this build.")
+            resetState()
+            return
+        }
+        if (!vm.hasPermission()) {
+            _uiState.value = _uiState.value.copy(cameraPermissionRequested = true)
+            speak("I need camera permission to see — allow it, then ask me again.")
+            return
+        }
+
+        val provider = visionProviderFor()
+        if (provider == null) {
+            speak(
+                "I can't see with the on-device model yet — the current runtime is text-only. " +
+                    "Switch to Ollama or OpenAI for vision."
+            )
+            resetState()
+            return
+        }
+
+        _uiState.value = _uiState.value.copy(
+            interactionState = InteractionState.THINKING,
+            captionText = "Looking…",
+            emotion = CompanionEmotion.CURIOUS
+        )
+        viewModelScope.launch {
+            val jpeg = vm.captureJpeg().getOrElse {
+                showProviderError("camera: ${it.message}")
+                delay(ERROR_DISPLAY_MS)
+                resetState()
+                return@launch
+            }
+            // Show what the companion is looking at while it thinks
+            val thumb = runCatching {
+                android.graphics.BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size)
+            }.getOrNull()
+            _uiState.value = _uiState.value.copy(capturedFrame = thumb)
+
+            provider.describe(jpeg, com.example.meowmba.core.vision.VisionRouter.promptFor(query)).fold(
+                onSuccess = { description ->
+                    memoryRepository?.saveEpisodicCheckpoint("what do you see", "[vision] $description", null)
+                    speak(description)
+                },
+                onFailure = {
+                    showProviderError(it.message ?: "vision failed")
+                    delay(ERROR_DISPLAY_MS)
+                    resetState()
+                }
+            )
+            _uiState.value = _uiState.value.copy(capturedFrame = null)
+        }
+    }
+
+    /** The MainActivity permission launcher reports back through here. */
+    fun onCameraPermissionResult(granted: Boolean) {
+        _uiState.value = _uiState.value.copy(cameraPermissionRequested = false)
+        if (granted) {
+            speak("Camera's on — ask me to look again.")
+        } else {
+            speak("No camera permission, so I can't see. You can enable it later in system settings.")
+        }
+        resetState()
+    }
+
+    /**
+     * Vision provider selection mirrors the chat provider: Ollama → meow's
+     * multimodal lane, OpenAI → cloud vision, on-device → honest null
+     * (MediaPipe's runtime is text-only today).
+     */
+    internal fun visionProviderFor(): com.example.meowmba.core.vision.VisionProvider? {
+        val selected = _uiState.value.selectedModel
+        return when {
+            selected.contains("Network") -> com.example.meowmba.core.vision.OllamaVisionProvider(
+                secureStorage?.getEndpoint("ollama") ?: "http://10.0.2.2:11434",
+                secureStorage?.getModelName("ollama_vision") ?: DEFAULT_VISION_MODEL
+            )
+            selected.contains("Cloud") -> com.example.meowmba.core.vision.OpenAIVisionProvider(
+                "https://api.openai.com",
+                secureStorage?.getApiKey("openai"),
+                "gpt-4o-mini"
+            )
+            else -> null
         }
     }
 
@@ -1288,6 +1391,7 @@ class CompanionViewModel(
         private const val KEY_HERMES_URL = "hermes_agent_url"
         private const val KEY_BACKGROUND_LISTENING = "background_listening"
         private const val KEY_SELECTED_MODEL = "selected_model"
+        private const val DEFAULT_VISION_MODEL = "gemma4:12b-it-qat"
         private const val DEFAULT_RETENTION_DAYS = 90
         private const val FOLLOW_UP_TIMEOUT_MS = 8000L
         private const val ERROR_DISPLAY_MS = 3500L
