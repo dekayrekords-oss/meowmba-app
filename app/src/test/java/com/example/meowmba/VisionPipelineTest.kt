@@ -2,6 +2,7 @@ package com.example.meowmba
 
 import com.example.meowmba.core.memory.MemoryRepository
 import com.example.meowmba.core.security.SecureStorageManager
+import com.example.meowmba.core.vision.DeviceVisionProvider
 import com.example.meowmba.core.vision.OllamaVisionProvider
 import com.example.meowmba.core.vision.OpenAIVisionProvider
 import com.example.meowmba.core.vision.VisionRouter
@@ -143,12 +144,12 @@ class VisionPipelineTest {
     }
 
     @Test
-    fun `on-device selection honestly has no vision`() = runTest {
+    fun `on-device selection uses device vision`() = runTest {
         val vm = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
 
         vm.onModelSelected("On-device (Local)")
 
-        assertNull(vm.visionProviderFor())
+        assertTrue("on-device should use device vision", vm.visionProviderFor() is DeviceVisionProvider)
     }
 
     @Test

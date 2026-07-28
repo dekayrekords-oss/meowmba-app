@@ -849,14 +849,7 @@ class CompanionViewModel(
 
             val provider = visionProviderFor()
             if (provider == null) {
-                val msg = if (query.isReadQuery) {
-                    "I can't read with the on-device model — the current runtime is text-only. " +
-                        "Switch to Ollama or OpenAI for reading."
-                } else {
-                    "I can't see with the on-device model yet — the current runtime is text-only. " +
-                        "Switch to Ollama or OpenAI for vision."
-                }
-                speak(msg)
+                speak("I can't see right now — no vision provider is available.")
                 resetState()
                 return@launch
             }
@@ -892,8 +885,8 @@ class CompanionViewModel(
 
     /**
      * Vision provider selection mirrors the chat provider: Ollama → meow's
-     * multimodal lane, OpenAI → cloud vision, on-device → honest null
-     * (MediaPipe's runtime is text-only today).
+     * multimodal lane, OpenAI → cloud vision, on-device → DeviceVisionProvider
+     * using Google Play Services ML Kit (image labeling + text recognition).
      */
     internal fun visionProviderFor(): com.example.meowmba.core.vision.VisionProvider? {
         val selected = _uiState.value.selectedModel
@@ -907,7 +900,7 @@ class CompanionViewModel(
                 secureStorage?.getApiKey("openai"),
                 "gpt-4o-mini"
             )
-            else -> null
+            else -> com.example.meowmba.core.vision.DeviceVisionProvider()
         }
     }
 

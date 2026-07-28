@@ -56,6 +56,8 @@ dependencies {
     implementation(libs.androidx.security.crypto)
     implementation(libs.androidx.camera.camera2)
     implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.mlkit.image.labeling)
+    implementation(libs.mlkit.text.recognition)
     implementation(libs.ktor.client.android)
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
