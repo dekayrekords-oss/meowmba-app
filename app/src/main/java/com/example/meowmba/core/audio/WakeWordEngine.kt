@@ -43,8 +43,18 @@ class RecognizerWakeWordEngine(
 
     override var onWake: ((command: String?) -> Unit)? = null
 
+    /**
+     * Fired when the recognizer keeps failing ([MAX_CONSECUTIVE_ERRORS] in a
+     * row) — the engine stops instead of hot-looping on a broken device, and
+     * the companion surfaces the reason honestly.
+     */
+    var onFatalError: (() -> Unit)? = null
+
     @Volatile
     private var running = false
+
+    @Volatile
+    private var consecutiveErrors = 0
 
     /** Update the phrase set (e.g. after the companion is renamed). */
     fun updateMatcher(newMatcher: WakePhraseMatcher) {
@@ -54,6 +64,7 @@ class RecognizerWakeWordEngine(
     override fun start() {
         if (running) return
         running = true
+        consecutiveErrors = 0
         _isRunning.value = true
         listen()
     }
@@ -69,6 +80,7 @@ class RecognizerWakeWordEngine(
         speechEngine.startListening(
             onResult = { text ->
                 if (!running) return@startListening
+                consecutiveErrors = 0  // a completed session proves the recognizer works
                 val match = matcher.match(text)
                 if (match != null) {
                     // Hand off to the companion; it resumes the engine when idle.
@@ -78,7 +90,13 @@ class RecognizerWakeWordEngine(
                 }
             },
             onError = {
-                if (running) restart(ERROR_BACKOFF_MS)
+                if (!running) return@startListening
+                if (++consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+                    stop()
+                    onFatalError?.invoke()
+                } else {
+                    restart(ERROR_BACKOFF_MS)
+                }
             }
         )
     }
@@ -93,5 +111,6 @@ class RecognizerWakeWordEngine(
     companion object {
         private const val RESTART_DELAY_MS = 250L
         private const val ERROR_BACKOFF_MS = 700L
+        private const val MAX_CONSECUTIVE_ERRORS = 5
     }
 }

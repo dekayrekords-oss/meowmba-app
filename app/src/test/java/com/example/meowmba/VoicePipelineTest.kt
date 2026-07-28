@@ -77,17 +77,20 @@ class WakePhraseMatcherTest {
 @OptIn(ExperimentalCoroutinesApi::class)
 class VoicePipelineTest {
 
-    /** Fake STT: records calls, lets tests push partials/finals. */
+    /** Fake STT: records calls, lets tests push partials/finals/errors. */
     class FakeSpeechEngine : SpeechEngine {
         override val isListening: StateFlow<Boolean> = MutableStateFlow(false)
         override val partialResults = MutableStateFlow("")
+        override var isAvailable = true
         var startListeningCalls = 0
         var stopListeningCalls = 0
         private var lastOnResult: ((String) -> Unit)? = null
+        private var lastOnError: ((Int) -> Unit)? = null
 
         override fun startListening(onResult: (String) -> Unit, onError: (Int) -> Unit) {
             startListeningCalls++
             lastOnResult = onResult
+            lastOnError = onError
         }
 
         override fun stopListening() { stopListeningCalls++ }
@@ -95,6 +98,7 @@ class VoicePipelineTest {
 
         fun simulateResult(text: String) { lastOnResult?.invoke(text) }
         fun simulatePartial(text: String) { partialResults.value = text }
+        fun simulateError(code: Int) { lastOnError?.invoke(code) }
     }
 
     /** Fake TTS: records speech, exposes the engine callbacks. */
@@ -282,5 +286,91 @@ class VoicePipelineTest {
         assertEquals(false, viewModel.uiState.value.backgroundListeningEnabled)
         viewModel.setBackgroundListeningEnabled(true)
         assertEquals(true, viewModel.uiState.value.backgroundListeningEnabled)
+    }
+
+    // ── Honest voice failures (mic tap / wake phrase "does nothing") ────────
+
+    @Test
+    fun `mic tap with mic privacy off explains instead of doing nothing`() = runTest {
+        viewModel.onAvatarZoneClick(com.example.meowmba.ui.companion.AvatarZone.EAR_LEFT)
+        assertFalse(viewModel.uiState.value.isMicEnabled)
+        val callsBefore = fakeStt.startListeningCalls
+
+        viewModel.onMicClick()
+
+        // Mic privacy cut puts the avatar in MUTED — the tap changes nothing but the caption
+        assertEquals(InteractionState.MUTED, viewModel.uiState.value.interactionState)
+        assertEquals(callsBefore, fakeStt.startListeningCalls)
+        assertTrue(viewModel.uiState.value.captionText!!.contains("Microphone is off"))
+    }
+
+    @Test
+    fun `unavailable recognizer surfaces an honest caption`() = runTest {
+        fakeStt.isAvailable = false
+
+        viewModel.onMicClick()
+
+        assertEquals(InteractionState.IDLE, viewModel.uiState.value.interactionState)
+        assertEquals(0, fakeStt.startListeningCalls)
+        assertTrue(viewModel.uiState.value.captionText!!.contains("isn't available"))
+    }
+
+    @Test
+    fun `permission error is surfaced, no-match stays silent`() = runTest {
+        viewModel.onMicClick()
+        assertEquals(InteractionState.LISTENING, viewModel.uiState.value.interactionState)
+
+        fakeStt.simulateError(9) // ERROR_INSUFFICIENT_PERMISSIONS
+        assertEquals(InteractionState.IDLE, viewModel.uiState.value.interactionState)
+        assertTrue(viewModel.uiState.value.captionText!!.contains("permission"))
+
+        viewModel.onMicClick()
+        fakeStt.simulateError(7) // ERROR_NO_MATCH — normal "didn't hear you"
+        assertEquals(InteractionState.IDLE, viewModel.uiState.value.interactionState)
+        assertEquals(null, viewModel.uiState.value.captionText)
+    }
+
+    @Test
+    fun `wake engine stops after repeated recognizer failures`() = runTest {
+        val engine = com.example.meowmba.core.audio.RecognizerWakeWordEngine(
+            fakeStt, com.example.meowmba.core.audio.WakePhraseMatcher("Meow"), this
+        )
+        var fatalFired = false
+        engine.onFatalError = { fatalFired = true }
+
+        engine.start()
+        // error → backoff → new session → error … (realistic interleave)
+        repeat(4) {
+            fakeStt.simulateError(5) // ERROR_CLIENT
+            advanceUntilIdle()
+        }
+        assertFalse(fatalFired) // 4 consecutive errors: still retrying
+
+        fakeStt.simulateError(5) // 5th consecutive failure → give up
+        assertTrue(fatalFired)
+        assertFalse(engine.isRunning.value)
+        val callsAtFatal = fakeStt.startListeningCalls
+        advanceUntilIdle()
+        assertEquals(callsAtFatal, fakeStt.startListeningCalls) // no hot loop after giving up
+    }
+
+    @Test
+    fun `wake engine keeps retrying through occasional errors`() = runTest {
+        val engine = com.example.meowmba.core.audio.RecognizerWakeWordEngine(
+            fakeStt, com.example.meowmba.core.audio.WakePhraseMatcher("Meow"), this
+        )
+        var fatalFired = false
+        engine.onFatalError = { fatalFired = true }
+
+        engine.start()
+        repeat(3) {
+            fakeStt.simulateError(7) // fewer than the fatal threshold
+            advanceUntilIdle()
+        }
+
+        assertFalse(fatalFired)
+        assertTrue(engine.isRunning.value)
+        assertEquals(4, fakeStt.startListeningCalls) // 1 initial + 3 retries
+        engine.stop()
     }
 }

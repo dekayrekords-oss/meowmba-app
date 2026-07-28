@@ -3,6 +3,7 @@ package com.example.meowmba.ui.companion
 import androidx.compose.ui.geometry.Offset
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.speech.SpeechRecognizer
 import com.example.meowmba.core.agent.LocalModelOption
 import com.example.meowmba.core.agent.MediaPipeProvider
 import com.example.meowmba.core.agent.ModelCatalog
@@ -163,6 +164,14 @@ class CompanionViewModel(
         if (speechService != null) {
             wakeWordEngine = RecognizerWakeWordEngine(speechService, matcher, viewModelScope).apply {
                 onWake = { command -> onWakeDetected(command) }
+                onFatalError = {
+                    // Stop the error loop; the persisted preference is left
+                    // alone so the next app launch tries again.
+                    _uiState.value = _uiState.value.copy(
+                        wakeWordEnabled = false,
+                        captionText = "Wake phrase stopped — the speech recognizer keeps failing on this device"
+                    )
+                }
             }
             if (_uiState.value.wakeWordEnabled) startWakeStandby()
         }
@@ -435,7 +444,13 @@ class CompanionViewModel(
      * Tapping while the companion speaks interrupts it and starts a new turn.
      */
     fun onMicClick() {
-        if (!_uiState.value.isMicEnabled) return
+        if (!_uiState.value.isMicEnabled) {
+            // Privacy toggle is easy to hit by accident (ear tap) — say why nothing happens.
+            _uiState.value = _uiState.value.copy(
+                captionText = "Microphone is off — tap an ear or use the Privacy tile to re-enable"
+            )
+            return
+        }
 
         when (_uiState.value.interactionState) {
             InteractionState.IDLE -> startListening()
@@ -452,8 +467,15 @@ class CompanionViewModel(
         isFollowUpListen = false
         wakeWordEngine?.stop()
 
-        if (speechService == null) {
+        val engine = speechService
+        if (engine == null) {
             startMockListening()
+            return
+        }
+        if (!engine.isAvailable) {
+            _uiState.value = _uiState.value.copy(
+                captionText = "Speech recognition isn't available on this device — no recognizer service installed"
+            )
             return
         }
 
@@ -464,10 +486,36 @@ class CompanionViewModel(
             emotion = CompanionEmotion.ALERT
         )
 
-        speechService.startListening(
+        engine.startListening(
             onResult = { result -> processUserSpeech(result) },
-            onError = { _ -> resetState() }
+            onError = { code -> onListeningError(code) }
         )
+    }
+
+    /**
+     * Recognizer errors: "nothing heard" codes (no-match, speech timeout) are
+     * a normal quiet end-of-turn; infrastructure failures (permission, busy,
+     * no service) are surfaced honestly instead of looking like a dead button.
+     */
+    private fun onListeningError(code: Int) {
+        resetState()
+        speechErrorCaption(code)?.let { msg ->
+            _uiState.value = _uiState.value.copy(captionText = msg)
+        }
+    }
+
+    private fun speechErrorCaption(code: Int): String? = when (code) {
+        SpeechRecognizer.ERROR_NO_MATCH,
+        SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> null
+        SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS ->
+            "Microphone permission is off — enable it in system Settings"
+        SpeechRecognizer.ERROR_RECOGNIZER_BUSY ->
+            "Speech recognizer is busy — try again in a moment"
+        SpeechRecognizer.ERROR_CLIENT ->
+            "Speech recognizer failed — is a recognition service installed?"
+        SpeechRecognizer.ERROR_AUDIO ->
+            "Audio recording error — is another app holding the mic?"
+        else -> "Speech recognition error ($code)"
     }
 
     private fun startMockListening() {

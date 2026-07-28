@@ -20,6 +20,13 @@ interface SpeechEngine {
     val partialResults: StateFlow<String>
 
     /**
+     * False when the device has no usable recognition service at all
+     * (e.g. no Google app / voice typing service) — sessions would only
+     * ever fail. Defaults to true so test fakes need no changes.
+     */
+    val isAvailable: Boolean get() = true
+
+    /**
      * Begin one recognition session.
      * [onResult] delivers the final transcript, [onError] the platform error code.
      */

@@ -12,9 +12,16 @@ import kotlinx.coroutines.flow.asStateFlow
 /**
  * [SpeechEngine] backed by Android's on-device SpeechRecognizer.
  * Prefers offline recognition when the device supports it.
+ *
+ * Devices without a recognition service (no Google app / voice typing
+ * provider) are detected up front via [isRecognitionAvailable] instead of
+ * failing every session with a silent ERROR_CLIENT.
  */
 class SpeechService(context: Context) : SpeechEngine {
-    private val speechRecognizer: SpeechRecognizer = SpeechRecognizer.createSpeechRecognizer(context)
+    override val isAvailable: Boolean = SpeechRecognizer.isRecognitionAvailable(context)
+
+    private val speechRecognizer: SpeechRecognizer? =
+        if (isAvailable) SpeechRecognizer.createSpeechRecognizer(context) else null
 
     private val _isListening = MutableStateFlow(false)
     override val isListening = _isListening.asStateFlow()
@@ -26,7 +33,7 @@ class SpeechService(context: Context) : SpeechEngine {
     private var onError: ((Int) -> Unit)? = null
 
     init {
-        speechRecognizer.setRecognitionListener(object : RecognitionListener {
+        speechRecognizer?.setRecognitionListener(object : RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) {
                 _isListening.value = true
             }
@@ -57,6 +64,11 @@ class SpeechService(context: Context) : SpeechEngine {
     }
 
     override fun startListening(onResult: (String) -> Unit, onError: (Int) -> Unit) {
+        val recognizer = speechRecognizer ?: run {
+            // No recognition service on this device — report honestly.
+            onError(SpeechRecognizer.ERROR_CLIENT)
+            return
+        }
         this.onResult = onResult
         this.onError = onError
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
@@ -66,15 +78,15 @@ class SpeechService(context: Context) : SpeechEngine {
             putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
         }
         _partialResults.value = ""
-        speechRecognizer.startListening(intent)
+        recognizer.startListening(intent)
     }
 
     override fun stopListening() {
-        speechRecognizer.stopListening()
+        speechRecognizer?.stopListening()
         _isListening.value = false
     }
 
     override fun destroy() {
-        speechRecognizer.destroy()
+        speechRecognizer?.destroy()
     }
 }
