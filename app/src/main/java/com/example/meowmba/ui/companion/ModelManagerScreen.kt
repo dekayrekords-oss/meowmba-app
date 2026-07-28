@@ -26,7 +26,6 @@ import androidx.compose.ui.unit.sp
 import com.example.meowmba.core.agent.LocalModelOption
 import com.example.meowmba.core.agent.ModelCatalog
 import com.example.meowmba.core.utils.SystemUtils
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ModelManagerScreen(
@@ -38,6 +37,8 @@ fun ModelManagerScreen(
     onUseModel: (LocalModelOption) -> Unit = {},
     onDeleteModel: (LocalModelOption) -> Unit = {},
     onCustomDownload: (String, String) -> Unit = { _, _ -> },
+    onUseInstalledFile: (String) -> Unit = {},
+    onDeleteInstalledFile: (String) -> Unit = {},
     onClose: () -> Unit
 ) {
     var showProviderPicker by remember { mutableStateOf(false) }
@@ -113,9 +114,20 @@ fun ModelManagerScreen(
                 primary = loaded.localName,
                 details = listOf(
                     "Runtime: ${loaded.localRuntime}",
-                    "Path: ${loaded.localPath}"
+                    "Path: ${loaded.localPath}",
+                    if (loaded.localInstalled) "File: present on disk" else "File: NOT found on disk"
                 ),
                 status = if (loaded.activeSource == ModelSource.LOCAL) LoadStatus.ACTIVE else LoadStatus.STANDBY
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            LoadedModelCard(
+                icon = { Icon(Icons.Default.Cloud, contentDescription = null, tint = Color(0xFF3FB950)) },
+                title = "Network server · LAN",
+                primary = "Ollama · ${loaded.networkModel}",
+                details = listOf("Endpoint: ${loaded.networkEndpoint}"),
+                status = if (loaded.activeSource == ModelSource.NETWORK) LoadStatus.ACTIVE else LoadStatus.STANDBY
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -221,6 +233,28 @@ fun ModelManagerScreen(
                     onDelete = { onDeleteModel(option) }
                 )
                 Spacer(modifier = Modifier.height(12.dp))
+            }
+
+            // Custom installs: real bundles on disk that are not in the catalog
+            val customInstalled = state.installedModels.filter { it.catalogDisplayName == null }
+            if (customInstalled.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    "Custom installs",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color.White
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                customInstalled.forEach { file ->
+                    CustomInstalledItem(
+                        file = file,
+                        isActive = state.loadedModels.activeSource == ModelSource.LOCAL &&
+                            java.io.File(state.loadedModels.localPath).name == file.fileName,
+                        onUse = { onUseInstalledFile(file.fileName) },
+                        onDelete = { onDeleteInstalledFile(file.fileName) }
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
             }
 
             // Any model via custom URL
@@ -342,10 +376,11 @@ fun CatalogModelItem(
     onUse: () -> Unit,
     onDelete: () -> Unit
 ) {
-    val installed = state.loadedModels.localPath.endsWith(option.fileName) ||
-        java.io.File(state.loadedModels.localPath).name == option.fileName
+    val installed = state.installedModels.any { it.fileName == option.fileName }
     val progress = state.modelDownloads[option.id]
-    val isActive = installed && state.loadedModels.activeSource == ModelSource.LOCAL
+    val isActive = (state.loadedModels.localPath.endsWith(option.fileName) ||
+        java.io.File(state.loadedModels.localPath).name == option.fileName) &&
+        state.loadedModels.activeSource == ModelSource.LOCAL
 
     Surface(
         color = Color(0xFF161B22),
@@ -433,6 +468,53 @@ fun CatalogModelItem(
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("Download", fontSize = 12.sp)
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CustomInstalledItem(
+    file: InstalledModelFile,
+    isActive: Boolean,
+    onUse: () -> Unit,
+    onDelete: () -> Unit
+) {
+    Surface(
+        color = Color(0xFF161B22),
+        shape = RoundedCornerShape(12.dp),
+        border = if (isActive) BorderStroke(1.dp, Color(0xFF3FB950).copy(alpha = 0.6f)) else null,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(file.fileName, color = Color.White, fontWeight = FontWeight.Bold)
+            Text(
+                "${file.sizeBytes / 1_048_576} MB · custom download",
+                color = Color(0xFF58A6FF),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Badge(Color(0xFF3FB950), "INSTALLED")
+                if (isActive) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Badge(Color(0xFF3FB950), "ACTIVE")
+                } else {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    TextButton(onClick = onUse) {
+                        Text("Use", color = Color(0xFF58A6FF), fontSize = 12.sp)
+                    }
+                }
+                Spacer(modifier = Modifier.weight(1f))
+                IconButton(onClick = onDelete, modifier = Modifier.size(28.dp)) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = "Delete model",
+                        tint = Color.Gray,
+                        modifier = Modifier.size(16.dp)
+                    )
                 }
             }
         }

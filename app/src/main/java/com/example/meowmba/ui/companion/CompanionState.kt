@@ -76,6 +76,8 @@ data class CompanionState(
     val hermesAgentUrl: String = "",
     /** Active model downloads by id (catalog option id or "custom:<fileName>"). */
     val modelDownloads: Map<String, ModelDownloader.DownloadProgress> = emptyMap(),
+    /** Every model bundle actually present in the app-private models dir. */
+    val installedModels: List<InstalledModelFile> = emptyList(),
     /** Keep listening for the wake phrase in the background (foreground service). */
     val backgroundListeningEnabled: Boolean = false
 )
@@ -91,7 +93,7 @@ enum class ModelSource { LOCAL, NETWORK, CLOUD }
  * builds the actual providers, so the page always reflects reality.
  */
 data class LoadedModelsInfo(
-    /** On-device model (runs on the phone itself). */
+    /** On-device model (runs on the phone itself) — catalog display name or real file name. */
     val localName: String = "Gemma 2b",
     val localPath: String = "/data/local/tmp/llm/gemma.bin",
     val localRuntime: String = "MediaPipe LLM Inference",
@@ -100,10 +102,21 @@ data class LoadedModelsInfo(
     val cloudModel: String = "gpt-4o-mini",
     val cloudEndpoint: String = "https://api.openai.com",
     val cloudKeyConfigured: Boolean = false,
+    /** Network (LAN) server model — Ollama. */
+    val networkEndpoint: String = "",
+    val networkModel: String = "",
     /** True when the local model file actually exists on disk. */
     val localInstalled: Boolean = false,
     /** Which source is actively serving responses right now. */
     val activeSource: ModelSource = ModelSource.LOCAL
+)
+
+/** A model bundle file present in the app-private models directory. */
+data class InstalledModelFile(
+    val fileName: String,
+    val sizeBytes: Long,
+    /** Catalog display name when the file matches a curated option, else null (custom). */
+    val catalogDisplayName: String? = null
 )
 
 /**

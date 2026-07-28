@@ -262,6 +262,8 @@ fun CompanionScreen(
                 onUseModel = { viewModel.useDownloadedModel(it) },
                 onDeleteModel = { viewModel.deleteDownloadedModel(it) },
                 onCustomDownload = { url, name -> viewModel.downloadCustomModel(url, name) },
+                onUseInstalledFile = { viewModel.useInstalledModelFile(it) },
+                onDeleteInstalledFile = { viewModel.deleteInstalledModelFile(it) },
                 onClose = { viewModel.toggleModelManager() }
             )
         }

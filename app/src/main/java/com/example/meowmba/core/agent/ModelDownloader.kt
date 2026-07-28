@@ -53,6 +53,16 @@ class ModelDownloader(
     fun firstInstalledOption(): LocalModelOption? =
         options.firstOrNull { installedFile(it) != null }
 
+    /**
+     * Every model bundle actually present in the models dir — catalog or
+     * custom — so the UI can show what is really on disk (never guessed).
+     */
+    fun listInstalled(): List<File> =
+        modelsDir.listFiles { f ->
+            f.isFile && f.length() > 0 &&
+                (f.name.endsWith(".task") || f.name.endsWith(".litertlm"))
+        }?.sortedBy { it.name } ?: emptyList()
+
     private val options get() = ModelCatalog.options
 
     fun destinationFor(fileName: String): File = File(modelsDir, fileName)

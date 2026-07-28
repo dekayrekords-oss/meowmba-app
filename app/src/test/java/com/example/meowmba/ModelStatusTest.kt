@@ -48,7 +48,8 @@ class ModelStatusTest {
     fun `defaults show local model active without secure storage`() = runTest {
         val vm = CompanionViewModel()
         val loaded = vm.uiState.value.loadedModels
-        assertEquals("Gemma 2b", loaded.localName)
+        // No storage → legacy default path; name reflects the real file, not a label
+        assertEquals("gemma.bin", loaded.localName)
         assertEquals("gpt-4o-mini", loaded.cloudModel)
         assertEquals(ModelSource.LOCAL, loaded.activeSource)
         assertFalse(loaded.cloudKeyConfigured)
@@ -88,8 +89,34 @@ class ModelStatusTest {
 
         val loaded = vm.uiState.value.loadedModels
         assertEquals("/sdcard/llm/gemma3.bin", loaded.localPath)
-        assertEquals("Gemma 2b", loaded.localName)
+        // Unknown (non-catalog) file → the honest file name, not "Gemma 2b"
+        assertEquals("gemma3.bin", loaded.localName)
         assertEquals(ModelSource.LOCAL, loaded.activeSource)
+    }
+
+    @Test
+    fun `catalog file resolves to its display name`() = runTest {
+        `when`(mockSecureStorage.getEndpoint("local"))
+            .thenReturn("/data/user/0/com.example.meowmba/files/models/qwen2.5-1.5b-instruct-q8.task")
+        val vm = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
+
+        vm.onModelSelected("Gemma 2b (Local)")
+
+        assertEquals("Qwen 2.5 1.5B Instruct", vm.uiState.value.loadedModels.localName)
+    }
+
+    @Test
+    fun `ollama selection populates the network card`() = runTest {
+        `when`(mockSecureStorage.getEndpoint("ollama")).thenReturn("http://192.168.1.69:11434")
+        `when`(mockSecureStorage.getModelName("ollama")).thenReturn("qwen3.6:latest")
+        val vm = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
+
+        vm.onModelSelected("Ollama (Local Network)")
+
+        val loaded = vm.uiState.value.loadedModels
+        assertEquals(ModelSource.NETWORK, loaded.activeSource)
+        assertEquals("http://192.168.1.69:11434", loaded.networkEndpoint)
+        assertEquals("qwen3.6:latest", loaded.networkModel)
     }
 
     @Test

@@ -123,6 +123,11 @@ The Hardware page installs real on-device models — no adb required:
   Hugging Face) after you accept the license in a browser.
 - An installed model is adopted automatically at startup; "Use"/"Delete"
   per model; the "no model installed" banner disappears once one exists.
+- **The Hardware page shows disk truth:** "Currently Loaded" names the real
+  model file (catalog display name when recognized), a Network card covers
+  the Ollama LAN provider, catalog INSTALLED badges reflect files on disk,
+  and custom-URL downloads get their own "Custom installs" section with
+  Use/Delete — a custom download can never silently vanish again.
 
 ## Phase 2.5: Background Wake Word (Completed)
 

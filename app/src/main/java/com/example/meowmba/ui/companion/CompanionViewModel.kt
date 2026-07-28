@@ -330,9 +330,12 @@ class CompanionViewModel(
     }
 
     /**
-     * Snapshot of what model is loaded on-device vs. on the cloud server,
-     * derived from the same configuration used to build the providers.
-     * Displayed on the Hardware (LLM Manager) page.
+     * Snapshot of what model is loaded on-device vs. on servers, derived from
+     * the same configuration used to build the providers. The local name is
+     * the real model file (catalog display name when recognized, file name
+     * otherwise) — never the provider-picker label. Also refreshes the list
+     * of model bundles actually present on disk. Displayed on the Hardware
+     * (LLM Manager) page.
      */
     private fun refreshLoadedModels() {
         val selected = _uiState.value.selectedModel
@@ -342,22 +345,28 @@ class CompanionViewModel(
             else -> ModelSource.CLOUD
         }
         val localPath = resolvedLocalModelPath()
+        val localFileName = java.io.File(localPath).name
         _uiState.value = _uiState.value.copy(
             loadedModels = LoadedModelsInfo(
-                localName = if (source == ModelSource.LOCAL) {
-                    selected.substringBefore(" (")
-                } else {
-                    "Gemma 2b"
-                },
+                localName = ModelCatalog.optionForFile(localFileName)?.displayName ?: localFileName,
                 localPath = localPath,
                 localRuntime = "MediaPipe LLM Inference",
                 cloudProvider = "OpenAI",
                 cloudModel = secureStorage?.getModelName("openai") ?: "gpt-4o-mini",
                 cloudEndpoint = "https://api.openai.com",
                 cloudKeyConfigured = !secureStorage?.getApiKey("openai").isNullOrBlank(),
+                networkEndpoint = secureStorage?.getEndpoint("ollama") ?: "http://10.0.2.2:11434",
+                networkModel = secureStorage?.getModelName("ollama") ?: "gemma2",
                 localInstalled = java.io.File(localPath).exists(),
                 activeSource = source
-            )
+            ),
+            installedModels = downloader?.listInstalled()?.map { f ->
+                InstalledModelFile(
+                    fileName = f.name,
+                    sizeBytes = f.length(),
+                    catalogDisplayName = ModelCatalog.optionForFile(f.name)?.displayName
+                )
+            } ?: emptyList()
         )
     }
 
@@ -1019,6 +1028,26 @@ class CompanionViewModel(
     fun deleteDownloadedModel(option: LocalModelOption) {
         downloader?.delete(option)
         if (_uiState.value.loadedModels.localPath.endsWith(option.fileName)) {
+            secureStorage?.saveEndpoint("local", "/data/local/tmp/llm/gemma.bin")
+        }
+        refreshLoadedModels()
+        updateProvider(_uiState.value.selectedModel)
+    }
+
+    /** Point the local provider at any bundle present in the models dir (catalog or custom). */
+    fun useInstalledModelFile(fileName: String) {
+        val file = downloader?.listInstalled()?.firstOrNull { it.name == fileName } ?: return
+        installDownloadedModel(file.absolutePath)
+        if (!_uiState.value.selectedModel.contains("(Local)")) {
+            onModelSelected("Gemma 2b (Local)")
+        }
+    }
+
+    /** Delete any bundle present in the models dir (catalog or custom). */
+    fun deleteInstalledModelFile(fileName: String) {
+        val file = downloader?.listInstalled()?.firstOrNull { it.name == fileName } ?: return
+        file.delete()
+        if (_uiState.value.loadedModels.localPath.endsWith(fileName)) {
             secureStorage?.saveEndpoint("local", "/data/local/tmp/llm/gemma.bin")
         }
         refreshLoadedModels()
