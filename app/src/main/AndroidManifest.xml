@@ -4,6 +4,9 @@
 
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Navigation: needed to rank nearby places by distance from the user. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
@@ -32,6 +35,19 @@
         <intent>
             <action android:name="android.intent.action.SENDTO" />
             <data android:scheme="mailto" />
+        </intent>
+        <!-- MetaMemory glasses companion (shared memories / runtime) -->
+        <package android:name="com.meow.metamemory" />
+        <!-- Navigation: without these, API 30+ package visibility makes the maps
+             intent silently unresolvable. -->
+        <package android:name="com.google.android.apps.maps" />
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="geo" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="google.navigation" />
         </intent>
     </queries>
 
@@ -74,6 +90,16 @@
             android:name=".core.download.DownloadService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+
+        <!-- Shared model runtime + memory for MetaMemory glasses app -->
+        <service
+            android:name=".bridge.MeowmbaRuntimeService"
+            android:exported="true"
+            android:enabled="true">
+            <intent-filter>
+                <action android:name="com.example.meowmba.action.RUNTIME_BRIDGE" />
+            </intent-filter>
+        </service>
     </application>
 
 </manifest>

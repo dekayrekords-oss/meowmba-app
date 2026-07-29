@@ -70,6 +70,8 @@ data class CompanionState(
     /** FTS search results on the Memory screen; null = not searching. */
     val memorySearchResults: List<MemoryEntity>? = null,
     val showMemoryScreen: Boolean = false,
+    /** NAV card: offline region packs, online fallback, saved places. */
+    val showNavScreen: Boolean = false,
     /** When true, nothing new is written to memory (privacy control). */
     val memoryPaused: Boolean = false,
     /** Auto-delete memories older than this many days; 0 = keep forever. */

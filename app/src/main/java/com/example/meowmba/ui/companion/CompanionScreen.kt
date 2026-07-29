@@ -351,11 +351,19 @@ fun CompanionScreen(
                     "Hardware" -> viewModel.toggleModelManager()
                     "Privacy" -> viewModel.togglePrivacyDashboard()
                     "Memory" -> viewModel.toggleMemoryScreen()
+                    "NAV" -> viewModel.toggleNavScreen()
                     "Agents", "Tools" -> viewModel.toggleAgentsScreen()
                 }
             }
         )
 
+
+        if (uiState.showNavScreen) {
+            NavScreen(
+                secureStorage = secureStorage,
+                onClose = { viewModel.toggleNavScreen() },
+            )
+        }
 
         if (uiState.showSettings && secureStorage != null) {
             SettingsScreen(

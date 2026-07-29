@@ -26,6 +26,10 @@ import com.example.meowmba.core.agent.runtime.LlmToolCallRouter
 import com.example.meowmba.core.agent.runtime.SubmitResult
 import com.example.meowmba.core.agent.runtime.TaskStatus
 import com.example.meowmba.core.agent.runtime.ToolCallPromptMode
+import com.example.meowmba.core.agent.tools.FindPlacesTool
+import com.example.meowmba.core.agent.tools.ListSavedPlacesTool
+import com.example.meowmba.core.agent.tools.NavigateTool
+import com.example.meowmba.core.agent.tools.SavePlaceTool
 import com.example.meowmba.core.agent.tools.FileDeleteTool
 import com.example.meowmba.core.agent.tools.FileListTool
 import com.example.meowmba.core.agent.tools.FileReadTool
@@ -341,6 +345,21 @@ class CompanionViewModel(
             toolRegistry.register(ListAppsTool(appContext))
             toolRegistry.register(OpenUrlTool(appContext))
             toolRegistry.register(OpenSettingsTool(appContext))
+
+            // Navigation. find_places is SAFE and read-only so the companion can look,
+            // describe the options and ask "closest, or do you want to pick?" before
+            // nav.navigate actually routes anywhere. Offline-first, so it works with no
+            // signal — see core/nav.
+            val savedPlaces = com.example.meowmba.core.nav.SavedPlaceStore(appContext)
+            val offlinePoi = com.example.meowmba.core.nav.OfflinePoiSource(appContext)
+            val onlinePoi = com.example.meowmba.core.nav.GeoapifyPlaceSource {
+                secureStorage?.getApiKey("geoapify").orEmpty()
+            }
+            val placeRepo = com.example.meowmba.core.nav.PlaceRepository(offlinePoi, onlinePoi)
+            toolRegistry.register(FindPlacesTool(appContext, placeRepo, savedPlaces))
+            toolRegistry.register(NavigateTool(appContext))
+            toolRegistry.register(SavePlaceTool(appContext, savedPlaces))
+            toolRegistry.register(ListSavedPlacesTool(savedPlaces))
         }
         if (workspaceRoot != null) {
             val ws = Workspace(workspaceRoot)
@@ -1586,6 +1605,10 @@ class CompanionViewModel(
     }
 
     // ── Memory screen & controls ────────────────────────────────────────────
+
+    fun toggleNavScreen() {
+        _uiState.value = _uiState.value.copy(showNavScreen = !_uiState.value.showNavScreen)
+    }
 
     fun toggleMemoryScreen() {
         _uiState.value = _uiState.value.copy(showMemoryScreen = !_uiState.value.showMemoryScreen)
