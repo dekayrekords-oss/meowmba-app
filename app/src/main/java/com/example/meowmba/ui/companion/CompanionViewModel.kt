@@ -207,8 +207,8 @@ class CompanionViewModel(
                 // still a buildable provider; a stale/removed label falls back
                 // to the default instead of producing a silent null provider.
                 selectedModel = storage.getPreference(KEY_SELECTED_MODEL)
-                    ?.takeIf { it in modelProviders }
-                    ?: _uiState.value.selectedModel
+                    ?.takeIf { it in availableModelProviders(storage.context) }
+                    ?: defaultModelLabel(storage.context)
             )
         }
         matcher = WakePhraseMatcher(_uiState.value.name)
@@ -479,11 +479,34 @@ class CompanionViewModel(
         super.onCleared()
     }
 
+    /**
+     * Which provider a fresh install starts on: Gemini Nano when AICore is present,
+     * otherwise the bundled local model.
+     *
+     * Only consulted when nothing is saved — an explicit choice in the picker always
+     * wins, so both options stay fully available. Falling back matters: defaulting to
+     * Nano unconditionally would strand every device without AICore on a provider that
+     * can never build.
+     */
+    private fun defaultModelLabel(context: android.content.Context?): String =
+        if (context != null && GeminiNanoProvider.isAvailable(context)) {
+            MODEL_GEMINI_NANO
+        } else {
+            "On-device (Local)"
+        }
+
     private fun updateProvider(modelName: String) {
         refreshLoadedModels()
         if (secureStorage == null) return
 
         val mainProvider: ModelProvider? = when (modelName) {
+            // Nano is now selectable in its own right, not just the router's light
+            // lane. runBlocking because AICore wants prepareInferenceEngine() before
+            // first use and updateProvider is synchronous; it is a local IPC warm-up,
+            // not a network call.
+            MODEL_GEMINI_NANO -> runBlocking {
+                GeminiNanoProvider.create(secureStorage.context)
+            }
             "On-device (Local)" -> {
                 val path = resolvedLocalModelPath()
                 if (path.endsWith(".litertlm")) {
@@ -511,23 +534,31 @@ class CompanionViewModel(
             else -> null
         }
 
-        // Wrap in dual-model router when Gemini Nano is available
-        val hasNano = GeminiNanoProvider.isAvailable(secureStorage.context)
-        currentProvider = if (hasNano && mainProvider != null) {
+        // Wrap in the dual-model router when Nano can serve as the LIGHT lane. Skipped
+        // when Nano is already the main provider — routing Nano to Nano just builds a
+        // second engine and warms it up for nothing.
+        val nanoIsMain = modelName == MODEL_GEMINI_NANO
+        val canRouteThroughNano =
+            !nanoIsMain && mainProvider != null &&
+                GeminiNanoProvider.isAvailable(secureStorage.context)
+
+        var nanoActive = nanoIsMain && mainProvider != null
+        currentProvider = if (canRouteThroughNano) {
             val nanoProvider = runBlocking {
                 try { GeminiNanoProvider.create(secureStorage.context) } catch (_: Exception) { null }
             }
             if (nanoProvider != null) {
-                _uiState.value = _uiState.value.copy(geminiNanoActive = true)
-                ModelRouter(lightProvider = nanoProvider, mainProvider = mainProvider)
+                nanoActive = true
+                ModelRouter(lightProvider = nanoProvider, mainProvider = mainProvider!!)
             } else {
-                _uiState.value = _uiState.value.copy(geminiNanoActive = false)
                 mainProvider
             }
         } else {
-            _uiState.value = _uiState.value.copy(geminiNanoActive = false)
             mainProvider
         }
+        // Set once, at the end. Assigning inside each branch meant the "Nano is the
+        // main provider" case was immediately overwritten to false by the fall-through.
+        _uiState.value = _uiState.value.copy(geminiNanoActive = nanoActive)
     }
 
     /**
@@ -553,6 +584,9 @@ class CompanionViewModel(
     private fun refreshLoadedModels() {
         val selected = _uiState.value.selectedModel
         val source = when {
+            // Nano runs on the device via AICore. Without this it fell through to
+            // CLOUD and the Hardware page claimed it was a cloud model.
+            selected == MODEL_GEMINI_NANO -> ModelSource.LOCAL
             selected.contains("(Local)") -> ModelSource.LOCAL
             selected.contains("Network") -> ModelSource.NETWORK
             else -> ModelSource.CLOUD

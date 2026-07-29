@@ -36,9 +36,12 @@ fun ModelSelector(
                 color = Color.White
             )
             Spacer(modifier = Modifier.height(16.dp))
-            
+
+            // Hoisted: LocalContext cannot be read inside the LazyListScope lambda.
+            val offered = availableModelProviders(androidx.compose.ui.platform.LocalContext.current)
+
             LazyColumn {
-                items(modelProviders) { model ->
+                items(offered) { model ->
                     ModelItem(
                         name = model,
                         isSelected = model == selectedModel,
@@ -77,8 +80,25 @@ fun ModelItem(name: String, isSelected: Boolean, onClick: () -> Unit) {
  * ("Phi-3 Mini (Local)", "Anthropic (Cloud)", "Memba Custom (Remote)" were
  * removed: they were never wired up and trapped users in "no model is ready".)
  */
+/** Label for the AICore-backed provider. Also the default when AICore is present. */
+const val MODEL_GEMINI_NANO = "Gemini Nano (On-device)"
+
 val modelProviders = listOf(
+    MODEL_GEMINI_NANO,
     "On-device (Local)",
     "Ollama (Local Network)",
     "OpenAI (Cloud)",
 )
+
+/**
+ * The picker entries that can actually build a provider on THIS device.
+ *
+ * Gemini Nano needs AICore, which not every device has. Offering it where it is
+ * absent would recreate exactly the "No model is ready" trap that [modelProviders]
+ * was pruned to avoid, so it is filtered out rather than shown and broken.
+ */
+fun availableModelProviders(context: android.content.Context?): List<String> =
+    modelProviders.filter { label ->
+        label != MODEL_GEMINI_NANO ||
+            (context != null && com.example.meowmba.core.agent.GeminiNanoProvider.isAvailable(context))
+    }

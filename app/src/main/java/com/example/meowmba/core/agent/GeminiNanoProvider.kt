@@ -51,14 +51,30 @@ class GeminiNanoProvider private constructor(
     }
 
     companion object {
+        /**
+         * AICore package names, newest first.
+         *
+         * NOTE the spelling. This used to probe "com.google.android.ai.core" — with a
+         * dot — which does not exist on any device. Nano therefore reported itself
+         * unavailable everywhere and the dual-model router never engaged. The real
+         * package is `com.google.android.aicore`; Samsung devices additionally ship
+         * `com.samsung.android.aicore`. Verified on a Z Fold 7 with `pm path`.
+         */
+        private val AICORE_PACKAGES = listOf(
+            "com.google.android.aicore",
+            "com.samsung.android.aicore",
+        )
+
         /** True when this device can run Gemini Nano via AICore. */
         fun isAvailable(context: Context): Boolean {
             if (Build.VERSION.SDK_INT < 31) return false
-            return try {
-                context.packageManager.getPackageInfo("com.google.android.ai.core", 0)
-                true
-            } catch (_: Exception) {
-                false
+            return AICORE_PACKAGES.any { pkg ->
+                try {
+                    context.packageManager.getPackageInfo(pkg, 0)
+                    true
+                } catch (_: Exception) {
+                    false
+                }
             }
         }
 

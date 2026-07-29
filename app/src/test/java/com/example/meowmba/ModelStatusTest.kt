@@ -133,7 +133,12 @@ class ModelStatusTest {
         // Regression net: picker entries that build nothing trap users in
         // "No model is ready" (the removed Phi-3/Anthropic/Memba-Custom stubs).
         val vm = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
-        com.example.meowmba.ui.companion.modelProviders.forEach { label ->
+        // Only the entries this device actually OFFERS. Gemini Nano is filtered out
+        // where AICore is absent (as in this JVM test), which is the point of
+        // availableModelProviders — an offered entry must always build.
+        com.example.meowmba.ui.companion
+            .availableModelProviders(mockSecureStorage.context)
+            .forEach { label ->
             vm.onModelSelected(label)
             org.junit.Assert.assertNotNull("picker entry '$label' builds no provider", vm.currentProvider)
         }
