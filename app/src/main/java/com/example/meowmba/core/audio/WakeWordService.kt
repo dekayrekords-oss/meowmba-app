@@ -66,19 +66,63 @@ class WakeWordService : Service() {
     private lateinit var secureStorage: SecureStorageManager
     private var wakeEngine: RecognizerWakeWordEngine? = null
     private var capturingCommand = false
+    private var isForeground = false
+    private var engineStarted = false
 
     override fun onCreate() {
         super.onCreate()
         secureStorage = SecureStorageManager(this)
         createChannels()
-        try {
-            startForeground(FG_ID, buildPersistentNotification("Listening for \"Hey ${companionName()}\""))
-        } catch (e: Exception) {
-            // Android 16+ blocks foreground service start from background
-            // (ForegroundServiceStartNotAllowedException). This catches it
-            // so the service still runs (may be killed earlier, but graceful).
+
+        // Android 16 refuses a microphone foreground service started from the
+        // background. Swallowing that failure and carrying on is what crashed
+        // the whole app: startForegroundService() promises the system a
+        // startForeground() call, and when none arrives the platform kills the
+        // process with ForegroundServiceDidNotStartInTimeException. If we can't
+        // go foreground we must stop instead — onStartCommand retries, since by
+        // then the app is often in the foreground and the start is permitted.
+        if (!promoteToForeground()) return
+
+        startEngine()
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_STOP) {
+            secureStorage.saveBooleanPreference(PREF_KEY, false)
+            stopSelf()
+            return START_NOT_STICKY
         }
 
+        // Second chance at the promise onCreate may have failed to keep. Giving
+        // up here is the graceful path; leaving it unkept is the fatal one.
+        if (!isForeground && !promoteToForeground()) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        if (!engineStarted) startEngine()
+        return START_STICKY
+    }
+
+    /** True once the service is genuinely foreground. Never throws. */
+    private fun promoteToForeground(): Boolean = try {
+        startForeground(
+            FG_ID,
+            buildPersistentNotification("Listening for \"Hey ${companionName()}\"")
+        )
+        isForeground = true
+        true
+    } catch (e: Exception) {
+        android.util.Log.w(
+            "WakeWordService",
+            "Could not enter the foreground; stopping rather than risking a " +
+                "system kill. Background listening will resume next time the " +
+                "app is open.",
+            e
+        )
+        false
+    }
+
+    private fun startEngine() {
         speechService = SpeechService(this)
         tts = TextToSpeechManager(this)
         wakeEngine = RecognizerWakeWordEngine(
@@ -87,20 +131,18 @@ class WakeWordService : Service() {
             onWake = { command -> handleWake(command) }
         }
         wakeEngine?.start()
-    }
-
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_STOP) {
-            secureStorage.saveBooleanPreference(PREF_KEY, false)
-            stopSelf()
-        }
-        return START_STICKY
+        engineStarted = true
     }
 
     override fun onDestroy() {
         wakeEngine?.stop()
-        speechService.destroy()
-        tts.shutdown()
+        // These are lateinit and are only assigned by startEngine(), which is
+        // skipped when the service stops early. Touching them unguarded would
+        // turn a handled failure into an UninitializedPropertyAccessException.
+        if (engineStarted) {
+            speechService.destroy()
+            tts.shutdown()
+        }
         scope.cancel()
         super.onDestroy()
     }

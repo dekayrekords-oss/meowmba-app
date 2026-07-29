@@ -356,63 +356,6 @@ fun CompanionScreen(
             }
         )
 
-        // Tool approval card: a risky action is blocked until you decide
-        uiState.pendingApproval?.let { approval ->
-            Surface(
-                color = Color(0xFF161B22),
-                shape = RoundedCornerShape(16.dp),
-                border = androidx.compose.foundation.BorderStroke(
-                    1.dp,
-                    if (approval.riskLevel == com.example.meowmba.core.agent.tools.RiskLevel.DESTRUCTIVE) {
-                        Color(0xFFF85149)
-                    } else {
-                        Color(0xFFD29922)
-                    }
-                ),
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .padding(32.dp)
-            ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    Text(
-                        if (approval.riskLevel == com.example.meowmba.core.agent.tools.RiskLevel.DESTRUCTIVE) {
-                            "Destructive action — your call"
-                        } else {
-                            "Approval needed"
-                        },
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(approval.title, color = Color(0xFF58A6FF), fontSize = 14.sp)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(approval.detail, color = Color.Gray, fontSize = 12.sp)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Button(
-                            onClick = { viewModel.resolveApproval(false) },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2C2C2C)),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("Deny")
-                        }
-                        Button(
-                            onClick = { viewModel.resolveApproval(true) },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (approval.riskLevel == com.example.meowmba.core.agent.tools.RiskLevel.DESTRUCTIVE) {
-                                    Color(0xFFF85149)
-                                } else {
-                                    Color(0xFF3FB950)
-                                }
-                            ),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("Approve")
-                        }
-                    }
-                }
-            }
-        }
 
         if (uiState.showSettings && secureStorage != null) {
             SettingsScreen(
@@ -493,5 +436,67 @@ fun CompanionScreen(
             messages = uiState.chatMessages,
             modifier = Modifier.align(Alignment.BottomCenter)
         )
+
+        // Drawn AFTER ChatOverlay deliberately. In a Box, later children
+        // paint on top; while this sat earlier in the file the approval
+        // card rendered underneath the open conversation sheet, so a task
+        // waiting on approval was invisible and silently timed out.
+        // Tool approval card: a risky action is blocked until you decide
+        uiState.pendingApproval?.let { approval ->
+            Surface(
+                color = Color(0xFF161B22),
+                shape = RoundedCornerShape(16.dp),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    if (approval.riskLevel == com.example.meowmba.core.agent.tools.RiskLevel.DESTRUCTIVE) {
+                        Color(0xFFF85149)
+                    } else {
+                        Color(0xFFD29922)
+                    }
+                ),
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(32.dp)
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Text(
+                        if (approval.riskLevel == com.example.meowmba.core.agent.tools.RiskLevel.DESTRUCTIVE) {
+                            "Destructive action — your call"
+                        } else {
+                            "Approval needed"
+                        },
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(approval.title, color = Color(0xFF58A6FF), fontSize = 14.sp)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(approval.detail, color = Color.Gray, fontSize = 12.sp)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Button(
+                            onClick = { viewModel.resolveApproval(false) },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2C2C2C)),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Deny")
+                        }
+                        Button(
+                            onClick = { viewModel.resolveApproval(true) },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (approval.riskLevel == com.example.meowmba.core.agent.tools.RiskLevel.DESTRUCTIVE) {
+                                    Color(0xFFF85149)
+                                } else {
+                                    Color(0xFF3FB950)
+                                }
+                            ),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Approve")
+                        }
+                    }
+                }
+            }
+        }
     }
 }
