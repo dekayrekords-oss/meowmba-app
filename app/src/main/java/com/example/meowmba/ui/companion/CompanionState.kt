@@ -9,6 +9,7 @@ import com.example.meowmba.core.database.MemoryEntity
 
 /** One chat bubble in the conversation workspace. */
 data class ChatUiMessage(
+    val id: Long = 0,
     val sender: String,
     val text: String,
     val isCompanion: Boolean
@@ -19,6 +20,16 @@ data class RecalledMemory(
     val contentSnippet: String,
     val reason: String
 )
+
+/** Generated media (image, video, audio) shown in a popup after creation. */
+data class GeneratedMedia(
+    val filePath: String,
+    val type: MediaType,
+    val label: String,
+    val timestamp: Long = System.currentTimeMillis()
+) {
+    enum class MediaType { IMAGE, VIDEO, AUDIO }
+}
 
 /**
  * Represents the complete UI state for the Memba companion.
@@ -83,7 +94,19 @@ data class CompanionState(
     /** Vision: set when a look request needs the CAMERA runtime permission. */
     val cameraPermissionRequested: Boolean = false,
     /** Vision: thumbnail of the last captured frame (shown while describing). */
-    val capturedFrame: android.graphics.Bitmap? = null
+    val capturedFrame: android.graphics.Bitmap? = null,
+    /** Vision: show live camera preview. */
+    val isPreviewVisible: Boolean = false,
+    /** Vision: use front-facing camera. */
+    val isFrontCamera: Boolean = false,
+    /** Gemini Nano is active as the light model alongside the main model. */
+    val geminiNanoActive: Boolean = false,
+    /** Generated media (image, video, audio) to show in a popup. */
+    val generatedMedia: GeneratedMedia? = null,
+    /** USB auto-bridge is monitoring for a tethered desktop connection. */
+    val usbAutoBridgeEnabled: Boolean = false,
+    /** True when the phone is plugged into USB (data connection). */
+    val usbConnected: Boolean = false
 )
 
 /**

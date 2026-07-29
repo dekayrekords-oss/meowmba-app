@@ -4,12 +4,16 @@ import androidx.compose.ui.geometry.Offset
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import android.speech.SpeechRecognizer
+import com.example.meowmba.core.agent.LiteRtProvider
 import com.example.meowmba.core.agent.LocalModelOption
 import com.example.meowmba.core.agent.MediaPipeProvider
 import com.example.meowmba.core.agent.ModelCatalog
+import com.example.meowmba.core.download.DownloadService
 import com.example.meowmba.core.agent.ModelDownloader
 import com.example.meowmba.core.agent.ModelProvider
 import com.example.meowmba.core.agent.ModelResponse
+import com.example.meowmba.core.agent.ModelRouter
+import com.example.meowmba.core.agent.GeminiNanoProvider
 import com.example.meowmba.core.agent.RemoteModelProvider
 import com.example.meowmba.core.agent.runtime.AgentOrchestrator
 import com.example.meowmba.core.agent.runtime.AgentRegistry
@@ -34,8 +38,18 @@ import com.example.meowmba.core.agent.tools.ToolRegistry
 import com.example.meowmba.core.agent.tools.Workspace
 import com.example.meowmba.core.agent.tools.DesktopWriteFileTool
 import com.example.meowmba.core.agent.tools.DesktopRunBuildTool
+import com.example.meowmba.core.agent.tools.DesktopRunScriptTool
+import com.example.meowmba.core.agent.tools.WebSearchTool
+import com.example.meowmba.core.agent.tools.EmailSendTool
+import com.example.meowmba.core.agent.tools.EmailDraftTool
+import com.example.meowmba.core.agent.tools.CalendarListTool
+import com.example.meowmba.core.agent.tools.CalendarCreateTool
+import com.example.meowmba.core.agent.tools.MediaGenerateTool
+import com.example.meowmba.core.agent.tools.MediaGenerateVideoTool
+import com.example.meowmba.core.agent.tools.MediaGenerateAudioTool
 import com.example.meowmba.core.audio.AudioStreamingManager
 import com.example.meowmba.core.bridge.DesktopBridgeManager
+import com.example.meowmba.core.bridge.UsbAutoBridgeManager
 import com.example.meowmba.core.audio.RecognizerWakeWordEngine
 import com.example.meowmba.core.audio.SelfVoiceFilter
 import com.example.meowmba.core.audio.SpeechEngine
@@ -55,12 +69,15 @@ import com.example.meowmba.core.memory.MemoryRepository
 import com.example.meowmba.core.memory.PromptBuilder
 import com.example.meowmba.core.memory.RecallEngine
 import com.example.meowmba.core.memory.RecallResult
+import com.example.meowmba.core.notification.NotificationHelper
 import com.example.meowmba.core.security.SecureStorageManager
+import java.io.File
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 
 /**
  * ViewModel managing the logic for the Memba companion.
@@ -91,10 +108,13 @@ class CompanionViewModel(
     /** Dispatcher for blocking work (on-device inference). Injected for tests. */
     private val ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO,
     /** CameraX capture for the vision path; null in tests → honest "no camera". */
-    private val visionManager: com.example.meowmba.core.vision.VisionManager? = null
+    private val visionManager: com.example.meowmba.core.vision.VisionManager? = null,
+    private val notificationHelper: NotificationHelper? = null
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(CompanionState())
     val uiState = _uiState.asStateFlow()
+
+    fun getVisionManager(): com.example.meowmba.core.vision.VisionManager? = visionManager
 
     /** Active model provider. Internal (not private) so tests can inject fakes. */
     internal var currentProvider: ModelProvider? = null
@@ -118,6 +138,9 @@ class CompanionViewModel(
 
     private var matcher = WakePhraseMatcher()
     private var wakeWordEngine: WakeWordEngine? = null
+
+    /** USB auto-bridge manager — auto-pairs when tethered. */
+    private var usbAutoBridge: UsbAutoBridgeManager? = null
 
     /** Suppresses the companion hearing its own TTS voice during barge-in. */
     private val selfVoiceFilter = SelfVoiceFilter()
@@ -230,6 +253,7 @@ class CompanionViewModel(
                 _uiState.value = _uiState.value.copy(
                     chatMessages = messages.map { message ->
                         ChatUiMessage(
+                            id = message.id,
                             sender = if (message.role == MessageRole.USER) "You" else _uiState.value.name,
                             text = message.content,
                             isCompanion = message.role != MessageRole.USER
@@ -277,6 +301,35 @@ class CompanionViewModel(
             val bridgeManager = DesktopBridgeManager(it)
             toolRegistry.register(DesktopWriteFileTool(bridgeManager))
             toolRegistry.register(DesktopRunBuildTool(bridgeManager))
+            toolRegistry.register(DesktopRunScriptTool(bridgeManager))
+
+            // USB auto-bridge: auto-pair when tethered via USB
+            val context = it.context
+            if (context != null) {
+                usbAutoBridge = UsbAutoBridgeManager(context, bridgeManager, viewModelScope).apply {
+                    onUsbStateChanged = { connected ->
+                        _uiState.value = _uiState.value.copy(usbConnected = connected)
+                    }
+                }
+                val usbEnabled = it.getBooleanPreference(KEY_USB_AUTO_BRIDGE, false)
+                _uiState.value = _uiState.value.copy(usbAutoBridgeEnabled = usbEnabled)
+                if (usbEnabled) usbAutoBridge?.start()
+            }
+        }
+        // Research, email, calendar, and media tools
+        toolRegistry.register(WebSearchTool())
+        val appContext = secureStorage?.context
+        if (appContext != null) {
+            toolRegistry.register(EmailSendTool(appContext))
+            toolRegistry.register(CalendarListTool(appContext))
+            toolRegistry.register(CalendarCreateTool(appContext))
+        }
+        if (workspaceRoot != null) {
+            val ws = Workspace(workspaceRoot)
+            toolRegistry.register(EmailDraftTool(ws))
+            toolRegistry.register(MediaGenerateTool(ws))
+            toolRegistry.register(MediaGenerateVideoTool(ws))
+            toolRegistry.register(MediaGenerateAudioTool(ws))
         }
         if (memoryRepository != null || workspaceRoot != null) {
             agentToolRegistry = toolRegistry
@@ -285,8 +338,35 @@ class CompanionViewModel(
                 orchestrator.tasks.value.take(10).map { "[${it.status}] ${it.title} (${it.agentId})" }
             })
             orchestrator.onTaskCompleted = { task ->
+                val result = task.result ?: ""
                 when (task.status) {
-                    TaskStatus.COMPLETED -> speak(task.result ?: "Done.")
+                    TaskStatus.COMPLETED -> {
+                        // Check for generated media
+                        val mediaLine = result.lineSequence().firstOrNull { it.startsWith("MEDIA_FILE:") }
+                        if (mediaLine != null) {
+                            val path = mediaLine.removePrefix("MEDIA_FILE:")
+                            val file = File(path)
+                            val type = when {
+                                path.endsWith(".png") || path.endsWith(".jpg") || path.endsWith(".jpeg") ->
+                                    GeneratedMedia.MediaType.IMAGE
+                                path.endsWith(".gif") || path.endsWith(".mp4") ->
+                                    GeneratedMedia.MediaType.VIDEO
+                                path.endsWith(".wav") || path.endsWith(".mp3") || path.endsWith(".m4a") ->
+                                    GeneratedMedia.MediaType.AUDIO
+                                else -> GeneratedMedia.MediaType.IMAGE
+                            }
+                            val label = task.title.removePrefix("generate ").removePrefix("create ")
+                                .replaceFirstChar { it.uppercase() }
+                            _uiState.value = _uiState.value.copy(
+                                generatedMedia = GeneratedMedia(
+                                    filePath = file.absolutePath,
+                                    type = type,
+                                    label = label
+                                )
+                            )
+                        }
+                        speak(result.lineSequence().firstOrNull { !it.startsWith("MEDIA_FILE:") } ?: "Done.")
+                    }
                     TaskStatus.FAILED -> speak("Sorry, that didn't work: ${task.result}")
                     else -> { /* cancelled tasks stay quiet */ }
                 }
@@ -330,6 +410,7 @@ class CompanionViewModel(
 
     override fun onCleared() {
         wakeWordEngine?.stop()
+        (currentProvider as? LiteRtProvider)?.close()
         super.onCleared()
     }
 
@@ -337,9 +418,14 @@ class CompanionViewModel(
         refreshLoadedModels()
         if (secureStorage == null) return
 
-        currentProvider = when (modelName) {
+        val mainProvider: ModelProvider? = when (modelName) {
             "On-device (Local)" -> {
-                MediaPipeProvider(secureStorage.context, resolvedLocalModelPath())
+                val path = resolvedLocalModelPath()
+                if (path.endsWith(".litertlm")) {
+                    LiteRtProvider(secureStorage.context, path)
+                } else {
+                    MediaPipeProvider(secureStorage.context, path)
+                }
             }
             "Ollama (Local Network)" -> {
                 RemoteModelProvider(
@@ -358,6 +444,24 @@ class CompanionViewModel(
                 )
             }
             else -> null
+        }
+
+        // Wrap in dual-model router when Gemini Nano is available
+        val hasNano = GeminiNanoProvider.isAvailable(secureStorage.context)
+        currentProvider = if (hasNano && mainProvider != null) {
+            val nanoProvider = runBlocking {
+                try { GeminiNanoProvider.create(secureStorage.context) } catch (_: Exception) { null }
+            }
+            if (nanoProvider != null) {
+                _uiState.value = _uiState.value.copy(geminiNanoActive = true)
+                ModelRouter(lightProvider = nanoProvider, mainProvider = mainProvider)
+            } else {
+                _uiState.value = _uiState.value.copy(geminiNanoActive = false)
+                mainProvider
+            }
+        } else {
+            _uiState.value = _uiState.value.copy(geminiNanoActive = false)
+            mainProvider
         }
     }
 
@@ -434,6 +538,17 @@ class CompanionViewModel(
     fun setConversationMode(enabled: Boolean) {
         _uiState.value = _uiState.value.copy(conversationMode = enabled)
         secureStorage?.saveBooleanPreference(KEY_CONVERSATION, enabled)
+    }
+
+    /** Toggle USB auto-bridge. When enabled, monitors USB and auto-pairs. */
+    fun setUsbAutoBridge(enabled: Boolean) {
+        _uiState.value = _uiState.value.copy(usbAutoBridgeEnabled = enabled)
+        secureStorage?.saveBooleanPreference(KEY_USB_AUTO_BRIDGE, enabled)
+        if (enabled) {
+            usbAutoBridge?.start()
+        } else {
+            usbAutoBridge?.stop()
+        }
     }
 
     /** Rename the companion; the wake phrase "Hey [name]" follows automatically. */
@@ -570,6 +685,9 @@ class CompanionViewModel(
             endConversation()
             return
         }
+
+        // Cancel follow-up timeout — user spoke, we're in a new turn
+        followUpJob?.cancel()
 
         // A new turn clears the previous turn's recall chips
         _uiState.value = _uiState.value.copy(recalledMemories = emptyList())
@@ -763,6 +881,8 @@ class CompanionViewModel(
             memoryRepository?.addMessage(MessageRole.ASSISTANT, text)
         }
 
+        notificationHelper?.postThought(text)
+
         if (ttsManager == null) {
             startMockSpeaking(text)
             return
@@ -796,7 +916,7 @@ class CompanionViewModel(
             }
 
             delay(1000)
-            resetState()
+            onSpeechFinished()
         }
     }
 
@@ -953,6 +1073,7 @@ class CompanionViewModel(
 
     /** Conversation mode: stay for a follow-up question, then time out to idle. */
     private fun startFollowUpListening() {
+        followUpJob?.cancel()
         val engine = speechService ?: run {
             resetState()
             return
@@ -963,11 +1084,22 @@ class CompanionViewModel(
             captionText = "Listening for follow-up…",
             emotion = CompanionEmotion.ALERT
         )
-        engine.startListening(
-            onResult = { result -> processUserSpeech(result) },
-            onError = { _ -> resetState() }
-        )
         followUpJob = viewModelScope.launch {
+            // If the interruption-watch recognizer is still alive, just swap
+            // callbacks — avoids stop+restart which stalls on Samsung.
+            if (engine.isListening.value) {
+                engine.swapCallbacks(
+                    onResult = { result -> processUserSpeech(result) },
+                    onError = { _ -> resetState() }
+                )
+            } else {
+                engine.stopListening()
+                delay(120)
+                engine.startListening(
+                    onResult = { result -> processUserSpeech(result) },
+                    onError = { _ -> resetState() }
+                )
+            }
             delay(FOLLOW_UP_TIMEOUT_MS)
             if (_uiState.value.interactionState == InteractionState.LISTENING && isFollowUpListen) {
                 speechService.stopListening()
@@ -1085,6 +1217,22 @@ class CompanionViewModel(
         processUserSpeech(text.trim())
     }
 
+    fun deleteMessage(id: Long) {
+        viewModelScope.launch {
+            memoryRepository?.deleteMessageById(id)
+        }
+    }
+
+    fun togglePreview() {
+        _uiState.value = _uiState.value.copy(isPreviewVisible = !_uiState.value.isPreviewVisible)
+    }
+
+    fun flipCamera() {
+        val useFront = !_uiState.value.isFrontCamera
+        _uiState.value = _uiState.value.copy(isFrontCamera = useFront)
+        visionManager?.setUseFrontCamera(useFront)
+    }
+
     fun toggleSettings() {
         _uiState.value = _uiState.value.copy(showSettings = !_uiState.value.showSettings)
     }
@@ -1170,17 +1318,38 @@ class CompanionViewModel(
             return
         }
         val existing = _uiState.value.modelDownloads[option.id]
-        if (existing != null && !existing.done && existing.error == null) return  // already running
+        if (existing != null && !existing.done && existing.error == null) return
 
+        // Start foreground service so download survives app backgrounding
+        secureStorage?.context?.let { ctx ->
+            DownloadService.start(
+                ctx, option.downloadUrl, option.fileName, option.id,
+                secureStorage?.getApiKey("huggingface"), dl.destinationFor(option.fileName).parentFile!!
+            )
+        }
+
+        // Lightweight ViewModel-side progress from file size (updates while in foreground).
+        // The service handles the actual download and posts a system notification;
+        // this coroutine polls so the in-app progress bars have something to show.
+        val target = dl.destinationFor(option.fileName)
         viewModelScope.launch {
             setDownloadProgress(option.id, ModelDownloader.DownloadProgress())
-            try {
-                val file = dl.download(option.downloadUrl, option.fileName) { progress ->
-                    setDownloadProgress(option.id, progress)
+            var staleTicks = 0
+            while (true) {
+                delay(2000)
+                if (target.isFile && target.length() > 0) {
+                    installDownloadedModel(target.absolutePath)
+                    break
                 }
-                installDownloadedModel(file.absolutePath)
-            } catch (e: Exception) {
-                setDownloadError(option.id, e.message ?: "Download failed")
+                val part = File(target.parentFile, "${option.fileName}.part")
+                if (part.isFile) {
+                    staleTicks = 0
+                    setDownloadProgress(option.id, ModelDownloader.DownloadProgress(received = part.length()))
+                    } else if (++staleTicks > 30) {
+                    val msg = "Download timed out or was cancelled"
+                    setDownloadProgress(option.id, ModelDownloader.DownloadProgress(error = msg))
+                    break
+                }
             }
         }
     }
@@ -1198,15 +1367,33 @@ class CompanionViewModel(
             !ModelCatalog.isValidModelFileName(fileName) ->
                 return setDownloadError(id, "File name must be simple and end in .task")
         }
+
+        secureStorage?.context?.let { ctx ->
+            DownloadService.start(
+                ctx, url, fileName, id,
+                secureStorage?.getApiKey("huggingface"), dl.destinationFor(fileName).parentFile!!
+            )
+        }
+
+        val target = dl.destinationFor(fileName)
         viewModelScope.launch {
             setDownloadProgress(id, ModelDownloader.DownloadProgress())
-            try {
-                val file = dl.download(url, fileName) { progress ->
-                    setDownloadProgress(id, progress)
+            var staleTicks = 0
+            while (true) {
+                delay(2000)
+                if (target.isFile && target.length() > 0) {
+                    installDownloadedModel(target.absolutePath)
+                    break
                 }
-                installDownloadedModel(file.absolutePath)
-            } catch (e: Exception) {
-                setDownloadError(id, e.message ?: "Download failed")
+                val part = File(target.parentFile, "$fileName.part")
+                if (part.isFile) {
+                    staleTicks = 0
+                    setDownloadProgress(id, ModelDownloader.DownloadProgress(received = part.length()))
+                } else if (++staleTicks > 30) {
+                    val msg = "Download timed out or was cancelled"
+                    setDownloadProgress(id, ModelDownloader.DownloadProgress(error = msg))
+                    break
+                }
             }
         }
     }
@@ -1353,6 +1540,14 @@ class CompanionViewModel(
         }
     }
 
+    fun dismissRecalledMemories() {
+        _uiState.value = _uiState.value.copy(recalledMemories = emptyList())
+    }
+
+    fun dismissGeneratedMedia() {
+        _uiState.value = _uiState.value.copy(generatedMedia = null)
+    }
+
     /** Delete all memories AND conversation history (user-requested). */
     fun clearAllMemories() {
         viewModelScope.launch {
@@ -1404,6 +1599,7 @@ class CompanionViewModel(
         private const val KEY_HERMES_URL = "hermes_agent_url"
         private const val KEY_BACKGROUND_LISTENING = "background_listening"
         private const val KEY_SELECTED_MODEL = "selected_model"
+        private const val KEY_USB_AUTO_BRIDGE = "usb_auto_bridge"
         private const val DEFAULT_VISION_MODEL = "gemma4:12b-it-qat"
         private const val DEFAULT_RETENTION_DAYS = 90
         private const val FOLLOW_UP_TIMEOUT_MS = 8000L

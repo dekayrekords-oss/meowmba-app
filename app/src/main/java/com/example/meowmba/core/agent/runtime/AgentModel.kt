@@ -90,34 +90,28 @@ object AgentRegistry {
         ),
         AgentDefinition(
             id = "research", name = "Scout",
-            purpose = "Research agent. Web tools are not installed yet — searches memory only for now.",
-            allowedTools = setOf("memory.search"),
-            statusNote = "Limited: web search adapter not available"
+            purpose = "Searches the web and memory for information.",
+            allowedTools = setOf("memory.search", "web.search")
         ),
-        // ── Registered but unsupported integrations (marked, never faked) ──
         AgentDefinition(
             id = "email", name = "Post",
-            purpose = "Drafts and summarizes email.",
-            available = false,
-            statusNote = "Email adapter not available yet"
+            purpose = "Drafts and sends email.",
+            allowedTools = setOf("email.send", "email.draft")
         ),
         AgentDefinition(
             id = "calendar", name = "Planner",
-            purpose = "Reviews calendar and prepares meetings.",
-            available = false,
-            statusNote = "Calendar adapter not available yet"
+            purpose = "Manages the calendar: lists upcoming events and creates new ones.",
+            allowedTools = setOf("calendar.list_events", "calendar.create_event")
         ),
         AgentDefinition(
             id = "computer", name = "Bridge",
             purpose = "Controls paired computers through the desktop bridge.",
-            available = false,
-            statusNote = "Desktop bridge ships in Phase 6"
+            allowedTools = setOf("desktop.write_file", "desktop.run_build", "desktop.run_script")
         ),
         AgentDefinition(
             id = "media", name = "Canvas",
-            purpose = "Generates images and video through configured services.",
-            available = false,
-            statusNote = "Media generation adapter not available yet"
+            purpose = "Generates simple images from text descriptions.",
+            allowedTools = setOf("media.generate_image", "media.generate_video", "media.generate_audio")
         )
     )
 

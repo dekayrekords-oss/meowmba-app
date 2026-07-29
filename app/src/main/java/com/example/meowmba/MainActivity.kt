@@ -22,6 +22,7 @@ import com.example.meowmba.core.audio.WakeWordService
 import com.example.meowmba.core.audio.TextToSpeechManager
 import com.example.meowmba.core.database.MeowmbaDatabase
 import com.example.meowmba.core.memory.MemoryRepository
+import com.example.meowmba.core.notification.NotificationHelper
 import com.example.meowmba.core.security.SecureStorageManager
 import com.example.meowmba.ui.companion.CompanionScreen
 import com.example.meowmba.ui.companion.CompanionViewModel
@@ -34,6 +35,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var memoryRepository: MemoryRepository
     private lateinit var audioStreamingManager: AudioStreamingManager
     private lateinit var visionManager: com.example.meowmba.core.vision.VisionManager
+    private lateinit var notificationHelper: NotificationHelper
     private var companionViewModel: CompanionViewModel? = null
 
     private val requestPermissionLauncher = registerForActivityResult(
@@ -59,6 +61,7 @@ class MainActivity : ComponentActivity() {
         secureStorage = SecureStorageManager(this)
         audioStreamingManager = AudioStreamingManager(this)
         visionManager = com.example.meowmba.core.vision.VisionManager(this, this)
+        notificationHelper = NotificationHelper(this)
         
         val database = MeowmbaDatabase.getDatabase(this)
         memoryRepository = MemoryRepository(database.messageDao(), database.memoryDao())
@@ -83,7 +86,8 @@ class MainActivity : ComponentActivity() {
                                 auditDao = auditDao,
                                 workspaceRoot = workspaceRoot,
                                 modelsDir = modelsDir,
-                                visionManager = visionManager
+                                visionManager = visionManager,
+                                notificationHelper = notificationHelper
                             ).also { companionViewModel = it } as T
                         }
                     }

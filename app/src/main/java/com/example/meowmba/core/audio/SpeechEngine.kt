@@ -32,6 +32,14 @@ interface SpeechEngine {
      */
     fun startListening(onResult: (String) -> Unit, onError: (Int) -> Unit)
 
+    /**
+     * Swap callbacks on an already-running recognizer without stopping it.
+     * Useful when barge-in / interruption transitions to follow-up — avoids
+     * restarting the recognizer and losing audio on devices (Samsung) where
+     * stop+start can stall.
+     */
+    fun swapCallbacks(onResult: (String) -> Unit, onError: (Int) -> Unit)
+
     /** Stop the current session early (the result callback may still fire). */
     fun stopListening()
 

@@ -9,6 +9,7 @@ import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
+import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
@@ -33,11 +34,38 @@ class VisionManager(
     private val lifecycleOwner: LifecycleOwner
 ) {
     private var imageCapture: ImageCapture? = null
+    private var preview: Preview? = null
     private var boundSelector: CameraSelector? = null
+    private var _useFrontCamera = false
+
+    val isFrontCamera: Boolean get() = _useFrontCamera
+
+    fun setUseFrontCamera(useFront: Boolean) {
+        if (useFront == _useFrontCamera) return
+        _useFrontCamera = useFront
+        unbind()
+        bindPreviewAsync()
+    }
 
     fun hasPermission(): Boolean =
         ContextCompat.checkSelfPermission(context, android.Manifest.permission.CAMERA) ==
             PackageManager.PERMISSION_GRANTED
+
+    /**
+     * Show or hide the live camera preview. The Preview use case is created
+     * eagerly with the surface provider so that it is ready whenever the
+     * camera is bound (on first capture or immediately if already bound).
+     */
+    fun setPreviewSurface(provider: Preview.SurfaceProvider?) {
+        if (provider != null) {
+            val p = preview ?: Preview.Builder().build().also { preview = it }
+            p.setSurfaceProvider(provider)
+            bindPreviewAsync()
+        } else {
+            preview?.setSurfaceProvider(null)
+            unbind()
+        }
+    }
 
     /**
      * Capture one frame as downscaled JPEG (max [maxDimension] px on the long
@@ -68,6 +96,34 @@ class VisionManager(
         }
     }
 
+    /**
+     * Bind the live preview (and any existing ImageCapture) on the main thread
+     * asynchronously. Safe to call from any thread — queues the bind via the
+     * CameraX provider listener.
+     */
+    private fun bindPreviewAsync() {
+        val future = ProcessCameraProvider.getInstance(context)
+        future.addListener(
+            {
+                try {
+                    val provider = future.get()
+                    val selector = resolveSelector(provider)
+                    provider.unbindAll()
+                    val useCases = mutableListOf<androidx.camera.core.UseCase>()
+                    preview?.let { p -> p.surfaceProvider?.let { useCases.add(p) } }
+                    imageCapture?.let { useCases.add(it) }
+                    if (useCases.isNotEmpty()) {
+                        provider.bindToLifecycle(lifecycleOwner, selector, *useCases.toTypedArray())
+                        boundSelector = selector
+                    }
+                } catch (_: Exception) {
+                    // Camera unavailable — next capture attempt will surface the error
+                }
+            },
+            ContextCompat.getMainExecutor(context)
+        )
+    }
+
     private suspend fun bindIfNeeded(): ImageCapture {
         imageCapture?.let { return it }
         val provider = suspendCancellableCoroutine<ProcessCameraProvider> { cont ->
@@ -80,17 +136,30 @@ class VisionManager(
         val capture = ImageCapture.Builder()
             .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
             .build()
-        val selector = when {
-            provider.hasCamera(CameraSelector.DEFAULT_BACK_CAMERA) -> CameraSelector.DEFAULT_BACK_CAMERA
-            provider.hasCamera(CameraSelector.DEFAULT_FRONT_CAMERA) -> CameraSelector.DEFAULT_FRONT_CAMERA
-            else -> throw IllegalStateException("no camera on this device")
-        }
+        val selector = resolveSelector(provider)
         provider.unbindAll()
-        provider.bindToLifecycle(lifecycleOwner, selector, capture)
+        val useCases = mutableListOf<androidx.camera.core.UseCase>(capture)
+        preview?.let { p -> p.surfaceProvider?.let { useCases.add(p) } }
+        provider.bindToLifecycle(lifecycleOwner, selector, *useCases.toTypedArray())
         imageCapture = capture
         boundSelector = selector
         return capture
     }
+
+    private fun resolveSelector(provider: ProcessCameraProvider): CameraSelector =
+        if (_useFrontCamera) {
+            when {
+                provider.hasCamera(CameraSelector.DEFAULT_FRONT_CAMERA) -> CameraSelector.DEFAULT_FRONT_CAMERA
+                provider.hasCamera(CameraSelector.DEFAULT_BACK_CAMERA) -> CameraSelector.DEFAULT_BACK_CAMERA
+                else -> throw IllegalStateException("no camera on this device")
+            }
+        } else {
+            when {
+                provider.hasCamera(CameraSelector.DEFAULT_BACK_CAMERA) -> CameraSelector.DEFAULT_BACK_CAMERA
+                provider.hasCamera(CameraSelector.DEFAULT_FRONT_CAMERA) -> CameraSelector.DEFAULT_FRONT_CAMERA
+                else -> throw IllegalStateException("no camera on this device")
+            }
+        }
 
     private fun unbind() {
         imageCapture = null

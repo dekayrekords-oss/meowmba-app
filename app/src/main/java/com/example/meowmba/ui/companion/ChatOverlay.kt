@@ -28,6 +28,7 @@ fun ChatOverlay(
     isExpanded: Boolean,
     onClose: () -> Unit,
     onSend: (String) -> Unit = {},
+    onDeleteMessage: (Long) -> Unit = {},
     messages: List<ChatUiMessage> = emptyList(),
     modifier: Modifier = Modifier
 ) {
@@ -79,7 +80,12 @@ fun ChatOverlay(
                 state = listState
             ) {
                 items(messages) { entry ->
-                    ChatMessage(entry.sender, entry.text, entry.isCompanion)
+                    ChatMessage(
+                        sender = entry.sender,
+                        message = entry.text,
+                        isCompanion = entry.isCompanion,
+                        onDelete = { onDeleteMessage(entry.id) }
+                    )
                 }
             }
             
@@ -125,24 +131,62 @@ fun ChatOverlay(
 }
 
 @Composable
-fun ChatMessage(sender: String, message: String, isCompanion: Boolean) {
+fun ChatMessage(sender: String, message: String, isCompanion: Boolean, onDelete: () -> Unit = {}) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp),
         horizontalAlignment = if (isCompanion) Alignment.Start else Alignment.End
     ) {
-        Surface(
-            color = if (isCompanion) Color(0xFF2C2C2C) else Color(0xFF448AFF),
-            shape = RoundedCornerShape(16.dp),
-            tonalElevation = 2.dp
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Text(
-                text = message,
-                modifier = Modifier.padding(12.dp),
-                color = Color.White,
-                style = MaterialTheme.typography.bodyMedium
-            )
+            if (isCompanion) {
+                Surface(
+                    color = Color(0xFF2C2C2C),
+                    shape = RoundedCornerShape(16.dp),
+                    tonalElevation = 2.dp
+                ) {
+                    Text(
+                        text = message,
+                        modifier = Modifier.padding(12.dp),
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+                Spacer(modifier = Modifier.width(4.dp))
+                IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
+                    Icon(
+                        Icons.Default.Close, contentDescription = "Delete",
+                        tint = Color.White.copy(alpha = 0.4f),
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.weight(1f))
+            } else {
+                Spacer(modifier = Modifier.weight(1f))
+                IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
+                    Icon(
+                        Icons.Default.Close, contentDescription = "Delete",
+                        tint = Color.White.copy(alpha = 0.4f),
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(4.dp))
+                Surface(
+                    color = Color(0xFF448AFF),
+                    shape = RoundedCornerShape(16.dp),
+                    tonalElevation = 2.dp
+                ) {
+                    Text(
+                        text = message,
+                        modifier = Modifier.padding(12.dp),
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
         }
         Text(
             text = sender,

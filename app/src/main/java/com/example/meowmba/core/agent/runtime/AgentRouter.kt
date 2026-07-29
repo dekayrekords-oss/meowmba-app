@@ -60,9 +60,98 @@ object AgentRouter {
             return AgentIntent("project", "project.create", mapOf("name" to name), "create project $name")
         }
 
+        // Project session: start a project to save all sessions and files under
+        extractAfter(raw, listOf("start a project called ", "start a new project called ",
+            "start project ", "begin a project called ", "new project "))?.let { name ->
+            return AgentIntent("project", "memory.save", mapOf("content" to "Project started: $name", "tags" to "project"),
+                "start project: $name")
+        }
+
         extractAfter(raw, listOf("search my memory for ", "search memory for ",
             "search memories for "))?.let { query ->
             return AgentIntent("memory", "memory.search", mapOf("query" to query), "search memory: $query")
+        }
+
+        // Research / web search
+        extractAfter(raw, listOf("search the web for ", "search web for ", "search online for ",
+            "look up ", "search for "))?.let { query ->
+            return AgentIntent("research", "web.search", mapOf("query" to query), "web search: $query")
+        }
+
+        // Email
+        extractAfter(raw, listOf("send an email to ", "send email to ", "email "))?.let { target ->
+            return AgentIntent("email", "email.send", mapOf("to" to target, "subject" to "", "body" to ""),
+                "send email to $target")
+        }
+        extractAfter(raw, listOf("draft an email to ", "draft email to "))?.let { target ->
+            return AgentIntent("email", "email.draft", mapOf("to" to target),
+                "draft email to $target")
+        }
+
+        // Calendar
+        if (normalized in setOf("what's on my calendar", "whats on my calendar",
+                "show my calendar", "what are my upcoming events", "list my events",
+                "show me my calendar", "calendar", "my events")) {
+            return AgentIntent("calendar", "calendar.list_events", mapOf("days" to "7"),
+                "list upcoming events")
+        }
+        extractAfter(raw, listOf("create an event called ", "create a calendar event called ",
+            "add an event called ", "schedule an event called ", "create event ",
+            "add event "))?.let { title ->
+            return AgentIntent("calendar", "calendar.create_event", mapOf("title" to title),
+                "create event: $title")
+        }
+
+        // Desktop bridge
+        if (normalized in setOf("what's on my desktop", "whats on my desktop",
+                "list my desktop", "desktop status", "bridge status")) {
+            return AgentIntent("computer", "desktop.run_build", mapOf("name" to "status"),
+                "check desktop status")
+        }
+        extractAfter(raw, listOf("write a file on my desktop called ", "write a file on desktop called ",
+            "create a file on desktop called ", "write on desktop "))?.let { _ ->
+            return AgentIntent("computer", "desktop.write_file", emptyMap(),
+                "write file on desktop")
+        }
+
+        // Run a script on the desktop
+        extractAfter(raw, listOf("run the script ", "run script ",
+            "execute the script ", "execute script "))?.let { path ->
+            if (path.endsWith(".py") || path.endsWith(".sh")) {
+                return AgentIntent("computer", "desktop.run_script", mapOf("path" to path),
+                    "run script: $path")
+            }
+        }
+        // "run build" still goes to run_build
+        extractAfter(raw, listOf("run build "))?.let { name ->
+            return AgentIntent("computer", "desktop.run_build", mapOf("name" to name),
+                "run build: $name")
+        }
+
+        // Media / image generation
+        extractAfter(raw, listOf("generate an image of ", "generate an image of a ",
+            "create an image of ", "make an image of ", "draw ", "paint ",
+            "generate an image called ", "create an image called ",
+            "generate image ", "create image "))?.let { prompt ->
+            return AgentIntent("media", "media.generate_image", mapOf("prompt" to prompt),
+                "generate image: $prompt")
+        }
+
+        // Video generation
+        extractAfter(raw, listOf("generate a video of ", "create a video of ",
+            "make a video of ", "generate video ", "create video ",
+            "make an animation of ", "animate "))?.let { prompt ->
+            return AgentIntent("media", "media.generate_video", mapOf("prompt" to prompt),
+                "generate video: $prompt")
+        }
+
+        // Audio / song generation
+        extractAfter(raw, listOf("generate a song ", "generate a sound ",
+            "create a song ", "make a song ", "generate audio ",
+            "create audio ", "generate a tone ", "generate sound ",
+            "create a melody "))?.let { prompt ->
+            return AgentIntent("media", "media.generate_audio", mapOf("prompt" to prompt),
+                "generate audio: $prompt")
         }
 
         return null

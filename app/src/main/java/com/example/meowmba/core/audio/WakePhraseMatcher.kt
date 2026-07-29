@@ -26,11 +26,29 @@ class WakePhraseMatcher(companionName: String = DEFAULT_NAME) {
     val phrases: List<String>
 
     init {
+        val custom = normalize(companionName)
         phrases = buildSet {
+            // Standard "hey" variants
             add("hey memba")
             add("hey meow")
-            val custom = normalize(companionName)
             if (custom.isNotBlank()) add("hey $custom")
+            // Casual wake words
+            add("yo")
+            add("oi")
+            add("dude")
+            // Mixed variants
+            add("aye meow")
+            if (custom.isNotBlank()) {
+                add("yo $custom")
+                add("oi $custom")
+                add("dude $custom")
+                add("aye $custom")
+            }
+            // "Yo memba" etc — only add if companion name differs from "Memba"
+            add("yo memba")
+            add("oi memba")
+            add("dude memba")
+            add("aye memba")
         }.sortedByDescending { it.length }
     }
 

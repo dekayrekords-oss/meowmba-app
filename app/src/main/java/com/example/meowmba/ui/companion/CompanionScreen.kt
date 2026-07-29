@@ -2,15 +2,32 @@ package com.example.meowmba.ui.companion
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.graphics.asImageBitmap
@@ -108,37 +125,138 @@ fun CompanionScreen(
             }
 
             // "Why recalled" chips: the user can always see which memories
-            // surfaced for this turn and why.
+            // surfaced for this turn and why. Swipe away or tap X to dismiss.
             AnimatedVisibility(
                 visible = uiState.recalledMemories.isNotEmpty(),
-                enter = fadeIn(),
-                exit = fadeOut(),
+                enter = fadeIn() + slideInVertically { it / 2 },
+                exit = fadeOut() + slideOutVertically { it / 2 },
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 220.dp, start = 24.dp, end = 24.dp)
             ) {
-                Surface(
-                    color = Color(0xFF161B22).copy(alpha = 0.85f),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text(
-                            "Recalled from memory",
-                            color = Color(0xFF58A6FF),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        uiState.recalledMemories.forEach { recall ->
+                val dismissState = rememberSwipeToDismissBoxState()
+                LaunchedEffect(dismissState.currentValue) {
+                    if (dismissState.currentValue == SwipeToDismissBoxValue.EndToStart) {
+                        viewModel.dismissRecalledMemories()
+                    }
+                }
+                SwipeToDismissBox(
+                    state = dismissState,
+                    enableDismissFromStartToEnd = false,
+                    backgroundContent = {},
+                    content = {
+                        Surface(
+                            color = Color(0xFF161B22).copy(alpha = 0.85f),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        "Recalled from memory",
+                                        color = Color(0xFF58A6FF),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    IconButton(
+                                        onClick = { viewModel.dismissRecalledMemories() },
+                                        modifier = Modifier.size(20.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Close,
+                                            contentDescription = "Dismiss",
+                                            tint = Color.Gray,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                }
+                                uiState.recalledMemories.forEach { recall ->
+                                    Text(
+                                        "• ${recall.contentSnippet}",
+                                        color = Color.White.copy(alpha = 0.9f),
+                                        fontSize = 12.sp
+                                    )
+                                    Text(
+                                        "  ${recall.reason}",
+                                        color = Color.Gray,
+                                        fontSize = 10.sp,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                }
+                            }
+                        }
+                    }
+                )
+            }
+
+            // Generated media popup (image/video/audio created by Canvas agent)
+            AnimatedVisibility(
+                visible = uiState.generatedMedia != null,
+                enter = fadeIn() + scaleIn(),
+                exit = fadeOut() + scaleOut(),
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(32.dp)
+            ) {
+                uiState.generatedMedia?.let { media ->
+                    Surface(
+                        color = Color(0xFF161B22),
+                        shape = RoundedCornerShape(16.dp),
+                        tonalElevation = 8.dp
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End
+                            ) {
+                                IconButton(onClick = { viewModel.dismissGeneratedMedia() }) {
+                                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.Gray)
+                                }
+                            }
+                            when (media.type) {
+                                GeneratedMedia.MediaType.IMAGE -> {
+                                    var bitmap by remember(media.filePath) {
+                                        mutableStateOf<android.graphics.Bitmap?>(null)
+                                    }
+                                    LaunchedEffect(media.filePath) {
+                                        bitmap = try {
+                                            android.graphics.BitmapFactory.decodeFile(media.filePath)
+                                        } catch (_: Exception) { null }
+                                    }
+                                    bitmap?.let { bmp ->
+                                        androidx.compose.foundation.Image(
+                                            bitmap = bmp.asImageBitmap(),
+                                            contentDescription = media.label,
+                                            modifier = Modifier
+                                                .size(240.dp)
+                                                .padding(bottom = 8.dp)
+                                        )
+                                    }
+                                }
+                                GeneratedMedia.MediaType.VIDEO -> {
+                                    Icon(
+                                        Icons.Default.PlayArrow,
+                                        contentDescription = null,
+                                        tint = Color(0xFF58A6FF),
+                                        modifier = Modifier.size(48.dp)
+                                    )
+                                }
+                                GeneratedMedia.MediaType.AUDIO -> {
+                                    Icon(
+                                        Icons.Default.PlayArrow,
+                                        contentDescription = null,
+                                        tint = Color(0xFF3FB950),
+                                        modifier = Modifier.size(48.dp)
+                                    )
+                                }
+                            }
+                            Text(media.label, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                             Text(
-                                "• ${recall.contentSnippet}",
-                                color = Color.White.copy(alpha = 0.9f),
-                                fontSize = 12.sp
-                            )
-                            Text(
-                                "  ${recall.reason}",
-                                color = Color.Gray,
-                                fontSize = 10.sp,
-                                fontFamily = FontFamily.Monospace
+                                media.filePath.substringAfterLast("/"),
+                                color = Color.Gray, fontSize = 11.sp
                             )
                         }
                     }
@@ -169,6 +287,57 @@ fun CompanionScreen(
                     contentDescription = "Open chat",
                     tint = Color(0x55CFF9FF)
                 )
+            }
+
+            // Camera preview toggle (bottom-end, above chat)
+            IconButton(
+                onClick = { viewModel.togglePreview() },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .imePadding()
+                    .padding(bottom = 72.dp, end = 16.dp)
+            ) {
+                Icon(
+                    imageVector = if (uiState.isPreviewVisible)
+                        Icons.Default.Close else Icons.Default.PlayArrow,
+                    contentDescription = "Toggle camera preview",
+                    tint = if (uiState.isPreviewVisible) Color(0xFF3FB950) else Color(0x55CFF9FF)
+                )
+            }
+        }
+
+        // Live camera preview — a small PiP-style window near the bottom
+        AnimatedVisibility(
+            visible = uiState.isPreviewVisible,
+            enter = fadeIn() + slideInVertically { it },
+            exit = fadeOut() + slideOutVertically { it },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 120.dp)
+        ) {
+            Box {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    tonalElevation = 4.dp
+                ) {
+                    Viewfinder(
+                        visionManager = viewModel.getVisionManager(),
+                        modifier = Modifier.size(width = 160.dp, height = 120.dp)
+                    )
+                }
+                IconButton(
+                    onClick = { viewModel.flipCamera() },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .size(28.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Sync,
+                        contentDescription = "Flip camera",
+                        tint = Color.White.copy(alpha = 0.7f),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
         }
 
@@ -254,12 +423,14 @@ fun CompanionScreen(
                 agentBrainEnabled = uiState.agentBrainEnabled,
                 hermesAgentUrl = uiState.hermesAgentUrl,
                 backgroundListeningEnabled = uiState.backgroundListeningEnabled,
+                usbAutoBridgeEnabled = uiState.usbAutoBridgeEnabled,
                 onCompanionNameChange = { viewModel.renameCompanion(it) },
                 onWakeWordChange = { viewModel.setWakeWordEnabled(it) },
                 onConversationModeChange = { viewModel.setConversationMode(it) },
                 onAgentBrainChange = { viewModel.setAgentBrainEnabled(it) },
                 onHermesUrlChange = { viewModel.setHermesAgentUrl(it) },
                 onBackgroundListeningChange = { viewModel.setBackgroundListeningEnabled(it) },
+                onUsbAutoBridgeChange = { viewModel.setUsbAutoBridge(it) },
                 onClose = { viewModel.toggleSettings() }
             )
         }
@@ -315,6 +486,7 @@ fun CompanionScreen(
             isExpanded = uiState.isChatExpanded,
             onClose = { viewModel.toggleChat() },
             onSend = { viewModel.onUserTextSubmitted(it) },
+            onDeleteMessage = { viewModel.deleteMessage(it) },
             messages = uiState.chatMessages,
             modifier = Modifier.align(Alignment.BottomCenter)
         )

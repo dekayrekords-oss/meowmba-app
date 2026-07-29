@@ -133,7 +133,18 @@ object DesktopBridgeProtocol {
         return digest.joinToString("") { "%02x".format(it) }
     }
 
-    /** base64-standard HMAC-SHA256 — identical output to Python's hmac+base64.b64encode. */
+    /**
+     * Build a JSON body for a standard pairing request (with token/code).
+     */
+    fun buildPairBody(token: String, secretB64: String, phoneName: String): ByteArray =
+        "{\"token\":\"$token\",\"secret\":\"$secretB64\",\"phone_name\":\"${phoneName.replace("\"", "\\\"")}\"}".toByteArray(Charsets.UTF_8)
+
+    /**
+     * Build a JSON body for an auto-pair request (USB tether — no code).
+     * The daemon accepts this when the client IP is on the USB subnet.
+     */
+    fun buildAutoPairBody(secretB64: String, phoneName: String): ByteArray =
+        "{\"usb_auto\":true,\"secret\":\"$secretB64\",\"phone_name\":\"${phoneName.replace("\"", "\\\"")}\"}".toByteArray(Charsets.UTF_8)
     fun signHmacSha256Base64(secret: ByteArray, message: String): String {
         val mac = Mac.getInstance("HmacSHA256")
         mac.init(SecretKeySpec(secret, "HmacSHA256"))

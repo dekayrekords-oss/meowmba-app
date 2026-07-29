@@ -94,6 +94,9 @@ class VoicePipelineTest {
         }
 
         override fun stopListening() { stopListeningCalls++ }
+        override fun swapCallbacks(onResult: (String) -> Unit, onError: (Int) -> Unit) {
+            lastOnResult = onResult; lastOnError = onError
+        }
         override fun destroy() {}
 
         fun simulateResult(text: String) { lastOnResult?.invoke(text) }

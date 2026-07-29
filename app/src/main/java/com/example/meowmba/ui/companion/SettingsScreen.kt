@@ -30,12 +30,14 @@ fun SettingsScreen(
     agentBrainEnabled: Boolean = true,
     hermesAgentUrl: String = "",
     backgroundListeningEnabled: Boolean = false,
+    usbAutoBridgeEnabled: Boolean = false,
     onCompanionNameChange: (String) -> Unit = {},
     onWakeWordChange: (Boolean) -> Unit = {},
     onConversationModeChange: (Boolean) -> Unit = {},
     onAgentBrainChange: (Boolean) -> Unit = {},
     onHermesUrlChange: (String) -> Unit = {},
     onBackgroundListeningChange: (Boolean) -> Unit = {},
+    onUsbAutoBridgeChange: ((Boolean) -> Unit)? = null,
     onClose: () -> Unit
 ) {
     var openaiKey by remember { mutableStateOf(secureStorage.getApiKey("openai") ?: "") }
@@ -125,7 +127,11 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             // Desktop Bridge (Phase 6): pair with a computer running meowmba-bridge.py
-            DesktopBridgeSection(secureStorage)
+            DesktopBridgeSection(
+                secureStorage,
+                usbAutoBridgeEnabled = usbAutoBridgeEnabled,
+                onUsbAutoBridgeChange = onUsbAutoBridgeChange
+            )
 
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -206,7 +212,11 @@ fun SettingsScreen(
 }
 
 @Composable
-fun DesktopBridgeSection(secureStorage: SecureStorageManager) {
+fun DesktopBridgeSection(
+    secureStorage: SecureStorageManager,
+    usbAutoBridgeEnabled: Boolean = false,
+    onUsbAutoBridgeChange: ((Boolean) -> Unit)? = null
+) {
     val bridgeManager = remember { DesktopBridgeManager(secureStorage) }
     var paired by remember { mutableStateOf(bridgeManager.pairedBridge()) }
     var payload by remember { mutableStateOf("") }
@@ -337,6 +347,22 @@ fun DesktopBridgeSection(secureStorage: SecureStorageManager) {
                     }
                 }
             ) { Text(if (busy) "Pairing…" else "Pair ${d.name}") }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = usbAutoBridgeEnabled, onCheckedChange = {
+                onUsbAutoBridgeChange?.invoke(it)
+            })
+            Spacer(modifier = Modifier.width(8.dp))
+            Column {
+                Text("USB Auto-Bridge", color = Color.White, fontSize = 13.sp)
+                Text(
+                    text = if (usbAutoBridgeEnabled) "Auto-pairs when plugged into this computer via USB" else "Plug in via USB for automatic pairing",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(12.dp))

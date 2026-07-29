@@ -61,7 +61,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-VERSION = "0.5.0"
+VERSION = "0.6.0"
 CONFIG_DIR = Path.home() / ".meowmba-bridge"
 CERT_PATH = CONFIG_DIR / "cert.pem"
 KEY_PATH = CONFIG_DIR / "key.pem"
@@ -83,6 +83,8 @@ MAX_READ_BYTES = 256 * 1024
 MAX_WRITE_BYTES = 256 * 1024
 MAX_BUILD_OUTPUT_BYTES = 32 * 1024
 MAX_BUILD_TIMEOUT_S = 3600
+MAX_SCRIPT_OUTPUT_BYTES = 64 * 1024
+MAX_SCRIPT_TIMEOUT_S = 600
 
 # Never listed or read through the bridge, even inside a workspace root.
 DENIED_NAMES = {
@@ -313,9 +315,15 @@ class BridgeHandler(BaseHTTPRequestHandler):
             self._send(404, {"error": "not found"})
 
     def _handle_pair(self, data: dict) -> None:
+        # USB auto-pair: accept from 192.168.42.x without a token.
+        client_ip = self.client_address[0] if hasattr(self, "client_address") else ""
+        if data.get("usb_auto") and client_ip.startswith("192.168.42."):
+            self._do_pair(data, is_usb_auto=True)
+            return
+
         token = _pair_state.get("token")
         if not token or time.time() > _pair_state.get("expires", 0):
-            self._send(409, {"error": "no active pairing window — restart with --pair"})
+            self._send(409, {"error": "no active pairing window — start it with --pair or --auto-pair"})
             return
         if not hmac.compare_digest(_normalize_code(str(data.get("token", ""))), _normalize_code(token)):
             _pair_state["attempts"] = _pair_state.get("attempts", 0) + 1
@@ -327,6 +335,9 @@ class BridgeHandler(BaseHTTPRequestHandler):
             _log("pair: rejected (bad code)")
             self._send(403, {"error": "bad pairing code"})
             return
+        self._do_pair(data, is_usb_auto=False)
+
+    def _do_pair(self, data: dict, is_usb_auto: bool) -> None:
         try:
             secret = base64.b64decode(str(data.get("secret", "")))
         except ValueError:
@@ -335,15 +346,16 @@ class BridgeHandler(BaseHTTPRequestHandler):
             self._send(400, {"error": "secret must be 32 bytes (base64)"})
             return
         phone_name = str(data.get("phone_name", "unknown phone"))[:80]
-        # Keep the audit log line-per-entry: no CR/LF smuggling via phone_name.
         phone_name = phone_name.replace("\r", " ").replace("\n", " ")
         _save_pairing({
             "phone_name": phone_name,
             "secret_b64": base64.b64encode(secret).decode(),
             "paired_at": int(time.time()),
+            "via_usb": is_usb_auto,
         })
-        _pair_state.clear()  # single-use
-        _log(f"pair: paired with '{phone_name}'")
+        if not is_usb_auto:
+            _pair_state.clear()  # single-use for code-based pairing
+        _log(f"pair: paired with '{phone_name}'{' (USB auto)' if is_usb_auto else ''}")
         self._send(200, {"ok": True, "desktop_name": self.server.cfg["name"], "version": VERSION})
 
     def _handle_rpc(self, data: dict, raw_body: bytes) -> None:
@@ -370,8 +382,10 @@ class BridgeHandler(BaseHTTPRequestHandler):
             self._rpc_write_file(data.get("params") or {}, pairing)
         elif method == "run_build":
             self._rpc_run_build(data.get("params") or {}, pairing)
+        elif method == "run_script":
+            self._rpc_run_script(data.get("params") or {}, pairing)
         else:
-            self._send(400, {"error": f"unknown method '{method}' (supports: ping, status, list_files, read_file, write_file, run_build)"})
+            self._send(400, {"error": f"unknown method '{method}' (supports: ping, status, list_files, read_file, write_file, run_build, run_script)"})
 
     # -- workspace file tools (P6b, read-only) --------------------------------
 
@@ -554,6 +568,66 @@ class BridgeHandler(BaseHTTPRequestHandler):
             "backup": backup,
         })
 
+    def _rpc_run_script(self, params: dict, pairing: dict) -> None:
+        """Run an arbitrary script on the desktop (no shell)."""
+        raw = str(params.get("path", "")).strip()
+        if not raw:
+            self._send(400, {"error": "path required"})
+            return
+        if _is_denied_name(os.path.basename(raw)):
+            self._send(403, {"error": "denied: sensitive file type"})
+            return
+        real, err = self._resolve_in_workspace(raw)
+        if err:
+            self._send(403, {"error": err})
+            return
+        if not os.path.isfile(real):
+            self._send(404, {"error": "not a file"})
+            return
+        if not os.access(real, os.X_OK):
+            self._send(403, {"error": "not executable (chmod +x)"})
+            return
+
+        args_raw = str(params.get("args", "")).strip()
+        args_list = args_raw.split() if args_raw else []
+        try:
+            timeout_s = max(1, min(int(params.get("timeout_sec", 60)), MAX_SCRIPT_TIMEOUT_S))
+        except (TypeError, ValueError):
+            timeout_s = 60
+
+        cwd = os.path.dirname(real)
+        argv = [real] + args_list
+        started = time.time()
+        timed_out = False
+        try:
+            proc = subprocess.run(
+                argv, cwd=cwd, capture_output=True, timeout=timeout_s, check=False
+            )
+            rc = proc.returncode
+            output = (proc.stdout + proc.stderr).decode("utf-8", errors="replace")
+        except subprocess.TimeoutExpired as ex:
+            rc = -9
+            timed_out = True
+            partial = (ex.stdout or b"") + (ex.stderr or b"")
+            output = partial.decode("utf-8", errors="replace")
+        except OSError as ex:
+            self._send(500, {"error": f"could not start: {ex}"})
+            return
+        duration = time.time() - started
+        output = output[-MAX_SCRIPT_OUTPUT_BYTES:]
+
+        _log(
+            f"run_script: {real} exit={rc} dur={duration:.1f}s "
+            f"{'TIMEOUT ' if timed_out else ''}by '{pairing.get('phone_name')}'"
+        )
+        self._send(200, {
+            "name": raw,
+            "exit_code": rc,
+            "duration_s": round(duration, 1),
+            "timed_out": timed_out,
+            "output": output,
+        })
+
     def _rpc_run_build(self, params: dict, pairing: dict) -> None:
         """Run a named, pre-declared command (P6d). No shell, ever."""
         name = str(params.get("name", ""))
@@ -624,6 +698,8 @@ class BridgeHandler(BaseHTTPRequestHandler):
 def main() -> None:
     ap = argparse.ArgumentParser(description="Meowmba desktop bridge daemon")
     ap.add_argument("--pair", action="store_true", help="open a 10-minute pairing window")
+    ap.add_argument("--auto-pair", action="store_true",
+        help="accept pairing from USB-tethered phones (192.168.42.x) without a code")
     ap.add_argument("--unpair", action="store_true", help="forget the paired phone and exit")
     ap.add_argument("--port", type=int, default=None, help=f"listen port (default {DEFAULT_PORT})")
     args = ap.parse_args()
@@ -660,6 +736,18 @@ def main() -> None:
         print("  pick this computer and enter the code.")
         print()
         print(f"  Manual fallback payload: {blob}")
+        print("═" * 64, flush=True)
+    elif args.auto_pair:
+        _pair_state["token"] = "AUTO_PAIR_USB"
+        _pair_state["expires"] = time.time() + 86400 * 365  # effectively permanent
+        _pair_state["attempts"] = 0
+        print("═" * 64)
+        print("  USB AUTO-PAIR ACTIVE")
+        print()
+        print("  Plug your phone in via USB tether — pairing happens")
+        print("  automatically. No code needed.")
+        print()
+        print(f"  Listening on https://0.0.0.0:{cfg['port']}")
         print("═" * 64, flush=True)
     elif not _load_pairing():
         print("warning: not paired — run with --pair to pair a phone", flush=True)

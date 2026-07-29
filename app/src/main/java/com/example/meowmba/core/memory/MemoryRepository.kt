@@ -85,6 +85,10 @@ class MemoryRepository(
         memoryDao.deleteById(id)
     }
 
+    suspend fun deleteMessageById(id: Long) {
+        messageDao.deleteById(id)
+    }
+
     suspend fun clearAllMemories() {
         memoryDao.clearAll()
     }

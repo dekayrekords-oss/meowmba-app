@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
@@ -70,7 +71,13 @@ class WakeWordService : Service() {
         super.onCreate()
         secureStorage = SecureStorageManager(this)
         createChannels()
-        startForeground(FG_ID, buildPersistentNotification("Listening for \"Hey ${companionName()}\""))
+        try {
+            startForeground(FG_ID, buildPersistentNotification("Listening for \"Hey ${companionName()}\""))
+        } catch (e: Exception) {
+            // Android 16+ blocks foreground service start from background
+            // (ForegroundServiceStartNotAllowedException). This catches it
+            // so the service still runs (may be killed earlier, but graceful).
+        }
 
         speechService = SpeechService(this)
         tts = TextToSpeechManager(this)

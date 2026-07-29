@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import com.example.meowmba.core.agent.LocalModelOption
 import com.example.meowmba.core.agent.ModelCatalog
 import com.example.meowmba.core.utils.SystemUtils
+import com.example.meowmba.core.utils.SystemUtils.HardwareCapabilities
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ModelManagerScreen(
@@ -57,8 +58,7 @@ fun ModelManagerScreen(
     }
 
     val context = LocalContext.current
-    val ram = remember { SystemUtils.getTotalRamGb(context) }
-    val cores = remember { SystemUtils.getCpuCores() }
+    val caps = remember { SystemUtils.getCapabilities(context) }
 
     Scaffold(
         topBar = {
@@ -79,7 +79,7 @@ fun ModelManagerScreen(
                 .verticalScroll(rememberScrollState())
         ) {
             // Hardware Status Card
-            HardwareStatusCard(ram, cores)
+            HardwareStatusCard(caps)
 
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -102,6 +102,15 @@ fun ModelManagerScreen(
                 )
                 TextButton(onClick = { showProviderPicker = true }) {
                     Text("Change", color = Color(0xFF58A6FF), fontSize = 12.sp)
+                }
+            }
+            if (state.geminiNanoActive) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "⚡ Light model: Gemini Nano (AICore) • Main: ${state.selectedModel}",
+                        color = Color(0xFF3FB950),
+                        fontSize = 11.sp
+                    )
                 }
             }
 
@@ -248,7 +257,7 @@ fun ModelManagerScreen(
                 customInstalled.forEach { file ->
                     CustomInstalledItem(
                         file = file,
-                        ramGb = ram,
+                        ramGb = caps.ramGb,
                         isActive = state.loadedModels.activeSource == ModelSource.LOCAL &&
                             java.io.File(state.loadedModels.localPath).name == file.fileName,
                         onUse = { onUseInstalledFile(file.fileName) },
@@ -332,7 +341,7 @@ fun LoadedModelCard(
 }
 
 @Composable
-fun HardwareStatusCard(ram: Double, cores: Int) {
+fun HardwareStatusCard(caps: HardwareCapabilities) {
     Surface(
         color = Color(0xFF161B22),
         shape = RoundedCornerShape(12.dp),
@@ -348,22 +357,36 @@ fun HardwareStatusCard(ram: Double, cores: Int) {
                     fontWeight = FontWeight.SemiBold
                 )
             }
-            
+
             Spacer(modifier = Modifier.height(16.dp))
-            
+
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column {
                     Text("RAM", color = Color.Gray, fontSize = 12.sp)
-                    Text("%.1f GB".format(ram), color = Color.White, fontWeight = FontWeight.Bold)
+                    Text("%.1f GB".format(caps.ramGb), color = Color.White, fontWeight = FontWeight.Bold)
                 }
                 Column {
                     Text("CPU", color = Color.Gray, fontSize = 12.sp)
-                    Text("$cores Cores", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text("${caps.cpuCores} Cores", color = Color.White, fontWeight = FontWeight.Bold)
                 }
                 Column {
-                    Text("STATUS", color = Color.Gray, fontSize = 12.sp)
-                    Text("OPTIMAL", color = Color(0xFF3FB950), fontWeight = FontWeight.Bold)
+                    Text("Android", color = Color.Gray, fontSize = 12.sp)
+                    Text("API ${caps.androidApi}", color = Color.White, fontWeight = FontWeight.Bold)
                 }
+                Column {
+                    Text("ARCH", color = Color.Gray, fontSize = 12.sp)
+                    Text(if (caps.is64Bit) "64-bit" else "32-bit", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // AI accelerator row
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                val nanoLabel = if (caps.hasGeminiNano) "✅ Gemini Nano" else "— Gemini Nano"
+                Text(nanoLabel, color = if (caps.hasGeminiNano) Color(0xFF3FB950) else Color.Gray, fontSize = 11.sp)
+                val npuLabel = if (caps.hasNpu) "✅ NPU" else "— NPU"
+                Text(npuLabel, color = if (caps.hasNpu) Color(0xFF3FB950) else Color.Gray, fontSize = 11.sp)
             }
         }
     }

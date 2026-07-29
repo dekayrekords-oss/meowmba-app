@@ -32,6 +32,17 @@ object ModelCatalog {
 
     val options: List<LocalModelOption> = listOf(
         LocalModelOption(
+            id = "gemma-4-e2b",
+            displayName = "Gemma 4 E2B IT",
+            description = "Google's mobile-first model. Apache 2.0, no token needed. Best quality for 11 GB devices.",
+            approxSize = "~2.59 GB",
+            downloadUrl = "$HF/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm",
+            fileName = "gemma-4-E2B-it.litertlm",
+            minRamGb = 4,
+            requiresHfToken = false,
+            recommended = true
+        ),
+        LocalModelOption(
             id = "qwen-0.5b",
             displayName = "Qwen 2.5 0.5B Instruct",
             description = "Tiny. Runs on any phone, instant routing decisions.",
@@ -51,8 +62,7 @@ object ModelCatalog {
                 "Qwen2.5-1.5B-Instruct_multi-prefill-seq_q8_ekv1280.task",
             fileName = "qwen2.5-1.5b-instruct-q8.task",
             minRamGb = 4,
-            requiresHfToken = false,
-            recommended = true
+            requiresHfToken = false
         ),
         LocalModelOption(
             id = "qwen-1.5b-lc",

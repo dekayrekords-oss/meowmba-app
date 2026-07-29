@@ -91,6 +91,18 @@ class DesktopBridgeManager(
             .forEach { secureStorage.savePreference(it, "") }
     }
 
+    /**
+     * Persist a completed pairing. Used by [UsbAutoBridgeManager] after
+     * USB auto-pair completes.
+     */
+    fun savePairing(host: String, port: Int, name: String, certSha256: String, secretB64: String) {
+        secureStorage.savePreference(KEY_HOST, host)
+        secureStorage.savePreference(KEY_PORT, port.toString())
+        secureStorage.savePreference(KEY_NAME, name)
+        secureStorage.savePreference(KEY_CERT, certSha256.lowercase())
+        secureStorage.savePreference(KEY_SECRET, secretB64)
+    }
+
     // ------------------------------------------------------------------
     // Pairing
     // ------------------------------------------------------------------
@@ -237,6 +249,23 @@ class DesktopBridgeManager(
             val obj = Json.parseToJsonElement(body).jsonObject
             BridgeBuildResult(
                 name = obj["name"]?.jsonPrimitive?.content ?: name,
+                exitCode = obj["exit_code"]?.jsonPrimitive?.long?.toInt() ?: -1,
+                durationSeconds = obj["duration_s"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
+                timedOut = obj["timed_out"]?.jsonPrimitive?.boolean ?: false,
+                output = obj["output"]?.jsonPrimitive?.content ?: ""
+            )
+        }
+
+    /**
+     * Run an arbitrary script (e.g. a .py file) on the paired desktop.
+     * The daemon executes the script with /usr/bin/env and streams output
+     * back. Requires the bridge daemon to support the `run_script` RPC.
+     */
+    suspend fun runScript(path: String, args: String = "", timeoutSec: Int = 60): Result<BridgeBuildResult> =
+        rpc("run_script", mapOf("path" to path, "args" to args, "timeout_sec" to timeoutSec)).mapCatching { body ->
+            val obj = Json.parseToJsonElement(body).jsonObject
+            BridgeBuildResult(
+                name = obj["name"]?.jsonPrimitive?.content ?: path,
                 exitCode = obj["exit_code"]?.jsonPrimitive?.long?.toInt() ?: -1,
                 durationSeconds = obj["duration_s"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
                 timedOut = obj["timed_out"]?.jsonPrimitive?.boolean ?: false,

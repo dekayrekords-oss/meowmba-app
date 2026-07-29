@@ -2,13 +2,18 @@ package com.example.meowmba.ui.companion
 
 import android.content.Intent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -45,9 +50,20 @@ fun MemoryScreen(
 ) {
     var query by remember { mutableStateOf("") }
     var confirmClear by remember { mutableStateOf(false) }
+    var selectedTab by remember { mutableStateOf(MemoryTab.ALL) }
     val context = LocalContext.current
 
-    val displayed = state.memorySearchResults ?: state.allMemories
+    val filtered = if (selectedTab == MemoryTab.ALL) state.memorySearchResults ?: state.allMemories
+    else {
+        val pool = state.memorySearchResults ?: state.allMemories
+        when (selectedTab) {
+            MemoryTab.IMAGES -> pool.filter { "image" in it.tags || "canvas" in it.tags }
+            MemoryTab.VIDEOS -> pool.filter { "video" in it.tags }
+            MemoryTab.PROJECTS -> pool.filter { it.type == MemoryType.PROJECT || "project" in it.tags }
+            else -> pool
+        }
+    }
+    val displayed = if (state.memorySearchResults != null) state.memorySearchResults else filtered
 
     Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF0D1117)) {
         Column(
@@ -74,6 +90,39 @@ fun MemoryScreen(
             )
 
             Spacer(modifier = Modifier.height(16.dp))
+
+            // Tabs: All · Images · Videos · Projects
+            val tabs = MemoryTab.entries
+            ScrollableTabRow(
+                selectedTabIndex = tabs.indexOf(selectedTab),
+                containerColor = Color.Transparent,
+                contentColor = Color(0xFF58A6FF),
+                edgePadding = 0.dp
+            ) {
+                tabs.forEach { tab ->
+                    Tab(
+                        selected = selectedTab == tab,
+                        onClick = { selectedTab = tab; query = ""; onSearch("") },
+                        text = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                val icon = when (tab) {
+                                    MemoryTab.ALL -> null
+                                    MemoryTab.IMAGES -> Icons.Default.Image
+                                    MemoryTab.VIDEOS -> Icons.Default.Videocam
+                                    MemoryTab.PROJECTS -> Icons.Default.Folder
+                                }
+                                if (icon != null) {
+                                    Icon(icon, contentDescription = null, modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                }
+                                Text(tab.label, fontSize = 12.sp)
+                            }
+                        }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Search
             OutlinedTextField(
@@ -194,6 +243,10 @@ fun MemoryScreen(
             }
         )
     }
+}
+
+private enum class MemoryTab(val label: String) {
+    ALL("All"), IMAGES("Images"), VIDEOS("Videos"), PROJECTS("Projects")
 }
 
 @Composable

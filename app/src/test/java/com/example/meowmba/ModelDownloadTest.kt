@@ -28,21 +28,25 @@ import java.nio.file.Files
 class ModelCatalogTest {
 
     @Test
-    fun `catalog has four distinct, downloadable options`() {
-        assertEquals(4, ModelCatalog.options.size)
-        assertEquals(4, ModelCatalog.options.map { it.id }.distinct().size)
-        assertEquals(4, ModelCatalog.options.map { it.fileName }.distinct().size)
+    fun `catalog has five distinct, downloadable options`() {
+        assertEquals(5, ModelCatalog.options.size)
+        assertEquals(5, ModelCatalog.options.map { it.id }.distinct().size)
+        assertEquals(5, ModelCatalog.options.map { it.fileName }.distinct().size)
         assertTrue(ModelCatalog.options.all { it.downloadUrl.startsWith("https://") })
-        assertTrue(ModelCatalog.options.all { it.fileName.endsWith(".task") })
+        assertTrue(ModelCatalog.options.all {
+            it.fileName.endsWith(".task") || it.fileName.endsWith(".litertlm")
+        })
     }
 
     @Test
-    fun `gating flags match reality - qwen ungated, gemma needs a token`() {
+    fun `gating flags match reality - qwen ungated, gemma3 needs a token`() {
         val qwen = ModelCatalog.options.filter { it.id.startsWith("qwen") }
         assertTrue(qwen.isNotEmpty())
         assertTrue(qwen.all { !it.requiresHfToken })
-        val gemma = ModelCatalog.options.single { it.id.startsWith("gemma") }
-        assertTrue(gemma.requiresHfToken)
+        val gemma3 = ModelCatalog.options.first { it.id == "gemma-3-1b" }
+        assertTrue(gemma3.requiresHfToken)
+        val gemma4 = ModelCatalog.options.first { it.id == "gemma-4-e2b" }
+        assertFalse(gemma4.requiresHfToken)
     }
 
     @Test

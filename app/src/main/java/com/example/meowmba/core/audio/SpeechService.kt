@@ -47,6 +47,9 @@ class SpeechService(private val context: Context) : SpeechEngine {
 
     override fun stopListening() = interactive.stopListening()
 
+    override fun swapCallbacks(onResult: (String) -> Unit, onError: (Int) -> Unit) =
+        interactive.swapCallbacks(onResult, onError)
+
     override fun destroy() = interactive.destroy()
 
     /**
@@ -135,6 +138,11 @@ class SpeechService(private val context: Context) : SpeechEngine {
             }
             _partialResults.value = ""
             r.startListening(intent)
+        }
+
+        override fun swapCallbacks(onResult: (String) -> Unit, onError: (Int) -> Unit) {
+            this.onResult = onResult
+            this.onError = onError
         }
 
         override fun stopListening() {
