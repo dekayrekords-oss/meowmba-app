@@ -2,6 +2,7 @@ package com.example.meowmba.ui.companion
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -28,9 +29,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.util.Log
 import com.example.meowmba.core.nav.CurrentLocation
 import com.example.meowmba.core.nav.NavigationLauncher
 import com.example.meowmba.core.nav.OfflinePoiSource
@@ -172,6 +179,23 @@ fun NavScreen(
                 color = Color(0xFF8B949E),
                 fontSize = 11.sp,
             )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "Get a free API key →",
+                color = Color(0xFF58A6FF),
+                fontSize = 12.sp,
+                textDecoration = TextDecoration.Underline,
+                modifier = Modifier.clickable {
+                    // Opens the Geoapify projects dashboard, where the key is created.
+                    // The manifest already declares an https VIEW intent in <queries>,
+                    // so this resolves on API 30+.
+                    status = if (openUrl(context, GEOAPIFY_SIGNUP_URL)) {
+                        "Opened geoapify.com — create a project, then paste the key below"
+                    } else {
+                        "No browser available. Visit $GEOAPIFY_SIGNUP_URL"
+                    }
+                },
+            )
             Spacer(Modifier.height(8.dp))
             SettingsTextField(
                 value = geoapifyKey,
@@ -257,4 +281,22 @@ fun NavScreen(
             Spacer(Modifier.height(24.dp))
         }
     }
+}
+
+private const val GEOAPIFY_SIGNUP_URL = "https://myprojects.geoapify.com/"
+
+/**
+ * Opens [url] in a browser. Returns false if nothing on the device can handle it, so
+ * the caller can show the URL as text instead of failing silently.
+ */
+private fun openUrl(context: Context, url: String): Boolean = try {
+    context.startActivity(
+        Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    )
+    true
+} catch (e: ActivityNotFoundException) {
+    false
+} catch (e: Exception) {
+    Log.w("NavScreen", "Could not open $url: ${e.message}")
+    false
 }
