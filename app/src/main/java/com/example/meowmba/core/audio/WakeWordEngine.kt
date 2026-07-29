@@ -1,6 +1,7 @@
 package com.example.meowmba.core.audio
 
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -56,6 +57,16 @@ class RecognizerWakeWordEngine(
     @Volatile
     private var consecutiveErrors = 0
 
+    /** Collector for this session's partial transcripts. */
+    private var partialJob: Job? = null
+
+    /**
+     * True once this session has woken the companion. Partials keep growing, so
+     * without this a single "hey meow" would fire on every subsequent update.
+     */
+    @Volatile
+    private var firedThisSession = false
+
     /** Update the phrase set (e.g. after the companion is renamed). */
     fun updateMatcher(newMatcher: WakePhraseMatcher) {
         matcher = newMatcher
@@ -72,17 +83,43 @@ class RecognizerWakeWordEngine(
     override fun stop() {
         running = false
         _isRunning.value = false
+        partialJob?.cancel()
+        partialJob = null
         speechEngine.stopListening()
     }
 
     private fun listen() {
         if (!running) return
+        firedThisSession = false
+
+        // Watch PARTIAL transcripts as well as the final one. This is the difference
+        // between usually hearing the wake phrase and often missing it: a session that
+        // ends in ERROR_NO_MATCH delivers no final result at all, so anything said
+        // during it — including "hey meow" — was silently discarded, even though the
+        // partials had already contained it. Observed on-device: speech detected for
+        // 7s, then NO_MATCH and nothing handed to the matcher.
+        partialJob?.cancel()
+        partialJob = scope.launch {
+            speechEngine.partialResults.collect { partial ->
+                if (!running || firedThisSession || partial.isBlank()) return@collect
+                val match = matcher.match(partial) ?: return@collect
+                // One wake per session: partials keep growing and would re-fire.
+                firedThisSession = true
+                consecutiveErrors = 0
+                onWake?.invoke(match.command)
+            }
+        }
+
         speechEngine.startListening(
             onResult = { text ->
                 if (!running) return@startListening
                 consecutiveErrors = 0  // a completed session proves the recognizer works
+                // Already woken from a partial in this session — the final transcript
+                // is the same utterance, so do not wake twice.
+                if (firedThisSession) return@startListening
                 val match = matcher.match(text)
                 if (match != null) {
+                    firedThisSession = true
                     // Hand off to the companion; it resumes the engine when idle.
                     onWake?.invoke(match.command)
                 } else {
@@ -91,6 +128,9 @@ class RecognizerWakeWordEngine(
             },
             onError = { code ->
                 if (!running) return@startListening
+                // Woken from a partial: the companion owns the mic now, so this
+                // session's terminal error is expected and must not restart the loop.
+                if (firedThisSession) return@startListening
                 when {
                     isContention(code) -> {
                         // Something ELSE holds the recognizer — most often the
@@ -128,7 +168,12 @@ class RecognizerWakeWordEngine(
     }
 
     companion object {
-        private const val RESTART_DELAY_MS = 250L
+        /**
+         * Gap between sessions. The recognizer is DEAF for this plus its own startup
+         * (~280ms measured), and a wake phrase landing in that window is simply lost —
+         * so keep it short. 250ms here made the deaf window over half a second.
+         */
+        private const val RESTART_DELAY_MS = 100L
         private const val ERROR_BACKOFF_MS = 700L
 
         /**
