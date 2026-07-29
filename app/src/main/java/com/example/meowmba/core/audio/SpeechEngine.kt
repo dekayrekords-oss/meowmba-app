@@ -62,6 +62,15 @@ interface SpeechSynthesizer {
     /** Speak [text], replacing anything currently playing. */
     fun speak(text: String)
 
+    /**
+     * Append [text] after whatever is already queued, without interrupting it.
+     *
+     * Used to speak a streamed reply sentence by sentence while the model is still
+     * generating. Default delegates to [speak] so simple fakes need no changes — but
+     * that default CUTS OFF prior speech, so real implementations should override.
+     */
+    fun speakMore(text: String) = speak(text)
+
     /** Stop playback immediately (user interruption). */
     fun stop()
 

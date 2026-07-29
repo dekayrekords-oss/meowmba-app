@@ -182,6 +182,27 @@ class SpeechService(private val context: Context) : SpeechEngine {
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+
+                // Capture window. Android's defaults end a session after a beat of
+                // quiet, which cuts people off mid-sentence and makes the companion
+                // feel like a walkie-talkie instead of a call. These ask for a much
+                // longer tolerance for pauses.
+                //
+                // Honoured as a HINT only — several recognizers ignore them outright
+                // (they are documented as not guaranteed). Setting them costs nothing
+                // and helps on the ones that do listen.
+                putExtra(
+                    RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS,
+                    COMPLETE_SILENCE_MS,
+                )
+                putExtra(
+                    RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS,
+                    POSSIBLY_COMPLETE_SILENCE_MS,
+                )
+                putExtra(
+                    RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS,
+                    MINIMUM_SESSION_MS,
+                )
                 // Keep recognition on the device whenever possible (privacy-first)
                 putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
             }
@@ -208,6 +229,14 @@ class SpeechService(private val context: Context) : SpeechEngine {
 
     internal companion object {
         private const val TAG = "MeowmbaVoice"
+
+        /**
+         * Capture-window hints. ~2.5s of silence before a sentence is considered
+         * finished, and sessions run at least 15s so a slow speaker is not cut off.
+         */
+        private const val COMPLETE_SILENCE_MS = 2_500L
+        private const val POSSIBLY_COMPLETE_SILENCE_MS = 2_000L
+        private const val MINIMUM_SESSION_MS = 15_000L
 
         /** Service-level errors tolerated before switching recognition service. */
         private const val ERRORS_BEFORE_FAILOVER = 3

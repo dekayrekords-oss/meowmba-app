@@ -822,17 +822,33 @@ class CompanionViewModel(
             )
 
             var fullResponse = ""
+            // Index up to which fullResponse has already been handed to TTS. Speaking
+            // sentence-by-sentence as they land is what removes the dead-air wait: the
+            // old code only called speak() on Complete, so the user heard nothing until
+            // the entire answer had been generated.
+            var spokenUpTo = 0
             currentProvider?.generateStreaming(prompt)?.collect { response ->
                 when (response) {
                     is ModelResponse.Partial -> {
                         fullResponse += response.text
                         _uiState.value = _uiState.value.copy(captionText = fullResponse)
+                        val chunk = com.example.meowmba.core.audio.SpeechChunker
+                            .nextChunk(fullResponse, spokenUpTo)
+                        if (chunk != null) {
+                            spokenUpTo += chunk.length
+                            speakStreaming(chunk.trim(), first = spokenUpTo == chunk.length)
+                        }
                     }
                     is ModelResponse.Complete -> {
                         if (fullResponse.isBlank()) {
                             showProviderError("${_uiState.value.selectedModel} returned an empty response")
                         } else {
-                            speak(fullResponse)
+                            // Whatever is left after the last sentence boundary.
+                            val tail = fullResponse.substring(spokenUpTo).trim()
+                            if (tail.isNotEmpty()) {
+                                speakStreaming(tail, first = spokenUpTo == 0)
+                            }
+                            recordSpokenResponse(fullResponse)
                             // Episodic checkpoint: resume exactly where we left off
                             if (!_uiState.value.memoryPaused) {
                                 memoryRepository?.saveEpisodicCheckpoint(text, fullResponse, userMessageId)
@@ -946,6 +962,44 @@ class CompanionViewModel(
         if (candidates.isEmpty()) return emptyList()
         val queryEmbedding = embedder.getEmbedding(text)
         return RecallEngine.rank(queryEmbedding, text, candidates)
+    }
+
+    /**
+     * Speaks one chunk of a streamed reply. [first] starts a new utterance (flushing
+     * anything stale and taking audio focus); later chunks are appended so they do not
+     * cut off what is still playing.
+     */
+    private fun speakStreaming(text: String, first: Boolean) {
+        if (text.isBlank()) return
+        val tts = ttsManager
+        if (tts == null) {
+            if (first) startMockSpeaking(text)
+            return
+        }
+        // Word-boundary offsets are per-utterance, so the echo filter tracks per chunk.
+        selfVoiceFilter.begin(text)
+        if (first) {
+            audioFocusManager?.requestFocus()
+            _uiState.value = _uiState.value.copy(
+                emotion = CompanionEmotion.HAPPY,
+                mouthEnergy = 0f,
+            )
+            tts.speak(text)
+        } else {
+            tts.speakMore(text)
+        }
+    }
+
+    /**
+     * Once-per-reply bookkeeping. Kept out of [speakStreaming] so a reply spoken as
+     * five sentences still lands in memory and notifications as ONE assistant message.
+     */
+    private fun recordSpokenResponse(full: String) {
+        viewModelScope.launch {
+            memoryRepository?.addMessage(MessageRole.ASSISTANT, full)
+        }
+        notificationHelper?.postThought(full)
+        lastAssistantText = full
     }
 
     private fun speak(text: String) {
