@@ -51,6 +51,7 @@ import com.example.meowmba.core.agent.tools.LaunchAppTool
 import com.example.meowmba.core.agent.tools.ListAppsTool
 import com.example.meowmba.core.agent.tools.OpenUrlTool
 import com.example.meowmba.core.agent.tools.OpenSettingsTool
+import com.example.meowmba.core.media.OnDeviceImageGenerator
 import com.example.meowmba.core.audio.AudioStreamingManager
 import com.example.meowmba.core.bridge.DesktopBridgeManager
 import com.example.meowmba.core.bridge.UsbAutoBridgeManager
@@ -191,6 +192,7 @@ class CompanionViewModel(
                 conversationMode = storage.getBooleanPreference(KEY_CONVERSATION, false),
                 agentBrainEnabled = storage.getBooleanPreference(KEY_AGENT_BRAIN, true),
                 hermesAgentUrl = storage.getPreference(KEY_HERMES_URL) ?: "",
+                imageModelDir = storage.getPreference(KEY_IMAGE_MODEL_DIR) ?: "",
                 backgroundListeningEnabled = storage.getBooleanPreference(KEY_BACKGROUND_LISTENING, false),
                 // Restore the provider picked last session — but only if it is
                 // still a buildable provider; a stale/removed label falls back
@@ -338,7 +340,19 @@ class CompanionViewModel(
         if (workspaceRoot != null) {
             val ws = Workspace(workspaceRoot)
             toolRegistry.register(EmailDraftTool(ws))
-            toolRegistry.register(MediaGenerateTool(ws))
+            // Read the path at call time, not registration time, so installing
+            // the weights takes effect without restarting the app.
+            toolRegistry.register(
+                MediaGenerateTool(ws) {
+                    val dir = _uiState.value.imageModelDir
+                    val context = secureStorage?.context
+                    if (dir.isNotBlank() && context != null) {
+                        OnDeviceImageGenerator(context, dir)
+                    } else {
+                        null
+                    }
+                }
+            )
             toolRegistry.register(MediaGenerateVideoTool(ws))
             toolRegistry.register(MediaGenerateAudioTool(ws))
         }
@@ -1520,6 +1534,23 @@ class CompanionViewModel(
     }
 
     /** Hermes Agent endpoint (persisted). Blank means on-device brain only. */
+    /**
+     * Point the companion at converted Stable Diffusion weights. Blank clears
+     * it and returns image requests to the canvas fallback.
+     */
+    fun setImageModelDir(path: String) {
+        val clean = path.trim().trimEnd('/')
+        _uiState.value = _uiState.value.copy(imageModelDir = clean)
+        secureStorage?.savePreference(KEY_IMAGE_MODEL_DIR, clean)
+    }
+
+    /** Whether usable image weights are present right now (for the Settings check). */
+    fun imageModelInstalled(): Boolean {
+        val dir = _uiState.value.imageModelDir.ifBlank { return false }
+        val context = secureStorage?.context ?: return false
+        return OnDeviceImageGenerator(context, dir).isAvailable()
+    }
+
     fun setHermesAgentUrl(url: String) {
         val clean = url.trim()
         _uiState.value = _uiState.value.copy(hermesAgentUrl = clean)
@@ -1631,6 +1662,9 @@ class CompanionViewModel(
         private const val KEY_RETENTION_DAYS = "retention_days"
         private const val KEY_AGENT_BRAIN = "agent_brain_enabled"
         private const val KEY_HERMES_URL = "hermes_agent_url"
+        private const val KEY_IMAGE_MODEL_DIR = "image_model_dir"
+        /** Where the MediaPipe image-generation guide tells you to push the bins. */
+        const val DEFAULT_IMAGE_MODEL_DIR = "/data/local/tmp/image_generator/bins"
         private const val KEY_BACKGROUND_LISTENING = "background_listening"
         private const val KEY_SELECTED_MODEL = "selected_model"
         private const val KEY_USB_AUTO_BRIDGE = "usb_auto_bridge"

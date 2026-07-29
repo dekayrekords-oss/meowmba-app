@@ -85,6 +85,12 @@ data class CompanionState(
     val agentBrainEnabled: Boolean = true,
     /** Optional Hermes Agent endpoint (OpenAI-compatible). Blank = on-device only. */
     val hermesAgentUrl: String = "",
+    /**
+     * Directory of converted Stable Diffusion bins for on-device image
+     * generation. Blank = no model installed, and image requests fall back to
+     * the drawn canvas.
+     */
+    val imageModelDir: String = "",
     /** Active model downloads by id (catalog option id or "custom:<fileName>"). */
     val modelDownloads: Map<String, ModelDownloader.DownloadProgress> = emptyMap(),
     /** Every model bundle actually present in the app-private models dir. */

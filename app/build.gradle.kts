@@ -53,6 +53,7 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
     implementation(libs.mediapipe.tasks.genai)
+    implementation(libs.mediapipe.tasks.vision.image.generator)
     implementation(libs.androidx.security.crypto)
     implementation(libs.androidx.camera.camera2)
     implementation(libs.androidx.camera.lifecycle)

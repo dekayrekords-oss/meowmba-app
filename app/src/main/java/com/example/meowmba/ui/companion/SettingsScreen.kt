@@ -29,6 +29,8 @@ fun SettingsScreen(
     conversationMode: Boolean = false,
     agentBrainEnabled: Boolean = true,
     hermesAgentUrl: String = "",
+    imageModelDir: String = "",
+    imageModelInstalled: () -> Boolean = { false },
     backgroundListeningEnabled: Boolean = false,
     usbAutoBridgeEnabled: Boolean = false,
     onCompanionNameChange: (String) -> Unit = {},
@@ -36,6 +38,7 @@ fun SettingsScreen(
     onConversationModeChange: (Boolean) -> Unit = {},
     onAgentBrainChange: (Boolean) -> Unit = {},
     onHermesUrlChange: (String) -> Unit = {},
+    onImageModelDirChange: (String) -> Unit = {},
     onBackgroundListeningChange: (Boolean) -> Unit = {},
     onUsbAutoBridgeChange: ((Boolean) -> Unit)? = null,
     onClose: () -> Unit
@@ -123,6 +126,43 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = Color.Gray
             )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // On-device image generation (Stable Diffusion via MediaPipe)
+            Text("Image generation", style = MaterialTheme.typography.titleMedium, color = Color.White)
+            var imageDir by remember(imageModelDir) { mutableStateOf(imageModelDir) }
+            var imageCheck by remember { mutableStateOf<String?>(null) }
+            SettingsTextField(
+                value = imageDir,
+                onValueChange = {
+                    imageDir = it
+                    imageCheck = null
+                    onImageModelDirChange(it)
+                },
+                label = { Text("Image model folder (optional)") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Text(
+                text = "Folder of converted Stable Diffusion 1.5 bins, e.g. " +
+                    "/data/local/tmp/image_generator/bins. Leave blank to draw simple " +
+                    "canvas images instead. Runs fully on-device; expect 15s to a " +
+                    "minute per image, and about 2 GB of RAM while it runs.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.Gray
+            )
+            TextButton(onClick = {
+                imageCheck = if (imageModelInstalled()) {
+                    "Model found — image requests will use it."
+                } else {
+                    "No usable model at that path — falling back to canvas drawings."
+                }
+            }) {
+                Text("Check image model")
+            }
+            imageCheck?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+            }
 
             Spacer(modifier = Modifier.height(24.dp))
 

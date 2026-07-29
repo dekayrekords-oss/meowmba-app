@@ -422,6 +422,8 @@ fun CompanionScreen(
                 conversationMode = uiState.conversationMode,
                 agentBrainEnabled = uiState.agentBrainEnabled,
                 hermesAgentUrl = uiState.hermesAgentUrl,
+                imageModelDir = uiState.imageModelDir,
+                imageModelInstalled = { viewModel.imageModelInstalled() },
                 backgroundListeningEnabled = uiState.backgroundListeningEnabled,
                 usbAutoBridgeEnabled = uiState.usbAutoBridgeEnabled,
                 onCompanionNameChange = { viewModel.renameCompanion(it) },
@@ -429,6 +431,7 @@ fun CompanionScreen(
                 onConversationModeChange = { viewModel.setConversationMode(it) },
                 onAgentBrainChange = { viewModel.setAgentBrainEnabled(it) },
                 onHermesUrlChange = { viewModel.setHermesAgentUrl(it) },
+                onImageModelDirChange = { viewModel.setImageModelDir(it) },
                 onBackgroundListeningChange = { viewModel.setBackgroundListeningEnabled(it) },
                 onUsbAutoBridgeChange = { viewModel.setUsbAutoBridge(it) },
                 onClose = { viewModel.toggleSettings() }

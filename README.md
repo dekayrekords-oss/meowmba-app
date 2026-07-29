@@ -23,6 +23,51 @@ Practical notes: 8GB+ RAM phone recommended; routing decisions take a few
 seconds on-device (chat answers longer). For the fastest, smartest brain, the
 server Hermes endpoint still wins — the phone path is for offline/no-server use.
 
+## On-device image generation (real Stable Diffusion, no server)
+
+`media.generate_image` uses **MediaPipe's Image Generator** (Stable Diffusion
+1.5 architecture) when weights are installed, and falls back to the simple
+canvas renderer when they are not. Everything runs on the phone — no endpoint,
+no key, no network.
+
+Filenames tell you which ran: `image_*.png` came from diffusion, `canvas_*.png`
+from the fallback.
+
+### Installing the weights
+
+The task needs a **directory of converted .tflite bins**, not a single file.
+The weights are not bundled — they are ~1.5 GB.
+
+1. Get an SD 1.5 checkpoint (`runwayml/stable-diffusion-v1-5` or any SD 1.5
+   fine-tune — the architecture is what matters, not the exact model).
+2. Convert it with MediaPipe's image-generator converter (Python, on a desktop).
+   Google's guide: <https://ai.google.dev/edge/mediapipe/solutions/vision/image_generator>
+3. Push the output folder to the phone:
+   ```
+   adb push bins /data/local/tmp/image_generator/bins
+   ```
+4. In Meowmba: **Settings → Image generation → Image model folder** →
+   `/data/local/tmp/image_generator/bins`, then tap **Check image model**.
+
+### RAM, and why the main model may need to shrink
+
+SD 1.5 wants roughly **2 GB resident** while generating. The generator is
+created per request and closed immediately after, so it does not hold that
+memory between images — but it still has to coexist with whatever LLM is
+loaded at that moment.
+
+On an 8 GB phone, pairing it with a 3B-class local model (or a server/cloud
+brain, which uses no local RAM at all) is comfortable. Pairing it with a large
+local `.task` model is where you will see the generator fail to allocate.
+If image generation reports an allocation failure, drop the main model a size
+before doing anything else.
+
+Expect ~15s per image on flagship hardware and well over a minute on midrange.
+
+> Note: Google lists the MediaPipe Image Generator task as **no longer
+> actively maintained**. It works and is stable, but there will be no new
+> versions — worth knowing before building anything load-bearing on it.
+
 ## Agent Brain (Hermes Agent + on-device routing)
 
 The companion's tool routing is model-driven, with a strict trust boundary:
