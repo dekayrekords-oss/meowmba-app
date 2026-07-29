@@ -23,12 +23,14 @@ import java.io.File
  * Packs live in filesDir/poi/<region>.sqlite so they can be swapped per region
  * without an app update.
  */
-class OfflinePoiSource(context: Context) : PlaceSource {
+class OfflinePoiSource(private val context: Context) : PlaceSource {
 
-    private val appContext = context.applicationContext
     override val kind = PlaceSourceKind.OFFLINE
 
-    private val packDir = File(appContext.filesDir, "poi")
+    // Lazy on purpose: constructing this must not touch Context or the filesystem.
+    // It is built eagerly in CompanionViewModel's init, and resolving filesDir there
+    // NPE'd every test that constructs the ViewModel with a mock Context.
+    private val packDir by lazy { File(context.applicationContext.filesDir, "poi") }
 
     /** What the NAV settings card shows for each installed pack. */
     data class PackInfo(

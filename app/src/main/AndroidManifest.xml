@@ -49,6 +49,16 @@
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="google.navigation" />
         </intent>
+        <!-- Speech: without an explicit RecognitionService query, API 30+ package
+             visibility hides most recognizers from queryIntentServices() and the
+             app binds whatever scrap it can see (observed: Home Assistant's
+             service, erroring 5/9). Android System Intelligence is the one we
+             actually want. -->
+        <package android:name="com.google.android.as" />
+        <package android:name="com.google.android.googlequicksearchbox" />
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
     </queries>
 
     <application

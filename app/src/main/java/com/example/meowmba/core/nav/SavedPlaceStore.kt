@@ -15,10 +15,14 @@ import org.json.JSONObject
  * putting them in Room would mean a schema migration. Nothing here touches the
  * network, so saved-place navigation works with no server and no signal.
  */
-class SavedPlaceStore(context: Context) {
+class SavedPlaceStore(private val context: Context) {
 
-    private val prefs =
+    // Lazy on purpose: constructing this must not touch Context or disk. It is built
+    // eagerly inside CompanionViewModel's init, and doing I/O there NPE'd every test
+    // that constructs the ViewModel with a mock Context.
+    private val prefs by lazy {
         context.applicationContext.getSharedPreferences("nav_saved_places", Context.MODE_PRIVATE)
+    }
 
     data class SavedPlace(
         val name: String,
@@ -34,8 +38,8 @@ class SavedPlaceStore(context: Context) {
         )
     }
 
-    private val _places = MutableStateFlow(read())
-    val places: StateFlow<List<SavedPlace>> = _places.asStateFlow()
+    private val _places by lazy { MutableStateFlow(read()) }
+    val places: StateFlow<List<SavedPlace>> get() = _places.asStateFlow()
 
     fun save(name: String, lat: Double, lon: Double) {
         val clean = name.trim().lowercase()
