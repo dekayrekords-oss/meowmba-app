@@ -13,6 +13,28 @@
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
 
+    <!--
+      Android 11+ package visibility. Without this, queryIntentActivities and
+      getLaunchIntentForPackage see almost nothing and "open Spotify" fails
+      with a misleading "no installed app matches" result. Declaring the
+      launcher intent (rather than QUERY_ALL_PACKAGES) keeps the app off
+      Play's sensitive-permission review path.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SENDTO" />
+            <data android:scheme="mailto" />
+        </intent>
+    </queries>
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"

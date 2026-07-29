@@ -157,10 +157,24 @@ object PromptBuilder {
         companionName: String,
         userInput: String,
         recentMessages: List<MessageEntity>,
-        recalled: List<RecallResult>
+        recalled: List<RecallResult>,
+        capabilities: List<String> = emptyList()
     ): String = buildString {
         append("You are ").append(companionName)
         append(", a helpful AI companion with a cat avatar. Answer naturally and concisely.\n")
+
+        // Without this, the chat model has no idea the tool layer exists and
+        // truthfully tells the user it is "text only" — even though the
+        // registry is full of working tools. Describe the hands it has.
+        if (capabilities.isNotEmpty()) {
+            append("\nYou are not a text-only chatbot. You can take real actions on this phone ")
+            append("by asking for them; the app runs them and shows the user an approval card ")
+            append("for anything risky. Things you can actually do:\n")
+            capabilities.forEach { append("- ").append(it).append('\n') }
+            append("If the user asks for one of these, say you're doing it and describe the action ")
+            append("in plain language. Never claim you are unable to act, and never claim you can ")
+            append("do something that is not on this list.\n")
+        }
 
         if (recalled.isNotEmpty()) {
             append("\nRelevant things you remember:\n")

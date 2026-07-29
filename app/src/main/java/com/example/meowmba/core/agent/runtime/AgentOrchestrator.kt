@@ -49,7 +49,11 @@ class AgentOrchestrator(
     private val scope: CoroutineScope,
     private val toolRegistry: ToolRegistry,
     private val auditSink: AuditSink,
-    private val approvalTimeoutMs: Long = 60_000
+    // 60s was long enough to auto-deny anything the user didn't answer while
+    // the phone was in their pocket, and the task then reported "Denied by
+    // user" for a decision they never made. Five minutes, and the timeout now
+    // says what actually happened.
+    private val approvalTimeoutMs: Long = 300_000
 ) {
     private val _tasks = MutableStateFlow<List<AgentTask>>(emptyList())
     val tasks: StateFlow<List<AgentTask>> = _tasks.asStateFlow()
@@ -156,7 +160,9 @@ class AgentOrchestrator(
             if (_pendingApproval.value == null) showNextApproval()
             audit("task.approval_requested", task.agentId, task.id, task.title)
 
+            var timedOut = false
             val approved = withTimeoutOrNull(approvalTimeoutMs) { decision.await() } ?: run {
+                timedOut = true
                 audit("task.approval_timeout", task.agentId, task.id, "auto-denied")
                 false
             }
@@ -167,7 +173,15 @@ class AgentOrchestrator(
             }
 
             if (!approved) {
-                failTask(task, "Denied by user")
+                failTask(
+                    task,
+                    if (timedOut) {
+                        "No answer on the approval card after ${approvalTimeoutMs / 1000}s, " +
+                            "so it wasn't run. Ask again to retry."
+                    } else {
+                        "Denied by user"
+                    }
+                )
                 return
             }
             audit("task.approved", task.agentId, task.id, task.title)
@@ -209,7 +223,7 @@ class AgentOrchestrator(
         if (runningCount(agentId) >= agent.maxConcurrentTasks) return
         val next = _tasks.value
             .filter { it.agentId == agentId && it.status == TaskStatus.QUEUED }
-            .maxByOrNull { it.createdAt }   // list is newest-first; oldest queued goes first
+            .minByOrNull { it.createdAt }   // oldest queued genuinely goes first (was maxBy: LIFO, starved old tasks)
             ?: return
         launchTask(next)
     }

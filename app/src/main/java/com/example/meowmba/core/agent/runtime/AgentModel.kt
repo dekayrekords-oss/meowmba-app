@@ -109,6 +109,13 @@ object AgentRegistry {
             allowedTools = setOf("desktop.write_file", "desktop.run_build", "desktop.run_script")
         ),
         AgentDefinition(
+            id = "phone", name = "Paws",
+            purpose = "Controls this phone: opens apps, links, and settings pages.",
+            allowedTools = setOf(
+                "phone.launch_app", "phone.list_apps", "phone.open_url", "phone.open_settings"
+            )
+        ),
+        AgentDefinition(
             id = "media", name = "Canvas",
             purpose = "Generates simple images from text descriptions.",
             allowedTools = setOf("media.generate_image", "media.generate_video", "media.generate_audio")

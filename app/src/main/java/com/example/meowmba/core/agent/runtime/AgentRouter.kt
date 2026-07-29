@@ -128,6 +128,31 @@ object AgentRouter {
                 "run build: $name")
         }
 
+        // Phone control. "open the file X" is matched earlier, so a bare
+        // "open X" reaching here means an app, not a workspace file.
+        if (normalized in setOf("what apps do i have", "list my apps", "show my apps",
+                "list apps", "show apps", "what apps are installed")) {
+            return AgentIntent("phone", "phone.list_apps", emptyMap(), "list installed apps")
+        }
+        // Order matters: the specific "open ..." forms must be tested before the
+        // bare "open " app prefix, or it swallows them.
+        if (normalized in setOf("open settings", "open my settings", "open phone settings")) {
+            return AgentIntent("phone", "phone.open_settings", emptyMap(), "open settings")
+        }
+        extractAfter(raw, listOf("open the settings for ", "open settings for ",
+            "open my settings ", "open settings "))?.let { page ->
+            return AgentIntent("phone", "phone.open_settings", mapOf("page" to page),
+                "open $page settings")
+        }
+        extractAfter(raw, listOf("open the website ", "open the site ", "go to the website ",
+            "open the url ", "browse to "))?.let { url ->
+            return AgentIntent("phone", "phone.open_url", mapOf("url" to url), "open $url")
+        }
+        extractAfter(raw, listOf("open the app ", "open app ", "launch the app ",
+            "launch app ", "launch ", "start the app ", "open "))?.let { name ->
+            return AgentIntent("phone", "phone.launch_app", mapOf("name" to name), "open $name")
+        }
+
         // Media / image generation
         extractAfter(raw, listOf("generate an image of ", "generate an image of a ",
             "create an image of ", "make an image of ", "draw ", "paint ",

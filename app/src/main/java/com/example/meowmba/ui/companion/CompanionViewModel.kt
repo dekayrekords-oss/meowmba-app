@@ -47,6 +47,10 @@ import com.example.meowmba.core.agent.tools.CalendarCreateTool
 import com.example.meowmba.core.agent.tools.MediaGenerateTool
 import com.example.meowmba.core.agent.tools.MediaGenerateVideoTool
 import com.example.meowmba.core.agent.tools.MediaGenerateAudioTool
+import com.example.meowmba.core.agent.tools.LaunchAppTool
+import com.example.meowmba.core.agent.tools.ListAppsTool
+import com.example.meowmba.core.agent.tools.OpenUrlTool
+import com.example.meowmba.core.agent.tools.OpenSettingsTool
 import com.example.meowmba.core.audio.AudioStreamingManager
 import com.example.meowmba.core.bridge.DesktopBridgeManager
 import com.example.meowmba.core.bridge.UsbAutoBridgeManager
@@ -324,6 +328,13 @@ class CompanionViewModel(
             toolRegistry.register(CalendarListTool(appContext))
             toolRegistry.register(CalendarCreateTool(appContext))
         }
+        // Phone control: open apps, links, and settings pages on this device.
+        if (appContext != null) {
+            toolRegistry.register(LaunchAppTool(appContext))
+            toolRegistry.register(ListAppsTool(appContext))
+            toolRegistry.register(OpenUrlTool(appContext))
+            toolRegistry.register(OpenSettingsTool(appContext))
+        }
         if (workspaceRoot != null) {
             val ws = Workspace(workspaceRoot)
             toolRegistry.register(EmailDraftTool(ws))
@@ -364,6 +375,22 @@ class CompanionViewModel(
                                     label = label
                                 )
                             )
+                            // Persist it. Without this the media only ever lived in
+                            // transient UI state, so nothing generated showed up in
+                            // the Memory tab afterwards.
+                            if (!_uiState.value.memoryPaused) {
+                                viewModelScope.launch {
+                                    runCatching {
+                                        memoryRepository?.addMemory(
+                                            content = "Created a ${type.name.lowercase()}: $label " +
+                                                "(saved as ${file.name})",
+                                            type = MemoryType.EPISODIC,
+                                            importance = ImportanceLevel.MEDIUM,
+                                            tags = listOf("media", type.name.lowercase(), file.name)
+                                        )
+                                    }
+                                }
+                            }
                         }
                         speak(result.lineSequence().firstOrNull { !it.startsWith("MEDIA_FILE:") } ?: "Done.")
                     }
@@ -747,7 +774,14 @@ class CompanionViewModel(
 
             // Context-augmented prompt: persona + recalled memories + recent turns
             val recentMessages = memoryRepository?.getRecentMessages(10) ?: emptyList()
-            val prompt = PromptBuilder.build(_uiState.value.name, text, recentMessages, recalled)
+            // Hand the chat model the same tool list the router sees, so it stops
+            // describing itself as text-only when it has a full registry behind it.
+            val capabilities = agentToolRegistry?.definitions()
+                ?.map { "${it.displayName} — ${it.description.substringBefore('.')}" }
+                ?: emptyList()
+            val prompt = PromptBuilder.build(
+                _uiState.value.name, text, recentMessages, recalled, capabilities
+            )
 
             var fullResponse = ""
             currentProvider?.generateStreaming(prompt)?.collect { response ->

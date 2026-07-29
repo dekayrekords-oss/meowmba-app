@@ -15,9 +15,20 @@ import kotlinx.coroutines.withContext
  */
 object CommandHeuristics {
     private val SIGNAL_WORDS = setOf(
+        // Files, projects, memory
         "create", "make", "file", "folder", "project", "delete", "remove",
         "read", "open", "write", "save", "search", "find", "list", "show",
-        "task", "workspace", "memory", "remember", "note", "scaffold", "todo"
+        "task", "workspace", "memory", "remember", "note", "scaffold", "todo",
+        // Email and calendar — these tools are registered but were unreachable
+        // without their own signal words, so the router never saw the request.
+        "email", "mail", "send", "draft", "reply", "compose", "inbox",
+        "calendar", "event", "schedule", "meeting", "appointment", "remind",
+        // Media generation
+        "image", "picture", "photo", "draw", "paint", "sketch", "render",
+        "generate", "video", "animation", "animate", "song", "audio", "sound",
+        // Phone and desktop control
+        "app", "launch", "start", "call", "text", "settings", "camera",
+        "run", "script", "build", "desktop", "computer"
     )
 
     fun mightBeCommand(text: String): Boolean {
