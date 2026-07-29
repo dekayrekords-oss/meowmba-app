@@ -86,7 +86,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
+import android.util.Log
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * ViewModel managing the logic for the Memba companion.
@@ -488,6 +491,10 @@ class CompanionViewModel(
      * Nano unconditionally would strand every device without AICore on a provider that
      * can never build.
      */
+    /** Resolves to the provider once any async warm-up (Gemini Nano) completes. */
+    private var providerReady: CompletableDeferred<ModelProvider?>? = null
+    private var providerWarmUp: Job? = null
+
     private fun defaultModelLabel(context: android.content.Context?): String =
         if (context != null && GeminiNanoProvider.isAvailable(context)) {
             MODEL_GEMINI_NANO
@@ -500,13 +507,11 @@ class CompanionViewModel(
         if (secureStorage == null) return
 
         val mainProvider: ModelProvider? = when (modelName) {
-            // Nano is now selectable in its own right, not just the router's light
-            // lane. runBlocking because AICore wants prepareInferenceEngine() before
-            // first use and updateProvider is synchronous; it is a local IPC warm-up,
-            // not a network call.
-            MODEL_GEMINI_NANO -> runBlocking {
-                GeminiNanoProvider.create(secureStorage.context)
-            }
+            // Nano is built ASYNCHRONOUSLY below — never here. GeminiNanoProvider
+            // .create() calls prepareInferenceEngine(), which blocks for seconds, and
+            // updateProvider runs on the main thread during init. Doing it inline hung
+            // the app on its boot screen (ANR). Consumers await [providerReady].
+            MODEL_GEMINI_NANO -> null
             "On-device (Local)" -> {
                 val path = resolvedLocalModelPath()
                 if (path.endsWith(".litertlm")) {
@@ -538,28 +543,52 @@ class CompanionViewModel(
         // when Nano is already the main provider — routing Nano to Nano just builds a
         // second engine and warms it up for nothing.
         val nanoIsMain = modelName == MODEL_GEMINI_NANO
-        val canRouteThroughNano =
-            !nanoIsMain && mainProvider != null &&
-                GeminiNanoProvider.isAvailable(secureStorage.context)
+        val nanoUsable = GeminiNanoProvider.isAvailable(secureStorage.context)
+        val canRouteThroughNano = !nanoIsMain && mainProvider != null && nanoUsable
 
-        var nanoActive = nanoIsMain && mainProvider != null
-        currentProvider = if (canRouteThroughNano) {
-            val nanoProvider = runBlocking {
-                try { GeminiNanoProvider.create(secureStorage.context) } catch (_: Exception) { null }
-            }
-            if (nanoProvider != null) {
-                nanoActive = true
-                ModelRouter(lightProvider = nanoProvider, mainProvider = mainProvider!!)
-            } else {
-                mainProvider
-            }
-        } else {
-            mainProvider
+        // Whatever is usable immediately. For Nano this is null until the warm-up
+        // finishes; [providerReady] is what callers actually await.
+        currentProvider = mainProvider
+        _uiState.value = _uiState.value.copy(geminiNanoActive = false)
+
+        providerWarmUp?.cancel()
+        providerWarmUp = null
+
+        if (!nanoIsMain && !canRouteThroughNano) {
+            providerReady = CompletableDeferred(mainProvider)
+            return
         }
-        // Set once, at the end. Assigning inside each branch meant the "Nano is the
-        // main provider" case was immediately overwritten to false by the fall-through.
-        _uiState.value = _uiState.value.copy(geminiNanoActive = nanoActive)
+
+        // AICore warm-up is slow and MUST stay off the main thread — doing it inline
+        // is what hung the app at the boot screen.
+        val pending = CompletableDeferred<ModelProvider?>()
+        providerReady = pending
+        providerWarmUp = viewModelScope.launch {
+            val nano = withContext(Dispatchers.IO) {
+                try {
+                    GeminiNanoProvider.create(secureStorage.context)
+                } catch (e: Exception) {
+                    Log.w("CompanionViewModel", "Gemini Nano warm-up failed: ${e.message}")
+                    null
+                }
+            }
+            val resolved: ModelProvider? = when {
+                nano == null -> mainProvider          // fall back honestly
+                nanoIsMain -> nano
+                else -> ModelRouter(lightProvider = nano, mainProvider = mainProvider!!)
+            }
+            currentProvider = resolved
+            _uiState.value = _uiState.value.copy(geminiNanoActive = nano != null)
+            pending.complete(resolved)
+        }
     }
+
+    /**
+     * The provider to generate with, waiting for an in-flight Nano warm-up rather than
+     * reporting "no model is ready" during the first few seconds after launch.
+     */
+    private suspend fun awaitProvider(): ModelProvider? =
+        currentProvider ?: providerReady?.await() ?: currentProvider
 
     /**
      * The local model file the provider will actually load: the configured
@@ -861,7 +890,7 @@ class CompanionViewModel(
             // old code only called speak() on Complete, so the user heard nothing until
             // the entire answer had been generated.
             var spokenUpTo = 0
-            currentProvider?.generateStreaming(prompt)?.collect { response ->
+            awaitProvider()?.generateStreaming(prompt)?.collect { response ->
                 when (response) {
                     is ModelResponse.Partial -> {
                         fullResponse += response.text
