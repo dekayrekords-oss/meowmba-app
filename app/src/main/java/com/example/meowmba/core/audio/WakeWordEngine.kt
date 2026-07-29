@@ -91,18 +91,30 @@ class RecognizerWakeWordEngine(
             },
             onError = { code ->
                 if (!running) return@startListening
-                if (!isInfrastructureError(code)) {
-                    // Quiet room: no-speech timeouts are the loop's NORMAL
-                    // heartbeat, not a failing recognizer. Counting them made
-                    // the engine declare the device broken after ~5 idle
-                    // sessions ("wake phrase stopped…" bug).
-                    consecutiveErrors = 0
-                    restart(RESTART_DELAY_MS)
-                } else if (++consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-                    stop()
-                    onFatalError?.invoke()
-                } else {
-                    restart(ERROR_BACKOFF_MS)
+                when {
+                    isContention(code) -> {
+                        // Something ELSE holds the recognizer — most often the
+                        // foreground WakeWordService and this in-app loop overlapping
+                        // during the mic handoff on resume/pause. That is transient and
+                        // says nothing about the device, so it must not count toward
+                        // "keeps failing"; counting it is what produced the false
+                        // "wake phrase stopped" report while the recognizer was fine.
+                        consecutiveErrors = 0
+                        restart(CONTENTION_BACKOFF_MS)
+                    }
+                    !isInfrastructureError(code) -> {
+                        // Quiet room: no-speech timeouts are the loop's NORMAL
+                        // heartbeat, not a failing recognizer. Counting them made
+                        // the engine declare the device broken after ~5 idle
+                        // sessions ("wake phrase stopped…" bug).
+                        consecutiveErrors = 0
+                        restart(RESTART_DELAY_MS)
+                    }
+                    ++consecutiveErrors >= MAX_CONSECUTIVE_ERRORS -> {
+                        stop()
+                        onFatalError?.invoke()
+                    }
+                    else -> restart(ERROR_BACKOFF_MS)
                 }
             }
         )
@@ -118,7 +130,20 @@ class RecognizerWakeWordEngine(
     companion object {
         private const val RESTART_DELAY_MS = 250L
         private const val ERROR_BACKOFF_MS = 700L
+
+        /**
+         * Longer than the normal backoff: whoever else holds the recognizer needs time
+         * to let go, and hammering it just keeps both sides busy.
+         */
+        private const val CONTENTION_BACKOFF_MS = 1_500L
         private const val MAX_CONSECUTIVE_ERRORS = 5
+
+        /**
+         * Another client currently owns the recognizer. Transient by definition —
+         * retry, never escalate to "this device is broken".
+         */
+        internal fun isContention(code: Int): Boolean =
+            code == android.speech.SpeechRecognizer.ERROR_RECOGNIZER_BUSY
 
         /**
          * Errors that mean the recognizer itself is broken (service missing,
