@@ -192,7 +192,12 @@ class CompanionViewModel(
                 conversationMode = storage.getBooleanPreference(KEY_CONVERSATION, false),
                 agentBrainEnabled = storage.getBooleanPreference(KEY_AGENT_BRAIN, true),
                 hermesAgentUrl = storage.getPreference(KEY_HERMES_URL) ?: "",
-                imageModelDir = storage.getPreference(KEY_IMAGE_MODEL_DIR) ?: "",
+                // Default to the conventional push location. When nothing is
+                // there, isAvailable() is false and image requests fall back to
+                // canvas — so the default costs nothing and saves every user
+                // from typing the same path the docs told them to push to.
+                imageModelDir = storage.getPreference(KEY_IMAGE_MODEL_DIR)
+                    ?: DEFAULT_IMAGE_MODEL_DIR,
                 backgroundListeningEnabled = storage.getBooleanPreference(KEY_BACKGROUND_LISTENING, false),
                 // Restore the provider picked last session — but only if it is
                 // still a buildable provider; a stale/removed label falls back
