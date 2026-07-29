@@ -12,6 +12,9 @@ mediapipeGenai = "0.10.35"
 # Image generation ships as its own artifact, on Google's Maven only (not
 # Central), and is versioned independently of tasks-genai.
 mediapipeImageGen = "0.10.26.1"
+# Must match the version MediaPipe resolves to, but the FULL runtime rather
+# than javalite — see the exclude in app/build.gradle.kts.
+protobufJava = "4.26.1"
 litertLm = "0.13.1"
 mlkitImageLabeling = "16.0.8"
 mlkitTextRecognition = "19.0.1"
@@ -46,6 +49,7 @@ mockitoCore = { group = "org.mockito", name = "mockito-core", version = "5.15.2"
 androidx-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
 mediapipe-tasks-genai = { group = "com.google.mediapipe", name = "tasks-genai", version.ref = "mediapipeGenai" }
 mediapipe-tasks-vision-image-generator = { group = "com.google.mediapipe", name = "tasks-vision-image-generator", version.ref = "mediapipeImageGen" }
+protobuf-java = { group = "com.google.protobuf", name = "protobuf-java", version.ref = "protobufJava" }
 litert-lm-android = { group = "com.google.ai.edge.litertlm", name = "litertlm-android", version.ref = "litertLm" }
 aicore-edge = { group = "com.google.ai.edge.aicore", name = "aicore", version.ref = "aicore" }
 mlkit-image-labeling = { group = "com.google.android.gms", name = "play-services-mlkit-image-labeling", version.ref = "mlkitImageLabeling" }

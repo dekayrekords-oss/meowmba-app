@@ -4,6 +4,13 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+// Drop javalite everywhere so it cannot collide with the full protobuf runtime
+// added below. Keeping both would duplicate com.google.protobuf.* classes and
+// fail dexing outright.
+configurations.configureEach {
+    exclude(group = "com.google.protobuf", module = "protobuf-javalite")
+}
+
 android {
     namespace = "com.example.meowmba"
     compileSdk = 37
@@ -54,6 +61,15 @@ dependencies {
     ksp(libs.androidx.room.compiler)
     implementation(libs.mediapipe.tasks.genai)
     implementation(libs.mediapipe.tasks.vision.image.generator)
+    // tasks-vision-image-generator ships code compiled against FULL protobuf
+    // (its Any$Builder.build() returns Any), but every MediaPipe artifact
+    // declares protobuf-javalite, where that method does not exist. The result
+    // is a runtime NoSuchMethodError the moment image generation starts:
+    //   No virtual method build()Lcom/google/protobuf/Any;
+    //     in class Lcom/google/protobuf/Any$Builder;
+    // protobuf-java contains GeneratedMessageLite as well as GeneratedMessage,
+    // so swapping the runtime satisfies the LLM path too.
+    implementation(libs.protobuf.java)
     implementation(libs.androidx.security.crypto)
     implementation(libs.androidx.camera.camera2)
     implementation(libs.androidx.camera.lifecycle)
