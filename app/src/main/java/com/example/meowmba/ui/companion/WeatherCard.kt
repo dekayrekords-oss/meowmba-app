@@ -6,7 +6,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,6 +26,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset as GeomOffset
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -44,6 +47,8 @@ fun WeatherCard(
     weather: WeatherNow,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Debug preview: tap the card to step through conditions. */
+    onCycleCondition: (() -> Unit)? = null,
 ) {
     val palette = paletteFor(weather.condition, weather.isDay)
 
@@ -61,16 +66,25 @@ fun WeatherCard(
     Box(
         modifier = modifier
             .fillMaxWidth()
+            .then(
+                if (onCycleCondition != null) {
+                    Modifier.clickable { onCycleCondition() }
+                } else Modifier
+            )
             // Translucent, not opaque: the animated weather behind it should read THROUGH
             // the card. The condition's hue survives as a tint so a storm still looks like a
             // storm, and a thin border keeps the edge legible against a busy scene.
+            // Edgeless on purpose: no border, and the tint fades to fully transparent at the
+            // bottom so the card has no visible boundary — it reads as a wash over the
+            // weather rather than a panel sitting on top of it.
             .background(
-                brush = Brush.verticalGradient(palette.gradient.map { it.copy(alpha = CARD_ALPHA) }),
-                shape = RoundedCornerShape(24.dp),
-            )
-            .border(
-                width = 1.dp,
-                color = palette.onSurface.copy(alpha = 0.18f),
+                brush = Brush.verticalGradient(
+                    listOf(
+                        palette.gradient.first().copy(alpha = CARD_ALPHA),
+                        palette.gradient.last().copy(alpha = CARD_ALPHA * 0.45f),
+                        Color.Transparent,
+                    ),
+                ),
                 shape = RoundedCornerShape(24.dp),
             )
             .padding(20.dp)
@@ -87,20 +101,19 @@ fun WeatherCard(
                         Text(
                             text = "${weather.temperatureF}",
                             color = palette.onSurface,
-                            fontSize = 52.sp,
-                            fontWeight = FontWeight.Light,
+                            style = shadowed(52.sp, FontWeight.Light),
                         )
                         Text(
                             text = "°",
                             color = palette.onSurface,
-                            fontSize = 28.sp,
+                            style = shadowed(28.sp),
                             modifier = Modifier.padding(top = 6.dp),
                         )
                     }
                     Text(
                         text = weather.condition.label,
                         color = palette.onSurface,
-                        fontSize = 15.sp,
+                        style = shadowed(15.sp),
                     )
                 }
                 Spacer(Modifier.weight(1f))
@@ -141,20 +154,37 @@ fun WeatherCard(
 @Composable
 private fun Stat(label: String, value: String, onSurface: Color) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, color = onSurface, fontSize = 17.sp, fontWeight = FontWeight.Medium)
+        Text(value, color = onSurface, style = shadowed(17.sp, FontWeight.Medium))
         Text(
             label.uppercase(),
-            color = onSurface.copy(alpha = 0.6f),
-            fontSize = 9.sp,
+            color = onSurface.copy(alpha = 0.75f),
+            style = shadowed(9.sp),
         )
     }
 }
 
 /**
- * Card translucency. High enough that white text stays readable over rain and lightning,
- * low enough that the scene is clearly visible through it.
+ * Card translucency at the top of the gradient, fading to nothing at the bottom.
+ *
+ * Low enough to be a wash rather than a panel. Text stays readable because it carries its
+ * own shadow, not because the background is opaque.
  */
-private const val CARD_ALPHA = 0.55f
+private const val CARD_ALPHA = 0.26f
+
+/**
+ * Legibility comes from a shadow on the glyphs, not from the background. That is what lets
+ * the card be almost fully transparent and still readable over a bright sun or a flash.
+ */
+private fun shadowed(size: androidx.compose.ui.unit.TextUnit, weight: FontWeight? = null) =
+    TextStyle(
+        fontSize = size,
+        fontWeight = weight,
+        shadow = Shadow(
+            color = Color(0xCC000000),
+            offset = GeomOffset(0f, 1.5f),
+            blurRadius = 6f,
+        ),
+    )
 
 private data class WeatherPalette(
     val gradient: List<Color>,

@@ -303,6 +303,7 @@ fun CompanionScreen(
                     "Privacy" -> viewModel.togglePrivacyDashboard()
                     "Memory" -> viewModel.toggleMemoryScreen()
                     "NAV" -> viewModel.toggleNavScreen()
+                    "Weather" -> viewModel.showWeatherCard()
                     "Agents", "Tools" -> viewModel.toggleAgentsScreen()
                 }
             }
@@ -318,7 +319,12 @@ fun CompanionScreen(
                     .align(androidx.compose.ui.Alignment.TopCenter)
                     .padding(horizontal = 16.dp, vertical = 48.dp)
             ) {
-                WeatherCard(weather = w, onDismiss = { viewModel.dismissWeatherCard() })
+                WeatherCard(
+                    weather = w,
+                    onDismiss = { viewModel.dismissWeatherCard() },
+                    // Tap the card to preview the next condition's animation.
+                    onCycleCondition = { viewModel.cycleForcedWeatherCondition() },
+                )
             }
         }
 

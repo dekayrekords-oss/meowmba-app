@@ -1881,6 +1881,53 @@ class CompanionViewModel(
 
     // ── Memory screen & controls ────────────────────────────────────────────
 
+    /**
+     * Summons the weather card from the tile menu: fetches real conditions, and if that is
+     * not possible (no location, no network) still shows a preview so the card and its
+     * animation are reachable rather than silently absent.
+     */
+    fun showWeatherCard() {
+        val repo = weatherRepository ?: run { cycleForcedWeatherCondition(); return }
+        viewModelScope.launch {
+            when (repo.fetch()) {
+                is com.example.meowmba.core.weather.WeatherRepository.Result.Ok -> Unit
+                is com.example.meowmba.core.weather.WeatherRepository.Result.Failed -> {
+                    android.util.Log.i("Weather", "fetch failed; showing preview card")
+                    cycleForcedWeatherCondition()
+                }
+            }
+        }
+    }
+
+    /**
+     * Debug preview: steps the card and scene through every weather condition.
+     *
+     * TEMPORARY — a way to see all the animations without waiting for the sky to oblige.
+     * Synthesises a reading when nothing has been fetched, so it works with no network and
+     * no location. The next real fetch overwrites it.
+     */
+    fun cycleForcedWeatherCondition() {
+        val conditions = com.example.meowmba.core.weather.WeatherCondition.entries
+        val current = _uiState.value.weather
+        val next = if (current == null) {
+            conditions.first()
+        } else {
+            conditions[(conditions.indexOf(current.condition) + 1) % conditions.size]
+        }
+        val base = current ?: com.example.meowmba.core.weather.WeatherNow(
+            condition = next, temperatureF = 72, feelsLikeF = 72,
+            highF = 84, lowF = 61, humidityPct = 38, windMph = 7,
+            isDay = true, place = "Preview",
+        )
+        android.util.Log.i("Weather", "forced condition preview: $next")
+        _uiState.value = _uiState.value.copy(
+            weather = base.copy(condition = next),
+            emotion = runCatching {
+                CompanionEmotion.valueOf(base.copy(condition = next).catEmotionName())
+            }.getOrDefault(_uiState.value.emotion),
+        )
+    }
+
     /** Dismisses the weather card. */
     fun dismissWeatherCard() {
         weatherRepository?.clear()
