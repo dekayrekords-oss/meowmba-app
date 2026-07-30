@@ -241,6 +241,17 @@ class CompanionViewModel(
                         captionText = "Wake phrase stopped — the speech recognizer keeps failing on this device"
                     )
                 }
+                built.kws?.onMicUnavailable = {
+                    // Expected whenever we lose the foreground; release so the background
+                    // service (if enabled) can take over, and reclaim on resume. The wake
+                    // preference is deliberately left ON.
+                    stopWakeLoopAndRelease()
+                }
+                built.kws?.onWakeRejected = {
+                    _uiState.value = _uiState.value.copy(
+                        captionText = "I heard the wake phrase but didn't recognise the voice"
+                    )
+                }
                 built.kws?.onFatalError = { reason ->
                     _uiState.value = _uiState.value.copy(
                         wakeWordEnabled = false,

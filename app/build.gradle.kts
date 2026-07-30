@@ -82,6 +82,10 @@ dependencies {
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
     testImplementation(libs.junit)
+    // Real org.json for unit tests. The android.jar stub throws
+    // "Method put in org.json.JSONArray not mocked", so anything that persists JSON
+    // (VoiceProfileStore) is untestable without it.
+    testImplementation("org.json:json:20240303")
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.mockitoCore)
     androidTestImplementation(platform(libs.androidx.compose.bom))

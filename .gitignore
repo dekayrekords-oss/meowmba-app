@@ -22,3 +22,5 @@ local.properties
 # Not committed — fetch with scripts/fetch_kws_assets.sh
 /app/src/main/jniLibs/
 /app/src/main/assets/sherpa-onnx-kws-*/
+/app/src/main/assets/silero_vad.onnx
+/app/src/main/assets/speaker.onnx

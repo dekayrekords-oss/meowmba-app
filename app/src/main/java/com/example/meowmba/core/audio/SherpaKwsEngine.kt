@@ -56,6 +56,17 @@ class SherpaKwsEngine(
     private var keywords: String,
     /** Assets-relative directory holding encoder/decoder/joiner/tokens. */
     private val modelDir: String = DEFAULT_MODEL_DIR,
+    /**
+     * Optional "is that you?" gate. When enrolled, a wake is only reported if the
+     * pre-roll audio matches an enrolled voice. Fails open — see [SpeakerVerifier].
+     */
+    private val verifier: SpeakerVerifier? = null,
+    /**
+     * Optional speech gate. When present, the keyword model only runs on audio that a
+     * VAD thinks contains speech, which is the two-stage VAD -> KWS design real
+     * assistants use. Costs battery to skip, not accuracy — see the lead-in note below.
+     */
+    private val speechGate: VadGate? = null,
 ) : WakeWordEngine {
 
     private val _isRunning = MutableStateFlow(false)
@@ -65,6 +76,19 @@ class SherpaKwsEngine(
 
     /** Raised when the model or microphone could not be brought up at all. */
     var onFatalError: ((String) -> Unit)? = null
+
+    /** Fired when a wake phrase was heard but the voice did not match an enrolled one. */
+    var onWakeRejected: (() -> Unit)? = null
+
+    /**
+     * Fired when the microphone became unavailable — almost always because the app went to
+     * the background, since mic access here is foreground-only.
+     *
+     * Distinct from [onFatalError] on purpose: this is temporary and expected, so it must
+     * NOT disable the wake phrase. Treating it as fatal meant every screen-off left the
+     * user with "Wake phrase stopped" and a switch they had to flip back on.
+     */
+    var onMicUnavailable: (() -> Unit)? = null
 
     /**
      * The audio immediately preceding and including the wake phrase, oldest-first, 16 kHz
@@ -110,7 +134,7 @@ class SherpaKwsEngine(
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED
         ) {
-            fail("Microphone permission is not granted, so I can't listen for the wake phrase.")
+            yieldMic()
             return
         }
 
@@ -148,7 +172,8 @@ class SherpaKwsEngine(
 
         if (record == null || record.state != AudioRecord.STATE_INITIALIZED) {
             runCatching { record?.release() }
-            fail("The microphone could not be opened for wake-word listening.")
+            // Another app very likely holds it; that resolves on its own.
+            yieldMic()
             return
         }
 
@@ -210,7 +235,7 @@ class SherpaKwsEngine(
                 if (peak == 0) {
                     if (++silentFrames >= SILENT_FRAMES_BEFORE_YIELD) {
                         Log.w(TAG, "no audio for ${silentFrames / 10}s — mic lost, yielding")
-                        fail("I lost access to the microphone, so I stopped listening for the wake phrase.")
+                        yieldMic()
                         return
                     }
                 } else {
@@ -224,8 +249,23 @@ class SherpaKwsEngine(
                     peakSinceLog = 0
                 }
 
-                for (i in 0 until read) floats[i] = pcm[i] / PCM16_FULL_SCALE
-                s.acceptWaveform(floats.copyOf(read), SAMPLE_RATE)
+                val frame = FloatArray(read)
+                for (i in 0 until read) frame[i] = pcm[i] / PCM16_FULL_SCALE
+
+                // VAD gate. Skipping silence is the whole battery win, but a naive gate
+                // clips the START of the phrase: the VAD needs a moment of speech before
+                // it flips, by which time "yo" is already gone. So on each rising edge the
+                // buffered lead-in is replayed into the spotter first, and nothing is lost.
+                if (speechGate != null) {
+                    when (speechGate.classify(frame)) {
+                        VadGate.Decision.SILENT -> continue
+                        VadGate.Decision.SPEECH_STARTED ->
+                            speechGate.leadIn()?.let { s.acceptWaveform(it, SAMPLE_RATE) }
+                        VadGate.Decision.SPEAKING -> Unit
+                    }
+                }
+
+                s.acceptWaveform(frame, SAMPLE_RATE)
 
                 // The result is checked INSIDE the decode loop, as in sherpa's demo: the
                 // keyword is reported by the decode step that detects it, and reset()
@@ -236,11 +276,20 @@ class SherpaKwsEngine(
                     if (hit.isNotBlank()) {
                         Log.i(TAG, "wake phrase detected: $hit")
                         kws.reset(s)
-                        lastPreRoll = preRoll.snapshot()
+                        val captured = preRoll.snapshot()
+                        lastPreRoll = captured
                         preRoll.clear()
-                        // The spotter reports no transcript; the caller starts a listening
-                        // turn (and may replay lastPreRoll).
-                        onWake?.invoke(null)
+
+                        // "Is that you?" — checked on the pre-roll, which contains the
+                        // phrase itself. Fails open when nothing is enrolled.
+                        val v = verifier
+                        if (v != null && v.isActive && !v.verifyPcm(captured)) {
+                            onWakeRejected?.invoke()
+                        } else {
+                            // The spotter reports no transcript; the caller starts a
+                            // listening turn (and may replay lastPreRoll).
+                            onWake?.invoke(null)
+                        }
                     }
                 }
             }
@@ -277,6 +326,13 @@ class SherpaKwsEngine(
             keywordsThreshold = KEYWORDS_THRESHOLD,
         ),
     )
+
+    /** Steps down quietly, without telling the user anything is broken. */
+    private fun yieldMic() {
+        running = false
+        _isRunning.value = false
+        onMicUnavailable?.invoke()
+    }
 
     private fun fail(message: String) {
         running = false

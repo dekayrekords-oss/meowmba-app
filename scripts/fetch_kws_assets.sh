@@ -77,6 +77,27 @@ else
   echo "    $(du -sh "$ASSET_DIR" | cut -f1) installed"
 fi
 
+echo "==> VAD + speaker models"
+ROOT_ASSETS="$ROOT/app/src/main/assets"
+mkdir -p "$ROOT_ASSETS"
+# NOTE: sherpa requires these at the assets ROOT, not in a subdirectory.
+if [ -f "$ROOT_ASSETS/silero_vad.onnx" ]; then
+  echo "    silero_vad.onnx already present"
+else
+  curl -fL --retry 10 --retry-all-errors --retry-delay 3 -o "$ROOT_ASSETS/silero_vad.onnx" \
+    "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx"
+  echo "    silero_vad.onnx installed ($(du -h "$ROOT_ASSETS/silero_vad.onnx" | cut -f1))"
+fi
+if [ -f "$ROOT_ASSETS/speaker.onnx" ]; then
+  echo "    speaker.onnx already present"
+else
+  # wespeaker CAM++ / VoxCeleb (English). Only needed for "is that you?" verification;
+  # without it the wake word still works, just ungated by speaker.
+  curl -fL --retry 10 --retry-all-errors --retry-delay 3 -o "$ROOT_ASSETS/speaker.onnx" \
+    "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/wespeaker_en_voxceleb_CAM++.onnx"
+  echo "    speaker.onnx installed ($(du -h "$ROOT_ASSETS/speaker.onnx" | cut -f1))"
+fi
+
 echo
 echo "Done. Wake word will use the keyword spotter on next build."
 echo "Verify on device with:  adb logcat | grep SherpaKws"

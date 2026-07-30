@@ -19,6 +19,16 @@ import kotlinx.coroutines.CoroutineScope
 object WakeWordEngineFactory {
 
     /**
+     * Kill switch for the VAD + speaker-verification stages.
+     *
+     * Kept because it earned its place: adding those stages made the mic deliver digital
+     * silence a few seconds after start, and flipping this to false is how the cause was
+     * isolated to the VAD (wrong window size) rather than guessed at. If wake detection
+     * ever regresses again, set false and re-measure before theorising.
+     */
+    private const val GATES_ENABLED = true
+
+    /**
      * Wake phrases offered regardless of the companion's name.
      *
      * Mirrors the casual variants WakePhraseMatcher accepted, because those are what
@@ -37,6 +47,8 @@ object WakeWordEngineFactory {
         val isKws: Boolean,
         /** Set when a fatal-error callback should be attached. */
         val kws: SherpaKwsEngine? = null,
+        /** Present when speaker verification is available (model bundled). */
+        val verifier: SpeakerVerifier? = null,
     )
 
     fun create(
@@ -46,8 +58,8 @@ object WakeWordEngineFactory {
         matcher: WakePhraseMatcher,
         speechEngine: SpeechEngine?,
     ): Result? {
-        if (context != null) buildKws(context, scope, companionName)?.let { kws ->
-            return Result(engine = kws, isKws = true, kws = kws)
+        if (context != null) buildKws(context, scope, companionName)?.let { (kws, verifier) ->
+            return Result(engine = kws, isKws = true, kws = kws, verifier = verifier)
         }
         if (speechEngine == null) return null
         return Result(
@@ -60,7 +72,7 @@ object WakeWordEngineFactory {
         context: Context,
         scope: CoroutineScope,
         companionName: String,
-    ): SherpaKwsEngine? {
+    ): Pair<SherpaKwsEngine, SpeakerVerifier?>? {
         // All model files must be present. A partial bundle is worse than none: the
         // native loader aborts the process instead of failing gracefully.
         if (!SherpaKwsEngine.assetsPresent(context)) return null
@@ -76,7 +88,20 @@ object WakeWordEngineFactory {
         if (keywords.isBlank()) {
             return null
         }
-        return SherpaKwsEngine(context, scope, keywords)
+        // Both gates are optional and fail open: a missing model just means the stage is
+        // skipped, never that the wake word stops working.
+        val verifier = SpeakerVerifier(context, VoiceProfileStore(context))
+            .takeIf { it.isModelAvailable() }
+            ?.also { it.reload() }
+
+        val engine = SherpaKwsEngine(
+            context = context,
+            scope = scope,
+            keywords = keywords,
+            verifier = if (GATES_ENABLED) verifier else null,
+            speechGate = if (GATES_ENABLED) VadGate.create(context) else null,
+        )
+        return engine to verifier
     }
 
     /** Reads tokens.txt from assets; null means the model is not bundled. */
