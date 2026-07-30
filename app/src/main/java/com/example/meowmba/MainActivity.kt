@@ -46,6 +46,20 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Asks for everything the companion needs in ONE prompt: microphone, location, camera.
+     *
+     * Location was previously never requested at runtime, only declared in the manifest —
+     * so weather and navigation silently had nothing to work with. Camera was requested
+     * lazily on first "look", which is still fine, but including it here means the user
+     * grants once instead of being interrupted later.
+     */
+    private val corePermissionsLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { granted ->
+        granted[Manifest.permission.CAMERA]?.let { companionViewModel?.onCameraPermissionResult(it) }
+    }
+
     private val cameraPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
@@ -170,12 +184,18 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun checkPermissions() {
-        if (ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.RECORD_AUDIO
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            requestPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        // Mic, location and camera together. Anything already granted is dropped, so a
+        // returning user is not re-prompted for what they have already allowed.
+        val core = listOf(
+            Manifest.permission.RECORD_AUDIO,
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION,
+            Manifest.permission.CAMERA,
+        ).filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+        if (core.isNotEmpty()) {
+            corePermissionsLauncher.launch(core.toTypedArray())
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(

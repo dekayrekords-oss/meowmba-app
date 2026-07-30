@@ -110,7 +110,12 @@ class SherpaKwsEngine(
     }
 
     override fun start() {
-        if (running) return
+        if (running) {
+            // Silently returning here is indistinguishable from "the wake word stopped
+            // working", which is exactly how it was reported.
+            Log.i(TAG, "start() ignored: already running")
+            return
+        }
         running = true
         _isRunning.value = true
         captureJob = scope.launch(Dispatchers.Default) { captureLoop() }

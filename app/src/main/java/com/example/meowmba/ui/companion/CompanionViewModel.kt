@@ -186,6 +186,9 @@ class CompanionViewModel(
 
     private var responseJob: Job? = null
     private var followUpJob: Job? = null
+
+    /** One bounded retry when the wake mic was busy at re-arm time. */
+    private var wakeRearmJob: Job? = null
     private var mouthDecayJob: Job? = null
 
     /** Set when a deliberate interruption stops TTS, so the resulting
@@ -796,14 +799,46 @@ class CompanionViewModel(
     }
 
     private fun startWakeStandby() {
-        if (_uiState.value.interactionState != InteractionState.IDLE) return
+        val state = _uiState.value.interactionState
+        if (state != InteractionState.IDLE) {
+            // "Wake word only works once" is what this looks like from outside, so say why.
+            android.util.Log.i(TAG_WAKE, "not re-arming: interaction state is $state")
+            return
+        }
         if (_uiState.value.isMicEnabled) {
             // Exclusive with WakeWordService; whoever holds the mic wins.
             if (com.example.meowmba.core.audio.MicOwner
                     .acquire(com.example.meowmba.core.audio.MicOwner.IN_APP)
             ) {
                 wakeWordEngine?.start()
+            } else {
+                android.util.Log.w(
+                    TAG_WAKE,
+                    "mic held by ${com.example.meowmba.core.audio.MicOwner.current}; retrying once"
+                )
+                // The command turn's recognizer can still be tearing down when we get here,
+                // so one bounded retry covers the handoff without spinning.
+                wakeRearmJob?.cancel()
+                wakeRearmJob = viewModelScope.launch {
+                    delay(WAKE_REARM_RETRY_MS)
+                    if (_uiState.value.interactionState == InteractionState.IDLE &&
+                        _uiState.value.isMicEnabled &&
+                        com.example.meowmba.core.audio.MicOwner
+                            .acquire(com.example.meowmba.core.audio.MicOwner.IN_APP)
+                    ) {
+                        android.util.Log.i(TAG_WAKE, "re-armed on retry")
+                        wakeWordEngine?.start()
+                    } else {
+                        android.util.Log.w(
+                            TAG_WAKE,
+                            "still not re-armed; mic held by " +
+                                "${com.example.meowmba.core.audio.MicOwner.current}"
+                        )
+                    }
+                }
             }
+        } else {
+            android.util.Log.i(TAG_WAKE, "not re-arming: mic disabled by the user")
         }
         _uiState.value = _uiState.value.copy(captionText = wakeHint())
     }
@@ -1944,6 +1979,11 @@ class CompanionViewModel(
         private const val DEFAULT_RETENTION_DAYS = 90
         private const val FOLLOW_UP_TIMEOUT_MS = 8000L
         private const val ERROR_DISPLAY_MS = 3500L
+
+        private const val TAG_WAKE = "WakeStandby"
+
+        /** Long enough for a recognizer to finish tearing down, short enough to feel instant. */
+        private const val WAKE_REARM_RETRY_MS = 900L
 
         /** Phrases that politely end conversation mode. */
         private val STOP_COMMANDS = setOf(

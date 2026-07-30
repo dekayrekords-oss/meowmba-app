@@ -124,70 +124,11 @@ fun CompanionScreen(
                 }
             }
 
-            // "Why recalled" chips: the user can always see which memories
-            // surfaced for this turn and why. Swipe away or tap X to dismiss.
-            AnimatedVisibility(
-                visible = uiState.recalledMemories.isNotEmpty(),
-                enter = fadeIn() + slideInVertically { it / 2 },
-                exit = fadeOut() + slideOutVertically { it / 2 },
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 220.dp, start = 24.dp, end = 24.dp)
-            ) {
-                val dismissState = rememberSwipeToDismissBoxState()
-                LaunchedEffect(dismissState.currentValue) {
-                    if (dismissState.currentValue == SwipeToDismissBoxValue.EndToStart) {
-                        viewModel.dismissRecalledMemories()
-                    }
-                }
-                SwipeToDismissBox(
-                    state = dismissState,
-                    enableDismissFromStartToEnd = false,
-                    backgroundContent = {},
-                    content = {
-                        Surface(
-                            color = Color(0xFF161B22).copy(alpha = 0.85f),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Column(modifier = Modifier.padding(12.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        "Recalled from memory",
-                                        color = Color(0xFF58A6FF),
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    IconButton(
-                                        onClick = { viewModel.dismissRecalledMemories() },
-                                        modifier = Modifier.size(20.dp)
-                                    ) {
-                                        Icon(
-                                            Icons.Default.Close,
-                                            contentDescription = "Dismiss",
-                                            tint = Color.Gray,
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                    }
-                                }
-                                uiState.recalledMemories.forEach { recall ->
-                                    Text(
-                                        "• ${recall.contentSnippet}",
-                                        color = Color.White.copy(alpha = 0.9f),
-                                        fontSize = 12.sp
-                                    )
-                                    Text(
-                                        "  ${recall.reason}",
-                                        color = Color.Gray,
-                                        fontSize = 10.sp,
-                                        fontFamily = FontFamily.Monospace
-                                    )
-                                }
-                            }
-                        }
-                    }
-                )
-            }
+            // The "recalled from memory" overlay was removed at the user's request — it
+            // covered the companion during every turn. Recall still happens and still feeds
+            // the prompt; it is just no longer narrated on screen. The Memory screen remains
+            // the place to see what is stored.
+
 
             // Generated media popup (image/video/audio created by Canvas agent)
             AnimatedVisibility(
