@@ -18,8 +18,18 @@ import kotlinx.coroutines.CoroutineScope
  */
 object WakeWordEngineFactory {
 
-    /** Wake phrases offered regardless of the companion's name. */
-    private val BASE_PHRASES = listOf("hey meow", "hey memba")
+    /**
+     * Wake phrases offered regardless of the companion's name.
+     *
+     * Mirrors the casual variants WakePhraseMatcher accepted, because those are what
+     * people actually say. Bare "yo"/"oi"/"dude" are deliberately NOT here — one syllable
+     * would false-fire constantly, whereas the matcher could afford them because it
+     * worked on a full transcript.
+     */
+    private val BASE_PHRASES = listOf(
+        "yo meow", "hey meow", "hey kitty",
+        "yo memba", "hey memba", "oi meow",
+    )
 
     data class Result(
         val engine: WakeWordEngine,

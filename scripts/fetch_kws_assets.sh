@@ -66,10 +66,12 @@ else
   # listed FIRST as the phrase known to work; "hey meow" is kept with a stronger boost
   # and lower threshold, and may still be unreliable.
   printf '%s\n' \
-    "▁HE Y ▁K IT TY :2.0 #0.15" \
+    "▁ Y O ▁ME OW :3.0 #0.10" \
     "▁HE Y ▁ME OW :3.0 #0.10" \
+    "▁HE Y ▁K IT TY :2.0 #0.15" \
+    "▁ Y O ▁ME M B A :2.5 #0.12" \
     "▁HE Y ▁ME M B A :2.5 #0.12" \
-    "▁HE Y ▁ME OW M B A :2.5 #0.12" \
+    "▁O I ▁ME OW :2.5 #0.12" \
     > "$ASSET_DIR/keywords.txt"
 
   echo "    $(du -sh "$ASSET_DIR" | cut -f1) installed"
