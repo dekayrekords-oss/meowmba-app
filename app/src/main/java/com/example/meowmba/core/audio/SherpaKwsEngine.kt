@@ -157,10 +157,33 @@ class SherpaKwsEngine(
 
         try {
             record.startRecording()
-            stream = kws.createStream(keywords)
-            Log.i(TAG, "keyword spotter listening; keywords=[${keywords.replace("\n", " | ")}]")
+
+            // Per-stream keywords are '/'-separated, NOT newline-separated — that is what
+            // sherpa's own Android demo does, and passing newlines makes createStream
+            // reject the whole string. It signals that by returning a NULL handle rather
+            // than throwing, so the loop then runs forever against a dead stream: audio
+            // flowing, mic hot, and not one detection. Check ptr, and fall back to the
+            // keywords bundled in the model directory.
+            val inlineKeywords = keywords.trim().replace("\n", "/")
+            var s = kws.createStream(inlineKeywords)
+            if (s.ptr == 0L) {
+                Log.w(TAG, "createStream rejected keywords [$inlineKeywords]; using bundled keywords.txt")
+                runCatching { s.release() }
+                s = kws.createStream("")
+            }
+            if (s.ptr == 0L) {
+                fail("The wake phrases could not be loaded into the spotter.")
+                return
+            }
+            stream = s
+            Log.i(TAG, "keyword spotter listening; keywords=[$inlineKeywords]")
             val pcm = ShortArray(CHUNK_SAMPLES)
             val floats = FloatArray(CHUNK_SAMPLES)
+            // Periodic health line. Without it there is no way to tell "listening but
+            // hearing silence" from "listening and the model just is not matching" —
+            // both look identical from outside.
+            var frames = 0L
+            var peakSinceLog = 0
 
             while (running && scope.isActive) {
                 val read = record.read(pcm, 0, pcm.size)
@@ -170,21 +193,38 @@ class SherpaKwsEngine(
                 }
                 preRoll.append(pcm, read)
 
+                var peak = 0
+                for (i in 0 until read) {
+                    val a = if (pcm[i] < 0) -pcm[i].toInt() else pcm[i].toInt()
+                    if (a > peak) peak = a
+                }
+                if (peak > peakSinceLog) peakSinceLog = peak
+                if (++frames % HEALTH_LOG_FRAMES == 0L) {
+                    Log.d(
+                        TAG,
+                        "listening: ${frames / 10}s, peak=${"%.3f".format(peakSinceLog / PCM16_FULL_SCALE)}"
+                    )
+                    peakSinceLog = 0
+                }
+
                 for (i in 0 until read) floats[i] = pcm[i] / PCM16_FULL_SCALE
-                stream.acceptWaveform(floats.copyOf(read), SAMPLE_RATE)
+                s.acceptWaveform(floats.copyOf(read), SAMPLE_RATE)
 
-                while (kws.isReady(stream)) kws.decode(stream)
-
-                val hit = kws.getResult(stream).keyword
-                if (hit.isNotBlank()) {
-                    Log.i(TAG, "wake phrase detected: $hit")
-                    lastPreRoll = preRoll.snapshot()
-                    preRoll.clear()
-                    // Reset so the same utterance cannot re-fire on the next frame.
-                    kws.reset(stream)
-                    // The spotter reports no transcript; the caller starts a listening
-                    // turn (and may replay lastPreRoll).
-                    onWake?.invoke(null)
+                // The result is checked INSIDE the decode loop, as in sherpa's demo: the
+                // keyword is reported by the decode step that detects it, and reset()
+                // must follow immediately.
+                while (kws.isReady(s)) {
+                    kws.decode(s)
+                    val hit = kws.getResult(s).keyword
+                    if (hit.isNotBlank()) {
+                        Log.i(TAG, "wake phrase detected: $hit")
+                        kws.reset(s)
+                        lastPreRoll = preRoll.snapshot()
+                        preRoll.clear()
+                        // The spotter reports no transcript; the caller starts a listening
+                        // turn (and may replay lastPreRoll).
+                        onWake?.invoke(null)
+                    }
                 }
             }
         } catch (e: Exception) {
@@ -268,6 +308,9 @@ class SherpaKwsEngine(
         private const val CHUNK_SAMPLES = SAMPLE_RATE / 10
 
         private const val PCM16_FULL_SCALE = 32_768.0f
+
+        /** One health line per 5s of audio (100ms frames). */
+        private const val HEALTH_LOG_FRAMES = 50L
 
         /** Enough for the wake phrase plus the start of a one-breath command. */
         private const val PRE_ROLL_SECONDS = 2.5f

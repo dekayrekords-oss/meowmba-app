@@ -56,10 +56,13 @@ else
   # Built-in wake phrases, tokenised with the model's own bpe.model. Regenerate with
   # scripts/kws_tokenise.py (its self-check reproduces the model's shipped keywords.txt
   # 9/9, so the tokeniser is known to agree with the model).
+  # Per-keyword tuning: ":boost #threshold" (no space after the prefix). Higher boost
+  # and lower threshold both make a keyword easier to trigger. These are more sensitive
+  # than sherpa's 1.5/0.25 defaults because a MISSED wake word was the complaint.
   printf '%s\n' \
-    "▁HE Y ▁ME OW" \
-    "▁HE Y ▁ME M B A" \
-    "▁HE Y ▁ME OW M B A" \
+    "▁HE Y ▁ME OW :2.0 #0.15" \
+    "▁HE Y ▁ME M B A :2.0 #0.15" \
+    "▁HE Y ▁ME OW M B A :2.0 #0.15" \
     > "$ASSET_DIR/keywords.txt"
 
   echo "    $(du -sh "$ASSET_DIR" | cut -f1) installed"
