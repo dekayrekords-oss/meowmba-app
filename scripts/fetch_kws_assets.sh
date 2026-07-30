@@ -65,7 +65,12 @@ else
   # model was trained on, so its token sequence is acoustically weak. "hey kitty" is
   # listed FIRST as the phrase known to work; "hey meow" is kept with a stronger boost
   # and lower threshold, and may still be unreliable.
+  # Wake phrases. "yomeow" as one word leads; the spaced and casual variants follow so
+  # the companion answers however it is addressed. Tokens come from the model's own
+  # bpe.model via scripts/kws_tokenise.py. ":boost #threshold" — more sensitive than
+  # sherpa's 1.5/0.25 defaults, since a missed wake is the complaint being fixed.
   printf '%s\n' \
+    "▁ Y OM E OW :3.0 #0.10" \
     "▁ Y O ▁ME OW :3.0 #0.10" \
     "▁HE Y ▁ME OW :3.0 #0.10" \
     "▁HE Y ▁K IT TY :2.0 #0.15" \

@@ -28,6 +28,8 @@ class WakePhraseMatcher(companionName: String = DEFAULT_NAME) {
     init {
         val custom = normalize(companionName)
         phrases = buildSet {
+            // The single canonical wake phrase, matching the keyword spotter.
+            add("yomeow")
             // Standard "hey" variants
             add("hey memba")
             add("hey meow")

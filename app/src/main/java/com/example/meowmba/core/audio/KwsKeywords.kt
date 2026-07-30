@@ -22,8 +22,14 @@ package com.example.meowmba.core.audio
 object KwsKeywords {
 
     /** Verified exact BPE splits for the phrases the app ships with. */
+    /**
+     * Verified exact BPE splits, from the model's own bpe.model via
+     * scripts/kws_tokenise.py (whose self-check reproduces the model's shipped
+     * keywords.txt 9/9).
+     */
     private val EXACT = mapOf(
-        // "yo meow" is the phrase actually used, so it leads.
+        // "yomeow" as one word, alongside the spaced variants.
+        "yomeow" to "▁ Y OM E OW",
         "yo meow" to "▁ Y O ▁ME OW",
         "hey meow" to "▁HE Y ▁ME OW",
         "hey kitty" to "▁HE Y ▁K IT TY",

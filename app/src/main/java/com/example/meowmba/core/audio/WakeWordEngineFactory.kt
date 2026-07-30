@@ -31,13 +31,15 @@ object WakeWordEngineFactory {
     /**
      * Wake phrases offered regardless of the companion's name.
      *
-     * Mirrors the casual variants WakePhraseMatcher accepted, because those are what
-     * people actually say. Bare "yo"/"oi"/"dude" are deliberately NOT here — one syllable
-     * would false-fire constantly, whereas the matcher could afford them because it
-     * worked on a full transcript.
+     * "yomeow" spoken as one word leads, since that is the phrase in use; the spaced and
+     * casual variants follow so the companion answers however it is addressed.
+     *
+     * Bare "yo" / "oi" / "dude" are deliberately absent. The old transcript matcher could
+     * afford single syllables because it scanned finished text; a spotter running
+     * continuously on raw audio would false-fire on them constantly.
      */
     private val BASE_PHRASES = listOf(
-        "yo meow", "hey meow", "hey kitty",
+        "yomeow", "yo meow", "hey meow", "hey kitty",
         "yo memba", "hey memba", "oi meow",
     )
 
