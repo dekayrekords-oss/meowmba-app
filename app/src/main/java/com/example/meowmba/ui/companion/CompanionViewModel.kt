@@ -939,6 +939,17 @@ class CompanionViewModel(
                 return@launch
             }
 
+            // Weather is answered directly, ahead of agent routing. It is a lookup with an
+            // obvious answer, so it should not become a queued agent task announced with
+            // "I'll ask if a step needs your approval".
+            if (AgentRouter.isWeatherQuestion(
+                    com.example.meowmba.core.audio.WakePhraseMatcher.normalize(text)
+                )
+            ) {
+                answerWeather()
+                return@launch
+            }
+
             // Agent routing: keyword fast path, then the on-device model brain.
             // The model only proposes — approval gates still decide.
             val agentIntent = routeAgentIntent(text)
@@ -1058,6 +1069,26 @@ class CompanionViewModel(
     }
 
     /** Submit a recognized agent intent to the orchestrator and say what's happening. */
+    /**
+     * Fetches the weather, says it, and lets the card appear.
+     *
+     * The card is not set here: WeatherRepository.latest drives it, and the ViewModel already
+     * observes that. One source of truth means the card is identical whether the answer came
+     * from here or from the agent calling weather.get.
+     */
+    private suspend fun answerWeather() {
+        val repo = weatherRepository ?: run {
+            speak("I can't check the weather in this build.")
+            return
+        }
+        when (val r = repo.fetch()) {
+            is com.example.meowmba.core.weather.WeatherRepository.Result.Ok ->
+                speak(r.weather.spoken())
+            is com.example.meowmba.core.weather.WeatherRepository.Result.Failed ->
+                speak(r.reason)
+        }
+    }
+
     private fun submitAgentIntent(intent: AgentRouter.AgentIntent) {
         val orchestrator = agentOrchestrator ?: run {
             speak("Agents aren't available in this build — the workspace isn't configured.")

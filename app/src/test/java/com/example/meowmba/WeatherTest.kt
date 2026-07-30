@@ -117,6 +117,33 @@ class WeatherTest {
         }
     }
 
+    // ── Question routing ─────────────────────────────────────────────────────────
+
+    private fun asks(q: String) = com.example.meowmba.core.agent.runtime.AgentRouter
+        .isWeatherQuestion(com.example.meowmba.core.audio.WakePhraseMatcher.normalize(q))
+
+    @Test
+    fun `recognises the ways people ask about weather`() {
+        listOf(
+            "what's the weather", "how's the weather", "whats the weather like",
+            "what's the forecast", "what's the temperature", "how hot is it",
+            "how cold is it outside", "is it raining", "is it going to rain",
+            "is it snowing", "do I need a coat", "do I need an umbrella",
+            "what's it like outside", "how's it outside", "what's the humidity",
+        ).forEach { assertTrue("should route: $it", asks(it)) }
+    }
+
+    @Test
+    fun `does not hijack unrelated questions`() {
+        // A weather noun is required, so temperature questions about OTHER things and
+        // ordinary chat do not trigger a forecast.
+        listOf(
+            "what time is it", "how are you", "take me to get a burger",
+            "play some music", "what's on my calendar", "how hot is this curry",
+            "set a timer", "remind me to call mom",
+        ).forEach { assertTrue("should NOT route: $it", !asks(it)) }
+    }
+
     @Test
     fun `every condition has an emoji and a label`() {
         WeatherCondition.entries.forEach {

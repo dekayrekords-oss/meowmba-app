@@ -192,4 +192,29 @@ object AgentRouter {
         }
         return null
     }
+
+    /**
+     * True for the ways people actually ask about the weather.
+     *
+     * Used by the ViewModel to answer DIRECTLY rather than to build an AgentIntent: routing
+     * this through the orchestrator announced "Agent is on it, I'll ask if a step needs your
+     * approval" for what should be an instant answer. Deterministic on purpose — leaving it
+     * to LLM tool-calling meant it depended on the on-device model emitting valid JSON,
+     * which it did not, so "what's the weather" did nothing at all.
+     *
+     * Requires a weather NOUN, so "how hot is this curry" and "what's the temperature of the
+     * oven" do not trigger a forecast. "Do I need a coat/umbrella" are included because they
+     * are weather questions in everything but wording.
+     */
+    internal fun isWeatherQuestion(normalized: String): Boolean {
+        val nouns = listOf(
+            "weather", "forecast", "temperature", "how hot is it", "how cold is it",
+            "how warm is it", "raining", "going to rain", "gonna rain", "snowing",
+            "going to snow", "sunny", "cloudy", "humidity", "wind speed",
+            "need a coat", "need a jacket", "need an umbrella", "how's it outside",
+            "hows it outside", "what's it like outside", "whats it like outside",
+        )
+        return nouns.any { normalized.contains(it) }
+    }
+
 }
