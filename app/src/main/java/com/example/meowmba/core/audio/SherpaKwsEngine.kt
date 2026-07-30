@@ -180,6 +180,10 @@ class SherpaKwsEngine(
         val preRoll = AudioPreRoll.forSeconds(PRE_ROLL_SECONDS, SAMPLE_RATE)
         var stream: OnlineStream? = null
 
+        // Set when a wake is accepted. The handoff deliberately happens AFTER the finally
+        // block below, never from inside the loop — see the note at the invoke site.
+        var wakeAccepted = false
+
         try {
             record.startRecording()
 
@@ -211,7 +215,7 @@ class SherpaKwsEngine(
             var peakSinceLog = 0
             var silentFrames = 0
 
-            while (running && scope.isActive) {
+            while (running && scope.isActive && !wakeAccepted) {
                 val read = record.read(pcm, 0, pcm.size)
                 if (read <= 0) {
                     // A transient underrun; keep going rather than tearing the mic down.
@@ -284,11 +288,13 @@ class SherpaKwsEngine(
                         // phrase itself. Fails open when nothing is enrolled.
                         val v = verifier
                         if (v != null && v.isActive && !v.verifyPcm(captured)) {
-                            onWakeRejected?.invoke()
+                            withContext(Dispatchers.Main) { onWakeRejected?.invoke() }
                         } else {
-                            // The spotter reports no transcript; the caller starts a
-                            // listening turn (and may replay lastPreRoll).
-                            onWake?.invoke(null)
+                            // Leave the loop so the mic is actually freed before anyone
+                            // tries to use it.
+                            wakeAccepted = true
+                            running = false
+                            break
                         }
                     }
                 }
@@ -299,6 +305,23 @@ class SherpaKwsEngine(
             runCatching { record.stop() }
             runCatching { record.release() }
             runCatching { stream?.release() }
+            _isRunning.value = false
+        }
+
+        if (wakeAccepted) {
+            // Two things that both broke the command turn if ignored:
+            //
+            // 1. This engine holds AudioRecord continuously. Invoking onWake from inside
+            //    the loop meant the SpeechRecognizer for the command started while the mic
+            //    was STILL open here, so it received nothing — "not picking up voice after
+            //    the wake word". The old recognizer-loop design hid this, because stopping
+            //    it freed the mic implicitly.
+            // 2. The loop runs on Dispatchers.Default, and SpeechRecognizer must be driven
+            //    from the main thread.
+            //
+            // So: exit the loop, let the finally above release the mic, THEN hand off on
+            // the main thread.
+            withContext(Dispatchers.Main) { onWake?.invoke(null) }
         }
     }
 
