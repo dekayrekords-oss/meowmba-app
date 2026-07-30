@@ -70,6 +70,15 @@ data class CompanionState(
     /** FTS search results on the Memory screen; null = not searching. */
     val memorySearchResults: List<MemoryEntity>? = null,
     val showMemoryScreen: Boolean = false,
+    /**
+     * Weather to show as a card, or null for none.
+     *
+     * Set whenever anything fetches weather — the agent tool included — so the companion
+     * shows the card whenever it talks about the weather without the model needing to know
+     * cards exist.
+     */
+    val weather: com.example.meowmba.core.weather.WeatherNow? = null,
+
     /** NAV card: offline region packs, online fallback, saved places. */
     val showNavScreen: Boolean = false,
     /** When true, nothing new is written to memory (privacy control). */

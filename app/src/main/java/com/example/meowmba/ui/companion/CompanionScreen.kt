@@ -358,6 +358,18 @@ fun CompanionScreen(
         )
 
 
+        // Weather card: floats above the companion rather than replacing it, so the cat
+        // reacting to the weather and the numbers are visible together.
+        uiState.weather?.let { w ->
+            androidx.compose.foundation.layout.Box(
+                modifier = Modifier
+                    .align(androidx.compose.ui.Alignment.TopCenter)
+                    .padding(horizontal = 16.dp, vertical = 48.dp)
+            ) {
+                WeatherCard(weather = w, onDismiss = { viewModel.dismissWeatherCard() })
+            }
+        }
+
         if (uiState.showNavScreen) {
             NavScreen(
                 secureStorage = secureStorage,

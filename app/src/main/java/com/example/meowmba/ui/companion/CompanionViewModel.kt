@@ -27,6 +27,7 @@ import com.example.meowmba.core.agent.runtime.SubmitResult
 import com.example.meowmba.core.agent.runtime.TaskStatus
 import com.example.meowmba.core.agent.runtime.ToolCallPromptMode
 import com.example.meowmba.core.agent.tools.FindPlacesTool
+import com.example.meowmba.core.agent.tools.WeatherTool
 import com.example.meowmba.core.agent.tools.ListSavedPlacesTool
 import com.example.meowmba.core.agent.tools.NavigateTool
 import com.example.meowmba.core.agent.tools.SavePlaceTool
@@ -134,6 +135,15 @@ class CompanionViewModel(
     /** Tools available for agent routing; null when no workspace/repo exists. */
     private var agentToolRegistry: ToolRegistry? = null
 
+    /**
+     * Weather source. Open-Meteo needs no API key and no account, so "what's the weather"
+     * works out of the box with nothing for the user to configure.
+     */
+    private val weatherRepository: com.example.meowmba.core.weather.WeatherRepository? by lazy {
+        val ctx = secureStorage?.context
+        if (ctx == null) null else com.example.meowmba.core.weather.WeatherRepository(ctx)
+    }
+
     /** Model downloads into app-private storage, HF token from encrypted prefs. */
     private val downloader: ModelDownloader? by lazy {
         modelDownloader ?: modelsDir?.let { dir ->
@@ -214,6 +224,21 @@ class CompanionViewModel(
                     ?: defaultModelLabel(storage.context)
             )
         }
+        // Any weather fetch — including the agent's tool call — surfaces the card and moves
+        // the cat's expression to match the sky.
+        weatherRepository?.let { repo ->
+            viewModelScope.launch {
+                repo.latest.collect { w ->
+                    _uiState.value = _uiState.value.copy(
+                        weather = w,
+                        emotion = w?.let { runCatching {
+                            CompanionEmotion.valueOf(it.catEmotionName())
+                        }.getOrDefault(_uiState.value.emotion) } ?: _uiState.value.emotion,
+                    )
+                }
+            }
+        }
+
         matcher = WakePhraseMatcher(_uiState.value.name)
 
         run {
@@ -386,6 +411,7 @@ class CompanionViewModel(
                 secureStorage?.getApiKey("geoapify").orEmpty()
             }
             val placeRepo = com.example.meowmba.core.nav.PlaceRepository(offlinePoi, onlinePoi)
+            weatherRepository?.let { repo -> toolRegistry.register(WeatherTool(repo)) }
             toolRegistry.register(FindPlacesTool(appContext, placeRepo, savedPlaces))
             toolRegistry.register(NavigateTool(appContext))
             toolRegistry.register(SavePlaceTool(appContext, savedPlaces))
@@ -1787,6 +1813,11 @@ class CompanionViewModel(
     }
 
     // ── Memory screen & controls ────────────────────────────────────────────
+
+    /** Dismisses the weather card. */
+    fun dismissWeatherCard() {
+        weatherRepository?.clear()
+    }
 
     fun toggleNavScreen() {
         _uiState.value = _uiState.value.copy(showNavScreen = !_uiState.value.showNavScreen)
