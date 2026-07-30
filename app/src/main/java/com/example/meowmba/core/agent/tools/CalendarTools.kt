@@ -1,15 +1,33 @@
 package com.example.meowmba.core.agent.tools
 
+import android.Manifest
 import android.content.ContentResolver
 import android.content.ContentValues
 import android.content.Context
+import android.content.pm.PackageManager
 import android.provider.CalendarContract
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+
+/**
+ * Calendar permission check.
+ *
+ * The manifest declaring READ_CALENDAR is not enough — it is a runtime permission, and
+ * querying CalendarProvider2 without it throws SecurityException from a ContentResolver
+ * deep inside a coroutine, which CRASHED THE APP when the user asked for their calendar.
+ * A tool must never throw across the boundary; it returns a Failure instead.
+ */
+private fun hasCalendarAccess(context: Context): Boolean =
+    ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) ==
+        PackageManager.PERMISSION_GRANTED
+
+private const val NO_CALENDAR_PERMISSION =
+    "I don't have calendar permission yet. Allow calendar access in Settings and ask me again."
 
 /**
  * `calendar.list_events` — reads upcoming events from the user's default
@@ -30,6 +48,9 @@ class CalendarListTool(private val context: Context) : Tool {
     )
 
     override suspend fun execute(args: Map<String, String>): ToolResult = withContext(Dispatchers.IO) {
+        if (!hasCalendarAccess(context)) {
+            return@withContext ToolResult.Failure(NO_CALENDAR_PERMISSION)
+        }
         val days = args["days"]?.toIntOrNull()?.coerceIn(1, 90) ?: 7
         val resolver = context.contentResolver
 
@@ -84,7 +105,17 @@ class CalendarListTool(private val context: Context) : Tool {
         }
     }
 
-    private fun getPrimaryCalendarId(resolver: ContentResolver): Long? {
+    /**
+     * Returns null instead of throwing when the provider refuses us. Permission is checked
+     * before we get here, but a revoked-mid-session grant would otherwise crash the app.
+     */
+    private fun getPrimaryCalendarId(resolver: ContentResolver): Long? = try {
+        primaryCalendarIdOrThrow(resolver)
+    } catch (e: SecurityException) {
+        null
+    }
+
+    private fun primaryCalendarIdOrThrow(resolver: ContentResolver): Long? {
         val projection = arrayOf(CalendarContract.Calendars._ID)
         val selection = "${CalendarContract.Calendars.VISIBLE} = 1"
         val cursor = resolver.query(CalendarContract.Calendars.CONTENT_URI, projection, selection, null, null)
@@ -138,6 +169,10 @@ class CalendarCreateTool(private val context: Context) : Tool {
     )
 
     override suspend fun execute(args: Map<String, String>): ToolResult = withContext(Dispatchers.IO) {
+        // Writing needs the same runtime grant; see hasCalendarAccess.
+        if (!hasCalendarAccess(context)) {
+            return@withContext ToolResult.Failure(NO_CALENDAR_PERMISSION)
+        }
         val title = args["title"]?.takeIf { it.isNotBlank() }
             ?: return@withContext ToolResult.Failure("Missing 'title'")
         val startStr = args["start_time"]?.takeIf { it.isNotBlank() }
