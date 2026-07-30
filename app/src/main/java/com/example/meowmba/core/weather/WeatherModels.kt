@@ -16,6 +16,7 @@ enum class WeatherCondition(val label: String, val emoji: String) {
     RAIN("Rain", "🌧️"),
     SNOW("Snow", "❄️"),
     THUNDERSTORM("Thunderstorm", "⛈️"),
+    DUST("Dust", "🌪️"),
     UNKNOWN("Unknown", "🌡️");
 
     companion object {
@@ -34,6 +35,9 @@ enum class WeatherCondition(val label: String, val emoji: String) {
             61, 63, 65, 66, 67, 80, 81, 82 -> RAIN
             71, 73, 75, 77, 85, 86 -> SNOW
             95, 96, 99 -> THUNDERSTORM
+            // WMO dust/sand: whirls (6-9) and duststorms (30-35). Open-Meteo rarely emits
+            // these, but they are real here and used to land in UNKNOWN.
+            6, 7, 8, 9, 30, 31, 32, 33, 34, 35 -> DUST
             else -> UNKNOWN
         }
     }
@@ -73,6 +77,7 @@ data class WeatherNow(
         WeatherCondition.RAIN -> "SLEEPY"
         WeatherCondition.SNOW -> "SLEEPY"
         WeatherCondition.THUNDERSTORM -> "ALERT"
+        WeatherCondition.DUST -> "ALERT"
         WeatherCondition.UNKNOWN -> "CONFUSED"
     }
 

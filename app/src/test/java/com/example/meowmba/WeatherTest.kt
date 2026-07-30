@@ -64,9 +64,16 @@ class WeatherTest {
     }
 
     @Test
+    fun `dust and sand codes`() {
+        listOf(6, 7, 8, 9, 30, 31, 32, 33, 34, 35).forEach {
+            assertEquals("code $it", WeatherCondition.DUST, WeatherCondition.fromWmoCode(it))
+        }
+    }
+
+    @Test
     fun `unrecognised codes do not masquerade as clear`() {
         // Defaulting to CLEAR would show sunshine for data we did not understand.
-        listOf(-1, 4, 30, 100, 999).forEach {
+        listOf(-1, 4, 20, 100, 999).forEach {
             assertEquals("code $it", WeatherCondition.UNKNOWN, WeatherCondition.fromWmoCode(it))
         }
     }

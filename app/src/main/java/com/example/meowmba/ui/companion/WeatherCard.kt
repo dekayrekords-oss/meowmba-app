@@ -6,6 +6,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -60,8 +61,16 @@ fun WeatherCard(
     Box(
         modifier = modifier
             .fillMaxWidth()
+            // Translucent, not opaque: the animated weather behind it should read THROUGH
+            // the card. The condition's hue survives as a tint so a storm still looks like a
+            // storm, and a thin border keeps the edge legible against a busy scene.
             .background(
-                brush = Brush.verticalGradient(palette.gradient),
+                brush = Brush.verticalGradient(palette.gradient.map { it.copy(alpha = CARD_ALPHA) }),
+                shape = RoundedCornerShape(24.dp),
+            )
+            .border(
+                width = 1.dp,
+                color = palette.onSurface.copy(alpha = 0.18f),
                 shape = RoundedCornerShape(24.dp),
             )
             .padding(20.dp)
@@ -141,6 +150,12 @@ private fun Stat(label: String, value: String, onSurface: Color) {
     }
 }
 
+/**
+ * Card translucency. High enough that white text stays readable over rain and lightning,
+ * low enough that the scene is clearly visible through it.
+ */
+private const val CARD_ALPHA = 0.55f
+
 private data class WeatherPalette(
     val gradient: List<Color>,
     val onSurface: Color,
@@ -178,6 +193,9 @@ private fun paletteFor(condition: WeatherCondition, isDay: Boolean): WeatherPale
         )
         WeatherCondition.THUNDERSTORM -> WeatherPalette(
             listOf(Color(0xFF4C3B6E), Color(0xFF241B38)), Color(0xFFEDE6FA)
+        )
+        WeatherCondition.DUST -> WeatherPalette(
+            listOf(Color(0xFF8A6A3B), Color(0xFF4A3720)), Color(0xFFFBF3E4)
         )
         WeatherCondition.UNKNOWN -> WeatherPalette(
             listOf(Color(0xFF475569), Color(0xFF29323F)), Color(0xFFF1F5F9)

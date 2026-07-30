@@ -282,6 +282,16 @@ fun CompanionScreen(
             }
         }
 
+        // Ambient weather behind the avatar. Drawn before the overlays so it never covers
+        // the face or the menus — it is atmosphere, not a layer to interact with.
+        uiState.weather?.let { w ->
+            WeatherScene(
+                condition = w.condition,
+                isDay = w.isDay,
+                modifier = Modifier.matchParentSize(),
+            )
+        }
+
         // 3. Overlays (Floating Menus)
         BackgroundTiles(
             visible = uiState.showTiles,
@@ -300,7 +310,8 @@ fun CompanionScreen(
 
 
         // Weather card: floats above the companion rather than replacing it, so the cat
-        // reacting to the weather and the numbers are visible together.
+        // reacting to the weather and the numbers are visible together. The scene itself is
+        // drawn FIRST (below), behind the avatar, so the cat sits inside the weather.
         uiState.weather?.let { w ->
             androidx.compose.foundation.layout.Box(
                 modifier = Modifier
