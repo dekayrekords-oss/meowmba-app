@@ -184,11 +184,28 @@ class RecognizerWakeWordEngine(
         private const val MAX_CONSECUTIVE_ERRORS = 5
 
         /**
-         * Another client currently owns the recognizer. Transient by definition —
-         * retry, never escalate to "this device is broken".
+         * The mic is temporarily unavailable to us — not a broken recognizer. Retry
+         * with a longer backoff; never escalate to "this device is broken".
+         *
+         * - RECOGNIZER_BUSY: another client owns it, usually the foreground
+         *   WakeWordService and the in-app loop overlapping during the mic handoff.
+         * - INSUFFICIENT_PERMISSIONS: appops grants this app mic access in FOREGROUND
+         *   mode only (verified: "Uid mode: RECORD_AUDIO: foreground" with the runtime
+         *   permission granted). Background moments therefore deny the mic and clear
+         *   again on their own. Escalating turned that into a permanent false
+         *   "the speech recognizer keeps failing on this device".
+         *
+         * ERROR_CLIENT is deliberately NOT here. [SpeechService.startListening] reports
+         * CLIENT when the recognizer could not be created at all — a genuinely unusable
+         * device — so treating it as transient would retry forever instead of stopping.
+         * The CLIENT errors seen in the logs came from the removed failover binding
+         * assistant services that reject dictation, not from a healthy recognizer.
          */
-        internal fun isContention(code: Int): Boolean =
-            code == android.speech.SpeechRecognizer.ERROR_RECOGNIZER_BUSY
+        internal fun isContention(code: Int): Boolean = when (code) {
+            android.speech.SpeechRecognizer.ERROR_RECOGNIZER_BUSY,
+            android.speech.SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> true
+            else -> false
+        }
 
         /**
          * Errors that mean the recognizer itself is broken (service missing,

@@ -35,11 +35,25 @@ class WakeWordErrorPolicyTest {
     }
 
     @Test
-    fun `contention is narrow`() {
-        // Only BUSY. A permissions or client error is a real problem, not contention.
+    fun `mic-unavailable errors are contention, not a broken device`() {
+        // Both were observed on a HEALTHY device: BUSY during the service/in-app mic
+        // handoff, and INSUFFICIENT_PERMISSIONS because appops grants mic in foreground
+        // mode only. Escalating either produced a false "keeps failing on this device".
+        listOf(
+            SpeechRecognizer.ERROR_RECOGNIZER_BUSY,
+            SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS,
+        ).forEach { code ->
+            assertTrue("code $code should be contention", RecognizerWakeWordEngine.isContention(code))
+        }
+    }
+
+    @Test
+    fun `contention does not swallow every error`() {
+        // CLIENT stays escalating on purpose: SpeechService reports it when the
+        // recognizer could not be created at all, so retrying it forever would hide a
+        // genuinely unusable device.
         listOf(
             SpeechRecognizer.ERROR_CLIENT,
-            SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS,
             SpeechRecognizer.ERROR_AUDIO,
             SpeechRecognizer.ERROR_SERVER,
             SpeechRecognizer.ERROR_NO_MATCH,
@@ -50,9 +64,9 @@ class WakeWordErrorPolicyTest {
 
     @Test
     fun `real infrastructure failures still escalate`() {
+        // Something durable is wrong with audio or the service itself.
         listOf(
             SpeechRecognizer.ERROR_CLIENT,
-            SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS,
             SpeechRecognizer.ERROR_AUDIO,
             SpeechRecognizer.ERROR_SERVER,
         ).forEach { code ->

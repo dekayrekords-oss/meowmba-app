@@ -477,7 +477,7 @@ class CompanionViewModel(
     }
 
     override fun onCleared() {
-        wakeWordEngine?.stop()
+        stopWakeLoopAndRelease()
         (currentProvider as? LiteRtProvider)?.close()
         super.onCleared()
     }
@@ -655,7 +655,7 @@ class CompanionViewModel(
         if (enabled) {
             startWakeStandby()
         } else {
-            wakeWordEngine?.stop()
+            stopWakeLoopAndRelease()
             if (_uiState.value.interactionState == InteractionState.IDLE) {
                 _uiState.value = _uiState.value.copy(captionText = null)
             }
@@ -698,7 +698,7 @@ class CompanionViewModel(
 
     /** Wake phrase heard: run the spoken command, or listen for one. */
     internal fun onWakeDetected(command: String?) {
-        wakeWordEngine?.stop()
+        stopWakeLoopAndRelease()
         if (!_uiState.value.isMicEnabled) {
             resetState()
             return
@@ -711,9 +711,27 @@ class CompanionViewModel(
     }
 
     /** Begin standby wake-phrase listening (only while idle). */
+    /**
+     * Stops the in-app wake loop AND gives the mic back, so WakeWordService can take
+     * over when the app goes to the background. Acquiring without releasing would let
+     * the in-app side hold the mic forever and silently block background listening.
+     */
+    private fun stopWakeLoopAndRelease() {
+        wakeWordEngine?.stop()
+        com.example.meowmba.core.audio.MicOwner
+            .release(com.example.meowmba.core.audio.MicOwner.IN_APP)
+    }
+
     private fun startWakeStandby() {
         if (_uiState.value.interactionState != InteractionState.IDLE) return
-        if (_uiState.value.isMicEnabled) wakeWordEngine?.start()
+        if (_uiState.value.isMicEnabled) {
+            // Exclusive with WakeWordService; whoever holds the mic wins.
+            if (com.example.meowmba.core.audio.MicOwner
+                    .acquire(com.example.meowmba.core.audio.MicOwner.IN_APP)
+            ) {
+                wakeWordEngine?.start()
+            }
+        }
         _uiState.value = _uiState.value.copy(captionText = wakeHint())
     }
 
@@ -743,7 +761,7 @@ class CompanionViewModel(
     private fun startListening(prompt: String = "Listening...") {
         followUpJob?.cancel()
         isFollowUpListen = false
-        wakeWordEngine?.stop()
+        stopWakeLoopAndRelease()
 
         val engine = speechService
         if (engine == null) {
@@ -1334,7 +1352,7 @@ class CompanionViewModel(
                 val newMicState = !_uiState.value.isMicEnabled
                 if (!newMicState) {
                     // Mic privacy cut: everything voice-related stops now
-                    wakeWordEngine?.stop()
+                    stopWakeLoopAndRelease()
                     speechService?.stopListening()
                 }
                 _uiState.value = _uiState.value.copy(
@@ -1711,7 +1729,7 @@ class CompanionViewModel(
      */
     fun onExternalWakeCommand(command: String) {
         if (command.isBlank()) return
-        wakeWordEngine?.stop()
+        stopWakeLoopAndRelease()
         processUserSpeech(command)
     }
 

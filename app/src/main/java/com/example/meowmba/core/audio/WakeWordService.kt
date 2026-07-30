@@ -100,7 +100,12 @@ class WakeWordService : Service() {
             return START_NOT_STICKY
         }
         if (!engineStarted) startEngine()
-        return START_STICKY
+        // NOT sticky. This is a user-toggled listener whose preference is persisted, so
+        // it comes back on the next launch anyway. Sticky restarts resurrected it into a
+        // fresh process after every process death — including every reinstall — where it
+        // competed with the in-app loop for the recognizer and could not be seen by the
+        // in-process MicOwner guard.
+        return START_NOT_STICKY
     }
 
     /** True once the service is genuinely foreground. Never throws. */
@@ -123,6 +128,16 @@ class WakeWordService : Service() {
     }
 
     private fun startEngine() {
+        // Exclusive with the in-app wake loop. Without this both drove sessions at once
+        // and the platform answered with a steady stream of ERROR_RECOGNIZER_BUSY.
+        if (!MicOwner.acquire(MicOwner.SERVICE)) {
+            android.util.Log.i(
+                "WakeWordService",
+                "in-app wake loop owns the mic; not starting a second one"
+            )
+            stopSelf()
+            return
+        }
         speechService = SpeechService(this)
         tts = TextToSpeechManager(this)
         wakeEngine = RecognizerWakeWordEngine(
@@ -135,6 +150,7 @@ class WakeWordService : Service() {
     }
 
     override fun onDestroy() {
+        MicOwner.release(MicOwner.SERVICE)
         wakeEngine?.stop()
         // These are lateinit and are only assigned by startEngine(), which is
         // skipped when the service stops early. Touching them unguarded would

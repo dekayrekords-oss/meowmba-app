@@ -65,21 +65,12 @@ class SpeechService(private val context: Context) : SpeechEngine {
 
     private inner class SessionEngine : SpeechEngine {
 
-        private val candidates = recognitionCandidates(context)
-
-        /** Index into [candidates]; advances when a service errors out repeatedly. */
-        private var candidateIndex = 0
-
-        /** Consecutive errors that mean this service cannot serve us at all. */
-        private var serviceErrors = 0
+        private val component: ComponentName? = recognitionService(context)
 
         private var recognizer: SpeechRecognizer? = null
 
-        private fun currentComponent(): ComponentName? = candidates.getOrNull(candidateIndex)
-
         private fun buildRecognizer(): SpeechRecognizer? {
             if (!isAvailable) return null
-            val component = currentComponent()
             return runCatching {
                 if (component != null) {
                     SpeechRecognizer.createSpeechRecognizer(context, component)
@@ -87,24 +78,6 @@ class SpeechService(private val context: Context) : SpeechEngine {
                     SpeechRecognizer.createSpeechRecognizer(context)
                 }
             }.getOrNull()?.also { attachListener(it) }
-        }
-
-        /**
-         * Moves to the next candidate service and rebuilds. Returns false when there
-         * is nothing left to try.
-         */
-        private fun failOver(): Boolean {
-            if (candidateIndex + 1 >= candidates.size) {
-                Log.w(TAG, "no recognizer candidates left after ${currentComponent()}")
-                return false
-            }
-            val from = currentComponent()
-            candidateIndex++
-            serviceErrors = 0
-            runCatching { recognizer?.destroy() }
-            recognizer = buildRecognizer()
-            Log.w(TAG, "recognizer failover: $from -> ${currentComponent()}")
-            return recognizer != null
         }
 
         private val _isListening = MutableStateFlow(false)
@@ -139,23 +112,19 @@ class SpeechService(private val context: Context) : SpeechEngine {
                     _isListening.value = false
                     Log.w(TAG, "session error code=$error ($componentName)")
 
-                    // Fail over only when the SERVICE cannot serve us. NO_MATCH is not
-                    // such a signal even when speech was detected: ambient noise
-                    // legitimately produces speech-started followed by NO_MATCH, and
-                    // treating that as "deaf" made a working recognizer hand off to a
-                    // broken one.
-                    if (error in FAILOVER_ERRORS) {
-                        if (++serviceErrors >= ERRORS_BEFORE_FAILOVER && failOver()) {
-                            Log.w(TAG, "switched recognizer after $ERRORS_BEFORE_FAILOVER service errors")
-                        }
-                    }
+                    // No automatic service switching. Rotating on error walked off the
+                    // correct recognizer (AiAi) after a few transient CLIENT errors,
+                    // down through Home Assistant and Claude, to "no candidates left"
+                    // and a false "keeps failing on this device". Picking the right
+                    // service ONCE is what actually fixed recognition; the rotation
+                    // only ever made it worse. The engine above decides what an error
+                    // means.
                     onError?.invoke(error)
                 }
                 override fun onResults(results: Bundle?) {
                     val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     Log.i(TAG, "session result: ${matches?.firstOrNull()?.take(60) ?: "(empty)"}")
                     if (!matches.isNullOrEmpty()) {
-                        serviceErrors = 0   // this service works; keep it
                         onResult?.invoke(matches[0])
                     }
                 }
@@ -170,7 +139,7 @@ class SpeechService(private val context: Context) : SpeechEngine {
         }
 
         private val componentName: String
-            get() = currentComponent()?.flattenToShortString() ?: "default"
+            get() = component?.flattenToShortString() ?: "platform default"
 
         override fun startListening(onResult: (String) -> Unit, onError: (Int) -> Unit) {
             val r = recognizer ?: run {
@@ -238,21 +207,6 @@ class SpeechService(private val context: Context) : SpeechEngine {
         private const val POSSIBLY_COMPLETE_SILENCE_MS = 2_000L
         private const val MINIMUM_SESSION_MS = 15_000L
 
-        /** Service-level errors tolerated before switching recognition service. */
-        private const val ERRORS_BEFORE_FAILOVER = 3
-
-        /**
-         * Errors that mean the bound SERVICE is unusable, so another candidate is
-         * worth trying. Deliberately excludes NO_MATCH and SPEECH_TIMEOUT: those are
-         * normal for a wake loop in a quiet or noisy room and say nothing about the
-         * service.
-         */
-        private val FAILOVER_ERRORS = setOf(
-            SpeechRecognizer.ERROR_CLIENT,
-            SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS,
-            SpeechRecognizer.ERROR_SERVER,
-        )
-
         /** Android System Intelligence — the real modern on-device recognizer. */
         private const val AIAI_PACKAGE = "com.google.android.as"
 
@@ -290,31 +244,35 @@ class SpeechService(private val context: Context) : SpeechEngine {
          * demoted rather than trusted first — it is exactly what pointed at the TTS
          * service here.
          */
-        fun recognitionCandidates(context: Context): List<ComponentName> {
-            val services = runCatching {
+        fun recognitionService(context: Context): ComponentName? {
+            val installed = runCatching {
                 context.packageManager.queryIntentServices(
                     Intent(RecognitionService.SERVICE_INTERFACE), 0
                 )
             }.getOrDefault(emptyList())
-
-            val installed = services
                 .map { ComponentName(it.serviceInfo.packageName, it.serviceInfo.name) }
                 .filter { it.packageName !in DENYLISTED_PACKAGES }
 
-            val configured = runCatching {
+            // Prefer a general-purpose ASR provider.
+            installed.firstOrNull { it.packageName == AIAI_PACKAGE }?.let { return it }
+            installed.firstOrNull { it.packageName == GOOGLE_RECOGNITION_PACKAGE }
+                ?.let { return it }
+
+            // Then the system's own choice, if it is not the denylisted TTS one.
+            runCatching {
                 Settings.Secure.getString(context.contentResolver, "voice_recognition_service")
             }.getOrNull()
                 ?.takeIf { it.isNotBlank() }
                 ?.let { ComponentName.unflattenFromString(it) }
                 ?.takeIf { it.packageName !in DENYLISTED_PACKAGES }
+                ?.let { return it }
 
-            val ordered = LinkedHashSet<ComponentName>()
-            installed.firstOrNull { it.packageName == AIAI_PACKAGE }?.let(ordered::add)
-            installed.firstOrNull { it.packageName == GOOGLE_RECOGNITION_PACKAGE }
-                ?.let(ordered::add)
-            configured?.let(ordered::add)
-            ordered.addAll(installed)
-            return ordered.toList()
+            // Deliberately NOT falling through to arbitrary third-party assist services.
+            // Devices here expose Home Assistant's and Claude's RecognitionServices;
+            // both are assistant integrations, not general dictation back-ends, and both
+            // error immediately (5/9) when driven as one. Returning null lets the
+            // platform pick instead of us binding something known-wrong.
+            return null
         }
     }
 }
