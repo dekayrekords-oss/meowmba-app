@@ -17,3 +17,8 @@ local.properties
 # Signing (never commit)
 *.jks
 *.keystore
+
+# sherpa-onnx wake-word runtime: 26MB of native libs + 5MB of model.
+# Not committed — fetch with scripts/fetch_kws_assets.sh
+/app/src/main/jniLibs/
+/app/src/main/assets/sherpa-onnx-kws-*/

@@ -216,14 +216,24 @@ class CompanionViewModel(
         }
         matcher = WakePhraseMatcher(_uiState.value.name)
 
-        if (speechService != null) {
-            // The wake loop gets its OWN recognizer instance — a dying loop
-            // session's late error must never land in a mic-tap session.
+        run {
+            // The recognizer FALLBACK gets its OWN recognizer instance — a dying loop
+            // session's late error must never land in a mic-tap session. The keyword
+            // spotter needs none of this; it owns an AudioRecord directly.
             val wakeEngineSource = (speechService as? com.example.meowmba.core.audio.SpeechService)
                 ?.createSessionEngine() ?: speechService
-            wakeWordEngine = RecognizerWakeWordEngine(wakeEngineSource, matcher, viewModelScope).apply {
-                onWake = { command -> onWakeDetected(command) }
-                onFatalError = {
+            val built = com.example.meowmba.core.audio.WakeWordEngineFactory.create(
+                context = secureStorage?.context,
+                scope = viewModelScope,
+                companionName = _uiState.value.name,
+                matcher = matcher,
+                speechEngine = wakeEngineSource,
+            )
+            if (built != null) {
+                wakeWordEngine = built.engine.apply {
+                    onWake = { command -> onWakeDetected(command) }
+                }
+                (built.engine as? RecognizerWakeWordEngine)?.onFatalError = {
                     // Stop the error loop; the persisted preference is left
                     // alone so the next app launch tries again.
                     _uiState.value = _uiState.value.copy(
@@ -231,8 +241,14 @@ class CompanionViewModel(
                         captionText = "Wake phrase stopped — the speech recognizer keeps failing on this device"
                     )
                 }
+                built.kws?.onFatalError = { reason ->
+                    _uiState.value = _uiState.value.copy(
+                        wakeWordEnabled = false,
+                        captionText = "Wake phrase stopped — $reason"
+                    )
+                }
+                if (_uiState.value.wakeWordEnabled) startWakeStandby()
             }
-            if (_uiState.value.wakeWordEnabled) startWakeStandby()
         }
 
         ttsManager?.onSpeechStarted = {
