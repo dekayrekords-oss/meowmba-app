@@ -981,6 +981,7 @@ class CompanionViewModel(
                     com.example.meowmba.core.audio.WakePhraseMatcher.normalize(text)
                 )
             ) {
+                android.util.Log.i("Weather", "routed as a weather question: \"$text\"")
                 answerWeather()
                 return@launch
             }

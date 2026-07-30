@@ -72,6 +72,9 @@ class WeatherRepository(private val context: Context) {
                 val body = conn.inputStream.bufferedReader().use { it.readText() }
                 val parsed = parse(body)
                     ?: return@withContext Result.Failed("I couldn't read the weather response.")
+                // Logged on SUCCESS too. Only logging failures meant "no card appeared" was
+                // indistinguishable from "the fetch never happened".
+                Log.i(TAG, "weather ok: ${parsed.condition} ${parsed.temperatureF}F -> card")
                 _latest.value = parsed
                 Result.Ok(parsed)
             } catch (e: Exception) {
