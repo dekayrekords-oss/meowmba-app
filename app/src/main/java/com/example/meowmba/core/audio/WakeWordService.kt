@@ -64,7 +64,7 @@ class WakeWordService : Service() {
     private lateinit var speechService: SpeechService
     private lateinit var tts: TextToSpeechManager
     private lateinit var secureStorage: SecureStorageManager
-    private var wakeEngine: RecognizerWakeWordEngine? = null
+    private var wakeEngine: WakeWordEngine? = null
     private var capturingCommand = false
     private var isForeground = false
     private var engineStarted = false
@@ -140,10 +140,27 @@ class WakeWordService : Service() {
         }
         speechService = SpeechService(this)
         tts = TextToSpeechManager(this)
-        wakeEngine = RecognizerWakeWordEngine(
-            speechService, WakePhraseMatcher(companionName()), scope
-        ).apply {
-            onWake = { command -> handleWake(command) }
+        // Same factory the in-app loop uses, so background listening gets the keyword
+        // spotter too rather than silently falling back to the recognizer loop.
+        val built = WakeWordEngineFactory.create(
+            context = this,
+            scope = scope,
+            companionName = companionName(),
+            matcher = WakePhraseMatcher(companionName()),
+            speechEngine = speechService,
+        )
+        if (built == null) {
+            android.util.Log.w("WakeWordService", "no wake engine could be built; stopping")
+            MicOwner.release(MicOwner.SERVICE)
+            stopSelf()
+            return
+        }
+        wakeEngine = built.engine.apply { onWake = { command -> handleWake(command) } }
+        built.kws?.onFatalError = { reason ->
+            // Losing the mic here means the service cannot do its one job.
+            android.util.Log.w("WakeWordService", "wake engine stopped: $reason")
+            MicOwner.release(MicOwner.SERVICE)
+            stopSelf()
         }
         wakeEngine?.start()
         engineStarted = true

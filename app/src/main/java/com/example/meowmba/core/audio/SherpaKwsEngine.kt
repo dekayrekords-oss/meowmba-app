@@ -184,6 +184,7 @@ class SherpaKwsEngine(
             // both look identical from outside.
             var frames = 0L
             var peakSinceLog = 0
+            var silentFrames = 0
 
             while (running && scope.isActive) {
                 val read = record.read(pcm, 0, pcm.size)
@@ -199,6 +200,22 @@ class SherpaKwsEngine(
                     if (a > peak) peak = a
                 }
                 if (peak > peakSinceLog) peakSinceLog = peak
+
+                // Digital silence is not quiet — it means we no longer have the mic.
+                // Android grants this app mic access foreground-only, so once the app is
+                // backgrounded without a microphone foreground service, AudioRecord keeps
+                // succeeding and returns nothing but zeros. Measured 440s of peak=0.000
+                // while another app held the foreground, with every log line claiming to
+                // be listening. Give the mic up so a rightful owner can take it.
+                if (peak == 0) {
+                    if (++silentFrames >= SILENT_FRAMES_BEFORE_YIELD) {
+                        Log.w(TAG, "no audio for ${silentFrames / 10}s — mic lost, yielding")
+                        fail("I lost access to the microphone, so I stopped listening for the wake phrase.")
+                        return
+                    }
+                } else {
+                    silentFrames = 0
+                }
                 if (++frames % HEALTH_LOG_FRAMES == 0L) {
                     Log.d(
                         TAG,
@@ -311,6 +328,14 @@ class SherpaKwsEngine(
 
         /** One health line per 5s of audio (100ms frames). */
         private const val HEALTH_LOG_FRAMES = 50L
+
+        /**
+         * Frames of pure digital silence tolerated before concluding the mic is gone.
+         * 15s: long enough that a genuinely dead-quiet room with an aggressive noise gate
+         * does not trip it, short enough that a lost mic does not go unnoticed for
+         * minutes.
+         */
+        private const val SILENT_FRAMES_BEFORE_YIELD = 150
 
         /** Enough for the wake phrase plus the start of a one-breath command. */
         private const val PRE_ROLL_SECONDS = 2.5f

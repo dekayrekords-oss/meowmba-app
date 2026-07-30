@@ -23,6 +23,10 @@ object KwsKeywords {
 
     /** Verified exact BPE splits for the phrases the app ships with. */
     private val EXACT = mapOf(
+        // Measured on device: this is the phrase that reliably triggers this model.
+        // "hey meow" did not, because MEOW is rare in GigaSpeech and its token sequence
+        // is acoustically weak — see scripts/fetch_kws_assets.sh for the comparison.
+        "hey kitty" to "▁HE Y ▁K IT TY",
         "hey meow" to "▁HE Y ▁ME OW",
         "hey memba" to "▁HE Y ▁ME M B A",
         "hey meowmba" to "▁HE Y ▁ME OW M B A",

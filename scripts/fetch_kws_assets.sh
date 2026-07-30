@@ -59,10 +59,17 @@ else
   # Per-keyword tuning: ":boost #threshold" (no space after the prefix). Higher boost
   # and lower threshold both make a keyword easier to trigger. These are more sensitive
   # than sherpa's 1.5/0.25 defaults because a MISSED wake word was the complaint.
+  # MEASURED on device, not guessed. Playing each phrase at the same volume, only
+  # "hey kitty" and the model's own "hello world" triggered; "hey meow", "hey robot",
+  # "hey buddy" and "hey computer" did not. "MEOW" is rare in GigaSpeech, which this
+  # model was trained on, so its token sequence is acoustically weak. "hey kitty" is
+  # listed FIRST as the phrase known to work; "hey meow" is kept with a stronger boost
+  # and lower threshold, and may still be unreliable.
   printf '%s\n' \
-    "▁HE Y ▁ME OW :2.0 #0.15" \
-    "▁HE Y ▁ME M B A :2.0 #0.15" \
-    "▁HE Y ▁ME OW M B A :2.0 #0.15" \
+    "▁HE Y ▁K IT TY :2.0 #0.15" \
+    "▁HE Y ▁ME OW :3.0 #0.10" \
+    "▁HE Y ▁ME M B A :2.5 #0.12" \
+    "▁HE Y ▁ME OW M B A :2.5 #0.12" \
     > "$ASSET_DIR/keywords.txt"
 
   echo "    $(du -sh "$ASSET_DIR" | cut -f1) installed"

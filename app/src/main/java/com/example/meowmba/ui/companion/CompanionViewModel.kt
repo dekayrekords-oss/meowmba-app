@@ -738,6 +738,26 @@ class CompanionViewModel(
             .release(com.example.meowmba.core.audio.MicOwner.IN_APP)
     }
 
+    /**
+     * Called when the app goes to the background. Releases the wake mic so
+     * WakeWordService can take over.
+     *
+     * This is not optional. Mic access for this app is granted FOREGROUND-ONLY (appops
+     * "Uid mode: RECORD_AUDIO: foreground"), so once backgrounded the in-app AudioRecord
+     * keeps returning zeros — measured 440 seconds of peak=0.000 while Snapchat held the
+     * foreground. Worse, holding MicOwner meant the foreground service, which DOES have
+     * the microphone service-type exemption, was refused the mic. Net effect: nothing
+     * listening at all, with every log line claiming it was.
+     */
+    fun releaseWakeMicForBackground() {
+        stopWakeLoopAndRelease()
+    }
+
+    /** Called when the app returns to the foreground; retakes the wake mic. */
+    fun reclaimWakeMicForForeground() {
+        if (_uiState.value.wakeWordEnabled) startWakeStandby()
+    }
+
     private fun startWakeStandby() {
         if (_uiState.value.interactionState != InteractionState.IDLE) return
         if (_uiState.value.isMicEnabled) {

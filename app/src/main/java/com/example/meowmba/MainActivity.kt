@@ -133,8 +133,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        // The in-app engine owns the mic while we are visible
+        // The in-app engine owns the mic while we are visible.
         WakeWordService.stop(this)
+        companionViewModel?.reclaimWakeMicForForeground()
         consumeWakeCommand(intent)
     }
 
@@ -147,6 +148,10 @@ class MainActivity : ComponentActivity() {
         val micGranted = ContextCompat.checkSelfPermission(
             this, Manifest.permission.RECORD_AUDIO
         ) == PackageManager.PERMISSION_GRANTED
+        // Release BEFORE starting the service: it refuses to start while the in-app loop
+        // still owns the mic, and the in-app loop cannot actually hear anything once we
+        // are backgrounded (foreground-only mic grant).
+        companionViewModel?.releaseWakeMicForBackground()
         if (wakeOn && backgroundOn && micGranted) {
             WakeWordService.start(this)
         }
