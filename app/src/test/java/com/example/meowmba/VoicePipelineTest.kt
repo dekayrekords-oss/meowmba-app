@@ -319,7 +319,7 @@ class VoicePipelineTest {
     }
 
     @Test
-    fun `permission error is surfaced, no-match stays silent`() = runTest {
+    fun `permission error is surfaced, a pause keeps listening`() = runTest {
         viewModel.onMicClick()
         assertEquals(InteractionState.LISTENING, viewModel.uiState.value.interactionState)
 
@@ -327,10 +327,14 @@ class VoicePipelineTest {
         assertEquals(InteractionState.IDLE, viewModel.uiState.value.interactionState)
         assertTrue(viewModel.uiState.value.captionText!!.contains("permission"))
 
+        // A no-match is how a PAUSE reports itself: the platform recognizer gives up
+        // after about a second of quiet. The turn stays open instead of ending
+        // mid-sentence (see UtteranceCapture), and the user is told nothing, because
+        // nothing has gone wrong.
         viewModel.onMicClick()
-        fakeStt.simulateError(7) // ERROR_NO_MATCH — normal "didn't hear you"
-        assertEquals(InteractionState.IDLE, viewModel.uiState.value.interactionState)
-        assertEquals(null, viewModel.uiState.value.captionText)
+        fakeStt.simulateError(7) // ERROR_NO_MATCH — "nothing heard yet"
+        assertEquals(InteractionState.LISTENING, viewModel.uiState.value.interactionState)
+        assertEquals("Listening...", viewModel.uiState.value.captionText)
     }
 
     @Test

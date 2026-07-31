@@ -32,6 +32,8 @@ object KwsKeywords {
         "yomeow" to "▁ Y OM E OW",
         "yo meow" to "▁ Y O ▁ME OW",
         "hey meow" to "▁HE Y ▁ME OW",
+        "ok meow" to "▁O K ▁ME OW",
+        "okay meow" to "▁OKAY ▁ME OW",
         "hey kitty" to "▁HE Y ▁K IT TY",
         "yo memba" to "▁ Y O ▁ME M B A",
         "hey memba" to "▁HE Y ▁ME M B A",
@@ -39,6 +41,101 @@ object KwsKeywords {
         "aye meow" to "▁A Y E ▁ME OW",
         "yo meowmba" to "▁ Y O ▁ME OW M B A",
         "hey meowmba" to "▁HE Y ▁ME OW M B A",
+
+        // ── Homophones ───────────────────────────────────────────────────────────
+        // "MEOW" is rare in GigaSpeech, which this model was trained on, so its token
+        // sequence is acoustically weak — measured on device, "hey kitty" fired and
+        // "hey meow" did not. The fix is not only a lower threshold: it is to also
+        // register spellings the model is MORE likely to emit for the same sound, so a
+        // decode that comes out "yo mao" still counts as the wake phrase. The user never
+        // sees these; they are alternative spellings of one noise.
+        "yomao" to "▁ Y OM A O",
+        "yomeo" to "▁ Y OM E O",
+        "yo mao" to "▁ Y O ▁MA O",
+        "yo meo" to "▁ Y O ▁ME O",
+        "yo mow" to "▁ Y O ▁MO W",
+        "yo mew" to "▁ Y O ▁ME W",
+        "yo miao" to "▁ Y O ▁MI A O",
+        "hey mao" to "▁HE Y ▁MA O",
+        "hey meo" to "▁HE Y ▁ME O",
+        "hey mew" to "▁HE Y ▁ME W",
+        "ok mao" to "▁O K ▁MA O",
+        "ok mew" to "▁O K ▁ME W",
+        "okay mao" to "▁OKAY ▁MA O",
+
+        // The "hey"/"ok" carriers needed more than homophones of MEOW. Measured on
+        // device: with the tuning fix in place, every "yo…" spelling fired and not one
+        // "hey meow" or "ok meow" did — the ▁HE Y ▁ME OW path is simply weak in this
+        // model. These add the run-together spellings (heymeow, okmeow — no word break
+        // before ME) and the drawn-out ones, which is how the phrase is actually said.
+        "heymeow" to "▁HE Y ME OW",
+        "haymeow" to "▁HA Y ME OW",
+        "hay meow" to "▁HA Y ▁ME OW",
+        "hi meow" to "▁HI ▁ME OW",
+        "hey meaow" to "▁HE Y ▁ME A OW",
+        "hey meeow" to "▁HE Y ▁ME E OW",
+        "hey miao" to "▁HE Y ▁MI A O",
+        "hey me ow" to "▁HE Y ▁ME ▁ OW",
+        "okmeow" to "▁O K ME OW",
+        "okey meow" to "▁O KE Y ▁ME OW",
+        "ok me ow" to "▁O K ▁ME ▁ OW",
+    )
+
+    /**
+     * Per-keyword `:boost #threshold`, the same syntax the model's own keywords.txt uses.
+     *
+     * This tuning used to be lost. The bundled keywords.txt carried it, but the phrases
+     * actually in force come from `createStream(inlineKeywords)`, which replaces that file
+     * — and [build] emitted bare token lines, so every phrase silently fell back to the
+     * engine-wide 2.0 / 0.20. The tuned 3.0 / 0.10 the file documented was never reaching
+     * the spotter.
+     *
+     * Higher boost and lower threshold both make a phrase easier to trigger. The wake
+     * phrases sit well past sherpa's 1.5 / 0.25 defaults because a MISSED wake is the
+     * complaint, and because two gates downstream (VAD, then speaker verification) catch
+     * what a permissive threshold lets through.
+     */
+    private const val DEFAULT_TUNING = ":2.5 #0.12"
+
+    private val TUNING = mapOf(
+        // The primary phrase and everything that sounds like it — most permissive.
+        "yomeow" to ":3.5 #0.08",
+        "yo meow" to ":3.5 #0.08",
+        "yomao" to ":3.5 #0.08",
+        "yomeo" to ":3.5 #0.08",
+        "yo mao" to ":3.5 #0.08",
+        "yo meo" to ":3.5 #0.08",
+        "yo mow" to ":3.5 #0.08",
+        "yo mew" to ":3.5 #0.08",
+        "yo miao" to ":3.5 #0.08",
+        // "hey"/"ok" carriers: same treatment, since both were reported unreliable.
+        "hey meow" to ":3.5 #0.08",
+        "hey mao" to ":3.5 #0.08",
+        "hey meo" to ":3.5 #0.08",
+        "hey mew" to ":3.5 #0.08",
+        "ok meow" to ":3.5 #0.08",
+        "okay meow" to ":3.5 #0.08",
+        "ok mao" to ":3.5 #0.08",
+        "ok mew" to ":3.5 #0.08",
+        "okay mao" to ":3.5 #0.08",
+        "heymeow" to ":3.5 #0.08",
+        "haymeow" to ":3.5 #0.08",
+        "hay meow" to ":3.5 #0.08",
+        "hi meow" to ":3.5 #0.08",
+        "hey meaow" to ":3.5 #0.08",
+        "hey meeow" to ":3.5 #0.08",
+        "hey miao" to ":3.5 #0.08",
+        "hey me ow" to ":3.5 #0.08",
+        "okmeow" to ":3.5 #0.08",
+        "okey meow" to ":3.5 #0.08",
+        "ok me ow" to ":3.5 #0.08",
+        // Longer and more distinctive: they do not need the help, and loosening them
+        // would only buy false wakes.
+        "hey kitty" to ":2.0 #0.15",
+        "yo memba" to ":2.5 #0.12",
+        "hey memba" to ":2.5 #0.12",
+        "yo meowmba" to ":2.5 #0.12",
+        "hey meowmba" to ":2.5 #0.12",
     )
 
     /**
@@ -51,7 +148,9 @@ object KwsKeywords {
             .map { it.trim() }
             .filter { it.isNotBlank() }
             .mapNotNull { phrase ->
-                EXACT[phrase.lowercase()] ?: tokenise(phrase, vocab)
+                val key = phrase.lowercase()
+                val tokens = EXACT[key] ?: tokenise(phrase, vocab) ?: return@mapNotNull null
+                "$tokens ${TUNING[key] ?: DEFAULT_TUNING}"
             }
             .distinct()
             .joinToString("\n")

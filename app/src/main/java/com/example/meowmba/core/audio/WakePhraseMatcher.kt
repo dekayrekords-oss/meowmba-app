@@ -34,6 +34,16 @@ class WakePhraseMatcher(companionName: String = DEFAULT_NAME) {
             add("hey memba")
             add("hey meow")
             if (custom.isNotBlank()) add("hey $custom")
+            // "ok"/"okay" carriers — as common a habit as "hey", and previously missing
+            // here and from the spotter, which is why "ok meow" did nothing at all.
+            add("ok meow")
+            add("okay meow")
+            add("ok memba")
+            add("okay memba")
+            if (custom.isNotBlank()) {
+                add("ok $custom")
+                add("okay $custom")
+            }
             // Casual wake words
             add("yo")
             add("oi")

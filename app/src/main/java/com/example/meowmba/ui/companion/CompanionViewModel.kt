@@ -884,6 +884,10 @@ class CompanionViewModel(
             InteractionState.IDLE -> startListening()
             InteractionState.SPEAKING -> interrupt()
             else -> {
+                // Tapping the mic while it is listening means "stop", so the stitched
+                // capture must stop too — otherwise it just opens another session.
+                utteranceCapture?.cancel()
+                utteranceCapture = null
                 speechService?.stopListening()
                 resetState()
             }
@@ -914,9 +918,49 @@ class CompanionViewModel(
             emotion = CompanionEmotion.ALERT
         )
 
-        engine.startListening(
-            onResult = { result -> processUserSpeech(result) },
-            onError = { code -> onListeningError(code) }
+        captureUtterance(engine) { result -> processUserSpeech(result) }
+    }
+
+    /**
+     * Captures one spoken turn, tolerating pauses.
+     *
+     * Everything that listens for a *command* goes through here rather than calling the
+     * engine directly, because a raw session ends after about a second of quiet and cuts
+     * people off mid-sentence. [UtteranceCapture] stitches sessions until the user has
+     * actually stopped. The live transcript is mirrored into the caption so it is obvious
+     * the companion is still hearing you during a pause.
+     */
+    private fun captureUtterance(
+        engine: com.example.meowmba.core.audio.SpeechEngine,
+        onError: (Int) -> Unit = { code -> onListeningError(code) },
+        onFinal: (String) -> Unit,
+    ) {
+        utteranceCapture?.cancel()
+        val capture = com.example.meowmba.core.audio.UtteranceCapture(
+            engine = engine,
+            scope = viewModelScope,
+            // "Stop" / "never mind" must land the moment it is heard.
+            finishEarlyWhen = { text -> isStopCommand(text) },
+        )
+        utteranceCapture = capture
+        viewModelScope.launch {
+            capture.live.collect { text ->
+                if (text.isNotBlank() &&
+                    _uiState.value.interactionState == InteractionState.LISTENING
+                ) {
+                    _uiState.value = _uiState.value.copy(captionText = text)
+                }
+            }
+        }
+        capture.start(
+            onFinal = { text ->
+                utteranceCapture = null
+                onFinal(text)
+            },
+            onError = { code ->
+                utteranceCapture = null
+                onError(code)
+            },
         )
     }
 
@@ -1456,23 +1500,20 @@ class CompanionViewModel(
             emotion = CompanionEmotion.ALERT
         )
         followUpJob = viewModelScope.launch {
-            // If the interruption-watch recognizer is still alive, just swap
-            // callbacks — avoids stop+restart which stalls on Samsung.
+            // The interruption watch may still hold a live session; hand the mic over
+            // cleanly before starting a stitched capture on top of it.
             if (engine.isListening.value) {
-                engine.swapCallbacks(
-                    onResult = { result -> processUserSpeech(result) },
-                    onError = { _ -> resetState() }
-                )
-            } else {
                 engine.stopListening()
                 delay(120)
-                engine.startListening(
-                    onResult = { result -> processUserSpeech(result) },
-                    onError = { _ -> resetState() }
-                )
+            }
+            // A follow-up is a spoken turn like any other: it has to survive a pause.
+            captureUtterance(engine, onError = { resetState() }) { result ->
+                processUserSpeech(result)
             }
             delay(FOLLOW_UP_TIMEOUT_MS)
             if (_uiState.value.interactionState == InteractionState.LISTENING && isFollowUpListen) {
+                utteranceCapture?.cancel()
+                utteranceCapture = null
                 speechService.stopListening()
                 resetState()
             }

@@ -70,9 +70,35 @@ else
   # bpe.model via scripts/kws_tokenise.py. ":boost #threshold" — more sensitive than
   # sherpa's 1.5/0.25 defaults, since a missed wake is the complaint being fixed.
   printf '%s\n' \
-    "▁ Y OM E OW :3.0 #0.10" \
-    "▁ Y O ▁ME OW :3.0 #0.10" \
-    "▁HE Y ▁ME OW :3.0 #0.10" \
+    "▁ Y OM E OW :3.5 #0.08" \
+    "▁ Y O ▁ME OW :3.5 #0.08" \
+    "▁HE Y ▁ME OW :3.5 #0.08" \
+    "▁O K ▁ME OW :3.5 #0.08" \
+    "▁OKAY ▁ME OW :3.5 #0.08" \
+    "▁ Y OM A O :3.5 #0.08" \
+    "▁ Y OM E O :3.5 #0.08" \
+    "▁ Y O ▁MA O :3.5 #0.08" \
+    "▁ Y O ▁ME O :3.5 #0.08" \
+    "▁ Y O ▁MO W :3.5 #0.08" \
+    "▁ Y O ▁ME W :3.5 #0.08" \
+    "▁ Y O ▁MI A O :3.5 #0.08" \
+    "▁HE Y ▁MA O :3.5 #0.08" \
+    "▁HE Y ▁ME O :3.5 #0.08" \
+    "▁HE Y ▁ME W :3.5 #0.08" \
+    "▁O K ▁MA O :3.5 #0.08" \
+    "▁O K ▁ME W :3.5 #0.08" \
+    "▁OKAY ▁MA O :3.5 #0.08" \
+    "▁HE Y ME OW :3.5 #0.08" \
+    "▁HA Y ME OW :3.5 #0.08" \
+    "▁HA Y ▁ME OW :3.5 #0.08" \
+    "▁HI ▁ME OW :3.5 #0.08" \
+    "▁HE Y ▁ME A OW :3.5 #0.08" \
+    "▁HE Y ▁ME E OW :3.5 #0.08" \
+    "▁HE Y ▁MI A O :3.5 #0.08" \
+    "▁HE Y ▁ME ▁ OW :3.5 #0.08" \
+    "▁O K ME OW :3.5 #0.08" \
+    "▁O KE Y ▁ME OW :3.5 #0.08" \
+    "▁O K ▁ME ▁ OW :3.5 #0.08" \
     "▁HE Y ▁K IT TY :2.0 #0.15" \
     "▁ Y O ▁ME M B A :2.5 #0.12" \
     "▁HE Y ▁ME M B A :2.5 #0.12" \

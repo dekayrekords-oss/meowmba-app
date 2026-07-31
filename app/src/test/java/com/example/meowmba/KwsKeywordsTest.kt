@@ -34,13 +34,13 @@ class KwsKeywordsTest {
     @Test
     fun `built-in phrase uses the verified exact split`() {
         // Produced by the model's own bpe.model, not by the greedy fallback.
-        assertEquals("▁HE Y ▁ME OW", KwsKeywords.build(listOf("hey meow"), vocab))
+        assertEquals("▁HE Y ▁ME OW :3.5 #0.08", KwsKeywords.build(listOf("hey meow"), vocab))
     }
 
     @Test
     fun `built-in split is case-insensitive`() {
-        assertEquals("▁HE Y ▁ME OW", KwsKeywords.build(listOf("Hey Meow"), vocab))
-        assertEquals("▁HE Y ▁ME OW", KwsKeywords.build(listOf("HEY MEOW"), vocab))
+        assertEquals("▁HE Y ▁ME OW :3.5 #0.08", KwsKeywords.build(listOf("Hey Meow"), vocab))
+        assertEquals("▁HE Y ▁ME OW :3.5 #0.08", KwsKeywords.build(listOf("HEY MEOW"), vocab))
     }
 
     @Test
@@ -53,7 +53,30 @@ class KwsKeywordsTest {
     @Test
     fun `one line per phrase`() {
         val out = KwsKeywords.build(listOf("hey meow", "hey memba"), vocab)
-        assertEquals(listOf("▁HE Y ▁ME OW", "▁HE Y ▁ME M B A"), out.lines())
+        assertEquals(
+            listOf("▁HE Y ▁ME OW :3.5 #0.08", "▁HE Y ▁ME M B A :2.5 #0.12"),
+            out.lines(),
+        )
+    }
+
+    /**
+     * The bug this pins: the tuning used to live only in the bundled keywords.txt, which
+     * createStream() replaces — so every phrase silently ran at the engine-wide default
+     * and the wake word was harder to trigger than the file claimed.
+     */
+    @Test
+    fun `every line carries per-keyword boost and threshold`() {
+        val out = KwsKeywords.build(
+            listOf("yomeow", "hey meow", "ok meow", "hey kitty", "robot"),
+            vocab,
+        )
+        assertTrue(out.lines().all { Regex(" :\\d+(\\.\\d+)? #\\d*\\.?\\d+$").containsMatchIn(it) })
+    }
+
+    @Test
+    fun `an untuned phrase still gets the default tuning`() {
+        // Greedy-fallback phrases (a custom companion name) are not in the tuning map.
+        assertEquals("▁ROB OT :2.5 #0.12", KwsKeywords.build(listOf("robot"), vocab))
     }
 
     @Test

@@ -39,8 +39,21 @@ object WakeWordEngineFactory {
      * continuously on raw audio would false-fire on them constantly.
      */
     private val BASE_PHRASES = listOf(
-        "yomeow", "yo meow", "hey meow", "hey kitty",
-        "yo memba", "hey memba", "oi meow",
+        // Said as one word, said as two, and every carrier the user actually uses.
+        "yomeow", "yo meow", "hey meow", "ok meow", "okay meow",
+        // Homophones of the same sound. "MEOW" is rare in the model's training data and
+        // decodes unreliably; registering the spellings it is likely to emit instead is
+        // what makes a fluid "yomeow" land without the deliberate "yo — meow" pause.
+        // See KwsKeywords.EXACT.
+        "yomao", "yomeo", "yo mao", "yo meo", "yo mow", "yo mew", "yo miao",
+        "hey mao", "hey meo", "hey mew", "ok mao", "ok mew", "okay mao",
+        // Run-together and drawn-out spellings of the hey/ok carriers. Measured: the
+        // plain "▁HE Y ▁ME OW" path does not fire on this model, these are the paths
+        // that do.
+        "heymeow", "haymeow", "hay meow", "hi meow", "hey meaow", "hey meeow",
+        "hey miao", "hey me ow", "okmeow", "okey meow", "ok me ow",
+        // Older phrases, kept.
+        "hey kitty", "yo memba", "hey memba", "oi meow",
     )
 
     data class Result(
