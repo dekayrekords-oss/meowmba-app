@@ -35,12 +35,10 @@ plus intent-capture, or Robolectric, or extracting the service start behind an
 interface. If you touch downloads, fix these; otherwise don't confuse them with
 failures from your change.
 
-## Uncommitted work in the tree (as of 2026-07-31)
+## Work state (as of 2026-07-31)
 
-Two independent pieces, both compile and have green tests:
-
-1. **Email/app routing fix — COMPLETE** (modified `AgentRouter.kt`,
-   `EmailTools.kt` + new `AppAndEmailRoutingTest.kt`, 15 tests, all green).
+1. **Email/app routing fix — COMMITTED** (`96ca7d3`; `AgentRouter.kt`,
+   `EmailTools.kt` + `AppAndEmailRoutingTest.kt`, 15 tests, all green).
    - Reported bug: "open gmail and write a message that says hi to X@Y.com"
      → `No installed app matches "gmail and write a message that says hi to…"`.
    - Fix: `composeEmail()` runs BEFORE the app-launcher rule and fires on any
@@ -59,8 +57,8 @@ Two independent pieces, both compile and have green tests:
    - Gotcha that bit once: `extractAfter` is PREFIX-only — never use it for
      mid-sentence extraction.
 
-2. **Runtime IPC bridge for sibling apps** (untracked `bridge/MeowmbaRuntimeService.kt`,
-   `core/memory/IpcMetaMemoryConnector.kt`).
+2. **Runtime IPC bridge for sibling apps — UNCOMMITTED** (untracked
+   `bridge/MeowmbaRuntimeService.kt`, `core/memory/IpcMetaMemoryConnector.kt`).
    - `MeowmbaRuntimeService`: exported Messenger service, action
      `com.example.meowmba.action.RUNTIME_BRIDGE`, already declared in the
      manifest. Msgs: `PING=1`, `DESCRIBE=2` (jpeg→caption via VisionProvider),
