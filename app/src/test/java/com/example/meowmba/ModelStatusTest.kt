@@ -159,7 +159,12 @@ class ModelStatusTest {
         `when`(mockSecureStorage.getPreference("selected_model")).thenReturn("Phi-3 Mini (Local)")
         val vm = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
 
-        assertEquals("On-device (Local)", vm.uiState.value.selectedModel)
+        // Falls back to the current default — the local router — and the assertion below
+        // is the real point: a provider actually got built, no null-provider trap.
+        assertEquals(
+            com.example.meowmba.ui.companion.MODEL_OMNIROUTE,
+            vm.uiState.value.selectedModel,
+        )
         org.junit.Assert.assertNotNull(vm.currentProvider)
     }
 

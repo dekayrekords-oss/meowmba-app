@@ -84,23 +84,24 @@ fun ModelItem(name: String, isSelected: Boolean, onClick: () -> Unit) {
 const val MODEL_GEMINI_NANO = "Gemini Nano (On-device)"
 
 /**
- * Omniroute — the route manager on meow (port 20128).
+ * Omniroute — the router, running inside the app.
  *
- * Spoken to as an OpenAI-compatible endpoint, which is what routers of this kind expose;
- * the address and model are editable in Settings, so pointing it somewhere else (or at a
- * different port) needs no code change. If the endpoint turns out to speak a different
- * dialect, "Test connection" on the Hardware page says so rather than failing silently.
+ * Not a server call: the app holds the route table and picks between the backends that
+ * are already configured on this phone. That is what lets it be the default (it always
+ * has the on-device model as a fallback, so it works with no network) and it is why it
+ * needs no address of its own.
  */
-const val MODEL_OMNIROUTE = "Omniroute (Router)"
+const val MODEL_OMNIROUTE = "Omniroute (Local router)"
 
-/** Where Omniroute lives unless Settings says otherwise. */
-const val DEFAULT_OMNIROUTE_ENDPOINT = "http://192.168.1.69:20128"
+
 
 val modelProviders = listOf(
+    // First because it is the default: the router decides which model answers, so it is
+    // the one entry that does not commit the phone to a particular engine.
+    MODEL_OMNIROUTE,
     MODEL_GEMINI_NANO,
     "On-device (Local)",
     "Ollama (Local Network)",
-    MODEL_OMNIROUTE,
     "OpenAI (Cloud)",
 )
 

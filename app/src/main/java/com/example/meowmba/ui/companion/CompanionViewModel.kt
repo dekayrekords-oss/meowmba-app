@@ -631,12 +631,74 @@ class CompanionViewModel(
     private var providerReady: CompletableDeferred<ModelProvider?>? = null
     private var providerWarmUp: Job? = null
 
-    private fun defaultModelLabel(context: android.content.Context?): String =
-        if (context != null && GeminiNanoProvider.isAvailable(context)) {
-            MODEL_GEMINI_NANO
-        } else {
-            "On-device (Local)"
+    /**
+     * What a fresh install talks to.
+     *
+     * Omniroute: it routes between whatever this phone actually has, and its last
+     * resort is the on-device model, so it is safe as a first-run default — there is no
+     * server it depends on and nothing it needs configured to work.
+     */
+    private fun defaultModelLabel(context: android.content.Context?): String = MODEL_OMNIROUTE
+
+    /**
+     * Assembles the local route table from the backends this phone has configured.
+     *
+     * Only what the user set up gets a route. Nothing is inferred and no address is
+     * hard-coded — in particular the app never reaches for the meow server on its own.
+     * The on-device model is always present and always last, which is what makes the
+     * router safe to be the default.
+     */
+    /** The local router, when it is the active provider — held so it can be hinted. */
+    private var omniRoute: com.example.meowmba.core.agent.OmniRoute? = null
+
+    private fun buildOmniRoute(): com.example.meowmba.core.agent.OmniRoute? {
+        val storage = secureStorage ?: return null
+        val routes = mutableListOf<com.example.meowmba.core.agent.OmniRoute.Route>()
+
+        storage.getEndpoint("ollama")?.takeIf { it.isNotBlank() }?.let { endpoint ->
+            routes += com.example.meowmba.core.agent.OmniRoute.Route(
+                id = "ollama",
+                label = "Ollama · ${storage.getModelName("ollama") ?: "gemma2"}",
+                provider = RemoteModelProvider(
+                    "Ollama", endpoint.trimEnd('/'), null,
+                    storage.getModelName("ollama") ?: "gemma2",
+                ),
+                tags = setOf(com.example.meowmba.core.agent.OmniRoute.RouteTag.CHAT, com.example.meowmba.core.agent.OmniRoute.RouteTag.CODING, com.example.meowmba.core.agent.OmniRoute.RouteTag.REASONING, com.example.meowmba.core.agent.OmniRoute.RouteTag.VISION),
+                priority = 20,
+            )
         }
+        storage.getApiKey("openai")?.takeIf { it.isNotBlank() }?.let { key ->
+            routes += com.example.meowmba.core.agent.OmniRoute.Route(
+                id = "openai",
+                label = "OpenAI · ${storage.getModelName("openai") ?: "gpt-4o-mini"}",
+                provider = RemoteModelProvider(
+                    "OpenAI", "https://api.openai.com", key,
+                    storage.getModelName("openai") ?: "gpt-4o-mini",
+                ),
+                tags = setOf(com.example.meowmba.core.agent.OmniRoute.RouteTag.REASONING, com.example.meowmba.core.agent.OmniRoute.RouteTag.CODING, com.example.meowmba.core.agent.OmniRoute.RouteTag.CHAT),
+                priority = 30,
+            )
+        }
+        // On-device, always, and always the fallback: no network, no configuration.
+        runCatching {
+            val path = resolvedLocalModelPath()
+            val local: ModelProvider = if (path.endsWith(".litertlm")) {
+                LiteRtProvider(storage.context, path)
+            } else {
+                MediaPipeProvider(storage.context, path)
+            }
+            routes += com.example.meowmba.core.agent.OmniRoute.Route(
+                id = "local",
+                label = "On-device",
+                provider = local,
+                tags = setOf(com.example.meowmba.core.agent.OmniRoute.RouteTag.FAST, com.example.meowmba.core.agent.OmniRoute.RouteTag.CHAT),
+                priority = 90,
+                offline = true,
+            )
+        }
+        if (routes.isEmpty()) return null
+        return com.example.meowmba.core.agent.OmniRoute(routes).also { omniRoute = it }
+    }
 
     private fun updateProvider(modelName: String) {
         refreshLoadedModels()
@@ -664,18 +726,7 @@ class CompanionViewModel(
                     secureStorage.getModelName("ollama") ?: "gemma2"
                 )
             }
-            MODEL_OMNIROUTE -> {
-                // OpenAI-compatible by default; the key is optional because a router on
-                // the home network usually has none.
-                RemoteModelProvider(
-                    name = "Omniroute",
-                    baseUrl = (secureStorage.getEndpoint("omniroute")
-                        ?: DEFAULT_OMNIROUTE_ENDPOINT).trimEnd('/'),
-                    apiKey = secureStorage.getApiKey("omniroute"),
-                    model = secureStorage.getModelName("omniroute") ?: "auto",
-                    style = RemoteModelProvider.ApiStyle.OPENAI_COMPATIBLE,
-                )
-            }
+            MODEL_OMNIROUTE -> buildOmniRoute()
             "OpenAI (Cloud)" -> {
                 RemoteModelProvider(
                     "OpenAI",
@@ -1173,6 +1224,8 @@ class CompanionViewModel(
             // old code only called speak() on Complete, so the user heard nothing until
             // the entire answer had been generated.
             var spokenUpTo = 0
+            // Route on what the user said, not on the assembled prompt around it.
+            omniRoute?.hintUserText(text)
             awaitProvider()?.generateStreaming(prompt)?.collect { response ->
                 when (response) {
                     is ModelResponse.Partial -> {
