@@ -49,6 +49,9 @@ fun WeatherCard(
     modifier: Modifier = Modifier,
     /** Debug preview: tap the card to step through conditions. */
     onCycleCondition: (() -> Unit)? = null,
+    /** Forced time of day for the scene, or null when it follows the real clock. */
+    previewTimeOfDay: com.example.meowmba.core.weather.TimeOfDay? = null,
+    onCycleTimeOfDay: (() -> Unit)? = null,
 ) {
     val palette = paletteFor(weather.condition, weather.isDay)
 
@@ -117,6 +120,24 @@ fun WeatherCard(
                     )
                 }
                 Spacer(Modifier.weight(1f))
+                // Time-of-day chip: tap to look at this weather at another hour.
+                onCycleTimeOfDay?.let { cycle ->
+                    Text(
+                        text = previewTimeOfDay?.name?.lowercase()
+                            ?.replaceFirstChar { it.uppercase() } ?: "Auto",
+                        color = palette.onSurface.copy(
+                            alpha = if (previewTimeOfDay == null) 0.6f else 0.95f
+                        ),
+                        style = shadowed(11.sp, FontWeight.Medium),
+                        modifier = Modifier
+                            .clickable { cycle() }
+                            .background(
+                                color = Color.Black.copy(alpha = 0.25f),
+                                shape = RoundedCornerShape(10.dp),
+                            )
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                    )
+                }
                 TextButton(onClick = onDismiss) {
                     Text("✕", color = palette.onSurface.copy(alpha = 0.7f), fontSize = 14.sp)
                 }
@@ -147,6 +168,8 @@ fun WeatherCard(
                     modifier = Modifier.alpha(0.9f),
                 )
             }
+            // "Always show weather" deliberately does NOT live here — settings belong on
+            // the Weather page in the ecosystem grid, not on a card that dismisses itself.
         }
     }
 }

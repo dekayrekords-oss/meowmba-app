@@ -53,6 +53,13 @@ fun CompanionScreen(
             .fillMaxSize()
             .background(Color(0xFF0D1117))
     ) {
+        // 0. Chosen background — first child, so it is genuinely behind the avatar.
+        AppBackground(
+            selection = uiState.background,
+            weather = uiState.ambientWeather ?: uiState.weather,
+            modifier = Modifier.matchParentSize(),
+        )
+
         // 1. Animated cat avatar (Memba 2 face) — full-bleed canvas
         AvatarRenderer(
             state = uiState,
@@ -282,14 +289,28 @@ fun CompanionScreen(
             }
         }
 
-        // Ambient weather behind the avatar. Drawn before the overlays so it never covers
-        // the face or the menus — it is atmosphere, not a layer to interact with.
-        uiState.weather?.let { w ->
-            WeatherScene(
-                condition = w.condition,
-                isDay = w.isDay,
-                modifier = Modifier.matchParentSize(),
-            )
+        // Atmosphere in front of the avatar — weather you are standing in, not a wallpaper.
+        // Drawn before the overlays so it never covers the menus.
+        //
+        // Shown while the card is up, and permanently when ambient weather is on. Skipped
+        // when the chosen BACKGROUND is already the live sky: the same scene twice is just
+        // double the particles and half the frame rate.
+        val liveWeatherIsBackground = uiState.background.kind ==
+            com.example.meowmba.core.background.BackgroundKind.LIVE_WEATHER
+        val atmosphere = uiState.weather
+            ?: uiState.ambientWeather?.takeIf { uiState.ambientWeatherEnabled }
+        if (!liveWeatherIsBackground) {
+            atmosphere?.let { w ->
+                val clockTimeOfDay = rememberTimeOfDay(w.isDay)
+                WeatherScene(
+                    condition = w.condition,
+                    isDay = w.isDay,
+                    timeOfDay = uiState.previewTimeOfDay ?: clockTimeOfDay,
+                    // Held back: this layer is in front of the face.
+                    intensity = overlayIntensity(w.condition),
+                    modifier = Modifier.matchParentSize(),
+                )
+            }
         }
 
         // 3. Overlays (Floating Menus)
@@ -297,13 +318,17 @@ fun CompanionScreen(
             visible = uiState.showTiles,
             onClose = { viewModel.onAvatarZoneClick(AvatarZone.BACKGROUND) },
             onTileClick = { tileName ->
+                // Picking a tile closes the tile menu. Weather in particular puts a card
+                // *behind* the still-open grid otherwise, which just looks broken.
+                viewModel.onAvatarZoneClick(AvatarZone.BACKGROUND)
                 when (tileName) {
                     "Settings" -> viewModel.toggleSettings()
                     "Hardware" -> viewModel.toggleModelManager()
                     "Privacy" -> viewModel.togglePrivacyDashboard()
                     "Memory" -> viewModel.toggleMemoryScreen()
                     "NAV" -> viewModel.toggleNavScreen()
-                    "Weather" -> viewModel.showWeatherCard()
+                    "Weather" -> viewModel.toggleWeatherScreen()
+                    "Background" -> viewModel.toggleBackgroundScreen()
                     "Agents", "Tools" -> viewModel.toggleAgentsScreen()
                 }
             }
@@ -320,12 +345,59 @@ fun CompanionScreen(
                     .padding(horizontal = 16.dp, vertical = 48.dp)
             ) {
                 WeatherCard(
-                    weather = w,
+                    // Forcing the scene to midday and leaving the card on its night palette
+                    // would look like two different weathers.
+                    weather = w.copy(
+                        isDay = uiState.previewTimeOfDay?.isLight ?: w.isDay,
+                    ),
                     onDismiss = { viewModel.dismissWeatherCard() },
                     // Tap the card to preview the next condition's animation.
                     onCycleCondition = { viewModel.cycleForcedWeatherCondition() },
+                    previewTimeOfDay = uiState.previewTimeOfDay,
+                    onCycleTimeOfDay = { viewModel.cyclePreviewTimeOfDay() },
                 )
             }
+        }
+
+        // The thing the conversation is about. Sits above the avatar, below the menus, and
+        // low enough that the weather card at the top is still readable next to it.
+        uiState.inventoryItem?.let { item ->
+            androidx.compose.foundation.layout.Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .imePadding()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 190.dp)
+            ) {
+                InventoryCard(
+                    item = item,
+                    onAction = { op, args -> viewModel.runInventoryAction(op, args) },
+                    onOpenApp = { viewModel.openInventoryApp(item.name) },
+                    onDismiss = { viewModel.dismissInventoryCard() },
+                )
+            }
+        }
+
+        if (uiState.showWeatherScreen) {
+            WeatherScreen(
+                weather = uiState.weather ?: uiState.ambientWeather,
+                ambientEnabled = uiState.ambientWeatherEnabled,
+                onAmbientChange = { viewModel.setAmbientWeatherEnabled(it) },
+                previewTimeOfDay = uiState.previewTimeOfDay,
+                onPreviewTimeOfDay = { viewModel.setPreviewTimeOfDay(it) },
+                onCycleCondition = { viewModel.cycleForcedWeatherCondition() },
+                onRefresh = { viewModel.refreshWeather() },
+                onClose = { viewModel.toggleWeatherScreen() },
+            )
+        }
+
+        if (uiState.showBackgroundScreen) {
+            BackgroundScreen(
+                selection = uiState.background,
+                onSelect = { viewModel.setBackground(it) },
+                onClose = { viewModel.toggleBackgroundScreen() },
+                ambientWeatherOn = uiState.ambientWeatherEnabled,
+            )
         }
 
         if (uiState.showNavScreen) {

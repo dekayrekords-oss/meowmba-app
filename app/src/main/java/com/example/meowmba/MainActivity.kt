@@ -117,10 +117,13 @@ class MainActivity : ComponentActivity() {
                 }
 
                 // Handle system back button
+                // Every full-screen overlay must be listed here, or back leaves the app
+                // from a page that clearly has somewhere to go back TO.
                 BackHandler(
                     enabled = uiState.showSettings || uiState.showModelManager || uiState.isChatExpanded ||
                         uiState.showTiles || uiState.showPrivacyDashboard || uiState.showMemoryScreen ||
-                        uiState.showAgentsScreen
+                        uiState.showAgentsScreen || uiState.showBackgroundScreen ||
+                        uiState.showWeatherScreen || uiState.showNavScreen
                 ) {
                     when {
                         uiState.showSettings -> viewModel.toggleSettings()
@@ -128,6 +131,9 @@ class MainActivity : ComponentActivity() {
                         uiState.showPrivacyDashboard -> viewModel.togglePrivacyDashboard()
                         uiState.showMemoryScreen -> viewModel.toggleMemoryScreen()
                         uiState.showAgentsScreen -> viewModel.toggleAgentsScreen()
+                        uiState.showBackgroundScreen -> viewModel.toggleBackgroundScreen()
+                        uiState.showWeatherScreen -> viewModel.toggleWeatherScreen()
+                        uiState.showNavScreen -> viewModel.toggleNavScreen()
                         uiState.isChatExpanded -> viewModel.toggleChat()
                         uiState.showTiles -> viewModel.onAvatarZoneClick(com.example.meowmba.ui.companion.AvatarZone.BACKGROUND)
                     }

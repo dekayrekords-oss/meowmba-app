@@ -79,6 +79,42 @@ data class CompanionState(
      */
     val weather: com.example.meowmba.core.weather.WeatherNow? = null,
 
+    /**
+     * Last known sky for the *ambient* scene, refreshed on a timer and independent of the
+     * card. Dismissing the card clears [weather]; it must not stop the weather playing.
+     */
+    val ambientWeather: com.example.meowmba.core.weather.WeatherNow? = null,
+
+    /**
+     * Keep the weather animation running all the time, matching the real conditions and the
+     * real time of day, instead of only while the card is up.
+     */
+    val ambientWeatherEnabled: Boolean = false,
+
+    /**
+     * Forces the scene's time of day while previewing, or null to follow the real clock.
+     *
+     * Without this the only way to see the dawn or midday sky is to be awake at dawn or
+     * midday, which makes half the work unreviewable.
+     */
+    val previewTimeOfDay: com.example.meowmba.core.weather.TimeOfDay? = null,
+
+    /**
+     * The inventory item the conversation is currently about, or null.
+     *
+     * Set by any inventory tool that lands on a single item, so the companion can put the
+     * thing on screen and offer what to do with it instead of describing it in prose.
+     */
+    val inventoryItem: com.example.meowmba.core.inventory.InventoryItem? = null,
+
+    /** Weather page: readings, the ambient switch, moon, preview controls. */
+    val showWeatherScreen: Boolean = false,
+
+    /** Background card: what is painted behind the companion. */
+    val background: com.example.meowmba.core.background.BackgroundSelection =
+        com.example.meowmba.core.background.BackgroundSelection(),
+    val showBackgroundScreen: Boolean = false,
+
     /** NAV card: offline region packs, online fallback, saved places. */
     val showNavScreen: Boolean = false,
     /** When true, nothing new is written to memory (privacy control). */

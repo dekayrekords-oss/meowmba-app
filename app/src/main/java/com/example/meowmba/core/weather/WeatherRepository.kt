@@ -43,8 +43,16 @@ class WeatherRepository(private val context: Context) {
      *
      * Never throws; a failure comes back as [Result.Failed] with something worth saying out
      * loud rather than a stack trace.
+     *
+     * [surface] controls whether the reading is published to [latest], which is what makes
+     * the card appear. Ambient mode refreshes the sky every quarter hour and must NOT pop a
+     * card open each time, so it passes `false` and reads the returned [Result.Ok] instead.
      */
-    suspend fun fetch(lat: Double? = null, lon: Double? = null): Result =
+    suspend fun fetch(
+        lat: Double? = null,
+        lon: Double? = null,
+        surface: Boolean = true,
+    ): Result =
         withContext(Dispatchers.IO) {
             val fix = if (lat != null && lon != null) {
                 CurrentLocation.Fix(lat, lon)
@@ -74,8 +82,12 @@ class WeatherRepository(private val context: Context) {
                     ?: return@withContext Result.Failed("I couldn't read the weather response.")
                 // Logged on SUCCESS too. Only logging failures meant "no card appeared" was
                 // indistinguishable from "the fetch never happened".
-                Log.i(TAG, "weather ok: ${parsed.condition} ${parsed.temperatureF}F -> card")
-                _latest.value = parsed
+                Log.i(
+                    TAG,
+                    "weather ok: ${parsed.condition} ${parsed.temperatureF}F " +
+                        if (surface) "-> card" else "-> ambient only",
+                )
+                if (surface) _latest.value = parsed
                 Result.Ok(parsed)
             } catch (e: Exception) {
                 Log.w(TAG, "weather fetch failed: ${e.message}")

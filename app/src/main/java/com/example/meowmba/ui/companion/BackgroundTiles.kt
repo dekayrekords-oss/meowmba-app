@@ -18,6 +18,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 /**
  * Tile overlay for Memba ecosystem applications.
@@ -80,7 +81,7 @@ fun TileItem(item: MembaTile, onClick: () -> Unit) {
         modifier = Modifier
             .clip(RoundedCornerShape(16.dp))
             .background(Color(0xFF2C2C2C))
-            .padding(16.dp)
+            .padding(horizontal = 8.dp, vertical = 16.dp)
             .clickable(onClick = onClick)
     ) {
         Icon(
@@ -90,10 +91,12 @@ fun TileItem(item: MembaTile, onClick: () -> Unit) {
             modifier = Modifier.size(40.dp)
         )
         Spacer(modifier = Modifier.height(8.dp))
+        // One line: "Background" wrapping to "Backgroun / d" made the whole grid look broken.
         Text(
             text = item.name,
-            style = MaterialTheme.typography.labelMedium,
-            color = Color.White
+            style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp),
+            color = Color.White,
+            maxLines = 1
         )
     }
 }
@@ -109,5 +112,6 @@ val tileItems = listOf(
     MembaTile("Privacy", Icons.Default.Security, Color(0xFF3FB950)),
     MembaTile("NAV", Icons.Default.Navigation, Color(0xFFFF6D00)),
     MembaTile("Weather", Icons.Default.WbSunny, Color(0xFF29B6F6)),
+    MembaTile("Background", Icons.Default.Wallpaper, Color(0xFFEC407A)),
     MembaTile("Settings", Icons.Default.Settings, Color(0xFFBDBDBD))
 )

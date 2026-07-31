@@ -187,6 +187,12 @@ class CompanionViewModel(
     private var responseJob: Job? = null
     private var followUpJob: Job? = null
 
+    /** Ambient sky refresh loop; null when the ambient scene is off. */
+    private var ambientWeatherJob: Job? = null
+
+    /** The turn currently being captured, so a new one can cancel it cleanly. */
+    private var utteranceCapture: com.example.meowmba.core.audio.UtteranceCapture? = null
+
     /** One bounded retry when the wake mic was busy at re-arm time. */
     private var wakeRearmJob: Job? = null
     private var mouthDecayJob: Job? = null
@@ -226,6 +232,14 @@ class CompanionViewModel(
                     ?.takeIf { it in availableModelProviders(storage.context) }
                     ?: defaultModelLabel(storage.context)
             )
+            _uiState.value = _uiState.value.copy(
+                ambientWeatherEnabled = storage.getBooleanPreference(KEY_AMBIENT_WEATHER, false),
+                background = com.example.meowmba.core.background.BackgroundSelection.parse(
+                    kind = storage.getPreference(KEY_BACKGROUND_KIND),
+                    value = storage.getPreference(KEY_BACKGROUND_VALUE),
+                    dim = storage.getPreference(KEY_BACKGROUND_DIM),
+                ),
+            )
         }
         // Any weather fetch — including the agent's tool call — surfaces the card and moves
         // the cat's expression to match the sky.
@@ -234,12 +248,22 @@ class CompanionViewModel(
                 repo.latest.collect { w ->
                     _uiState.value = _uiState.value.copy(
                         weather = w,
+                        // A real reading is also the freshest thing the ambient scene could
+                        // ask for, so it feeds both. Kept when the card is dismissed.
+                        ambientWeather = w ?: _uiState.value.ambientWeather,
                         emotion = w?.let { runCatching {
                             CompanionEmotion.valueOf(it.catEmotionName())
                         }.getOrDefault(_uiState.value.emotion) } ?: _uiState.value.emotion,
                     )
                 }
             }
+        }
+        // Ambient sky, if it was left on last session.
+        if (_uiState.value.ambientWeatherEnabled ||
+            _uiState.value.background.kind ==
+            com.example.meowmba.core.background.BackgroundKind.LIVE_WEATHER
+        ) {
+            startAmbientWeather()
         }
 
         matcher = WakePhraseMatcher(_uiState.value.name)
@@ -1928,9 +1952,349 @@ class CompanionViewModel(
         )
     }
 
-    /** Dismisses the weather card. */
+    /**
+     * Opens the Weather page and refreshes the reading behind it.
+     *
+     * The fetch surfaces normally, so the card is also there when the page is closed —
+     * the page is where you configure the weather, the card is where you glance at it.
+     */
+    fun toggleWeatherScreen() {
+        val opening = !_uiState.value.showWeatherScreen
+        _uiState.value = _uiState.value.copy(showWeatherScreen = opening)
+        if (opening) refreshWeather()
+    }
+
+    /** Fetches current conditions; silent on failure, the page says so itself. */
+    fun refreshWeather() {
+        val repo = weatherRepository ?: return
+        viewModelScope.launch { repo.fetch() }
+    }
+
+    /** Sets (or clears, with null) the forced time of day used by the scene. */
+    fun setPreviewTimeOfDay(tod: com.example.meowmba.core.weather.TimeOfDay?) {
+        _uiState.value = _uiState.value.copy(previewTimeOfDay = tod)
+    }
+
+    /**
+     * Steps the scene's forced time of day: Auto → Dawn → Day → Dusk → Night → Auto.
+     *
+     * Not persisted. It is a way to look at the sky you are not currently standing under,
+     * and a forced midday that survived a restart would just look like a bug.
+     */
+    fun cyclePreviewTimeOfDay() {
+        val order = com.example.meowmba.core.weather.TimeOfDay.entries
+        val current = _uiState.value.previewTimeOfDay
+        val next = when {
+            current == null -> order.first()
+            current == order.last() -> null
+            else -> order[order.indexOf(current) + 1]
+        }
+        _uiState.value = _uiState.value.copy(previewTimeOfDay = next)
+    }
+
+    /** Dismisses the weather card. The ambient scene, if on, keeps playing. */
     fun dismissWeatherCard() {
         weatherRepository?.clear()
+    }
+
+    // ── Ambient weather ─────────────────────────────────────────────────────
+
+    /**
+     * Keeps the weather animation on screen permanently, matching the real sky (persisted).
+     *
+     * Switching it on fetches immediately so the change is visible now rather than at the
+     * next quarter hour — a setting that appears to do nothing for fifteen minutes reads as
+     * a broken setting.
+     */
+    fun setAmbientWeatherEnabled(enabled: Boolean) {
+        _uiState.value = _uiState.value.copy(ambientWeatherEnabled = enabled)
+        secureStorage?.saveBooleanPreference(KEY_AMBIENT_WEATHER, enabled)
+        if (enabled) {
+            startAmbientWeather()
+        } else if (_uiState.value.background.kind !=
+            com.example.meowmba.core.background.BackgroundKind.LIVE_WEATHER
+        ) {
+            // The live-weather background needs the same feed, so only stop when nothing
+            // else is using it.
+            ambientWeatherJob?.cancel()
+            ambientWeatherJob = null
+        }
+    }
+
+    /**
+     * Refreshes the ambient sky now and every [AMBIENT_WEATHER_INTERVAL_MS].
+     *
+     * Fetches with `surface = false`: the card must not reopen itself every quarter hour.
+     * A failed fetch keeps the last good reading rather than blanking the scene — stale
+     * weather looks better than no weather, and the sky rarely changes in one interval.
+     */
+    private fun startAmbientWeather() {
+        if (ambientWeatherJob?.isActive == true) return
+        val repo = weatherRepository ?: return
+        ambientWeatherJob = viewModelScope.launch {
+            while (true) {
+                when (val r = repo.fetch(surface = false)) {
+                    is com.example.meowmba.core.weather.WeatherRepository.Result.Ok ->
+                        _uiState.value = _uiState.value.copy(ambientWeather = r.weather)
+                    is com.example.meowmba.core.weather.WeatherRepository.Result.Failed ->
+                        android.util.Log.i("Weather", "ambient refresh failed: ${r.reason}")
+                }
+                kotlinx.coroutines.delay(AMBIENT_WEATHER_INTERVAL_MS)
+            }
+        }
+    }
+
+    // ── Inventory ───────────────────────────────────────────────────────────
+
+    /**
+     * Answers a parsed inventory request out loud, and puts the item on screen.
+     *
+     * The shape of every branch is the same on purpose: say the short answer, show the
+     * record. Showing it is what makes the next turn work — "sell it" has an obvious
+     * subject once the thing is on screen, and the user can see the companion picked the
+     * right one before anything is changed.
+     *
+     * Nothing destructive happens here. Selling and deleting go through the card's own
+     * buttons (or the approval-gated tools), because a mishear must never be able to
+     * delete a record of something the user owns.
+     */
+    private suspend fun answerInventory(
+        request: com.example.meowmba.core.inventory.InventoryRequestParser.Request,
+    ) {
+        val client = inventoryClient ?: run {
+            speak("I can't reach Meow Inventory in this build.")
+            return
+        }
+        if (!client.isAvailable()) {
+            speak("Meow Inventory isn't installed on this phone.")
+            return
+        }
+        val json = org.json.JSONObject()
+
+        suspend fun run(op: String, args: org.json.JSONObject): String? =
+            when (val r = client.op(op, args)) {
+                is com.example.meowmba.core.inventory.InventoryBridgeClient.Result.Ok -> r.json
+                is com.example.meowmba.core.inventory.InventoryBridgeClient.Result.Failed -> {
+                    speak(r.reason)
+                    null
+                }
+            }
+
+        when (request) {
+            is com.example.meowmba.core.inventory.InventoryRequestParser.Request.Open -> {
+                openInventoryApp(null)
+                speak("Opening Meow Inventory.")
+            }
+
+            is com.example.meowmba.core.inventory.InventoryRequestParser.Request.Stats -> {
+                val body = run("stats", json) ?: return
+                val j = org.json.JSONObject(body)
+                val value = j.optDouble("estimated_value", 0.0)
+                speak(
+                    buildString {
+                        append("You've got ${j.optInt("total_items")} things logged")
+                        val forSale = j.optInt("for_sale")
+                        if (forSale > 0) append(", $forSale of them for sale")
+                        if (value > 0) {
+                            append(", worth about ")
+                            append(
+                                com.example.meowmba.core.inventory.InventoryItem
+                                    .trimNumber(value)
+                            )
+                            append(" dollars")
+                        }
+                        append(".")
+                    }
+                )
+            }
+
+            is com.example.meowmba.core.inventory.InventoryRequestParser.Request.Search -> {
+                val body = run(
+                    "search",
+                    json.put("query", request.query).put("filter", request.filter),
+                ) ?: return
+                val items = com.example.meowmba.core.inventory.InventoryItem.listFrom(body)
+                when {
+                    items.isEmpty() -> speak(
+                        if (request.query.isBlank()) "There's nothing in your inventory yet."
+                        else "I don't see ${request.query} in your inventory."
+                    )
+                    // One hit: show it and offer the next move, which is the whole point of
+                    // pulling the item up rather than reading its fields aloud.
+                    items.size == 1 -> {
+                        client.show(items.first())
+                        speak("${items.first().summary()}. What do you want to do with it?")
+                    }
+                    else -> {
+                        client.show(items.first())
+                        speak(
+                            "You've got ${items.size}: " +
+                                items.take(4).joinToString(", ") { it.name } +
+                                if (items.size > 4) ", and more." else "."
+                        )
+                    }
+                }
+            }
+
+            is com.example.meowmba.core.inventory.InventoryRequestParser.Request.Add -> {
+                val body = run("create", json.put("name", request.name)) ?: return
+                val item = com.example.meowmba.core.inventory.InventoryItem
+                    .from(org.json.JSONObject(body))
+                client.show(item)
+                speak("Added ${item.name}. Want to set a price or a category?")
+            }
+
+            // The rest are changes: find the item, show it, and let the user commit. The
+            // card's buttons do the write.
+            is com.example.meowmba.core.inventory.InventoryRequestParser.Request.ListForSale -> {
+                val item = findAndShow(client, request.name) ?: return
+                if (request.price != null) {
+                    val body = run(
+                        "list_for_sale",
+                        org.json.JSONObject().put("id", item.id).put("price", request.price),
+                    ) ?: return
+                    client.show(
+                        com.example.meowmba.core.inventory.InventoryItem
+                            .from(org.json.JSONObject(body))
+                    )
+                    speak(
+                        "Listed ${item.name} at " +
+                            com.example.meowmba.core.inventory.InventoryItem
+                                .trimNumber(request.price) + " dollars."
+                    )
+                } else {
+                    speak("Here's ${item.name}. Tap Sell to set an asking price.")
+                }
+            }
+
+            is com.example.meowmba.core.inventory.InventoryRequestParser.Request.MarkSold -> {
+                val item = findAndShow(client, request.name) ?: return
+                val args = org.json.JSONObject().put("id", item.id)
+                request.price?.let { args.put("price", it) }
+                val body = run("mark_sold", args) ?: return
+                client.show(
+                    com.example.meowmba.core.inventory.InventoryItem
+                        .from(org.json.JSONObject(body))
+                )
+                speak("Marked ${item.name} as sold.")
+            }
+
+            is com.example.meowmba.core.inventory.InventoryRequestParser.Request.Rename -> {
+                val item = findAndShow(client, request.name) ?: return
+                val body = run(
+                    "update",
+                    org.json.JSONObject().put("id", item.id).put("new_name", request.newName),
+                ) ?: return
+                client.show(
+                    com.example.meowmba.core.inventory.InventoryItem
+                        .from(org.json.JSONObject(body))
+                )
+                speak("Renamed it to ${request.newName}.")
+            }
+
+            is com.example.meowmba.core.inventory.InventoryRequestParser.Request.Delete -> {
+                val item = findAndShow(client, request.name) ?: return
+                // Shown, not deleted: confirmation is a tap on the card, never a
+                // transcript the recognizer might have got wrong.
+                speak("This is ${item.name}. Tap Delete on the card if you're sure.")
+            }
+        }
+    }
+
+    /** Resolves a spoken name to one item and puts it on screen, or explains the miss. */
+    private suspend fun findAndShow(
+        client: com.example.meowmba.core.inventory.InventoryBridgeClient,
+        name: String,
+    ): com.example.meowmba.core.inventory.InventoryItem? {
+        val result = client.op("get", org.json.JSONObject().put("name", name))
+        return when (result) {
+            is com.example.meowmba.core.inventory.InventoryBridgeClient.Result.Failed -> {
+                speak("I don't see $name in your inventory.")
+                null
+            }
+            is com.example.meowmba.core.inventory.InventoryBridgeClient.Result.Ok -> {
+                val item = com.example.meowmba.core.inventory.InventoryItem
+                    .from(org.json.JSONObject(result.json))
+                client.show(item)
+                item
+            }
+        }
+    }
+
+    /**
+     * Runs one inventory operation from the item card's buttons.
+     *
+     * The card talks to the bridge directly rather than through the tool layer: these are
+     * the user's own taps, already unambiguous about which item they mean, so routing them
+     * back through model-facing tools and an approval prompt would only add a dialog
+     * between a button and the thing it says it does.
+     */
+    fun runInventoryAction(op: String, args: Map<String, String>) {
+        val client = inventoryClient ?: return
+        viewModelScope.launch {
+            val payload = org.json.JSONObject().apply {
+                args.forEach { (k, v) -> put(k, v) }
+            }
+            val result = if (op == "delete") client.op(op, payload)
+            else client.itemOp(op, payload)
+            when (result) {
+                is com.example.meowmba.core.inventory.InventoryBridgeClient.Result.Failed ->
+                    _uiState.value = _uiState.value.copy(captionText = result.reason)
+                is com.example.meowmba.core.inventory.InventoryBridgeClient.Result.Ok ->
+                    if (op == "delete") {
+                        client.show(null)
+                        speak("Deleted.")
+                    }
+            }
+        }
+    }
+
+    fun dismissInventoryCard() {
+        inventoryClient?.show(null)
+    }
+
+    /** Opens Meow Inventory, on the given item when the app can deep-link to it. */
+    fun openInventoryApp(name: String?) {
+        val ctx = secureStorage?.context ?: return
+        val intent = ctx.packageManager
+            .getLaunchIntentForPackage(com.example.meowmba.core.inventory.InventoryBridgeClient.PKG)
+            ?.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            ?: run {
+                _uiState.value = _uiState.value.copy(
+                    captionText = "Meow Inventory isn't installed on this phone.",
+                )
+                return
+            }
+        name?.takeIf { it.isNotBlank() }?.let {
+            intent.data = android.net.Uri.parse(
+                "meowinventory://item?name=${android.net.Uri.encode(it)}"
+            )
+        }
+        runCatching { ctx.startActivity(intent) }
+    }
+
+    // ── Background ──────────────────────────────────────────────────────────
+
+    fun toggleBackgroundScreen() {
+        _uiState.value = _uiState.value.copy(
+            showBackgroundScreen = !_uiState.value.showBackgroundScreen
+        )
+    }
+
+    /** Applies and persists a background choice. */
+    fun setBackground(selection: com.example.meowmba.core.background.BackgroundSelection) {
+        _uiState.value = _uiState.value.copy(background = selection)
+        secureStorage?.let {
+            it.savePreference(KEY_BACKGROUND_KIND, selection.kind.name)
+            it.savePreference(KEY_BACKGROUND_VALUE, selection.value)
+            it.savePreference(KEY_BACKGROUND_DIM, selection.dimPercent.toString())
+        }
+        if (selection.kind == com.example.meowmba.core.background.BackgroundKind.LIVE_WEATHER) {
+            startAmbientWeather()
+        } else if (!_uiState.value.ambientWeatherEnabled) {
+            ambientWeatherJob?.cancel()
+            ambientWeatherJob = null
+        }
     }
 
     fun toggleNavScreen() {
@@ -2023,6 +2387,16 @@ class CompanionViewModel(
         private const val KEY_BACKGROUND_LISTENING = "background_listening"
         private const val KEY_SELECTED_MODEL = "selected_model"
         private const val KEY_USB_AUTO_BRIDGE = "usb_auto_bridge"
+        private const val KEY_AMBIENT_WEATHER = "ambient_weather"
+        private const val KEY_BACKGROUND_KIND = "background_kind"
+        private const val KEY_BACKGROUND_VALUE = "background_value"
+        private const val KEY_BACKGROUND_DIM = "background_dim"
+
+        /**
+         * Ambient sky refresh. Fifteen minutes is roughly how often Open-Meteo's own
+         * current-conditions block changes, so polling faster only costs battery.
+         */
+        private const val AMBIENT_WEATHER_INTERVAL_MS = 15 * 60 * 1000L
         private const val DEFAULT_VISION_MODEL = "gemma4:12b-it-qat"
         private const val DEFAULT_RETENTION_DAYS = 90
         private const val FOLLOW_UP_TIMEOUT_MS = 8000L
