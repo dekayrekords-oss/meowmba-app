@@ -34,7 +34,12 @@ class EmailSendTool(private val context: Context) : Tool {
         val body = args["body"] ?: ""
 
         val intent = Intent(Intent.ACTION_SENDTO).apply {
-            data = android.net.Uri.parse("mailto:$to")
+            // Subject and body go in the URI, not only in the extras. Gmail's external
+            // compose activity honours the mailto: query string and IGNORES EXTRA_TEXT
+            // for ACTION_SENDTO — measured on device: the recipient arrived and the
+            // message body was silently empty. The extras stay for clients that read
+            // them instead.
+            data = android.net.Uri.parse(mailtoUri(to, subject, body))
             putExtra(Intent.EXTRA_SUBJECT, subject)
             putExtra(Intent.EXTRA_TEXT, body)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -45,6 +50,30 @@ class EmailSendTool(private val context: Context) : Tool {
         } else {
             return ToolResult.Failure("No email app found on this device.")
         }
+    }
+
+    companion object {
+        /**
+         * Builds a `mailto:` URI with the subject and body encoded into the query.
+         *
+         * Pure and JVM-testable — android.net.Uri is not mocked in unit tests, and this
+         * is the part with the actual rules in it: RFC 6068 wants percent-encoding, and
+         * URLEncoder emits form encoding, whose `+` for a space arrives in the composer
+         * as a literal plus sign.
+         */
+        fun mailtoUri(to: String, subject: String, body: String): String = buildString {
+            append("mailto:").append(to.trim())
+            val query = buildList {
+                subject.takeIf { it.isNotBlank() }?.let { add("subject=" + encode(it)) }
+                body.takeIf { it.isNotBlank() }?.let { add("body=" + encode(it)) }
+            }
+            if (query.isNotEmpty()) append('?').append(query.joinToString("&"))
+        }
+
+        private fun encode(value: String): String =
+            java.net.URLEncoder.encode(value, "UTF-8")
+                .replace("+", "%20")
+                .replace("%7E", "~")
     }
 }
 

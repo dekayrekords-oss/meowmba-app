@@ -22,6 +22,40 @@ object AgentRouter {
         val title: String
     )
 
+    /** Anything that reads as an address is treated as the recipient. */
+    private val EMAIL_ADDRESS = Regex("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}")
+
+    /** Words that make an address a request to write, rather than a mention of one. */
+    private val COMPOSE_CUES = listOf(
+        "email", "e-mail", "message", "write", "send", "compose", "tell", "reply",
+    )
+
+    /** Where the message text starts, longest first so the specific forms win. */
+    private val BODY_MARKERS = listOf(
+        "that says ", "which says ", "that reads ", "with the message ",
+        "saying that ", "saying ", "says ", "tell them ", "telling them ",
+    ).sortedByDescending { it.length }
+
+    /**
+     * Where the subject starts. Searched anywhere in the sentence, not just at
+     * the start — "email X with the subject Y" names it mid-sentence. ("With the
+     * subject " and "subject " end at the same place, so the short form suffices.)
+     */
+    private const val SUBJECT_MARKER = "subject "
+
+    /**
+     * Where an extracted value ends and the rest of the sentence begins.
+     *
+     * " to " is here because a message request usually ends by naming the recipient.
+     */
+    private val BOUNDARIES = listOf(
+        " and ", " then ", " so that ", " so i ", ", ", " please", " for me",
+        " after that", " as well", " to ",
+    )
+
+    /** Longer than this is a sentence, not the name of an app. */
+    private const val MAX_APP_NAME_WORDS = 3
+
     fun route(text: String): AgentIntent? {
         val raw = text.trim()
         val normalized = WakePhraseMatcher.normalize(raw)
@@ -78,14 +112,22 @@ object AgentRouter {
             return AgentIntent("research", "web.search", mapOf("query" to query), "web search: $query")
         }
 
-        // Email
+        // Email. Checked BEFORE the phone section, and by content rather than by
+        // sentence-opening prefix: "open gmail and write a message that says hi to
+        // someone@example.com" starts with "open", so a prefix-only rule handed the whole
+        // sentence to the app launcher and it reported no app by that name.
+        composeEmail(raw)?.let { return it }
         extractAfter(raw, listOf("send an email to ", "send email to ", "email "))?.let { target ->
-            return AgentIntent("email", "email.send", mapOf("to" to target, "subject" to "", "body" to ""),
-                "send email to $target")
+            val to = boundTarget(target) ?: return@let
+            return AgentIntent("email", "email.send", mapOf("to" to to, "subject" to "", "body" to ""),
+                "send email to $to")
         }
         extractAfter(raw, listOf("draft an email to ", "draft email to "))?.let { target ->
-            return AgentIntent("email", "email.draft", mapOf("to" to target),
-                "draft email to $target")
+            // Same trailing-clause rule as app names: "draft email to bob and then
+            // relax" is addressed to bob, not to "bob and then relax".
+            val to = boundTarget(target) ?: return@let
+            return AgentIntent("email", "email.draft", mapOf("to" to to),
+                "draft email to $to")
         }
 
         // Calendar
@@ -149,7 +191,13 @@ object AgentRouter {
             return AgentIntent("phone", "phone.open_url", mapOf("url" to url), "open $url")
         }
         extractAfter(raw, listOf("open the app ", "open app ", "launch the app ",
-            "launch app ", "launch ", "start the app ", "open "))?.let { name ->
+            "launch app ", "launch ", "start the app ", "open "))?.let { rest ->
+            // Bounded: an app name is a name, not the rest of the sentence.
+            val name = boundTarget(rest) ?: return@let
+            // More than a few words is a sentence, not an app — "open up about your
+            // feelings" must stay conversation rather than becoming a launch request
+            // for an app called "up about your feelings".
+            if (name.split(' ').size > MAX_APP_NAME_WORDS) return@let
             return AgentIntent("phone", "phone.launch_app", mapOf("name" to name), "open $name")
         }
 
@@ -180,6 +228,78 @@ object AgentRouter {
         }
 
         return null
+    }
+
+    /**
+     * An email compose request, wherever the address sits in the sentence.
+     *
+     * People say "open gmail and write a message that says hi to X" — one sentence that
+     * opens an app AND writes a message. `email.send` does both: it opens the mail app
+     * with the recipient and body already filled in, so this is one action, not two.
+     *
+     * Saying "draft" keeps the word's original meaning: `email.draft` saves a file in
+     * the workspace instead of opening the composer.
+     */
+    private fun composeEmail(raw: String): AgentIntent? {
+        val address = EMAIL_ADDRESS.find(raw)?.value ?: return null
+        val lower = raw.lowercase()
+        // An address alone is not a request to write — "my email is x@y.com" isn't.
+        if (COMPOSE_CUES.none { lower.contains(it) }) return null
+
+        val bodyMatch = BODY_MARKERS.asSequence()
+            .mapNotNull { marker ->
+                val idx = lower.indexOf(marker)
+                if (idx < 0) null else idx to raw.substring(idx + marker.length)
+            }
+            .firstOrNull()
+        val body = bodyMatch?.second
+            // The address often trails the message ("says hi to x@y.com") — it is the
+            // recipient, not part of what to say.
+            ?.replace(EMAIL_ADDRESS, "")
+            ?.trim()
+            ?.removeSuffix(" to")
+            ?.trim()
+            ?.trim('"', '\'', '.', ',')
+            .orEmpty()
+        val bodyStart = bodyMatch?.first ?: raw.length
+
+        // The subject search stops where the message begins: "saying the subject is
+        // green" is a message ABOUT a subject, not a subject.
+        val subject = lower.indexOf(SUBJECT_MARKER)
+            .takeIf { it >= 0 && it < bodyStart }
+            ?.let { idx ->
+                val rest = raw.substring(idx + SUBJECT_MARKER.length)
+                val cut = (BODY_MARKERS + BOUNDARIES)
+                    .mapNotNull { m -> rest.lowercase().indexOf(m).takeIf { i -> i > 0 } }
+                    .minOrNull() ?: rest.length
+                rest.substring(0, cut).trim().trim('"', '\'', '.', ',')
+            }
+            .orEmpty()
+
+        val drafting = lower.contains("draft")
+        return AgentIntent(
+            agentId = "email",
+            toolId = if (drafting) "email.draft" else "email.send",
+            args = mapOf("to" to address, "subject" to subject, "body" to body),
+            title = if (drafting) "draft email to $address" else "email $address",
+        )
+    }
+
+    /**
+     * Cuts an extracted value where the sentence moves on.
+     *
+     * Every prefix extractor here used to return the whole remainder of the input, which
+     * is right for a file path at the end of a sentence and wrong for everything else:
+     * one trailing clause turned "gmail" into "gmail and write a message that says hi to
+     * someone@example.com", and the lookup could only fail.
+     */
+    private fun boundTarget(raw: String): String? {
+        var value = raw.trim()
+        BOUNDARIES.forEach { marker ->
+            val idx = value.lowercase().indexOf(marker)
+            if (idx > 0) value = value.substring(0, idx)
+        }
+        return value.trim().trim(',', '.', '!', '?').trim().ifBlank { null }
     }
 
     /** Case-insensitive prefix match; returns the RAW remainder (punctuation intact). */
