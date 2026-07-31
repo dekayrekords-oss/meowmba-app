@@ -77,7 +77,10 @@ import com.example.meowmba.core.memory.EmbeddingInterface
 import com.example.meowmba.core.memory.LocalHashEmbedder
 import com.example.meowmba.core.memory.MemoryCommandParser
 import com.example.meowmba.core.memory.MemoryExporter
+import com.example.meowmba.core.memory.IpcMetaMemoryConnector
 import com.example.meowmba.core.memory.MemoryRepository
+import com.example.meowmba.core.memory.MetaMemoryConnector
+import com.example.meowmba.core.memory.NoOpMetaMemoryConnector
 import com.example.meowmba.core.memory.PromptBuilder
 import com.example.meowmba.core.memory.RecallEngine
 import com.example.meowmba.core.memory.RecallResult
@@ -124,7 +127,9 @@ class CompanionViewModel(
     private val ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO,
     /** CameraX capture for the vision path; null in tests → honest "no camera". */
     private val visionManager: com.example.meowmba.core.vision.VisionManager? = null,
-    private val notificationHelper: NotificationHelper? = null
+    private val notificationHelper: NotificationHelper? = null,
+    /** MetaMemory ecosystem link. Injected in tests; see [metaMemory] for the default. */
+    private val metaMemoryConnector: MetaMemoryConnector? = null
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(CompanionState())
     val uiState = _uiState.asStateFlow()
@@ -156,6 +161,21 @@ class CompanionViewModel(
         secureStorage?.context?.let {
             com.example.meowmba.core.inventory.InventoryBridgeClient(it)
         }
+    }
+
+    /**
+     * MetaMemory ecosystem link. Glasses captures arrive through
+     * `MeowmbaRuntimeService` writing Room directly, so the connector's live
+     * job today is answering "is the producer app even installed" — honestly,
+     * via the no-op when there is no context/repository to check with.
+     */
+    internal val metaMemory: MetaMemoryConnector by lazy {
+        metaMemoryConnector
+            ?: if (secureStorage?.context != null && memoryRepository != null) {
+                IpcMetaMemoryConnector(secureStorage!!.context, memoryRepository!!)
+            } else {
+                NoOpMetaMemoryConnector()
+            }
     }
 
     /** Model downloads into app-private storage, HF token from encrypted prefs. */
@@ -2624,7 +2644,17 @@ class CompanionViewModel(
     }
 
     fun toggleMemoryScreen() {
-        _uiState.value = _uiState.value.copy(showMemoryScreen = !_uiState.value.showMemoryScreen)
+        val opening = !_uiState.value.showMemoryScreen
+        _uiState.value = _uiState.value.copy(showMemoryScreen = opening)
+        if (opening) refreshMetaMemoryLink()
+    }
+
+    /** The link badge is checked, never assumed: true only if MetaMemory is installed. */
+    private fun refreshMetaMemoryLink() {
+        viewModelScope.launch {
+            val linked = runCatching { metaMemory.isAvailable() }.getOrDefault(false)
+            _uiState.value = _uiState.value.copy(metaMemoryLinked = linked)
+        }
     }
 
     /** Full-text search on the Memory screen. Blank query clears search mode. */

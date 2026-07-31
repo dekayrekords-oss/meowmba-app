@@ -1,7 +1,9 @@
 package com.example.meowmba
 
 import android.content.Context
+import com.example.meowmba.core.database.MemoryEntity
 import com.example.meowmba.core.memory.MemoryRepository
+import com.example.meowmba.core.memory.MetaMemoryConnector
 import com.example.meowmba.core.security.SecureStorageManager
 import com.example.meowmba.ui.companion.CompanionEmotion
 import com.example.meowmba.ui.companion.CompanionViewModel
@@ -14,6 +16,8 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.mockito.Mockito.`when`
@@ -53,5 +57,27 @@ class CompanionViewModelTest {
         viewModel.onMicClick()
         assertEquals(InteractionState.LISTENING, viewModel.uiState.value.interactionState)
         assertEquals(CompanionEmotion.ALERT, viewModel.uiState.value.emotion)
+    }
+
+    @Test
+    fun `opening the memory screen reports a real MetaMemory link`() = runTest {
+        val viewModel = CompanionViewModel(
+            metaMemoryConnector = object : MetaMemoryConnector {
+                override suspend fun isAvailable() = true
+                override suspend fun push(memories: List<MemoryEntity>) = Result.success(0)
+                override suspend fun pull() = Result.success(emptyList<MemoryEntity>())
+            }
+        )
+        assertFalse(viewModel.uiState.value.metaMemoryLinked)
+        viewModel.toggleMemoryScreen()
+        assertTrue(viewModel.uiState.value.metaMemoryLinked)
+    }
+
+    @Test
+    fun `the MetaMemory link is reported false when there is no connector to ask`() = runTest {
+        // No storage/repository → the honest no-op connector → never claims a link.
+        val viewModel = CompanionViewModel()
+        viewModel.toggleMemoryScreen()
+        assertFalse(viewModel.uiState.value.metaMemoryLinked)
     }
 }

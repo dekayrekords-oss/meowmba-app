@@ -70,6 +70,8 @@ data class CompanionState(
     /** FTS search results on the Memory screen; null = not searching. */
     val memorySearchResults: List<MemoryEntity>? = null,
     val showMemoryScreen: Boolean = false,
+    /** True only when the MetaMemory glasses app is actually installed — never assumed. */
+    val metaMemoryLinked: Boolean = false,
     /**
      * Weather to show as a card, or null for none.
      *

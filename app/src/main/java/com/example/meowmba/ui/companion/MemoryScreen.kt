@@ -88,6 +88,18 @@ fun MemoryScreen(
                 color = Color.Gray,
                 fontSize = 12.sp
             )
+            // The glasses link is a fact about what is installed, not a promise:
+            // when linked, captures pushed over the runtime bridge already appear
+            // in the list below (tagged meta_glasses) with no sync button at all.
+            Text(
+                if (state.metaMemoryLinked) {
+                    "MetaMemory linked — glasses captures appear here automatically"
+                } else {
+                    "MetaMemory app not installed"
+                },
+                color = if (state.metaMemoryLinked) Color(0xFF58A6FF) else Color.Gray,
+                fontSize = 12.sp
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 

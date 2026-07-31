@@ -66,10 +66,14 @@ failures from your change.
      (→ Room, tagged `meta_glasses`/`meta_memory`), `PULL_MEMORIES=5`.
      Caller allowlist by UID→package: self, `com.meow.metamemory`,
      `com.meow.inventory`.
-   - **OPEN THREAD — not yet wired:** `IpcMetaMemoryConnector` implements
-     `MetaMemoryConnector` but nothing instantiates it — `MemoryRepository`
-     and the memory UI still have no connector injected. If you pick this up,
-     find the app container / ViewModel factory and inject it there.
+   - **Wired 2026-07-31:** `CompanionViewModel.metaMemory` lazily builds the
+     real `IpcMetaMemoryConnector` from `secureStorage.context` +
+     `memoryRepository` (constructor-injectable for tests, no-op when either
+     is absent — same pattern as `inventoryClient`). The Memory screen shows
+     an honest link line ("MetaMemory linked" only when the app is actually
+     installed; `CompanionState.metaMemoryLinked`, refreshed on screen open).
+     `push`/`pull` still have no callers by design: captures land in Room
+     directly via `MSG_PUSH_MEMORY`, so there is no sync button to wire.
    - Contract documented from the other side in
      `~/meta-memory-app/docs/MEOWMBA_BRIDGE.md`. Sibling apps:
      `~/meta-memory-app` (Meta glasses capture, has its own AGENTS.md),
