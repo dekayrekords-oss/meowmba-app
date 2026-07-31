@@ -57,7 +57,7 @@ failures from your change.
    - Gotcha that bit once: `extractAfter` is PREFIX-only — never use it for
      mid-sentence extraction.
 
-2. **Runtime IPC bridge for sibling apps — UNCOMMITTED** (untracked
+2. **Runtime IPC bridge for sibling apps — COMMITTED** (`01dc16f`;
    `bridge/MeowmbaRuntimeService.kt`, `core/memory/IpcMetaMemoryConnector.kt`).
    - `MeowmbaRuntimeService`: exported Messenger service, action
      `com.example.meowmba.action.RUNTIME_BRIDGE`, already declared in the
@@ -66,7 +66,7 @@ failures from your change.
      (→ Room, tagged `meta_glasses`/`meta_memory`), `PULL_MEMORIES=5`.
      Caller allowlist by UID→package: self, `com.meow.metamemory`,
      `com.meow.inventory`.
-   - **Not yet wired:** `IpcMetaMemoryConnector` implements
+   - **OPEN THREAD — not yet wired:** `IpcMetaMemoryConnector` implements
      `MetaMemoryConnector` but nothing instantiates it — `MemoryRepository`
      and the memory UI still have no connector injected. If you pick this up,
      find the app container / ViewModel factory and inject it there.
