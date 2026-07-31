@@ -1173,6 +1173,14 @@ class CompanionViewModel(
                 return@launch
             }
 
+            // "What model are you using" is a fact the app holds. Answered here so it
+            // never reaches a model that has to guess at its own identity — which is how
+            // it ended up promising to "look at your device" and never coming back.
+            com.example.meowmba.core.agent.SelfStatusParser.parse(text)?.let { question ->
+                speak(describeSelf(question))
+                return@launch
+            }
+
             // Inventory, answered directly for the same reason as the weather: "do I have
             // a spare SM58" is a lookup, not a background task to be queued and announced.
             // Anything this parser does not recognise still reaches the tool router, which
@@ -2211,6 +2219,57 @@ class CompanionViewModel(
                         android.util.Log.i("Weather", "ambient refresh failed: ${r.reason}")
                 }
                 kotlinx.coroutines.delay(AMBIENT_WEATHER_INTERVAL_MS)
+            }
+        }
+    }
+
+    /**
+     * What is actually answering, in one spoken sentence.
+     *
+     * Built from state rather than from the model, so it is true even when the model
+     * that would have answered is the thing that is broken.
+     */
+    private fun describeSelf(
+        question: com.example.meowmba.core.agent.SelfStatusParser.Question,
+    ): String {
+        val s = _uiState.value
+        val loaded = s.loadedModels
+        val route = omniRoute?.lastRoute?.value
+        val onDevice = loaded.localName.takeIf { it.isNotBlank() && it != "none" }
+
+        return when (question) {
+            com.example.meowmba.core.agent.SelfStatusParser.Question.MODEL -> buildString {
+                if (s.selectedModel == MODEL_OMNIROUTE) {
+                    append("Omniroute is picking for me, on the phone. ")
+                    append(
+                        route?.let { "That last answer came from $it" }
+                            ?: "Nothing has been routed yet this session"
+                    )
+                    onDevice?.let { if (route == null) append(", and on-device is $it") }
+                    append(".")
+                } else {
+                    append("I'm on ${s.selectedModel}")
+                    onDevice?.takeIf { s.loadedModels.activeSource == ModelSource.LOCAL }
+                        ?.let { append(", running $it") }
+                    append(".")
+                }
+                if (s.geminiNanoActive) append(" Gemini Nano is handling the quick stuff.")
+            }
+
+            com.example.meowmba.core.agent.SelfStatusParser.Question.WHERE -> buildString {
+                val where = when {
+                    s.selectedModel == MODEL_OMNIROUTE && route != null -> route
+                    loaded.activeSource == ModelSource.LOCAL ->
+                        "on this phone" + (onDevice?.let { " ($it)" } ?: "")
+                    loaded.activeSource == ModelSource.NETWORK ->
+                        "on your network, at ${loaded.networkEndpoint}"
+                    else -> "in the cloud, on ${loaded.cloudProvider}"
+                }
+                append("Right now: $where.")
+                if (s.selectedModel == MODEL_OMNIROUTE) {
+                    append(" Omniroute decides per question, and falls back to the ")
+                    append("on-device model when nothing else answers.")
+                }
             }
         }
     }

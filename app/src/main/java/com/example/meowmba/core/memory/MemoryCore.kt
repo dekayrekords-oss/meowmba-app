@@ -171,8 +171,17 @@ object PromptBuilder {
             append("by asking for them; the app runs them and shows the user an approval card ")
             append("for anything risky. Things you can actually do:\n")
             capabilities.forEach { append("- ").append(it).append('\n') }
-            append("If the user asks for one of these, say you're doing it and describe the action ")
-            append("in plain language. Never claim you are unable to act, and never claim you can ")
+            // "Say you're doing it" was a lie in the only case this prompt is used.
+            // When a request IS routed to a tool, the app answers and this model never
+            // sees the turn; so if the model is reading this, nothing is running and
+            // nothing is going to. Claiming otherwise is what produced "I'm looking at
+            // your device right now to tell you what model is running" followed by
+            // silence, forever.
+            append("You are only WRITING A REPLY right now — no action is running while ")
+            append("you write, and none will start because of what you say here. So never ")
+            append("claim to be doing, checking, looking at, or fetching anything, and ")
+            append("never promise a result is coming. Offer to do it and ask them to say ")
+            append("the word. Never claim you are unable to act, and never claim you can ")
             append("do something that is not on this list.\n")
         }
 
