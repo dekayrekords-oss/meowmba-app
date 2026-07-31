@@ -38,6 +38,13 @@
         </intent>
         <!-- MetaMemory glasses companion (shared memories / runtime) -->
         <package android:name="com.meow.metamemory" />
+        <!-- Meow Inventory. Without this, API 30+ package visibility hides the app
+             entirely: bindService fails and getLaunchIntentForPackage returns null, which
+             looks exactly like "the inventory app is not installed". -->
+        <package android:name="com.meow.inventory" />
+        <intent>
+            <action android:name="com.meow.inventory.action.INVENTORY_BRIDGE" />
+        </intent>
         <!-- Navigation: without these, API 30+ package visibility makes the maps
              intent silently unresolvable. -->
         <package android:name="com.google.android.apps.maps" />

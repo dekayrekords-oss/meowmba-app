@@ -40,6 +40,7 @@ import com.example.meowmba.core.agent.tools.MemorySearchTool
 import com.example.meowmba.core.agent.tools.ProjectCreateTool
 import com.example.meowmba.core.agent.tools.TaskListTool
 import com.example.meowmba.core.agent.tools.ToolRegistry
+import com.example.meowmba.core.agent.tools.registerInventoryTools
 import com.example.meowmba.core.agent.tools.Workspace
 import com.example.meowmba.core.agent.tools.DesktopWriteFileTool
 import com.example.meowmba.core.agent.tools.DesktopRunBuildTool
@@ -142,6 +143,18 @@ class CompanionViewModel(
     private val weatherRepository: com.example.meowmba.core.weather.WeatherRepository? by lazy {
         val ctx = secureStorage?.context
         if (ctx == null) null else com.example.meowmba.core.weather.WeatherRepository(ctx)
+    }
+
+    /**
+     * Meow Inventory, over the app-to-app bridge.
+     *
+     * Lazy and null-safe: the companion works fine on a phone without the inventory app,
+     * and every tool reports that in a sentence rather than failing silently.
+     */
+    val inventoryClient: com.example.meowmba.core.inventory.InventoryBridgeClient? by lazy {
+        secureStorage?.context?.let {
+            com.example.meowmba.core.inventory.InventoryBridgeClient(it)
+        }
     }
 
     /** Model downloads into app-private storage, HF token from encrypted prefs. */
@@ -439,6 +452,16 @@ class CompanionViewModel(
             }
             val placeRepo = com.example.meowmba.core.nav.PlaceRepository(offlinePoi, onlinePoi)
             weatherRepository?.let { repo -> toolRegistry.register(WeatherTool(repo)) }
+            // Meow Inventory: what the user owns, and everything they can do with it.
+            inventoryClient?.let { client ->
+                toolRegistry.registerInventoryTools(appContext, client)
+                // The card follows whatever item the conversation lands on.
+                viewModelScope.launch {
+                    client.lastItem.collect { item ->
+                        _uiState.value = _uiState.value.copy(inventoryItem = item)
+                    }
+                }
+            }
             toolRegistry.register(FindPlacesTool(appContext, placeRepo, savedPlaces))
             toolRegistry.register(NavigateTool(appContext))
             toolRegistry.register(SavePlaceTool(appContext, savedPlaces))
@@ -559,6 +582,9 @@ class CompanionViewModel(
     override fun onCleared() {
         stopWakeLoopAndRelease()
         (currentProvider as? LiteRtProvider)?.close()
+        // Leaving the inventory service bound would keep that app's process alive for as
+        // long as this one lives, for nobody's benefit.
+        inventoryClient?.unbind()
         super.onCleared()
     }
 
@@ -1051,6 +1077,15 @@ class CompanionViewModel(
             ) {
                 android.util.Log.i("Weather", "routed as a weather question: \"$text\"")
                 answerWeather()
+                return@launch
+            }
+
+            // Inventory, answered directly for the same reason as the weather: "do I have
+            // a spare SM58" is a lookup, not a background task to be queued and announced.
+            // Anything this parser does not recognise still reaches the tool router, which
+            // has the full inventory tool set.
+            com.example.meowmba.core.inventory.InventoryRequestParser.parse(text)?.let { req ->
+                answerInventory(req)
                 return@launch
             }
 
