@@ -359,6 +359,20 @@ fun CompanionScreen(
             }
         }
 
+        // What the agents are doing. Above the avatar, below the full-screen menus, and
+        // translucent — handing work to an agent should not take you out of the room.
+        AgentActivityPanel(
+            tasks = uiState.activeTasks,
+            visible = uiState.agentActivityVisible,
+            onDismiss = { viewModel.dismissAgentActivity() },
+            onOpenAgent = { viewModel.openAgentDetail(it) },
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .safeDrawingPadding()
+                .padding(horizontal = 12.dp)
+                .padding(top = if (uiState.weather != null) 250.dp else 12.dp),
+        )
+
         // The thing the conversation is about. Sits above the avatar, below the menus, and
         // low enough that the weather card at the top is still readable next to it.
         uiState.inventoryItem?.let { item ->
@@ -474,6 +488,7 @@ fun CompanionScreen(
             AgentsScreen(
                 state = uiState,
                 onCancelTask = { viewModel.cancelTask(it) },
+                onSelectAgent = { viewModel.selectAgent(it) },
                 onClose = { viewModel.toggleAgentsScreen() }
             )
         }

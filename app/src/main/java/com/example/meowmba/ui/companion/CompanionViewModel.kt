@@ -16,6 +16,7 @@ import com.example.meowmba.core.agent.ModelRouter
 import com.example.meowmba.core.agent.GeminiNanoProvider
 import com.example.meowmba.core.agent.RemoteModelProvider
 import com.example.meowmba.core.agent.runtime.AgentOrchestrator
+import com.example.meowmba.core.agent.runtime.AgentTask
 import com.example.meowmba.core.agent.runtime.AgentRegistry
 import com.example.meowmba.core.agent.runtime.AgentRouter
 import com.example.meowmba.core.agent.runtime.AgentBrainRouter
@@ -183,7 +184,13 @@ class CompanionViewModel(
     // ── Agent system (Phase 5) ──────────────────────────────────────────────
     private var agentOrchestrator: AgentOrchestrator? = null
 
-    /** Audit trail: ring-buffered into UI state and persisted to Room. */
+    /**
+     * Audit trail: ring-buffered into UI state and persisted to Room.
+     *
+     * The in-memory copy is written straight away so the Agents screen updates without
+     * waiting on a database round-trip; [observeAuditTrail] then replaces it with what
+     * Room actually holds, which is what makes an agent's history survive a restart.
+     */
     private val agentAuditSink = object : AuditSink {
         override suspend fun log(action: String, agentId: String, taskId: String?, detail: String) {
             val entry = AuditEntryEntity(agentId = agentId, taskId = taskId, action = action, detail = detail)
@@ -205,6 +212,19 @@ class CompanionViewModel(
 
     /** The turn currently being captured, so a new one can cancel it cleanly. */
     private var utteranceCapture: com.example.meowmba.core.audio.UtteranceCapture? = null
+
+    /**
+     * Last seen status per task, so only real transitions are narrated.
+     *
+     * Declared with the other fields, NOT down beside the function that uses it: the task
+     * collector starts inside init{}, and a property declared later in the class body is
+     * still null when it first fires — which is a NullPointerException on the very first
+     * agent update.
+     */
+    private val narratedTaskStatus = mutableMapOf<String, TaskStatus>()
+
+    /** Keeps the agent panel up briefly after the last task finishes. */
+    private var agentPanelLingerJob: Job? = null
 
     /** One bounded retry when the wake mic was busy at re-arm time. */
     private var wakeRearmJob: Job? = null
@@ -380,6 +400,15 @@ class CompanionViewModel(
             }
         }
 
+        // What the agents have done, from Room. Without this the audit trail only ever
+        // showed the current session, so "see what this agent has worked on" was empty
+        // every time the app restarted — which is most of the times you would ask.
+        viewModelScope.launch {
+            auditDao?.getRecent()?.collect { entries ->
+                _uiState.value = _uiState.value.copy(auditEntries = entries)
+            }
+        }
+
         // Memory controls: pause flag + retention policy (purged once on start)
         viewModelScope.launch {
             secureStorage?.let { storage ->
@@ -545,6 +574,7 @@ class CompanionViewModel(
             agentOrchestrator = orchestrator
             viewModelScope.launch {
                 orchestrator.tasks.collect { tasks ->
+                    narrateAgentProgress(tasks)
                     _uiState.value = _uiState.value.copy(activeTasks = tasks)
                 }
             }
@@ -632,6 +662,18 @@ class CompanionViewModel(
                     secureStorage.getEndpoint("ollama") ?: "http://10.0.2.2:11434",
                     null,
                     secureStorage.getModelName("ollama") ?: "gemma2"
+                )
+            }
+            MODEL_OMNIROUTE -> {
+                // OpenAI-compatible by default; the key is optional because a router on
+                // the home network usually has none.
+                RemoteModelProvider(
+                    name = "Omniroute",
+                    baseUrl = (secureStorage.getEndpoint("omniroute")
+                        ?: DEFAULT_OMNIROUTE_ENDPOINT).trimEnd('/'),
+                    apiKey = secureStorage.getApiKey("omniroute"),
+                    model = secureStorage.getModelName("omniroute") ?: "auto",
+                    style = RemoteModelProvider.ApiStyle.OPENAI_COMPATIBLE,
                 )
             }
             "OpenAI (Cloud)" -> {
@@ -2120,6 +2162,98 @@ class CompanionViewModel(
         }
     }
 
+    // ── Agent follow-through ────────────────────────────────────────────────
+
+    /**
+     * Keeps the user informed while an agent works.
+     *
+     * Handing a job to an agent used to be the last the user heard of it until it
+     * finished speaking a result — the task list existed, but you had to go looking for
+     * it. Every transition now goes two places at once:
+     *
+     *  - the live panel, raised the moment an agent picks up work; and
+     *  - the chat, as a SYSTEM line, which is what remains after the panel is swiped
+     *    away (and what is still there tomorrow, since chat is persisted and the task
+     *    list is not).
+     *
+     * Only transitions are written. Re-emitting the same state on every list update
+     * would bury the conversation in duplicates.
+     */
+    private fun narrateAgentProgress(tasks: List<AgentTask>) {
+        var raisePanel = false
+        for (task in tasks) {
+            val previous = narratedTaskStatus[task.id]
+            if (previous == task.status) continue
+            narratedTaskStatus[task.id] = task.status
+            val agent = AgentRegistry.byId(task.agentId)?.name ?: task.agentId
+            // Deliberately quiet where the companion already speaks. Submitting says
+            // "Shelve is on it", finishing speaks the result out loud, and both of those
+            // land in the chat too — so narrating them again turns one event into three
+            // lines that say the same thing.
+            val line = when (task.status) {
+                TaskStatus.QUEUED -> null
+                TaskStatus.RUNNING ->
+                    if (previous == TaskStatus.WAITING_APPROVAL) {
+                        "$agent got the go-ahead: ${task.title}"
+                    } else {
+                        null
+                    }
+                TaskStatus.WAITING_APPROVAL -> "$agent needs your OK for: ${task.title}"
+                TaskStatus.COMPLETED -> "$agent finished: ${task.title}"
+                TaskStatus.FAILED -> "$agent couldn't finish: ${task.title}"
+                TaskStatus.CANCELLED -> "$agent stopped: ${task.title}"
+            }
+            // Raised for any task the panel has not shown yet, terminal or not: a
+            // file write finishes in milliseconds, and "the agent panel only appears
+            // for slow work" is indistinguishable from "the panel is broken".
+            if (previous == null || !task.isTerminal) raisePanel = true
+            line?.let { text ->
+                viewModelScope.launch {
+                    runCatching { memoryRepository?.addMessage(MessageRole.SYSTEM, text) }
+                }
+            }
+        }
+        // Forget tasks that are done and gone, so the map cannot grow forever.
+        val live = tasks.map { it.id }.toSet()
+        narratedTaskStatus.keys.retainAll(live)
+
+        val anyLive = tasks.any { !it.isTerminal }
+        if (raisePanel) {
+            _uiState.value = _uiState.value.copy(agentActivityVisible = true)
+        }
+        // Everything finished: leave the outcome up for a moment, then get out of the
+        // way. Hiding it the instant the last task completes means the only thing the
+        // panel ever shows is "running", never the result.
+        agentPanelLingerJob?.cancel()
+        if (!anyLive && _uiState.value.agentActivityVisible) {
+            agentPanelLingerJob = viewModelScope.launch {
+                delay(AGENT_PANEL_LINGER_MS)
+                if (_uiState.value.activeTasks.none { !it.isTerminal }) {
+                    _uiState.value = _uiState.value.copy(agentActivityVisible = false)
+                }
+            }
+        }
+    }
+
+    /** Swiped away: the panel goes, the chat keeps narrating. */
+    fun dismissAgentActivity() {
+        _uiState.value = _uiState.value.copy(agentActivityVisible = false)
+    }
+
+    /** Opens one agent's history, or clears the selection with null. */
+    fun selectAgent(agentId: String?) {
+        _uiState.value = _uiState.value.copy(selectedAgentId = agentId)
+    }
+
+    /** Opens the Agents screen on a specific agent (tapping the live panel). */
+    fun openAgentDetail(agentId: String) {
+        _uiState.value = _uiState.value.copy(
+            showAgentsScreen = true,
+            selectedAgentId = agentId,
+            agentActivityVisible = false,
+        )
+    }
+
     // ── Inventory ───────────────────────────────────────────────────────────
 
     /**
@@ -2473,6 +2607,12 @@ class CompanionViewModel(
          * current-conditions block changes, so polling faster only costs battery.
          */
         private const val AMBIENT_WEATHER_INTERVAL_MS = 15 * 60 * 1000L
+
+        /**
+         * How long the agent panel stays up after everything is done. Long enough to
+         * read a one-line result, short enough not to sit on the companion's face.
+         */
+        private const val AGENT_PANEL_LINGER_MS = 6_000L
         private const val DEFAULT_VISION_MODEL = "gemma4:12b-it-qat"
         private const val DEFAULT_RETENTION_DAYS = 90
         private const val FOLLOW_UP_TIMEOUT_MS = 8000L

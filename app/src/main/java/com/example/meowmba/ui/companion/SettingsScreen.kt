@@ -49,6 +49,11 @@ fun SettingsScreen(
     var ollamaModel by remember { mutableStateOf(secureStorage.getModelName("ollama") ?: "gemma2") }
     var ollamaVisionModel by remember { mutableStateOf(secureStorage.getModelName("ollama_vision") ?: "gemma4:12b-it-qat") }
     var localModelPath by remember { mutableStateOf(secureStorage.getEndpoint("local") ?: "/data/local/tmp/llm/gemma.bin") }
+    var omniEndpoint by remember {
+        mutableStateOf(secureStorage.getEndpoint("omniroute") ?: DEFAULT_OMNIROUTE_ENDPOINT)
+    }
+    var omniModel by remember { mutableStateOf(secureStorage.getModelName("omniroute") ?: "auto") }
+    var omniKey by remember { mutableStateOf(secureStorage.getApiKey("omniroute") ?: "") }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -221,6 +226,32 @@ fun SettingsScreen(
             )
             
             Spacer(modifier = Modifier.height(24.dp))
+
+            // Omniroute — the route manager on meow. Spoken to as an OpenAI-compatible
+            // endpoint; "auto" lets the router pick the model, which is the point of it.
+            Text("Omniroute", style = MaterialTheme.typography.titleMedium, color = Color.White)
+            SettingsTextField(
+                value = omniEndpoint,
+                onValueChange = { omniEndpoint = it },
+                label = { Text("Endpoint (default $DEFAULT_OMNIROUTE_ENDPOINT)") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            SettingsTextField(
+                value = omniModel,
+                onValueChange = { omniModel = it },
+                label = { Text("Model or route (e.g. auto)") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            SettingsTextField(
+                value = omniKey,
+                onValueChange = { omniKey = it },
+                label = { Text("API key (leave blank if it needs none)") },
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
             
             // Local Model Configuration
             Text("Local Model (MediaPipe)", style = MaterialTheme.typography.titleMedium, color = Color.White)
@@ -241,6 +272,9 @@ fun SettingsScreen(
                     secureStorage.saveModelName("ollama", ollamaModel)
                     secureStorage.saveModelName("ollama_vision", ollamaVisionModel)
                     secureStorage.saveEndpoint("local", localModelPath)
+                    secureStorage.saveEndpoint("omniroute", omniEndpoint)
+                    secureStorage.saveModelName("omniroute", omniModel)
+                    secureStorage.saveApiKey("omniroute", omniKey)
                     onClose()
                 },
                 modifier = Modifier.fillMaxWidth()

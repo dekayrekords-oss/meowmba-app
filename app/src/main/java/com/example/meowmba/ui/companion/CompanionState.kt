@@ -126,6 +126,19 @@ data class CompanionState(
     /** A tool call waiting for the user's explicit decision, if any. */
     val pendingApproval: ApprovalRequest? = null,
     val showAgentsScreen: Boolean = false,
+
+    /**
+     * The agent whose history is open on the Agents screen, or null for the roster.
+     */
+    val selectedAgentId: String? = null,
+
+    /**
+     * Whether the live agent-activity panel is on screen.
+     *
+     * Raised whenever an agent picks up work. Swiping the panel away lowers it and the
+     * chat carries the updates instead — the work continues either way.
+     */
+    val agentActivityVisible: Boolean = false,
     /** Audit trail (newest first, ring buffer of 200). */
     val auditEntries: List<AuditEntryEntity> = emptyList(),
     /** On-device agent brain: model-driven tool routing for natural commands. */

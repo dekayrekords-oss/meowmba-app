@@ -83,10 +83,24 @@ fun ModelItem(name: String, isSelected: Boolean, onClick: () -> Unit) {
 /** Label for the AICore-backed provider. Also the default when AICore is present. */
 const val MODEL_GEMINI_NANO = "Gemini Nano (On-device)"
 
+/**
+ * Omniroute — the route manager on meow (port 20128).
+ *
+ * Spoken to as an OpenAI-compatible endpoint, which is what routers of this kind expose;
+ * the address and model are editable in Settings, so pointing it somewhere else (or at a
+ * different port) needs no code change. If the endpoint turns out to speak a different
+ * dialect, "Test connection" on the Hardware page says so rather than failing silently.
+ */
+const val MODEL_OMNIROUTE = "Omniroute (Router)"
+
+/** Where Omniroute lives unless Settings says otherwise. */
+const val DEFAULT_OMNIROUTE_ENDPOINT = "http://192.168.1.69:20128"
+
 val modelProviders = listOf(
     MODEL_GEMINI_NANO,
     "On-device (Local)",
     "Ollama (Local Network)",
+    MODEL_OMNIROUTE,
     "OpenAI (Cloud)",
 )
 

@@ -1,5 +1,6 @@
 package com.example.meowmba.ui.companion
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -35,8 +36,22 @@ import java.util.Locale
 fun AgentsScreen(
     state: CompanionState,
     onCancelTask: (String) -> Unit,
+    onSelectAgent: (String?) -> Unit = {},
     onClose: () -> Unit
 ) {
+    // One agent selected: show what that agent has actually done instead of the roster.
+    state.selectedAgentId?.let { id ->
+        AgentRegistry.byId(id)?.let { agent ->
+            AgentDetail(
+                agent = agent,
+                state = state,
+                onCancelTask = onCancelTask,
+                onBack = { onSelectAgent(null) },
+            )
+            return
+        }
+    }
+
     Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF0D1117)) {
         Column(
             modifier = Modifier
@@ -60,8 +75,15 @@ fun AgentsScreen(
 
             // ── Agent roster ────────────────────────────────────────────────
             SectionTitle("Agents")
+            Body("Tap an agent to see what it has worked on.")
+            Spacer(modifier = Modifier.height(8.dp))
             AgentRegistry.agents.forEach { agent ->
-                AgentCard(agent)
+                val worked = state.activeTasks.count { it.agentId == agent.id }
+                AgentCard(
+                    agent = agent,
+                    taskCount = worked,
+                    onClick = { onSelectAgent(agent.id) },
+                )
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
@@ -117,13 +139,25 @@ private fun Body(text: String) {
 }
 
 @Composable
-private fun AgentCard(agent: AgentDefinition) {
+private fun AgentCard(
+    agent: AgentDefinition,
+    taskCount: Int = 0,
+    onClick: (() -> Unit)? = null,
+) {
     val (label, color) = when {
         !agent.available -> "UNAVAILABLE" to Color(0xFFF85149)
         agent.statusNote != null -> "LIMITED" to Color(0xFFD29922)
         else -> "ACTIVE" to Color(0xFF3FB950)
     }
-    Surface(color = Color(0xFF161B22), shape = RoundedCornerShape(12.dp)) {
+    Surface(
+        color = Color(0xFF161B22),
+        shape = RoundedCornerShape(12.dp),
+        modifier = if (onClick != null) {
+            Modifier.fillMaxWidth().clickable(onClick = onClick)
+        } else {
+            Modifier.fillMaxWidth()
+        },
+    ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -132,6 +166,15 @@ private fun AgentCard(agent: AgentDefinition) {
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f)
                 )
+                if (taskCount > 0) {
+                    Text(
+                        "$taskCount",
+                        color = Color(0xFF58A6FF),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(end = 8.dp),
+                    )
+                }
                 Surface(color = color.copy(alpha = 0.15f), shape = RoundedCornerShape(4.dp)) {
                     Text(
                         label,
@@ -213,5 +256,80 @@ private fun AuditRow(entry: AuditEntryEntity) {
             color = Color.White.copy(alpha = 0.8f),
             fontSize = 11.sp
         )
+    }
+}
+
+/**
+ * One agent's record: what it is allowed to do, what it is doing, and what it has done.
+ *
+ * The task list lives in memory and the audit trail lives in Room, so both are shown —
+ * tasks answer "what is happening", the audit answers "what happened yesterday".
+ */
+@Composable
+private fun AgentDetail(
+    agent: AgentDefinition,
+    state: CompanionState,
+    onCancelTask: (String) -> Unit,
+    onBack: () -> Unit,
+) {
+    val tasks = state.activeTasks.filter { it.agentId == agent.id }
+    val audit = state.auditEntries.filter { it.agentId == agent.id }
+
+    Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF0D1117)) {
+        Column(
+            modifier = Modifier
+                .safeDrawingPadding()
+                .padding(24.dp)
+                .verticalScroll(rememberScrollState())
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = onBack) {
+                    Text("‹ Agents", color = Color(0xFF58A6FF), fontSize = 14.sp)
+                }
+            }
+            Text(
+                agent.name,
+                style = MaterialTheme.typography.headlineMedium,
+                color = Color.White,
+            )
+            Text(agent.purpose, color = Color.Gray, fontSize = 13.sp)
+
+            Spacer(modifier = Modifier.height(16.dp))
+            SectionTitle("Can use")
+            if (agent.allowedTools.isEmpty()) {
+                Body("No tools assigned.")
+            } else {
+                Text(
+                    agent.allowedTools.sorted().joinToString("  ·  "),
+                    color = Color(0xFF8B949E),
+                    fontSize = 12.sp,
+                    fontFamily = FontFamily.Monospace,
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            SectionTitle("Worked on")
+            if (tasks.isEmpty()) {
+                Body("Nothing this session.")
+            } else {
+                tasks.forEach { task ->
+                    TaskCard(task, onCancel = { onCancelTask(task.id) })
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            SectionTitle("History")
+            if (audit.isEmpty()) {
+                Body("No audited activity yet.")
+            } else {
+                audit.take(40).forEach { entry -> AuditRow(entry) }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+            Button(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
+                Text("Back to agents")
+            }
+        }
     }
 }
