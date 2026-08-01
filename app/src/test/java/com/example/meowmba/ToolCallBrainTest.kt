@@ -63,6 +63,18 @@ class ToolCallPromptTest {
         assertTrue(prompt.contains("<|im_start|>user\nmake a file<|im_end|>"))
         assertTrue(prompt.endsWith("<|im_start|>assistant\n"))
     }
+
+    @Test
+    fun `both prompt modes steer self-performance to the avatar, never media files`() {
+        // Measured on device: "animation of you licking your paw" was routed to
+        // media.generate_video and the user got a file while the cat never moved.
+        val contract = ToolCallPrompt.build("lick your paw", registry().definitions())
+        val hermes = ToolCallPrompt.buildHermesNative("lick your paw", registry().definitions())
+        listOf(contract, hermes).forEach { prompt ->
+            assertTrue(prompt.contains("avatar.animate"))
+            assertTrue(prompt.contains("never media.*"))
+        }
+    }
 }
 
 class ToolCallParserTest {

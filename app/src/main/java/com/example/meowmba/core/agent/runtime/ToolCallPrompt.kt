@@ -36,6 +36,12 @@ object ToolCallPrompt {
         append("- If the user message is not a tool request, answer {\"tool\": null}.\n")
         append("- Format: {\"tool\": \"<id>\", \"args\": {\"<arg>\": \"<value>\"}}\n")
         append("- Never invent tools or arguments not listed above.\n")
+        // Measured on device: "animation of you licking your paw" went to
+        // media.generate_video and the user got a FILE while the avatar never
+        // moved. Self-performance is avatar.animate, always.
+        append("- Requests for the companion to perform — a trick, gesture, dance, or ")
+        append("\"animate yourself/the cat/it\" — are avatar.animate, never media.* tools ")
+        append("(those only make files).\n")
         append('\n')
         append("User: ").append(userText).append('\n')
         append("JSON:")
@@ -57,6 +63,8 @@ object ToolCallPrompt {
         append("</tools> For each function call return a json object with function name and ")
         append("arguments within <tool_call></tool_call> XML tags as follows:\n")
         append("<tool_call>\n{\"arguments\": <args-dict>, \"name\": <function-name>}\n</tool_call>")
+        append(" Requests for the companion to perform (trick, gesture, \"animate yourself/it\") ")
+        append("are avatar.animate, never media.* tools — those only make files.")
         append("<|im_end|>\n")
         append("<|im_start|>user\n").append(userText).append("<|im_end|>\n")
         append("<|im_start|>assistant\n")

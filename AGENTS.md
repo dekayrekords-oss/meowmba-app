@@ -71,6 +71,40 @@ failures from your change.
      `"animate "` prefix was REMOVED from media.generate_video — it swallowed
      avatar performances ("animate yourself" became a video OF "yourself").
      Invented keyframes still come only from the LLM brain.
+   - **Self-performance disambiguation (2026-07-31):** the on-device brain sent
+     "animation of you licking your paw" to `media.generate_video` → a FILE,
+     while the user watched the thinking face + ambient ear twitch and called
+     it "60 seconds of ear wiggle". Fixes: `avatar.animate`'s description leads
+     with "PERFORM on its own face… never a media tool", the video tool says it
+     only makes files, and BOTH tool-call prompt contracts (`ToolCallPrompt`
+     CONTRACT + HERMES_NATIVE) carry the rule "self-performance is
+     avatar.animate, never media.*". Pinned in `ToolCallPromptTest`.
+
+## Debugging on-device behavior (read this before guessing)
+
+The audit log + chat history are IN Room on the phone, and the debug build is
+debuggable — pull them instead of theorizing:
+
+```bash
+adb exec-out run-as com.example.meowmba cat \
+  /data/data/com.example.meowmba/databases/meowmba_database > /tmp/meowmba.db
+sqlite3 /tmp/meowmba.db \
+  "SELECT * FROM audit_log ORDER BY id DESC LIMIT 20;"
+sqlite3 /tmp/meowmba.db \
+  "SELECT role, substr(content,1,140) FROM messages ORDER BY timestamp DESC LIMIT 8;"
+```
+
+`audit_log` = every task submit/start/complete/fail with timestamps;
+`messages` = what the app actually heard and said. Two production bugs were
+diagnosed from this table in one day ("email compose" and "paw lick").
+Saved custom animations are plain files:
+`adb exec-out run-as com.example.meowmba ls /data/data/com.example.meowmba/files/custom_animations/`
+
+**Context window facts:** chat prompts carry persona + capabilities + recalled
+memories + the **last 10 messages** (`getRecentMessages(10)`); the tool-routing
+brain (`LlmToolCallRouter`) decides from the CURRENT UTTERANCE ONLY — no
+history. If a follow-up like "yeah do that" mis-routes, that missing context
+is why.
 
 2. **Email/app routing fix — COMMITTED** (`96ca7d3`; `AgentRouter.kt`,
    `EmailTools.kt` + `AppAndEmailRoutingTest.kt`, 15 tests, all green).

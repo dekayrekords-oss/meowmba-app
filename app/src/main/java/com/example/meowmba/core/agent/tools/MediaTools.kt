@@ -222,7 +222,9 @@ class MediaGenerateVideoTool(private val workspace: Workspace) : Tool {
     override val definition = ToolDefinition(
         id = "media.generate_video",
         displayName = "Generate video",
-        description = "Create a simple animated GIF from a text description. Draws animated frames with color themes.",
+        description = "Create a simple animated GIF from a text description. Draws animated frames with color themes. " +
+            "Makes a FILE in the workspace — never for making the cat avatar itself move or perform; " +
+            "that is avatar.animate.",
         inputSchema = mapOf("prompt" to "string", "style" to "string", "frames" to "string"),
         riskLevel = RiskLevel.MODERATE,
         environments = setOf(ToolEnvironment.PHONE),

@@ -23,14 +23,19 @@ class AvatarAnimateTool(
     override val definition = ToolDefinition(
         id = "avatar.animate",
         displayName = "Animate the avatar",
-        description = "Invents and plays a custom face animation. 'frames' is a JSON array " +
+        description = "Make the cat avatar PERFORM on its own face right now: tricks, " +
+            "gestures, expressions. ALWAYS use this — never a media/image/video tool — when " +
+            "the user asks you to do a trick, dance, gesture, or to animate " +
+            "yourself/the cat/it (\"lick your paw\", \"show me an animation of you…\", " +
+            "\"do something cute\"). Media tools only make FILES; this is the only tool " +
+            "that moves the face. 'frames' is a JSON array " +
             "of keyframes; each has \"at\" (milliseconds) plus any of: eye_open (0-1.6), " +
             "pupil_size (0.05-0.9), gaze_up (0-1), head_tilt (-25..25 degrees), " +
             "ear_perk (0.3-1.6), ear_droop (0-40 degrees), happy_eyes (boolean), " +
             "whisker_flutter (boolean), mouth (IDLE|HAPPY|SPEAKING), glow (#RRGGBB). " +
             "Fields left out keep their normal value; numbers interpolate between frames. " +
-            "Example: [{\"at\":0,\"ear_perk\":1.5},{\"at\":300,\"ear_perk\":0.6}," +
-            "{\"at\":600,\"ear_perk\":1.0}] wiggles the ears for 0.6s. " +
+            "INVENT frames that act out the user's action — the example only shows the " +
+            "format: [{\"at\":0,\"eye_open\":0.1},{\"at\":150,\"eye_open\":1.0}] is a slow blink. " +
             "Set save=true to keep the animation by name for later. " +
             "To REPLAY, give just the name with no frames — built-ins (" +
             CustomAnimations.BUILT_INS.keys.joinToString(", ") + ") and saved clips play by name.",
