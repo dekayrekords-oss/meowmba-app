@@ -67,6 +67,49 @@ object CustomAnimations {
     private val ALLOWED_MOUTHS = setOf(MouthMode.IDLE, MouthMode.HAPPY, MouthMode.SPEAKING)
 
     /**
+     * Signature clips shipped with the app, so "do a trick" performs instantly with
+     * no model call — and so a fresh install has real animations before the companion
+     * invents its first one. Looked up by name before the on-disk store.
+     */
+    val BUILT_INS: Map<String, CustomAnimationSpec> = listOf(
+        CustomAnimationSpec(
+            "ear wiggle",
+            listOf(
+                AnimFrame(atMs = 0, earPerk = 1.0f),
+                AnimFrame(atMs = 140, earPerk = 1.5f),
+                AnimFrame(atMs = 280, earPerk = 0.7f),
+                AnimFrame(atMs = 420, earPerk = 1.4f),
+                AnimFrame(atMs = 600, earPerk = 1.0f),
+            ),
+        ),
+        CustomAnimationSpec(
+            "happy bop",
+            listOf(
+                AnimFrame(atMs = 0, headTiltDeg = 0f, happyEyes = false, mouth = MouthMode.IDLE),
+                AnimFrame(
+                    atMs = 200, headTiltDeg = -12f, happyEyes = true,
+                    mouth = MouthMode.HAPPY, glowColorHex = 0xFF3FB950,
+                ),
+                AnimFrame(atMs = 450, headTiltDeg = 12f),
+                AnimFrame(atMs = 700, headTiltDeg = -8f, whiskerFlutter = true),
+                AnimFrame(atMs = 900, headTiltDeg = 0f, happyEyes = false, mouth = MouthMode.IDLE),
+            ),
+        ),
+        CustomAnimationSpec(
+            "curious tilt",
+            listOf(
+                AnimFrame(atMs = 0, headTiltDeg = 0f, pupilSize = 0.28f),
+                AnimFrame(atMs = 350, headTiltDeg = 16f, pupilSize = 0.62f, earPerk = 1.2f),
+                AnimFrame(atMs = 700, headTiltDeg = 16f, pupilSize = 0.62f, earPerk = 1.2f),
+                AnimFrame(atMs = 1000, headTiltDeg = 0f, pupilSize = 0.28f, earPerk = 1.0f),
+            ),
+        ),
+    ).associateBy { it.name }
+
+    /** A built-in clip by name, or null. Store clips are the caller's fallback. */
+    fun builtIn(name: String): CustomAnimationSpec? = BUILT_INS[name.trim().lowercase()]
+
+    /**
      * Parses a spec from JSON: `{"name": "wiggle", "frames": [{"at": 0, "ear_perk": 1.5}, …]}`.
      * Numeric keys accept snake_case or camelCase ("eye_open"/"eyeOpen") — models emit both.
      *

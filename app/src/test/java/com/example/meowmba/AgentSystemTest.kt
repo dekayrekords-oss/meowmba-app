@@ -116,6 +116,40 @@ class AgentRouterTest {
         assertNull(AgentRouter.route("what's the weather like"))
         assertNull(AgentRouter.route("tell me a joke"))
     }
+
+    @Test
+    fun `avatar performance intents reach the face, never the video tool`() {
+        // The reported failure: "it makes the animation but does not show me —
+        // it makes a file instead." Every one of these must land on avatar.animate.
+        listOf("do a trick", "show me a trick", "do an animation", "show me an animation",
+            "animate yourself", "wiggle your ears").forEach { said ->
+            val intent = AgentRouter.route(said)!!
+            assertEquals(said, "avatar.animate", intent.toolId)
+            assertEquals(said, "main", intent.agentId)
+        }
+
+        val dance = AgentRouter.route("dance")!!
+        assertEquals("avatar.animate", dance.toolId)
+        assertEquals("happy bop", dance.args["name"])
+
+        val replay = AgentRouter.route("play the ear wiggle animation")!!
+        assertEquals("avatar.animate", replay.toolId)
+        assertEquals("ear wiggle", replay.args["name"])
+    }
+
+    @Test
+    fun `a video of something is still a video`() {
+        // Only the bare "animate " prefix was removed — video-of-X stays media.
+        val intent = AgentRouter.route("make an animation of a cat chasing a laser")!!
+        assertEquals("media.generate_video", intent.toolId)
+        assertEquals("media", intent.agentId)
+    }
+
+    @Test
+    fun `play without an animation suffix is not an avatar command`() {
+        assertNull(AgentRouter.route("play the piano"))
+        assertNull(AgentRouter.route("play something"))
+    }
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)

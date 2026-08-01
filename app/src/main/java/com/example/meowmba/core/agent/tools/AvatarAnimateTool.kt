@@ -31,10 +31,12 @@ class AvatarAnimateTool(
             "Fields left out keep their normal value; numbers interpolate between frames. " +
             "Example: [{\"at\":0,\"ear_perk\":1.5},{\"at\":300,\"ear_perk\":0.6}," +
             "{\"at\":600,\"ear_perk\":1.0}] wiggles the ears for 0.6s. " +
-            "Set save=true to keep the animation by name for later.",
+            "Set save=true to keep the animation by name for later. " +
+            "To REPLAY, give just the name with no frames — built-ins (" +
+            CustomAnimations.BUILT_INS.keys.joinToString(", ") + ") and saved clips play by name.",
         inputSchema = mapOf(
             "name" to "string",
-            "frames" to "string (JSON array of keyframes)",
+            "frames" to "string (JSON array of keyframes — omit to replay a built-in or saved clip)",
             "save" to "string (\"true\" to persist, optional)",
         ),
         riskLevel = RiskLevel.SAFE,
@@ -46,7 +48,19 @@ class AvatarAnimateTool(
         val name = args["name"]?.takeIf { it.isNotBlank() }
             ?: return ToolResult.Failure("Missing 'name'")
         val framesJson = args["frames"]?.takeIf { it.isNotBlank() }
-            ?: return ToolResult.Failure("Missing 'frames' — a JSON array of keyframes")
+
+        // Replay: no frames means "play the clip with this name" — built-ins
+        // first, then whatever the companion saved earlier.
+        if (framesJson == null) {
+            val clip = CustomAnimations.builtIn(name) ?: store?.load(name)
+                ?: return ToolResult.Failure(
+                    "No animation called \"$name\". Built-ins: " +
+                        CustomAnimations.BUILT_INS.keys.joinToString(", ") +
+                        " — or invent one with frames."
+                )
+            onPlay(clip)
+            return ToolResult.Success("Playing \"${clip.name}\" (${clip.durationMs}ms).")
+        }
 
         val document = try {
             JSONObject().put("name", name).put("frames", JSONArray(framesJson)).toString()

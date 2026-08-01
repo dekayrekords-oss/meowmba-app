@@ -201,6 +201,27 @@ object AgentRouter {
             return AgentIntent("phone", "phone.launch_app", mapOf("name" to name), "open $name")
         }
 
+        // Avatar performance. Deterministic because a trick must be instant and must
+        // ALWAYS land on the face: the video tool's bare "animate " prefix used to
+        // swallow these, and the user got a workspace file instead of a performance.
+        // Frames stay with the tool (built-in/store lookup by name) — the router
+        // only has to say WHICH clip.
+        if (normalized in setOf("do a trick", "show me a trick", "do an animation",
+                "show me an animation", "perform a trick", "do something cute",
+                "animate yourself", "wiggle your ears")) {
+            return AgentIntent("main", "avatar.animate", mapOf("name" to "ear wiggle"), "ear wiggle")
+        }
+        if (normalized in setOf("dance", "do a dance", "show me a dance", "dance for me")) {
+            return AgentIntent("main", "avatar.animate", mapOf("name" to "happy bop"), "happy bop")
+        }
+        // "play the ear wiggle animation" — replay a saved or built-in clip by name.
+        extractAfter(raw, listOf("play the ", "play "))?.let { rest ->
+            val name = rest.removeSuffix(" animation").removeSuffix(" Animation").trim()
+            if (name.isNotBlank() && name != rest.trim()) {
+                return AgentIntent("main", "avatar.animate", mapOf("name" to name), "play $name")
+            }
+        }
+
         // Media / image generation
         extractAfter(raw, listOf("generate an image of ", "generate an image of a ",
             "create an image of ", "make an image of ", "draw ", "paint ",
@@ -210,10 +231,12 @@ object AgentRouter {
                 "generate image: $prompt")
         }
 
-        // Video generation
+        // Video generation. No bare "animate " prefix: it swallowed avatar
+        // performances ("animate yourself" became a video OF "yourself" — a file,
+        // not a performance). "make an animation of X" is still clearly a video.
         extractAfter(raw, listOf("generate a video of ", "create a video of ",
             "make a video of ", "generate video ", "create video ",
-            "make an animation of ", "animate "))?.let { prompt ->
+            "make an animation of "))?.let { prompt ->
             return AgentIntent("media", "media.generate_video", mapOf("prompt" to prompt),
                 "generate video: $prompt")
         }

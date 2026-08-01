@@ -216,4 +216,44 @@ class CustomAnimationTest {
         val (again, _) = CustomAnimations.parse(CustomAnimations.toJson(spec))
         assertEquals(spec, again)
     }
+
+    // ── The tool's replay path (the reported "makes a file instead" fix) ────
+
+    @Test
+    fun `the tool plays a built-in by name with no frames`() = kotlinx.coroutines.test.runTest {
+        val played = mutableListOf<CustomAnimationSpec>()
+        val tool = com.example.meowmba.core.agent.tools.AvatarAnimateTool(null) { played.add(it) }
+        val result = tool.execute(mapOf("name" to "ear wiggle"))
+        assertTrue(result is com.example.meowmba.core.agent.tools.ToolResult.Success)
+        assertEquals("ear wiggle", played.single().name)
+    }
+
+    @Test
+    fun `the tool replays a saved clip by name`() = kotlinx.coroutines.test.runTest {
+        val dir = createTempDir("anims")
+        try {
+            val store = CustomAnimationStore(dir)
+            val (spec, _) = CustomAnimations.parse(
+                """{"name":"my spin","frames":[{"at":0,"head_tilt":-15},{"at":500,"head_tilt":15}]}"""
+            )
+            store.save(spec)
+            val played = mutableListOf<CustomAnimationSpec>()
+            val tool = com.example.meowmba.core.agent.tools.AvatarAnimateTool(store) { played.add(it) }
+            val result = tool.execute(mapOf("name" to "my spin"))
+            assertTrue(result is com.example.meowmba.core.agent.tools.ToolResult.Success)
+            assertEquals("my spin", played.single().name)
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `an unknown clip name fails honestly with what DOES exist`() = kotlinx.coroutines.test.runTest {
+        val tool = com.example.meowmba.core.agent.tools.AvatarAnimateTool(null) { }
+        val result = tool.execute(mapOf("name" to "backflip"))
+        assertTrue(result is com.example.meowmba.core.agent.tools.ToolResult.Failure)
+        val message = (result as com.example.meowmba.core.agent.tools.ToolResult.Failure).error
+        assertTrue(message.contains("backflip"))
+        assertTrue(message.contains("ear wiggle"))
+    }
 }
