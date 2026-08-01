@@ -23,22 +23,61 @@ class AvatarAnimateTool(
     override val definition = ToolDefinition(
         id = "avatar.animate",
         displayName = "Animate the avatar",
-        description = "Make the cat avatar PERFORM on its own face right now: tricks, " +
-            "gestures, expressions. ALWAYS use this — never a media/image/video tool — when " +
-            "the user asks you to do a trick, dance, gesture, or to animate " +
-            "yourself/the cat/it (\"lick your paw\", \"show me an animation of you…\", " +
-            "\"do something cute\"). Media tools only make FILES; this is the only tool " +
-            "that moves the face. 'frames' is a JSON array " +
-            "of keyframes; each has \"at\" (milliseconds) plus any of: eye_open (0-1.6), " +
-            "pupil_size (0.05-0.9), gaze_up (0-1), head_tilt (-25..25 degrees), " +
-            "ear_perk (0.3-1.6), ear_droop (0-40 degrees), happy_eyes (boolean), " +
-            "whisker_flutter (boolean), mouth (IDLE|HAPPY|SPEAKING), glow (#RRGGBB). " +
-            "Fields left out keep their normal value; numbers interpolate between frames. " +
-            "INVENT frames that act out the user's action — the example only shows the " +
-            "format: [{\"at\":0,\"eye_open\":0.1},{\"at\":400,\"eye_open\":1.0}] is a slow blink. " +
-            "Set save=true to keep the animation by name for later. " +
-            "To REPLAY, give just the name with no frames — built-ins (" +
-            CustomAnimations.BUILT_INS.keys.joinToString(", ") + ") and saved clips play by name.",
+        description = buildString {
+            append(
+                "Make the cat avatar PERFORM on its own face right now: tricks, gestures, " +
+                "expressions. ALWAYS use this — never a media/image/video tool — when the user " +
+                "asks you to do a trick, dance, gesture, or to animate yourself/the cat/it " +
+                "(\"lick your paw\", \"show me an animation of you...\", \"do something cute\"). " +
+                "Media tools only make FILES; this is the only tool that moves the face.\n\n"
+            )
+            append(
+                "FIELDS per keyframe: at (ms, required), eye_open (0.0-1.6; 1.0 normal, " +
+                "0.06 fully closed, 1.6 wide-eyed), pupil_size (0.05-0.9; 0.28 normal, " +
+                "0.9 full dilation), gaze_up (0-1), head_tilt (-25 to 25 deg; negative=left), " +
+                "ear_perk (0.3-1.6; 1.0 neutral, 1.6 radar-locked, 0.35 flattened), " +
+                "ear_droop (0-40 deg; 0 up, 28+ submissive/sleepy), happy_eyes (boolean), " +
+                "whisker_flutter (boolean), mouth (IDLE|HAPPY|SPEAKING), glow (#RRGGBB). " +
+                "Fields left out keep their normal value. Numbers smoothstep-interpolate " +
+                "between keyframes; booleans/mouth/glow step at their keyframe.\n\n"
+            )
+            append(
+                "HOW TO INVENT FRAMES — five annotated examples:\n" +
+                "SLOW BLINK (eye_open only, 2s): " +
+                "[{\"at\":0,\"eye_open\":1.0},{\"at\":700,\"eye_open\":0.06}," +
+                "{\"at\":1300,\"eye_open\":0.06},{\"at\":2000,\"eye_open\":1.0}]\n" +
+                "HEADSHAKE (head_tilt oscillation damped, 1.2s): " +
+                "[{\"at\":0,\"head_tilt\":0},{\"at\":160,\"head_tilt\":-20}," +
+                "{\"at\":360,\"head_tilt\":20},{\"at\":560,\"head_tilt\":-14}," +
+                "{\"at\":760,\"head_tilt\":12},{\"at\":960,\"head_tilt\":-6}," +
+                "{\"at\":1200,\"head_tilt\":0}]\n" +
+                "PAW LICK (multi-field + boolean, 1.8s): " +
+                "[{\"at\":0,\"head_tilt\":0,\"eye_open\":1.0,\"whisker_flutter\":false}," +
+                "{\"at\":350,\"head_tilt\":8,\"eye_open\":0.55}," +
+                "{\"at\":650,\"head_tilt\":10,\"eye_open\":0.4,\"whisker_flutter\":true}," +
+                "{\"at\":1000,\"head_tilt\":10,\"eye_open\":0.4,\"whisker_flutter\":true}," +
+                "{\"at\":1400,\"head_tilt\":4,\"eye_open\":0.75,\"whisker_flutter\":false}," +
+                "{\"at\":1800,\"head_tilt\":0,\"eye_open\":1.0}]\n" +
+                "EAR FLATTEN (ear mechanics, 2s): " +
+                "[{\"at\":0,\"ear_perk\":1.0,\"ear_droop\":0}," +
+                "{\"at\":500,\"ear_perk\":0.6,\"ear_droop\":14}," +
+                "{\"at\":1000,\"ear_perk\":0.35,\"ear_droop\":28}," +
+                "{\"at\":1500,\"ear_perk\":0.35,\"ear_droop\":28}," +
+                "{\"at\":2000,\"ear_perk\":1.0,\"ear_droop\":0}]\n" +
+                "HUNTING FOCUS (pupils + glow, 1.6s): " +
+                "[{\"at\":0,\"pupil_size\":0.28,\"ear_perk\":1.0}," +
+                "{\"at\":380,\"pupil_size\":0.58,\"ear_perk\":1.3,\"head_tilt\":5}," +
+                "{\"at\":800,\"pupil_size\":0.85,\"ear_perk\":1.55,\"glow\":\"#D29922\"}," +
+                "{\"at\":1200,\"pupil_size\":0.9,\"ear_perk\":1.6}," +
+                "{\"at\":1600,\"pupil_size\":0.28,\"ear_perk\":1.0,\"head_tilt\":0}]\n\n"
+            )
+            append(
+                "Set save=true to keep the animation by name for later. " +
+                "To REPLAY a named clip, give just the name with no frames. " +
+                "Built-ins (play by name): " +
+                CustomAnimations.BUILT_INS.keys.joinToString(", ") + "."
+            )
+        },
         inputSchema = mapOf(
             "name" to "string",
             "frames" to "string (JSON array of keyframes — omit to replay a built-in or saved clip)",

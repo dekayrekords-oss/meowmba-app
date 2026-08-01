@@ -1310,7 +1310,8 @@ class CompanionViewModel(
      * Whatever proposes, approval gates still decide.
      */
     private suspend fun routeAgentIntent(text: String): AgentRouter.AgentIntent? {
-        AgentRouter.route(text)?.let { return it }
+        val kwIntent = AgentRouter.route(text)
+        kwIntent?.let { return it }
         if (!_uiState.value.agentBrainEnabled) return null
         val registry = agentToolRegistry ?: return null
 
@@ -1382,9 +1383,14 @@ class CompanionViewModel(
             speak("Agents aren't available in this build — the workspace isn't configured.")
             return
         }
-        when (val result = orchestrator.submit(intent.agentId, intent.toolId, intent.args, intent.title)) {
+        val result = orchestrator.submit(intent.agentId, intent.toolId, intent.args, intent.title)
+        when (result) {
             is SubmitResult.Rejected -> speak(result.reason)
             is SubmitResult.Started -> {
+                // avatar.animate is instant and self-announcing (the tool result
+                // says "Playing …") — a preamble announcement would cancel the TTS
+                // that describes the clip and double-fire speech over the performance.
+                if (intent.toolId == "avatar.animate") return
                 val agentName = AgentRegistry.byId(intent.agentId)?.name ?: "Agent"
                 speak(
                     if (result.queued) {

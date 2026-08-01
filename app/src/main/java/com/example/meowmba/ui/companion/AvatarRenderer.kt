@@ -104,7 +104,13 @@ fun AvatarRenderer(
     } ?: basePose
 
     // ── Expression blending: every pose field eases toward its target ──────
-    val blendSpec = tween<Float>(CatAnimationRegistry.spec("system.expression_blend").durationMs)
+    // When a custom animation is playing, CustomAnimations.sample() already
+    // interpolates between keyframes (smoothstep). Adding a 350ms expression
+    // blend ON TOP causes the animated value to never reach its keyframe target
+    // before the next one arrives — the motion is cancelled out. Use a near-
+    // instant spec during playback so the sample values are honored directly.
+    val blendMs = if (customAnim != null) 16 else CatAnimationRegistry.spec("system.expression_blend").durationMs
+    val blendSpec = tween<Float>(blendMs)
     val eyeOpen by animateFloatAsState(pose.eyeOpen, blendSpec, label = "eyeOpen")
     val pupilSize by animateFloatAsState(pose.pupilSize, blendSpec, label = "pupil")
     val gazeUp by animateFloatAsState(pose.pupilGazeUp, blendSpec, label = "gazeUp")

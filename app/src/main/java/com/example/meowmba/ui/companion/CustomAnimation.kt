@@ -84,6 +84,7 @@ object CustomAnimations {
      * invents its first one. Looked up by name before the on-disk store.
      */
     val BUILT_INS: Map<String, CustomAnimationSpec> = listOf(
+        // ── Original three ─────────────────────────────────────────────────────
         CustomAnimationSpec(
             "ear wiggle",
             listOf(
@@ -114,6 +115,152 @@ object CustomAnimations {
                 AnimFrame(atMs = 400, headTiltDeg = 16f, pupilSize = 0.62f, earPerk = 1.2f),
                 AnimFrame(atMs = 800, headTiltDeg = 16f, pupilSize = 0.62f, earPerk = 1.2f),
                 AnimFrame(atMs = 1200, headTiltDeg = 0f, pupilSize = 0.28f, earPerk = 1.0f),
+            ),
+        ),
+        // ── New cat animations ──────────────────────────────────────────────────
+        // slow blink: the classic cat trust signal — a long, deliberate close and reopen
+        CustomAnimationSpec(
+            "slow blink",
+            listOf(
+                AnimFrame(atMs = 0, eyeOpen = 1.0f),
+                AnimFrame(atMs = 700, eyeOpen = 0.06f),
+                AnimFrame(atMs = 1300, eyeOpen = 0.06f),
+                AnimFrame(atMs = 2000, eyeOpen = 1.0f),
+            ),
+        ),
+        // paw lick: head dips toward a paw, eyes squint, whiskers quiver during lick
+        CustomAnimationSpec(
+            "paw lick",
+            listOf(
+                AnimFrame(atMs = 0, headTiltDeg = 0f, eyeOpen = 1.0f, whiskerFlutter = false),
+                AnimFrame(atMs = 350, headTiltDeg = 8f, eyeOpen = 0.55f),
+                AnimFrame(atMs = 650, headTiltDeg = 10f, eyeOpen = 0.4f, whiskerFlutter = true),
+                AnimFrame(atMs = 1000, headTiltDeg = 10f, eyeOpen = 0.4f, whiskerFlutter = true),
+                AnimFrame(atMs = 1400, headTiltDeg = 4f, eyeOpen = 0.75f, whiskerFlutter = false),
+                AnimFrame(atMs = 1800, headTiltDeg = 0f, eyeOpen = 1.0f),
+            ),
+        ),
+        // ear flatten: defensive or annoyed — ears fold back and droop low
+        CustomAnimationSpec(
+            "ear flatten",
+            listOf(
+                AnimFrame(atMs = 0, earPerk = 1.0f, earDroopDeg = 0f),
+                AnimFrame(atMs = 500, earPerk = 0.6f, earDroopDeg = 14f),
+                AnimFrame(atMs = 1000, earPerk = 0.35f, earDroopDeg = 28f),
+                AnimFrame(atMs = 1500, earPerk = 0.35f, earDroopDeg = 28f),
+                AnimFrame(atMs = 2000, earPerk = 1.0f, earDroopDeg = 0f),
+            ),
+        ),
+        // nose twitch: micro-oscillations like sniffing something interesting
+        CustomAnimationSpec(
+            "nose twitch",
+            listOf(
+                AnimFrame(atMs = 0, headTiltDeg = 0f, earPerk = 1.0f, pupilSize = 0.28f),
+                AnimFrame(atMs = 180, headTiltDeg = 2f, earPerk = 1.12f, pupilSize = 0.33f),
+                AnimFrame(atMs = 360, headTiltDeg = -1f, earPerk = 0.95f, pupilSize = 0.28f),
+                AnimFrame(atMs = 540, headTiltDeg = 3f, earPerk = 1.18f, pupilSize = 0.36f),
+                AnimFrame(atMs = 720, headTiltDeg = -2f, earPerk = 0.9f, pupilSize = 0.28f),
+                AnimFrame(atMs = 900, headTiltDeg = 1f, earPerk = 1.08f, pupilSize = 0.31f),
+                AnimFrame(atMs = 1200, headTiltDeg = 0f, earPerk = 1.0f, pupilSize = 0.28f),
+            ),
+        ),
+        // chirp: pupils dilate, ears perk, mouth chatters in rapid bursts
+        CustomAnimationSpec(
+            "chirp",
+            listOf(
+                AnimFrame(atMs = 0, pupilSize = 0.28f, earPerk = 1.0f, mouth = MouthMode.IDLE),
+                AnimFrame(atMs = 180, pupilSize = 0.65f, earPerk = 1.4f, mouth = MouthMode.SPEAKING),
+                AnimFrame(atMs = 320, mouth = MouthMode.IDLE),
+                AnimFrame(atMs = 460, mouth = MouthMode.SPEAKING),
+                AnimFrame(atMs = 600, mouth = MouthMode.IDLE),
+                AnimFrame(atMs = 740, mouth = MouthMode.SPEAKING, pupilSize = 0.72f),
+                AnimFrame(atMs = 880, mouth = MouthMode.IDLE),
+                AnimFrame(atMs = 1100, pupilSize = 0.45f, earPerk = 1.2f),
+                AnimFrame(atMs = 1500, pupilSize = 0.28f, earPerk = 1.0f, mouth = MouthMode.IDLE),
+            ),
+        ),
+        // yawn: jaw drops wide, eyes close to slits, ears droop, body relaxes back open
+        CustomAnimationSpec(
+            "yawn",
+            listOf(
+                AnimFrame(atMs = 0, eyeOpen = 1.0f, mouth = MouthMode.IDLE, earDroopDeg = 0f),
+                AnimFrame(atMs = 450, eyeOpen = 0.6f, earDroopDeg = 8f),
+                AnimFrame(atMs = 850, eyeOpen = 0.2f, mouth = MouthMode.SPEAKING, earDroopDeg = 20f),
+                AnimFrame(atMs = 1250, eyeOpen = 0.06f, mouth = MouthMode.SPEAKING, earDroopDeg = 28f),
+                AnimFrame(atMs = 1600, eyeOpen = 0.35f, mouth = MouthMode.IDLE, earDroopDeg = 14f),
+                AnimFrame(atMs = 2000, eyeOpen = 1.0f, earDroopDeg = 0f),
+            ),
+        ),
+        // hunting focus: pupils dilate to maximum, ears radar-lock, amber glow of concentration
+        CustomAnimationSpec(
+            "hunting focus",
+            listOf(
+                AnimFrame(atMs = 0, pupilSize = 0.28f, earPerk = 1.0f, headTiltDeg = 0f),
+                AnimFrame(atMs = 380, pupilSize = 0.58f, earPerk = 1.3f, headTiltDeg = 5f),
+                AnimFrame(
+                    atMs = 800, pupilSize = 0.85f, earPerk = 1.55f,
+                    headTiltDeg = 5f, glowColorHex = 0xFFD29922,
+                ),
+                AnimFrame(atMs = 1200, pupilSize = 0.9f, earPerk = 1.6f, glowColorHex = 0xFFD29922),
+                AnimFrame(atMs = 1600, pupilSize = 0.28f, earPerk = 1.0f, headTiltDeg = 0f),
+            ),
+        ),
+        // zoomies: wide-eyed chaos — rapid head swings with bursts of happy eyes
+        CustomAnimationSpec(
+            "zoomies",
+            listOf(
+                AnimFrame(atMs = 0, eyeOpen = 1.0f, happyEyes = false, headTiltDeg = 0f),
+                AnimFrame(atMs = 150, eyeOpen = 1.6f, happyEyes = true, headTiltDeg = -15f),
+                AnimFrame(atMs = 330, headTiltDeg = 20f),
+                AnimFrame(atMs = 500, headTiltDeg = -22f, happyEyes = false),
+                AnimFrame(atMs = 670, headTiltDeg = 22f, happyEyes = true),
+                AnimFrame(atMs = 840, headTiltDeg = -18f),
+                AnimFrame(atMs = 1010, headTiltDeg = 14f, happyEyes = false),
+                AnimFrame(atMs = 1300, headTiltDeg = 0f, eyeOpen = 1.0f),
+                AnimFrame(atMs = 1600, headTiltDeg = 0f),
+            ),
+        ),
+        // stretch: the full-body morning stretch — slow close, peak open mouth, bright reopen
+        CustomAnimationSpec(
+            "stretch",
+            listOf(
+                AnimFrame(atMs = 0, eyeOpen = 1.0f, mouth = MouthMode.IDLE, earDroopDeg = 0f, headTiltDeg = 0f),
+                AnimFrame(atMs = 450, eyeOpen = 0.5f, earDroopDeg = 10f),
+                AnimFrame(atMs = 850, eyeOpen = 0.15f, mouth = MouthMode.HAPPY, earDroopDeg = 22f, headTiltDeg = 8f),
+                AnimFrame(atMs = 1250, eyeOpen = 0.1f, mouth = MouthMode.HAPPY, earDroopDeg = 25f),
+                AnimFrame(atMs = 1700, eyeOpen = 0.5f, mouth = MouthMode.IDLE, earDroopDeg = 10f, headTiltDeg = 4f),
+                AnimFrame(atMs = 2200, eyeOpen = 1.0f, earDroopDeg = 0f, headTiltDeg = 0f),
+            ),
+        ),
+        // headshake: emphatic "nope" — dampened oscillation that settles back to center
+        CustomAnimationSpec(
+            "headshake",
+            listOf(
+                AnimFrame(atMs = 0, headTiltDeg = 0f),
+                AnimFrame(atMs = 160, headTiltDeg = -20f),
+                AnimFrame(atMs = 360, headTiltDeg = 20f),
+                AnimFrame(atMs = 560, headTiltDeg = -14f),
+                AnimFrame(atMs = 760, headTiltDeg = 12f),
+                AnimFrame(atMs = 960, headTiltDeg = -6f),
+                AnimFrame(atMs = 1200, headTiltDeg = 0f),
+            ),
+        ),
+        // trill: chirpy vibrato — ears pulse, whiskers buzz, warm green glow of happiness
+        CustomAnimationSpec(
+            "trill",
+            listOf(
+                AnimFrame(atMs = 0, earPerk = 1.0f, happyEyes = false, whiskerFlutter = false),
+                AnimFrame(
+                    atMs = 180, earPerk = 1.5f, happyEyes = true,
+                    whiskerFlutter = true, glowColorHex = 0xFF3FB950,
+                ),
+                AnimFrame(atMs = 380, earPerk = 0.8f, whiskerFlutter = false),
+                AnimFrame(atMs = 580, earPerk = 1.5f, whiskerFlutter = true),
+                AnimFrame(atMs = 780, earPerk = 0.8f, whiskerFlutter = false),
+                AnimFrame(atMs = 980, earPerk = 1.5f, whiskerFlutter = true),
+                AnimFrame(atMs = 1180, earPerk = 0.8f, whiskerFlutter = false),
+                AnimFrame(atMs = 1450, earPerk = 1.2f, whiskerFlutter = true),
+                AnimFrame(atMs = 1700, earPerk = 1.0f, happyEyes = false, whiskerFlutter = false),
             ),
         ),
     ).associateBy { it.name }

@@ -78,7 +78,8 @@ class LlmToolCallRouter(
 
     suspend fun route(text: String, context: String? = null): AgentRouter.AgentIntent? {
         // 1. Zero-latency keyword path
-        keywordRouter(text)?.let { return it }
+        val kwResult = keywordRouter(text)
+        kwResult?.let { return it }
 
         // 2. Don't spend a model call on obvious conversation
         if (!CommandHeuristics.mightBeCommand(text)) return null

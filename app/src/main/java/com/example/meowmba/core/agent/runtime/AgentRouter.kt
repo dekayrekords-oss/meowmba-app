@@ -214,6 +214,39 @@ object AgentRouter {
         if (normalized in setOf("dance", "do a dance", "show me a dance", "dance for me")) {
             return AgentIntent("main", "avatar.animate", mapOf("name" to "happy bop"), "happy bop")
         }
+        if (normalized in setOf("slow blink", "do a slow blink", "blink at me", "give me a slow blink")) {
+            return AgentIntent("main", "avatar.animate", mapOf("name" to "slow blink"), "slow blink")
+        }
+        if (normalized in setOf("lick your paw", "lick your paws", "paw lick", "do a paw lick")) {
+            return AgentIntent("main", "avatar.animate", mapOf("name" to "paw lick"), "paw lick")
+        }
+        if (normalized in setOf("flatten your ears", "flatten ears", "ear flatten", "put your ears back")) {
+            return AgentIntent("main", "avatar.animate", mapOf("name" to "ear flatten"), "ear flatten")
+        }
+        if (normalized in setOf("nose twitch", "twitch your nose", "sniff", "sniff around")) {
+            return AgentIntent("main", "avatar.animate", mapOf("name" to "nose twitch"), "nose twitch")
+        }
+        if (normalized in setOf("chirp", "do a chirp", "make a chirping sound", "chirp at me")) {
+            return AgentIntent("main", "avatar.animate", mapOf("name" to "chirp"), "chirp")
+        }
+        if (normalized in setOf("yawn", "do a yawn", "yawn for me", "show me a yawn")) {
+            return AgentIntent("main", "avatar.animate", mapOf("name" to "yawn"), "yawn")
+        }
+        if (normalized in setOf("hunting focus", "hunting mode", "focus", "lock on", "stare")) {
+            return AgentIntent("main", "avatar.animate", mapOf("name" to "hunting focus"), "hunting focus")
+        }
+        if (normalized in setOf("zoomies", "do zoomies", "go crazy", "run around")) {
+            return AgentIntent("main", "avatar.animate", mapOf("name" to "zoomies"), "zoomies")
+        }
+        if (normalized in setOf("stretch", "do a stretch", "stretch out")) {
+            return AgentIntent("main", "avatar.animate", mapOf("name" to "stretch"), "stretch")
+        }
+        if (normalized in setOf("headshake", "shake your head", "head shake", "no")) {
+            return AgentIntent("main", "avatar.animate", mapOf("name" to "headshake"), "headshake")
+        }
+        if (normalized in setOf("trill", "do a trill", "make a trill", "purr trill")) {
+            return AgentIntent("main", "avatar.animate", mapOf("name" to "trill"), "trill")
+        }
         // "play the ear wiggle animation" — replay a saved or built-in clip by name.
         extractAfter(raw, listOf("play the ", "play "))?.let { rest ->
             val name = rest.removeSuffix(" animation").removeSuffix(" Animation").trim()
