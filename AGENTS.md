@@ -121,6 +121,14 @@ every clamp) — a 60ms performance is indistinguishable from "nothing happened"
      verify the RUNNING process predates the last install (`ps -o ETIME`)
      before trusting on-device behavior.
 
+   - **Crash anatomy worth knowing:** asked to "make an animation called lick
+     your paw", the model emitted `frames` as a REAL JSON array —
+     `ToolCallParser`'s `value.jsonPrimitive` threw on the main thread and
+     took the whole app down (`6bf9543`). The parser now never throws and
+     structured args ride as JSON text, which is exactly what
+     `avatar.animate`'s `frames` parses. Same fix in `HermesAgentBrain`.
+     Regression-pinned in `ToolCallParserTest`.
+
 2. **Email/app routing fix — COMMITTED** (`96ca7d3`; `AgentRouter.kt`,
    `EmailTools.kt` + `AppAndEmailRoutingTest.kt`, 15 tests, all green).
    - Reported bug: "open gmail and write a message that says hi to X@Y.com"
