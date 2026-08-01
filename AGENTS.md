@@ -13,7 +13,9 @@ single `:app` module.
 
 Repo: `/Users/bobrossjr/AndroidStudioProjects/Meowmba`
 Remotes: `lan` (primary, `meow:/home/claude/git/meowmba-app.git`), `origin` (meow-nb).
-Local `main` is currently **31 commits ahead of `lan/main`** — unpushed work.
+**Pending sync (2026-07-31):** `lan/main` is current at `2be2ad4`; `origin`
+(meow-nb, Tailscale 100.77.97.236) is 5 commits behind — it dropped off the
+network mid-push. When the notebook is back: `git push origin main`.
 
 ## Build & test
 
