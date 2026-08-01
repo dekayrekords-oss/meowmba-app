@@ -46,7 +46,26 @@ failures from your change.
 
 ## Work state (as of 2026-07-31)
 
-1. **Email/app routing fix — COMMITTED** (`96ca7d3`; `AgentRouter.kt`,
+1. **Invented avatar animations — COMMITTED** (`6d23205`; new `ui/companion/CustomAnimation.kt`,
+   `core/agent/tools/AvatarAnimateTool.kt`; edits to `AgentModel.kt`,
+   `CompanionState.kt`, `CompanionViewModel.kt`, `AvatarRenderer.kt` +
+   `CustomAnimationTest.kt`, 14 tests, all green).
+   - The companion invents its own face animations: `avatar.animate` takes a
+     name + JSON keyframes (sparse pose overrides), validates/clamps via
+     `CustomAnimations.parse` (every clamp reported in the result), plays the
+     clip over the state-machine pose, and auto-clears. `save=true` persists
+     clips as JSON files in `filesDir/custom_animations/`.
+   - Owned by Meow (`main`) in `AgentRegistry` — self-expression, not a
+     specialist skill. SAFE risk, no approval card.
+   - Same trust boundary as every tool: the model proposes,
+     `CustomAnimations` constrains. Privacy marks (mic/camera X, dim, MUTED
+     mouth) are NOT animatable — a clip cannot fake a privacy state.
+   - Sampling is per-field sparse: a clip can wiggle just the ears while the
+     eyes keep reacting. Numbers smoothstep-lerp; booleans/mouth/glow step.
+   - Not on the keyword fast path by design — only the LLM brain invents
+     keyframes; "do a trick" falls through to it.
+
+2. **Email/app routing fix — COMMITTED** (`96ca7d3`; `AgentRouter.kt`,
    `EmailTools.kt` + `AppAndEmailRoutingTest.kt`, 15 tests, all green).
    - Reported bug: "open gmail and write a message that says hi to X@Y.com"
      → `No installed app matches "gmail and write a message that says hi to…"`.
@@ -66,7 +85,7 @@ failures from your change.
    - Gotcha that bit once: `extractAfter` is PREFIX-only — never use it for
      mid-sentence extraction.
 
-2. **Runtime IPC bridge for sibling apps — COMMITTED** (`01dc16f`;
+3. **Runtime IPC bridge for sibling apps — COMMITTED** (`01dc16f`;
    `bridge/MeowmbaRuntimeService.kt`, `core/memory/IpcMetaMemoryConnector.kt`).
    - `MeowmbaRuntimeService`: exported Messenger service, action
      `com.example.meowmba.action.RUNTIME_BRIDGE`, already declared in the
