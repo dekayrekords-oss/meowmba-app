@@ -80,4 +80,18 @@ class CompanionViewModelTest {
         viewModel.toggleMemoryScreen()
         assertFalse(viewModel.uiState.value.metaMemoryLinked)
     }
+
+    @Test
+    fun `playing an animation closes the chat sheet so the face is visible`() = runTest {
+        // The sheet covers the bottom 60% — face included. Real tasks played in
+        // the audit log while the user read chat and saw nothing.
+        val viewModel = CompanionViewModel()
+        viewModel.toggleChat()
+        assertTrue(viewModel.uiState.value.isChatExpanded)
+        viewModel.playCustomAnimation(
+            com.example.meowmba.ui.companion.CustomAnimations.BUILT_INS.getValue("ear wiggle")
+        )
+        assertFalse(viewModel.uiState.value.isChatExpanded)
+        assertEquals("ear wiggle", viewModel.uiState.value.activeAnimation?.name)
+    }
 }

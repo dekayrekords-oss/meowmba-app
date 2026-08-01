@@ -67,10 +67,12 @@ object CustomAnimations {
      * Shorter than this and nobody sees the performance. Measured on device:
      * a weak model invented a 60ms clip — the tool honestly reported "Playing
      * (60ms)" and the user reported "it does not make an animation". Both were
-     * right. Sub-threshold clips are stretched (ratios preserved) and the
-     * stretch is reported, exactly like every other clamp.
+     * right. 500ms proved too short too: a clip that starts while the chat
+     * sheet slides away is over before the sheet is. Sub-threshold clips are
+     * stretched (ratios preserved) and the stretch is reported, exactly like
+     * every other clamp.
      */
-    private const val MIN_VISIBLE_MS = 500
+    private const val MIN_VISIBLE_MS = 1200
     private val NAME_PATTERN = Regex("[A-Za-z0-9 _\\-]{1,40}")
 
     /** Mouths a clip may use. MUTED is system-owned (the mute X is a fact, not a look). */
@@ -86,10 +88,10 @@ object CustomAnimations {
             "ear wiggle",
             listOf(
                 AnimFrame(atMs = 0, earPerk = 1.0f),
-                AnimFrame(atMs = 140, earPerk = 1.5f),
-                AnimFrame(atMs = 280, earPerk = 0.7f),
-                AnimFrame(atMs = 420, earPerk = 1.4f),
-                AnimFrame(atMs = 600, earPerk = 1.0f),
+                AnimFrame(atMs = 300, earPerk = 1.5f),
+                AnimFrame(atMs = 600, earPerk = 0.7f),
+                AnimFrame(atMs = 900, earPerk = 1.4f),
+                AnimFrame(atMs = 1200, earPerk = 1.0f),
             ),
         ),
         CustomAnimationSpec(
@@ -97,21 +99,21 @@ object CustomAnimations {
             listOf(
                 AnimFrame(atMs = 0, headTiltDeg = 0f, happyEyes = false, mouth = MouthMode.IDLE),
                 AnimFrame(
-                    atMs = 200, headTiltDeg = -12f, happyEyes = true,
+                    atMs = 250, headTiltDeg = -12f, happyEyes = true,
                     mouth = MouthMode.HAPPY, glowColorHex = 0xFF3FB950,
                 ),
-                AnimFrame(atMs = 450, headTiltDeg = 12f),
-                AnimFrame(atMs = 700, headTiltDeg = -8f, whiskerFlutter = true),
-                AnimFrame(atMs = 900, headTiltDeg = 0f, happyEyes = false, mouth = MouthMode.IDLE),
+                AnimFrame(atMs = 550, headTiltDeg = 12f),
+                AnimFrame(atMs = 800, headTiltDeg = -8f, whiskerFlutter = true),
+                AnimFrame(atMs = 1200, headTiltDeg = 0f, happyEyes = false, mouth = MouthMode.IDLE),
             ),
         ),
         CustomAnimationSpec(
             "curious tilt",
             listOf(
                 AnimFrame(atMs = 0, headTiltDeg = 0f, pupilSize = 0.28f),
-                AnimFrame(atMs = 350, headTiltDeg = 16f, pupilSize = 0.62f, earPerk = 1.2f),
-                AnimFrame(atMs = 700, headTiltDeg = 16f, pupilSize = 0.62f, earPerk = 1.2f),
-                AnimFrame(atMs = 1000, headTiltDeg = 0f, pupilSize = 0.28f, earPerk = 1.0f),
+                AnimFrame(atMs = 400, headTiltDeg = 16f, pupilSize = 0.62f, earPerk = 1.2f),
+                AnimFrame(atMs = 800, headTiltDeg = 16f, pupilSize = 0.62f, earPerk = 1.2f),
+                AnimFrame(atMs = 1200, headTiltDeg = 0f, pupilSize = 0.28f, earPerk = 1.0f),
             ),
         ),
     ).associateBy { it.name }

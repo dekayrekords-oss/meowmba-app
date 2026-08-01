@@ -34,14 +34,14 @@ class CustomAnimationTest {
             """
             {"name": "happy wiggle", "frames": [
               {"at": 0, "ear_perk": 1.5, "happy_eyes": true, "mouth": "HAPPY", "glow": "#3FB950"},
-              {"at": 250, "ear_perk": 0.6, "head_tilt": -12},
-              {"at": 500, "ear_perk": 1.0, "eye_open": 0.9, "pupil_size": 0.5, "gaze_up": 0.4, "ear_droop": 10}
+              {"at": 600, "ear_perk": 0.6, "head_tilt": -12},
+              {"at": 1200, "ear_perk": 1.0, "eye_open": 0.9, "pupil_size": 0.5, "gaze_up": 0.4, "ear_droop": 10}
             ]}
             """.trimIndent()
         )
         assertEquals("happy wiggle", spec.name)
         assertEquals(3, spec.frames.size)
-        assertEquals(500, spec.durationMs)
+        assertEquals(1200, spec.durationMs)
         assertEquals(1.5f, spec.frames[0].earPerk!!, 0.001f)
         assertEquals(true, spec.frames[0].happyEyes)
         assertEquals(MouthMode.HAPPY, spec.frames[0].mouth)
@@ -94,10 +94,10 @@ class CustomAnimationTest {
     @Test
     fun `frames sort by time so model order does not matter`() {
         val (spec, _) = CustomAnimations.parse(
-            """{"name":"x","frames":[{"at":1000,"eye_open":1.0},{"at":400,"eye_open":0.2}]}"""
+            """{"name":"x","frames":[{"at":2000,"eye_open":1.0},{"at":1200,"eye_open":0.2}]}"""
         )
-        assertEquals(400, spec.frames[0].atMs)
-        assertEquals(1000, spec.frames[1].atMs)
+        assertEquals(1200, spec.frames[0].atMs)
+        assertEquals(2000, spec.frames[1].atMs)
     }
 
     @Test
@@ -107,9 +107,9 @@ class CustomAnimationTest {
         val (spec, notes) = CustomAnimations.parse(
             """{"name":"tiny","frames":[{"at":0,"ear_perk":1.5},{"at":60,"ear_perk":1.0}]}"""
         )
-        assertEquals(500, spec.durationMs)
+        assertEquals(1200, spec.durationMs)
         assertEquals(0, spec.frames[0].atMs)
-        assertEquals(500, spec.frames[1].atMs)
+        assertEquals(1200, spec.frames[1].atMs)
         assertTrue(notes.any { it.contains("stretched") })
     }
 

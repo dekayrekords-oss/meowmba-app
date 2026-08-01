@@ -2678,10 +2678,18 @@ class CompanionViewModel(
     /**
      * Plays an invented clip over the face, then clears it. A new clip replaces
      * the old — the face is one screen, and the renderer blends the handoff.
+     *
+     * The chat sheet covers the bottom 60% of the screen — the face included —
+     * so a clip that plays while it is open is a performance nobody sees
+     * (reported on device: real tasks in the audit log, user saw nothing).
+     * "Show me" means show me: the sheet closes for the clip and stays closed.
      */
     fun playCustomAnimation(spec: CustomAnimationSpec) {
         customAnimJob?.cancel()
-        _uiState.value = _uiState.value.copy(activeAnimation = spec)
+        _uiState.value = _uiState.value.copy(
+            activeAnimation = spec,
+            isChatExpanded = false,
+        )
         customAnimJob = viewModelScope.launch {
             delay(spec.durationMs.toLong() + 300)
             _uiState.value = _uiState.value.copy(activeAnimation = null)
