@@ -150,6 +150,23 @@ class ToolCallParserTest {
         val call = ToolCallParser.parse("""{"tool": "file.write", "args": {"path": "c.txt", "content": "a {nested} brace"}}""", registry)
         assertEquals("a {nested} brace", call?.args?.get("content"))
     }
+
+    @Test
+    fun `structured args ride as json text instead of crashing`() {
+        // The exact shape that crashed the app on device: the model sent
+        // "frames" as a real array; value.jsonPrimitive threw on the main thread.
+        val output = """{"tool": "file.write", "args": {"path": "anim.json", "content": [{"at": 0, "ear_perk": 1.5}, {"at": 400}]}}"""
+        val call = ToolCallParser.parse(output, registry)
+        assertEquals("file.write", call?.toolId)
+        assertEquals("anim.json", call?.args?.get("path"))
+        assertEquals("""[{"at":0,"ear_perk":1.5},{"at":400}]""", call?.args?.get("content"))
+    }
+
+    @Test
+    fun `a non-primitive tool name yields null, never a crash`() {
+        assertNull(ToolCallParser.parse("""{"tool": {"id": "file.write"}}""", registry))
+        assertNull(ToolCallParser.parse("""{"tool": ["file.write"]}""", registry))
+    }
 }
 
 class CommandHeuristicsTest {

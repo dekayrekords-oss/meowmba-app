@@ -113,7 +113,14 @@ object HermesProtocol {
             val args = function["arguments"]?.jsonPrimitive?.content.orEmpty()
             val parsedArgs = try {
                 json.parseToJsonElement(args).jsonObject.entries
-                    .associate { (k, v) -> k to v.jsonPrimitive.content }
+                    .associate { (k, v) ->
+                        k to when (v) {
+                            // Structured values (arrays/objects) ride as JSON text —
+                            // avatar.animate's "frames" arrives exactly this way.
+                            is JsonPrimitive -> v.content
+                            else -> v.toString()
+                        }
+                    }
             } catch (e: Exception) {
                 emptyMap()
             }

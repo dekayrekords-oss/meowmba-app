@@ -97,7 +97,11 @@ class LlmToolCallRouter(
         } ?: return null
         val output = (response as? ModelResponse.Complete)?.text ?: return null
 
-        val call = ToolCallParser.parse(output, toolRegistry) ?: return null
+        // Parse must never be able to crash the app: the model's output is
+        // untrusted by contract ("garbage yields null"), and an exception here
+        // took the whole app down on device.
+        val call = runCatching { ToolCallParser.parse(output, toolRegistry) }
+            .getOrNull() ?: return null
 
         // Resolve which available agent owns this tool
         val owner = AgentRegistry.ownerOf(call.toolId) ?: return null

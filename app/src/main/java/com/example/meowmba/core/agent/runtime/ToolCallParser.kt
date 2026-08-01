@@ -2,7 +2,9 @@ package com.example.meowmba.core.agent.runtime
 
 import com.example.meowmba.core.agent.tools.ToolRegistry
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -36,20 +38,32 @@ object ToolCallParser {
     fun parse(output: String, registry: ToolRegistry): ParsedToolCall? {
         val obj = extractJsonObject(output) ?: return null
 
-        // Both key styles: {"tool", "args"} and Hermes {"name", "arguments"}
-        val toolId = obj["tool"]?.jsonPrimitive?.content
-            ?: obj["name"]?.jsonPrimitive?.content
+        // Both key styles: {"tool", "args"} and Hermes {"name", "arguments"}.
+        // .jsonPrimitive THROWS on non-primitives, so every access goes through
+        // primitiveTextOrNull — garbage must yield null, never a crash (the
+        // model's "frames" as a real array crashed the app on device).
+        val toolId = obj["tool"].primitiveTextOrNull()
+            ?: obj["name"].primitiveTextOrNull()
             ?: return null
         if (toolId == "null" || toolId.isBlank()) return null
         if (registry.byId(toolId) == null) return null   // hallucinated tool: reject
 
         val rawArgs = (obj["args"] ?: obj["arguments"]) as? JsonObject
         val args = rawArgs?.entries?.associate { (key, value) ->
-            key to value.jsonPrimitive.content
+            key to when (value) {
+                // Structured args ride as JSON text: avatar.animate's "frames"
+                // as a real array is exactly the string the tool parses.
+                is JsonPrimitive -> value.content
+                else -> value.toString()
+            }
         } ?: emptyMap()
 
         return ParsedToolCall(toolId, args)
     }
+
+    /** Content when this is a primitive, null otherwise — never throws. */
+    private fun JsonElement?.primitiveTextOrNull(): String? =
+        (this as? JsonPrimitive)?.content
 
     /**
      * Extract the first balanced JSON object from arbitrary text, respecting
