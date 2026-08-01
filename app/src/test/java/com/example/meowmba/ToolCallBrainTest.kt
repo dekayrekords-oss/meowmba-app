@@ -75,6 +75,20 @@ class ToolCallPromptTest {
             assertTrue(prompt.contains("never media.*"))
         }
     }
+
+    @Test
+    fun `follow-up context rides both prompt modes, and stays out when absent`() {
+        // Measured on device: "yes" (to "want me to try a custom animation?")
+        // routed blind and invented a random 60ms clip.
+        val ctx = "Meow: Would you like me to try a custom face animation?"
+        val contract = ToolCallPrompt.build("yes", registry().definitions(), ctx)
+        assertTrue(contract.contains("Recent conversation"))
+        assertTrue(contract.contains(ctx))
+        assertTrue(contract.contains("User: yes"))
+        val hermes = ToolCallPrompt.buildHermesNative("yes", registry().definitions(), ctx)
+        assertTrue(hermes.contains(ctx))
+        assertTrue(!ToolCallPrompt.build("yes", registry().definitions()).contains("Recent conversation"))
+    }
 }
 
 class ToolCallParserTest {

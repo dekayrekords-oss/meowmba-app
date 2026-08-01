@@ -94,10 +94,28 @@ class CustomAnimationTest {
     @Test
     fun `frames sort by time so model order does not matter`() {
         val (spec, _) = CustomAnimations.parse(
-            """{"name":"x","frames":[{"at":400,"eye_open":1.0},{"at":100,"eye_open":0.2}]}"""
+            """{"name":"x","frames":[{"at":1000,"eye_open":1.0},{"at":400,"eye_open":0.2}]}"""
         )
-        assertEquals(100, spec.frames[0].atMs)
-        assertEquals(400, spec.frames[1].atMs)
+        assertEquals(400, spec.frames[0].atMs)
+        assertEquals(1000, spec.frames[1].atMs)
+    }
+
+    @Test
+    fun `a clip too short to see is stretched and the stretch is reported`() {
+        // Measured on device: a weak model invented a 60ms clip; the tool said
+        // "Playing (60ms)" and the user said "it does not make an animation".
+        val (spec, notes) = CustomAnimations.parse(
+            """{"name":"tiny","frames":[{"at":0,"ear_perk":1.5},{"at":60,"ear_perk":1.0}]}"""
+        )
+        assertEquals(500, spec.durationMs)
+        assertEquals(0, spec.frames[0].atMs)
+        assertEquals(500, spec.frames[1].atMs)
+        assertTrue(notes.any { it.contains("stretched") })
+    }
+
+    @Test
+    fun `all-zero keyframes are rejected because the clip never plays`() {
+        assertTrue(parseFails("""{"name":"x","frames":[{"at":0},{"at":0}]}""").contains("never plays"))
     }
 
     @Test

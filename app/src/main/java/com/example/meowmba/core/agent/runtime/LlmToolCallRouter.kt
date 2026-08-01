@@ -68,7 +68,7 @@ class LlmToolCallRouter(
     private val promptMode: ToolCallPromptMode = ToolCallPromptMode.CONTRACT
 ) {
 
-    suspend fun route(text: String): AgentRouter.AgentIntent? {
+    suspend fun route(text: String, context: String? = null): AgentRouter.AgentIntent? {
         // 1. Zero-latency keyword path
         keywordRouter(text)?.let { return it }
 
@@ -77,8 +77,8 @@ class LlmToolCallRouter(
 
         // 3. Model-based decision (IO-bound: inference must not block main)
         val prompt = when (promptMode) {
-            ToolCallPromptMode.CONTRACT -> ToolCallPrompt.build(text, toolRegistry.definitions())
-            ToolCallPromptMode.HERMES_NATIVE -> ToolCallPrompt.buildHermesNative(text, toolRegistry.definitions())
+            ToolCallPromptMode.CONTRACT -> ToolCallPrompt.build(text, toolRegistry.definitions(), context)
+            ToolCallPromptMode.HERMES_NATIVE -> ToolCallPrompt.buildHermesNative(text, toolRegistry.definitions(), context)
         }
         val response = try {
             withContext(dispatcher) {

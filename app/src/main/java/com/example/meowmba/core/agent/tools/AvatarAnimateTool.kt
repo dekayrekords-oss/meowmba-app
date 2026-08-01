@@ -35,7 +35,7 @@ class AvatarAnimateTool(
             "whisker_flutter (boolean), mouth (IDLE|HAPPY|SPEAKING), glow (#RRGGBB). " +
             "Fields left out keep their normal value; numbers interpolate between frames. " +
             "INVENT frames that act out the user's action — the example only shows the " +
-            "format: [{\"at\":0,\"eye_open\":0.1},{\"at\":150,\"eye_open\":1.0}] is a slow blink. " +
+            "format: [{\"at\":0,\"eye_open\":0.1},{\"at\":400,\"eye_open\":1.0}] is a slow blink. " +
             "Set save=true to keep the animation by name for later. " +
             "To REPLAY, give just the name with no frames — built-ins (" +
             CustomAnimations.BUILT_INS.keys.joinToString(", ") + ") and saved clips play by name.",

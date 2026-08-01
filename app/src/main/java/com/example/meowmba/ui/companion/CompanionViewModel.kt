@@ -1322,7 +1322,23 @@ class CompanionViewModel(
             provider, registry,
             dispatcher = ioDispatcher,
             promptMode = toolCallPromptMode()
-        ).route(text)
+        ).route(text, context = followUpContextFor(text))
+    }
+
+    /**
+     * The brain routes one utterance with no memory of the conversation — fine for
+     * full sentences, broken for follow-ups: measured on device, "yes" (to "want me
+     * to try a custom animation?") invented a random 60ms clip. Short utterances get
+     * the last exchange attached so the router can see what "yes" agreed to.
+     */
+    private fun followUpContextFor(text: String): String? {
+        val words = text.trim().split(Regex("\\s+")).count { it.isNotBlank() }
+        if (words > 4) return null
+        val recent = _uiState.value.chatMessages.takeLast(2)
+        if (recent.isEmpty()) return null
+        return recent.joinToString("\n") {
+            (if (it.isCompanion) "Meow" else "User") + ": " + it.text.take(200)
+        }
     }
 
     /**

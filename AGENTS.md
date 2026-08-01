@@ -102,9 +102,11 @@ Saved custom animations are plain files:
 
 **Context window facts:** chat prompts carry persona + capabilities + recalled
 memories + the **last 10 messages** (`getRecentMessages(10)`); the tool-routing
-brain (`LlmToolCallRouter`) decides from the CURRENT UTTERANCE ONLY — no
-history. If a follow-up like "yeah do that" mis-routes, that missing context
-is why.
+brain (`LlmToolCallRouter`) decides from the CURRENT UTTERANCE ONLY — except
+short follow-ups (≤4 words, "yes", "do it"), which now get the last 2 chat
+messages attached (`followUpContextFor`) after a bare "yes" invented a random
+60ms clip on device. Clips under 500ms are stretched to 500ms (reported like
+every clamp) — a 60ms performance is indistinguishable from "nothing happened".
 
 2. **Email/app routing fix — COMMITTED** (`96ca7d3`; `AgentRouter.kt`,
    `EmailTools.kt` + `AppAndEmailRoutingTest.kt`, 15 tests, all green).

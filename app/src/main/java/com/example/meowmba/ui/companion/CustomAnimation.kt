@@ -3,6 +3,7 @@ package com.example.meowmba.ui.companion
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import kotlin.math.roundToInt
 
 /**
  * Custom (invented) avatar animations.
@@ -61,6 +62,15 @@ object CustomAnimations {
     private val DROOP_RANGE = 0f..40f
     private const val MAX_FRAMES = 16
     private const val MAX_DURATION_MS = 10_000
+
+    /**
+     * Shorter than this and nobody sees the performance. Measured on device:
+     * a weak model invented a 60ms clip — the tool honestly reported "Playing
+     * (60ms)" and the user reported "it does not make an animation". Both were
+     * right. Sub-threshold clips are stretched (ratios preserved) and the
+     * stretch is reported, exactly like every other clamp.
+     */
+    private const val MIN_VISIBLE_MS = 500
     private val NAME_PATTERN = Regex("[A-Za-z0-9 _\\-]{1,40}")
 
     /** Mouths a clip may use. MUTED is system-owned (the mute X is a fact, not a look). */
@@ -142,10 +152,17 @@ object CustomAnimations {
             parseFrame(i, f, notes)
         }.sortedBy { it.atMs }
 
-        if (frames.last().atMs == 0 && frames.size == 1) {
-            throw SpecException("a single frame at 0ms never plays — add a later keyframe")
+        if (frames.last().atMs == 0) {
+            throw SpecException("every keyframe is at 0ms — the clip never plays; add a later keyframe")
         }
-        return CustomAnimationSpec(name, frames) to notes
+        val stretched = if (frames.last().atMs < MIN_VISIBLE_MS) {
+            val factor = MIN_VISIBLE_MS.toFloat() / frames.last().atMs
+            notes.add("clip was ${frames.last().atMs}ms — stretched to ${MIN_VISIBLE_MS}ms so it can be seen")
+            frames.map { f -> f.copy(atMs = (f.atMs * factor).roundToInt()) }
+        } else {
+            frames
+        }
+        return CustomAnimationSpec(name, stretched) to notes
     }
 
     private fun parseFrame(index: Int, f: JSONObject, notes: MutableList<String>): AnimFrame {

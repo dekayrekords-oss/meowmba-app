@@ -23,7 +23,7 @@ enum class ToolCallPromptMode {
  */
 object ToolCallPrompt {
 
-    fun build(userText: String, tools: List<ToolDefinition>): String = buildString {
+    fun build(userText: String, tools: List<ToolDefinition>, context: String? = null): String = buildString {
         append("You are a tool router. Reply with ONLY one JSON object, no other text.\n")
         append("Tools:\n")
         tools.forEach { tool ->
@@ -43,6 +43,12 @@ object ToolCallPrompt {
         append("\"animate yourself/the cat/it\" — are avatar.animate, never media.* tools ")
         append("(those only make files).\n")
         append('\n')
+        // Follow-ups ("yes", "do it") are meaningless without the turn before;
+        // measured on device, a bare "yes" invented a random 60ms clip.
+        if (!context.isNullOrBlank()) {
+            append("Recent conversation (for context only — route the LATEST user message):\n")
+            append(context).append('\n').append('\n')
+        }
         append("User: ").append(userText).append('\n')
         append("JSON:")
     }
@@ -52,7 +58,7 @@ object ToolCallPrompt {
      * matching the template Hermes models were trained on. Tool schemas are
      * emitted in OpenAI function format via [HermesProtocol.toOpenAiTools].
      */
-    fun buildHermesNative(userText: String, tools: List<ToolDefinition>): String = buildString {
+    fun buildHermesNative(userText: String, tools: List<ToolDefinition>, context: String? = null): String = buildString {
         append("<|im_start|>system\n")
         append("You are a function calling AI model. You are provided with function signatures ")
         append("within <tools></tools> XML tags. You may call one function to assist with the ")
@@ -66,6 +72,9 @@ object ToolCallPrompt {
         append(" Requests for the companion to perform (trick, gesture, \"animate yourself/it\") ")
         append("are avatar.animate, never media.* tools — those only make files.")
         append("<|im_end|>\n")
+        if (!context.isNullOrBlank()) {
+            append("<|im_start|>user\n").append(context).append("<|im_end|>\n")
+        }
         append("<|im_start|>user\n").append(userText).append("<|im_end|>\n")
         append("<|im_start|>assistant\n")
     }
