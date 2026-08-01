@@ -66,7 +66,9 @@ object AgentRegistry {
         AgentDefinition(
             id = MAIN, name = "Meow",
             purpose = "Main conversational agent. Routes goals to specialists and answers directly.",
-            allowedTools = setOf("task.list")
+            // avatar.animate is self-expression (the companion performing its own
+            // invented clips), so it belongs to Meow rather than a specialist.
+            allowedTools = setOf("task.list", "avatar.animate")
         ),
         AgentDefinition(
             id = "file", name = "Shelve",

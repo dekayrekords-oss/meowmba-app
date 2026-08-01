@@ -19,6 +19,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -75,8 +76,32 @@ fun AvatarRenderer(
     onSwipeDown: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val pose = CatAvatarStateMachine.resolvePose(state)
+    val basePose = CatAvatarStateMachine.resolvePose(state)
     val haptics = LocalHapticFeedback.current
+
+    // ── Invented animation overlay ─────────────────────────────────────────
+    // A clip the companion invented plays OVER the state-machine pose: sparse
+    // fields interpolate across keyframes, everything else keeps reacting
+    // normally. Feeding it in here means the expression blending below smooths
+    // the keyframe steps for free, and the clip simply stops applying when it
+    // ends (sample returns null past the duration).
+    val customAnim = state.activeAnimation
+    var animT by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(customAnim) {
+        if (customAnim != null) {
+            var start = -1L
+            while (true) {
+                withFrameMillis { now ->
+                    if (start < 0L) start = now
+                    animT = now - start
+                }
+                if (animT > customAnim.durationMs) break
+            }
+        }
+    }
+    val pose = customAnim?.let { clip ->
+        CustomAnimations.sample(clip, animT)?.let { with(CustomAnimations) { basePose.overlay(it) } }
+    } ?: basePose
 
     // ── Expression blending: every pose field eases toward its target ──────
     val blendSpec = tween<Float>(CatAnimationRegistry.spec("system.expression_blend").durationMs)

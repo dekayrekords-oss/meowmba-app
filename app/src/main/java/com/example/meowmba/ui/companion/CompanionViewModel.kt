@@ -36,6 +36,7 @@ import com.example.meowmba.core.agent.tools.FileDeleteTool
 import com.example.meowmba.core.agent.tools.FileListTool
 import com.example.meowmba.core.agent.tools.FileReadTool
 import com.example.meowmba.core.agent.tools.FileWriteTool
+import com.example.meowmba.core.agent.tools.AvatarAnimateTool
 import com.example.meowmba.core.agent.tools.MemorySaveTool
 import com.example.meowmba.core.agent.tools.MemorySearchTool
 import com.example.meowmba.core.agent.tools.ProjectCreateTool
@@ -245,6 +246,9 @@ class CompanionViewModel(
 
     /** Keeps the agent panel up briefly after the last task finishes. */
     private var agentPanelLingerJob: Job? = null
+
+    /** Auto-clears an invented animation when it finishes. */
+    private var customAnimJob: Job? = null
 
     /** One bounded retry when the wake mic was busy at re-arm time. */
     private var wakeRearmJob: Job? = null
@@ -489,6 +493,12 @@ class CompanionViewModel(
             toolRegistry.register(ListAppsTool(appContext))
             toolRegistry.register(OpenUrlTool(appContext))
             toolRegistry.register(OpenSettingsTool(appContext))
+
+            // Invented avatar animations: the model writes keyframes, the app
+            // validates and plays them — the same propose/constrain boundary as
+            // every other tool. Saved clips persist as plain JSON files.
+            val animStore = CustomAnimationStore(File(appContext.filesDir, "custom_animations"))
+            toolRegistry.register(AvatarAnimateTool(animStore) { spec -> playCustomAnimation(spec) })
 
             // Navigation. find_places is SAFE and read-only so the companion can look,
             // describe the options and ask "closest, or do you want to pick?" before
@@ -2647,6 +2657,19 @@ class CompanionViewModel(
         val opening = !_uiState.value.showMemoryScreen
         _uiState.value = _uiState.value.copy(showMemoryScreen = opening)
         if (opening) refreshMetaMemoryLink()
+    }
+
+    /**
+     * Plays an invented clip over the face, then clears it. A new clip replaces
+     * the old — the face is one screen, and the renderer blends the handoff.
+     */
+    fun playCustomAnimation(spec: CustomAnimationSpec) {
+        customAnimJob?.cancel()
+        _uiState.value = _uiState.value.copy(activeAnimation = spec)
+        customAnimJob = viewModelScope.launch {
+            delay(spec.durationMs.toLong() + 300)
+            _uiState.value = _uiState.value.copy(activeAnimation = null)
+        }
     }
 
     /** The link badge is checked, never assumed: true only if MetaMemory is installed. */

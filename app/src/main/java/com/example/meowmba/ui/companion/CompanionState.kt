@@ -70,6 +70,8 @@ data class CompanionState(
     /** FTS search results on the Memory screen; null = not searching. */
     val memorySearchResults: List<MemoryEntity>? = null,
     val showMemoryScreen: Boolean = false,
+    /** Invented clip currently playing over the face, or null. Clears itself when done. */
+    val activeAnimation: CustomAnimationSpec? = null,
     /** True only when the MetaMemory glasses app is actually installed — never assumed. */
     val metaMemoryLinked: Boolean = false,
     /**

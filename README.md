@@ -263,6 +263,27 @@ The wake phrase now works with the screen off, the way Android allows it:
 - **Mouth sync:** TTS word-boundary callbacks (API 26+) pulse `mouthEnergy`, amplifying the avatar's mouth in rhythm with real speech; older devices fall back to the base talk cycle.
 - **Voice modes:** push-to-talk, tap-to-toggle, wake phrase, and conversation mode — all persisted in encrypted preferences, all off by default until enabled in Settings.
 
+## Phase 8: Avatar — invented animations (started)
+
+The companion can **invent its own face animations** and perform them:
+
+- **`avatar.animate` tool:** the agent brain writes a name + JSON keyframes
+  (sparse pose overrides — `eye_open`, `ear_perk`, `head_tilt`, `happy_eyes`,
+  `mouth`, `glow`, …). The clip plays over the state-machine pose and the face
+  returns to normal when it ends.
+- **Propose/constrain, like every tool:** `CustomAnimations.parse` validates
+  structure, clamps out-of-range values (and reports every clamp in the tool
+  result), and rejects broken specs with the reason. Privacy marks (mic/camera
+  X, dim, MUTED mouth) are not animatable — an invented clip cannot fake a
+  privacy state.
+- **Per-field sparse sampling:** only the fields a keyframe names are animated
+  (numbers smoothstep-interpolate; booleans/mouth/glow step), so a clip can
+  wiggle just the ears while the eyes keep reacting to the conversation.
+- **`save=true` persists** clips as JSON in `filesDir/custom_animations/`, so
+  an animation the cat invented today still exists after a restart.
+- Owned by Meow (the main agent) — self-expression, not a specialist skill.
+  SAFE risk, no approval card. Pure-Kotlin pipeline, 14 unit tests.
+
 ## Phase 1: Working Avatar Shell (Completed)
 
 Phase 1 establishes the foundation of the companion experience with a highly interactive and animated shell.
