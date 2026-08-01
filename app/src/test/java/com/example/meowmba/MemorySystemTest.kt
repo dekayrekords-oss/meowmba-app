@@ -131,6 +131,18 @@ class MemoryCoreTest {
     }
 
     @Test
+    fun `the capabilities block forbids faking tool results`() {
+        // Measured on device: with tool results in its history, the chat model
+        // mimicked them — fabricating `Playing "head tilt" (30ms)` when no task ran.
+        val prompt = PromptBuilder.build(
+            "Meow", "yes", emptyList(), emptyList(),
+            capabilities = listOf("animate the avatar")
+        )
+        assertTrue(prompt.contains("TOOL"))
+        assertTrue(prompt.contains("Never write anything that looks like a tool result"))
+    }
+
+    @Test
     fun `exporter emits valid structured json`() {
         val memories = listOf(
             MemoryEntity(

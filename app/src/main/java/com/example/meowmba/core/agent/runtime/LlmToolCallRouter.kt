@@ -28,7 +28,15 @@ object CommandHeuristics {
         "generate", "video", "animation", "animate", "song", "audio", "sound",
         // Phone and desktop control
         "app", "launch", "start", "call", "text", "settings", "camera",
-        "run", "script", "build", "desktop", "computer"
+        "run", "script", "build", "desktop", "computer",
+        // Avatar performance + follow-up affirmations. Measured on device:
+        // "lick your paw" and a bare "yes" were gated out here, so the CHAT
+        // model answered — and it mimicked the tool results in its history,
+        // fabricating `Playing "head tilt" (30ms)` with no task in the audit
+        // log. A false positive costs one model call that returns null; a
+        // false negative here is a lie the user can see.
+        "trick", "dance", "perform", "wiggle", "paw", "lick", "gesture",
+        "yes", "yeah", "yep", "sure", "ok", "okay", "please",
     )
 
     fun mightBeCommand(text: String): Boolean {

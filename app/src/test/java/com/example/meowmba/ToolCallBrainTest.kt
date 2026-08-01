@@ -166,6 +166,16 @@ class CommandHeuristicsTest {
         assertTrue(!CommandHeuristics.mightBeCommand("what's the weather like"))
         assertTrue(!CommandHeuristics.mightBeCommand("tell me about yourself"))
     }
+
+    @Test
+    fun `performance requests and affirmations reach the brain`() {
+        // Measured on device: these were gated out, so the CHAT model answered —
+        // and mimicked the tool results in its history, faking a play.
+        assertTrue(CommandHeuristics.mightBeCommand("lick your paw"))
+        assertTrue(CommandHeuristics.mightBeCommand("yes"))
+        assertTrue(CommandHeuristics.mightBeCommand("do a trick"))
+        assertTrue(CommandHeuristics.mightBeCommand("dance for me"))
+    }
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)

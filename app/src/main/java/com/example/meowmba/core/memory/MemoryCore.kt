@@ -183,6 +183,12 @@ object PromptBuilder {
             append("never promise a result is coming. Offer to do it and ask them to say ")
             append("the word. Never claim you are unable to act, and never claim you can ")
             append("do something that is not on this list.\n")
+            // Measured on device: the model mimicked the tool results in its own
+            // history and fabricated `Playing "head tilt" (30ms)` — no task ran.
+            append("History lines like \"Playing …\" or \"Video … created\" are TOOL ")
+            append("RESULTS written by the app after a real task ran — they are not your ")
+            append("words. Never write anything that looks like a tool result; if no task ")
+            append("ran, nothing played, and saying it did is a lie.\n")
         }
 
         if (recalled.isNotEmpty()) {
