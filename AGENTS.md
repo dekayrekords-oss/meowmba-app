@@ -62,8 +62,15 @@ failures from your change.
      mouth) are NOT animatable — a clip cannot fake a privacy state.
    - Sampling is per-field sparse: a clip can wiggle just the ears while the
      eyes keep reacting. Numbers smoothstep-lerp; booleans/mouth/glow step.
-   - Not on the keyword fast path by design — only the LLM brain invents
-     keyframes; "do a trick" falls through to it.
+   - Not on the keyword fast path by design — mostly. After the on-device
+     report ("it makes the animation but does not show me — it makes a file
+     instead", fixed in `ed0f380`): trick/dance phrases route deterministically
+     to `avatar.animate` with BUILT-IN clips (`ear wiggle`, `happy bop`,
+     `curious tilt` — instant, no model call), and "play the X animation"
+     replays built-ins/saved clips by name through the tool. The bare
+     `"animate "` prefix was REMOVED from media.generate_video — it swallowed
+     avatar performances ("animate yourself" became a video OF "yourself").
+     Invented keyframes still come only from the LLM brain.
 
 2. **Email/app routing fix — COMMITTED** (`96ca7d3`; `AgentRouter.kt`,
    `EmailTools.kt` + `AppAndEmailRoutingTest.kt`, 15 tests, all green).
