@@ -12,10 +12,17 @@ desktop bridge. Package `com.example.meowmba`, minSdk 31, Compose Material3,
 single `:app` module.
 
 Repo: `/Users/bobrossjr/AndroidStudioProjects/Meowmba`
-Remotes: `lan` (primary, `meow:/home/claude/git/meowmba-app.git`), `origin` (meow-nb).
-**Pending sync (2026-07-31):** `lan/main` is current at `2be2ad4`; `origin`
-(meow-nb, Tailscale 100.77.97.236) is 5 commits behind — it dropped off the
-network mid-push. When the notebook is back: `git push origin main`.
+Remotes:
+- `lan` — primary, `meow:/home/claude/git/meowmba-app.git` (claude account on the server)
+- `prog` — same server, prog account: `prog@192.168.1.69:/home/prog/git/meowmba-app.git`
+- `origin` — the notebook, `meow-nb:/home/claude/git/meowmba-app.git`
+
+**Sync state (2026-07-31):** `lan` and `prog` are current. `origin` (meow-nb)
+is unreachable — Tailscale IP dead, nothing on the LAN accepts the meow key —
+and is 6+ commits behind. When the notebook returns: `git push origin main`.
+The repo sets `core.sshCommand` to `id_ed25519_meow` + `IdentitiesOnly`;
+all three remotes use that key. prog's password exists but its account
+lockouts bite after a few failed password logins — always use the key.
 
 ## Build & test
 
