@@ -108,6 +108,19 @@ messages attached (`followUpContextFor`) after a bare "yes" invented a random
 60ms clip on device. Clips under 500ms are stretched to 500ms (reported like
 every clamp) — a 60ms performance is indistinguishable from "nothing happened".
 
+   - **The chat model can FAKE tool results (2026-07-31, root cause of a
+     week-of-one-day bug chain):** "lick your paw"/"yes" failed
+     `CommandHeuristics` (no signal words) → the CHAT model answered → with
+     real tool results in its last-10 history it MIMICKED them (`Playing
+     "head tilt" (30ms)` — no task in `audit_log`, store empty, clip
+     nonexistent). Diagnosis rule: **a "played/did X" claim with no matching
+     audit entry is a hallucination, not a tool bug.** Gate now passes
+     performance words + affirmations; the capabilities prompt forbids
+     imitating tool results. Also learned: Room WAL means `cat` of the main
+     DB file alone misses fresh rows — pull `meowmba_database-wal` too, and
+     verify the RUNNING process predates the last install (`ps -o ETIME`)
+     before trusting on-device behavior.
+
 2. **Email/app routing fix — COMMITTED** (`96ca7d3`; `AgentRouter.kt`,
    `EmailTools.kt` + `AppAndEmailRoutingTest.kt`, 15 tests, all green).
    - Reported bug: "open gmail and write a message that says hi to X@Y.com"
