@@ -201,6 +201,31 @@ object AgentRouter {
             return AgentIntent("phone", "phone.launch_app", mapOf("name" to name), "open $name")
         }
 
+        // Vault / Obsidian note tools
+        if (normalized in setOf("list my notes", "show my notes", "what notes do i have",
+                "show notes", "list notes", "my notes", "open notes", "open my notes",
+                "open vault", "show vault", "show me my notes")) {
+            return AgentIntent("main", "vault.note.list", emptyMap(), "list vault notes")
+        }
+        extractAfter(raw, listOf("show me the note ", "open the note ", "read the note ",
+                "open note ", "read note ", "show note "))?.let { title ->
+            return AgentIntent("main", "vault.note.read", mapOf("title" to title.trim()), "read note: $title")
+        }
+        extractAfter(raw, listOf("search my notes for ", "search notes for ",
+                "find notes about ", "find a note about ", "search vault for "))?.let { query ->
+            return AgentIntent("main", "vault.note.search", mapOf("query" to query.trim()), "search notes: $query")
+        }
+        extractAfter(raw, listOf("create a note called ", "make a note called ",
+                "new note called ", "create a note titled ", "make a note titled ",
+                "write a note called "))?.let { title ->
+            return AgentIntent("main", "vault.note.write",
+                mapOf("title" to title.trim(), "body" to ""), "new note: $title")
+        }
+        extractAfter(raw, listOf("delete the note ", "delete note "))?.let { title ->
+            return AgentIntent("main", "vault.note.delete",
+                mapOf("title" to title.trim()), "delete note: $title")
+        }
+
         // Avatar performance. Deterministic because a trick must be instant and must
         // ALWAYS land on the face: the video tool's bare "animate " prefix used to
         // swallow these, and the user got a workspace file instead of a performance.

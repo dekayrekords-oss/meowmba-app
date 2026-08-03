@@ -110,6 +110,7 @@ val tileItems = listOf(
     MembaTile("Tools", Icons.Default.Build, Color(0xFFFFD600)),
     MembaTile("Agents", Icons.Default.SmartToy, Color(0xFFAA00FF)),
     MembaTile("Privacy", Icons.Default.Security, Color(0xFF3FB950)),
+    MembaTile("Notes", Icons.Default.Book, Color(0xFFD2A8FF)),
     MembaTile("NAV", Icons.Default.Navigation, Color(0xFFFF6D00)),
     MembaTile("Weather", Icons.Default.WbSunny, Color(0xFF29B6F6)),
     MembaTile("Background", Icons.Default.Wallpaper, Color(0xFFEC407A)),

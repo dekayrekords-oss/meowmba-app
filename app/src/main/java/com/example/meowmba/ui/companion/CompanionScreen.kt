@@ -330,6 +330,7 @@ fun CompanionScreen(
                     "Weather" -> viewModel.toggleWeatherScreen()
                     "Background" -> viewModel.toggleBackgroundScreen()
                     "Agents", "Tools" -> viewModel.toggleAgentsScreen()
+                    "Notes" -> viewModel.toggleVaultScreen()
                 }
             }
         )
@@ -491,6 +492,16 @@ fun CompanionScreen(
                 onSelectAgent = { viewModel.selectAgent(it) },
                 onClose = { viewModel.toggleAgentsScreen() }
             )
+        }
+
+        if (uiState.showVaultScreen) {
+            val vault = viewModel.vaultRepository
+            if (vault != null) {
+                VaultScreen(
+                    vault = vault,
+                    onClose = { viewModel.toggleVaultScreen() }
+                )
+            }
         }
 
         ChatOverlay(

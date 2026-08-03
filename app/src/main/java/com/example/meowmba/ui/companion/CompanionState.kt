@@ -131,6 +131,9 @@ data class CompanionState(
     val pendingApproval: ApprovalRequest? = null,
     val showAgentsScreen: Boolean = false,
 
+    /** Obsidian-style vault notes screen. */
+    val showVaultScreen: Boolean = false,
+
     /**
      * The agent whose history is open on the Agents screen, or null for the roster.
      */

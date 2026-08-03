@@ -48,6 +48,8 @@ import com.example.meowmba.core.agent.tools.DesktopWriteFileTool
 import com.example.meowmba.core.agent.tools.DesktopRunBuildTool
 import com.example.meowmba.core.agent.tools.DesktopRunScriptTool
 import com.example.meowmba.core.agent.tools.WebSearchTool
+import com.example.meowmba.core.agent.tools.registerVaultTools
+import com.example.meowmba.core.vault.VaultRepository
 import com.example.meowmba.core.agent.tools.EmailSendTool
 import com.example.meowmba.core.agent.tools.EmailDraftTool
 import com.example.meowmba.core.agent.tools.CalendarListTool
@@ -147,6 +149,11 @@ class CompanionViewModel(
      * Weather source. Open-Meteo needs no API key and no account, so "what's the weather"
      * works out of the box with nothing for the user to configure.
      */
+    /** Obsidian-compatible note vault stored in app-private files/vault/. */
+    val vaultRepository: VaultRepository? by lazy {
+        secureStorage?.context?.let { VaultRepository(File(it.filesDir, "vault")) }
+    }
+
     private val weatherRepository: com.example.meowmba.core.weather.WeatherRepository? by lazy {
         val ctx = secureStorage?.context
         if (ctx == null) null else com.example.meowmba.core.weather.WeatherRepository(ctx)
@@ -499,6 +506,9 @@ class CompanionViewModel(
             // every other tool. Saved clips persist as plain JSON files.
             val animStore = CustomAnimationStore(File(appContext.filesDir, "custom_animations"))
             toolRegistry.register(AvatarAnimateTool(animStore) { spec -> playCustomAnimation(spec) })
+
+            // Obsidian-compatible vault notes.
+            vaultRepository?.let { toolRegistry.registerVaultTools(it) }
 
             // Navigation. find_places is SAFE and read-only so the companion can look,
             // describe the options and ask "closest, or do you want to pick?" before
@@ -2070,6 +2080,10 @@ class CompanionViewModel(
 
     fun toggleAgentsScreen() {
         _uiState.value = _uiState.value.copy(showAgentsScreen = !_uiState.value.showAgentsScreen)
+    }
+
+    fun toggleVaultScreen() {
+        _uiState.value = _uiState.value.copy(showVaultScreen = !_uiState.value.showVaultScreen)
     }
 
     /** User decision on the pending tool approval card. */
