@@ -2699,16 +2699,28 @@ class CompanionViewModel(
      * Plays an invented clip over the face, then clears it. A new clip replaces
      * the old — the face is one screen, and the renderer blends the handoff.
      *
-     * The chat sheet covers the bottom 60% of the screen — the face included —
-     * so a clip that plays while it is open is a performance nobody sees
-     * (reported on device: real tasks in the audit log, user saw nothing).
-     * "Show me" means show me: the sheet closes for the clip and stays closed.
+     * Every full-screen panel (chat sheet, tiles, Settings, Model Manager,
+     * Privacy, Memory, Weather, Background, Nav, Agents, Vault, ...) is a
+     * later child than AvatarRenderer in CompanionScreen's Box, so any one of
+     * them left open paints over the face — the clip plays, the audit log
+     * says "Playing X", and the user sees nothing. "Show me" means show me:
+     * they all close for the clip and stay closed.
      */
     fun playCustomAnimation(spec: CustomAnimationSpec) {
         customAnimJob?.cancel()
         _uiState.value = _uiState.value.copy(
             activeAnimation = spec,
             isChatExpanded = false,
+            showTiles = false,
+            showSettings = false,
+            showModelManager = false,
+            showPrivacyDashboard = false,
+            showMemoryScreen = false,
+            showWeatherScreen = false,
+            showBackgroundScreen = false,
+            showNavScreen = false,
+            showAgentsScreen = false,
+            showVaultScreen = false,
         )
         customAnimJob = viewModelScope.launch {
             delay(spec.durationMs.toLong() + 300)

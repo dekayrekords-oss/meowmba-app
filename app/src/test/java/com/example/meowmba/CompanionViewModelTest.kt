@@ -94,4 +94,39 @@ class CompanionViewModelTest {
         assertFalse(viewModel.uiState.value.isChatExpanded)
         assertEquals("ear wiggle", viewModel.uiState.value.activeAnimation?.name)
     }
+
+    @Test
+    fun `playing an animation closes every full-screen panel, not just chat`() = runTest {
+        // Each panel added since the chat-sheet fix (tiles, Settings, Model
+        // Manager, Privacy, Memory, Weather, Background, Nav, Agents, Vault)
+        // is a later Box child than AvatarRenderer, so any one left open
+        // paints over the face exactly like the chat sheet used to.
+        val viewModel = CompanionViewModel()
+        viewModel.openTiles()
+        viewModel.toggleSettings()
+        viewModel.toggleModelManager()
+        viewModel.togglePrivacyDashboard()
+        viewModel.toggleMemoryScreen()
+        viewModel.toggleWeatherScreen()
+        viewModel.toggleBackgroundScreen()
+        viewModel.toggleNavScreen()
+        viewModel.toggleAgentsScreen()
+        viewModel.toggleVaultScreen()
+
+        viewModel.playCustomAnimation(
+            com.example.meowmba.ui.companion.CustomAnimations.BUILT_INS.getValue("ear wiggle")
+        )
+
+        val state = viewModel.uiState.value
+        assertFalse(state.showTiles)
+        assertFalse(state.showSettings)
+        assertFalse(state.showModelManager)
+        assertFalse(state.showPrivacyDashboard)
+        assertFalse(state.showMemoryScreen)
+        assertFalse(state.showWeatherScreen)
+        assertFalse(state.showBackgroundScreen)
+        assertFalse(state.showNavScreen)
+        assertFalse(state.showAgentsScreen)
+        assertFalse(state.showVaultScreen)
+    }
 }
