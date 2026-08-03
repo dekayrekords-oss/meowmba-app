@@ -195,6 +195,15 @@ class RecognizerWakeWordEngine(
          *   again on their own. Escalating turned that into a permanent false
          *   "the speech recognizer keeps failing on this device".
          *
+         * - SERVER_DISCONNECTED: observed on-device (Z Fold 4) bound explicitly to AIAI
+         *   (com.google.android.as) — a healthy, correctly-bound recognizer, not the old
+         *   platform-default/ERROR_CLIENT failure. It arrives in short bursts right after
+         *   the loop (re)starts, fast enough (100ms restart / 700ms error backoff) to hit
+         *   MAX_CONSECUTIVE_ERRORS before any no-match session can reset the count —
+         *   which is exactly why re-enabling Wake Word in Settings just re-tripped the
+         *   same breaker immediately. That is AIAI's service connection churning while it
+         *   settles, not a device that cannot recognize speech at all.
+         *
          * ERROR_CLIENT is deliberately NOT here. [SpeechService.startListening] reports
          * CLIENT when the recognizer could not be created at all — a genuinely unusable
          * device — so treating it as transient would retry forever instead of stopping.
@@ -203,7 +212,8 @@ class RecognizerWakeWordEngine(
          */
         internal fun isContention(code: Int): Boolean = when (code) {
             android.speech.SpeechRecognizer.ERROR_RECOGNIZER_BUSY,
-            android.speech.SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> true
+            android.speech.SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS,
+            android.speech.SpeechRecognizer.ERROR_SERVER_DISCONNECTED -> true
             else -> false
         }
 

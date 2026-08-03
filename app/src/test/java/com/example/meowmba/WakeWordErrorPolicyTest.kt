@@ -48,6 +48,18 @@ class WakeWordErrorPolicyTest {
     }
 
     @Test
+    fun `server disconnected from a properly-bound recognizer is contention, not a broken device`() {
+        // Observed on-device (Z Fold 4), bound explicitly to AIAI: short bursts of
+        // SERVER_DISCONNECTED right after the loop restarts, fast enough to trip the
+        // fatal threshold before a no-match session could reset the count — so
+        // re-enabling Wake Word in Settings re-tripped the same breaker instantly.
+        // That is AIAI's connection settling, not a device that cannot recognize speech.
+        assertTrue(
+            RecognizerWakeWordEngine.isContention(SpeechRecognizer.ERROR_SERVER_DISCONNECTED)
+        )
+    }
+
+    @Test
     fun `contention does not swallow every error`() {
         // CLIENT stays escalating on purpose: SpeechService reports it when the
         // recognizer could not be created at all, so retrying it forever would hide a
