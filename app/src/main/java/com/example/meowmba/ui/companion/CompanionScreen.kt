@@ -430,10 +430,12 @@ fun CompanionScreen(
                 conversationMode = uiState.conversationMode,
                 agentBrainEnabled = uiState.agentBrainEnabled,
                 hermesAgentUrl = uiState.hermesAgentUrl,
-                imageModelDir = uiState.imageModelDir,
                 imageServerUrl = uiState.imageServerUrl,
                 preferServerImageGen = uiState.preferServerImageGen,
                 imageModelInstalled = { viewModel.imageModelInstalled() },
+                imageModelDownload = uiState.modelDownloads[
+                    com.example.meowmba.core.agent.ImageModelCatalog.options.first().id
+                ],
                 backgroundListeningEnabled = uiState.backgroundListeningEnabled,
                 usbAutoBridgeEnabled = uiState.usbAutoBridgeEnabled,
                 onCompanionNameChange = { viewModel.renameCompanion(it) },
@@ -441,7 +443,8 @@ fun CompanionScreen(
                 onConversationModeChange = { viewModel.setConversationMode(it) },
                 onAgentBrainChange = { viewModel.setAgentBrainEnabled(it) },
                 onHermesUrlChange = { viewModel.setHermesAgentUrl(it) },
-                onImageModelDirChange = { viewModel.setImageModelDir(it) },
+                onDownloadImageModel = { viewModel.downloadImageModel() },
+                onDeleteImageModel = { viewModel.deleteImageModel() },
                 onImageServerUrlChange = { viewModel.setImageServerUrl(it) },
                 onPreferServerImageGenChange = { viewModel.setPreferServerImageGen(it) },
                 onBackgroundListeningChange = { viewModel.setBackgroundListeningEnabled(it) },

@@ -11,6 +11,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.meowmba.core.bridge.DesktopBridgeManager
@@ -29,10 +30,10 @@ fun SettingsScreen(
     conversationMode: Boolean = false,
     agentBrainEnabled: Boolean = true,
     hermesAgentUrl: String = "",
-    imageModelDir: String = "",
     imageServerUrl: String = "",
     preferServerImageGen: Boolean = false,
     imageModelInstalled: () -> Boolean = { false },
+    imageModelDownload: com.example.meowmba.core.agent.ModelDownloader.DownloadProgress? = null,
     backgroundListeningEnabled: Boolean = false,
     usbAutoBridgeEnabled: Boolean = false,
     onCompanionNameChange: (String) -> Unit = {},
@@ -40,7 +41,8 @@ fun SettingsScreen(
     onConversationModeChange: (Boolean) -> Unit = {},
     onAgentBrainChange: (Boolean) -> Unit = {},
     onHermesUrlChange: (String) -> Unit = {},
-    onImageModelDirChange: (String) -> Unit = {},
+    onDownloadImageModel: () -> Unit = {},
+    onDeleteImageModel: () -> Unit = {},
     onImageServerUrlChange: (String) -> Unit = {},
     onPreferServerImageGenChange: (Boolean) -> Unit = {},
     onBackgroundListeningChange: (Boolean) -> Unit = {},
@@ -133,41 +135,74 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // On-device image generation (Stable Diffusion via MediaPipe)
+            // On-device image generation (stable-diffusion.cpp, native GGUF weights)
             Text("Image generation", style = MaterialTheme.typography.titleMedium, color = Color.White)
-            var imageDir by remember(imageModelDir) { mutableStateOf(imageModelDir) }
-            var imageCheck by remember { mutableStateOf<String?>(null) }
-            SettingsTextField(
-                value = imageDir,
-                onValueChange = {
-                    imageDir = it
-                    imageCheck = null
-                    onImageModelDirChange(it)
-                },
-                label = { Text("Image model folder (optional)") },
-                modifier = Modifier.fillMaxWidth()
-            )
+            val imageOption = com.example.meowmba.core.agent.ImageModelCatalog.options.first()
+            Text(imageOption.displayName, color = Color.White, fontWeight = FontWeight.Bold)
+            Text(imageOption.description, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
             Text(
-                text = "Folder of converted Stable Diffusion 1.5 bins, e.g. " +
-                    "/data/local/tmp/image_generator/bins. Leave blank to draw simple " +
-                    "canvas images instead. Runs fully on-device; expect 15s to a " +
-                    "minute per image, and about 2 GB of RAM while it runs.",
+                "${imageOption.approxSize} · ${imageOption.minRamGb}GB+ RAM. Runs fully on-device; " +
+                    "expect a few seconds to a minute per image depending on the phone.",
                 style = MaterialTheme.typography.bodySmall,
                 color = Color.Gray
             )
-            TextButton(onClick = {
-                imageCheck = if (imageModelInstalled()) {
-                    "Model found — image requests will use it."
-                } else {
-                    "No usable model at that path. Image requests will use the " +
-                        "configured server if one is set, otherwise canvas drawings."
+            Spacer(modifier = Modifier.height(8.dp))
+            // imageModelInstalled() is a disk stat — check it once per composition and
+            // whenever a download's state changes, not on every recomposition (this
+            // composable body also re-runs on unrelated keystrokes elsewhere on this
+            // screen, e.g. the companion name / Hermes URL fields).
+            var imageModelInstalledNow by remember { mutableStateOf(imageModelInstalled()) }
+            LaunchedEffect(imageModelDownload) { imageModelInstalledNow = imageModelInstalled() }
+            when {
+                imageModelInstalledNow -> {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Installed", color = Color(0xFF3FB950), fontSize = 12.sp)
+                        Spacer(modifier = Modifier.weight(1f))
+                        TextButton(onClick = {
+                            onDeleteImageModel()
+                            imageModelInstalledNow = false
+                        }) {
+                            Text("Delete", color = Color(0xFFF85149), fontSize = 12.sp)
+                        }
+                    }
                 }
-            }) {
-                Text("Check image model (on-device only)")
+                imageModelDownload != null && !imageModelDownload.done && imageModelDownload.error == null -> {
+                    if (imageModelDownload.fraction != null) {
+                        LinearProgressIndicator(
+                            progress = { imageModelDownload.fraction!! },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Text(
+                            "${(imageModelDownload.fraction!! * 100).toInt()}% · " +
+                                "${imageModelDownload.received / 1_048_576} MB",
+                            color = Color.Gray, fontSize = 11.sp
+                        )
+                    } else {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                        Text(
+                            "${imageModelDownload.received / 1_048_576} MB…",
+                            color = Color.Gray, fontSize = 11.sp
+                        )
+                    }
+                }
+                imageModelDownload?.error != null -> {
+                    Text(imageModelDownload.error, color = Color(0xFFF85149), fontSize = 12.sp)
+                    TextButton(onClick = onDownloadImageModel) {
+                        Text("Retry", color = Color(0xFF58A6FF), fontSize = 12.sp)
+                    }
+                }
+                else -> {
+                    OutlinedButton(onClick = onDownloadImageModel) {
+                        Text("Download (${imageOption.approxSize})", fontSize = 12.sp)
+                    }
+                }
             }
-            imageCheck?.let {
-                Text(it, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-            }
+            Text(
+                text = "No model installed → image requests use the configured server " +
+                    "if one is set below, otherwise a simple canvas drawing.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.Gray
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
             SettingsTextField(

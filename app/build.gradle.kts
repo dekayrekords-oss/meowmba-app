@@ -16,6 +16,15 @@ android {
     namespace = "com.example.meowmba"
     compileSdk = 37
 
+    ndkVersion = "27.0.12077973"  // match whatever Task 1 confirmed available
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
+    }
+
     defaultConfig {
         applicationId = "com.example.meowmba"
         minSdk = 31
@@ -24,6 +33,18 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        externalNativeBuild {
+            cmake {
+                arguments += listOf(
+                    "-DANDROID_PLATFORM=android-31",
+                    "-DCMAKE_C_FLAGS=-march=armv8.7a",
+                    "-DCMAKE_CXX_FLAGS=-march=armv8.7a",
+                    "-DGGML_OPENMP=OFF",
+                    "-DGGML_LLAMAFILE=OFF"
+                )
+                abiFilters += "arm64-v8a"
+            }
+        }
     }
 
     buildTypes {

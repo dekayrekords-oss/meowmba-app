@@ -1,6 +1,7 @@
 package com.example.meowmba
 
 import android.content.Context
+import com.example.meowmba.core.agent.ImageModelCatalog
 import com.example.meowmba.core.agent.ModelCatalog
 import com.example.meowmba.core.agent.ModelDownloader
 import com.example.meowmba.core.security.SecureStorageManager
@@ -62,6 +63,44 @@ class ModelCatalogTest {
         assertFalse(ModelCatalog.isValidModelFileName("a/b.task"))
         assertFalse(ModelCatalog.isValidModelFileName("model.gguf"))
         assertFalse(ModelCatalog.isValidModelFileName("no extension"))
+    }
+}
+
+class ModelDownloadImageCatalogTest {
+
+    @Test
+    fun `catalog has one downloadable SDXL-Lightning entry, GGUF Q8_0 quantized`() {
+        assertEquals(1, ImageModelCatalog.options.size)
+        val sdxl = ImageModelCatalog.options.single()
+        assertEquals("sdxl-lightning-4step-q8", sdxl.id)
+        assertTrue(sdxl.downloadUrl.startsWith("https://huggingface.co/"))
+        assertTrue(sdxl.fileName.endsWith(".gguf"))
+        assertTrue(sdxl.fileName.contains("q8_0"))
+        assertFalse(sdxl.requiresHfToken)
+        assertTrue(sdxl.recommended)
+    }
+
+    @Test
+    fun `optionForFile finds the entry by installed filename`() {
+        val option = ImageModelCatalog.optionForFile("sdxl_lightning_4step.q8_0.gguf")
+        assertNotNull(option)
+        assertEquals("sdxl-lightning-4step-q8", option!!.id)
+        assertNull(ImageModelCatalog.optionForFile("nonexistent.gguf"))
+    }
+
+    @Test
+    fun `installedFile reports null until the gguf is actually present on disk`() {
+        val modelsDir = Files.createTempDirectory("image_model_dl_test").toFile()
+        val downloader = ModelDownloader(modelsDir, hfTokenProvider = { null })
+        val option = ImageModelCatalog.options.single()
+
+        assertNull(downloader.installedFile(option))
+
+        File(modelsDir, option.fileName).writeBytes(ByteArray(64))
+
+        val installed = downloader.installedFile(option)
+        assertNotNull(installed)
+        assertEquals(option.fileName, installed!!.name)
     }
 }
 
@@ -179,5 +218,47 @@ class ModelDownloadViewModelTest {
         vm.deleteDownloadedModel(option)
         assertFalse(File(modelsDir, option.fileName).exists())
         assertFalse(vm.uiState.value.loadedModels.localInstalled)
+    }
+
+    @Test
+    fun `downloadImageModel without a models directory fails honestly instead of crashing`() = runTest {
+        // No modelsDir/modelDownloader injected → the ViewModel's `downloader` is null,
+        // so this must hit the early guard and never touch DownloadService.start (which
+        // needs a real Android Context — the same reason the three catalog-model download
+        // tests above fail under plain JUnit rather than Robolectric).
+        val vm = CompanionViewModel(secureStorage = mockStorage)
+        val option = ImageModelCatalog.options.first()
+
+        vm.downloadImageModel(option)
+
+        val progress = vm.uiState.value.modelDownloads[option.id]
+        assertNotNull(progress?.error)
+        assertTrue(progress!!.error!!.contains("unavailable"))
+    }
+
+    @Test
+    fun `deleting the image model returns to not-installed honestly`() = runTest {
+        // Install by writing the file directly (not via downloadImageModel, which
+        // routes through the same real DownloadService.start Android dependency the
+        // three pre-existing catalog-download tests above already can't exercise
+        // under plain JUnit) so this test verifies deleteImageModel in isolation.
+        val option = ImageModelCatalog.options.first()
+        File(modelsDir, option.fileName).writeBytes(ByteArray(64))
+        val vm = viewModel()
+        assertTrue(vm.imageModelInstalled())
+
+        vm.deleteImageModel(option)
+        assertFalse(File(modelsDir, option.fileName).exists())
+        assertFalse(vm.imageModelInstalled())
+    }
+
+    @Test
+    fun `an already-downloaded image model is detected at startup without any download`() = runTest {
+        val option = ImageModelCatalog.options.first()
+        File(modelsDir, option.fileName).writeBytes(ByteArray(64))
+
+        val vm = viewModel()
+        assertTrue(vm.imageModelInstalled())
+        assertEquals(0, engineCalls)
     }
 }

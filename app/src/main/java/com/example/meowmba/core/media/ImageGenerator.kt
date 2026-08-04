@@ -4,9 +4,10 @@ import android.graphics.Bitmap
 
 /**
  * A backend that turns a text prompt into an image. Implemented by
- * [OnDeviceImageGenerator] (on-device, default) and `RemoteImageGenerator`
- * (opt-in, only constructed when a server URL is configured) so
- * `MediaGenerateTool` can route between them without knowing which is which.
+ * [SDCppImageGenerator] (on-device, stable-diffusion.cpp, default) and
+ * `RemoteImageGenerator` (opt-in, only constructed when a server URL is
+ * configured) so `MediaGenerateTool` can route between them without knowing
+ * which is which.
  */
 interface ImageGenerator {
     /** Cheap, synchronous check — no network calls. Actual reachability is
