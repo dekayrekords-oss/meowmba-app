@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
 }
 
@@ -87,6 +88,7 @@ dependencies {
     // (VoiceProfileStore) is untestable without it.
     testImplementation("org.json:json:20240303")
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.ktor.client.mock)
     testImplementation(libs.mockitoCore)
     testImplementation(libs.robolectric)
     androidTestImplementation(platform(libs.androidx.compose.bom))
