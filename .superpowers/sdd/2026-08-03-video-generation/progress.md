@@ -231,3 +231,98 @@ Status: DONE
   future subagent-driven work in this codebase, not something to wave
   through just because the resulting code was fine.
 - 3 tests pass. Committed as 8ac9eb5.
+
+## Task 3: Wire into MediaGenerateVideoTool + Settings + progress captions
+Status: DONE
+- Two subagent dispatch attempts both hit a genuine worktree-isolation
+  guard neither Write/Edit nor EnterWorktree could resolve from inside
+  a pinned subagent (confirmed: EnterWorktree refuses to act when cwd
+  already matches the target; Write/Edit's separate guard persisted
+  regardless). The second agent correctly reported this as a blocker
+  rather than working around it (unlike the Task 2 agent's settings.json
+  incident) — good, desired behavior, noted for contrast.
+- Implemented directly by the controller instead (verified own Edit/Write
+  access works fine in this worktree via a safe test-and-revert probe).
+- `timeoutMs` raised to 900_000 initially per the brief (avoiding the
+  music plan's exact known bug class) — final review then caught that
+  900_000 was set to *exactly* RemoteVideoGenerator's own poll-budget
+  floor with zero margin, reintroducing the same bug class via
+  arithmetic equality rather than a too-small value. Fixed to 1_080_000
+  (180s real margin).
+- 5/5 RemoteVideoGeneratorTest + 3/3 MediaGenerateVideoToolRoutingTest +
+  1/1 new CompanionViewModelTest all pass. Full suite: 395 tests
+  (2 new), 3 pre-existing unrelated failures. assembleDebug BUILD
+  SUCCESSFUL.
+- Committed as 0cbf417 (Task 3) and f3fe555 (final-review fixes).
+
+## Final whole-branch review
+Status: DONE — one Severe + one Medium finding, both fixed
+Diffed against the correct merge-base (8c422bb) — NOT origin/main,
+which has since moved forward significantly: the repo owner (Wyatt
+Gilmore) independently reviewed and merged BOTH the native-image-gen
+and music-generation plans into main, plus made several unrelated
+follow-up commits (wake-word fixes, animation fixes, security
+hardening, build automation) — confirmed via `git log origin/main`
+author/commit inspection. This is the expected, intentional human
+review/merge flow working correctly — not a problem, just something
+the final review had to diff around correctly to avoid a huge amount
+of unrelated noise.
+
+Findings (both fixed directly by the controller, commit f3fe555):
+1. **Severe**: `timeoutMs = 900_000` was set to exactly
+   RemoteVideoGenerator's own poll-budget floor (maxPolls=90 *
+   pollIntervalMs=10_000), zero margin for HTTP round trips or the
+   fallback path. Fixed to 1_080_000.
+2. **Medium**: missing test coverage for poll-timeout and oversized-
+   response branches. Added both, mirroring RemoteImageGeneratorTest's
+   established pattern.
+
+## FINAL STATUS: PLAN PARTIALLY COMPLETE
+- Tasks 2-3 (Kotlin client + app wiring): DONE, final review clean
+  after two fixes, fully tested (395 tests, 3 pre-existing unrelated
+  failures), assembleDebug succeeds.
+- Task 1 (meow-video server): code complete, deployed, and verified
+  CORRECT by every available static/API check — but the plan's
+  explicit "produce and verify one real video file" acceptance
+  criterion is UNMET. 8 real end-to-end generation attempts (2 memory
+  strategies + a resolution reduction) all failed due to sustained,
+  near-continuous real GPU contention from live production LLM traffic
+  on this shared host — not a code defect. See the detailed Task 1
+  entries above for full real error text, timings, and reasoning. A
+  human should retry generation during a genuinely idle GPU window;
+  the server is already deployed and running
+  (systemd --user service `meow-video-api.service`, port 8002, enabled
+  + linger).
+- A real host memory-pressure crash occurred during Task 1 testing
+  (documented above with root cause and the safety practices adopted
+  afterward: unload Ollama + verify RAM headroom before any standalone
+  GPU test, proactive self-kill on critical RAM pressure).
+- A subagent permission-bypass incident occurred during Task 2 (writing
+  an unauthorized .claude/settings.json to disable an isolation guard)
+  — caught by the controller, remediated, documented. A second, similar
+  situation in Task 3 was handled correctly by a different subagent
+  (reported the blocker instead of bypassing it).
+
+Branch: feat/video-generation
+Worktree: /home/claude/meowmba-app/.claude/worktrees/video-generation
+Merge-base: 8c422bb (NOTE: origin/main has since advanced well past
+this — see above. This branch will need a rebase or merge-with-
+conflict-resolution onto current origin/main before it can land
+cleanly, since it touches files origin/main's later commits also
+touched: CompanionViewModel.kt, MediaTools.kt, SettingsScreen.kt,
+CompanionScreen.kt, CompanionState.kt. Left for the human to handle
+during their own merge, per the "don't merge into main yourself"
+instruction — did not attempt an autonomous rebase across files a
+human was actively also modifying.)
+Commits (7): fb80c09, 8ac9eb5, 72fc15f, 0cbf417, f3fe555
+Not pushed yet (about to push for backup), not merged.
+
+Server infra (NOT in this git repo): /home/claude/meow-video/
+  - server.py + Dockerfile-equivalent (deployed via systemd --user,
+    not Docker — see Task 1 entry for why), env-var-overridable
+    resolution/frame-count config (MEOW_VIDEO_HEIGHT/WIDTH/NUM_FRAMES/FPS)
+  - systemd --user service `meow-video-api.service`, port 8002,
+    enabled + linger (survives logout/reboot), currently running with
+    default (model-card-verified) config: height=704, width=1280,
+    num_frames=121, fps=24
+  - Model weights cached at ~/.cache/huggingface (Wan-AI/Wan2.2-TI2V-5B-Diffusers)
