@@ -23,17 +23,30 @@ Practical notes: 8GB+ RAM phone recommended; routing decisions take a few
 seconds on-device (chat answers longer). For the fastest, smartest brain, the
 server Hermes endpoint still wins — the phone path is for offline/no-server use.
 
-## On-device image generation (real Stable Diffusion, no server)
+## Image generation (on-device diffusion, or an optional remote server)
 
-`media.generate_image` uses **MediaPipe's Image Generator** (Stable Diffusion
-1.5 architecture) when weights are installed, and falls back to the simple
-canvas renderer when they are not. Everything runs on the phone — no endpoint,
-no key, no network.
+`media.generate_image` routes across up to two real AI backends, falling back
+to a simple procedural canvas renderer only when neither is available or both
+fail:
 
-Filenames tell you which ran: `image_*.png` came from diffusion, `canvas_*.png`
-from the fallback.
+1. **On-device** — **MediaPipe's Image Generator** (Stable Diffusion 1.5
+   architecture), when weights are installed locally. Runs fully on the
+   phone — no endpoint, no key, no network. This is the default and requires
+   no setup beyond installing the weights (below).
+2. **Remote server** *(opt-in)* — a server URL you configure yourself in
+   **Settings → Image generation → Server URL**. Off by default; nothing is
+   sent anywhere unless you type a URL in. Useful for offloading generation
+   to a desktop GPU on your LAN. By default the on-device backend is tried
+   first and the server is the fallback; flip **"Prefer server"** in Settings
+   to try the server first instead.
 
-### Installing the weights
+Filenames tell you which backend ran: `image_*.png` came from a real
+generator (on-device or remote), `canvas_*.png` from the procedural fallback.
+Backend failures (unreachable host, HTTP error, blocked cleartext, etc.) are
+logged to logcat under the tag `MediaGenerateTool` so a fallback is
+distinguishable from "nothing configured".
+
+### Installing the on-device weights
 
 The task needs a **directory of converted .tflite bins**, not a single file.
 The weights are not bundled — they are ~1.5 GB.
@@ -47,7 +60,9 @@ The weights are not bundled — they are ~1.5 GB.
    adb push bins /data/local/tmp/image_generator/bins
    ```
 4. In Meowmba: **Settings → Image generation → Image model folder** →
-   `/data/local/tmp/image_generator/bins`, then tap **Check image model**.
+   `/data/local/tmp/image_generator/bins`, then tap **Check image model
+   (on-device only)** — this button only verifies the local weights path, not
+   the overall routing outcome (which may still use the server or canvas).
 
 ### RAM, and why the main model may need to shrink
 
@@ -67,6 +82,54 @@ Expect ~15s per image on flagship hardware and well over a minute on midrange.
 > Note: Google lists the MediaPipe Image Generator task as **no longer
 > actively maintained**. It works and is stable, but there will be no new
 > versions — worth knowing before building anything load-bearing on it.
+
+### Running your own remote image server
+
+The remote backend (`RemoteImageGenerator`) speaks a tiny, deliberately
+generic wire contract — any server that implements it works, regardless of
+what generates the image underneath:
+
+```
+POST {baseUrl}/generate
+Content-Type: application/json
+
+{"prompt": "a cat wearing a tiny hat"}
+```
+
+Response: HTTP 200 with the raw image bytes as the body, in any format
+`BitmapFactory` can decode (PNG/JPEG are the common choices). No JSON
+envelope, no base64 — just the bytes. Responses over 32 MB are rejected
+client-side as a safety guard.
+
+The server fully controls its own generation parameters (step count, seed,
+model choice, etc.) — the app does not send or negotiate any of that.
+
+Minimal example, FastAPI + Stable Diffusion:
+
+```python
+from fastapi import FastAPI, Response
+from pydantic import BaseModel
+from diffusers import StableDiffusionPipeline
+import io
+
+app = FastAPI()
+pipe = StableDiffusionPipeline.from_pretrained("runwayml/stable-diffusion-v1-5").to("cuda")
+
+class GenerateRequest(BaseModel):
+    prompt: str
+
+@app.post("/generate")
+def generate(req: GenerateRequest):
+    image = pipe(req.prompt).images[0]
+    buf = io.BytesIO()
+    image.save(buf, format="PNG")
+    return Response(content=buf.getvalue(), media_type="image/png")
+```
+
+Because this is a plain `http://` LAN address (no TLS setup required for a
+box on your own network), the app's network security config
+(`app/src/main/res/xml/network_security_config.xml`) explicitly permits
+cleartext traffic — see the comment in that file for the reasoning.
 
 ## Agent Brain (Hermes Agent + on-device routing)
 

@@ -2141,7 +2141,9 @@ class CompanionViewModel(
     }
 
     fun setImageServerUrl(url: String) {
-        val clean = url.trim()
+        // Strip trailing slashes too — otherwise a URL like "http://host/" produces
+        // "http://host//generate" when RemoteImageGenerator appends "/generate".
+        val clean = url.trim().trimEnd('/')
         _uiState.value = _uiState.value.copy(imageServerUrl = clean)
         secureStorage?.savePreference(KEY_IMAGE_SERVER_URL, clean)
     }

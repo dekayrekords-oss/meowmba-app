@@ -159,10 +159,11 @@ fun SettingsScreen(
                 imageCheck = if (imageModelInstalled()) {
                     "Model found — image requests will use it."
                 } else {
-                    "No usable model at that path — falling back to canvas drawings."
+                    "No usable model at that path. Image requests will use the " +
+                        "configured server if one is set, otherwise canvas drawings."
                 }
             }) {
-                Text("Check image model")
+                Text("Check image model (on-device only)")
             }
             imageCheck?.let {
                 Text(it, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
