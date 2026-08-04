@@ -139,6 +139,14 @@ class CompanionViewModelTest {
     }
 
     @Test
+    fun `setMusicServerUrl trims and persists the URL`() = runTest {
+        val viewModel = CompanionViewModel(secureStorage = mockSecureStorage)
+        viewModel.setMusicServerUrl("  http://192.168.1.10:9200/  ")
+        assertEquals("http://192.168.1.10:9200", viewModel.uiState.value.musicServerUrl)
+        verify(mockSecureStorage).savePreference("music_server_url", "http://192.168.1.10:9200")
+    }
+
+    @Test
     fun `preferServerImageGen defaults to false`() = runTest {
         val viewModel = CompanionViewModel(secureStorage = mockSecureStorage)
         assertFalse(viewModel.uiState.value.preferServerImageGen)

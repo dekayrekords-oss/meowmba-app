@@ -34,6 +34,7 @@ fun SettingsScreen(
     preferServerImageGen: Boolean = false,
     imageModelInstalled: () -> Boolean = { false },
     imageModelDownload: com.example.meowmba.core.agent.ModelDownloader.DownloadProgress? = null,
+    musicServerUrl: String = "",
     backgroundListeningEnabled: Boolean = false,
     usbAutoBridgeEnabled: Boolean = false,
     onCompanionNameChange: (String) -> Unit = {},
@@ -45,6 +46,7 @@ fun SettingsScreen(
     onDeleteImageModel: () -> Unit = {},
     onImageServerUrlChange: (String) -> Unit = {},
     onPreferServerImageGenChange: (Boolean) -> Unit = {},
+    onMusicServerUrlChange: (String) -> Unit = {},
     onBackgroundListeningChange: (Boolean) -> Unit = {},
     onUsbAutoBridgeChange: ((Boolean) -> Unit)? = null,
     onClose: () -> Unit
@@ -224,6 +226,25 @@ fun SettingsScreen(
                     "Falls back to on-device if the server is unreachable.",
                 checked = preferServerImageGen,
                 onCheckedChange = onPreferServerImageGenChange
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Music generation (opt-in remote server only — no on-device generator)
+            Text("Music generation", style = MaterialTheme.typography.titleMedium, color = Color.White)
+            Spacer(modifier = Modifier.height(8.dp))
+            SettingsTextField(
+                value = musicServerUrl,
+                onValueChange = onMusicServerUrlChange,
+                label = { Text("Music server URL (optional)") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Text(
+                text = "Your own music-generation server, e.g. " +
+                    "http://192.168.1.10:9200. Leave blank to use a simple " +
+                    "procedural tone sequence instead.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.Gray
             )
 
             Spacer(modifier = Modifier.height(24.dp))

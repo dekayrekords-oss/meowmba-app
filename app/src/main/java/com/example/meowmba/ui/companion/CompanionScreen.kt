@@ -436,6 +436,7 @@ fun CompanionScreen(
                 imageModelDownload = uiState.modelDownloads[
                     com.example.meowmba.core.agent.ImageModelCatalog.options.first().id
                 ],
+                musicServerUrl = uiState.musicServerUrl,
                 backgroundListeningEnabled = uiState.backgroundListeningEnabled,
                 usbAutoBridgeEnabled = uiState.usbAutoBridgeEnabled,
                 onCompanionNameChange = { viewModel.renameCompanion(it) },
@@ -447,6 +448,7 @@ fun CompanionScreen(
                 onDeleteImageModel = { viewModel.deleteImageModel() },
                 onImageServerUrlChange = { viewModel.setImageServerUrl(it) },
                 onPreferServerImageGenChange = { viewModel.setPreferServerImageGen(it) },
+                onMusicServerUrlChange = { viewModel.setMusicServerUrl(it) },
                 onBackgroundListeningChange = { viewModel.setBackgroundListeningEnabled(it) },
                 onUsbAutoBridgeChange = { viewModel.setUsbAutoBridge(it) },
                 onClose = { viewModel.toggleSettings() }
