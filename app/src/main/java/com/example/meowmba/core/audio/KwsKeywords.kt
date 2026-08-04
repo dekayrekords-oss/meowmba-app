@@ -68,6 +68,15 @@ object KwsKeywords {
         // "hey meow" or "ok meow" did — the ▁HE Y ▁ME OW path is simply weak in this
         // model. These add the run-together spellings (heymeow, okmeow — no word break
         // before ME) and the drawn-out ones, which is how the phrase is actually said.
+        // The H in "hey" is the weak link: it is barely voiced in casual speech, so the
+        // model regularly decodes the phrase with NO H ("ey meow") or a reduced vowel
+        // ("eh meow"). Those decodes used to be discarded, which is why "hey meow"
+        // needed several tries while "yo meow" fired first time — every token below is
+        // checked against tokens.txt (KwsKeywordsTest), because a sequence the model
+        // cannot emit is worse than useless: it never fires and says nothing about why.
+        "ey meow" to "▁E Y ▁ME OW",
+        "eh meow" to "▁E H ▁ME OW",
+        "eymeow" to "▁E Y ME OW",
         "heymeow" to "▁HE Y ME OW",
         "haymeow" to "▁HA Y ME OW",
         "hay meow" to "▁HA Y ▁ME OW",
@@ -118,6 +127,9 @@ object KwsKeywords {
         "ok mao" to ":3.5 #0.08",
         "ok mew" to ":3.5 #0.08",
         "okay mao" to ":3.5 #0.08",
+        "ey meow" to ":3.5 #0.08",
+        "eh meow" to ":3.5 #0.08",
+        "eymeow" to ":3.5 #0.08",
         "heymeow" to ":3.5 #0.08",
         "haymeow" to ":3.5 #0.08",
         "hay meow" to ":3.5 #0.08",

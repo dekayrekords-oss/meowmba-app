@@ -18,6 +18,7 @@ class KwsKeywordsTest {
             "<blk> 0", "<sos/eos> 1", "<unk> 2",
             "S 3", "T 4", "▁THE 5", "▁A 6", "▁TO 7",
             "▁HE 8", "Y 9", "▁ME 10", "OW 11", "M 12", "B 13", "A 14",
+            "▁E 23", "E 24", "H 25",
             "▁GO 15", "O 16", "G 17", "LE 18", "▁HI 19",
             "▁ROB 20", "OT 21", "Z 22",
         )
@@ -35,6 +36,17 @@ class KwsKeywordsTest {
     fun `built-in phrase uses the verified exact split`() {
         // Produced by the model's own bpe.model, not by the greedy fallback.
         assertEquals("▁HE Y ▁ME OW :3.5 #0.08", KwsKeywords.build(listOf("hey meow"), vocab))
+    }
+
+    @Test
+    fun `H-less decodes of hey meow are registered with the weak-phrase tuning`() {
+        // The H in "hey" is barely voiced in casual speech, so the model regularly
+        // decodes the wake phrase without it. Those spellings must be registered,
+        // token-valid and as permissive as the phrase itself — an unemittable token
+        // sequence never fires, which looks exactly like a broken wake word.
+        assertEquals("▁E Y ▁ME OW :3.5 #0.08", KwsKeywords.build(listOf("ey meow"), vocab))
+        assertEquals("▁E H ▁ME OW :3.5 #0.08", KwsKeywords.build(listOf("eh meow"), vocab))
+        assertEquals("▁E Y ME OW :3.5 #0.08", KwsKeywords.build(listOf("eymeow"), vocab))
     }
 
     @Test
