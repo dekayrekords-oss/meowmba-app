@@ -25,3 +25,5 @@ keystore.properties
 /app/src/main/assets/sherpa-onnx-kws-*/
 /app/src/main/assets/silero_vad.onnx
 /app/src/main/assets/speaker.onnx
+# auto-build artifacts
+build-out/
