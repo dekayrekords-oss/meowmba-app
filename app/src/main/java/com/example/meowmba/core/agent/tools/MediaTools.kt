@@ -368,7 +368,16 @@ class MediaGenerateAudioTool(
         riskLevel = RiskLevel.MODERATE,
         environments = setOf(ToolEnvironment.PHONE),
         confirmationPolicy = ConfirmationPolicy.NONE,
-        timeoutMs = 30_000
+        // 30s was inherited from the tone-generator-only days, when this tool
+        // returned instantly. RemoteMusicGenerator's own poll budget alone is
+        // up to 120s (maxPolls=60 * pollIntervalMs=2000ms), plus its HTTP
+        // timeouts on the initial /generate and final /result calls (up to
+        // 30s each) — a 30s ceiling here means the orchestrator's own
+        // withTimeoutOrNull kills the whole execute() call, including the
+        // tone-generator fallback, before the remote path can ever finish or
+        // fail cleanly. Same class of bug the image tool hit first (see its
+        // timeoutMs comment) — mirrored here with the same fix shape.
+        timeoutMs = 200_000
     )
 
     private companion object {

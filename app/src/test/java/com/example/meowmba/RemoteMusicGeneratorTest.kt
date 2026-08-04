@@ -67,4 +67,87 @@ class RemoteMusicGeneratorTest {
 
         assertTrue(result.isFailure)
     }
+
+    @Test
+    fun `a server-reported failure status is an honest Result failure`() = runTest {
+        val engine = MockEngine { request ->
+            when (request.url.encodedPath) {
+                "/generate" -> respond(
+                    """{"task_id": "failed-task"}""",
+                    HttpStatusCode.OK,
+                    headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                )
+                "/status/failed-task" -> respond(
+                    """{"status": 2}""",
+                    HttpStatusCode.OK,
+                    headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                )
+                else -> respond("not found", HttpStatusCode.NotFound)
+            }
+        }
+        val generator = RemoteMusicGenerator("http://192.168.1.10:9200", engine, pollIntervalMs = 1L)
+
+        val result = generator.generate("upbeat lofi")
+
+        assertTrue(result.isFailure)
+    }
+
+    @Test
+    fun `polling exhausts maxPolls and times out honestly instead of hanging`() = runTest {
+        val engine = MockEngine { request ->
+            when (request.url.encodedPath) {
+                "/generate" -> respond(
+                    """{"task_id": "never-done"}""",
+                    HttpStatusCode.OK,
+                    headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                )
+                "/status/never-done" -> respond(
+                    """{"status": 0}""", // always "still running"
+                    HttpStatusCode.OK,
+                    headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                )
+                else -> respond("not found", HttpStatusCode.NotFound)
+            }
+        }
+        val generator = RemoteMusicGenerator("http://192.168.1.10:9200", engine, pollIntervalMs = 1L, maxPolls = 3)
+
+        val result = generator.generate("upbeat lofi")
+
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull()?.message?.contains("timed out") == true)
+    }
+
+    @Test
+    fun `generate rejects a result response larger than the size ceiling`() = runTest {
+        val oversized = ByteArray(33 * 1024 * 1024) // 33 MB, over the 32 MB cap
+        val engine = MockEngine { request ->
+            when (request.url.encodedPath) {
+                "/generate" -> respond(
+                    """{"task_id": "big-task"}""",
+                    HttpStatusCode.OK,
+                    headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                )
+                "/status/big-task" -> respond(
+                    """{"status": 1}""",
+                    HttpStatusCode.OK,
+                    headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                )
+                "/result/big-task" -> respond(
+                    content = oversized,
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(
+                        HttpHeaders.ContentType to listOf("audio/wav"),
+                        HttpHeaders.ContentLength to listOf(oversized.size.toString())
+                    )
+                )
+                else -> respond("not found", HttpStatusCode.NotFound)
+            }
+        }
+        val generator = RemoteMusicGenerator("http://192.168.1.10:9200", engine, pollIntervalMs = 1L)
+
+        val result = generator.generate("upbeat lofi")
+
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull()?.message?.contains("too large") == true)
+    }
 }
