@@ -1,6 +1,7 @@
 package com.example.meowmba
 
 import android.content.Context
+import com.example.meowmba.core.agent.ImageModelCatalog
 import com.example.meowmba.core.agent.ModelCatalog
 import com.example.meowmba.core.agent.ModelDownloader
 import com.example.meowmba.core.security.SecureStorageManager
@@ -62,6 +63,44 @@ class ModelCatalogTest {
         assertFalse(ModelCatalog.isValidModelFileName("a/b.task"))
         assertFalse(ModelCatalog.isValidModelFileName("model.gguf"))
         assertFalse(ModelCatalog.isValidModelFileName("no extension"))
+    }
+}
+
+class ModelDownloadImageCatalogTest {
+
+    @Test
+    fun `catalog has one downloadable SDXL-Lightning entry, GGUF Q8_0 quantized`() {
+        assertEquals(1, ImageModelCatalog.options.size)
+        val sdxl = ImageModelCatalog.options.single()
+        assertEquals("sdxl-lightning-4step-q8", sdxl.id)
+        assertTrue(sdxl.downloadUrl.startsWith("https://huggingface.co/"))
+        assertTrue(sdxl.fileName.endsWith(".gguf"))
+        assertTrue(sdxl.fileName.contains("q8_0"))
+        assertFalse(sdxl.requiresHfToken)
+        assertTrue(sdxl.recommended)
+    }
+
+    @Test
+    fun `optionForFile finds the entry by installed filename`() {
+        val option = ImageModelCatalog.optionForFile("sdxl_lightning_4step.q8_0.gguf")
+        assertNotNull(option)
+        assertEquals("sdxl-lightning-4step-q8", option!!.id)
+        assertNull(ImageModelCatalog.optionForFile("nonexistent.gguf"))
+    }
+
+    @Test
+    fun `installedFile reports null until the gguf is actually present on disk`() {
+        val modelsDir = Files.createTempDirectory("image_model_dl_test").toFile()
+        val downloader = ModelDownloader(modelsDir, hfTokenProvider = { null })
+        val option = ImageModelCatalog.options.single()
+
+        assertNull(downloader.installedFile(option))
+
+        File(modelsDir, option.fileName).writeBytes(ByteArray(64))
+
+        val installed = downloader.installedFile(option)
+        assertNotNull(installed)
+        assertEquals(option.fileName, installed!!.name)
     }
 }
 

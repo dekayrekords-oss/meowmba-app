@@ -49,6 +49,15 @@ class ModelDownloader(
     fun installedFile(option: LocalModelOption): File? =
         File(modelsDir, option.fileName).takeIf { it.isFile && it.length() > 0 }
 
+    /**
+     * The installed file for an image-model catalog option, or null when
+     * absent/empty. Overload (not a new type) because installed-check and
+     * download both key purely on `fileName` — see [ImageModelOption]'s doc
+     * for why the catalog entry itself is a separate type.
+     */
+    fun installedFile(option: ImageModelOption): File? =
+        File(modelsDir, option.fileName).takeIf { it.isFile && it.length() > 0 }
+
     /** Any installed catalog model (used at startup when no path is configured). */
     fun firstInstalledOption(): LocalModelOption? =
         options.firstOrNull { installedFile(it) != null }

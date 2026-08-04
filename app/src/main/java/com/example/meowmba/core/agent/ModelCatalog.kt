@@ -98,3 +98,64 @@ object ModelCatalog {
         name.matches(Regex("[a-zA-Z0-9._-]+")) &&
             (name.endsWith(".task") || name.endsWith(".litertlm"))
 }
+
+/**
+ * Catalog entry for on-device image-generation models
+ * (stable-diffusion.cpp, GGUF format).
+ *
+ * Kept as a parallel type rather than folded into [LocalModelOption]:
+ * image checkpoints are GGUF-quantized diffusion models, not MediaPipe/
+ * LiteRT LLM bundles, and [ModelCatalog.isValidModelFileName] structurally
+ * requires `.task`/`.litertlm` (with a dedicated test asserting `.gguf` is
+ * rejected). Reusing that type would mean either weakening LLM filename
+ * validation or every LLM call site branching on model kind. The download
+ * mechanics themselves (`ModelDownloader.download`) are already generic
+ * over url/fileName and need no duplication — only the "what's in the
+ * catalog" and "is it installed" surfaces need a parallel entry point, see
+ * [ModelDownloader.installedFile].
+ */
+data class ImageModelOption(
+    val id: String,
+    val displayName: String,
+    val description: String,
+    val approxSize: String,
+    val downloadUrl: String,
+    /** Destination file name inside the app's private models directory. */
+    val fileName: String,
+    val minRamGb: Int,
+    val requiresHfToken: Boolean,
+    val recommended: Boolean = false
+)
+
+/**
+ * Curated on-device image-model catalog.
+ *
+ * SDXL-Lightning entry verified against Hugging Face (2026-08):
+ * `OlegSkutte/SDXL-Lightning-GGUF` hosts a Q8_0 GGUF quantization of
+ * ByteDance's SDXL-Lightning (4-step distilled SDXL), matching the
+ * `SD_TYPE_Q8_0` weight type hardcoded in the JNI bridge's
+ * `nativeCreateContext`. The download URL was confirmed to resolve
+ * (HTTP 200, no auth) to a real ~4.1 GB (4,098,988,672 byte) file.
+ */
+object ImageModelCatalog {
+
+    private const val HF = "https://huggingface.co"
+
+    val options: List<ImageModelOption> = listOf(
+        ImageModelOption(
+            id = "sdxl-lightning-4step-q8",
+            displayName = "SDXL-Lightning (4-step, Q8_0)",
+            description = "ByteDance's distilled SDXL for few-step generation, GGUF-quantized " +
+                "for stable-diffusion.cpp. Generates 1024px images in ~4 steps.",
+            approxSize = "~4.1 GB",
+            downloadUrl = "$HF/OlegSkutte/SDXL-Lightning-GGUF/resolve/main/sdxl_lightning_4step.q8_0.gguf",
+            fileName = "sdxl_lightning_4step.q8_0.gguf",
+            minRamGb = 6,
+            requiresHfToken = false,
+            recommended = true
+        )
+    )
+
+    fun optionForFile(fileName: String): ImageModelOption? =
+        options.find { it.fileName == fileName }
+}
