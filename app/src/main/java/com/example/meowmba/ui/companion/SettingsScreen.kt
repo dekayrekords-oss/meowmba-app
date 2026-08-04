@@ -147,12 +147,21 @@ fun SettingsScreen(
                 color = Color.Gray
             )
             Spacer(modifier = Modifier.height(8.dp))
+            // imageModelInstalled() is a disk stat — check it once per composition and
+            // whenever a download's state changes, not on every recomposition (this
+            // composable body also re-runs on unrelated keystrokes elsewhere on this
+            // screen, e.g. the companion name / Hermes URL fields).
+            var imageModelInstalledNow by remember { mutableStateOf(imageModelInstalled()) }
+            LaunchedEffect(imageModelDownload) { imageModelInstalledNow = imageModelInstalled() }
             when {
-                imageModelInstalled() -> {
+                imageModelInstalledNow -> {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Installed", color = Color(0xFF3FB950), fontSize = 12.sp)
                         Spacer(modifier = Modifier.weight(1f))
-                        TextButton(onClick = onDeleteImageModel) {
+                        TextButton(onClick = {
+                            onDeleteImageModel()
+                            imageModelInstalledNow = false
+                        }) {
                             Text("Delete", color = Color(0xFFF85149), fontSize = 12.sp)
                         }
                     }
