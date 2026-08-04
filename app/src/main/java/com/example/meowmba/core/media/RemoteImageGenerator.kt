@@ -64,7 +64,10 @@ class RemoteImageGenerator(
             val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
                 ?: return Result.failure(IllegalStateException("Image server returned an undecodable response"))
             Result.success(bitmap)
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
+            // BitmapFactory.decodeByteArray can throw OutOfMemoryError (an Error, not Exception)
+            // on large or malformed payloads from network/untrusted sources. Catch Throwable
+            // to prevent crashes on misbehaving or malicious servers.
             Result.failure(IllegalStateException("Image server unreachable: ${e.message ?: "network error"}"))
         }
     }
