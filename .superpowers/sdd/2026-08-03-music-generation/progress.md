@@ -87,3 +87,88 @@ commands from the plan text, ran everything directly instead)
   HTTP round trips. ACE-Step's own reported DiT time: ~1.3s (matches
   the design doc's "under 2s per full song" claim). This feeds Task 2's
   client-side poll interval/timeout choice.
+
+## Task 2: MusicGenerator interface + RemoteMusicGenerator client
+Status: DONE
+- Dispatched to an implementer subagent with the real verified wire
+  contract from Task 1 (wav not mp3, real measured timing).
+- Fixed 3 real bugs in the plan's own reference code (verified by
+  actually compiling, not guessed): missing `contentLength` import;
+  the plan's private top-level DTOs (`GenerateRequest`/`TaskIdResponse`/
+  `StatusResponse`) collide at the package level with identically-named
+  private data classes already in `RemoteImageGenerator.kt` (same
+  package — Kotlin file-private top-level classes still share one JVM
+  namespace slot per package) — renamed to `MusicGenerateRequest`/etc;
+  a test method name containing a literal `/` is illegal even inside
+  Kotlin backticks.
+- 3 tests pass. Committed as 1820a62.
+
+## Task 3: Wire into MediaGenerateAudioTool + Settings
+Status: DONE
+- Dispatched to an implementer subagent with the wav-not-mp3 deviation
+  spelled out explicitly (both the remote and fallback paths now write
+  `audio_*.wav` — no longer distinguishable by extension alone the way
+  images are `image_*` vs `canvas_*`; documented honestly in a doc
+  comment rather than inventing a filename-prefix scheme not worth the
+  complexity).
+- Settings wiring (`musicServerUrl`) verified to match `imageServerUrl`
+  exactly; test uses `mockSecureStorage` + `verify()`, not the
+  no-op-construction mistake this codebase's history already had to
+  catch once.
+- Real deviation found during implementation: the plan's Task 3 Step 1
+  test hits `Log.w` on the fallback-after-remote-failure path, which
+  throws under plain JUnit (Android `Log` unmocked) — fixed by applying
+  `@RunWith(RobolectricTestRunner::class)`, mirroring how the sibling
+  `MediaGenerateToolRoutingTest` already solves the identical problem.
+- 393/396 tests pass (3 pre-existing unrelated failures), assembleDebug
+  BUILD SUCCESSFUL. Committed as 5e15bf5.
+
+## Final whole-branch review
+Status: DONE — one Severe + one Medium finding, both fixed
+Dispatched to a review subagent with instructions to verify Throwable
+discipline, size-guard ordering, resource cleanup, the wav/mp3
+consistency, settings-test quality, and to actually run the suite.
+
+Findings (both fixed directly by the controller, commit e379a0f):
+1. **Severe**: `MediaGenerateAudioTool.timeoutMs` stayed at the
+   inherited `30_000` even after wiring in `RemoteMusicGenerator`,
+   whose own poll budget alone is up to 120s (`maxPolls=60 *
+   pollIntervalMs=2000`) plus per-call HTTP timeouts. The orchestrator's
+   `withTimeoutOrNull` would kill the *entire* tool call — including the
+   tone-generator fallback — before a real remote generation could
+   finish, surfacing a raw "Tool timed out" error instead of either a
+   real result or the promised graceful fallback. Same class of bug the
+   image tool (`MediaGenerateTool`) hit first and fixed by raising to
+   `300_000`; mirrored here by raising to `200_000` with a comment
+   explaining the real math (matches this task's real measured 29s
+   warm-generation time with wide margin for cold-start/network
+   variance, while not being needlessly larger than the actual budget).
+2. **Medium**: `RemoteMusicGeneratorTest.kt` had no coverage for the
+   server-reported-failure (status:2), poll-timeout (maxPolls
+   exhausted), or oversized-response branches, despite the code's own
+   comment claiming "same discipline as RemoteImageGenerator" — whose
+   equivalent branches are tested. Added 3 tests mirroring
+   `RemoteImageGeneratorTest.kt`'s existing style for the same cases.
+- Re-ran full suite after fixes: 399 tests (3 new), 3 failures — same
+  pre-existing unrelated `ModelDownloadViewModelTest` failures.
+  assembleDebug BUILD SUCCESSFUL.
+
+## FINAL STATUS: PLAN COMPLETE
+All 3 app-side tasks done, server-side infra (meow-music) deployed and
+verified end-to-end with real generated audio, final review clean after
+two fixes.
+
+Branch: feat/music-generation
+Worktree: /home/claude/meowmba-app/.claude/worktrees/music-generation
+Merge-base: origin/main @ 8c422bb
+App commits (5): 688e20b, [Task1 ledger], 1820a62, 5e15bf5, e379a0f
+Server infra (NOT in this git repo, per plan): /home/claude/meow-music/
+  - orchestrator.py + Dockerfile, deployed as Docker container
+    `meow-music` (--network host, port 9200, --restart unless-stopped)
+  - ACE-Step 1.5 vendored at /home/claude/meow-music/vendor
+    (commit 6d467e4), running as systemd --user service
+    `acestep-api.service` (enabled, linger enabled — survives
+    logout/reboot), port 8001, weights cached on disk (9.4GB)
+Not pushed... will push app-side branch now. Server infra is host
+state, not a git artifact — documented here and in the final status
+report for a human to find.
