@@ -12,6 +12,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.shadows.ShadowBitmapFactory
 
 @RunWith(RobolectricTestRunner::class)
 class RemoteImageGeneratorTest {
@@ -49,5 +50,52 @@ class RemoteImageGeneratorTest {
 
         assertTrue(result.isFailure)
         assertTrue(result.exceptionOrNull()?.message?.contains("500") == true)
+    }
+
+    @Test
+    fun `generate rejects a response larger than the size ceiling`() = runTest {
+        val oversized = ByteArray(33 * 1024 * 1024) // 33 MB, over the 32 MB cap
+        val engine = MockEngine { request ->
+            respond(
+                content = oversized,
+                status = HttpStatusCode.OK,
+                headers = headersOf(
+                    HttpHeaders.ContentType to listOf(ContentType.Image.PNG.toString()),
+                    HttpHeaders.ContentLength to listOf(oversized.size.toString())
+                )
+            )
+        }
+        val generator = RemoteImageGenerator("http://192.168.1.10:9100", engine)
+
+        val result = generator.generate("a cat")
+
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull()?.message?.contains("too large") == true)
+    }
+
+    @Test
+    fun `generate reports an honest failure on 200 OK with undecodable bytes`() = runTest {
+        // Robolectric's shadow BitmapFactory happily decodes any byte array by
+        // default (allowInvalidImageData defaults to true) — disable that so the
+        // shadow actually mirrors real BitmapFactory's null-on-garbage behavior.
+        ShadowBitmapFactory.setAllowInvalidImageData(false)
+        try {
+            val garbage = "not an image".toByteArray()
+            val engine = MockEngine { request ->
+                respond(
+                    content = garbage,
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, ContentType.Image.PNG.toString())
+                )
+            }
+            val generator = RemoteImageGenerator("http://192.168.1.10:9100", engine)
+
+            val result = generator.generate("a cat")
+
+            assertTrue(result.isFailure)
+            assertTrue(result.exceptionOrNull()?.message?.contains("undecodable") == true)
+        } finally {
+            ShadowBitmapFactory.setAllowInvalidImageData(true)
+        }
     }
 }

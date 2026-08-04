@@ -31,6 +31,17 @@ private class FakeImageGenerator(
     }
 }
 
+/** Simulates a backend that throws instead of returning Result.failure — e.g. a
+ *  native crash escaping a future JNI-based backend's generate(). */
+private class ThrowingImageGenerator(val name: String) : ImageGenerator {
+    var callCount = 0
+    override fun isAvailable() = true
+    override suspend fun generate(prompt: String, iterations: Int, seed: Int): Result<Bitmap> {
+        callCount++
+        throw RuntimeException("$name crashed")
+    }
+}
+
 @RunWith(RobolectricTestRunner::class)
 class MediaGenerateToolRoutingTest {
 
@@ -116,5 +127,40 @@ class MediaGenerateToolRoutingTest {
 
         assertEquals(0, local.callCount)
         assertEquals(1, remote.callCount)
+    }
+
+    @Test
+    fun `a backend that throws instead of failing still falls through to the next backend`() = runTest {
+        val local = ThrowingImageGenerator(name = "local")
+        val remote = FakeImageGenerator(available = true, succeeds = true, name = "remote")
+        val tool = MediaGenerateTool(
+            workspace(),
+            localGenerator = { local },
+            remoteGenerator = { remote },
+            preferServer = { false }
+        )
+
+        val result = tool.execute(mapOf("prompt" to "a cat"))
+
+        assertEquals(1, local.callCount)
+        assertEquals(1, remote.callCount)
+        assertTrue(result is ToolResult.Success)
+    }
+
+    @Test
+    fun `every backend throwing still produces the canvas placeholder, never a crash`() = runTest {
+        val local = ThrowingImageGenerator(name = "local")
+        val remote = ThrowingImageGenerator(name = "remote")
+        val tool = MediaGenerateTool(
+            workspace(),
+            localGenerator = { local },
+            remoteGenerator = { remote },
+            preferServer = { false }
+        )
+
+        val result = tool.execute(mapOf("prompt" to "a cat"))
+
+        assertTrue(result is ToolResult.Success)
+        assertTrue((result as ToolResult.Success).output.contains("canvas_"))
     }
 }

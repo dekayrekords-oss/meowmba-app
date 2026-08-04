@@ -4,19 +4,19 @@ import android.graphics.*
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 
 /**
- * `media.generate_image` — generates a simple PNG image from a text
- * description using the Android Canvas API. Draws text, geometric shapes,
- * and color themes based on the prompt.
- *
- * Not an AI image generator — this is a procedural renderer that turns
- * simple descriptions into visual output. The companion uses it when the
- * user asks to create an image or visualize an idea.
+ * `media.generate_image` — routes to real AI image generation (on-device
+ * MediaPipe diffusion, or a user-configured remote server) when a backend
+ * is available, and falls back to a simple procedural canvas renderer
+ * (text, geometric shapes, color themes drawn from the prompt) when
+ * neither backend is available or both fail. The companion uses it when
+ * the user asks to create an image or visualize an idea.
  *
  * SAFE risk, no confirmation — writes to the workspace.
  */
@@ -43,6 +43,11 @@ class MediaGenerateTool(
         riskLevel = RiskLevel.MODERATE,
         environments = setOf(ToolEnvironment.PHONE),
         confirmationPolicy = ConfirmationPolicy.NONE,
+        // 15s was inherited from the canvas-only days, when this tool drew a
+        // bitmap and returned instantly. On-device diffusion loads ~2 GB of
+        // weights and runs 20 denoising steps — the orchestrator was killing
+        // it mid-generation every time. The canvas fallback still returns in
+        // milliseconds, so a long ceiling costs it nothing.
         timeoutMs = 300_000
     )
 
@@ -50,6 +55,13 @@ class MediaGenerateTool(
      * Tries backends in preference order, falling through to the next one on
      * unavailability or failure. Returns null only when every configured
      * backend failed, so the caller can fall back to the canvas placeholder.
+     *
+     * The `runCatching` here is the routing layer enforcing its own "always
+     * produce something" guarantee structurally: both current backends
+     * already catch Throwable internally and return Result.failure, but a
+     * future backend (e.g. a planned JNI-based local backend) isn't
+     * guaranteed to be equally careful — a native crash escaping generate()
+     * should still fall through to the canvas, not take down the tool call.
      */
     private suspend fun tryGenerators(fullPrompt: String): Bitmap? {
         val order = if (preferServer()) {
@@ -60,9 +72,19 @@ class MediaGenerateTool(
         for (supplier in order) {
             val generator = supplier?.invoke() ?: continue
             if (!generator.isAvailable()) continue
-            generator.generate(fullPrompt).getOrNull()?.let { return it }
+            val result = runCatching { generator.generate(fullPrompt) }.getOrNull()
+            result?.getOrNull()?.let { return it }
+            if (result == null) {
+                Log.w(TAG, "image backend threw instead of returning a Result")
+            } else {
+                Log.w(TAG, "image backend failed: ${result.exceptionOrNull()?.message}")
+            }
         }
         return null
+    }
+
+    private companion object {
+        const val TAG = "MediaGenerateTool"
     }
 
     override suspend fun execute(args: Map<String, String>): ToolResult = withContext(Dispatchers.IO) {
