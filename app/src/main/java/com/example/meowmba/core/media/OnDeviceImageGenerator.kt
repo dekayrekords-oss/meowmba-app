@@ -3,7 +3,7 @@ package com.example.meowmba.core.media
 import android.content.Context
 import android.graphics.Bitmap
 import com.google.mediapipe.framework.image.BitmapExtractor
-import com.google.mediapipe.tasks.vision.imagegenerator.ImageGenerator
+import com.google.mediapipe.tasks.vision.imagegenerator.ImageGenerator as MediaPipeImageGenerator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -29,14 +29,14 @@ import java.io.File
 class OnDeviceImageGenerator(
     private val context: Context,
     private val modelDirectory: String
-) {
+) : ImageGenerator {
 
     /**
      * The task needs a directory of converted bins. Checking for the directory
      * alone is not enough — an empty folder produces a confusing native crash
      * rather than a clean error, so require it to be non-empty.
      */
-    fun isAvailable(): Boolean {
+    override fun isAvailable(): Boolean {
         val dir = File(modelDirectory)
         return dir.isDirectory && (dir.listFiles()?.isNotEmpty() == true)
     }
@@ -49,10 +49,10 @@ class OnDeviceImageGenerator(
      *   fewer is faster and blurrier. Expect ~15s on a flagship, well over a
      *   minute on midrange hardware.
      */
-    suspend fun generate(
+    override suspend fun generate(
         prompt: String,
-        iterations: Int = 20,
-        seed: Int = 0
+        iterations: Int,
+        seed: Int
     ): Result<Bitmap> = withContext(Dispatchers.IO) {
         if (!isAvailable()) {
             return@withContext Result.failure(
@@ -60,12 +60,12 @@ class OnDeviceImageGenerator(
             )
         }
 
-        var generator: ImageGenerator? = null
+        var generator: MediaPipeImageGenerator? = null
         return@withContext try {
-            val options = ImageGenerator.ImageGeneratorOptions.builder()
+            val options = MediaPipeImageGenerator.ImageGeneratorOptions.builder()
                 .setImageGeneratorModelDirectory(modelDirectory)
                 .build()
-            generator = ImageGenerator.createFromOptions(context, options)
+            generator = MediaPipeImageGenerator.createFromOptions(context, options)
 
             val result = generator.generate(prompt, iterations, seed)
                 ?: return@withContext Result.failure(

@@ -88,6 +88,7 @@ dependencies {
     testImplementation("org.json:json:20240303")
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.mockitoCore)
+    testImplementation(libs.robolectric)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)

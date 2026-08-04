@@ -22,19 +22,19 @@ import java.io.FileOutputStream
  */
 class MediaGenerateTool(
     private val workspace: Workspace,
-    /**
-     * Supplies the on-device Stable Diffusion generator when the user has
-     * installed the weights. Null (or an uninstalled model) falls back to the
-     * canvas renderer below, so the tool always produces *something*.
-     */
-    private val imageGenerator: (() -> com.example.meowmba.core.media.OnDeviceImageGenerator?)? = null
+    /** Supplies the on-device generator. Null when unavailable. */
+    private val localGenerator: (() -> com.example.meowmba.core.media.ImageGenerator?)? = null,
+    /** Supplies the remote generator. Null unless the user configured a server URL. */
+    private val remoteGenerator: (() -> com.example.meowmba.core.media.ImageGenerator?)? = null,
+    /** True when Settings has "prefer server" selected. Defaults to local-first. */
+    private val preferServer: () -> Boolean = { false }
 ) : Tool {
     override val definition = ToolDefinition(
         id = "media.generate_image",
         displayName = "Generate image",
-        description = "Create a PNG image from a text description. Uses the " +
-            "on-device Stable Diffusion model when one is installed, and falls " +
-            "back to a simple drawn canvas otherwise. " +
+        description = "Create a PNG image from a text description. Tries the " +
+            "configured image backend (on-device or a configured server) and " +
+            "falls back to a simple drawn canvas if neither is available. " +
             "The result is saved as a .png file in the workspace.",
         inputSchema = mapOf(
             "prompt" to "string",
@@ -43,49 +43,52 @@ class MediaGenerateTool(
         riskLevel = RiskLevel.MODERATE,
         environments = setOf(ToolEnvironment.PHONE),
         confirmationPolicy = ConfirmationPolicy.NONE,
-        // 15s was inherited from the canvas-only days, when this tool drew a
-        // bitmap and returned instantly. On-device diffusion loads ~2 GB of
-        // weights and runs 20 denoising steps — the orchestrator was killing
-        // it mid-generation every time. The canvas fallback still returns in
-        // milliseconds, so a long ceiling costs it nothing.
         timeoutMs = 300_000
     )
+
+    /**
+     * Tries backends in preference order, falling through to the next one on
+     * unavailability or failure. Returns null only when every configured
+     * backend failed, so the caller can fall back to the canvas placeholder.
+     */
+    private suspend fun tryGenerators(fullPrompt: String): Bitmap? {
+        val order = if (preferServer()) {
+            listOf(remoteGenerator, localGenerator)
+        } else {
+            listOf(localGenerator, remoteGenerator)
+        }
+        for (supplier in order) {
+            val generator = supplier?.invoke() ?: continue
+            if (!generator.isAvailable()) continue
+            generator.generate(fullPrompt).getOrNull()?.let { return it }
+        }
+        return null
+    }
 
     override suspend fun execute(args: Map<String, String>): ToolResult = withContext(Dispatchers.IO) {
         val prompt = args["prompt"]?.takeIf { it.isNotBlank() }
             ?: return@withContext ToolResult.Failure("Missing 'prompt'")
         val style = args["style"]?.takeIf { it.isNotBlank() }?.lowercase() ?: "auto"
+        val fullPrompt = if (style != "auto") "$prompt, $style style" else prompt
 
-        // Real diffusion first. Only fall through to the canvas when no model
-        // is installed — a model that IS installed but fails should say so
-        // rather than silently handing back a text-on-circles placeholder.
-        val generator = imageGenerator?.invoke()
-        if (generator != null && generator.isAvailable()) {
-            val fullPrompt = if (style != "auto") "$prompt, $style style" else prompt
-            val outcome = generator.generate(fullPrompt)
-            outcome.getOrNull()?.let { bitmap ->
-                val name = fileNameFor(prompt, prefix = "image")
-                return@withContext try {
-                    workspace.resolve(name)?.let { file ->
-                        FileOutputStream(file).use { out ->
-                            bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
-                        }
-                        ToolResult.Success(
-                            "Image saved as \"$name\" in the workspace: $prompt" +
-                                "\nMEDIA_FILE:${file.absolutePath}"
-                        )
-                    } ?: ToolResult.Failure("Could not write image — path is outside the workspace.")
-                } catch (e: Exception) {
-                    ToolResult.Failure("Failed to save the generated image: ${e.message}")
-                } finally {
-                    bitmap.recycle()
-                }
+        val bitmap = tryGenerators(fullPrompt)
+        if (bitmap != null) {
+            val name = fileNameFor(prompt, prefix = "image")
+            return@withContext try {
+                workspace.resolve(name)?.let { file ->
+                    FileOutputStream(file).use { out ->
+                        bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+                    }
+                    ToolResult.Success(
+                        "Image saved as \"$name\" in the workspace: $prompt" +
+                            "\nMEDIA_FILE:${file.absolutePath}"
+                    )
+                } ?: ToolResult.Failure("Could not write image — path is outside the workspace.")
+            } catch (e: Exception) {
+                ToolResult.Failure("Failed to save the generated image: ${e.message}")
+            } finally {
+                bitmap.recycle()
             }
-            return@withContext ToolResult.Failure(
-                "On-device image generation failed: " +
-                    "${outcome.exceptionOrNull()?.message ?: "unknown error"}. " +
-                    "Check the image model path in Settings."
-            )
         }
 
         val width = 512

@@ -8,6 +8,7 @@ lifecycleRuntimeKtx = "2.11.0"
 activityCompose = "1.13.0"
 kotlin = "2.2.10"
 composeBom = "2026.02.01"
+robolectric = "4.14.1"
 mediapipeGenai = "0.10.35"
 # Image generation ships as its own artifact, on Google's Maven only (not
 # Central), and is versioned independently of tasks-genai.
@@ -46,6 +47,7 @@ androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-te
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version = "1.10.1" }
 mockitoCore = { group = "org.mockito", name = "mockito-core", version = "5.15.2" }
+robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
 androidx-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
 mediapipe-tasks-genai = { group = "com.google.mediapipe", name = "tasks-genai", version.ref = "mediapipeGenai" }
 mediapipe-tasks-vision-image-generator = { group = "com.google.mediapipe", name = "tasks-vision-image-generator", version.ref = "mediapipeImageGen" }

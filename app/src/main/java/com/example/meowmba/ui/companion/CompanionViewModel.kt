@@ -542,15 +542,18 @@ class CompanionViewModel(
             // Read the path at call time, not registration time, so installing
             // the weights takes effect without restarting the app.
             toolRegistry.register(
-                MediaGenerateTool(ws) {
-                    val dir = _uiState.value.imageModelDir
-                    val context = secureStorage?.context
-                    if (dir.isNotBlank() && context != null) {
-                        OnDeviceImageGenerator(context, dir)
-                    } else {
-                        null
+                MediaGenerateTool(
+                    ws,
+                    localGenerator = {
+                        val dir = _uiState.value.imageModelDir
+                        val context = secureStorage?.context
+                        if (dir.isNotBlank() && context != null) {
+                            OnDeviceImageGenerator(context, dir)
+                        } else {
+                            null
+                        }
                     }
-                }
+                )
             )
             toolRegistry.register(MediaGenerateVideoTool(ws))
             toolRegistry.register(MediaGenerateAudioTool(ws))
