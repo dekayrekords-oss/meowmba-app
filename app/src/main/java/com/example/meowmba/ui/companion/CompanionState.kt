@@ -162,6 +162,12 @@ data class CompanionState(
     val imageServerUrl: String = "",
     /** When true and imageServerUrl is set, try the server before on-device. */
     val preferServerImageGen: Boolean = false,
+    /**
+     * Opt-in HTTP server for music generation. Empty = no music backend, and
+     * audio requests fall back to the procedural tone generator. Unlike
+     * images, there's no on-device generator to prefer against.
+     */
+    val musicServerUrl: String = "",
     /** Active model downloads by id (catalog option id or "custom:<fileName>"). */
     val modelDownloads: Map<String, ModelDownloader.DownloadProgress> = emptyMap(),
     /** Every model bundle actually present in the app-private models dir. */

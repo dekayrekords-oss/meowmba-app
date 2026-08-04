@@ -338,14 +338,32 @@ class MediaGenerateVideoTool(private val workspace: Workspace) : Tool {
 }
 
 /**
- * `media.generate_audio` — creates a simple WAV tone sequence from a
- * description. Generates sine waves with varying frequencies and durations.
+ * `media.generate_audio` — routes to real AI music generation (a
+ * user-configured remote server) when available, and falls back to a
+ * simple procedural WAV tone sequence (sine waves) when no backend is
+ * configured or generation fails. The companion uses it when the user asks
+ * to create music or a sound.
+ *
+ * Note on file naming: the remote backend (meow-music/ACE-Step) returns WAV
+ * audio on the currently deployed host (ffmpeg is unavailable there, so it
+ * can't transcode to MP3), the same container the tone-generator fallback
+ * already writes via `writeWav`. Both paths therefore produce `audio_*.wav`
+ * — unlike `media.generate_image`'s `image_*` vs `canvas_*` split, the
+ * extension alone can't tell you which backend produced a given file here.
+ * They're still distinguishable by content (real generated music vs. a
+ * procedural tone sequence) if that ever matters.
  */
-class MediaGenerateAudioTool(private val workspace: Workspace) : Tool {
+class MediaGenerateAudioTool(
+    private val workspace: Workspace,
+    /** Supplies the remote generator. Null unless the user configured a server URL. */
+    private val remoteGenerator: (() -> com.example.meowmba.core.media.MusicGenerator?)? = null
+) : Tool {
     override val definition = ToolDefinition(
         id = "media.generate_audio",
         displayName = "Generate audio",
-        description = "Create a simple WAV audio file from a text description. Generates tone sequences (sine waves).",
+        description = "Create a WAV audio file from a text description. Tries the " +
+            "configured music server if one is set, and falls back to a simple " +
+            "procedural tone sequence otherwise.",
         inputSchema = mapOf("prompt" to "string", "duration_sec" to "string"),
         riskLevel = RiskLevel.MODERATE,
         environments = setOf(ToolEnvironment.PHONE),
@@ -353,10 +371,49 @@ class MediaGenerateAudioTool(private val workspace: Workspace) : Tool {
         timeoutMs = 30_000
     )
 
+    private companion object {
+        const val TAG = "MediaGenerateAudioTool"
+    }
+
+    /**
+     * Mirrors `MediaGenerateTool.tryGenerators`: never throws, logs failures,
+     * and returns null (rather than propagating) so the caller can fall
+     * through to the procedural tone generator.
+     */
+    private suspend fun tryRemote(prompt: String, durationSec: Int): ByteArray? {
+        val generator = remoteGenerator?.invoke() ?: return null
+        if (!generator.isAvailable()) return null
+        val result = runCatching { generator.generate(prompt, durationSec) }.getOrNull()
+        result?.getOrNull()?.let { return it }
+        if (result == null) {
+            Log.w(TAG, "music backend threw instead of returning a Result")
+        } else {
+            Log.w(TAG, "music backend failed: ${result.exceptionOrNull()?.message}")
+        }
+        return null
+    }
+
     override suspend fun execute(args: Map<String, String>): ToolResult = withContext(Dispatchers.IO) {
         val prompt = args["prompt"]?.takeIf { it.isNotBlank() }
             ?: return@withContext ToolResult.Failure("Missing 'prompt'")
         val durationSec = args["duration_sec"]?.toIntOrNull()?.coerceIn(1, 30) ?: 5
+
+        val remoteBytes = tryRemote(prompt, durationSec)
+        if (remoteBytes != null) {
+            val safeName = prompt.replace(Regex("[^a-zA-Z0-9_\\- ]"), "").take(40).trim()
+                .replace(Regex("\\s+"), "_")
+            val fileName = if (safeName.isNotBlank()) "audio_${safeName}.wav" else "audio_${System.currentTimeMillis()}.wav"
+            return@withContext try {
+                workspace.resolve(fileName)?.let { file ->
+                    FileOutputStream(file).use { out -> out.write(remoteBytes) }
+                    ToolResult.Success(
+                        "Audio saved as \"$fileName\" ($durationSec sec) in the workspace: $prompt\nMEDIA_FILE:${file.absolutePath}"
+                    )
+                } ?: ToolResult.Failure("Could not write audio — path is outside workspace.")
+            } catch (e: Exception) {
+                ToolResult.Failure("Failed to save the generated audio: ${e.message}")
+            }
+        }
 
         val sampleRate = 22050
         val numSamples = sampleRate * durationSec

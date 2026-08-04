@@ -285,6 +285,7 @@ class CompanionViewModel(
                 hermesAgentUrl = storage.getPreference(KEY_HERMES_URL) ?: "",
                 imageServerUrl = storage.getPreference(KEY_IMAGE_SERVER_URL) ?: "",
                 preferServerImageGen = storage.getBooleanPreference(KEY_PREFER_SERVER_IMAGE_GEN, false),
+                musicServerUrl = storage.getPreference(KEY_MUSIC_SERVER_URL) ?: "",
                 // Default to the conventional push location. When nothing is
                 // there, isAvailable() is false and image requests fall back to
                 // canvas — so the default costs nothing and saves every user
@@ -569,7 +570,19 @@ class CompanionViewModel(
                 )
             )
             toolRegistry.register(MediaGenerateVideoTool(ws))
-            toolRegistry.register(MediaGenerateAudioTool(ws))
+            toolRegistry.register(
+                MediaGenerateAudioTool(
+                    ws,
+                    remoteGenerator = {
+                        val url = _uiState.value.musicServerUrl
+                        if (url.isNotBlank()) {
+                            com.example.meowmba.core.media.RemoteMusicGenerator(url)
+                        } else {
+                            null
+                        }
+                    }
+                )
+            )
         }
         if (memoryRepository != null || workspaceRoot != null) {
             agentToolRegistry = toolRegistry
@@ -2170,6 +2183,14 @@ class CompanionViewModel(
         secureStorage?.saveBooleanPreference(KEY_PREFER_SERVER_IMAGE_GEN, enabled)
     }
 
+    fun setMusicServerUrl(url: String) {
+        // Strip trailing slashes too — otherwise a URL like "http://host/" produces
+        // "http://host//generate" when RemoteMusicGenerator appends "/generate".
+        val clean = url.trim().trimEnd('/')
+        _uiState.value = _uiState.value.copy(musicServerUrl = clean)
+        secureStorage?.savePreference(KEY_MUSIC_SERVER_URL, clean)
+    }
+
     /** Background wake-phrase listening toggle (persisted; service runs via MainActivity). */
     fun setBackgroundListeningEnabled(enabled: Boolean) {
         _uiState.value = _uiState.value.copy(backgroundListeningEnabled = enabled)
@@ -2858,6 +2879,7 @@ class CompanionViewModel(
         private const val KEY_HERMES_URL = "hermes_agent_url"
         private const val KEY_IMAGE_SERVER_URL = "image_server_url"
         private const val KEY_PREFER_SERVER_IMAGE_GEN = "prefer_server_image_gen"
+        private const val KEY_MUSIC_SERVER_URL = "music_server_url"
         private const val KEY_IMAGE_MODEL_DIR = "image_model_dir"
         /** Where the MediaPipe image-generation guide tells you to push the bins. */
         const val DEFAULT_IMAGE_MODEL_DIR = "/data/local/tmp/image_generator/bins"

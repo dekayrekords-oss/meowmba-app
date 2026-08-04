@@ -434,6 +434,7 @@ fun CompanionScreen(
                 imageServerUrl = uiState.imageServerUrl,
                 preferServerImageGen = uiState.preferServerImageGen,
                 imageModelInstalled = { viewModel.imageModelInstalled() },
+                musicServerUrl = uiState.musicServerUrl,
                 backgroundListeningEnabled = uiState.backgroundListeningEnabled,
                 usbAutoBridgeEnabled = uiState.usbAutoBridgeEnabled,
                 onCompanionNameChange = { viewModel.renameCompanion(it) },
@@ -444,6 +445,7 @@ fun CompanionScreen(
                 onImageModelDirChange = { viewModel.setImageModelDir(it) },
                 onImageServerUrlChange = { viewModel.setImageServerUrl(it) },
                 onPreferServerImageGenChange = { viewModel.setPreferServerImageGen(it) },
+                onMusicServerUrlChange = { viewModel.setMusicServerUrl(it) },
                 onBackgroundListeningChange = { viewModel.setBackgroundListeningEnabled(it) },
                 onUsbAutoBridgeChange = { viewModel.setUsbAutoBridge(it) },
                 onClose = { viewModel.toggleSettings() }
