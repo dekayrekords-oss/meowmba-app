@@ -79,6 +79,10 @@ class ModelDownloader(
     fun delete(option: LocalModelOption): Boolean =
         File(modelsDir, option.fileName).delete()
 
+    /** Delete an installed image-model catalog entry. Mirrors [delete] for [LocalModelOption]. */
+    fun delete(option: ImageModelOption): Boolean =
+        File(modelsDir, option.fileName).delete()
+
     /**
      * Download [url] to [fileName] in the models directory.
      * Throws on HTTP/network errors (caller maps to user-facing state).

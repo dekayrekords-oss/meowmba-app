@@ -152,12 +152,6 @@ data class CompanionState(
     val agentBrainEnabled: Boolean = true,
     /** Optional Hermes Agent endpoint (OpenAI-compatible). Blank = on-device only. */
     val hermesAgentUrl: String = "",
-    /**
-     * Directory of converted Stable Diffusion bins for on-device image
-     * generation. Blank = no model installed, and image requests fall back to
-     * the drawn canvas.
-     */
-    val imageModelDir: String = "",
     /** Opt-in HTTP server for image generation. Empty = on-device only. */
     val imageServerUrl: String = "",
     /** When true and imageServerUrl is set, try the server before on-device. */

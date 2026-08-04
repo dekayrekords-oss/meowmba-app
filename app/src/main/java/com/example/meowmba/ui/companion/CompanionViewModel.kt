@@ -5,6 +5,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import android.speech.SpeechRecognizer
 import com.example.meowmba.core.agent.LiteRtProvider
+import com.example.meowmba.core.agent.ImageModelCatalog
+import com.example.meowmba.core.agent.ImageModelOption
 import com.example.meowmba.core.agent.LocalModelOption
 import com.example.meowmba.core.agent.MediaPipeProvider
 import com.example.meowmba.core.agent.ModelCatalog
@@ -62,7 +64,7 @@ import com.example.meowmba.core.agent.tools.LaunchAppTool
 import com.example.meowmba.core.agent.tools.ListAppsTool
 import com.example.meowmba.core.agent.tools.OpenUrlTool
 import com.example.meowmba.core.agent.tools.OpenSettingsTool
-import com.example.meowmba.core.media.OnDeviceImageGenerator
+import com.example.meowmba.core.media.SDCppImageGenerator
 import com.example.meowmba.core.audio.AudioStreamingManager
 import com.example.meowmba.core.bridge.DesktopBridgeManager
 import com.example.meowmba.core.bridge.UsbAutoBridgeManager
@@ -285,12 +287,6 @@ class CompanionViewModel(
                 hermesAgentUrl = storage.getPreference(KEY_HERMES_URL) ?: "",
                 imageServerUrl = storage.getPreference(KEY_IMAGE_SERVER_URL) ?: "",
                 preferServerImageGen = storage.getBooleanPreference(KEY_PREFER_SERVER_IMAGE_GEN, false),
-                // Default to the conventional push location. When nothing is
-                // there, isAvailable() is false and image requests fall back to
-                // canvas — so the default costs nothing and saves every user
-                // from typing the same path the docs told them to push to.
-                imageModelDir = storage.getPreference(KEY_IMAGE_MODEL_DIR)
-                    ?: DEFAULT_IMAGE_MODEL_DIR,
                 backgroundListeningEnabled = storage.getBooleanPreference(KEY_BACKGROUND_LISTENING, false),
                 // Restore the provider picked last session — but only if it is
                 // still a buildable provider; a stale/removed label falls back
@@ -549,10 +545,11 @@ class CompanionViewModel(
                 MediaGenerateTool(
                     ws,
                     localGenerator = {
-                        val dir = _uiState.value.imageModelDir
-                        val context = secureStorage?.context
-                        if (dir.isNotBlank() && context != null) {
-                            OnDeviceImageGenerator(context, dir)
+                        // Read the installed path at call time, not registration time, so
+                        // installing/deleting the weights takes effect without a restart.
+                        val modelPath = downloader?.installedFile(ImageModelCatalog.options.first())?.path
+                        if (modelPath != null) {
+                            SDCppImageGenerator(modelPath)
                         } else {
                             null
                         }
@@ -2091,6 +2088,75 @@ class CompanionViewModel(
         updateProvider(_uiState.value.selectedModel)
     }
 
+    /**
+     * Download the on-device image-generation model (stable-diffusion.cpp
+     * GGUF weights) into app-private storage. Progress is tracked in the same
+     * [CompanionState.modelDownloads] map as LLM downloads, keyed by the
+     * catalog option's id — no separate state is needed since the map is
+     * already generic over "any download id".
+     */
+    fun downloadImageModel(option: ImageModelOption = ImageModelCatalog.options.first()) {
+        val dl = downloader ?: run {
+            setDownloadError(option.id, "Downloads are unavailable in this build")
+            return
+        }
+        if (option.requiresHfToken && secureStorage?.getApiKey("huggingface").isNullOrBlank()) {
+            setDownloadError(option.id, "Needs a free Hugging Face token — add it in Settings")
+            return
+        }
+        val existing = _uiState.value.modelDownloads[option.id]
+        if (existing != null && !existing.done && existing.error == null) return
+
+        secureStorage?.context?.let { ctx ->
+            DownloadService.start(
+                ctx, option.downloadUrl, option.fileName, option.id,
+                secureStorage?.getApiKey("huggingface"), dl.destinationFor(option.fileName).parentFile!!
+            )
+        }
+
+        val target = dl.destinationFor(option.fileName)
+        viewModelScope.launch {
+            setDownloadProgress(option.id, ModelDownloader.DownloadProgress())
+            var staleTicks = 0
+            while (true) {
+                delay(2000)
+                if (target.isFile && target.length() > 0) {
+                    setDownloadProgress(
+                        option.id,
+                        ModelDownloader.DownloadProgress(target.length(), target.length(), done = true)
+                    )
+                    break
+                }
+                val part = File(target.parentFile, "${option.fileName}.part")
+                if (part.isFile) {
+                    staleTicks = 0
+                    setDownloadProgress(option.id, ModelDownloader.DownloadProgress(received = part.length()))
+                } else if (++staleTicks > 30) {
+                    val msg = "Download timed out or was cancelled"
+                    setDownloadProgress(option.id, ModelDownloader.DownloadProgress(error = msg))
+                    break
+                }
+            }
+        }
+    }
+
+    /** Delete the installed image model and clear any stale progress entry for it. */
+    fun deleteImageModel(option: ImageModelOption = ImageModelCatalog.options.first()) {
+        downloader?.delete(option)
+        _uiState.value = _uiState.value.copy(
+            modelDownloads = _uiState.value.modelDownloads - option.id
+        )
+    }
+
+    /**
+     * Whether the on-device image model is present right now (for the
+     * Settings screen and the media-generation tool). Fully derived from
+     * disk — no installed-state is persisted, since [ModelDownloader.installedFile]
+     * is already the source of truth and a stale flag could disagree with reality.
+     */
+    fun imageModelInstalled(option: ImageModelOption = ImageModelCatalog.options.first()): Boolean =
+        downloader?.installedFile(option) != null
+
     private fun installDownloadedModel(path: String) {
         secureStorage?.saveEndpoint("local", path)
         refreshLoadedModels()
@@ -2133,23 +2199,6 @@ class CompanionViewModel(
     }
 
     /** Hermes Agent endpoint (persisted). Blank means on-device brain only. */
-    /**
-     * Point the companion at converted Stable Diffusion weights. Blank clears
-     * it and returns image requests to the canvas fallback.
-     */
-    fun setImageModelDir(path: String) {
-        val clean = path.trim().trimEnd('/')
-        _uiState.value = _uiState.value.copy(imageModelDir = clean)
-        secureStorage?.savePreference(KEY_IMAGE_MODEL_DIR, clean)
-    }
-
-    /** Whether usable image weights are present right now (for the Settings check). */
-    fun imageModelInstalled(): Boolean {
-        val dir = _uiState.value.imageModelDir.ifBlank { return false }
-        val context = secureStorage?.context ?: return false
-        return OnDeviceImageGenerator(context, dir).isAvailable()
-    }
-
     fun setHermesAgentUrl(url: String) {
         val clean = url.trim()
         _uiState.value = _uiState.value.copy(hermesAgentUrl = clean)
@@ -2858,9 +2907,6 @@ class CompanionViewModel(
         private const val KEY_HERMES_URL = "hermes_agent_url"
         private const val KEY_IMAGE_SERVER_URL = "image_server_url"
         private const val KEY_PREFER_SERVER_IMAGE_GEN = "prefer_server_image_gen"
-        private const val KEY_IMAGE_MODEL_DIR = "image_model_dir"
-        /** Where the MediaPipe image-generation guide tells you to push the bins. */
-        const val DEFAULT_IMAGE_MODEL_DIR = "/data/local/tmp/image_generator/bins"
         private const val KEY_BACKGROUND_LISTENING = "background_listening"
         private const val KEY_SELECTED_MODEL = "selected_model"
         private const val KEY_USB_AUTO_BRIDGE = "usb_auto_bridge"

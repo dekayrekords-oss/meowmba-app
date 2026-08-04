@@ -219,4 +219,46 @@ class ModelDownloadViewModelTest {
         assertFalse(File(modelsDir, option.fileName).exists())
         assertFalse(vm.uiState.value.loadedModels.localInstalled)
     }
+
+    @Test
+    fun `downloadImageModel without a models directory fails honestly instead of crashing`() = runTest {
+        // No modelsDir/modelDownloader injected → the ViewModel's `downloader` is null,
+        // so this must hit the early guard and never touch DownloadService.start (which
+        // needs a real Android Context — the same reason the three catalog-model download
+        // tests above fail under plain JUnit rather than Robolectric).
+        val vm = CompanionViewModel(secureStorage = mockStorage)
+        val option = ImageModelCatalog.options.first()
+
+        vm.downloadImageModel(option)
+
+        val progress = vm.uiState.value.modelDownloads[option.id]
+        assertNotNull(progress?.error)
+        assertTrue(progress!!.error!!.contains("unavailable"))
+    }
+
+    @Test
+    fun `deleting the image model returns to not-installed honestly`() = runTest {
+        // Install by writing the file directly (not via downloadImageModel, which
+        // routes through the same real DownloadService.start Android dependency the
+        // three pre-existing catalog-download tests above already can't exercise
+        // under plain JUnit) so this test verifies deleteImageModel in isolation.
+        val option = ImageModelCatalog.options.first()
+        File(modelsDir, option.fileName).writeBytes(ByteArray(64))
+        val vm = viewModel()
+        assertTrue(vm.imageModelInstalled())
+
+        vm.deleteImageModel(option)
+        assertFalse(File(modelsDir, option.fileName).exists())
+        assertFalse(vm.imageModelInstalled())
+    }
+
+    @Test
+    fun `an already-downloaded image model is detected at startup without any download`() = runTest {
+        val option = ImageModelCatalog.options.first()
+        File(modelsDir, option.fileName).writeBytes(ByteArray(64))
+
+        val vm = viewModel()
+        assertTrue(vm.imageModelInstalled())
+        assertEquals(0, engineCalls)
+    }
 }
