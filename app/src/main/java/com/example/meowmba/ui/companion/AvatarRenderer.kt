@@ -298,8 +298,10 @@ fun AvatarRenderer(
 
         // Face center: gaze shifts the whole face slightly (with a tiny
         // constant drift so an always-on desk display never burns in).
-        // body_bounce shifts the whole face up/down during animations.
-        val bounceY = effectivePose.bodyBounce * s * 0.06f
+        // body_bounce shifts the whole face up/down during animations. Clamped
+        // exactly like its siblings (tailWag/tongue/sparkle) so no out-of-range or
+        // non-finite value can ever reach the canvas transforms.
+        val bounceY = effectivePose.bodyBounce.coerceIn(-1f, 1f) * s * 0.06f
         val cx = w / 2f + gazeX * s * 0.03f + driftX * s * 0.004f
         val cy = h * 0.47f + gazeY * s * 0.02f - bounceY
 

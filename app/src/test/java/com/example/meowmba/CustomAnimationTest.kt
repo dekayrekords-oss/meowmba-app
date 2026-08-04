@@ -184,6 +184,77 @@ class CustomAnimationTest {
     }
 
     @Test
+    fun `new pose fields round-trip through JSON`() {
+        // bodyBounce / tailWag / sparkle were added after the original field set;
+        // the toJson/parse pair must survive them or a saved clip silently loses them.
+        // 1500ms keeps the clip past MIN_VISIBLE_MS (1200) so no stretch note fires.
+        val (spec, notes) = CustomAnimations.parse(
+            """{"name":"bounce party","frames":[
+              {"at":0,"body_bounce":0,"tail_wag":-0.5,"sparkle":0},
+              {"at":1500,"body_bounce":1,"tail_wag":0.5,"sparkle":1}
+            ]}""".trimIndent()
+        )
+        assertTrue(notes.isEmpty())
+        val (again, notes2) = CustomAnimations.parse(CustomAnimations.toJson(spec))
+        assertTrue(notes2.isEmpty())
+        assertEquals(spec.name, again.name)
+        assertEquals(spec.frames.size, again.frames.size)
+        assertEquals(1f, again.frames[1].bodyBounce!!, 0.001f)
+        assertEquals(0.5f, again.frames[1].tailWag!!, 0.001f)
+        assertEquals(1f, again.frames[1].sparkle!!, 0.001f)
+    }
+
+    @Test
+    fun `new pose fields sample across the clip and overlay onto a pose`() {
+        val (spec, _) = CustomAnimations.parse(
+            """{"name":"bounce party","frames":[
+              {"at":0,"body_bounce":0,"tail_wag":-1,"sparkle":0},
+              {"at":2000,"body_bounce":1,"tail_wag":1,"sparkle":1}
+            ]}""".trimIndent()
+        )
+        val start = CustomAnimations.sample(spec, 0)!!
+        assertEquals(0f, start.bodyBounce!!, 0.001f)
+        assertEquals(-1f, start.tailWag!!, 0.001f)
+        val mid = CustomAnimations.sample(spec, 1000)!!
+        // Between the keys and strictly monotonic; smoothstep easing means the
+        // midpoint value is NOT 0.5, so pin the trend, not the exact number.
+        assertTrue("mid-clip bounce should sit between the keys", mid.bodyBounce!! > 0f && mid.bodyBounce!! < 1f)
+        val end = CustomAnimations.sample(spec, 2000)!!
+        assertEquals(1f, end.bodyBounce!!, 0.001f)
+        assertEquals(1f, end.tailWag!!, 0.001f)
+        assertEquals(1f, end.sparkle!!, 0.001f)
+        assertNull(CustomAnimations.sample(spec, 2001))
+
+        val base = AvatarPose()
+        val out = with(CustomAnimations) { base.overlay(end) }
+        assertEquals(1f, out.bodyBounce, 0.001f)
+        assertEquals(1f, out.tailWag, 0.001f)
+        assertEquals(1f, out.sparkle, 0.001f)
+        // A frame that does not name the new fields must leave them untouched.
+        val untouched = with(CustomAnimations) { out.overlay(AnimFrame(atMs = 0, eyeOpen = 0.5f)) }
+        assertEquals(1f, untouched.bodyBounce, 0.001f)
+        assertEquals(1f, untouched.sparkle, 0.001f)
+    }
+
+    @Test
+    fun `out-of-range new pose fields are clamped and reported`() {
+        val (spec, notes) = CustomAnimations.parse(
+            """{"name":"too much","frames":[
+              {"at":0,"body_bounce":5,"tail_wag":-9,"sparkle":3},
+              {"at":1500,"eye_open":0.5}
+            ]}""".trimIndent()
+        )
+        assertEquals(1f, spec.frames[0].bodyBounce!!, 0.001f)
+        assertEquals(-1f, spec.frames[0].tailWag!!, 0.001f)
+        assertEquals(1f, spec.frames[0].sparkle!!, 0.001f)
+        // One note per clamped field — every correction is reported, nothing silent.
+        assertEquals(3, notes.size)
+        assertTrue(notes.any { it.contains("body_bounce") })
+        assertTrue(notes.any { it.contains("tail_wag") })
+        assertTrue(notes.any { it.contains("sparkle") })
+    }
+
+    @Test
     fun `overlay changes only the fields the frame names`() {
         val base = AvatarPose(eyeOpen = 1.1f, earPerk = 1.05f, mouth = MouthMode.SPEAKING)
         val frame = AnimFrame(atMs = 0, eyeOpen = 0.3f, happyEyes = true)
