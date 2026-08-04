@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -10,6 +12,19 @@ plugins {
 // fail dexing outright.
 configurations.configureEach {
     exclude(group = "com.google.protobuf", module = "protobuf-javalite")
+}
+
+// Release signing. Reads keystore.properties (gitignored) from the project
+// root when present; fresh checkouts fall back to the debug keystore so the
+// build never breaks. Example keystore.properties:
+//   storeFile=/path/to/meowmba-release.keystore
+//   storePassword=...
+//   keyAlias=meowmba
+//   keyPassword=...
+val keystorePropsFile = rootProject.file("keystore.properties")
+val keystoreProps = Properties()
+if (keystorePropsFile.exists()) {
+    keystoreProps.load(keystorePropsFile.inputStream())
 }
 
 android {
@@ -47,10 +62,28 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            if (keystorePropsFile.exists()) {
+                storeFile = file(keystoreProps.getProperty("storeFile"))
+                storePassword = keystoreProps.getProperty("storePassword")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
             optimization {
                 enable = false
+            }
+            // Real release keystore when configured, debug key otherwise
+            // (same behaviour as before this block existed).
+            signingConfig = if (keystorePropsFile.exists()) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
             }
         }
     }

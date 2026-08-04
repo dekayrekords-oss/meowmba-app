@@ -2,6 +2,7 @@ package com.example.meowmba.bridge
 
 import android.app.Service
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
@@ -85,8 +86,35 @@ class MeowmbaRuntimeService : Service() {
             Log.w(TAG, "Reject bind from $pkg")
             return null
         }
+        // Package names alone are spoofable: a malicious sideloaded app could
+        // squat "com.meow.metamemory" and inherit bridge access. Require the
+        // caller to be signed with the same certificate as this app, which on
+        // Android is effectively proof of same-developer origin.
+        if (!sameSigningCertAsSelf(pkg)) {
+            Log.w(TAG, "Reject bind from $pkg: signing certificate mismatch")
+            return null
+        }
         return messenger.binder
     }
+
+    /**
+     * True when [pkg] is signed with the exact same certificate as this app.
+     * Fails closed: any lookup error rejects the bind.
+     */
+    private fun sameSigningCertAsSelf(pkg: String): Boolean = runCatching {
+        val pm = packageManager
+        val flag = PackageManager.GET_SIGNING_CERTIFICATES
+        val self = pm.getPackageInfo(packageName, flag).signingInfo
+        val other = pm.getPackageInfo(pkg, flag).signingInfo
+            ?: return false
+        if (self == null) return false
+        if (self.hasMultipleSigners() || other.hasMultipleSigners()) return false
+        val selfCerts = self.signingCertificateHistory ?: return false
+        val otherCerts = other.signingCertificateHistory ?: return false
+        val selfCert = selfCerts.firstOrNull() ?: return false
+        val otherCert = otherCerts.firstOrNull() ?: return false
+        selfCert.toCharsString() == otherCert.toCharsString()
+    }.getOrDefault(false)
 
     private inner class IncomingHandler : Handler(Looper.getMainLooper()) {
         override fun handleMessage(msg: Message) {
