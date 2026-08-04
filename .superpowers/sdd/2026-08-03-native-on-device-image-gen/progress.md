@@ -118,4 +118,30 @@ Status: DONE
     zero remaining references outside docs/.
 - Committed as 5ac979a.
 
-## Plan status: all 5 tasks DONE. Proceeding to final whole-branch review.
+## Final whole-branch review
+Status: DONE — one Minor finding, fixed
+Dispatched to a review subagent with instructions to cross-check the JNI
+bridge against the real (freshly cloned) stable-diffusion.cpp source at
+the pinned commit, check memory safety, Throwable discipline, dead code,
+test quality, and to actually run the test suite itself.
+
+Result: everything verified correct except one finding —
+`SettingsScreen.kt`'s `imageModelInstalled()` (a disk stat) was called
+directly in a composable `when` guard, re-running on every keystroke in
+unrelated Settings fields (same composable scope). Fixed directly
+(commit b91e0bd): now checked once via `remember` + recomputed only via
+`LaunchedEffect(imageModelDownload)` or on explicit delete, not on every
+recomposition.
+
+## FINAL STATUS: PLAN COMPLETE
+All 5 tasks done, final review clean after one fix. Final
+`./gradlew testDebugUnitTest`: 396 tests, 3 failures — the same
+pre-existing `ModelDownloadViewModelTest` failures documented
+throughout this plan as unrelated to this work (present on origin/main
+before this branch).
+
+Branch: feat/native-on-device-image-gen
+Worktree: /home/claude/meowmba-app/.claude/worktrees/native-image-gen
+Merge-base: origin/main @ 8c422bb
+Commits (7): 15c29d0, 93bc920, ec544b0, 6feebfb, 0a0b3f1, 5ac979a, 3e5f37c, b91e0bd
+Not pushed, not merged — left for human review per instructions.
