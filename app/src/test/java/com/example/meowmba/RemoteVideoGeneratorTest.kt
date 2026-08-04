@@ -83,4 +83,60 @@ class RemoteVideoGeneratorTest {
         assertTrue(result.isFailure)
         assertTrue(result.exceptionOrNull()?.message?.contains("CUDA out of memory") == true)
     }
+
+    @Test
+    fun `polling exhausts maxPolls and times out honestly instead of hanging`() = runTest {
+        val engine = MockEngine { request ->
+            when (request.url.encodedPath) {
+                "/generate" -> respond(
+                    """{"job_id": "never-done"}""", HttpStatusCode.OK,
+                    headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                )
+                "/status/never-done" -> respond(
+                    """{"status": "running", "error": null}""", // always "still running"
+                    HttpStatusCode.OK,
+                    headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                )
+                else -> respond("not found", HttpStatusCode.NotFound)
+            }
+        }
+        val generator = RemoteVideoGenerator("http://192.168.1.10:9300", engine, pollIntervalMs = 1L, maxPolls = 3)
+
+        val result = generator.generate("a cat playing")
+
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull()?.message?.contains("timed out") == true)
+    }
+
+    @Test
+    fun `generate rejects a result response larger than the size ceiling`() = runTest {
+        val oversized = ByteArray(65 * 1024 * 1024) // 65 MB, over the 64 MB cap
+        val engine = MockEngine { request ->
+            when (request.url.encodedPath) {
+                "/generate" -> respond(
+                    """{"job_id": "big-video"}""", HttpStatusCode.OK,
+                    headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                )
+                "/status/big-video" -> respond(
+                    """{"status": "done", "error": null}""", HttpStatusCode.OK,
+                    headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                )
+                "/result/big-video" -> respond(
+                    content = oversized,
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(
+                        HttpHeaders.ContentType to listOf("video/mp4"),
+                        HttpHeaders.ContentLength to listOf(oversized.size.toString())
+                    )
+                )
+                else -> respond("not found", HttpStatusCode.NotFound)
+            }
+        }
+        val generator = RemoteVideoGenerator("http://192.168.1.10:9300", engine, pollIntervalMs = 1L)
+
+        val result = generator.generate("a cat playing")
+
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull()?.message?.contains("too large") == true)
+    }
 }

@@ -267,9 +267,18 @@ class MediaGenerateVideoTool(
         // — a 30s ceiling here would let the orchestrator's own timeout kill the
         // whole tool call, including the placeholder fallback, before a real
         // generation could ever finish or fail cleanly. Same class of bug the
-        // image tool's timeoutMs comment already documents; set well above the
-        // remote generator's own worst-case budget, same reasoning.
-        timeoutMs = 900_000
+        // image tool's timeoutMs comment already documents.
+        //
+        // Final-review finding: setting this to *exactly* 900_000 (the poll
+        // budget's own delay floor) left zero margin — RemoteVideoGenerator
+        // still needs time for the initial POST /generate, all 90 GET /status
+        // round trips (not just the sleeps between them), and the final
+        // GET /result fetch, plus this tool still needs to run its own
+        // fallback path afterward if the remote call times out. 180s of
+        // margin (POST/GET overhead is normally seconds, but this box has
+        // shown real multi-minute contention-related slowness — see the SDD
+        // progress log) plus room for the fallback itself to actually run.
+        timeoutMs = 1_080_000
     )
 
     private companion object {
