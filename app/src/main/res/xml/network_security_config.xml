@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Since API 28, cleartext (http://) traffic is blocked by default. This app
+  deliberately makes cleartext requests to two kinds of endpoints — the
+  optional remote image-generation server (Settings → Image generation →
+  Server URL, e.g. http://192.168.1.10:9100) and the pre-existing Hermes
+  agent / Ollama endpoints — both of which are the user's own LAN
+  infrastructure, typed in by hand as a raw IP (or "localhost"), never a
+  hostname we control.
+
+  Why base-config instead of domain-config: Android's <domain> element only
+  matches an exact hostname/IP string (with includeSubdomains only expanding
+  DNS subdomains) — it does not support CIDR ranges or wildcards for IP
+  literals. There is no way to write "any RFC 1918 address" as a finite list
+  of <domain> entries, and the user can type any of ~17.9M private-range
+  addresses depending on their router's subnet. Enumerating exact IPs isn't
+  practical for a "paste your LAN server's address" feature, so we fall back
+  to base-config.
+
+  This does mean cleartext is technically permitted app-wide, not just to
+  private ranges — but nothing in this codebase issues an http:// request
+  except these two user-configured, user-typed endpoints; every other
+  network call in the app uses https:// by construction. So in practice this
+  only ever affects same-LAN traffic the user explicitly opted into by
+  typing an http:// URL into Settings.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>
