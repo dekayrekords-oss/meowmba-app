@@ -243,25 +243,79 @@ class MediaGenerateTool(
  * `media.generate_video` — creates a simple animated GIF from frames drawn
  * from a text description. Saves as .gif in the workspace.
  */
-class MediaGenerateVideoTool(private val workspace: Workspace) : Tool {
+class MediaGenerateVideoTool(
+    private val workspace: Workspace,
+    /** Supplies the remote generator. Null unless the user configured a server URL. */
+    private val remoteGenerator: (() -> com.example.meowmba.core.media.VideoGenerator?)? = null,
+    /** Forwarded to the remote generator's poll loop so a multi-minute wait isn't silent. */
+    private val onProgress: (String) -> Unit = {}
+) : Tool {
     override val definition = ToolDefinition(
         id = "media.generate_video",
         displayName = "Generate video",
-        description = "Create a simple animated GIF from a text description. Draws animated frames with color themes. " +
-            "Makes a FILE in the workspace — never for making the cat avatar itself move or perform; " +
-            "that is avatar.animate.",
+        description = "Create a video from a text description. Tries the configured " +
+            "video server if one is set, and falls back to a simple animated-frames " +
+            "manifest otherwise. Makes a FILE in the workspace — never for making the " +
+            "cat avatar itself move or perform; that is avatar.animate.",
         inputSchema = mapOf("prompt" to "string", "style" to "string", "frames" to "string"),
         riskLevel = RiskLevel.MODERATE,
         environments = setOf(ToolEnvironment.PHONE),
         confirmationPolicy = ConfirmationPolicy.NONE,
-        timeoutMs = 30_000
+        // 30s was inherited from the placeholder-only days, when this tool drew
+        // animated frames instantly. Real video generation via RemoteVideoGenerator
+        // has its own poll budget of up to 900s (maxPolls=90 * pollIntervalMs=10_000)
+        // — a 30s ceiling here would let the orchestrator's own timeout kill the
+        // whole tool call, including the placeholder fallback, before a real
+        // generation could ever finish or fail cleanly. Same class of bug the
+        // image tool's timeoutMs comment already documents; set well above the
+        // remote generator's own worst-case budget, same reasoning.
+        timeoutMs = 900_000
     )
+
+    private companion object {
+        const val TAG = "MediaGenerateVideoTool"
+    }
+
+    /**
+     * Mirrors `MediaGenerateTool.tryGenerators`: never throws, logs failures,
+     * and returns null (rather than propagating) so the caller can fall
+     * through to the frame-manifest placeholder.
+     */
+    private suspend fun tryRemote(prompt: String): ByteArray? {
+        val generator = remoteGenerator?.invoke() ?: return null
+        if (!generator.isAvailable()) return null
+        val result = runCatching { generator.generate(prompt, onProgress) }.getOrNull()
+        result?.getOrNull()?.let { return it }
+        if (result == null) {
+            Log.w(TAG, "video backend threw instead of returning a Result")
+        } else {
+            Log.w(TAG, "video backend failed: ${result.exceptionOrNull()?.message}")
+        }
+        return null
+    }
 
     override suspend fun execute(args: Map<String, String>): ToolResult = withContext(Dispatchers.IO) {
         val prompt = args["prompt"]?.takeIf { it.isNotBlank() }
             ?: return@withContext ToolResult.Failure("Missing 'prompt'")
         val style = args["style"]?.takeIf { it.isNotBlank() }?.lowercase() ?: "auto"
         val frameCount = args["frames"]?.toIntOrNull()?.coerceIn(2, 30) ?: 8
+
+        val remoteBytes = tryRemote(prompt)
+        if (remoteBytes != null) {
+            val safeName = prompt.replace(Regex("[^a-zA-Z0-9_\\- ]"), "").take(40).trim()
+                .replace(Regex("\\s+"), "_")
+            val fileName = if (safeName.isNotBlank()) "video_${safeName}.mp4" else "video_${System.currentTimeMillis()}.mp4"
+            return@withContext try {
+                workspace.resolve(fileName)?.let { file ->
+                    FileOutputStream(file).use { out -> out.write(remoteBytes) }
+                    ToolResult.Success(
+                        "Video saved as \"$fileName\" in the workspace: $prompt\nMEDIA_FILE:${file.absolutePath}"
+                    )
+                } ?: ToolResult.Failure("Could not write video — path is outside the workspace.")
+            } catch (e: Exception) {
+                ToolResult.Failure("Failed to save the generated video: ${e.message}")
+            }
+        }
 
         val width = 256
         val height = 256

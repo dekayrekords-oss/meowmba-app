@@ -432,6 +432,7 @@ fun CompanionScreen(
                 hermesAgentUrl = uiState.hermesAgentUrl,
                 imageServerUrl = uiState.imageServerUrl,
                 preferServerImageGen = uiState.preferServerImageGen,
+                videoServerUrl = uiState.videoServerUrl,
                 imageModelInstalled = { viewModel.imageModelInstalled() },
                 imageModelDownload = uiState.modelDownloads[
                     com.example.meowmba.core.agent.ImageModelCatalog.options.first().id
@@ -449,6 +450,7 @@ fun CompanionScreen(
                 onImageServerUrlChange = { viewModel.setImageServerUrl(it) },
                 onPreferServerImageGenChange = { viewModel.setPreferServerImageGen(it) },
                 onMusicServerUrlChange = { viewModel.setMusicServerUrl(it) },
+                onVideoServerUrlChange = { viewModel.setVideoServerUrl(it) },
                 onBackgroundListeningChange = { viewModel.setBackgroundListeningEnabled(it) },
                 onUsbAutoBridgeChange = { viewModel.setUsbAutoBridge(it) },
                 onClose = { viewModel.toggleSettings() }

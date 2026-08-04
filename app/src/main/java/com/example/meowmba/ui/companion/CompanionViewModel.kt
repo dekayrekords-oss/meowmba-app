@@ -286,6 +286,7 @@ class CompanionViewModel(
                 agentBrainEnabled = storage.getBooleanPreference(KEY_AGENT_BRAIN, true),
                 hermesAgentUrl = storage.getPreference(KEY_HERMES_URL) ?: "",
                 imageServerUrl = storage.getPreference(KEY_IMAGE_SERVER_URL) ?: "",
+                videoServerUrl = storage.getPreference(KEY_VIDEO_SERVER_URL) ?: "",
                 preferServerImageGen = storage.getBooleanPreference(KEY_PREFER_SERVER_IMAGE_GEN, false),
                 musicServerUrl = storage.getPreference(KEY_MUSIC_SERVER_URL) ?: "",
                 backgroundListeningEnabled = storage.getBooleanPreference(KEY_BACKGROUND_LISTENING, false),
@@ -566,7 +567,22 @@ class CompanionViewModel(
                     preferServer = { _uiState.value.preferServerImageGen }
                 )
             )
-            toolRegistry.register(MediaGenerateVideoTool(ws))
+            toolRegistry.register(
+                MediaGenerateVideoTool(
+                    ws,
+                    remoteGenerator = {
+                        val url = _uiState.value.videoServerUrl
+                        if (url.isNotBlank()) {
+                            com.example.meowmba.core.media.RemoteVideoGenerator(url)
+                        } else {
+                            null
+                        }
+                    },
+                    onProgress = { text ->
+                        _uiState.value = _uiState.value.copy(captionText = text)
+                    }
+                )
+            )
             toolRegistry.register(
                 MediaGenerateAudioTool(
                     ws,
@@ -2247,6 +2263,14 @@ class CompanionViewModel(
         secureStorage?.savePreference(KEY_MUSIC_SERVER_URL, clean)
     }
 
+    fun setVideoServerUrl(url: String) {
+        // Strip trailing slashes too — otherwise a URL like "http://host/" produces
+        // "http://host//generate" when RemoteVideoGenerator appends "/generate".
+        val clean = url.trim().trimEnd('/')
+        _uiState.value = _uiState.value.copy(videoServerUrl = clean)
+        secureStorage?.savePreference(KEY_VIDEO_SERVER_URL, clean)
+    }
+
     /** Background wake-phrase listening toggle (persisted; service runs via MainActivity). */
     fun setBackgroundListeningEnabled(enabled: Boolean) {
         _uiState.value = _uiState.value.copy(backgroundListeningEnabled = enabled)
@@ -2934,6 +2958,7 @@ class CompanionViewModel(
         private const val KEY_AGENT_BRAIN = "agent_brain_enabled"
         private const val KEY_HERMES_URL = "hermes_agent_url"
         private const val KEY_IMAGE_SERVER_URL = "image_server_url"
+        private const val KEY_VIDEO_SERVER_URL = "video_server_url"
         private const val KEY_PREFER_SERVER_IMAGE_GEN = "prefer_server_image_gen"
         private const val KEY_MUSIC_SERVER_URL = "music_server_url"
         private const val KEY_BACKGROUND_LISTENING = "background_listening"

@@ -162,6 +162,8 @@ data class CompanionState(
      * images, there's no on-device generator to prefer against.
      */
     val musicServerUrl: String = "",
+    /** Opt-in HTTP server for video generation. Empty = frame-manifest placeholder only. */
+    val videoServerUrl: String = "",
     /** Active model downloads by id (catalog option id or "custom:<fileName>"). */
     val modelDownloads: Map<String, ModelDownloader.DownloadProgress> = emptyMap(),
     /** Every model bundle actually present in the app-private models dir. */
