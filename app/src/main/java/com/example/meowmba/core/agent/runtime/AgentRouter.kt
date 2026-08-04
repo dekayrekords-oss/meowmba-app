@@ -272,6 +272,74 @@ object AgentRouter {
         if (normalized in setOf("trill", "do a trill", "make a trill", "purr trill")) {
             return AgentIntent("main", "avatar.animate", mapOf("name" to "trill"), "trill")
         }
+        // Describe-animation routes. These cover moods, emotions, and behaviors
+        // that don't have a dedicated built-in clip. The describer maps keywords
+        // to pre-baked keyframes — no model call needed.
+        if (normalized in setOf("be happy", "look happy", "smile", "cheer up",
+                "look excited", "get excited", "be excited")) {
+            return AgentIntent("main", "avatar.describe_animation",
+                mapOf("description" to normalized), normalized)
+        }
+        if (normalized in setOf("look sad", "be sad", "feel sad", "cheerless")) {
+            return AgentIntent("main", "avatar.describe_animation",
+                mapOf("description" to normalized), normalized)
+        }
+        if (normalized in setOf("get angry", "look angry", "be mad", "be angry",
+                "look pissed")) {
+            return AgentIntent("main", "avatar.describe_animation",
+                mapOf("description" to normalized), normalized)
+        }
+        if (normalized in setOf("look scared", "be scared", "get scared",
+                "look frightened", "you're scared")) {
+            return AgentIntent("main", "avatar.describe_animation",
+                mapOf("description" to normalized), normalized)
+        }
+        if (normalized in setOf("look curious", "be curious", "wonder",
+                "what's that", "hmm")) {
+            return AgentIntent("main", "avatar.describe_animation",
+                mapOf("description" to normalized), normalized)
+        }
+        if (normalized in setOf("look sleepy", "be sleepy", "get sleepy",
+                "take a nap", "feel drowsy")) {
+            return AgentIntent("main", "avatar.describe_animation",
+                mapOf("description" to normalized), normalized)
+        }
+        if (normalized in setOf("purr", "purr for me", "do a purr")) {
+            return AgentIntent("main", "avatar.describe_animation",
+                mapOf("description" to normalized), normalized)
+        }
+        if (normalized in setOf("sneeze", "do a sneeze", "achoo")) {
+            return AgentIntent("main", "avatar.describe_animation",
+                mapOf("description" to normalized), normalized)
+        }
+        if (normalized in setOf("jump", "do a jump", "hop", "do a hop")) {
+            return AgentIntent("main", "avatar.describe_animation",
+                mapOf("description" to normalized), normalized)
+        }
+        if (normalized in setOf("laugh", "do a laugh", "haha", "that's funny")) {
+            return AgentIntent("main", "avatar.describe_animation",
+                mapOf("description" to normalized), normalized)
+        }
+        if (normalized in setOf("cry", "do a cry", "boohoo", "weep")) {
+            return AgentIntent("main", "avatar.describe_animation",
+                mapOf("description" to normalized), normalized)
+        }
+        if (normalized in setOf("wave", "wave at me", "say hi")) {
+            return AgentIntent("main", "avatar.describe_animation",
+                mapOf("description" to normalized), normalized)
+        }
+        if (normalized in setOf("nod", "nod your head", "yes yes")) {
+            return AgentIntent("main", "avatar.describe_animation",
+                mapOf("description" to normalized), normalized)
+        }
+        if (normalized in setOf("glow", "sparkle", "glow for me")) {
+            return AgentIntent("main", "avatar.describe_animation",
+                mapOf("description" to normalized), normalized)
+        }
+        if (normalized in setOf("spin", "do a spin", "spin around")) {
+            return AgentIntent("main", "avatar.describe_animation",
+                mapOf("description" to normalized), normalized)
+        }
         // "play the ear wiggle animation" — replay a saved or built-in clip by name.
         extractAfter(raw, listOf("play the ", "play "))?.let { rest ->
             val name = rest.removeSuffix(" animation").removeSuffix(" Animation").trim()

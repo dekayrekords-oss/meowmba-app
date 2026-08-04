@@ -37,6 +37,14 @@ data class AnimFrame(
     val whiskerFlutter: Boolean? = null,
     val mouth: MouthMode? = null,
     val glowColorHex: Long? = null,
+    /** Tongue extension (0 = hidden, 1 = fully out for licking). */
+    val tongueOut: Float? = null,
+    /** Vertical body bounce (-1 = squish down, 1 = pop up). */
+    val bodyBounce: Float? = null,
+    /** Tail wag angle (-1 = left, 1 = right, 0 = center). */
+    val tailWag: Float? = null,
+    /** Sparkle particle intensity (0 = none, 1 = full sparkle). */
+    val sparkle: Float? = null,
 )
 
 /** A named invented clip: sorted frames, last frame's time is the duration. */
@@ -60,6 +68,10 @@ object CustomAnimations {
     private val TILT_RANGE = -25f..25f
     private val PERK_RANGE = 0.3f..1.6f
     private val DROOP_RANGE = 0f..40f
+    private val TONGUE_RANGE = 0f..1f
+    private val BOUNCE_RANGE = -1f..1f
+    private val WAG_RANGE = -1f..1f
+    private val SPARKLE_RANGE = 0f..1f
     private const val MAX_FRAMES = 16
     private const val MAX_DURATION_MS = 10_000
 
@@ -128,16 +140,18 @@ object CustomAnimations {
                 AnimFrame(atMs = 2000, eyeOpen = 1.0f),
             ),
         ),
-        // paw lick: head dips toward a paw, eyes squint, whiskers quiver during lick
+        // paw lick: head dips toward a paw, eyes squint, tongue extends for two licks, whiskers quiver
         CustomAnimationSpec(
             "paw lick",
             listOf(
-                AnimFrame(atMs = 0, headTiltDeg = 0f, eyeOpen = 1.0f, whiskerFlutter = false),
-                AnimFrame(atMs = 350, headTiltDeg = 8f, eyeOpen = 0.55f),
-                AnimFrame(atMs = 650, headTiltDeg = 10f, eyeOpen = 0.4f, whiskerFlutter = true),
-                AnimFrame(atMs = 1000, headTiltDeg = 10f, eyeOpen = 0.4f, whiskerFlutter = true),
-                AnimFrame(atMs = 1400, headTiltDeg = 4f, eyeOpen = 0.75f, whiskerFlutter = false),
-                AnimFrame(atMs = 1800, headTiltDeg = 0f, eyeOpen = 1.0f),
+                AnimFrame(atMs = 0, headTiltDeg = 0f, eyeOpen = 1.0f, whiskerFlutter = false, tongueOut = 0f),
+                AnimFrame(atMs = 350, headTiltDeg = 8f, eyeOpen = 0.55f, tongueOut = 0f),
+                AnimFrame(atMs = 550, headTiltDeg = 10f, eyeOpen = 0.4f, whiskerFlutter = true, tongueOut = 0.9f),
+                AnimFrame(atMs = 750, headTiltDeg = 10f, eyeOpen = 0.4f, whiskerFlutter = true, tongueOut = 0.3f),
+                AnimFrame(atMs = 950, headTiltDeg = 10f, eyeOpen = 0.4f, whiskerFlutter = true, tongueOut = 0.9f),
+                AnimFrame(atMs = 1150, headTiltDeg = 10f, eyeOpen = 0.4f, whiskerFlutter = true, tongueOut = 0.3f),
+                AnimFrame(atMs = 1400, headTiltDeg = 4f, eyeOpen = 0.75f, whiskerFlutter = false, tongueOut = 0f),
+                AnimFrame(atMs = 1800, headTiltDeg = 0f, eyeOpen = 1.0f, tongueOut = 0f),
             ),
         ),
         // ear flatten: defensive or annoyed — ears fold back and droop low
@@ -341,6 +355,18 @@ object CustomAnimations {
             whiskerFlutter = bool(f, "whisker_flutter", "whiskerFlutter"),
             mouth = mouth(f),
             glowColorHex = glow(f),
+            tongueOut = num(f, "tongue_out", "tongueOut")?.let {
+                clampF(it, TONGUE_RANGE, notes, "tongue_out")
+            },
+            bodyBounce = num(f, "body_bounce", "bodyBounce")?.let {
+                clampF(it, BOUNCE_RANGE, notes, "body_bounce")
+            },
+            tailWag = num(f, "tail_wag", "tailWag")?.let {
+                clampF(it, WAG_RANGE, notes, "tail_wag")
+            },
+            sparkle = num(f, "sparkle")?.let {
+                clampF(it, SPARKLE_RANGE, notes, "sparkle")
+            },
         )
     }
 
@@ -404,6 +430,10 @@ object CustomAnimations {
             f.whiskerFlutter?.let { o.put("whisker_flutter", it) }
             f.mouth?.let { o.put("mouth", it.name) }
             f.glowColorHex?.let { o.put("glow", it) }
+            f.tongueOut?.let { o.put("tongue_out", it.toDouble()) }
+            f.bodyBounce?.let { o.put("body_bounce", it.toDouble()) }
+            f.tailWag?.let { o.put("tail_wag", it.toDouble()) }
+            f.sparkle?.let { o.put("sparkle", it.toDouble()) }
             frames.put(o)
         }
         return JSONObject().put("name", spec.name).put("frames", frames).toString()
@@ -430,6 +460,10 @@ object CustomAnimations {
             whiskerFlutter = step(spec.frames, t) { it.whiskerFlutter },
             mouth = step(spec.frames, t) { it.mouth },
             glowColorHex = step(spec.frames, t) { it.glowColorHex },
+            tongueOut = lerp(spec.frames, t) { it.tongueOut },
+            bodyBounce = lerp(spec.frames, t) { it.bodyBounce },
+            tailWag = lerp(spec.frames, t) { it.tailWag },
+            sparkle = lerp(spec.frames, t) { it.sparkle },
         )
     }
 
@@ -464,6 +498,10 @@ object CustomAnimations {
         whiskerFlutter = frame.whiskerFlutter ?: whiskerFlutter,
         mouth = frame.mouth ?: mouth,
         glowColorHex = frame.glowColorHex ?: glowColorHex,
+        tongueOut = frame.tongueOut ?: tongueOut,
+        bodyBounce = frame.bodyBounce ?: bodyBounce,
+        tailWag = frame.tailWag ?: tailWag,
+        sparkle = frame.sparkle ?: sparkle,
     )
 }
 

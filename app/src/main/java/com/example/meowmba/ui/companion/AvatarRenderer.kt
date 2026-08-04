@@ -298,8 +298,10 @@ fun AvatarRenderer(
 
         // Face center: gaze shifts the whole face slightly (with a tiny
         // constant drift so an always-on desk display never burns in).
+        // body_bounce shifts the whole face up/down during animations.
+        val bounceY = effectivePose.bodyBounce * s * 0.06f
         val cx = w / 2f + gazeX * s * 0.03f + driftX * s * 0.004f
-        val cy = h * 0.47f + gazeY * s * 0.02f
+        val cy = h * 0.47f + gazeY * s * 0.02f - bounceY
 
         val eyeDX = s * 0.26f
         val eyeW = s * 0.19f
@@ -307,6 +309,26 @@ fun AvatarRenderer(
         val eyeH = (baseEyeH * eyeOpen * blink.value * breathe).coerceAtLeast(s * 0.012f)
         val eyeCy = cy - s * 0.06f
         val stroke = s * 0.014f
+
+        // ── LAYER -1: Tail (behind the face, wags during animations) ────────
+        val wag = effectivePose.tailWag.coerceIn(-1f, 1f)
+        if (kotlin.math.abs(wag) > 0.01f || effectivePose.tailWag != 0f) {
+            val tailBaseX = cx + s * 0.32f
+            val tailBaseY = cy + s * 0.18f
+            val tailLen = s * 0.22f
+            val tailAngle = -40f + wag * 35f  // -75° (left) to -5° (right)
+            val tailColor = EYE_COLOR.copy(alpha = 0.7f * faceAlpha)
+            rotate(tailAngle, pivot = Offset(tailBaseX, tailBaseY)) {
+                val tail = Path().apply {
+                    moveTo(tailBaseX, tailBaseY)
+                    quadraticBezierTo(
+                        tailBaseX + tailLen * 0.4f, tailBaseY - tailLen * 0.8f,
+                        tailBaseX + tailLen * 0.1f, tailBaseY - tailLen
+                    )
+                }
+                drawPath(tail, tailColor, style = Stroke(width = s * 0.018f, cap = StrokeCap.Round))
+            }
+        }
 
         // ── LAYER 0: Halo glow ─────────────────────────────────────────────
         val glowColor = Color(effectivePose.glowColorHex)
@@ -346,6 +368,31 @@ fun AvatarRenderer(
         }
         drawPath(nose, NOSE_COLOR.copy(alpha = NOSE_COLOR.alpha * faceAlpha))
 
+        // ── LAYER 3b: Paw (visible when head tilts down, e.g. paw lick) ────
+        // The paw fades in proportionally with head tilt — a 10° tilt shows
+        // it at full alpha, below that it cross-fades from invisible.
+        val pawAlpha = ((headTilt / 10f).coerceIn(0f, 1f) * faceAlpha)
+        if (pawAlpha > 0.01f) {
+            val pawCx = cx + s * 0.18f * (if (headTilt > 0) 1f else -1f)
+            val pawCy = cy + s * 0.28f
+            val pawS = s * 0.055f
+            val pawColor = eyeColor.copy(alpha = pawAlpha)
+            // Main pad (oval)
+            drawOval(
+                color = pawColor,
+                topLeft = Offset(pawCx - pawS * 0.7f, pawCy - pawS * 0.4f),
+                size = Size(pawS * 1.4f, pawS * 0.9f),
+            )
+            // Three toe beans
+            for (i in -1..1) {
+                drawCircle(
+                    color = pawColor,
+                    radius = pawS * 0.28f,
+                    center = Offset(pawCx + i * pawS * 0.5f, pawCy - pawS * 0.7f),
+                )
+            }
+        }
+
         // ── LAYER 4: Whiskers (slow sway, fast flutter while talking) ──────
         val energetic = effectivePose.whiskerFlutter
         val swayAmp = s * (if (energetic) 0.016f else 0.009f)
@@ -373,6 +420,43 @@ fun AvatarRenderer(
             effectivePose.mouth, cx, mouthY, s, stroke, talk, mouthWobble, eyeColor,
             state.mouthEnergy
         )
+
+        // ── LAYER 6: Tongue (licking animations) ────────────────────────────
+        val tongue = effectivePose.tongueOut.coerceIn(0f, 1f)
+        if (tongue > 0.01f) {
+            val tongueColor = Color(0xFFFF6B8A).copy(alpha = tongue * faceAlpha)
+            val tongueLen = s * 0.09f * tongue
+            val tongueW = s * 0.028f * tongue
+            val tongueTop = mouthY + s * 0.01f
+            val tonguePath = Path().apply {
+                moveTo(cx - tongueW, tongueTop)
+                quadraticBezierTo(
+                    cx - tongueW * 1.2f, tongueTop + tongueLen * 0.6f,
+                    cx, tongueTop + tongueLen
+                )
+                quadraticBezierTo(
+                    cx + tongueW * 1.2f, tongueTop + tongueLen * 0.6f,
+                    cx + tongueW, tongueTop
+                )
+                close()
+            }
+            drawPath(tonguePath, tongueColor)
+        }
+
+        // ── LAYER 7: Sparkle particles ──────────────────────────────────────
+        val sparkleIntensity = effectivePose.sparkle.coerceIn(0f, 1f)
+        if (sparkleIntensity > 0.01f) {
+            val sparkleColor = Color(0xFFFFF3BF).copy(alpha = sparkleIntensity * faceAlpha)
+            val seed = (animT / 120).toInt()  // changes every 120ms for twinkling
+            val count = (sparkleIntensity * 8).toInt().coerceAtLeast(2)
+            for (i in 0 until count) {
+                val hash = (seed * 31 + i * 7) and 0x7FFFFFFF
+                val sx = cx + (((hash % 1000) / 1000f) - 0.5f) * s * 0.7f
+                val sy = cy + (((hash / 1000 % 1000) / 1000f) - 0.5f) * s * 0.7f
+                val radius = s * (0.005f + (hash % 100) / 100f * 0.008f)
+                drawCircle(color = sparkleColor, radius = radius, center = Offset(sx, sy))
+            }
+        }
     }
 }
 

@@ -37,6 +37,7 @@ import com.example.meowmba.core.agent.tools.FileListTool
 import com.example.meowmba.core.agent.tools.FileReadTool
 import com.example.meowmba.core.agent.tools.FileWriteTool
 import com.example.meowmba.core.agent.tools.AvatarAnimateTool
+import com.example.meowmba.core.agent.tools.DescribeAnimationTool
 import com.example.meowmba.core.agent.tools.MemorySaveTool
 import com.example.meowmba.core.agent.tools.MemorySearchTool
 import com.example.meowmba.core.agent.tools.ProjectCreateTool
@@ -508,6 +509,7 @@ class CompanionViewModel(
             // every other tool. Saved clips persist as plain JSON files.
             val animStore = CustomAnimationStore(File(appContext.filesDir, "custom_animations"))
             toolRegistry.register(AvatarAnimateTool(animStore) { spec -> playCustomAnimation(spec) })
+            toolRegistry.register(DescribeAnimationTool { spec -> playCustomAnimation(spec) })
 
             // Obsidian-compatible vault notes.
             vaultRepository?.let { toolRegistry.registerVaultTools(it) }
@@ -579,47 +581,54 @@ class CompanionViewModel(
                 val result = task.result ?: ""
                 when (task.status) {
                     TaskStatus.COMPLETED -> {
-                        // Check for generated media
-                        val mediaLine = result.lineSequence().firstOrNull { it.startsWith("MEDIA_FILE:") }
-                        if (mediaLine != null) {
-                            val path = mediaLine.removePrefix("MEDIA_FILE:")
-                            val file = File(path)
-                            val type = when {
-                                path.endsWith(".png") || path.endsWith(".jpg") || path.endsWith(".jpeg") ->
-                                    GeneratedMedia.MediaType.IMAGE
-                                path.endsWith(".gif") || path.endsWith(".mp4") ->
-                                    GeneratedMedia.MediaType.VIDEO
-                                path.endsWith(".wav") || path.endsWith(".mp3") || path.endsWith(".m4a") ->
-                                    GeneratedMedia.MediaType.AUDIO
-                                else -> GeneratedMedia.MediaType.IMAGE
-                            }
-                            val label = task.title.removePrefix("generate ").removePrefix("create ")
-                                .replaceFirstChar { it.uppercase() }
-                            _uiState.value = _uiState.value.copy(
-                                generatedMedia = GeneratedMedia(
-                                    filePath = file.absolutePath,
-                                    type = type,
-                                    label = label
+                        // avatar.animate: the animation IS the response — onPlay already
+                        // set activeAnimation; speaking the tool result ("Playing X (Nms)")
+                        // just confuses the user and the TTS caption obscures the face.
+                        if (task.toolId == "avatar.animate") {
+                            // no-op: playCustomAnimation already set activeAnimation
+                        } else {
+                            // Check for generated media
+                            val mediaLine = result.lineSequence().firstOrNull { it.startsWith("MEDIA_FILE:") }
+                            if (mediaLine != null) {
+                                val path = mediaLine.removePrefix("MEDIA_FILE:")
+                                val file = File(path)
+                                val type = when {
+                                    path.endsWith(".png") || path.endsWith(".jpg") || path.endsWith(".jpeg") ->
+                                        GeneratedMedia.MediaType.IMAGE
+                                    path.endsWith(".gif") || path.endsWith(".mp4") ->
+                                        GeneratedMedia.MediaType.VIDEO
+                                    path.endsWith(".wav") || path.endsWith(".mp3") || path.endsWith(".m4a") ->
+                                        GeneratedMedia.MediaType.AUDIO
+                                    else -> GeneratedMedia.MediaType.IMAGE
+                                }
+                                val label = task.title.removePrefix("generate ").removePrefix("create ")
+                                    .replaceFirstChar { it.uppercase() }
+                                _uiState.value = _uiState.value.copy(
+                                    generatedMedia = GeneratedMedia(
+                                        filePath = file.absolutePath,
+                                        type = type,
+                                        label = label
+                                    )
                                 )
-                            )
-                            // Persist it. Without this the media only ever lived in
-                            // transient UI state, so nothing generated showed up in
-                            // the Memory tab afterwards.
-                            if (!_uiState.value.memoryPaused) {
-                                viewModelScope.launch {
-                                    runCatching {
-                                        memoryRepository?.addMemory(
-                                            content = "Created a ${type.name.lowercase()}: $label " +
-                                                "(saved as ${file.name})",
-                                            type = MemoryType.EPISODIC,
-                                            importance = ImportanceLevel.MEDIUM,
-                                            tags = listOf("media", type.name.lowercase(), file.name)
-                                        )
+                                // Persist it. Without this the media only ever lived in
+                                // transient UI state, so nothing generated showed up in
+                                // the Memory tab afterwards.
+                                if (!_uiState.value.memoryPaused) {
+                                    viewModelScope.launch {
+                                        runCatching {
+                                            memoryRepository?.addMemory(
+                                                content = "Created a ${type.name.lowercase()}: $label " +
+                                                    "(saved as ${file.name})",
+                                                type = MemoryType.EPISODIC,
+                                                importance = ImportanceLevel.MEDIUM,
+                                                tags = listOf("media", type.name.lowercase(), file.name)
+                                            )
+                                        }
                                     }
                                 }
                             }
+                            speak(result.lineSequence().firstOrNull { !it.startsWith("MEDIA_FILE:") } ?: "Done.")
                         }
-                        speak(result.lineSequence().firstOrNull { !it.startsWith("MEDIA_FILE:") } ?: "Done.")
                     }
                     TaskStatus.FAILED -> speak("Sorry, that didn't work: ${task.result}")
                     else -> { /* cancelled tasks stay quiet */ }
@@ -1411,10 +1420,18 @@ class CompanionViewModel(
         when (result) {
             is SubmitResult.Rejected -> speak(result.reason)
             is SubmitResult.Started -> {
-                // avatar.animate is instant and self-announcing (the tool result
-                // says "Playing …") — a preamble announcement would cancel the TTS
-                // that describes the clip and double-fire speech over the performance.
-                if (intent.toolId == "avatar.animate") return
+                // avatar.animate is instant and self-announcing (the animation IS the
+                // response) — no preamble, no TTS. Reset to IDLE immediately so wake
+                // word listening restarts; processUserSpeech left us in THINKING.
+                if (intent.toolId == "avatar.animate") {
+                    _uiState.value = _uiState.value.copy(
+                        interactionState = InteractionState.IDLE,
+                        captionText = null,
+                        emotion = CompanionEmotion.IDLE,
+                    )
+                    if (_uiState.value.wakeWordEnabled) startWakeStandby()
+                    return
+                }
                 val agentName = AgentRegistry.byId(intent.agentId)?.name ?: "Agent"
                 speak(
                     if (result.queued) {

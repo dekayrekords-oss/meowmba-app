@@ -56,7 +56,15 @@ data class AvatarPose(
     /** Whether the halo gently pulses (listening). */
     val glowPulse: Boolean = false,
     /** Dim the whole face (privacy-sensitive states). */
-    val dimmed: Boolean = false
+    val dimmed: Boolean = false,
+    /** Tongue extension (0 = hidden, 1 = fully out for licking). */
+    val tongueOut: Float = 0f,
+    /** Vertical body bounce (-1 = squish down, 1 = pop up). */
+    val bodyBounce: Float = 0f,
+    /** Tail wag angle (-1 = left, 1 = right, 0 = center). */
+    val tailWag: Float = 0f,
+    /** Sparkle particle intensity (0 = none, 1 = full sparkle). */
+    val sparkle: Float = 0f
 )
 
 /**

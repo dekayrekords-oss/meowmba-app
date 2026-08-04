@@ -150,6 +150,39 @@ class AgentRouterTest {
         assertNull(AgentRouter.route("play the piano"))
         assertNull(AgentRouter.route("play something"))
     }
+
+    @Test
+    fun `describe-animation routes land on avatar describe_animation`() {
+        listOf("be happy", "look happy", "smile", "cheer up").forEach { said ->
+            val intent = AgentRouter.route(said)!!
+            assertEquals(said, "avatar.describe_animation", intent.toolId)
+            assertEquals(said, "main", intent.agentId)
+        }
+        val sad = AgentRouter.route("look sad")!!
+        assertEquals("avatar.describe_animation", sad.toolId)
+        assertEquals("look sad", sad.args["description"])
+
+        val angry = AgentRouter.route("get angry")!!
+        assertEquals("avatar.describe_animation", angry.toolId)
+
+        val scared = AgentRouter.route("look scared")!!
+        assertEquals("avatar.describe_animation", scared.toolId)
+
+        val sleepy = AgentRouter.route("look sleepy")!!
+        assertEquals("avatar.describe_animation", sleepy.toolId)
+
+        val purr = AgentRouter.route("purr")!!
+        assertEquals("avatar.describe_animation", purr.toolId)
+
+        val jump = AgentRouter.route("jump")!!
+        assertEquals("avatar.describe_animation", jump.toolId)
+
+        val laugh = AgentRouter.route("laugh")!!
+        assertEquals("avatar.describe_animation", laugh.toolId)
+
+        val spin = AgentRouter.route("spin")!!
+        assertEquals("avatar.describe_animation", spin.toolId)
+    }
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
