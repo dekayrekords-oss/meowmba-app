@@ -288,12 +288,6 @@ class CompanionViewModel(
                 imageServerUrl = storage.getPreference(KEY_IMAGE_SERVER_URL) ?: "",
                 preferServerImageGen = storage.getBooleanPreference(KEY_PREFER_SERVER_IMAGE_GEN, false),
                 musicServerUrl = storage.getPreference(KEY_MUSIC_SERVER_URL) ?: "",
-                // Default to the conventional push location. When nothing is
-                // there, isAvailable() is false and image requests fall back to
-                // canvas — so the default costs nothing and saves every user
-                // from typing the same path the docs told them to push to.
-                imageModelDir = storage.getPreference(KEY_IMAGE_MODEL_DIR)
-                    ?: DEFAULT_IMAGE_MODEL_DIR,
                 backgroundListeningEnabled = storage.getBooleanPreference(KEY_BACKGROUND_LISTENING, false),
                 // Restore the provider picked last session — but only if it is
                 // still a buildable provider; a stale/removed label falls back
@@ -2935,9 +2929,6 @@ class CompanionViewModel(
         private const val KEY_IMAGE_SERVER_URL = "image_server_url"
         private const val KEY_PREFER_SERVER_IMAGE_GEN = "prefer_server_image_gen"
         private const val KEY_MUSIC_SERVER_URL = "music_server_url"
-        private const val KEY_IMAGE_MODEL_DIR = "image_model_dir"
-        /** Where the MediaPipe image-generation guide tells you to push the bins. */
-        const val DEFAULT_IMAGE_MODEL_DIR = "/data/local/tmp/image_generator/bins"
         private const val KEY_BACKGROUND_LISTENING = "background_listening"
         private const val KEY_SELECTED_MODEL = "selected_model"
         private const val KEY_USB_AUTO_BRIDGE = "usb_auto_bridge"
