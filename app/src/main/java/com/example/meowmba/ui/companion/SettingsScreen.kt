@@ -30,6 +30,8 @@ fun SettingsScreen(
     agentBrainEnabled: Boolean = true,
     hermesAgentUrl: String = "",
     imageModelDir: String = "",
+    imageServerUrl: String = "",
+    preferServerImageGen: Boolean = false,
     imageModelInstalled: () -> Boolean = { false },
     backgroundListeningEnabled: Boolean = false,
     usbAutoBridgeEnabled: Boolean = false,
@@ -39,6 +41,8 @@ fun SettingsScreen(
     onAgentBrainChange: (Boolean) -> Unit = {},
     onHermesUrlChange: (String) -> Unit = {},
     onImageModelDirChange: (String) -> Unit = {},
+    onImageServerUrlChange: (String) -> Unit = {},
+    onPreferServerImageGenChange: (Boolean) -> Unit = {},
     onBackgroundListeningChange: (Boolean) -> Unit = {},
     onUsbAutoBridgeChange: ((Boolean) -> Unit)? = null,
     onClose: () -> Unit
@@ -163,6 +167,28 @@ fun SettingsScreen(
             imageCheck?.let {
                 Text(it, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            SettingsTextField(
+                value = imageServerUrl,
+                onValueChange = onImageServerUrlChange,
+                label = { Text("Image server URL (optional)") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Text(
+                text = "Your own image-generation server, e.g. " +
+                    "http://192.168.1.10:9100. Leave blank to always use " +
+                    "on-device generation.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.Gray
+            )
+            VoiceToggle(
+                label = "Prefer server for images",
+                description = "Try the server above before on-device generation. " +
+                    "Falls back to on-device if the server is unreachable.",
+                checked = preferServerImageGen,
+                onCheckedChange = onPreferServerImageGenChange
+            )
 
             Spacer(modifier = Modifier.height(24.dp))
 

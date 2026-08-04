@@ -129,4 +129,24 @@ class CompanionViewModelTest {
         assertFalse(state.showAgentsScreen)
         assertFalse(state.showVaultScreen)
     }
+
+    @Test
+    fun `setImageServerUrl trims and persists the URL`() = runTest {
+        val viewModel = CompanionViewModel()
+        viewModel.setImageServerUrl("  http://192.168.1.10:9100  ")
+        assertEquals("http://192.168.1.10:9100", viewModel.uiState.value.imageServerUrl)
+    }
+
+    @Test
+    fun `preferServerImageGen defaults to false`() = runTest {
+        val viewModel = CompanionViewModel()
+        assertFalse(viewModel.uiState.value.preferServerImageGen)
+    }
+
+    @Test
+    fun `setPreferServerImageGen updates state`() = runTest {
+        val viewModel = CompanionViewModel()
+        viewModel.setPreferServerImageGen(true)
+        assertTrue(viewModel.uiState.value.preferServerImageGen)
+    }
 }

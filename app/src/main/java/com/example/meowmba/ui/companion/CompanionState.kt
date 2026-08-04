@@ -158,6 +158,10 @@ data class CompanionState(
      * the drawn canvas.
      */
     val imageModelDir: String = "",
+    /** Opt-in HTTP server for image generation. Empty = on-device only. */
+    val imageServerUrl: String = "",
+    /** When true and imageServerUrl is set, try the server before on-device. */
+    val preferServerImageGen: Boolean = false,
     /** Active model downloads by id (catalog option id or "custom:<fileName>"). */
     val modelDownloads: Map<String, ModelDownloader.DownloadProgress> = emptyMap(),
     /** Every model bundle actually present in the app-private models dir. */
