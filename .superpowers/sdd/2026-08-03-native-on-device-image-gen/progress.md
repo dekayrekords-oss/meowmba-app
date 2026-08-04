@@ -65,3 +65,57 @@ Status: DONE
 - Verified myself (controller): local.properties correctly gitignored
   and not committed; commit touches exactly the 4 intended files.
 - Committed as 6feebfb.
+
+## Task 4: Model catalog + auto-download
+Status: DONE
+- Dispatched to an implementer subagent. Read ModelCatalog.kt/ModelDownloader.kt
+  first per plan instructions.
+- Found `ModelCatalog.isValidModelFileName` structurally rejects `.gguf`
+  (asserted by an existing test) — could not reuse `LocalModelOption`
+  without weakening LLM filename validation, so added a parallel
+  `ImageModelOption`/`ImageModelCatalog` type (the plan's own anticipated
+  fallback for exactly this case). Download mechanics stayed fully
+  shared (`ModelDownloader.download` is already generic over url/fileName).
+- Verified SDXL-Lightning source myself (controller): real HF repo
+  `OlegSkutte/SDXL-Lightning-GGUF`, file `sdxl_lightning_4step.q8_0.gguf`,
+  confirmed via `curl -sI -L` → HTTP 302→200, content-length 4098988672
+  bytes (~4.1GB), no auth required, Q8_0 quant matching the JNI bridge's
+  hardcoded wtype.
+- 3 new tests pass. Committed as 0a0b3f1.
+
+## Task 5: Wire into the app — replace OnDeviceImageGenerator, update Settings
+Status: DONE
+- Controller (me) finalized this task's brief using Task 4's real
+  ImageModelCatalog/ModelDownloader signatures, per the plan's explicit
+  instruction not to pre-write this task.
+- Dispatched to an implementer subagent (two turns — first turn did the
+  code changes and kicked off `./gradlew assembleDebug` in its own
+  background Monitor but returned before it finished; I picked up
+  directly rather than bouncing through more subagent turns, verifying
+  the real build/test artifacts myself).
+- Design decision (subagent's, verified sound by me): image-model
+  installed-state is fully derived from disk via
+  `ModelDownloader.installedFile()`, no persisted flag — avoids a
+  stale-flag-disagrees-with-reality class of bug. `imageModelDir`/
+  `setImageModelDir`/`KEY_IMAGE_MODEL_DIR` removed entirely. Download UI
+  reuses the existing `DownloadService`/`CompanionState.modelDownloads`
+  map (same infra as LLM downloads), keyed by the image catalog's id —
+  no new download machinery.
+- Settings UI: replaced the manual folder text field with a proper
+  installed/downloading/error/not-installed state machine with a
+  progress bar, mirroring ModelManagerScreen's CatalogModelItem pattern.
+- Verified myself (controller), not just trusted the report:
+  - `./gradlew assembleDebug` → real `app-debug.apk` (354MB) produced;
+    unzipped and confirmed `lib/arm64-v8a/libsd_jni_bridge.so` (65.7MB)
+    is actually embedded — the native build genuinely worked end-to-end
+    through Gradle's `externalNativeBuild`, not just my manual Task 1/2
+    docker builds.
+  - `./gradlew testDebugUnitTest` → 396 tests, exactly 3 failures (the
+    same pre-existing ModelDownloadViewModelTest failures documented
+    throughout this plan as unrelated/known).
+  - Reviewed the full diff myself before committing (all 8 files) —
+    clean, no dead code, `OnDeviceImageGenerator` fully removed with
+    zero remaining references outside docs/.
+- Committed as 5ac979a.
+
+## Plan status: all 5 tasks DONE. Proceeding to final whole-branch review.
