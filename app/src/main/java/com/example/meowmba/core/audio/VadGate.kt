@@ -23,6 +23,50 @@ import com.k2fsa.sherpa.onnx.VadModelConfig
  * Fails OPEN: if the model is missing or errors, every frame is reported as speech and the
  * spotter behaves exactly as it did without a gate.
  */
+
+/**
+ * Window alignment across frames for the VAD.
+ *
+ * Silero needs EXACT 512-sample windows, and a 1600-sample capture frame does not divide
+ * evenly — 64 samples are left over each time. The old implementation counted those and
+ * threw them away: a steady 4% of the audio never reached the VAD, and every window
+ * boundary drifted by the same amount. Quiet damage of exactly the kind a short wake word
+ * does not survive. The leftovers are now kept as PCM and prepended to the next frame, so
+ * every sample reaches the VAD exactly once, in order.
+ *
+ * Internal (not private) so the bookkeeping can be unit-tested without a native VAD.
+ */
+internal class WindowCarry(private val window: Int) {
+
+    /** Samples waiting for the next frame to complete a window. */
+    private var pending = ShortArray(0)
+
+    val pendingSamples: Int get() = pending.size
+
+    /**
+     * Feeds one frame; returns the sample stream that fills whole windows (a multiple of
+     * [window]) and keeps the remainder for the next call.
+     */
+    fun feed(frame: FloatArray): FloatArray {
+        val combined = FloatArray(pending.size + frame.size)
+        for (i in pending.indices) combined[i] = pending[i] / 32_768.0f
+        frame.copyInto(combined, pending.size)
+        val usable = (combined.size / window) * window
+        pending = if (usable < combined.size) {
+            ShortArray(combined.size - usable) {
+                (combined[usable + it] * 32_768.0f).toInt().coerceIn(-32_768, 32_767).toShort()
+            }
+        } else {
+            ShortArray(0)
+        }
+        return if (usable == combined.size) combined else combined.copyOf(usable)
+    }
+
+    fun clear() {
+        pending = ShortArray(0)
+    }
+}
+
 class VadGate private constructor(private val vad: Vad) {
 
     enum class Decision {
@@ -41,8 +85,8 @@ class VadGate private constructor(private val vad: Vad) {
 
     private var wasSpeaking = false
 
-    /** Samples left over from the previous frame's window alignment. */
-    private var carry = 0
+    /** Window alignment across frames — see [WindowCarry]. */
+    private val carry = WindowCarry(WINDOW)
 
     /** Frames of trailing silence still treated as speech, so a pause mid-phrase is kept. */
     private var hangoverFrames = 0
@@ -59,16 +103,11 @@ class VadGate private constructor(private val vad: Vad) {
             // 100ms frame (1600 samples) instead of 512-sample windows is not merely
             // inefficient — it left the capture path delivering digital silence a few
             // seconds in, bisected by disabling this gate and watching the mic recover.
+            val aligned = carry.feed(frame)
             var offset = 0
-            while (offset + WINDOW <= frame.size) {
-                vad.acceptWaveform(frame.copyOfRange(offset, offset + WINDOW))
+            while (offset + WINDOW <= aligned.size) {
+                vad.acceptWaveform(aligned.copyOfRange(offset, offset + WINDOW))
                 offset += WINDOW
-            }
-            // A 1600-sample frame leaves a 64-sample remainder; carrying it into the next
-            // call keeps the window boundaries aligned instead of dropping audio.
-            if (offset < frame.size) {
-                carry += frame.size - offset
-                if (carry >= WINDOW) carry -= WINDOW
             }
             vad.isSpeechDetected()
         } catch (e: Exception) {
@@ -111,6 +150,7 @@ class VadGate private constructor(private val vad: Vad) {
         preSpeech.clear()
         wasSpeaking = false
         hangoverFrames = 0
+        carry.clear()
     }
 
     fun release() {

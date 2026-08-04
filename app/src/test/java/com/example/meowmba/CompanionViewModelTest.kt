@@ -4,7 +4,9 @@ import android.content.Context
 import com.example.meowmba.core.database.MemoryEntity
 import com.example.meowmba.core.memory.MemoryRepository
 import com.example.meowmba.core.memory.MetaMemoryConnector
+import com.example.meowmba.core.audio.MicOwner
 import com.example.meowmba.core.security.SecureStorageManager
+import com.example.meowmba.ui.companion.AvatarZone
 import com.example.meowmba.ui.companion.CompanionEmotion
 import com.example.meowmba.ui.companion.CompanionViewModel
 import com.example.meowmba.ui.companion.InteractionState
@@ -37,10 +39,12 @@ class CompanionViewModelTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         `when`(mockSecureStorage.context).thenReturn(mockContext)
+        MicOwner.resetForTest()
     }
 
     @After
     fun tearDown() {
+        MicOwner.resetForTest()
         Dispatchers.resetMain()
     }
 
@@ -158,5 +162,35 @@ class CompanionViewModelTest {
         viewModel.setPreferServerImageGen(true)
         assertTrue(viewModel.uiState.value.preferServerImageGen)
         verify(mockSecureStorage).saveBooleanPreference("prefer_server_image_gen", true)
+    }
+
+    @Test
+    fun `ear tap re-enable re-arms wake standby`() = runTest {
+        // Regression: tapping an ear to cut the mic and tapping again used to flip
+        // isMicEnabled back on WITHOUT calling startWakeStandby(), leaving the wake
+        // phrase dead until the next background/foreground cycle — which reads from
+        // the user's side exactly as "the wake word stopped working".
+        val viewModel = CompanionViewModel(secureStorage = mockSecureStorage)
+        viewModel.setWakeWordEnabled(true)
+
+        // Ear tap cuts the mic...
+        viewModel.onAvatarZoneClick(AvatarZone.EAR_LEFT)
+        assertFalse(viewModel.uiState.value.isMicEnabled)
+        assertEquals(InteractionState.MUTED, viewModel.uiState.value.interactionState)
+
+        // ...and a mic tap while cut shows the sentinel caption. Unless the wake
+        // standby is re-armed on re-enable, this caption must survive the ear tap.
+        viewModel.onMicClick()
+        assertTrue(viewModel.uiState.value.captionText!!.startsWith("Microphone is off"))
+
+        // Ear tap again re-enables the mic AND must re-arm wake listening.
+        viewModel.onAvatarZoneClick(AvatarZone.EAR_LEFT)
+        assertTrue(viewModel.uiState.value.isMicEnabled)
+        assertEquals(InteractionState.IDLE, viewModel.uiState.value.interactionState)
+        assertEquals(MicOwner.IN_APP, MicOwner.current)
+        assertEquals(
+            "Say \"Hey ${viewModel.uiState.value.name}\"…",
+            viewModel.uiState.value.captionText
+        )
     }
 }

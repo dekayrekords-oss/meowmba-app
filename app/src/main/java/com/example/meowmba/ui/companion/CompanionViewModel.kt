@@ -1805,6 +1805,13 @@ class CompanionViewModel(
                     isMicEnabled = newMicState,
                     interactionState = if (!newMicState) InteractionState.MUTED else InteractionState.IDLE
                 )
+                if (newMicState && _uiState.value.wakeWordEnabled) {
+                    // Re-enabling the mic must bring wake listening back. Without this the
+                    // ear tap flipped isMicEnabled but nothing called startWakeStandby(),
+                    // so the wake phrase stayed dead until the next background/foreground
+                    // cycle — which reads exactly as "the wake word stopped working".
+                    startWakeStandby()
+                }
             }
             AvatarZone.EYE_LEFT, AvatarZone.EYE_RIGHT -> {
                 _uiState.value = _uiState.value.copy(isCameraEnabled = !_uiState.value.isCameraEnabled)
