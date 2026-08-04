@@ -581,10 +581,10 @@ class CompanionViewModel(
                 val result = task.result ?: ""
                 when (task.status) {
                     TaskStatus.COMPLETED -> {
-                        // avatar.animate: the animation IS the response — onPlay already
-                        // set activeAnimation; speaking the tool result ("Playing X (Nms)")
-                        // just confuses the user and the TTS caption obscures the face.
-                        if (task.toolId == "avatar.animate") {
+                        // avatar.animate / avatar.describe_animation: the animation IS
+                        // the response — onPlay already set activeAnimation; speaking
+                        // the tool result just confuses the user.
+                        if (task.toolId == "avatar.animate" || task.toolId == "avatar.describe_animation") {
                             // no-op: playCustomAnimation already set activeAnimation
                         } else {
                             // Check for generated media
@@ -1420,10 +1420,10 @@ class CompanionViewModel(
         when (result) {
             is SubmitResult.Rejected -> speak(result.reason)
             is SubmitResult.Started -> {
-                // avatar.animate is instant and self-announcing (the animation IS the
-                // response) — no preamble, no TTS. Reset to IDLE immediately so wake
+                // avatar.animate / avatar.describe_animation: the animation IS the
+                // response — no preamble, no TTS. Reset to IDLE immediately so wake
                 // word listening restarts; processUserSpeech left us in THINKING.
-                if (intent.toolId == "avatar.animate") {
+                if (intent.toolId == "avatar.animate" || intent.toolId == "avatar.describe_animation") {
                     _uiState.value = _uiState.value.copy(
                         interactionState = InteractionState.IDLE,
                         captionText = null,
