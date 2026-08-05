@@ -1,0 +1,5 @@
+# Godot's editor cache/scratch directory. Fully regenerated on next editor
+# open; this project has no imported binary assets, so nothing in here is
+# needed by the runtime engine at build/run time. (Godot's own recommended
+# project .gitignore excludes this directory for the same reason.)
+.godot/

@@ -1,0 +1,33 @@
+; Engine configuration file.
+; Godot 4.7.1.stable. This project is embedded directly (no export/PCK step)
+; into the host Android app's assets/ directory, per the documented
+; "Godot as an Android library" workflow: docs.godotengine.org/en/stable/
+; tutorials/platform/android/android_library.html — "create the Godot
+; project directly (no subfolder) in the assets directory of the Android
+; application project."
+
+config_version=5
+
+[application]
+
+config/name="Meowmba Avatar (Godot Prototype)"
+run/main_scene="res://avatar.tscn"
+config/features=PackedStringArray("4.7", "GL Compatibility")
+boot_splash/show_image=false
+config/icon="res://icon.svg"
+
+[display]
+
+window/size/viewport_width=1080
+window/size/viewport_height=1080
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/handheld/orientation="portrait"
+window/energy_saving/keep_screen_on=true
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true
+environment/defaults/default_clear_color=Color(0.05098, 0.06667, 0.09020, 1)
