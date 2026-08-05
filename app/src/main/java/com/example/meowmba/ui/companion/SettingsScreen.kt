@@ -99,6 +99,7 @@ fun SettingsScreen(
     var openrouterKey by remember { mutableStateOf(secureStorage.getApiKey("openrouter") ?: "") }
     var openrouterModel by remember { mutableStateOf(secureStorage.getModelName("openrouter") ?: "nvidia/nemotron-3-super-120b-a12b:free") }
     var localModelPath by remember { mutableStateOf(secureStorage.getEndpoint("local") ?: "/data/local/tmp/llm/gemma.bin") }
+    var showAdvanced by remember { mutableStateOf(false) }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -267,21 +268,6 @@ fun SettingsScreen(
                 }
                 Switch(checked = robotBodyEnabled, onCheckedChange = onRobotBodyChange)
             }
-            OutlinedTextField(
-                value = robotHost,
-                onValueChange = onRobotHostChange,
-                label = { Text("Base host (IP)") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-            OutlinedTextField(
-                value = robotPort,
-                onValueChange = onRobotPortChange,
-                label = { Text("Base port") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -289,9 +275,9 @@ fun SettingsScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Use Bluetooth (paired device)", style = MaterialTheme.typography.bodyLarge)
+                    Text("Connect over Bluetooth", style = MaterialTheme.typography.bodyLarge)
                     Text(
-                        "Talk to the base over classic Bluetooth instead of TCP.",
+                        "Default. Talks to a paired LOOI base over classic Bluetooth. Turn off to use Wi-Fi/TCP instead.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -303,6 +289,22 @@ fun SettingsScreen(
                     value = robotBtAddress,
                     onValueChange = onRobotBtAddressChange,
                     label = { Text("Paired device MAC (e.g. 00:11:22:33:44:55)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            } else {
+                OutlinedTextField(
+                    value = robotHost,
+                    onValueChange = onRobotHostChange,
+                    label = { Text("Base host (IP)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                OutlinedTextField(
+                    value = robotPort,
+                    onValueChange = onRobotPortChange,
+                    label = { Text("Base port") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -366,6 +368,26 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Advanced",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color.White,
+                    modifier = Modifier.weight(1f)
+                )
+                OutlinedButton(onClick = { showAdvanced = !showAdvanced }) {
+                    Text(if (showAdvanced) "Hide" else "Show")
+                }
+            }
+            Text(
+                text = "Image/music/video generation, API keys, servers and the desktop bridge.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.Gray
+            )
+            if (showAdvanced) {
             // On-device image generation (stable-diffusion.cpp, native GGUF weights)
             Text("Image generation", style = MaterialTheme.typography.titleMedium, color = Color.White)
             val imageOption = com.example.meowmba.core.agent.ImageModelCatalog.options.first()
@@ -637,6 +659,8 @@ fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth()
             )
             
+            }
+
             Spacer(modifier = Modifier.height(40.dp))
             
             Button(

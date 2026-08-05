@@ -389,11 +389,19 @@ Tests: `app/src/test/java/com/example/meowmba/RobotTest.kt` (protocol clamping/v
 
 Tests: `WebViewBridgeTest.kt` (decode escapes/unicode/pass-through). Suite now 506; only the 3 known ModelDownloadViewModelTest failures remain.
 
+## Settings cleanup + LOOI Bluetooth default
+
+- **Bluetooth is now the default LOOI transport.** `robot_use_bluetooth` defaults to true in `CompanionState`, and both the init-restore and `refreshRobot` read it with default true. With no paired MAC the manager still falls back to simulated and says so.
+- **Settings robot section reordered Bluetooth-first:** "Connect over Bluetooth" switch + MAC field show by default; the TCP host/port fields only appear when Bluetooth is turned off.
+- **Settings menu cleaned up (collapse advanced):** the developer/server tail (image/music/video generation, desktop bridge, OpenAI/OpenCode/HF/OpenRouter keys, SSH servers, local model) is now wrapped in an "Advanced" expander (`Show`/`Hide`), defaulting collapsed, so the everyday items (voice, wake, robot, home, routines) are a short scroll. `Save and Close` stays always visible.
+
+Verified on device: settings opens with the robot section showing "Connect over Bluetooth" + MAC, and the advanced tail absent until expanded. 0 crashes.
+
 <!-- AUTOBUILD:START -->
 (regenerated after each commit)
-- 2026-08-05 10:52:55 : Add LOOI robot body: real motor control over a line protocol, RobotManager with honest simulated fal
+- 2026-08-05 12:04:43 : LOOI Bluetooth hardware control; fix black-canvas web page (decode JS string) and harden WebView for
+- 6cf9c2d 2026-08-05 10:49 Add LOOI robot body: real motor control over a line protocol, RobotManager with honest simulated fallback, Settings section, unit tests
 - 748d953 2026-08-05 10:28 Fix rotation black-screen (FGS promise race), home stickiness, OpenRouter error surfacing; audit LOOI
 - 0cce31a 2026-08-05 09:37 Avatar: 20 new built-in animations (tricks, moods, body moves)
 - 247c9b8 2026-08-05 08:36 Avatar: tail hangs downward per user request
-- b63aa19 2026-08-05 08:31 Avatar: always-visible swaying tail, tail-wag built-in, earlier+showier idle animations
 <!-- AUTOBUILD:END -->

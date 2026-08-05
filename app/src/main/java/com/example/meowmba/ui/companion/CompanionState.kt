@@ -74,7 +74,7 @@ data class CompanionState(
     val robotHost: String = "192.168.1.200",
     val robotPort: String = "9100",
     val robotStatus: String = "simulated (no body)",
-    val robotUseBluetooth: Boolean = false,
+    val robotUseBluetooth: Boolean = true,
     val robotBtAddress: String = "",
     /** Phase G1: unprompted one-liners, max once per hour. */
     val idleChatterEnabled: Boolean = true,

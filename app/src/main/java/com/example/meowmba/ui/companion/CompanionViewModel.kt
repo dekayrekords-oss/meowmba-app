@@ -313,7 +313,7 @@ class CompanionViewModel(
                 robotBodyEnabled = st.getBooleanPreference("robot_body_enabled", false),
                 robotHost = st.getPreference("robot_host") ?: "192.168.1.200",
                 robotPort = st.getPreference("robot_port") ?: "9100",
-                robotUseBluetooth = st.getBooleanPreference("robot_use_bluetooth", false),
+                robotUseBluetooth = st.getBooleanPreference("robot_use_bluetooth", true),
                 robotBtAddress = st.getPreference("robot_bt_address") ?: "",
             )
         }
@@ -1571,7 +1571,7 @@ class CompanionViewModel(
     /** (Re)resolve the active robot body from preferences. Non-blocking. */
     fun refreshRobot() {
         val enabled = secureStorage?.getBooleanPreference("robot_body_enabled", false) == true
-        val useBt = secureStorage?.getBooleanPreference("robot_use_bluetooth", false) == true
+        val useBt = secureStorage?.getBooleanPreference("robot_use_bluetooth", true) == true
         val host = secureStorage?.getPreference("robot_host") ?: "192.168.1.200"
         val port = (secureStorage?.getPreference("robot_port")?.toIntOrNull()) ?: 9100
         val btAddress = secureStorage?.getPreference("robot_bt_address") ?: ""
