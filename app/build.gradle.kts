@@ -100,6 +100,13 @@ ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }
 
+// Unit tests run on a virtual coroutine clock: the forever-loop inside
+// IdleAnimationDirector would spin forever there, so keep it off for the
+// whole test task. IdleBehaviorTest re-enables it explicitly.
+tasks.withType<Test>().configureEach {
+    systemProperty("meowmba.idleAnimations", "false")
+}
+
 dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)

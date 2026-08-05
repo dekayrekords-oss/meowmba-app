@@ -38,6 +38,9 @@ class CompanionViewModelTest {
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
+        // Idle-animation director uses real delays; disable it here so its
+        // forever-loop never runs on the test virtual clock.
+        System.setProperty("meowmba.idleAnimations", "false")
         `when`(mockSecureStorage.context).thenReturn(mockContext)
         MicOwner.resetForTest()
     }

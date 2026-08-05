@@ -28,6 +28,7 @@ fun SettingsScreen(
     companionName: String = "Meow",
     wakeWordEnabled: Boolean = false,
     conversationMode: Boolean = false,
+    keepScreenOnInFaceMode: Boolean = true,
     agentBrainEnabled: Boolean = true,
     hermesAgentUrl: String = "",
     imageServerUrl: String = "",
@@ -40,6 +41,7 @@ fun SettingsScreen(
     onCompanionNameChange: (String) -> Unit = {},
     onWakeWordChange: (Boolean) -> Unit = {},
     onConversationModeChange: (Boolean) -> Unit = {},
+    onKeepScreenOnChange: (Boolean) -> Unit = {},
     onAgentBrainChange: (Boolean) -> Unit = {},
     onHermesUrlChange: (String) -> Unit = {},
     onDownloadImageModel: () -> Unit = {},
@@ -106,6 +108,13 @@ fun SettingsScreen(
                     "the wake phrase to be enabled.",
                 checked = backgroundListeningEnabled,
                 onCheckedChange = onBackgroundListeningChange
+            )
+            VoiceToggle(
+                label = "Keep screen on in face mode",
+                description = "Prevents the display from sleeping while the companion face " +
+                    "is showing, so Meow stays visible like a desk pet.",
+                checked = keepScreenOnInFaceMode,
+                onCheckedChange = onKeepScreenOnChange
             )
             VoiceToggle(
                 label = "Conversation mode",

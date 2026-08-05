@@ -109,6 +109,21 @@ class MainActivity : ComponentActivity() {
 
                 val uiState by viewModel.uiState.collectAsState()
 
+                // Face mode: optionally hold the display awake while the bare
+                // companion face is on screen (Settings toggle, default ON).
+                val keepAwake = uiState.keepScreenOnInFaceMode &&
+                    com.example.meowmba.ui.companion.faceModeActive(uiState)
+                androidx.compose.runtime.DisposableEffect(keepAwake) {
+                    if (keepAwake) {
+                        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    } else {
+                        window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    }
+                    onDispose {
+                        window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    }
+                }
+
                 // Vision: the VM asks for CAMERA only when a look needs it
                 androidx.compose.runtime.LaunchedEffect(uiState.cameraPermissionRequested) {
                     if (uiState.cameraPermissionRequested) {

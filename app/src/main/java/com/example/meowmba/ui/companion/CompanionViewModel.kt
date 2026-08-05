@@ -138,6 +138,7 @@ class CompanionViewModel(
     private val metaMemoryConnector: MetaMemoryConnector? = null
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(CompanionState())
+    private var idleAnimationDirector: IdleAnimationDirector? = null
     val uiState = _uiState.asStateFlow()
 
     fun getVisionManager(): com.example.meowmba.core.vision.VisionManager? = visionManager
@@ -283,6 +284,7 @@ class CompanionViewModel(
                 name = if (savedName.isNullOrBlank()) _uiState.value.name else savedName,
                 wakeWordEnabled = storage.getBooleanPreference(KEY_WAKE_WORD, false),
                 conversationMode = storage.getBooleanPreference(KEY_CONVERSATION, false),
+                keepScreenOnInFaceMode = storage.getBooleanPreference(KEY_KEEP_SCREEN_ON, true),
                 agentBrainEnabled = storage.getBooleanPreference(KEY_AGENT_BRAIN, true),
                 hermesAgentUrl = storage.getPreference(KEY_HERMES_URL) ?: "",
                 imageServerUrl = storage.getPreference(KEY_IMAGE_SERVER_URL) ?: "",
@@ -508,6 +510,27 @@ class CompanionViewModel(
             toolRegistry.register(AvatarAnimateTool(animStore) { spec -> playCustomAnimation(spec) })
             toolRegistry.register(DescribeAnimationTool { spec -> playCustomAnimation(spec) })
 
+            // Occasional random idle animations so the face feels alive.
+            // Opt-out flag for JVM unit tests: their virtual clocks would
+            // make the forever-loop spin instead of waiting.
+            val idleAnimationsEnabled = System.getProperty("meowmba.idleAnimations", "true") != "false"
+            if (idleAnimationsEnabled) idleAnimationDirector = IdleAnimationDirector(
+                scope = viewModelScope,
+                canPlay = {
+                    val s = _uiState.value
+                    s.interactionState == InteractionState.IDLE &&
+                        s.activeAnimation == null &&
+                        s.activeTask == null &&
+                        s.mouthEnergy == 0f
+                },
+                pickSpec = {
+                    val saved = animStore.list().mapNotNull { animStore.load(it) }
+                    val pool = CustomAnimations.BUILT_INS.values + saved
+                    pool.randomOrNull()
+                },
+                play = { spec -> playCustomAnimation(spec) },
+            ).also { it.start() }
+
             // Obsidian-compatible vault notes.
             vaultRepository?.let { toolRegistry.registerVaultTools(it) }
 
@@ -683,6 +706,7 @@ class CompanionViewModel(
     }
 
     override fun onCleared() {
+        idleAnimationDirector?.stop()
         stopWakeLoopAndRelease()
         (currentProvider as? LiteRtProvider)?.close()
         // Leaving the inventory service bound would keep that app's process alive for as
@@ -938,6 +962,12 @@ class CompanionViewModel(
     fun setConversationMode(enabled: Boolean) {
         _uiState.value = _uiState.value.copy(conversationMode = enabled)
         secureStorage?.saveBooleanPreference(KEY_CONVERSATION, enabled)
+    }
+
+    /** Face-mode display setting: keep the screen awake while the face shows. */
+    fun setKeepScreenOn(enabled: Boolean) {
+        _uiState.value = _uiState.value.copy(keepScreenOnInFaceMode = enabled)
+        secureStorage?.saveBooleanPreference(KEY_KEEP_SCREEN_ON, enabled)
     }
 
     /** Toggle USB auto-bridge. When enabled, monitors USB and auto-pairs. */
@@ -2929,6 +2959,7 @@ class CompanionViewModel(
         private const val KEY_COMPANION_NAME = "companion_name"
         private const val KEY_WAKE_WORD = "wake_word_enabled"
         private const val KEY_CONVERSATION = "conversation_mode"
+        private const val KEY_KEEP_SCREEN_ON = "keep_screen_on_face"
         private const val KEY_MEMORY_PAUSED = "memory_paused"
         private const val KEY_RETENTION_DAYS = "retention_days"
         private const val KEY_AGENT_BRAIN = "agent_brain_enabled"

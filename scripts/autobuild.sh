@@ -31,3 +31,19 @@ if ./gradlew :app:assembleRelease >>"$LOG" 2>&1; then
 else
   echo "$(date '+%F %T') FAIL release $SHA" >> "$OUT/autobuild.log"
 fi
+
+# Refresh the live handoff doc's build section so any future session can see
+# what was built and when.
+if [ -f docs/HANDOFF.md ]; then
+  TMP="$(mktemp)"
+  {
+    echo "- $(date '+%F %T') `$SHA`: $(git log -1 --format=%s | head -c 100)"
+    git log --format='- %h %ad %s' --date=format:'%Y-%m-%d %H:%M' -4 HEAD~1
+  } > "$TMP"
+  awk -v marker='<!-- AUTOBUILD:START -->' -v end='<!-- AUTOBUILD:END -->' -v inj="$TMP" '
+    $0 == marker { print; print "(regenerated after each commit)"; while ((getline line < inj) > 0) print line; skip=1; next }
+    $0 == end { skip=0 }
+    !skip { print }
+  ' docs/HANDOFF.md > docs/HANDOFF.md.new && mv docs/HANDOFF.md.new docs/HANDOFF.md
+  rm -f "$TMP"
+fi

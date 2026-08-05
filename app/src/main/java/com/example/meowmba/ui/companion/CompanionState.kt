@@ -56,6 +56,8 @@ data class CompanionState(
     val wakeWordEnabled: Boolean = false,
     /** Stay in conversation after responding, for natural follow-ups. */
     val conversationMode: Boolean = false,
+    /** Keep the display awake while the companion face is on screen. */
+    val keepScreenOnInFaceMode: Boolean = true,
     /** Speech energy 0..1 driven by TTS word boundaries; animates the mouth. */
     val mouthEnergy: Float = 0f,
     /** Result of the last "Test connection" action on the Hardware page. */
@@ -247,3 +249,21 @@ enum class CompanionEmotion {
     CONFUSED,
     PROUD
 }
+
+/**
+ * True when the bare companion face is what's on screen — no overlay panels,
+ * drawers, or full-screen cards. Used for face-mode behaviours such as
+ * keeping the display awake. Pure function of state so it is unit-testable.
+ */
+fun faceModeActive(state: CompanionState): Boolean =
+    !state.showSettings &&
+        !state.showModelManager &&
+        !state.isChatExpanded &&
+        !state.showTiles &&
+        !state.showPrivacyDashboard &&
+        !state.showMemoryScreen &&
+        !state.showAgentsScreen &&
+        !state.showBackgroundScreen &&
+        !state.showWeatherScreen &&
+        !state.showNavScreen &&
+        !state.showVaultScreen
