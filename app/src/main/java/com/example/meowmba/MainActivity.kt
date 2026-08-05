@@ -217,9 +217,18 @@ class MainActivity : ComponentActivity() {
         // Release BEFORE starting the service: it refuses to start while the in-app loop
         // still owns the mic, and the in-app loop cannot actually hear anything once we
         // are backgrounded (foreground-only mic grant).
-        companionViewModel?.releaseWakeMicForBackground()
-        if (wakeOn && backgroundOn && micGranted) {
-            WakeWordService.start(this)
+        val awaitingReply = companionViewModel?.isAwaitingFollowUp() == true
+        if (awaitingReply && micGranted) {
+            // Mid-conversation background hop: the in-app recognizer goes deaf the
+            // moment we lose the foreground, so hand the turn to the mic-exempt
+            // foreground service instead of letting the follow-up die unheard.
+            companionViewModel?.handOffListeningToBackground()
+            WakeWordService.startFollowUp(this)
+        } else {
+            companionViewModel?.releaseWakeMicForBackground()
+            if (wakeOn && backgroundOn && micGranted) {
+                WakeWordService.start(this)
+            }
         }
     }
 

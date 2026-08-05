@@ -868,6 +868,9 @@ class CompanionViewModel(
                                         }
                                     }
                                 }
+                                // "Like every LLM": what meow just made goes straight
+                                // into the browser panel so the user actually sees it.
+                                showFileInBrowser(file)
                             }
                             speak(result.lineSequence().firstOrNull { !it.startsWith("MEDIA_FILE:") } ?: "Done.")
                         }
@@ -1332,6 +1335,80 @@ class CompanionViewModel(
         _uiState.value = _uiState.value.copy(showAppDrawer = false, showBrowser = false)
     }
 
+    // ── "Show it in the browser" ────────────────────────────────────────────
+
+    /**
+     * Open the browser panel and display the newest thing meow made. Pages
+     * load directly; images/video/audio get a minimal black wrapper page so
+     * the WebView renders them like any LLM chat would.
+     */
+    fun showLatestArtifactInBrowser() {
+        viewModelScope.launch {
+            val file = withContext(Dispatchers.IO) { findLatestArtifact() }
+            if (file == null) {
+                if (!_uiState.value.showBrowser) toggleBrowser()
+                _uiState.value = _uiState.value.copy(
+                    captionText = "Browser open — nothing saved to show yet."
+                )
+                speak("The browser is open, but I don't have anything saved to show yet.")
+            } else {
+                showFileInBrowser(file)
+            }
+        }
+    }
+
+    /** Newest renderable artifact across the saved pages and the workspace. */
+    private fun findLatestArtifact(): java.io.File? {
+        val dirs = listOfNotNull(
+            secureStorage?.context?.let { ctx: android.content.Context ->
+                java.io.File(ctx.filesDir, "web_pages")
+            },
+            workspaceRoot
+        )
+        val exts = setOf(
+            "html", "htm", "png", "jpg", "jpeg", "gif", "webp",
+            "mp4", "webm", "wav", "mp3"
+        )
+        return dirs.flatMap { it.listFiles()?.toList() ?: emptyList() }
+            .filter { it.isFile && it.extension.lowercase() in exts }
+            .maxByOrNull { it.lastModified() }
+    }
+
+    /** Render one artifact in the browser panel (opens the panel if needed). */
+    fun showFileInBrowser(file: java.io.File) {
+        if (!_uiState.value.showBrowser) toggleBrowser()
+        val ext = file.extension.lowercase()
+        val uri = android.net.Uri.fromFile(file).toString()
+        val script = when {
+            ext == "html" || ext == "htm" ->
+                "window.location.href = '$uri'; 'opening'"
+            ext in setOf("png", "jpg", "jpeg", "gif", "webp") -> mediaWrapperJs(
+                "<img src='$uri' style='max-width:100%;max-height:100vh;display:block;margin:auto'>"
+            )
+            ext in setOf("mp4", "webm") -> mediaWrapperJs(
+                "<video src='$uri' controls autoplay playsinline " +
+                    "style='max-width:100%;max-height:100vh;display:block;margin:auto'></video>"
+            )
+            ext in setOf("wav", "mp3") -> mediaWrapperJs(
+                "<audio src='$uri' controls autoplay style='width:90%;display:block;margin:auto'></audio>"
+            )
+            else -> "window.location.href = '$uri'; 'opening'"
+        }
+        viewModelScope.launch {
+            // Give the WebView a beat to attach before we drive it.
+            delay(700)
+            com.example.meowmba.core.browser.WebViewBridge.evaluate(script) {}
+            _uiState.value = _uiState.value.copy(captionText = "Showing ${file.name} in the browser.")
+        }
+    }
+
+    /** document.write wrapper page; outer JS uses double quotes, inner HTML single. */
+    private fun mediaWrapperJs(body: String): String =
+        "document.open();document.write(\"<!doctype html><html><body " +
+            "style='margin:0;background:#000;display:flex;align-items:center;" +
+            "justify-content:center;min-height:100vh'>$body</body></html>\");" +
+            "document.close();'shown'"
+
     /** Phase G1: feed a life event into the mood engine and apply its effects. */
     private fun noteMoodEvent(event: com.example.meowmba.core.personality.MoodEvent) {
         moodEngine.onEvent(event, System.currentTimeMillis())
@@ -1514,6 +1591,25 @@ class CompanionViewModel(
      */
     fun releaseWakeMicForBackground() {
         stopWakeLoopAndRelease()
+    }
+
+    /** True while meow is still listening for a spoken turn (conversation follow-up). */
+    fun isAwaitingFollowUp(): Boolean =
+        _uiState.value.interactionState == InteractionState.LISTENING
+
+    /**
+     * Background hand-off for a live conversation: the in-app recognizer goes
+     * deaf once the foreground is lost, so stop everything here and let
+     * WakeWordService capture the follow-up with its mic exemption.
+     */
+    fun handOffListeningToBackground() {
+        followUpJob?.cancel()
+        isFollowUpListen = false
+        utteranceCapture?.cancel()
+        utteranceCapture = null
+        speechService?.stopListening()
+        stopWakeLoopAndRelease()
+        resetState()
     }
 
     /** Called when the app returns to the foreground; retakes the wake mic. */
@@ -1702,6 +1798,13 @@ class CompanionViewModel(
     }
 
     private fun processUserSpeech(text: String) {
+        // "Show it in the browser": pull the newest artifact into the panel.
+        // Checked before the agent routing so it also works while the browser
+        // is already open.
+        if (looksLikeShowInBrowser(WakePhraseMatcher.normalize(text))) {
+            showLatestArtifactInBrowser()
+            return
+        }
         // While the browser is open, speech goes straight to the browser
         // agent as the standing goal ("make me a page about...", "move the
         // header down"...). The loop sees touch edits via its screenshots.
@@ -3515,6 +3618,23 @@ class CompanionViewModel(
 
         /** Long enough for a recognizer to finish tearing down, short enough to feel instant. */
         private const val WAKE_REARM_RETRY_MS = 900L
+
+        /** Verbs that turn "…browser" into a show-in-the-browser request. */
+        private val SHOW_BROWSER_VERBS = listOf("show", "open", "display", "put", "bring")
+
+        /** Creation verbs keep the request with the browser agent instead. */
+        private val SHOW_BROWSER_CREATION_VERBS = listOf(
+            "make", "build", "create", "generate", "draw", "write", "design", "code"
+        )
+
+        /** "in the browser", "on the side browser", "in browser"… */
+        private val SHOW_BROWSER_PLACE = Regex("\\b(in|on)( the)? (\\w+ )?browser")
+
+        /** "show it in the browser", "open that in the side browser", etc. */
+        fun looksLikeShowInBrowser(normalized: String): Boolean =
+            SHOW_BROWSER_VERBS.any { normalized.contains(it) } &&
+                SHOW_BROWSER_CREATION_VERBS.none { normalized.contains(it) } &&
+                SHOW_BROWSER_PLACE.containsMatchIn(normalized)
 
         /** Phrases that politely end conversation mode. */
         private val STOP_COMMANDS = setOf(

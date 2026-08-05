@@ -42,6 +42,8 @@ class WakeWordService : Service() {
 
     companion object {
         const val EXTRA_WAKE_COMMAND = "com.example.meowmba.WAKE_COMMAND"
+        const val EXTRA_MODE = "com.example.meowmba.WAKE_MODE"
+        const val MODE_FOLLOW_UP = "follow_up"
         const val CHANNEL_ID = "memba_wake"
         const val COMMAND_CHANNEL_ID = "memba_wake_command"
         const val PREF_KEY = "background_listening"
@@ -52,6 +54,18 @@ class WakeWordService : Service() {
         fun start(context: Context) {
             ContextCompat.startForegroundService(
                 context, Intent(context, WakeWordService::class.java)
+            )
+        }
+
+        /**
+         * Follow-up hand-off: the app just went to the background mid-conversation.
+         * Skip the wake phrase and capture the user's reply directly.
+         */
+        fun startFollowUp(context: Context) {
+            ContextCompat.startForegroundService(
+                context,
+                Intent(context, WakeWordService::class.java)
+                    .putExtra(EXTRA_MODE, MODE_FOLLOW_UP)
             )
         }
 
@@ -68,6 +82,7 @@ class WakeWordService : Service() {
     private var capturingCommand = false
     private var isForeground = false
     private var engineStarted = false
+    private var followUpPending = false
 
     override fun onCreate() {
         super.onCreate()
@@ -93,13 +108,18 @@ class WakeWordService : Service() {
             return START_NOT_STICKY
         }
 
+        if (intent?.getStringExtra(EXTRA_MODE) == MODE_FOLLOW_UP) {
+            followUpPending = true
+        }
         // Second chance at the promise onCreate may have failed to keep. Giving
         // up here is the graceful path; leaving it unkept is the fatal one.
         if (!isForeground && !promoteToForeground()) {
+            followUpPending = false
             stopSelf()
             return START_NOT_STICKY
         }
         if (!engineStarted) startEngine()
+        maybeStartFollowUpCapture()
         // NOT sticky. This is a user-toggled listener whose preference is persisted, so
         // it comes back on the next launch anyway. Sticky restarts resurrected it into a
         // fresh process after every process death — including every reinstall — where it
@@ -181,6 +201,35 @@ class WakeWordService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    // ── Follow-up hand-off ──────────────────────────────────────────────────
+
+    /**
+     * Follow-up mode: the conversation was already live when the app went to
+     * the background, so don't wait for the wake phrase — capture the user's
+     * reply right now and deliver it like any wake command.
+     */
+    private fun maybeStartFollowUpCapture() {
+        if (!followUpPending || !engineStarted || capturingCommand) return
+        followUpPending = false
+        capturingCommand = true
+        // Reflect the conversation turn in the ongoing notification.
+        runCatching {
+            startForeground(FG_ID, buildPersistentNotification("Listening for your reply…"))
+        }
+        // The wake spotter and the recognizer must not fight over the mic.
+        wakeEngine?.stop()
+        speechService.startListening(
+            onResult = { captured ->
+                capturingCommand = false
+                acknowledgeAndDeliver(captured)
+            },
+            onError = {
+                capturingCommand = false
+                wakeEngine?.start()
+            }
+        )
+    }
 
     // ── Wake handling ───────────────────────────────────────────────────────
 

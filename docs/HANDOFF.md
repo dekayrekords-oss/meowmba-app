@@ -179,11 +179,31 @@ with risk levels, audit trail).
 - **Vision defaults moved to MeowLion** (`qwen3.6-memba:35b-a3b` on http://192.168.1.163:11434) for all endpoint/model fallbacks.
 - meow-nb role: publish target for built pages via the existing SSH tool; MeowLion is the brain driving the loop.
 
+## Background follow-up handoff + show-in-browser (2026-07-29)
+
+- **Follow-ups now survive the background hop.** The in-app recognizer goes deaf
+  the moment the app loses the foreground (mic is foreground-only), so follow-up
+  turns died unheard when the user switched apps. `MainActivity.onPause` now
+  detects an active LISTENING state (`isAwaitingFollowUp()`), tears down the
+  in-app capture (`handOffListeningToBackground()`), and starts
+  `WakeWordService.startFollowUp()` — the mic-exempt foreground service captures
+  the reply immediately (no wake phrase needed) and delivers it through the
+  existing wake-command notification path.
+- **"Show it in the browser" intent.** `looksLikeShowInBrowser()` (display verb
+  + "in/on … browser", minus creation verbs like make/build/create) routes
+  speech to `showLatestArtifactInBrowser()`: scans `web_pages/` + workspace for
+  the newest html/png/jpg/gif/webp/mp4/webm/wav/mp3, opens the browser panel,
+  and renders it — pages via `location.href`, media via a black
+  `document.write` wrapper page (`mediaWrapperJs`).
+- **Like every LLM: generated media auto-displays.** The `MEDIA_FILE:` handling
+  in the orchestrator result path now calls `showFileInBrowser(file)`, so images
+  and videos meow generates pop open in the browser panel automatically.
+
 <!-- AUTOBUILD:START -->
 (regenerated after each commit)
-- 2026-08-04 21:44:35 : HANDOFF: gesture/freeze/split/MeowLion notes
+- 2026-08-04 22:05:04 : Drawer favorites + face pins, live browser agent loop on MeowLion
+- 43b4683 2026-08-04 21:41 HANDOFF: gesture/freeze/split/MeowLion notes
 - cfeea0f 2026-08-04 21:41 Gesture remap, overlay animation freeze, foldable split browser, MeowLion default brain
 - 265dda5 2026-08-04 20:54 Ignore .kotlin daemon log artifacts
 - 3dfa052 2026-08-04 20:54 Phase G: LOOI mood engine, idle chatter, and motor control API
-- 1219c87 2026-08-04 19:24 Ignore python bytecode cache
 <!-- AUTOBUILD:END -->
