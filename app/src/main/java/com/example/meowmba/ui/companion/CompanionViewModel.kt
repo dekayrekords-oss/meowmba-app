@@ -1622,6 +1622,17 @@ class CompanionViewModel(
     fun setRobotBtAddress(address: String) {
         secureStorage?.savePreference("robot_bt_address", address)
         _uiState.value = _uiState.value.copy(robotBtAddress = address)
+        refreshRobot()
+    }
+
+    /** Populate the Settings base-picker: bonded devices plus a bounded BLE scan. */
+    fun scanForRobotBases() {
+        if (_uiState.value.robotScanning) return
+        _uiState.value = _uiState.value.copy(robotScanning = true, robotScanResults = emptyList())
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val found = robotManager.discoverAllBases()
+            _uiState.value = _uiState.value.copy(robotScanning = false, robotScanResults = found)
+        }
     }
 
     fun setIdleChatter(enabled: Boolean) {

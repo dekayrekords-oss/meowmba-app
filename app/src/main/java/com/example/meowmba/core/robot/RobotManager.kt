@@ -53,6 +53,55 @@ class RobotManager {
         null
     }
 
+    /**
+     * Full-spectrum discovery for the Settings picker. Returns "name -> address"
+     * pairs: bonded devices first (a base already paired at the system level), then
+     * anything a bounded BLE scan sees. Requires BLUETOOTH_SCAN (manifest,
+     * neverForLocation) and BLUETOOTH_CONNECT for names; returns whatever it can
+     * rather than nothing — a missing permission degrades, it does not blank the
+     * list. The scan runs up to [scanMs] and is stopped before returning.
+     */
+    fun discoverAllBases(scanMs: Long = 7_000): List<Pair<String, String>> {
+        val out = LinkedHashMap<String, String>()   // address -> name, dedup
+        try {
+            val adapter = android.bluetooth.BluetoothAdapter.getDefaultAdapter() ?: return emptyList()
+            adapter.bondedDevices?.forEach { d ->
+                runCatching { out[d.address] = d.name ?: d.address }
+            }
+            val scanner = if (adapter.isEnabled) {
+                runCatching { adapter.bluetoothLeScanner }.getOrNull()
+            } else null
+            if (scanner != null) {
+                val latch = java.util.concurrent.CountDownLatch(1)
+                val callback = object : android.bluetooth.le.ScanCallback() {
+                    override fun onScanResult(callbackType: Int, result: android.bluetooth.le.ScanResult) {
+                        runCatching {
+                            val d = result.device
+                            if (d.address !in out) out[d.address] = result.scanRecord?.deviceName ?: d.address
+                        }
+                    }
+                    override fun onScanFailed(errorCode: Int) { latch.countDown() }
+                }
+                try {
+                    scanner.startScan(callback)
+                    latch.await(scanMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+                    runCatching { scanner.stopScan(callback) }
+                } catch (e: Exception) {
+                    runCatching { scanner.stopScan(callback) }
+                }
+            }
+        } catch (e: Exception) {
+            // SecurityException on any missing permission: keep what we have.
+        }
+        // Likely bases first so the user sees them without scrolling.
+        return out.entries
+            .map { (addr, name) -> name to addr }
+            .sortedWith(compareByDescending<Pair<String, String>> {
+                val n = it.first.lowercase()
+                "looi" in n || "meow" in n || "robot" in n || "luna" in n
+            }.thenBy { it.first.lowercase() })
+    }
+
     /** Bring up a LOOI base over classic Bluetooth (RFCOMM/SPP) to a paired device. */
     fun connectBluetooth(address: String): Boolean =
         bringUp(BluetoothRobotTransport(address), "LOOI body (BT) @ $address",

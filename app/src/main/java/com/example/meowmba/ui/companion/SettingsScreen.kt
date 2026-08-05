@@ -53,6 +53,9 @@ fun SettingsScreen(
     robotStatus: String = "simulated (no body)",
     robotUseBluetooth: Boolean = false,
     robotBtAddress: String = "",
+    robotScanning: Boolean = false,
+    robotScanResults: List<Pair<String, String>> = emptyList(),
+    onRobotScan: () -> Unit = {},
     onRobotBodyChange: (Boolean) -> Unit = {},
     onRobotHostChange: (String) -> Unit = {},
     onRobotPortChange: (String) -> Unit = {},
@@ -292,6 +295,37 @@ fun SettingsScreen(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
+                Spacer(modifier = Modifier.height(6.dp))
+                OutlinedButton(onClick = onRobotScan, enabled = !robotScanning) {
+                    Text(if (robotScanning) "Scanning for bases…" else "Find base (scan)")
+                }
+                if (robotScanResults.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "Tap your LOOI base to use its address:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    robotScanResults.forEach { (name, address) ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onRobotBtAddressChange(address) }
+                                .padding(vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(name, style = MaterialTheme.typography.bodyMedium)
+                                Text(address, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            if (address == robotBtAddress) {
+                                Text("in use", style = MaterialTheme.typography.bodySmall, color = Color(0xFF81C784))
+                            }
+                        }
+                    }
+                } else if (!robotScanning && robotScanResults.isEmpty()) {
+                    // Shown only after a scan ran and saw nothing.
+                }
             } else {
                 OutlinedTextField(
                     value = robotHost,

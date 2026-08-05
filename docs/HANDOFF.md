@@ -425,9 +425,9 @@ Verified on device: settings opens with the robot section showing "Connect over 
 
 <!-- AUTOBUILD:START -->
 (regenerated after each commit)
-- 2026-08-05 15:20:57 : Wake: widen hey-carrier tuning + missed-wake audio diagnostic; log cloud-brain route failures
+- 2026-08-05 15:36:27 : OpenRouter: fix 404 — endpoint carried a /v1 the provider appends itself; normalize base urls
+- 32e5285 2026-08-05 15:19 Wake: widen hey-carrier tuning + missed-wake audio diagnostic; log cloud-brain route failures
 - d7fb985 2026-08-05 13:45 Wake phrase: tolerate AIAI ERROR_CLIENT churn; expand and loosen hey/ok KWS variants
 - 3893308 2026-08-05 12:55 LOOI auto-connect: discover paired base and enable body by default
 - 7f50bdb 2026-08-05 12:32 Settings cleanup: collapse advanced options; LOOI defaults to Bluetooth
-- 574a3fd 2026-08-05 12:02 LOOI Bluetooth hardware control; fix black-canvas web page (decode JS string) and harden WebView for video (YouTube)
 <!-- AUTOBUILD:END -->

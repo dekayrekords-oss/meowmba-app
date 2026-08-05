@@ -76,6 +76,9 @@ data class CompanionState(
     val robotStatus: String = "simulated (no body)",
     val robotUseBluetooth: Boolean = true,
     val robotBtAddress: String = "",
+    /** Base discovery: spinner + candidates (name, address) for the Settings picker. */
+    val robotScanning: Boolean = false,
+    val robotScanResults: List<Pair<String, String>> = emptyList(),
     /** Phase G1: unprompted one-liners, max once per hour. */
     val idleChatterEnabled: Boolean = true,
     /** Keep the display awake while the companion face is on screen. */
