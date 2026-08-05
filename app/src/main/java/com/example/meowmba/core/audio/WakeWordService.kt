@@ -101,15 +101,13 @@ class WakeWordService : Service() {
         super.onCreate()
         runCatching { createChannels() }
 
-        // The foreground promise comes BEFORE anything that can throw.
-        // startForegroundService() gives the system a startForeground()
-        // deadline; anything in between — even a rare keystore failure inside
-        // EncryptedSharedPreferences — left the promise unkept and the
-        // platform killed the whole app with
-        // ForegroundServiceDidNotStartInTimeException. Android 16 also refuses
-        // a microphone foreground service started from the background; if we
-        // can't go foreground we stop instead — onStartCommand retries, since
-        // by then the app is often in the foreground and the start is permitted.
+        // The foreground promise comes BEFORE anything that can throw, and NO
+        // path out of here may leave it unkept: once startForegroundService()
+        // has been called the platform arms a startForeground() deadline that
+        // stopSelf() does NOT cancel — leaving early without promoting (or
+        // letting a stopService race win) got the whole app killed with
+        // ForegroundServiceDidNotStartInTimeException, which as the HOME app
+        // showed up as a black screen on every rotation.
         if (!promoteToForeground()) return
 
         secureStorage = try {
@@ -124,7 +122,14 @@ class WakeWordService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
-            secureStorage.saveBooleanPreference(PREF_KEY, false)
+            // secureStorage is lateinit and only assigned when onCreate got as
+            // far as building it; the Stop action must work (and not crash)
+            // even from a degraded start.
+            runCatching {
+                if (::secureStorage.isInitialized) {
+                    secureStorage.saveBooleanPreference(PREF_KEY, false)
+                }
+            }
             stopSelf()
             return START_NOT_STICKY
         }

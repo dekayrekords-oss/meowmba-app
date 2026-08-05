@@ -47,6 +47,12 @@ object StreamParsers {
         if (data == "[DONE]") return ModelResponse.Complete("")
         return try {
             val obj = json.parseToJsonElement(data).jsonObject
+            // Mid-stream error (OpenRouter free models return HTTP 200 then
+            // push {"error":{…}} when rate-limited). Surfacing it as an Error —
+            // not null — is what lets the router fall back to the next route.
+            obj["error"]?.let { err ->
+                return ModelResponse.Error(extractErrorText(err) ?: "stream error")
+            }
             val content = obj["choices"]?.jsonArray?.firstOrNull()?.jsonObject
                 ?.get("delta")?.jsonObject
                 ?.get("content")?.jsonPrimitive?.content.orEmpty()
@@ -55,6 +61,35 @@ object StreamParsers {
             null
         }
     }
+
+    /**
+     * Turn a non-2xx HTTP body into a human-readable message.
+     *
+     * OpenAI-compatible APIs (incl. OpenRouter) answer errors with
+     * `{"error":{"message":"…","code":…}}`; dumping the raw JSON is cryptic.
+     * Falls back to the trimmed body when it is not that shape.
+     */
+    fun extractApiErrorMessage(body: String): String {
+        val trimmed = body.trim()
+        if (trimmed.isEmpty()) return "no detail"
+        return try {
+            val obj = json.parseToJsonElement(trimmed).jsonObject
+            val err = obj["error"]
+            extractErrorText(err) ?: trimmed.take(200)
+        } catch (e: Exception) {
+            trimmed.take(200)
+        }
+    }
+
+    /** Pull the message out of an `error` JSON element (object or string). */
+    private fun extractErrorText(err: kotlinx.serialization.json.JsonElement?): String? = try {
+        when (err) {
+            is kotlinx.serialization.json.JsonObject ->
+                err["message"]?.jsonPrimitive?.content
+            is kotlinx.serialization.json.JsonPrimitive -> err.content
+            else -> null
+        }?.takeIf { it.isNotBlank() }
+    } catch (e: Exception) { null }
 
     /** Count models in an Ollama /api/tags response: {"models":[…]}. */
     fun countOllamaModels(body: String): Int = countArrayEntries(body, "models")

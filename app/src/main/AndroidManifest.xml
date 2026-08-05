@@ -86,13 +86,19 @@
             android:exported="true"
             android:label="@string/app_name"
             android:theme="@style/Theme.Meowmba"
+            android:launchMode="singleTask"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|uiMode|density"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
                 <category android:name="android.intent.category.LAUNCHER" />
                 <!-- Optional home launcher: the user chooses MEOWMBA as their
-                     launcher in Android settings; fully reversible. -->
+                     launcher in Android settings; fully reversible. singleTask
+                     above is load-bearing here: with the standard launchMode the
+                     HOME intent could stack duplicate MainActivity instances, and
+                     a force-stop of a duplicated home makes Android forget the
+                     default-home choice and re-show the launcher picker. -->
                 <category android:name="android.intent.category.HOME" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>

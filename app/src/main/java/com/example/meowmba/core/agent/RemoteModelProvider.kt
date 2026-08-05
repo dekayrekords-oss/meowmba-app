@@ -72,7 +72,8 @@ class RemoteModelProvider(
             setBody(OllamaRequest(model, prompt, stream = true))
         }.execute { response ->
             if (!response.status.isSuccess()) {
-                emit(ModelResponse.Error("Ollama HTTP ${response.status.value}: ${response.bodyAsText().take(200)}"))
+                val detail = StreamParsers.extractApiErrorMessage(response.bodyAsText())
+                emit(ModelResponse.Error("$name HTTP ${response.status.value}: $detail"))
                 return@execute
             }
             val channel = response.bodyAsChannel()
@@ -86,11 +87,15 @@ class RemoteModelProvider(
     private suspend fun kotlinx.coroutines.flow.FlowCollector<ModelResponse>.streamOpenAI(prompt: String) {
         client.preparePost("$baseUrl/v1/chat/completions") {
             header(HttpHeaders.Authorization, "Bearer $apiKey")
+            // OpenRouter attribution headers: harmless elsewhere, expected there.
+            header("HTTP-Referer", "https://meowmba.local")
+            header("X-Title", "MEOWMBA")
             contentType(ContentType.Application.Json)
             setBody(OpenAIRequest(model, listOf(OpenAIMessage("user", prompt)), stream = true))
         }.execute { response ->
             if (!response.status.isSuccess()) {
-                emit(ModelResponse.Error("OpenAI HTTP ${response.status.value}: ${response.bodyAsText().take(200)}"))
+                val detail = StreamParsers.extractApiErrorMessage(response.bodyAsText())
+                emit(ModelResponse.Error("$name HTTP ${response.status.value}: $detail"))
                 return@execute
             }
             val channel = response.bodyAsChannel()

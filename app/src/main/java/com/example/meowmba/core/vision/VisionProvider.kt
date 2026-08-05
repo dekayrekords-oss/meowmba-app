@@ -70,7 +70,8 @@ class OllamaVisionProvider(
                 setBody(body)
             }
             if (!response.status.isSuccess()) {
-                return Result.failure(Exception("Ollama HTTP ${response.status.value}: ${response.bodyAsText().take(160)}"))
+                val detail = com.example.meowmba.core.agent.StreamParsers.extractApiErrorMessage(response.bodyAsText())
+                return Result.failure(Exception("$name HTTP ${response.status.value}: $detail"))
             }
             val text = Json.parseToJsonElement(response.bodyAsText())
                 .jsonObject["response"]?.jsonPrimitive?.content?.trim()
@@ -125,7 +126,8 @@ class OpenAIVisionProvider(
                 setBody(body)
             }
             if (!response.status.isSuccess()) {
-                return Result.failure(Exception("OpenAI HTTP ${response.status.value}: ${response.bodyAsText().take(160)}"))
+                val detail = com.example.meowmba.core.agent.StreamParsers.extractApiErrorMessage(response.bodyAsText())
+                return Result.failure(Exception("$name HTTP ${response.status.value}: $detail"))
             }
             val text = Json.parseToJsonElement(response.bodyAsText())
                 .jsonObject["choices"]?.jsonArray?.firstOrNull()?.jsonObject

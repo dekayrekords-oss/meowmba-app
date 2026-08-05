@@ -5,6 +5,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -37,6 +39,11 @@ class MainActivity : ComponentActivity() {
     private lateinit var visionManager: com.example.meowmba.core.vision.VisionManager
     private lateinit var notificationHelper: NotificationHelper
     private var companionViewModel: CompanionViewModel? = null
+
+    /** Debounced hand-off to the background wake service (see onPause). */
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val wakeStandbyStart = Runnable { startWakeStandbyNow() }
+    private val followUpStart = Runnable { startFollowUpNow() }
 
     /** One-time MediaProjection consent for watch mode. */
     private val screenCaptureLauncher = registerForActivityResult(
@@ -203,7 +210,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        // The in-app engine owns the mic while we are visible.
+        // If a background hand-off was scheduled by a transient pause, it is now
+        // stale: we are visible again and the in-app engine owns the mic.
+        mainHandler.removeCallbacks(wakeStandbyStart)
+        mainHandler.removeCallbacks(followUpStart)
         WakeWordService.stop(this)
         companionViewModel?.reclaimWakeMicForForeground()
         consumeWakeCommand(intent)
@@ -211,6 +221,14 @@ class MainActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
+        // A configuration change (fold unfold, rotation) pauses and resumes
+        // the activity back-to-back: starting the foreground wake service here
+        // only for onResume's stopService to tear it down moments later raced
+        // the platform's startForeground() deadline and killed the process
+        // (ForegroundServiceDidNotStartInTimeException) — as the HOME app that
+        // showed up as a black screen. The activity survives the change, so no
+        // handoff is needed; the mic never left our ownership.
+        if (isChangingConfigurations) return
         // Hand the mic to the foreground service only when the user opted in
         // to BOTH wake phrase and background listening, and mic is granted.
         val wakeOn = secureStorage.getBooleanPreference("wake_word_enabled", false)
@@ -226,13 +244,50 @@ class MainActivity : ComponentActivity() {
             // Mid-conversation background hop: the in-app recognizer goes deaf the
             // moment we lose the foreground, so hand the turn to the mic-exempt
             // foreground service instead of letting the follow-up die unheard.
+            // Debounced like the plain start: an immediate startForegroundService
+            // here, immediately undone by onResume's stopService during a transient
+            // pause (HOME press as the launcher, rotation), broke the platform's
+            // startForeground() promise and got the process killed.
             companionViewModel?.handOffListeningToBackground()
-            WakeWordService.startFollowUp(this)
+            mainHandler.removeCallbacks(followUpStart)
+            mainHandler.postDelayed(followUpStart, WAKE_STANDBY_DEBOUNCE_MS)
         } else {
             companionViewModel?.releaseWakeMicForBackground()
             if (wakeOn && backgroundOn && micGranted) {
-                WakeWordService.start(this)
+                // Debounce: a pause that is immediately followed by a resume
+                // (rotation, home re-resolution, app-switcher flick) must NOT
+                // start the foreground service, because onResume's stopService
+                // would then tear it down before startForeground() runs and the
+                // platform kills the process for breaking the FGS promise.
+                // Genuine backgrounding outlasts the window, so the service
+                // still starts for real.
+                mainHandler.removeCallbacks(wakeStandbyStart)
+                mainHandler.postDelayed(wakeStandbyStart, WAKE_STANDBY_DEBOUNCE_MS)
             }
+        }
+    }
+
+    /** Re-checks state at fire time, then hands the mic to follow-up capture. */
+    private fun startFollowUpNow() {
+        if (isFinishing || isChangingConfigurations) return
+        val micGranted = ContextCompat.checkSelfPermission(
+            this, Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+        if (micGranted && companionViewModel?.isAwaitingFollowUp() == true) {
+            WakeWordService.startFollowUp(this)
+        }
+    }
+
+    /** Re-checks state at fire time, then starts the background wake service. */
+    private fun startWakeStandbyNow() {
+        if (isFinishing || isChangingConfigurations) return
+        val wakeOn = secureStorage.getBooleanPreference("wake_word_enabled", false)
+        val backgroundOn = secureStorage.getBooleanPreference(WakeWordService.PREF_KEY, false)
+        val micGranted = ContextCompat.checkSelfPermission(
+            this, Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+        if (wakeOn && backgroundOn && micGranted) {
+            WakeWordService.start(this)
         }
     }
 
@@ -244,6 +299,12 @@ class MainActivity : ComponentActivity() {
 
     /** Wake command arriving before the ViewModel exists (cold launch). */
     private var pendingWakeCommand: String? = null
+
+    companion object {
+        /** Long enough to swallow transient pause/resume churn, short enough that
+         *  real backgrounding still gets the wake service promptly. */
+        private const val WAKE_STANDBY_DEBOUNCE_MS = 500L
+    }
 
     private fun consumeWakeCommand(source: Intent?) {
         val command = source?.getStringExtra(WakeWordService.EXTRA_WAKE_COMMAND)

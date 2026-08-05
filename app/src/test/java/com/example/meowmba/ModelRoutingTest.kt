@@ -64,6 +64,34 @@ class StreamParsersTest {
         assertEquals(3, StreamParsers.countOpenAIModels("""{"data":[{"id":"a"},{"id":"b"},{"id":"c"}]}"""))
         assertEquals(0, StreamParsers.countOllamaModels("not json"))
     }
+
+    // OpenRouter free-model failures must surface honestly so the router can
+    // fall back, instead of looking like an empty reply.
+
+    @Test
+    fun `mid-stream openrouter error surfaces as an Error, not silence`() {
+        val line = """data: {"error":{"message":"Provider returned error","code":429}}"""
+        val result = StreamParsers.parseOpenAISseLine(line)
+        assertTrue("expected an Error, got $result", result is ModelResponse.Error)
+        assertEquals("Provider returned error", (result as ModelResponse.Error).message)
+    }
+
+    @Test
+    fun `extracts a clean message from an openai error body`() {
+        val body = """{"error":{"message":"User not found.","code":401}}"""
+        assertEquals("User not found.", StreamParsers.extractApiErrorMessage(body))
+    }
+
+    @Test
+    fun `extracts a message from a string error body`() {
+        assertEquals("rate limited", StreamParsers.extractApiErrorMessage("""{"error":"rate limited"}"""))
+    }
+
+    @Test
+    fun `falls back to the raw body when the error shape is unknown`() {
+        assertEquals("gateway timeout", StreamParsers.extractApiErrorMessage("gateway timeout"))
+        assertEquals("no detail", StreamParsers.extractApiErrorMessage("   "))
+    }
 }
 
 class SelfVoiceFilterTest {

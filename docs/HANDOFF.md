@@ -16,8 +16,12 @@ native image generation. Kotlin + Jetpack Compose, minSdk 31, NDK 27, arm64 only
 - origin: bare repo on `meow-nb:/home/claude/git/meowmba-app.git`
 - remote worktree: `meow-nb:/home/claude/meowmba-app` (has JDK 21 + Android SDK, can build)
 - local mirror: `~/meowmba-app`
-- Device: Galaxy Z Fold 6 (SM-F966U1, serial RFCY61NJEVM); USB drops — fix with
+- Device: Galaxy Z Fold **7** (serial RFCY61NJEVM); USB drops — fix with
   `adb kill-server && adb start-server`.
+  DUAL-DISPLAY SCREENCAP GOTCHA: the Fold 7 has two displays; a bare
+  `adb shell screencap` grabs the INNER display (state OFF) and returns a
+  pure-black image that looks like a rendering bug. Always capture the cover
+  display explicitly: `adb shell screencap -p -d 4630946872173396372`.
 
 ## Build & release
 - Auto-build: `.git/hooks/post-commit` → `scripts/autobuild.sh` builds debug AND
@@ -332,11 +336,44 @@ avatar.animate and in the idle performance pool. New unit test asserts all 20
 exist and sample cleanly. Device-verified: idle performances firing on the
 Fold 7 (MeowAnim logcat).
 
+## Rotation black-screen + home-stickiness + OpenRouter errors (4 fixes)
+
+1. **Rotation black screen (root-caused).** Rotating as the HOME app killed the
+   process with `ForegroundServiceDidNotStartInTimeException`: MainActivity.onPause
+   called `startForegroundService(WakeWordService)` and onResume's `stopService`
+   tore it down before `startForeground()` ran, breaking the platform's FGS
+   promise. Fix: MainActivity now declares
+   `configChanges="orientation|screenSize|screenLayout|smallestScreenSize|..."`
+   (rotation is handled in place, no pause/resume) AND debounces BOTH the plain
+   and follow-up wake-service starts by 500ms (`wakeStandbyStart`/`followUpStart`
+   runnables, cancelled in onResume) so transient pause/resume churn never starts
+   the service. WakeWordService also guards the `secureStorage` lateinit in the
+   STOP path. Verified: crash buffer clean across repeated rotate+HOME churn;
+   landscape renders the face+tail on the cover display.
+2. **Home stickiness.** The crash above was resetting Android's default-home
+   choice (process death acts like a force-stop), which is why the launcher
+   picker kept re-appearing. With the crash gone, `launchMode="singleTask"` on
+   MainActivity (no duplicate home instances), and a new Settings → "Home
+   screen" section that shows whether MEOWMBA is the default home and offers a
+   "Set as home screen" button (opens `Settings.ACTION_HOME_SETTINGS`), the
+   choice now sticks. Verified: single HOME press returns to MEOWMBA.
+3. **OpenRouter errors.** Free models answer HTTP 200 then push the rate-limit
+   error as a mid-stream SSE `{"error":{...}}` line, which the old parser dropped
+   (no `choices`) → empty response, no fallback. `StreamParsers.parseOpenAISseLine`
+   now surfaces mid-stream errors as `ModelResponse.Error` (so OmniRoute falls
+   back to on-device), and a new `extractApiErrorMessage()` turns
+   `{"error":{"message":...}}` bodies into clean captions in RemoteModelProvider
+   and VisionProvider instead of dumping raw JSON. Added OpenRouter attribution
+   headers (HTTP-Referer, X-Title). New StreamParsersTest cases cover all of it.
+4. **LOOI robot:** audit confirms only a simulated motor/expression layer exists
+   (`core/robot/MotorController` + `SimulatedMotorController` + `FaceMotorMap`);
+   no LOOI hardware protocol is integrated. Answered to the user; no code change.
+
 <!-- AUTOBUILD:START -->
 (regenerated after each commit)
-- 2026-08-05 08:37:14 : Avatar: tail hangs downward per user request
+- 2026-08-05 09:39:55 : Avatar: 20 new built-in animations (tricks, moods, body moves)
+- 247c9b8 2026-08-05 08:36 Avatar: tail hangs downward per user request
 - b63aa19 2026-08-05 08:31 Avatar: always-visible swaying tail, tail-wag built-in, earlier+showier idle animations
 - 836236c 2026-08-05 00:30 Stability: fix foreground-service crash, retry transient speech errors silently, always show artifacts
 - d1321e7 2026-08-04 23:55 Standalone build: OpenRouter cloud brain with on-device fallback, home server removed
-- ae96841 2026-08-04 23:27 Fix deflection: pin MeowLion for direct answers, deliver cold-launch wake commands, harden question detectors
 <!-- AUTOBUILD:END -->

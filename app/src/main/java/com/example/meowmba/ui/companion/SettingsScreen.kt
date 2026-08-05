@@ -1,7 +1,11 @@
 package com.example.meowmba.ui.companion
 
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
+import android.provider.Settings
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -191,6 +195,42 @@ fun SettingsScreen(
             )
             OutlinedButton(onClick = onOpenAccessibility) {
                 Text("Open accessibility settings")
+            }
+
+            // ── Home screen ────────────────────────────────────────────────
+            val context = LocalContext.current
+            val isDefaultHome = remember {
+                val homeIntent = Intent(Intent.ACTION_MAIN)
+                    .addCategory(Intent.CATEGORY_HOME)
+                val resolved = context.packageManager
+                    .resolveActivity(homeIntent, PackageManager.MATCH_DEFAULT_ONLY)
+                resolved?.activityInfo?.packageName == context.packageName
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Home screen",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = if (isDefaultHome) {
+                    "MEOWMBA is your default home screen."
+                } else {
+                    "MEOWMBA can be your home screen so the cat is always there. " +
+                        "Set it as the default home app; it is fully reversible from " +
+                        "the same screen."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (!isDefaultHome) {
+                OutlinedButton(onClick = {
+                    runCatching {
+                        context.startActivity(Intent(Settings.ACTION_HOME_SETTINGS))
+                    }
+                }) {
+                    Text("Set as home screen")
+                }
             }
 
             if (routines.isNotEmpty()) {
