@@ -85,11 +85,34 @@ with risk levels, audit trail).
   animations, and in Commentary mode speaks ≤1 comment per 5 min, never
   while the user is talking. Both toggles default OFF (except animations).
 
+## Phase D features (2026-08-04)
+
+- **Optional launcher**: MainActivity now declares HOME + DEFAULT intent-filter
+  categories, so the app can be chosen as the device launcher in system
+  settings. It stays a normal app unless the user opts in; back on the bare
+  face does nothing destructive.
+- **App drawer (swipe right on the face)**: alphabetical grid of all
+  launchable apps with a live search bar up top (`ui/companion/AppDrawerScreen.kt`).
+  Tap to launch, back or swipe to close.
+- **Agent browser (swipe left on the face)**: built-in WebView with URL bar
+  (`ui/companion/BrowserScreen.kt`). On every page load a `window.__meow`
+  helper set is injected (`core/browser/WebViewBridge.kt`): open / title /
+  links / click / type / scroll, plus screenshot-to-PNG.
+- **web.browser tool** (`core/agent/tools/WebBrowserTool.kt`, MODERATE risk):
+  lets Meow drive the browser by voice — open a URL, read the title/links,
+  click elements, type text, scroll, and screenshot what it sees. Selectors
+  support `tag=text` text matching; all inputs are JS-escaped.
+- Gesture wiring in `AvatarRenderer`: horizontal drag >280 px triggers
+  onSwipeLeft/onSwipeRight; short strokes stay petting. Overlays are mutually
+  exclusive (`toggleAppDrawer` / `toggleBrowser` / `closeOverlays`) and are
+  covered by the BackHandler in MainActivity.
+- Tests: `PhaseDTest.kt` (JS escaping + DOM helper contract).
+
 <!-- AUTOBUILD:START -->
 (regenerated after each commit)
-- 2026-08-04 18:28:26 : Phase B: BigPickle brain, ask-anything recall, SSH server management
+- 2026-08-04 18:40:52 : Phase C: IMU motion sense, screen watch mode, context director
+- 490fab4 2026-08-04 18:26 Phase B: BigPickle brain, ask-anything recall, SSH server management
 - 99172fc 2026-08-04 18:11 Merge remote-tracking branch 'origin/main'
 - f8f1d98 2026-08-04 18:09 Face mode: keep-screen-on toggle, random idle animations, live HANDOFF doc
 - 6e9cc38 2026-08-04 21:32 chore(sdd): record final review outcome, Task 3, and overall plan status
-- c4d62da 2026-08-04 21:31 fix(media): give MediaGenerateVideoTool's timeout real margin, add missing RemoteVideoGenerator test coverage
 <!-- AUTOBUILD:END -->

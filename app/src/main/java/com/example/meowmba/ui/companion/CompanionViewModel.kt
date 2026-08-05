@@ -31,6 +31,7 @@ import com.example.meowmba.core.agent.runtime.TaskStatus
 import com.example.meowmba.core.agent.runtime.ToolCallPromptMode
 import com.example.meowmba.core.agent.tools.FindPlacesTool
 import com.example.meowmba.core.agent.tools.MemoryRecallTool
+import com.example.meowmba.core.agent.tools.WebBrowserTool
 import com.example.meowmba.core.agent.tools.SshTool
 import com.example.meowmba.core.agent.tools.WeatherTool
 import com.example.meowmba.core.agent.tools.ListSavedPlacesTool
@@ -549,6 +550,12 @@ class CompanionViewModel(
             secureStorage?.let { storage ->
                 sshHostRegistry = com.example.meowmba.core.ssh.SshHostRegistry(storage)
                 toolRegistry.register(SshTool(sshHostRegistry!!))
+            }
+
+            // Agent-driven browser: the companion can open, click, type and
+            // screenshot pages in the swipe-left browser.
+            appContext?.let { ctx ->
+                toolRegistry.register(WebBrowserTool(java.io.File(ctx.filesDir, "web_screenshots")))
             }
 
             // IMU: lean with the phone, startle on shake. RobotPoseSource for
@@ -1147,6 +1154,26 @@ class CompanionViewModel(
                     _uiState.value.interactionState == InteractionState.SPEAKING
             },
         ).also { it.start() }
+    }
+
+    /** Swipe right on the face: app drawer. */
+    fun toggleAppDrawer() {
+        _uiState.value = _uiState.value.copy(
+            showAppDrawer = !_uiState.value.showAppDrawer,
+            showBrowser = false,
+        )
+    }
+
+    /** Swipe left on the face: the browser meow can drive. */
+    fun toggleBrowser() {
+        _uiState.value = _uiState.value.copy(
+            showBrowser = !_uiState.value.showBrowser,
+            showAppDrawer = false,
+        )
+    }
+
+    fun closeOverlays() {
+        _uiState.value = _uiState.value.copy(showAppDrawer = false, showBrowser = false)
     }
 
     fun setCommentaryMode(enabled: Boolean) {

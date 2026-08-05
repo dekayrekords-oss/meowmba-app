@@ -74,6 +74,8 @@ fun AvatarRenderer(
     onZoneClick: (AvatarZone) -> Unit,
     onSwipeUp: () -> Unit = {},
     onSwipeDown: () -> Unit = {},
+    onSwipeLeft: () -> Unit = {},
+    onSwipeRight: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val basePose = CatAvatarStateMachine.resolvePose(state)
@@ -278,6 +280,10 @@ fun AvatarRenderer(
                         // A decisive vertical drag is a navigation swipe, not a pet
                         if (abs(totalY) > abs(totalX) && abs(totalY) > 140f) {
                             if (totalY < 0) onSwipeUp() else onSwipeDown()
+                        } else if (abs(totalX) > abs(totalY) && abs(totalX) > 280f) {
+                            // Long decisive horizontal swipe = launcher navigation.
+                            // Shorter strokes stay petting.
+                            if (totalX < 0) onSwipeLeft() else onSwipeRight()
                         }
                     }
                 ) { change, dragAmount ->

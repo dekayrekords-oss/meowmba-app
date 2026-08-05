@@ -160,9 +160,11 @@ class MainActivity : ComponentActivity() {
                     enabled = uiState.showSettings || uiState.showModelManager || uiState.isChatExpanded ||
                         uiState.showTiles || uiState.showPrivacyDashboard || uiState.showMemoryScreen ||
                         uiState.showAgentsScreen || uiState.showBackgroundScreen ||
-                        uiState.showWeatherScreen || uiState.showNavScreen
+                        uiState.showWeatherScreen || uiState.showNavScreen ||
+                        uiState.showAppDrawer || uiState.showBrowser
                 ) {
                     when {
+                        uiState.showAppDrawer || uiState.showBrowser -> viewModel.closeOverlays()
                         uiState.showSettings -> viewModel.toggleSettings()
                         uiState.showModelManager -> viewModel.toggleModelManager()
                         uiState.showPrivacyDashboard -> viewModel.togglePrivacyDashboard()

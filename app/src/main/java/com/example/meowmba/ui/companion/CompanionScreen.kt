@@ -73,7 +73,9 @@ fun CompanionScreen(
                 state = uiState,
                 onZoneClick = { viewModel.onAvatarZoneClick(it) },
                 onSwipeUp = { viewModel.openChat() },
-                onSwipeDown = { viewModel.openTiles() }
+                onSwipeDown = { viewModel.openTiles() },
+                onSwipeLeft = { viewModel.toggleBrowser() },
+                onSwipeRight = { viewModel.toggleAppDrawer() }
             )
         }
 
@@ -519,6 +521,15 @@ fun CompanionScreen(
                 onSelectAgent = { viewModel.selectAgent(it) },
                 onClose = { viewModel.toggleAgentsScreen() }
             )
+        }
+
+        // Swipe right = app drawer (launcher); swipe left = agent browser.
+        if (uiState.showAppDrawer) {
+            AppDrawerScreen(onClose = { viewModel.toggleAppDrawer() })
+        }
+
+        if (uiState.showBrowser) {
+            BrowserScreen()
         }
 
         if (uiState.showVaultScreen) {

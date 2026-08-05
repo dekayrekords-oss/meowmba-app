@@ -62,6 +62,10 @@ data class CompanionState(
     val watchModeEnabled: Boolean = false,
     /** Meow may speak short unsolicited comments about what it sees. */
     val commentaryEnabled: Boolean = false,
+    /** App drawer overlay (swipe right) is open. */
+    val showAppDrawer: Boolean = false,
+    /** Agent browser overlay (swipe left) is open. */
+    val showBrowser: Boolean = false,
     /** Speech energy 0..1 driven by TTS word boundaries; animates the mouth. */
     val mouthEnergy: Float = 0f,
     /** Result of the last "Test connection" action on the Hardware page. */
