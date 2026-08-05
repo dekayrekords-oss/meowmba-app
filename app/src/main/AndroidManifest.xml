@@ -4,6 +4,8 @@
 
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <!-- Navigation: needed to rank nearby places by distance from the user. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
@@ -129,6 +131,16 @@
                 <action android:name="com.example.meowmba.action.RUNTIME_BRIDGE" />
             </intent-filter>
         </service>
+            <receiver
+            android:name=".core.routines.RoutineAlarmReceiver"
+            android:exported="false" />
+        <receiver
+            android:name=".core.routines.BootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

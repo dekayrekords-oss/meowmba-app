@@ -34,6 +34,14 @@ data class GeneratedMedia(
 /**
  * Represents the complete UI state for the Memba companion.
  */
+/** Settings-facing view of a scheduled routine. */
+data class RoutineUi(
+    val id: Long,
+    val name: String,
+    val whenLabel: String,
+    val enabled: Boolean,
+)
+
 data class CompanionState(
     val name: String = "Meow",
     val interactionState: InteractionState = InteractionState.IDLE,
@@ -56,6 +64,10 @@ data class CompanionState(
     val wakeWordEnabled: Boolean = false,
     /** Stay in conversation after responding, for natural follow-ups. */
     val conversationMode: Boolean = false,
+    /** Phase E3: keep listening 8 s after each exchange so you can cut in. */
+    val bargeInEnabled: Boolean = true,
+    /** Phase E1: scheduled routines shown in Settings. */
+    val routines: List<RoutineUi> = emptyList(),
     /** Keep the display awake while the companion face is on screen. */
     val keepScreenOnInFaceMode: Boolean = true,
     /** Low-rate screen awareness (MediaProjection) is on. */

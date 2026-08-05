@@ -9,8 +9,8 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [MessageEntity::class, MemoryEntity::class, MemoryFtsEntity::class, MessageFtsEntity::class, AuditEntryEntity::class],
-    version = 5,
+    entities = [MessageEntity::class, MemoryEntity::class, MemoryFtsEntity::class, MessageFtsEntity::class, AuditEntryEntity::class, RoutineEntity::class],
+    version = 6,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -18,6 +18,7 @@ abstract class MeowmbaDatabase : RoomDatabase() {
     abstract fun messageDao(): MessageDao
     abstract fun memoryDao(): MemoryDao
     abstract fun auditDao(): AuditDao
+    abstract fun routineDao(): RoutineDao
 
     companion object {
         /** Adds full-text search over chat history without losing any data. */
@@ -32,6 +33,13 @@ abstract class MeowmbaDatabase : RoomDatabase() {
             }
         }
 
+        /** Phase E: routines table, additive — no existing data touched. */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `routines` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `timeOfDay` TEXT, `intervalMinutes` INTEGER, `action` TEXT NOT NULL, `message` TEXT NOT NULL, `enabled` INTEGER NOT NULL, `lastRunAt` INTEGER NOT NULL)")
+            }
+        }
+
         @Volatile
         private var INSTANCE: MeowmbaDatabase? = null
 
@@ -42,7 +50,7 @@ abstract class MeowmbaDatabase : RoomDatabase() {
                     MeowmbaDatabase::class.java,
                     "meowmba_database"
                 )
-                    .addMigrations(MIGRATION_4_5)
+                    .addMigrations(MIGRATION_4_5, MIGRATION_5_6)
                     .fallbackToDestructiveMigration(dropAllTables = true)
                     .build()
                 INSTANCE = instance

@@ -439,6 +439,8 @@ fun CompanionScreen(
                 companionName = uiState.name,
                 wakeWordEnabled = uiState.wakeWordEnabled,
                 conversationMode = uiState.conversationMode,
+                bargeInEnabled = uiState.bargeInEnabled,
+                routines = uiState.routines,
                 keepScreenOnInFaceMode = uiState.keepScreenOnInFaceMode,
                 agentBrainEnabled = uiState.agentBrainEnabled,
                 hermesAgentUrl = uiState.hermesAgentUrl,
@@ -455,6 +457,10 @@ fun CompanionScreen(
                 onCompanionNameChange = { viewModel.renameCompanion(it) },
                 onWakeWordChange = { viewModel.setWakeWordEnabled(it) },
                 onConversationModeChange = { viewModel.setConversationMode(it) },
+
+                onBargeInChange = { viewModel.setBargeIn(it) },
+
+                onRoutineToggle = { id, on -> viewModel.setRoutineEnabled(id, on) },
                 onKeepScreenOnChange = { viewModel.setKeepScreenOn(it) },
                 watchModeEnabled = uiState.watchModeEnabled,
                 onWatchModeChange = { viewModel.setWatchMode(it) },

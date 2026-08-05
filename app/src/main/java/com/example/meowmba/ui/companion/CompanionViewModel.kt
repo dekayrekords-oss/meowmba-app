@@ -138,7 +138,9 @@ class CompanionViewModel(
     private val visionManager: com.example.meowmba.core.vision.VisionManager? = null,
     private val notificationHelper: NotificationHelper? = null,
     /** MetaMemory ecosystem link. Injected in tests; see [metaMemory] for the default. */
-    private val metaMemoryConnector: MetaMemoryConnector? = null
+    private val metaMemoryConnector: MetaMemoryConnector? = null,
+    /** Phase E: scheduled routines. Null in unit tests. */
+    private val routineDao: com.example.meowmba.core.database.RoutineDao? = null
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(CompanionState())
     private var idleAnimationDirector: IdleAnimationDirector? = null
@@ -290,6 +292,7 @@ class CompanionViewModel(
                 name = if (savedName.isNullOrBlank()) _uiState.value.name else savedName,
                 wakeWordEnabled = storage.getBooleanPreference(KEY_WAKE_WORD, false),
                 conversationMode = storage.getBooleanPreference(KEY_CONVERSATION, false),
+                bargeInEnabled = storage.getBooleanPreference(KEY_BARGE_IN, true),
                 keepScreenOnInFaceMode = storage.getBooleanPreference(KEY_KEEP_SCREEN_ON, true),
                 commentaryEnabled = storage.getBooleanPreference(KEY_COMMENTARY, false),
                 agentBrainEnabled = storage.getBooleanPreference(KEY_AGENT_BRAIN, true),
@@ -499,6 +502,27 @@ class CompanionViewModel(
         // Research, email, calendar, and media tools
         toolRegistry.register(WebSearchTool())
         val appContext = secureStorage?.context
+        // Phase E1: seed default routines, watch the table, keep alarms armed.
+        if (appContext != null) {
+            routineDao?.let { dao ->
+                viewModelScope.launch {
+                    com.example.meowmba.core.routines.RoutineScheduler.seedDefaults(dao)
+                    dao.getAll().collect { list ->
+                        _uiState.value = _uiState.value.copy(
+                            routines = list.map { r ->
+                                RoutineUi(
+                                    id = r.id,
+                                    name = r.name,
+                                    whenLabel = r.timeOfDay ?: r.intervalMinutes?.let { "every ${it}m" } ?: "",
+                                    enabled = r.enabled,
+                                )
+                            }
+                        )
+                        com.example.meowmba.core.routines.RoutineScheduler.scheduleAll(appContext, list.filter { it.enabled })
+                    }
+                }
+            }
+        }
         if (appContext != null) {
             toolRegistry.register(EmailSendTool(appContext))
             toolRegistry.register(CalendarListTool(appContext))
@@ -1176,6 +1200,73 @@ class CompanionViewModel(
 
     fun closeOverlays() {
         _uiState.value = _uiState.value.copy(showAppDrawer = false, showBrowser = false)
+    }
+
+    /** Phase E3: barge-in — stay listening 8 s after every exchange. */
+    fun setBargeIn(enabled: Boolean) {
+        secureStorage?.saveBooleanPreference(KEY_BARGE_IN, enabled)
+        _uiState.value = _uiState.value.copy(bargeInEnabled = enabled)
+    }
+
+    /** Phase E1: enable/disable a routine; alarms re-arm via the DB observer. */
+    fun setRoutineEnabled(id: Long, enabled: Boolean) {
+        val dao = routineDao ?: return
+        val ctx = secureStorage?.context ?: return
+        viewModelScope.launch {
+            dao.setEnabled(id, enabled)
+            if (!enabled) com.example.meowmba.core.routines.RoutineScheduler.cancel(ctx, id)
+        }
+    }
+
+    /** MainActivity forwards routine alarms here (launch or onNewIntent). */
+    fun onRoutineIntent(routineId: Long) {
+        if (routineId < 0) return
+        viewModelScope.launch { runRoutine(routineId) }
+    }
+
+    private suspend fun runRoutine(id: Long) {
+        val dao = routineDao ?: return
+        val routine = dao.getById(id) ?: return
+        if (!routine.enabled) return
+        dao.markRun(id, System.currentTimeMillis())
+        when (routine.action) {
+            "morning_brief" -> speak(buildMorningBrief())
+            "memory_followup" -> speak(buildMemoryFollowUp())
+            else -> if (routine.message.isNotBlank()) speak(routine.message)
+        }
+    }
+
+    /** E1 default template: date + weather in one breath. */
+    private suspend fun buildMorningBrief(): String {
+        val date = java.time.LocalDate.now()
+            .format(java.time.format.DateTimeFormatter.ofPattern("EEEE, MMMM d"))
+        val weather = try {
+            when (val r = weatherRepository?.fetch()) {
+                is com.example.meowmba.core.weather.WeatherRepository.Result.Ok -> r.weather.spoken()
+                else -> null
+            }
+        } catch (_: Exception) { null }
+        return buildString {
+            append("Good morning! It's ").append(date).append('.')
+            weather?.let { append(' ').append(it).append('.') }
+            append(" Have a good one.")
+        }
+    }
+
+    /** E2: surface pending/todo memories once a day, three at most. */
+    private suspend fun buildMemoryFollowUp(): String {
+        val repo = memoryRepository ?: return "Memory follow-ups aren't available in this build."
+        val pending = repo.getRecentMemories(200).filter { m ->
+            m.tags.any { t -> t.equals("pending", true) || t.equals("todo", true) } ||
+                Regex("""\b(todo|to-do|pending|follow ?up)\b""", RegexOption.IGNORE_CASE)
+                    .containsMatchIn(m.content)
+        }.take(3)
+        if (pending.isEmpty()) return "Nothing pending — we're all caught up."
+        return buildString {
+            append("A few things we said we'd get back to: ")
+            append(pending.joinToString("; ") { it.content.take(120) })
+            append('.')
+        }
     }
 
     fun setCommentaryMode(enabled: Boolean) {
@@ -1973,7 +2064,7 @@ class CompanionViewModel(
         }
         selfVoiceFilter.clear()
         val s = _uiState.value
-        if (s.conversationMode && s.isMicEnabled && !s.isMuted && speechService != null) {
+        if (shouldEnterFollowUp(s) && speechService != null) {
             startFollowUpListening()
         } else {
             resetState()
@@ -3193,6 +3284,7 @@ class CompanionViewModel(
         private const val KEY_KEEP_SCREEN_ON = "keep_screen_on_face"
         private const val KEY_WATCH_MODE = "watch_mode"
         private const val KEY_COMMENTARY = "commentary_mode"
+        private const val KEY_BARGE_IN = "barge_in"
         private const val KEY_MEMORY_PAUSED = "memory_paused"
         private const val KEY_RETENTION_DAYS = "retention_days"
         private const val KEY_AGENT_BRAIN = "agent_brain_enabled"
@@ -3223,6 +3315,15 @@ class CompanionViewModel(
         private const val DEFAULT_VISION_MODEL = "gemma4:12b-it-qat"
         private const val DEFAULT_RETENTION_DAYS = 90
         private const val FOLLOW_UP_TIMEOUT_MS = 8000L
+
+        /**
+         * Phase E3 state machine: after the companion finishes speaking, do we
+         * stay hot in FOLLOW_UP mode? Conversation mode always does; barge-in
+         * does it whenever the wake word is armed. Mic off / muted never.
+         */
+        fun shouldEnterFollowUp(s: CompanionState): Boolean =
+            s.isMicEnabled && !s.isMuted &&
+                (s.conversationMode || (s.bargeInEnabled && s.wakeWordEnabled))
         private const val ERROR_DISPLAY_MS = 3500L
 
         private const val TAG_WAKE = "WakeStandby"

@@ -108,11 +108,28 @@ with risk levels, audit trail).
   covered by the BackHandler in MainActivity.
 - Tests: `PhaseDTest.kt` (JS escaping + DOM helper contract).
 
+## Phase E features (2026-08-04)
+
+- **Routines engine** (`core/routines/`): time-of-day or interval routines in
+  a Room table (DB v6, additive MIGRATION_5_6). `RoutineScheduler` arms exact
+  alarms (`setExactAndAllowWhileIdle`, guarded by `canScheduleExactAlarms`);
+  `RoutineAlarmReceiver` reschedules and brings the app forward; `BootReceiver`
+  re-arms after reboot. Default templates seed on first run: Morning brief
+  (08:00, date + weather) and Memory follow-ups (20:00). Settings shows a
+  Routines card with per-routine toggles.
+- **Proactive memory follow-ups** (E2): the 20:00 routine scans memories for
+  pending/todo tags (or matching keywords) and speaks the top 3.
+- **Barge-in** (E3): after Meow finishes speaking it keeps listening 8 s
+  (FOLLOW_UP mode) whenever the wake word is armed — you can cut in without
+  re-saying the wake word. Setting toggle, default ON. Pure state machine in
+  `CompanionViewModel.shouldEnterFollowUp`, timeout resumes wake standby.
+- Tests: `PhaseETest.kt` (9 tests: trigger math + barge-in decision table).
+
 <!-- AUTOBUILD:START -->
 (regenerated after each commit)
-- 2026-08-04 18:52:20 : Phase D: optional launcher, app drawer, agent-driven browser
+- 2026-08-04 18:56:41 : Fix Phase D launch crash: _motionTilt must be initialized before init-block collectors
+- 6f44a95 2026-08-04 18:50 Phase D: optional launcher, app drawer, agent-driven browser
 - 5d8bbc4 2026-08-04 18:39 Phase C: IMU motion sense, screen watch mode, context director
 - 490fab4 2026-08-04 18:26 Phase B: BigPickle brain, ask-anything recall, SSH server management
 - 99172fc 2026-08-04 18:11 Merge remote-tracking branch 'origin/main'
-- f8f1d98 2026-08-04 18:09 Face mode: keep-screen-on toggle, random idle animations, live HANDOFF doc
 <!-- AUTOBUILD:END -->

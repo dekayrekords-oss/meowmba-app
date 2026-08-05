@@ -112,8 +112,15 @@ class MainActivity : ComponentActivity() {
                                 workspaceRoot = workspaceRoot,
                                 modelsDir = modelsDir,
                                 visionManager = visionManager,
-                                notificationHelper = notificationHelper
-                            ).also { companionViewModel = it } as T
+                                notificationHelper = notificationHelper,
+                                routineDao = database.routineDao()
+                            ).also {
+                                companionViewModel = it
+                                if (pendingRoutineId >= 0) {
+                                    it.onRoutineIntent(pendingRoutineId)
+                                    pendingRoutineId = -1L
+                                }
+                            } as T
                         }
                     }
                 )
@@ -223,10 +230,24 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun consumeWakeCommand(source: Intent?) {
-        val command = source?.getStringExtra(WakeWordService.EXTRA_WAKE_COMMAND) ?: return
-        source.removeExtra(WakeWordService.EXTRA_WAKE_COMMAND)
-        companionViewModel?.onExternalWakeCommand(command)
+        val command = source?.getStringExtra(WakeWordService.EXTRA_WAKE_COMMAND)
+        if (command != null) {
+            source.removeExtra(WakeWordService.EXTRA_WAKE_COMMAND)
+            companionViewModel?.onExternalWakeCommand(command)
+        }
+        // Phase E: a routine alarm brought us to the front.
+        val routineId = source?.getLongExtra(
+            com.example.meowmba.core.routines.RoutineScheduler.EXTRA_ROUTINE_ID, -1L
+        ) ?: -1L
+        if (routineId >= 0) {
+            source?.removeExtra(com.example.meowmba.core.routines.RoutineScheduler.EXTRA_ROUTINE_ID)
+            val vm = companionViewModel
+            if (vm != null) vm.onRoutineIntent(routineId) else pendingRoutineId = routineId
+        }
     }
+
+    /** Routine alarm arriving before the ViewModel exists. */
+    private var pendingRoutineId: Long = -1L
 
     private fun checkPermissions() {
         // Mic, location and camera together. Anything already granted is dropped, so a

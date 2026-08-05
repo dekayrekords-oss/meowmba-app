@@ -79,3 +79,30 @@ interface AuditDao {
     @Query("DELETE FROM audit_log")
     suspend fun clear()
 }
+
+@Dao
+interface RoutineDao {
+    @Query("SELECT * FROM routines ORDER BY id")
+    fun getAll(): Flow<List<RoutineEntity>>
+
+    @Query("SELECT * FROM routines WHERE enabled = 1")
+    suspend fun getEnabled(): List<RoutineEntity>
+
+    @Query("SELECT * FROM routines WHERE id = :id")
+    suspend fun getById(id: Long): RoutineEntity?
+
+    @Insert
+    suspend fun insert(routine: RoutineEntity): Long
+
+    @Update
+    suspend fun update(routine: RoutineEntity)
+
+    @Query("UPDATE routines SET enabled = :enabled WHERE id = :id")
+    suspend fun setEnabled(id: Long, enabled: Boolean)
+
+    @Query("UPDATE routines SET lastRunAt = :timestamp WHERE id = :id")
+    suspend fun markRun(id: Long, timestamp: Long)
+
+    @Query("SELECT COUNT(*) FROM routines")
+    suspend fun count(): Int
+}

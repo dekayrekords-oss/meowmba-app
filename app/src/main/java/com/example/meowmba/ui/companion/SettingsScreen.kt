@@ -28,6 +28,8 @@ fun SettingsScreen(
     companionName: String = "Meow",
     wakeWordEnabled: Boolean = false,
     conversationMode: Boolean = false,
+    bargeInEnabled: Boolean = true,
+    routines: List<RoutineUi> = emptyList(),
     keepScreenOnInFaceMode: Boolean = true,
     watchModeEnabled: Boolean = false,
     commentaryEnabled: Boolean = false,
@@ -44,6 +46,10 @@ fun SettingsScreen(
     onCompanionNameChange: (String) -> Unit = {},
     onWakeWordChange: (Boolean) -> Unit = {},
     onConversationModeChange: (Boolean) -> Unit = {},
+
+    onBargeInChange: (Boolean) -> Unit = {},
+
+    onRoutineToggle: (Long, Boolean) -> Unit = { _, _ -> },
     onKeepScreenOnChange: (Boolean) -> Unit = {},
     onWatchModeChange: (Boolean) -> Unit = {},
     onCommentaryChange: (Boolean) -> Unit = {},
@@ -153,6 +159,48 @@ fun SettingsScreen(
                 checked = conversationMode,
                 onCheckedChange = onConversationModeChange
             )
+
+            VoiceToggle(
+                label = "Barge-in",
+                description = "Keep listening for 8 seconds after every reply so you can cut in without saying the wake word again.",
+                checked = bargeInEnabled,
+                onCheckedChange = onBargeInChange
+            )
+
+            if (routines.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Routines",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = "Scheduled moments when Meow speaks up on its own.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                routines.forEach { routine ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(routine.name, style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                routine.whenLabel,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = routine.enabled,
+                            onCheckedChange = { onRoutineToggle(routine.id, it) }
+                        )
+                    }
+                }
+            }
             VoiceToggle(
                 label = "Agent brain",
                 description = "Understands natural tool commands (\"make a file called todo.txt\") " +

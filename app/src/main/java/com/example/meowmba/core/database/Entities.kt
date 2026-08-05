@@ -88,6 +88,25 @@ data class MessageFtsEntity(
  * Immutable audit trail for the agent system: every task transition,
  * approval decision, and tool outcome. Never stores secrets.
  */
+/**
+ * Phase E: a scheduled routine — time-of-day or interval trigger, fired by
+ * AlarmManager and spoken/acted by the companion.
+ */
+@Entity(tableName = "routines")
+data class RoutineEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    /** "HH:mm" for daily time-of-day routines; null when [intervalMinutes] is used. */
+    val timeOfDay: String? = null,
+    /** Repeat interval in minutes; null for time-of-day routines. */
+    val intervalMinutes: Int? = null,
+    /** "speak" | "morning_brief" | "memory_followup". */
+    val action: String = "speak",
+    val message: String = "",
+    val enabled: Boolean = true,
+    val lastRunAt: Long = 0L
+)
+
 @Entity(tableName = "audit_log")
 data class AuditEntryEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
