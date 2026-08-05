@@ -108,6 +108,9 @@ tasks.withType<Test>().configureEach {
 }
 
 dependencies {
+    // SSH client (mwiede fork is the maintained jsch).
+    implementation("com.github.mwiede:jsch:0.2.21")
+
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)

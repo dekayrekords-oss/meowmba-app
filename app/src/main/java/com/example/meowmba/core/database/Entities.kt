@@ -77,6 +77,13 @@ data class MemoryFtsEntity(
     val content: String
 )
 
+/** Full-text index over the chat history so recall can search everything ever said. */
+@Fts4(contentEntity = MessageEntity::class)
+@Entity(tableName = "messages_fts")
+data class MessageFtsEntity(
+    val content: String
+)
+
 /**
  * Immutable audit trail for the agent system: every task transition,
  * approval decision, and tool outcome. Never stores secrets.

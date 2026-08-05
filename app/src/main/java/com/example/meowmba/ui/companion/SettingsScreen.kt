@@ -53,9 +53,20 @@ fun SettingsScreen(
     onVideoServerUrlChange: (String) -> Unit = {},
     onBackgroundListeningChange: (Boolean) -> Unit = {},
     onUsbAutoBridgeChange: ((Boolean) -> Unit)? = null,
+    onSaved: () -> Unit = {},
     onClose: () -> Unit
 ) {
     var openaiKey by remember { mutableStateOf(secureStorage.getApiKey("openai") ?: "") }
+    var opencodeKey by remember { mutableStateOf(secureStorage.getApiKey("opencode") ?: "") }
+    var defaultBrain by remember { mutableStateOf(secureStorage.getPreference("default_brain") ?: "auto") }
+    var brainMenuOpen by remember { mutableStateOf(false) }
+    val sshRegistry = remember { com.example.meowmba.core.ssh.SshHostRegistry(secureStorage) }
+    var sshName by remember { mutableStateOf("meow-nb") }
+    var sshHost by remember { mutableStateOf("") }
+    var sshPort by remember { mutableStateOf("22") }
+    var sshUser by remember { mutableStateOf("") }
+    var sshPassword by remember { mutableStateOf("") }
+    var savedServers by remember { mutableStateOf(sshRegistry.list().map { it.name }) }
     var hfToken by remember { mutableStateOf(secureStorage.getApiKey("huggingface") ?: "") }
     var ollamaEndpoint by remember { mutableStateOf(secureStorage.getEndpoint("ollama") ?: "http://10.0.2.2:11434") }
     var ollamaModel by remember { mutableStateOf(secureStorage.getModelName("ollama") ?: "gemma2") }
@@ -299,6 +310,31 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            // BigPickle (OpenCode Zen) — free fallback brain, can be made the default.
+            Text("BigPickle (OpenCode Zen)", style = MaterialTheme.typography.titleMedium, color = Color.White)
+            SettingsTextField(
+                value = opencodeKey,
+                onValueChange = { opencodeKey = it },
+                label = { Text("OpenCode Zen API key (free at opencode.ai/zen)") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Box {
+                OutlinedButton(onClick = { brainMenuOpen = true }) {
+                    Text("Default brain: " + brainLabel(defaultBrain))
+                }
+                DropdownMenu(expanded = brainMenuOpen, onDismissRequest = { brainMenuOpen = false }) {
+                    BRAIN_CHOICES.forEach { (id, label) ->
+                        DropdownMenuItem(
+                            text = { Text(label) },
+                            onClick = { defaultBrain = id; brainMenuOpen = false },
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
             // Hugging Face token (gated model downloads like Gemma)
             Text("Hugging Face", style = MaterialTheme.typography.titleMedium, color = Color.White)
             SettingsTextField(
@@ -337,6 +373,59 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
             
+            // SSH servers meow may manage (encrypted, allowlisted commands only)
+            Text("Servers (SSH)", style = MaterialTheme.typography.titleMedium, color = Color.White)
+            if (savedServers.isNotEmpty()) {
+                Text("Saved: " + savedServers.joinToString(", "), color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
+            }
+            SettingsTextField(
+                value = sshName, onValueChange = { sshName = it },
+                label = { Text("Server name (how you'll refer to it, e.g. meow-nb)") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            SettingsTextField(
+                value = sshHost, onValueChange = { sshHost = it },
+                label = { Text("Host (IP or hostname)") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            SettingsTextField(
+                value = sshPort, onValueChange = { sshPort = it },
+                label = { Text("Port") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            SettingsTextField(
+                value = sshUser, onValueChange = { sshUser = it },
+                label = { Text("Username") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            SettingsTextField(
+                value = sshPassword, onValueChange = { sshPassword = it },
+                label = { Text("Password (stored encrypted on this phone only)") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = {
+                    val port = sshPort.toIntOrNull() ?: 22
+                    if (sshName.isNotBlank() && sshHost.isNotBlank() && sshUser.isNotBlank()) {
+                        sshRegistry.save(
+                            com.example.meowmba.core.ssh.SshHost(
+                                name = sshName.trim(), host = sshHost.trim(),
+                                port = port, user = sshUser.trim(), password = sshPassword,
+                            )
+                        )
+                        savedServers = sshRegistry.list().map { it.name }
+                        sshHost = ""; sshUser = ""; sshPassword = ""
+                    }
+                },
+            ) { Text("Save server") }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
             // Local Model Configuration
             Text("Local Model (MediaPipe)", style = MaterialTheme.typography.titleMedium, color = Color.White)
             SettingsTextField(
@@ -351,11 +440,14 @@ fun SettingsScreen(
             Button(
                 onClick = {
                     secureStorage.saveApiKey("openai", openaiKey)
+                    secureStorage.saveApiKey("opencode", opencodeKey)
+                    secureStorage.savePreference("default_brain", defaultBrain)
                     secureStorage.saveApiKey("huggingface", hfToken)
                     secureStorage.saveEndpoint("ollama", ollamaEndpoint)
                     secureStorage.saveModelName("ollama", ollamaModel)
                     secureStorage.saveModelName("ollama_vision", ollamaVisionModel)
                     secureStorage.saveEndpoint("local", localModelPath)
+                    onSaved()
                     onClose()
                 },
                 modifier = Modifier.fillMaxWidth()
@@ -740,3 +832,15 @@ fun SettingsTextField(
         )
     )
 }
+
+
+/** Route-id → display label for the "Default brain" selector. */
+private fun brainLabel(id: String): String = BRAIN_CHOICES.firstOrNull { it.first == id }?.second ?: "Auto"
+
+private val BRAIN_CHOICES = listOf(
+    "auto" to "Auto (Omniroute)",
+    "bigpickle" to "BigPickle",
+    "ollama" to "Ollama",
+    "openai" to "OpenAI",
+    "local" to "On-device",
+)

@@ -57,6 +57,26 @@ Same screen. Both tiles open `AgentsScreen.kt` (roster, active tasks, tool list
 with risk levels, audit trail).
 
 ## Recent builds
+## Phase B features (2026-08-04)
+
+- **BigPickle brain**: OpenCode Zen key in Settings → route `bigpickle`
+  (https://opencode.ai/zen/v1, model `big-pickle`). "Default brain" selector
+  forces one provider (others dropped except the always-kept on-device
+  fallback). Route table rebuilds on Settings save (`rebuildOmniRoute`).
+- **Ask-anything recall**: `messages_fts` FTS4 index (Room v5, data-preserving
+  MIGRATION_4_5 + LIKE fallback). `memory.recall` tool searches chat history +
+  memories + vault notes. Completed agent tasks are journaled into the vault
+  ("Task log: …", appended, never overwritten).
+- **SSH management**: Settings → Servers stores encrypted hosts; `ssh.run`
+  tool runs allowlisted read-only commands only (ls/df/free/uptime/systemctl
+  status/journalctl tail/docker ps), rejects shell metacharacters, TOFU host
+  keys, 4KB output cap, 30s timeout. jsch = com.github.mwiede:jsch:0.2.21.
+
 <!-- AUTOBUILD:START -->
 (regenerated after each commit)
+- 2026-08-04 18:11:17 : Merge remote-tracking branch 'origin/main'
+- f8f1d98 2026-08-04 18:09 Face mode: keep-screen-on toggle, random idle animations, live HANDOFF doc
+- df0aecb 2026-08-04 13:51 build: auto-build debug+release APKs after every commit
+- 7f8609c 2026-08-04 13:21 security: cert-check bridge callers, exclude private data from backup, release signing config
+- 3f2133c 2026-08-04 12:29 fix(build): build sd_jni_bridge 16KB-page-aligned for Android 15+ installs
 <!-- AUTOBUILD:END -->

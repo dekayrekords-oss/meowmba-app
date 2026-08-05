@@ -30,6 +30,8 @@ import com.example.meowmba.core.agent.runtime.SubmitResult
 import com.example.meowmba.core.agent.runtime.TaskStatus
 import com.example.meowmba.core.agent.runtime.ToolCallPromptMode
 import com.example.meowmba.core.agent.tools.FindPlacesTool
+import com.example.meowmba.core.agent.tools.MemoryRecallTool
+import com.example.meowmba.core.agent.tools.SshTool
 import com.example.meowmba.core.agent.tools.WeatherTool
 import com.example.meowmba.core.agent.tools.ListSavedPlacesTool
 import com.example.meowmba.core.agent.tools.NavigateTool
@@ -535,6 +537,19 @@ class CompanionViewModel(
             // Obsidian-compatible vault notes.
             vaultRepository?.let { toolRegistry.registerVaultTools(it) }
 
+            // "What did we talk about…?" — full-history recall over messages,
+            // memories, and vault notes.
+            memoryRepository?.let { repo ->
+                toolRegistry.register(MemoryRecallTool(repo, vaultRepository))
+            }
+
+            // Server management over SSH (meow-nb and friends). Servers are
+            // remembered in the encrypted registry; commands are allowlisted.
+            secureStorage?.let { storage ->
+                sshHostRegistry = com.example.meowmba.core.ssh.SshHostRegistry(storage)
+                toolRegistry.register(SshTool(sshHostRegistry!!))
+            }
+
             // Navigation. find_places is SAFE and read-only so the companion can look,
             // describe the options and ask "closest, or do you want to pick?" before
             // nav.navigate actually routes anywhere. Offline-first, so it works with no
@@ -630,6 +645,23 @@ class CompanionViewModel(
                 val result = task.result ?: ""
                 when (task.status) {
                     TaskStatus.COMPLETED -> {
+                        // Persistent task journal: every completed multi-step task gets a
+                        // vault entry so meow can recall what was done and why later on.
+                        if (task.toolId != "avatar.animate" && task.toolId != "avatar.describe_animation") {
+                            vaultRepository?.let { vault ->
+                                viewModelScope.launch {
+                                    runCatching {
+                                        vault.append(
+                                            title = "Task log: ${task.title}",
+                                            text = buildString {
+                                                append("- completed ${java.time.Instant.now()} by ${task.agentId} via ${task.toolId}\n")
+                                                append("- result: ${result.take(1200)}")
+                                            },
+                                        )
+                                    }
+                                }
+                            }
+                        }
                         // avatar.animate / avatar.describe_animation: the animation IS
                         // the response — onPlay already set activeAnimation; speaking
                         // the tool result just confuses the user.
@@ -764,6 +796,10 @@ class CompanionViewModel(
     /** The local router, when it is the active provider — held so it can be hinted. */
     private var omniRoute: com.example.meowmba.core.agent.OmniRoute? = null
 
+    /** Remembered SSH servers (encrypted). Exposed for the Settings UI. */
+    var sshHostRegistry: com.example.meowmba.core.ssh.SshHostRegistry? = null
+        private set
+
     private fun buildOmniRoute(): com.example.meowmba.core.agent.OmniRoute? {
         val storage = secureStorage ?: return null
         val routes = mutableListOf<com.example.meowmba.core.agent.OmniRoute.Route>()
@@ -778,6 +814,17 @@ class CompanionViewModel(
                 ),
                 tags = setOf(com.example.meowmba.core.agent.OmniRoute.RouteTag.CHAT, com.example.meowmba.core.agent.OmniRoute.RouteTag.CODING, com.example.meowmba.core.agent.OmniRoute.RouteTag.REASONING, com.example.meowmba.core.agent.OmniRoute.RouteTag.VISION),
                 priority = 20,
+            )
+        }
+        storage.getApiKey("opencode")?.takeIf { it.isNotBlank() }?.let { key ->
+            routes += com.example.meowmba.core.agent.OmniRoute.Route(
+                id = "bigpickle",
+                label = "BigPickle (OpenCode Zen)",
+                provider = RemoteModelProvider(
+                    "BigPickle", "https://opencode.ai/zen/v1", key, "big-pickle",
+                ),
+                tags = setOf(com.example.meowmba.core.agent.OmniRoute.RouteTag.CHAT, com.example.meowmba.core.agent.OmniRoute.RouteTag.CODING, com.example.meowmba.core.agent.OmniRoute.RouteTag.REASONING),
+                priority = 25,
             )
         }
         storage.getApiKey("openai")?.takeIf { it.isNotBlank() }?.let { key ->
@@ -810,7 +857,23 @@ class CompanionViewModel(
             )
         }
         if (routes.isEmpty()) return null
-        return com.example.meowmba.core.agent.OmniRoute(routes).also { omniRoute = it }
+        // "Default brain" setting: force one provider as the primary brain.
+        // Everything else is dropped except the on-device fallback, which is
+        // always kept so the cat never loses its voice offline.
+        val forced = storage.getPreference("default_brain")?.takeIf { it.isNotBlank() && it != "auto" }
+        val finalRoutes = if (forced != null && routes.any { it.id == forced }) {
+            routes.filter { it.id == forced || it.offline }.map {
+                if (it.id == forced) it.copy(priority = 1) else it
+            }
+        } else routes
+        return com.example.meowmba.core.agent.OmniRoute(finalRoutes).also { omniRoute = it }
+    }
+
+    /** Re-assemble the route table after Settings saved new keys/brain choice. */
+    fun rebuildOmniRoute() {
+        if (_uiState.value.selectedModel == MODEL_OMNIROUTE) {
+            omniRoute = buildOmniRoute()
+        }
     }
 
     private fun updateProvider(modelName: String) {

@@ -56,6 +56,17 @@ class MemoryRepository(
     }
 
     /** Full-text search for the user-driven Memory screen search bar. */
+    /**
+     * Search everything ever discussed. FTS first; if the FTS table is
+     * missing on this install (pre-migration database), fall back to LIKE.
+     */
+    suspend fun searchMessages(query: String, limit: Int = 8): List<MessageEntity> {
+        val trimmed = query.trim()
+        if (trimmed.isEmpty()) return emptyList()
+        return runCatching { messageDao.searchFullText(trimmed, limit) }
+            .getOrElse { runCatching { messageDao.searchLike(trimmed, limit) }.getOrDefault(emptyList()) }
+    }
+
     suspend fun searchMemories(query: String): List<MemoryEntity> {
         val sanitized = query.trim().replace("\"", " ")
         if (sanitized.isBlank()) return emptyList()

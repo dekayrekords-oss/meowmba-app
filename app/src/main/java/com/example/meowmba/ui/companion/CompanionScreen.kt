@@ -445,6 +445,7 @@ fun CompanionScreen(
                 onWakeWordChange = { viewModel.setWakeWordEnabled(it) },
                 onConversationModeChange = { viewModel.setConversationMode(it) },
                 onKeepScreenOnChange = { viewModel.setKeepScreenOn(it) },
+                onSaved = { viewModel.rebuildOmniRoute() },
                 onAgentBrainChange = { viewModel.setAgentBrainEnabled(it) },
                 onHermesUrlChange = { viewModel.setHermesAgentUrl(it) },
                 onDownloadImageModel = { viewModel.downloadImageModel() },

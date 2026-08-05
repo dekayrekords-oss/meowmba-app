@@ -19,6 +19,18 @@ interface MessageDao {
 
     @Query("DELETE FROM messages WHERE id = :id")
     suspend fun deleteById(id: Long)
+
+    @Query("""
+        SELECT messages.* FROM messages
+        JOIN messages_fts ON (messages.rowid = messages_fts.docid)
+        WHERE messages_fts MATCH :query
+        ORDER BY messages.timestamp DESC LIMIT :limit
+    """)
+    suspend fun searchFullText(query: String, limit: Int): List<MessageEntity>
+
+    /** Fallback when the FTS table is unavailable (older installs). */
+    @Query("SELECT * FROM messages WHERE content LIKE '%' || :query || '%' ORDER BY timestamp DESC LIMIT :limit")
+    suspend fun searchLike(query: String, limit: Int): List<MessageEntity>
 }
 
 @Dao
