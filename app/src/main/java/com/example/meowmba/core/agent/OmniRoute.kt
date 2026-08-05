@@ -36,7 +36,11 @@ class OmniRoute(
      * Log call in here fails every test that lets a route win — the same trap
      * WakeWordEngineFactory documents. Tests pass a no-op.
      */
-    private val log: (String) -> Unit = { Log.i(TAG, it) },
+    private val log: (String) -> Unit = { message ->
+        // Routing must never die because of its own trace line — android.util.Log is
+        // unmocked in JVM tests, and a throw here aborts the whole answer stream.
+        runCatching { Log.i(TAG, message) }
+    },
 ) : ModelProvider {
 
     /** What a prompt needs, coarse enough to decide with no model in the loop. */
@@ -167,6 +171,7 @@ class OmniRoute(
                 }
             }
         }
+        log("every route failed; last error: ${lastError ?: "unknown"}")
         return ModelResponse.Error(
             "Every route failed. Last was ${lastError ?: "unknown"}."
         )
@@ -224,6 +229,7 @@ class OmniRoute(
                 lastError = "${route.label}: ${failure.message ?: failure.javaClass.simpleName}"
             }
         }
+        log("every route failed; last error: ${lastError ?: "unknown"}")
         emit(ModelResponse.Error("Every route failed. Last was ${lastError ?: "unknown"}."))
     }
 

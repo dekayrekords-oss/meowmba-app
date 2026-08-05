@@ -1,5 +1,6 @@
 package com.example.meowmba.core.agent
 
+import android.util.Log
 import io.ktor.client.*
 import io.ktor.client.plugins.*
 import io.ktor.client.plugins.contentnegotiation.*
@@ -62,6 +63,7 @@ class RemoteModelProvider(
                 ApiStyle.OPENAI_COMPATIBLE -> streamOpenAI(prompt)
             }
         } catch (e: Exception) {
+            Log.w(TAG, "$name unreachable: ${e.message ?: "network error"}")
             emit(ModelResponse.Error("$name unreachable: ${e.message ?: "network error"}"))
         }
     }
@@ -73,6 +75,7 @@ class RemoteModelProvider(
         }.execute { response ->
             if (!response.status.isSuccess()) {
                 val detail = StreamParsers.extractApiErrorMessage(response.bodyAsText())
+                Log.w(TAG, "$name request failed: HTTP ${response.status.value}: $detail")
                 emit(ModelResponse.Error("$name HTTP ${response.status.value}: $detail"))
                 return@execute
             }
@@ -95,6 +98,7 @@ class RemoteModelProvider(
         }.execute { response ->
             if (!response.status.isSuccess()) {
                 val detail = StreamParsers.extractApiErrorMessage(response.bodyAsText())
+                Log.w(TAG, "$name request failed: HTTP ${response.status.value} for model $model: $detail")
                 emit(ModelResponse.Error("$name HTTP ${response.status.value}: $detail"))
                 return@execute
             }
@@ -152,6 +156,9 @@ class RemoteModelProvider(
         }
     } catch (e: Exception) {
         "Unreachable: ${e.message ?: "network error"}"
+    }
+    private companion object {
+        const val TAG = "RemoteModel"
     }
 }
 

@@ -429,6 +429,16 @@ class CompanionViewModel(
                         captionText = "Wake phrase stopped — $reason"
                     )
                 }
+                built.kws?.onLoudNoWake = { pcm ->
+                    // Missed-wake diagnosis: keep the audio that failed to trigger so it
+                    // can be transcribed offline. Runs on already-buffered audio only;
+                    // it never touches the mic or the capture loop.
+                    viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                        runCatching { saveWakeMissAudio(pcm) }
+                            .onSuccess { android.util.Log.i("WakeMissDiag", "wake-miss audio saved: $it") }
+                            .onFailure { android.util.Log.w("WakeMissDiag", "wake-miss save failed: ${it.message}") }
+                    }
+                }
                 if (_uiState.value.wakeWordEnabled) startWakeStandby()
             }
         }
@@ -1803,6 +1813,44 @@ class CompanionViewModel(
     /** Called when the app returns to the foreground; retakes the wake mic. */
     fun reclaimWakeMicForForeground() {
         if (_uiState.value.wakeWordEnabled) startWakeStandby()
+    }
+
+    /**
+     * Writes a missed-wake pre-roll snapshot as a WAV (16 kHz mono PCM16) so the audio
+     * the spotter failed on can be pulled and transcribed. Capped at 5 files, oldest
+     * dropped first — this is a diagnosis aid, not a recorder.
+     */
+    private fun saveWakeMissAudio(pcm: ShortArray): String {
+        val dir = secureStorage?.context?.filesDir
+            ?: throw IllegalStateException("no filesDir")
+        val existing = dir.listFiles { f ->
+            f.name.startsWith("wake_miss_") && f.name.endsWith(".wav")
+        }?.sortedBy { it.lastModified() } ?: emptyList()
+        existing.dropLast(4).forEach { it.delete() }
+        val file = java.io.File(dir, "wake_miss_${System.currentTimeMillis()}.wav")
+        val dataBytes = pcm.size * 2
+        val header = java.io.ByteArrayOutputStream().apply {
+            fun le32(v: Int) {
+                write(v and 0xFF); write((v shr 8) and 0xFF)
+                write((v shr 16) and 0xFF); write((v shr 24) and 0xFF)
+            }
+            fun le16(v: Int) { write(v and 0xFF); write((v shr 8) and 0xFF) }
+            write("RIFF".toByteArray()); le32(36 + dataBytes); write("WAVE".toByteArray())
+            write("fmt ".toByteArray()); le32(16); le16(1); le16(1)
+            le32(16_000); le32(16_000 * 2); le16(2); le16(16)
+            write("data".toByteArray()); le32(dataBytes)
+        }.toByteArray()
+        file.outputStream().use { out ->
+            out.write(header)
+            val buf = ByteArray(dataBytes)
+            for (i in pcm.indices) {
+                val v = pcm[i].toInt()
+                buf[i * 2] = (v and 0xFF).toByte()
+                buf[i * 2 + 1] = ((v shr 8) and 0xFF).toByte()
+            }
+            out.write(buf)
+        }
+        return file.absolutePath
     }
 
     private fun startWakeStandby() {

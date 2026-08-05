@@ -425,9 +425,9 @@ Verified on device: settings opens with the robot section showing "Connect over 
 
 <!-- AUTOBUILD:START -->
 (regenerated after each commit)
-- 2026-08-05 12:58:20 : LOOI auto-connect: discover paired base and enable body by default
+- 2026-08-05 13:46:38 : Wake phrase: tolerate AIAI ERROR_CLIENT churn; expand and loosen hey/ok KWS variants
+- 3893308 2026-08-05 12:55 LOOI auto-connect: discover paired base and enable body by default
 - 7f50bdb 2026-08-05 12:32 Settings cleanup: collapse advanced options; LOOI defaults to Bluetooth
 - 574a3fd 2026-08-05 12:02 LOOI Bluetooth hardware control; fix black-canvas web page (decode JS string) and harden WebView for video (YouTube)
 - 6cf9c2d 2026-08-05 10:49 Add LOOI robot body: real motor control over a line protocol, RobotManager with honest simulated fallback, Settings section, unit tests
-- 748d953 2026-08-05 10:28 Fix rotation black-screen (FGS promise race), home stickiness, OpenRouter error surfacing; audit LOOI
 <!-- AUTOBUILD:END -->

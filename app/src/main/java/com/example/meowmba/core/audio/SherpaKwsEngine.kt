@@ -91,6 +91,13 @@ class SherpaKwsEngine(
     var onMicUnavailable: (() -> Unit)? = null
 
     /**
+     * Diagnostic: fired when loud audio ran for ~2s without ANY keyword firing. The
+     * payload is the pre-roll snapshot — what the mic heard while the wake word
+     * "didn't work" — so it can be transcribed offline and the miss root-caused.
+     */
+    var onLoudNoWake: ((pcm: ShortArray) -> Unit)? = null
+
+    /**
      * The audio immediately preceding and including the wake phrase, oldest-first, 16 kHz
      * mono PCM16. Read this on wake to recover a command spoken in the same breath.
      */
@@ -219,6 +226,8 @@ class SherpaKwsEngine(
             var frames = 0L
             var peakSinceLog = 0
             var silentFrames = 0
+            // Missed-wake diagnostic: set on the first loud frame, see the check below.
+            var loudAtFrame = -1L
 
             while (running && scope.isActive && !wakeAccepted) {
                 val read = record.read(pcm, 0, pcm.size)
@@ -234,6 +243,21 @@ class SherpaKwsEngine(
                     if (a > peak) peak = a
                 }
                 if (peak > peakSinceLog) peakSinceLog = peak
+
+                // Missed-wake diagnostic: ~2s of continuous loud audio with no keyword
+                // hit means the user almost certainly spoke and the spotter did not
+                // fire. Hand the buffered audio up for offline transcription. Fires at
+                // most once per loud event; a hit below also re-arms it.
+                if (peak > LOUD_PEAK_THRESHOLD) {
+                    if (loudAtFrame < 0) loudAtFrame = frames
+                    if (frames - loudAtFrame >= MISS_DUMP_DELAY_FRAMES) {
+                        Log.i(TAG, "loud speech without wake; dumping pre-roll for diagnosis")
+                        onLoudNoWake?.invoke(preRoll.snapshot())
+                        loudAtFrame = -1L
+                    }
+                } else {
+                    loudAtFrame = -1L
+                }
 
                 // Digital silence is not quiet — it means we no longer have the mic.
                 // Android grants this app mic access foreground-only, so once the app is
@@ -285,6 +309,7 @@ class SherpaKwsEngine(
                     if (hit.isNotBlank()) {
                         Log.i(TAG, "wake phrase detected: $hit")
                         kws.reset(s)
+                        loudAtFrame = -1L
                         val captured = preRoll.snapshot()
                         lastPreRoll = captured
                         preRoll.clear()
@@ -432,5 +457,11 @@ class SherpaKwsEngine(
          */
         private const val KEYWORDS_SCORE = 2.0f
         private const val KEYWORDS_THRESHOLD = 0.20f
+
+        /** Peak (0..32768) above which a frame counts as loud speech/noise. */
+        private const val LOUD_PEAK_THRESHOLD = 8_192
+
+        /** ~2s of continuous loud audio without a hit triggers the missed-wake dump. */
+        private const val MISS_DUMP_DELAY_FRAMES = 20L
     }
 }
