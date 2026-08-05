@@ -291,6 +291,13 @@ class CompanionViewModel(
     // Declared BEFORE init: init launches collectors that write to this flow.
     private val _motionTilt = kotlinx.coroutines.flow.MutableStateFlow(0f)
 
+    /** Phase G1: LOOI-style mood state machine (pure, unit-tested). */
+    private val moodEngine = com.example.meowmba.core.personality.MoodEngine()
+
+    /** Phase G2: motor API — simulated until real hardware exists. */
+    private val motorController: com.example.meowmba.core.robot.MotorController =
+        com.example.meowmba.core.robot.SimulatedMotorController()
+
     init {
         // Restore persisted voice preferences (name, wake word, conversation mode)
         secureStorage?.let { storage ->
@@ -300,6 +307,7 @@ class CompanionViewModel(
                 wakeWordEnabled = storage.getBooleanPreference(KEY_WAKE_WORD, false),
                 conversationMode = storage.getBooleanPreference(KEY_CONVERSATION, false),
                 bargeInEnabled = storage.getBooleanPreference(KEY_BARGE_IN, true),
+                idleChatterEnabled = storage.getBooleanPreference(KEY_IDLE_CHATTER, true),
                 keepScreenOnInFaceMode = storage.getBooleanPreference(KEY_KEEP_SCREEN_ON, true),
                 commentaryEnabled = storage.getBooleanPreference(KEY_COMMENTARY, false),
                 agentBrainEnabled = storage.getBooleanPreference(KEY_AGENT_BRAIN, true),
@@ -519,6 +527,26 @@ class CompanionViewModel(
         // Research, email, calendar, and media tools
         toolRegistry.register(WebSearchTool())
         val appContext = secureStorage?.context
+        // Phase G1: periodic mood tick + optional idle chatter (max 1/hour).
+        // Runs on Dispatchers.Default: the real-time delay must NOT be driven by
+        // unit-test virtual clocks (an infinite delay loop under advanceUntilIdle
+        // would spin forever and exhaust the test JVM heap).
+        viewModelScope.launch(Dispatchers.Default) {
+            while (true) {
+                delay(10 * 60_000L)
+                val now = System.currentTimeMillis()
+                moodEngine.tick(now)
+                applyMood()
+                val st = _uiState.value
+                if (st.idleChatterEnabled && st.interactionState == InteractionState.IDLE &&
+                    st.captionText == null && moodEngine.mayChatter(now)
+                ) {
+                    moodEngine.markChattered(now)
+                    speak(moodEngine.pickChatter(now, kotlin.random.Random.nextInt()))
+                }
+            }
+        }
+
         // Phase E1: seed default routines, watch the table, keep alarms armed.
         if (appContext != null) {
             routineDao?.let { dao ->
@@ -617,13 +645,19 @@ class CompanionViewModel(
                     if (sense.available) {
                         sense.start()
                         viewModelScope.launch {
-                            sense.motion.collect { st -> _motionTilt.value = st.rollDeg }
+                            sense.motion.collect { st ->
+                                _motionTilt.value = st.rollDeg
+                                // G2 balance demo: head counter-rotates against tilt.
+                                com.example.meowmba.core.robot.FaceMotorMap.balanceTilt(st.rollDeg)
+                                    .forEach { (servo, angle) -> motorController.setServo(servo, angle) }
+                            }
                         }
                         viewModelScope.launch {
                             var lastSeen = 0
                             sense.shakeCount.collect { count ->
                                 if (count > lastSeen) {
                                     lastSeen = count
+                                    noteMoodEvent(com.example.meowmba.core.personality.MoodEvent.Shake)
                                     val spec = CustomAnimations.BUILT_INS["happy bop"]
                                         ?: CustomAnimations.BUILT_INS.values.randomOrNull()
                                     spec?.let { playCustomAnimation(it) }
@@ -729,6 +763,7 @@ class CompanionViewModel(
                 val result = task.result ?: ""
                 when (task.status) {
                     TaskStatus.COMPLETED -> {
+                        noteMoodEvent(com.example.meowmba.core.personality.MoodEvent.TaskSuccess)
                         // Persistent task journal: every completed multi-step task gets a
                         // vault entry so meow can recall what was done and why later on.
                         if (task.toolId != "avatar.animate" && task.toolId != "avatar.describe_animation") {
@@ -1227,6 +1262,28 @@ class CompanionViewModel(
         _uiState.value = _uiState.value.copy(showAppDrawer = false, showBrowser = false)
     }
 
+    /** Phase G1: feed a life event into the mood engine and apply its effects. */
+    private fun noteMoodEvent(event: com.example.meowmba.core.personality.MoodEvent) {
+        moodEngine.onEvent(event, System.currentTimeMillis())
+        applyMood()
+    }
+
+    private fun applyMood() {
+        val (servos, expression) = com.example.meowmba.core.robot.FaceMotorMap.mapMood(moodEngine.mood)
+        servos.forEach { (servo, angle) -> motorController.setServo(servo, angle) }
+        motorController.setExpression(expression)
+        (ttsManager as? com.example.meowmba.core.audio.TextToSpeechManager)?.let { tts ->
+            tts.setPitch(moodEngine.ttsPitch())
+            tts.setSpeechRate(moodEngine.ttsRate())
+        }
+        _uiState.value = _uiState.value.copy(moodLabel = moodEngine.mood.name.lowercase())
+    }
+
+    fun setIdleChatter(enabled: Boolean) {
+        secureStorage?.saveBooleanPreference(KEY_IDLE_CHATTER, enabled)
+        _uiState.value = _uiState.value.copy(idleChatterEnabled = enabled)
+    }
+
     /** Phase F3: jump the user to the system accessibility page. */
     fun openAccessibilitySettings() {
         val ctx = secureStorage?.context ?: return
@@ -1575,6 +1632,13 @@ class CompanionViewModel(
     }
 
     private fun processUserSpeech(text: String) {
+        // G1: user speech = curiosity; praise gets a proud wag.
+        val lower = text.lowercase()
+        val praise = listOf("good ", "nice ", "great ", "thank", "well done", "love you", "awesome")
+        noteMoodEvent(
+            if (praise.any { lower.contains(it) }) com.example.meowmba.core.personality.MoodEvent.Praise
+            else com.example.meowmba.core.personality.MoodEvent.UserSpoke
+        )
         if (_uiState.value.conversationMode && isStopCommand(text)) {
             endConversation()
             return
@@ -2646,6 +2710,7 @@ class CompanionViewModel(
      * exact same pipeline as an in-app utterance.
      */
     fun onExternalWakeCommand(command: String) {
+        noteMoodEvent(com.example.meowmba.core.personality.MoodEvent.WakeGreeting)
         if (command.isBlank()) return
         stopWakeLoopAndRelease()
         processUserSpeech(command)
@@ -3321,6 +3386,7 @@ class CompanionViewModel(
         private const val KEY_WATCH_MODE = "watch_mode"
         private const val KEY_COMMENTARY = "commentary_mode"
         private const val KEY_BARGE_IN = "barge_in"
+        private const val KEY_IDLE_CHATTER = "idle_chatter"
         private const val KEY_MEMORY_PAUSED = "memory_paused"
         private const val KEY_RETENTION_DAYS = "retention_days"
         private const val KEY_AGENT_BRAIN = "agent_brain_enabled"

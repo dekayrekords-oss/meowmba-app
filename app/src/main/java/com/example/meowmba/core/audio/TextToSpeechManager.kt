@@ -36,6 +36,11 @@ class TextToSpeechManager(context: Context) : SpeechSynthesizer {
      * mid-answer, which resumes the wake loop and re-arms barge-in against its own
      * remaining speech.
      */
+    /** Phase G1: mood modulates voice slightly (1.0 = neutral). */
+    fun setPitch(pitch: Float) { tts?.setPitch(pitch.coerceIn(0.5f, 2.0f)) }
+
+    fun setSpeechRate(rate: Float) { tts?.setSpeechRate(rate.coerceIn(0.5f, 2.0f)) }
+
     private var pendingUtterances = 0
 
     private fun setupListener() {

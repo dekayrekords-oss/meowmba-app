@@ -145,11 +145,29 @@ with risk levels, audit trail).
   disabled). Settings has a UI-automation card linking to the system page.
 - Tests: `PhaseFTest.kt` (off-by-default honesty + approval policy).
 
+## Phase G features (2026-08-04)
+
+- **Mood & personality engine (G1)** (`core/personality/MoodEngine.kt`):
+  pure state machine — moods content/excited/sleepy/curious/startled/proud
+  driven by wake greetings, praise in transcripts, shake, task success, and
+  idle >30 min → sleepy. Mood biases idle animation choice, nudges TTS
+  pitch/rate (TextToSpeechManager.setPitch/setSpeechRate), and enables
+  LOOI-style idle chatter: time-aware one-liners, max once/hour, toggle in
+  Settings ("Idle chatter", default ON).
+- **Motor control API (G2)** (`core/robot/`): `MotorController` interface
+  (setServo/setExpression) with `SimulatedMotorController` (logging) until
+  real hardware arrives; `FaceMotorMap` maps every built-in animation, every
+  mood, and the IMU tilt (balance demo: head counter-rotates, clamped ±15°)
+  to servo commands. Wired in the VM: tilt and shake drive the simulated
+  motors today.
+- Tests: `PhaseGTest.kt` (11 tests: mood transitions, chatter rate-limit,
+  TTS modulation, servo mapping, clamp behavior).
+
 <!-- AUTOBUILD:START -->
 (regenerated after each commit)
-- 2026-08-04 19:07:24 : Phase E: routines engine, memory follow-ups, barge-in
+- 2026-08-04 19:33:17 : Ignore python bytecode cache
+- e39d29b 2026-08-04 19:24 Phase F: desktop control bridge, phone system tools, opt-in UI automation
+- d91bfbf 2026-08-04 19:05 Phase E: routines engine, memory follow-ups, barge-in
 - 146f363 2026-08-04 18:55 Fix Phase D launch crash: _motionTilt must be initialized before init-block collectors
 - 6f44a95 2026-08-04 18:50 Phase D: optional launcher, app drawer, agent-driven browser
-- 5d8bbc4 2026-08-04 18:39 Phase C: IMU motion sense, screen watch mode, context director
-- 490fab4 2026-08-04 18:26 Phase B: BigPickle brain, ask-anything recall, SSH server management
 <!-- AUTOBUILD:END -->

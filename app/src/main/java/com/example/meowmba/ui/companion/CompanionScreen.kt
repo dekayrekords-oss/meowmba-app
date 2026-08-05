@@ -460,6 +460,8 @@ fun CompanionScreen(
 
                 onBargeInChange = { viewModel.setBargeIn(it) },
                 onOpenAccessibility = { viewModel.openAccessibilitySettings() },
+                idleChatterEnabled = uiState.idleChatterEnabled,
+                onIdleChatterChange = { viewModel.setIdleChatter(it) },
 
                 onRoutineToggle = { id, on -> viewModel.setRoutineEnabled(id, on) },
                 onKeepScreenOnChange = { viewModel.setKeepScreenOn(it) },

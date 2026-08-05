@@ -49,6 +49,8 @@ fun SettingsScreen(
 
     onBargeInChange: (Boolean) -> Unit = {},
     onOpenAccessibility: () -> Unit = {},
+    idleChatterEnabled: Boolean = true,
+    onIdleChatterChange: (Boolean) -> Unit = {},
 
     onRoutineToggle: (Long, Boolean) -> Unit = { _, _ -> },
     onKeepScreenOnChange: (Boolean) -> Unit = {},
@@ -159,6 +161,13 @@ fun SettingsScreen(
                 description = "Stay for follow-up questions after responding. Say \"stop\" to end.",
                 checked = conversationMode,
                 onCheckedChange = onConversationModeChange
+            )
+
+            VoiceToggle(
+                label = "Idle chatter",
+                description = "Occasional unprompted one-liners while idle — at most once per hour.",
+                checked = idleChatterEnabled,
+                onCheckedChange = onIdleChatterChange
             )
 
             VoiceToggle(

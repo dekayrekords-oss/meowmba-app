@@ -68,6 +68,10 @@ data class CompanionState(
     val bargeInEnabled: Boolean = true,
     /** Phase E1: scheduled routines shown in Settings. */
     val routines: List<RoutineUi> = emptyList(),
+    /** Phase G1: current mood label (content, excited, sleepy, ...). */
+    val moodLabel: String = "content",
+    /** Phase G1: unprompted one-liners, max once per hour. */
+    val idleChatterEnabled: Boolean = true,
     /** Keep the display awake while the companion face is on screen. */
     val keepScreenOnInFaceMode: Boolean = true,
     /** Low-rate screen awareness (MediaProjection) is on. */
