@@ -48,7 +48,7 @@ class IdleBehaviorTest {
     }
 
     @Test
-    fun `idle cadence stays in the 45 to 120 second window`() {
+    fun `idle cadence stays in the 25 to 80 second window`() {
         val director = IdleAnimationDirector(
             scope = TestScope(),
             random = Random(42),
@@ -58,8 +58,24 @@ class IdleBehaviorTest {
         )
         repeat(1000) {
             val wait = director.nextWaitMs()
-            assertTrue("wait $wait below floor", wait >= 45_000L)
-            assertTrue("wait $wait above ceiling", wait < 120_000L)
+            assertTrue("wait $wait below floor", wait >= 25_000L)
+            assertTrue("wait $wait above ceiling", wait < 80_000L)
+        }
+    }
+
+    @Test
+    fun `first idle clip arrives within 12 to 25 seconds`() {
+        val director = IdleAnimationDirector(
+            scope = TestScope(),
+            random = Random(7),
+            canPlay = { true },
+            pickSpec = { null },
+            play = {},
+        )
+        repeat(1000) {
+            val wait = director.firstWaitMs()
+            assertTrue("first wait $wait below floor", wait >= 12_000L)
+            assertTrue("first wait $wait above ceiling", wait < 25_000L)
         }
     }
 

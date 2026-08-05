@@ -277,6 +277,20 @@ object CustomAnimations {
                 AnimFrame(atMs = 1700, earPerk = 1.0f, happyEyes = false, whiskerFlutter = false),
             ),
         ),
+        // Whole-tail wag: big sweeping wags with happy eyes. The user-visible
+        // "tail" animation — previously no built-in ever moved the tail.
+        CustomAnimationSpec(
+            "tail wag",
+            listOf(
+                AnimFrame(atMs = 0, tailWag = 0f, happyEyes = false, earPerk = 1.0f),
+                AnimFrame(atMs = 200, tailWag = 0.9f, happyEyes = true, earPerk = 1.15f),
+                AnimFrame(atMs = 400, tailWag = -0.9f, earPerk = 1.1f),
+                AnimFrame(atMs = 600, tailWag = 0.9f, happyEyes = true, earPerk = 1.15f),
+                AnimFrame(atMs = 800, tailWag = -0.9f, earPerk = 1.1f),
+                AnimFrame(atMs = 1000, tailWag = 0.5f, happyEyes = true, earPerk = 1.05f),
+                AnimFrame(atMs = 1600, tailWag = 0f, happyEyes = false, earPerk = 1.0f),
+            ),
+        ),
     ).associateBy { it.name }
 
     /** A built-in clip by name, or null. Store clips are the caller's fallback. */

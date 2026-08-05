@@ -292,11 +292,33 @@ Tests: ModelStatus/VisionPipeline rewritten for OpenRouter; suite 486/3
 Tests: +2 transient-error classification tests; suite 488/3 (3 known
 pre-existing).
 
+## Avatar animations finally visible (paw / tail / body)
+
+User report: only the ambient ear wiggle was ever seen; paw, tail and other
+authored clips never appeared. Root causes found and fixed:
+
+- **Tail invisible at rest**: the renderer only drew the tail when a clip was
+  actively setting `tailWag`, so between clips the cat had no tail. Now an
+  ambient 3.6s tail-sway (±0.14 wag) always draws the tail; clips override it.
+- **No tail built-in existed**: added a "tail wag" built-in clip (big sweeping
+  wags + happy eyes), now replayable by name and in the idle pool.
+- **Idle director too rare / gated wrong**: first clip now arrives in 12–25s
+  (was 45–120s), later cadence 25–80s; `mouthEnergy == 0f` exact float compare
+  relaxed to `<= 0.02f` so lingering TTS energy can't block performances.
+- **First clip is always showy**: the session's first idle pick is forced to
+  the big visible set (tail wag / zoomies / paw lick / happy bop / stretch /
+  headshake) or any user-saved invention, so body animations show early.
+- Added `MeowAnim: playing "<name>"` System.err log in playCustomAnimation for
+  on-device verification (JVM-test safe, logcat-visible).
+
+Device-verified on Fold 6: tail visible at rest in screenshots; logcat shows
+the first idle clip ("paw lick") firing ~15s after launch.
+
 <!-- AUTOBUILD:START -->
 (regenerated after each commit)
-- 2026-08-05 00:02:46 : Standalone build: OpenRouter cloud brain with on-device fallback, home server removed
+- 2026-08-05 00:32:03 : Stability: fix foreground-service crash, retry transient speech errors silently, always show artifac
+- d1321e7 2026-08-04 23:55 Standalone build: OpenRouter cloud brain with on-device fallback, home server removed
 - ae96841 2026-08-04 23:27 Fix deflection: pin MeowLion for direct answers, deliver cold-launch wake commands, harden question detectors
 - 91fd92a 2026-08-04 22:43 Answer questions directly; explicit searches open live in the browser panel
 - ad734b1 2026-08-04 22:24 Background follow-up handoff to WakeWordService; show-in-browser for all artifacts
-- 7887c18 2026-08-04 22:02 Drawer favorites + face pins, live browser agent loop on MeowLion
 <!-- AUTOBUILD:END -->

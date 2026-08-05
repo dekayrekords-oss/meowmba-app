@@ -606,6 +606,10 @@ class CompanionViewModel(
             // Opt-out flag for JVM unit tests: their virtual clocks would
             // make the forever-loop spin instead of waiting.
             val idleAnimationsEnabled = System.getProperty("meowmba.idleAnimations", "true") != "false"
+            // The very first idle clip of a session is always a big visible
+            // one (tail wag, paw lick, zoomies...) so the user sees the body
+            // animations early instead of only subtle ear wiggles.
+            var idleClipShownThisSession = false
             if (idleAnimationsEnabled) idleAnimationDirector = IdleAnimationDirector(
                 scope = viewModelScope,
                 canPlay = {
@@ -613,12 +617,21 @@ class CompanionViewModel(
                     s.interactionState == InteractionState.IDLE &&
                         s.activeAnimation == null &&
                         s.activeTask == null &&
-                        s.mouthEnergy == 0f
+                        // TTS energy decays toward zero; compare with slack so a
+                        // lingering 0.001f never blocks performances forever.
+                        s.mouthEnergy <= 0.02f
                 },
                 pickSpec = {
                     val saved = animStore.list().mapNotNull { animStore.load(it) }
                     val pool = CustomAnimations.BUILT_INS.values + saved
-                    pool.randomOrNull()
+                    if (!idleClipShownThisSession) {
+                        idleClipShownThisSession = true
+                        val showyNames = setOf("tail wag", "zoomies", "paw lick", "happy bop", "stretch", "headshake")
+                        val showy = pool.filter { it.name in showyNames } + saved
+                        (showy.ifEmpty { pool.toList() }).randomOrNull()
+                    } else {
+                        pool.randomOrNull()
+                    }
                 },
                 play = { spec -> playCustomAnimation(spec) },
             ).also { it.start() }
@@ -3612,6 +3625,7 @@ class CompanionViewModel(
      */
     fun playCustomAnimation(spec: CustomAnimationSpec) {
         customAnimJob?.cancel()
+        System.err.println("MeowAnim: playing \"${spec.name}\" (${spec.durationMs}ms)")
         _uiState.value = _uiState.value.copy(
             activeAnimation = spec,
             isChatExpanded = false,

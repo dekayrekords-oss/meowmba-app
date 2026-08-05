@@ -157,6 +157,17 @@ fun AvatarRenderer(
         }
     }
 
+    // Gentle at-rest tail sway so the tail exists between clips instead of
+    // only appearing mid-wag. Clips override it (customAnim != null zeroes it).
+    val tailSway by rememberInfiniteTransition(label = "tailSway").animateFloat(
+        initialValue = if (paused) 0f else -0.14f,
+        targetValue = if (paused) 0f else 0.14f,
+        animationSpec = infiniteRepeatable(
+            tween(3600), RepeatMode.Reverse
+        ),
+        label = "tailSway"
+    )
+
     fun registryInfinite(name: String) = CatAnimationRegistry.spec(name)
     // Paused = frozen endpoints (from == to), so ambient loops stop moving
     // instead of being torn out of the composition.
@@ -329,8 +340,12 @@ fun AvatarRenderer(
         val stroke = s * 0.014f
 
         // ── LAYER -1: Tail (behind the face, wags during animations) ────────
-        val wag = effectivePose.tailWag.coerceIn(-1f, 1f)
-        if (kotlin.math.abs(wag) > 0.01f || effectivePose.tailWag != 0f) {
+        // Tail is ALWAYS drawn: at rest it sways gently via tailSway, during
+        // clips the keyframed wag drives it. Invisible-at-rest is why the user
+        // never saw a tail before.
+        val restingSway = if (customAnim != null) 0f else tailSway
+        val wag = (effectivePose.tailWag + restingSway).coerceIn(-1f, 1f)
+        run {
             val tailBaseX = cx + s * 0.32f
             val tailBaseY = cy + s * 0.18f
             val tailLen = s * 0.22f

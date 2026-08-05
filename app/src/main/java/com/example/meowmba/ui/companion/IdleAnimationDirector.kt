@@ -14,7 +14,9 @@ import kotlin.random.Random
  * The director never decides WHETHER an animation is appropriate on its own —
  * it asks [canPlay] (owned by the ViewModel, which knows about TTS, tasks,
  * active clips and interaction state) and only fires when the answer is yes.
- * Cadence is a random 45–120 s wait so the behaviour never looks metronomic.
+ * The first clip arrives early (12–25 s) so the face performs within the first
+ * moments of idle watching; afterwards a random 25–80 s wait keeps the
+ * behaviour from looking metronomic.
  */
 class IdleAnimationDirector(
     private val scope: CoroutineScope,
@@ -26,14 +28,18 @@ class IdleAnimationDirector(
     private val play: (CustomAnimationSpec) -> Unit,
 ) {
     private var job: Job? = null
+    private var hasPlayed = false
 
     fun start() {
         if (job?.isActive == true) return
         job = scope.launch {
             while (isActive) {
-                delay(nextWaitMs())
+                delay(if (hasPlayed) nextWaitMs() else firstWaitMs())
                 if (canPlay()) {
-                    pickSpec()?.let(play)
+                    pickSpec()?.let { spec ->
+                        hasPlayed = true
+                        play(spec)
+                    }
                 }
             }
         }
@@ -44,6 +50,9 @@ class IdleAnimationDirector(
         job = null
     }
 
-    /** Random cadence in 45–120 s; internal for unit tests. */
-    internal fun nextWaitMs(): Long = (45_000L + random.nextLong(75_000L))
+    /** First-clip cadence: 12–25 s so a performance happens early. Internal for unit tests. */
+    internal fun firstWaitMs(): Long = (12_000L + random.nextLong(13_000L))
+
+    /** Random cadence in 25–80 s; internal for unit tests. */
+    internal fun nextWaitMs(): Long = (25_000L + random.nextLong(55_000L))
 }
