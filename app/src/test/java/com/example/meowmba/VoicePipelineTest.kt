@@ -347,18 +347,44 @@ class VoicePipelineTest {
 
         engine.start()
         // error → backoff → new session → error … (realistic interleave)
+        // ERROR_AUDIO (4) still rides the regular 5-strike escalation.
         repeat(4) {
-            fakeStt.simulateError(5) // ERROR_CLIENT
+            fakeStt.simulateError(4) // ERROR_AUDIO
             advanceUntilIdle()
         }
         assertFalse(fatalFired) // 4 consecutive errors: still retrying
 
-        fakeStt.simulateError(5) // 5th consecutive failure → give up
+        fakeStt.simulateError(4) // 5th consecutive failure → give up
         assertTrue(fatalFired)
         assertFalse(engine.isRunning.value)
         val callsAtFatal = fakeStt.startListeningCalls
         advanceUntilIdle()
         assertEquals(callsAtFatal, fakeStt.startListeningCalls) // no hot loop after giving up
+    }
+
+    @Test
+    fun `client error churn is tolerated, sustained client failure still stops`() = runTest {
+        // AIAI on the Fold 7 emits short bursts of ERROR_CLIENT (5) right after the app
+        // (re)starts; the old 5-strike rule tripped inside one burst and surfaced the
+        // false "the speech recognizer keeps failing on this device". CLIENT now has a
+        // long leash (25), but ~30s of sustained failure must still stop the loop.
+        val engine = com.example.meowmba.core.audio.RecognizerWakeWordEngine(
+            fakeStt, com.example.meowmba.core.audio.WakePhraseMatcher("Meow"), this
+        )
+        var fatalFired = false
+        engine.onFatalError = { fatalFired = true }
+
+        engine.start()
+        repeat(24) {
+            fakeStt.simulateError(5) // ERROR_CLIENT burst
+            advanceUntilIdle()
+        }
+        assertFalse(fatalFired) // a churn burst must not declare the device broken
+        assertTrue(engine.isRunning.value)
+
+        fakeStt.simulateError(5) // 25th sustained failure → give up
+        assertTrue(fatalFired)
+        assertFalse(engine.isRunning.value)
     }
 
     @Test

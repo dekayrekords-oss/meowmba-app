@@ -55,6 +55,10 @@ object WakeWordEngineFactory {
         // H-less decodes of "hey meow" — the H is barely voiced in casual speech, so
         // the spotter must also listen for what the model actually emits. See KwsKeywords.
         "ey meow", "eh meow", "eymeow",
+        // 2026-08-05 wave ("only yo meow works"): more decodes of the hey/ok carriers.
+        "hey miaw", "hey miow", "hey miou", "hey meao", "hey meou", "hey meu",
+        "hey mia", "hey meuw", "hey maow", "hey maw", "he meow", "ay meow",
+        "yo miaw", "yo miow", "yo meao", "ok miaw",
         // Older phrases, kept.
         "hey kitty", "yo memba", "hey memba", "oi meow",
     )

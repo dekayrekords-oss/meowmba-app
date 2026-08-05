@@ -57,6 +57,13 @@ class RecognizerWakeWordEngine(
     @Volatile
     private var consecutiveErrors = 0
 
+    /**
+     * Sustained-failure counter for ERROR_CLIENT only. CLIENT is churn-tolerant now
+     * (see companion), so it gets its own, much higher bar before the loop gives up.
+     */
+    @Volatile
+    private var clientFailures = 0
+
     /** Collector for this session's partial transcripts. */
     private var partialJob: Job? = null
 
@@ -76,6 +83,7 @@ class RecognizerWakeWordEngine(
         if (running) return
         running = true
         consecutiveErrors = 0
+        clientFailures = 0
         _isRunning.value = true
         listen()
     }
@@ -113,7 +121,9 @@ class RecognizerWakeWordEngine(
         speechEngine.startListening(
             onResult = { text ->
                 if (!running) return@startListening
-                consecutiveErrors = 0  // a completed session proves the recognizer works
+                // A completed session proves the recognizer works.
+                consecutiveErrors = 0
+                clientFailures = 0
                 // Already woken from a partial in this session — the final transcript
                 // is the same utterance, so do not wake twice.
                 if (firedThisSession) return@startListening
@@ -141,6 +151,21 @@ class RecognizerWakeWordEngine(
                         // "wake phrase stopped" report while the recognizer was fine.
                         consecutiveErrors = 0
                         restart(CONTENTION_BACKOFF_MS)
+                    }
+                    code == android.speech.SpeechRecognizer.ERROR_CLIENT -> {
+                        // Observed on-device (Fold 7, bound to AIAI): bursts of code=5
+                        // at ~700ms intervals right after the app (re)starts, then it
+                        // settles. The old 5-strike rule hit the fatal threshold inside
+                        // one burst and surfaced the false "the speech recognizer keeps
+                        // failing on this device". CLIENT therefore gets its own long
+                        // leash: only ~30s of SUSTAINED client failures stop the loop.
+                        consecutiveErrors = 0
+                        if (++clientFailures >= MAX_CLIENT_FAILURES) {
+                            stop()
+                            onFatalError?.invoke()
+                        } else {
+                            restart(CLIENT_BACKOFF_MS)
+                        }
                     }
                     !isInfrastructureError(code) -> {
                         // Quiet room: no-speech timeouts are the loop's NORMAL
@@ -184,6 +209,15 @@ class RecognizerWakeWordEngine(
         private const val MAX_CONSECUTIVE_ERRORS = 5
 
         /**
+         * ERROR_CLIENT leash: 25 failures at a 1.2s backoff is ~30 seconds of sustained
+         * failure — far longer than the AIAI startup churn bursts observed on-device
+         * (a handful of errors in a few seconds), but short enough that a genuinely
+         * unusable device still stops instead of retrying forever.
+         */
+        private const val MAX_CLIENT_FAILURES = 25
+        private const val CLIENT_BACKOFF_MS = 1_200L
+
+        /**
          * The mic is temporarily unavailable to us — not a broken recognizer. Retry
          * with a longer backoff; never escalate to "this device is broken".
          *
@@ -204,11 +238,11 @@ class RecognizerWakeWordEngine(
          *   same breaker immediately. That is AIAI's service connection churning while it
          *   settles, not a device that cannot recognize speech at all.
          *
-         * ERROR_CLIENT is deliberately NOT here. [SpeechService.startListening] reports
-         * CLIENT when the recognizer could not be created at all — a genuinely unusable
-         * device — so treating it as transient would retry forever instead of stopping.
-         * The CLIENT errors seen in the logs came from the removed failover binding
-         * assistant services that reject dictation, not from a healthy recognizer.
+         * ERROR_CLIENT is deliberately NOT here either: it has its own, much higher
+         * threshold above. AIAI on Fold 7 emits bursts of code=5 right after (re)start
+         * — counting them with the regular 5-strike rule produced the false "the speech
+         * recognizer keeps failing on this device" caption even though the recognizer
+         * settles and works moments later.
          */
         internal fun isContention(code: Int): Boolean = when (code) {
             android.speech.SpeechRecognizer.ERROR_RECOGNIZER_BUSY,

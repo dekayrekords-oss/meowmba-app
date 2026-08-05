@@ -35,7 +35,7 @@ class KwsKeywordsTest {
     @Test
     fun `built-in phrase uses the verified exact split`() {
         // Produced by the model's own bpe.model, not by the greedy fallback.
-        assertEquals("▁HE Y ▁ME OW :3.5 #0.08", KwsKeywords.build(listOf("hey meow"), vocab))
+        assertEquals("▁HE Y ▁ME OW :4.0 #0.06", KwsKeywords.build(listOf("hey meow"), vocab))
     }
 
     @Test
@@ -44,15 +44,15 @@ class KwsKeywordsTest {
         // decodes the wake phrase without it. Those spellings must be registered,
         // token-valid and as permissive as the phrase itself — an unemittable token
         // sequence never fires, which looks exactly like a broken wake word.
-        assertEquals("▁E Y ▁ME OW :3.5 #0.08", KwsKeywords.build(listOf("ey meow"), vocab))
-        assertEquals("▁E H ▁ME OW :3.5 #0.08", KwsKeywords.build(listOf("eh meow"), vocab))
-        assertEquals("▁E Y ME OW :3.5 #0.08", KwsKeywords.build(listOf("eymeow"), vocab))
+        assertEquals("▁E Y ▁ME OW :4.0 #0.06", KwsKeywords.build(listOf("ey meow"), vocab))
+        assertEquals("▁E H ▁ME OW :4.0 #0.06", KwsKeywords.build(listOf("eh meow"), vocab))
+        assertEquals("▁E Y ME OW :4.0 #0.06", KwsKeywords.build(listOf("eymeow"), vocab))
     }
 
     @Test
     fun `built-in split is case-insensitive`() {
-        assertEquals("▁HE Y ▁ME OW :3.5 #0.08", KwsKeywords.build(listOf("Hey Meow"), vocab))
-        assertEquals("▁HE Y ▁ME OW :3.5 #0.08", KwsKeywords.build(listOf("HEY MEOW"), vocab))
+        assertEquals("▁HE Y ▁ME OW :4.0 #0.06", KwsKeywords.build(listOf("Hey Meow"), vocab))
+        assertEquals("▁HE Y ▁ME OW :4.0 #0.06", KwsKeywords.build(listOf("HEY MEOW"), vocab))
     }
 
     @Test
@@ -66,7 +66,7 @@ class KwsKeywordsTest {
     fun `one line per phrase`() {
         val out = KwsKeywords.build(listOf("hey meow", "hey memba"), vocab)
         assertEquals(
-            listOf("▁HE Y ▁ME OW :3.5 #0.08", "▁HE Y ▁ME M B A :2.5 #0.12"),
+            listOf("▁HE Y ▁ME OW :4.0 #0.06", "▁HE Y ▁ME M B A :2.5 #0.12"),
             out.lines(),
         )
     }

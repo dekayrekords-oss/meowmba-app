@@ -407,11 +407,27 @@ Verified on device: settings opens with the robot section showing "Connect over 
 - BLUETOOTH_CONNECT added to the startup runtime-permission request (bondedDevices
   throws on Android 12+ without it).
 
+## Wake phrase fixes (2026-08-05)
+
+- False "Wake phrase stopped - the speech recognizer keeps failing": AIAI on the Fold 7
+  emits bursts of ERROR_CLIENT (code=5) at ~700ms right after (re)start; the 5-strike
+  rule tripped inside one burst. RecognizerWakeWordEngine now gives ERROR_CLIENT its own
+  leash: 25 failures at a 1.2s backoff (~30s sustained) before stopping; any completed
+  session resets both counters. ERROR_AUDIO/SERVER still ride the 5-strike rule.
+- "Only yo meow works": added 16 more emittable decodes of the hey/ok carriers to
+  KwsKeywords EXACT + WakeWordEngineFactory.BASE_PHRASES (hey miaw/miow/miou/meao/meou/
+  meu/mia/meuw/maow/maw, he meow, ay meow, yo miaw/miow/meao, ok miaw) and bumped all
+  meow-phrase tuning from :3.5 #0.08 to :4.0 #0.06. False wakes stay bounded by the VAD
+  + speaker-verification gates.
+- Tests: VoicePipelineTest updated (audio-error escalation + new CLIENT-churn test);
+  KwsKeywordsTest re-pinned at the new tuning. 507 tests, only the 3 known
+  ModelDownloadViewModelTest failures.
+
 <!-- AUTOBUILD:START -->
 (regenerated after each commit)
-- 2026-08-05 12:34:28 : Settings cleanup: collapse advanced options; LOOI defaults to Bluetooth
+- 2026-08-05 12:58:20 : LOOI auto-connect: discover paired base and enable body by default
+- 7f50bdb 2026-08-05 12:32 Settings cleanup: collapse advanced options; LOOI defaults to Bluetooth
 - 574a3fd 2026-08-05 12:02 LOOI Bluetooth hardware control; fix black-canvas web page (decode JS string) and harden WebView for video (YouTube)
 - 6cf9c2d 2026-08-05 10:49 Add LOOI robot body: real motor control over a line protocol, RobotManager with honest simulated fallback, Settings section, unit tests
 - 748d953 2026-08-05 10:28 Fix rotation black-screen (FGS promise race), home stickiness, OpenRouter error surfacing; audit LOOI
-- 0cce31a 2026-08-05 09:37 Avatar: 20 new built-in animations (tricks, moods, body moves)
 <!-- AUTOBUILD:END -->
