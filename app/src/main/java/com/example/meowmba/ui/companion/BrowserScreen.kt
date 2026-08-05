@@ -44,6 +44,15 @@ fun BrowserScreen(initialUrl: String = "https://www.google.com") {
                     settings.domStorageEnabled = true
                     settings.loadWithOverviewMode = true
                     settings.useWideViewPort = true
+                    // Video-heavy sites (YouTube) render a black player in a
+                    // bare WebView unless playback can start and mixed content
+                    // loads; a modern UA keeps them off the "unsupported" path.
+                    settings.mediaPlaybackRequiresUserGesture = false
+                    settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                    settings.databaseEnabled = true
+                    settings.userAgentString =
+                        "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 " +
+                        "(KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36"
                     webViewClient = object : WebViewClient() {
                         override fun onPageFinished(view: WebView, url: String) {
                             view.evaluateJavascript(WebViewBridge.DOM_HELPERS, null)

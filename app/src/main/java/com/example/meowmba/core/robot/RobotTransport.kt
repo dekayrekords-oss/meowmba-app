@@ -61,6 +61,59 @@ class TcpRobotTransport(
     }
 }
 
+/**
+ * Classic-Bluetooth (RFCOMM / SPP) pipe to a paired LOOI base — the real hardware
+ * path. The base exposes the standard serial-port profile; we open the RFCOMM
+ * socket and speak [LooiProtocol] lines over it.
+ *
+ * Requires BLUETOOTH_CONNECT (runtime on Android 12+) and a paired device.
+ */
+class BluetoothRobotTransport(private val address: String) : RobotTransport {
+    private var socket: android.bluetooth.BluetoothSocket? = null
+    private val lock = Any()
+
+    override val connected: Boolean
+        get() = socket?.let { it.isConnected } ?: false
+
+    override fun connect(): Boolean = synchronized(lock) {
+        try {
+            val adapter = android.bluetooth.BluetoothAdapter.getDefaultAdapter()
+                ?: return false
+            if (!adapter.isEnabled) return false
+            val device = adapter.getRemoteDevice(address)
+            val s = device.createRfcommSocketToServiceRecord(SPP_UUID)
+            adapter.cancelDiscovery()
+            s.connect()
+            socket = s
+            true
+        } catch (e: Exception) {
+            socket = null
+            false
+        }
+    }
+
+    override fun send(line: String) = synchronized(lock) {
+        val s = socket ?: return
+        try {
+            s.outputStream.write((line + "\n").toByteArray(Charsets.US_ASCII))
+            s.outputStream.flush()
+        } catch (e: Exception) {
+            close()
+        }
+    }
+
+    override fun close() = synchronized(lock) {
+        runCatching { socket?.close() }
+        socket = null
+    }
+
+    companion object {
+        /** Standard Serial Port Profile UUID used by LOOI-style serial bridges. */
+        val SPP_UUID: java.util.UUID =
+            java.util.UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
+    }
+}
+
 /** Records sent frames; for tests and the no-hardware demo body. */
 class LoopbackTransport : RobotTransport {
     val sent = mutableListOf<String>()

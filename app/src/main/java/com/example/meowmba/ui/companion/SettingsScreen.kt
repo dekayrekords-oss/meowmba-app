@@ -51,9 +51,13 @@ fun SettingsScreen(
     robotHost: String = "",
     robotPort: String = "",
     robotStatus: String = "simulated (no body)",
+    robotUseBluetooth: Boolean = false,
+    robotBtAddress: String = "",
     onRobotBodyChange: (Boolean) -> Unit = {},
     onRobotHostChange: (String) -> Unit = {},
     onRobotPortChange: (String) -> Unit = {},
+    onRobotUseBluetoothChange: (Boolean) -> Unit = {},
+    onRobotBtAddressChange: (String) -> Unit = {},
     onCompanionNameChange: (String) -> Unit = {},
     onWakeWordChange: (Boolean) -> Unit = {},
     onConversationModeChange: (Boolean) -> Unit = {},
@@ -278,6 +282,31 @@ fun SettingsScreen(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Use Bluetooth (paired device)", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "Talk to the base over classic Bluetooth instead of TCP.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(checked = robotUseBluetooth, onCheckedChange = onRobotUseBluetoothChange)
+            }
+            if (robotUseBluetooth) {
+                OutlinedTextField(
+                    value = robotBtAddress,
+                    onValueChange = onRobotBtAddressChange,
+                    label = { Text("Paired device MAC (e.g. 00:11:22:33:44:55)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
 
             if (routines.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))

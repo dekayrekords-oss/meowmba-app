@@ -34,23 +34,30 @@ class RobotManager {
      * Try to bring up a LOOI base at [host]:[port]. Returns true when the body
      * is live; on failure falls back to simulated and reports it in [status].
      */
-    fun connectLooi(host: String, port: Int): Boolean {
-        val t = TcpRobotTransport(host, port)
-        return if (t.connect()) {
+    fun connectLooi(host: String, port: Int): Boolean =
+        bringUp(TcpRobotTransport(host, port), "LOOI body @ $host:$port",
+            "LOOI unreachable ($host:$port) - simulated")
+
+    /** Bring up a LOOI base over classic Bluetooth (RFCOMM/SPP) to a paired device. */
+    fun connectBluetooth(address: String): Boolean =
+        bringUp(BluetoothRobotTransport(address), "LOOI body (BT) @ $address",
+            "LOOI BT unreachable ($address) - simulated")
+
+    private fun bringUp(t: RobotTransport, okLabel: String, failLabel: String): Boolean =
+        if (t.connect()) {
             transport?.close()
             transport = t
             controller = LooiMotorController(t)
-            _status.value = "LOOI body @ $host:$port"
+            _status.value = okLabel
             true
         } else {
             t.close()
             transport?.close()
             transport = null
             controller = SimulatedMotorController()
-            _status.value = "LOOI unreachable ($host:$port) - simulated"
+            _status.value = failLabel
             false
         }
-    }
 
     fun close() {
         transport?.close()

@@ -381,11 +381,19 @@ The robot subsystem is no longer simulated-only. `core/robot/` now has:
 
 Tests: `app/src/test/java/com/example/meowmba/RobotTest.kt` (protocol clamping/validation, controller-over-transport, manager simulated fallback). Suite now 502 tests; only the 3 known ModelDownloadViewModelTest failures remain.
 
+## LOOI hardware control (Bluetooth) + black-screen fixes
+
+- **Bluetooth hardware control (#48):** `core/robot/RobotTransport.kt` gains `BluetoothRobotTransport` (classic BT RFCOMM/SPP, standard serial UUID) alongside TCP. `RobotManager.connectBluetooth(address)` + shared `bringUp`. Manifest adds BLUETOOTH/BLUETOOTH_ADMIN (maxSdk 30) + BLUETOOTH_CONNECT. Settings robot section gains "Use Bluetooth (paired device)" switch + MAC field. `CompanionViewModel.refreshRobot` picks BT vs TCP vs simulated honestly.
+- **Black canvas web page (#50):** root cause was `WebViewBridge.evaluate` returning the raw JSON-encoded JS string with only the quotes trimmed — `\n`, `\"`, `\uXXXX` stayed literal, corrupting saved HTML into a black/garbage canvas; a 4096 cap also truncated pages. Added `decodeJsValue`/`unescapeJsonString` (pure, unit-tested) and raised the `pageHtml` cap to 200k.
+- **Black YouTube (#49):** hardened `BrowserScreen` WebView for video-heavy sites: `mediaPlaybackRequiresUserGesture=false`, mixed-content always-allow, database enabled, modern Chrome mobile UA so YouTube serves a playable mobile page instead of a black player.
+
+Tests: `WebViewBridgeTest.kt` (decode escapes/unicode/pass-through). Suite now 506; only the 3 known ModelDownloadViewModelTest failures remain.
+
 <!-- AUTOBUILD:START -->
 (regenerated after each commit)
-- 2026-08-05 10:30:29 : Fix rotation black-screen (FGS promise race), home stickiness, OpenRouter error surfacing; audit LOO
+- 2026-08-05 10:52:55 : Add LOOI robot body: real motor control over a line protocol, RobotManager with honest simulated fal
+- 748d953 2026-08-05 10:28 Fix rotation black-screen (FGS promise race), home stickiness, OpenRouter error surfacing; audit LOOI
 - 0cce31a 2026-08-05 09:37 Avatar: 20 new built-in animations (tricks, moods, body moves)
 - 247c9b8 2026-08-05 08:36 Avatar: tail hangs downward per user request
 - b63aa19 2026-08-05 08:31 Avatar: always-visible swaying tail, tail-wag built-in, earlier+showier idle animations
-- 836236c 2026-08-05 00:30 Stability: fix foreground-service crash, retry transient speech errors silently, always show artifacts
 <!-- AUTOBUILD:END -->

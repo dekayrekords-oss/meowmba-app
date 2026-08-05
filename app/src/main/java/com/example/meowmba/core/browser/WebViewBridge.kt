@@ -33,7 +33,7 @@ object WebViewBridge {
         }
         view.post {
             view.evaluateJavascript(script) { value ->
-                onResult(value?.trim('"')?.take(4096) ?: "null")
+                onResult(decodeJsValue(value))
             }
         }
     }
@@ -85,6 +85,53 @@ object WebViewBridge {
         }
     }
 
+    /**
+     * evaluateJavascript returns a JSON-encoded value (a quoted string with \n,
+     * \" and \uXXXX escapes). Trimming the quotes alone leaves those escapes
+     * literal, which corrupted saved pages (they rendered as a black/garbage
+     * canvas). Decode properly; fall back to the old trim if parsing fails.
+     */
+    internal fun decodeJsValue(value: String?): String {
+        if (value == null) return "null"
+        val trimmed = value.trim()
+        if (trimmed == "null") return "null"
+        if (!trimmed.startsWith("\"") || !trimmed.endsWith("\"") || trimmed.length < 2)
+            return trimmed
+        return unescapeJsonString(trimmed.substring(1, trimmed.length - 1))
+    }
+
+    /** Decodes \n \t \r \" \\ \/ and \uXXXX inside a JSON string body. */
+    internal fun unescapeJsonString(body: String): String {
+        val sb = StringBuilder(body.length)
+        var i = 0
+        while (i < body.length) {
+            val c = body[i]
+            if (c == '\\' && i + 1 < body.length) {
+                when (val n = body[i + 1]) {
+                    'n' -> { sb.append('\n'); i += 2 }
+                    't' -> { sb.append('\t'); i += 2 }
+                    'r' -> { sb.append('\r'); i += 2 }
+                    'b' -> { sb.append('\b'); i += 2 }
+                    'f' -> { sb.append('\u000C'); i += 2 }
+                    '"' -> { sb.append('"'); i += 2 }
+                    '\\' -> { sb.append('\\'); i += 2 }
+                    '/' -> { sb.append('/'); i += 2 }
+                    'u' -> {
+                        if (i + 5 < body.length + 1) {
+                            val hex = body.substring(i + 2, i + 6)
+                            val code = hex.toIntOrNull(16)
+                            if (code != null) { sb.append(code.toChar()); i += 6 } else { sb.append(c); i++ }
+                        } else { sb.append(c); i++ }
+                    }
+                    else -> { sb.append(c); i++ }
+                }
+            } else {
+                sb.append(c); i++
+            }
+        }
+        return sb.toString()
+    }
+
     /** DOM helpers injected on every page load. */
     const val DOM_HELPERS = """
 (function(){
@@ -121,7 +168,7 @@ object WebViewBridge {
     },
     pageHtml: function() {
       var h = (document.documentElement && document.documentElement.outerHTML) || '';
-      return h.length > 6000 ? h.slice(0, 6000) + '...[truncated]' : h;
+      return h.length > 200000 ? h.slice(0, 200000) + '...[truncated]' : h;
     },
     title: function() { return document.title + ' | ' + location.href; },
     links: function() {
