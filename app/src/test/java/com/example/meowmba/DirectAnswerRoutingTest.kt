@@ -51,6 +51,15 @@ class DirectAnswerRoutingTest {
     }
 
     @Test
+    fun `addressed questions still match`() {
+        assertTrue(CompanionViewModel.looksLikeDirectQuestion("hey meow how do i install ollama"))
+        assertTrue(CompanionViewModel.looksLikeDirectQuestion("meow what is a capacitor"))
+        assertTrue(CompanionViewModel.looksLikeDirectQuestion("tell me how to install ffmpeg"))
+        assertEquals("cat facts", CompanionViewModel.extractSearchQuery("hey meow search for cat facts"))
+        assertTrue(CompanionViewModel.looksLikeShowInBrowser("hey meow show it in the browser"))
+    }
+
+    @Test
     fun `commands and requests do not match`() {
         assertFalse(CompanionViewModel.looksLikeDirectQuestion("open the browser"))
         assertFalse(CompanionViewModel.looksLikeDirectQuestion("make me a web page"))

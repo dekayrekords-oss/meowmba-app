@@ -1341,6 +1341,9 @@ class CompanionViewModel(
      * not converted into a queued task that narrates "looking it up".
      */
     private fun respondDirectly(text: String) {
+        // System.err on purpose: shows up in logcat as "System.err: MeowDirect"
+        // but does not crash JVM unit tests where android.util.Log is unmocked.
+        System.err.println("MeowDirect: answering directly: $text")
         // Mirror the normal pipeline's turn bookkeeping so the UI (and the
         // voice pipeline tests) see the same THINKING transition.
         followUpJob?.cancel()
@@ -1361,22 +1364,32 @@ class CompanionViewModel(
                 )
                 memoryRepository?.touchRecalled(recalled.map { it.memory.id })
             }
-            if (currentProvider == null) {
+            val provider: ModelProvider? =
+                omniRoute ?: currentProvider ?: awaitProvider()
+            if (provider == null) {
                 delay(1500)
                 speak("No model is ready yet. Download one from the Hardware page, or configure a server in Settings.")
                 return@launch
             }
             val recentMessages = memoryRepository?.getRecentMessages(10) ?: emptyList()
-            val capabilities = agentToolRegistry?.definitions()
-                ?.map { "${it.displayName} — ${it.description.substringBefore('.')}" }
-                ?: emptyList()
+            // No tool list here on purpose: questions get answered from knowledge,
+            // and the capabilities block is what tempted the model into "I can look
+            // that up if you say the word" deflections.
             val prompt = PromptBuilder.build(
-                _uiState.value.name, text, recentMessages, recalled, capabilities
+                _uiState.value.name, text, recentMessages, recalled
             )
             var fullResponse = ""
             var spokenUpTo = 0
             omniRoute?.hintUserText(text)
-            awaitProvider()?.generateStreaming(prompt)?.collect { response ->
+            // Pin MeowLion first: word-count routing tags short questions as FAST,
+            // which only the small on-device model carries — and that model is
+            // exactly the one that answers questions with more questions.
+            val stream = if (provider is com.example.meowmba.core.agent.OmniRoute) {
+                provider.generateStreaming(prompt, preferRouteId = "ollama")
+            } else {
+                provider.generateStreaming(prompt)
+            }
+            stream.collect { response ->
                 when (response) {
                     is ModelResponse.Partial -> {
                         fullResponse += response.text
@@ -3738,12 +3751,27 @@ class CompanionViewModel(
             "my notes", "my photos", "my pictures", "my files", "my emails", "my calendar"
         )
 
+        /** Drops a leading address — "hey meow, how do I…" still has to route. */
+        fun stripAddress(normalized: String): String {
+            var t = normalized.trim()
+            while (true) {
+                when {
+                    t.startsWith("hey meow ") -> t = t.removePrefix("hey meow ").trim()
+                    t.startsWith("hey memba ") -> t = t.removePrefix("hey memba ").trim()
+                    t.startsWith("hey ") -> t = t.removePrefix("hey ").trim()
+                    t.startsWith("meow ") -> t = t.removePrefix("meow ").trim()
+                    t.startsWith("memba ") -> t = t.removePrefix("memba ").trim()
+                    else -> return t
+                }
+            }
+        }
+
         /**
          * Explicit web-search phrasing → the query to run in the browser panel.
          * Null when the utterance is not a search request (or searches local data).
          */
         fun extractSearchQuery(normalized: String): String? {
-            val t = normalized.trim()
+            val t = stripAddress(normalized.trim())
             // Bare verbs with no object are not searches.
             if (t in setOf("search", "search for", "look up", "google")) return null
             if (SEARCH_LOCAL_SCOPES.any { t.contains(it) }) return null
@@ -3777,14 +3805,18 @@ class CompanionViewModel(
          * requests, and searches keep their existing routing.
          */
         fun looksLikeDirectQuestion(normalized: String): Boolean {
-            val t = normalized.trim()
+            val t = stripAddress(normalized.trim())
             if (t.isEmpty()) return false
             if (POLITE_ACTION.containsMatchIn(t)) return false
             val first = t.substringBefore(' ')
             val startsLikeQuestion = first in QUESTION_STARTERS
             val hasHowTo = t.contains("how to ")
+            // "tell me how/what/why…" asks for information, not an action.
+            val tellMeQuestion = Regex("^tell me (how|what|why|when|where|who|which|if|about)\b")
+                .containsMatchIn(t)
             val actionRequest = ACTION_STARTERS.any { t.startsWith("$it ") }
-            return (startsLikeQuestion || hasHowTo || t.endsWith("?")) && !actionRequest
+            return (startsLikeQuestion || hasHowTo || tellMeQuestion || t.endsWith("?")) &&
+                !actionRequest
         }
 
         /** Creation verbs keep the request with the browser agent instead. */
@@ -3796,10 +3828,12 @@ class CompanionViewModel(
         private val SHOW_BROWSER_PLACE = Regex("\\b(in|on)( the)? (\\w+ )?browser")
 
         /** "show it in the browser", "open that in the side browser", etc. */
-        fun looksLikeShowInBrowser(normalized: String): Boolean =
-            SHOW_BROWSER_VERBS.any { normalized.contains(it) } &&
-                SHOW_BROWSER_CREATION_VERBS.none { normalized.contains(it) } &&
-                SHOW_BROWSER_PLACE.containsMatchIn(normalized)
+        fun looksLikeShowInBrowser(normalized: String): Boolean {
+            val t = stripAddress(normalized)
+            return SHOW_BROWSER_VERBS.any { t.contains(it) } &&
+                SHOW_BROWSER_CREATION_VERBS.none { t.contains(it) } &&
+                SHOW_BROWSER_PLACE.containsMatchIn(t)
+        }
 
         /** Phrases that politely end conversation mode. */
         private val STOP_COMMANDS = setOf(

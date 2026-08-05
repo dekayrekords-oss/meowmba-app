@@ -131,14 +131,23 @@ class OmniRoute(
         return prompt
     }
 
-    /** The order this prompt should be attempted in, best first, fallbacks after. */
-    fun plan(prompt: String): List<Route> {
+    /**
+     * The order this prompt should be attempted in, best first, fallbacks after.
+     *
+     * [preferRouteId] pins one route to the front regardless of classification —
+     * used for direct question answering, where word-count routing kept handing
+     * short questions to the small on-device model and it answered with another
+     * question.
+     */
+    fun plan(prompt: String, preferRouteId: String? = null): List<Route> {
         val tag = classify(prompt)
         val tagged = routes.filter { tag in it.tags }.sortedBy { it.priority }
         val rest = routes.filterNot { it in tagged }
             // Offline last: it is the safety net, not the preference.
             .sortedWith(compareBy({ it.offline }, { it.priority }))
-        return tagged + rest
+        val planned = tagged + rest
+        val pinned = preferRouteId?.let { id -> planned.firstOrNull { it.id == id } }
+        return if (pinned != null) listOf(pinned) + (planned - pinned) else planned
     }
 
     override suspend fun generate(prompt: String): ModelResponse {
@@ -170,8 +179,12 @@ class OmniRoute(
      * been emitted the user is reading it, and silently restarting on a different model
      * mid-sentence would rewrite what they are looking at.
      */
-    override fun generateStreaming(prompt: String): Flow<ModelResponse> = flow {
-        val plan = plan(prompt)
+    override fun generateStreaming(prompt: String): Flow<ModelResponse> =
+        generateStreaming(prompt, preferRouteId = null)
+
+    /** Streaming variant with a pinned first-choice route. See [plan]. */
+    fun generateStreaming(prompt: String, preferRouteId: String?): Flow<ModelResponse> = flow {
+        val plan = plan(prompt, preferRouteId)
         if (plan.isEmpty()) {
             emit(ModelResponse.Error("No models are configured for Omniroute to route to."))
             return@flow

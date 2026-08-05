@@ -215,11 +215,39 @@ with risk levels, audit trail).
   on `google.com/search?q=…`. Checked before the browser-agent routing so it also
   works while the panel is already open.
 
+## Deflection fix: three real culprits (2026-08-04)
+
+Questions were STILL being answered with questions. MeowLion itself answers
+directly (verified via curl), so the app was not reaching it:
+
+- **Phone Wi-Fi had silently dropped to cellular.** MeowLion lives on the home
+  LAN (192.168.1.163), so every remote call failed and OmniRoute fell through
+  to the on-device Gemma — the model that deflects. Restored with
+  `adb shell svc wifi enable` (SSID "MEOW", 192.168.1.213).
+- **Short questions misrouted to the on-device model.** OmniRoute tags prompts
+  of ≤6 words as `FAST`, and only the local Gemma route carries that tag — so
+  "what is a capacitor" was classified straight onto the deflecting model.
+  `OmniRoute.plan(prompt, preferRouteId)` can now pin a route to the front, and
+  `respondDirectly()` pins `"ollama"` (MeowLion) for direct answers.
+- **Cold-launch wake commands were dropped.** `consumeWakeCommand()` runs in
+  `onCreate`, before the ViewModel exists (it is created during first
+  composition), so background-heard questions never reached the pipeline.
+  `MainActivity` now stashes a `pendingWakeCommand` and delivers it from the
+  ViewModel factory's `.also {}` block, mirroring `pendingRoutineId`.
+- Also: the PromptBuilder anti-deflection rule is now unconditional (moved out
+  of the capabilities block), and question detectors harden `stripAddress`
+  plus "tell me how/what/…" phrasing.
+
+Verified end-to-end on the Fold 6: cold-launch wake commands
+"what is a capacitor" and "how do I install ollama on a mac" both produce
+`MeowDirect` logs and direct spoken answers from MeowLion (postThought
+notifications), zero FATAL.
+
 <!-- AUTOBUILD:START -->
 (regenerated after each commit)
-- 2026-08-04 22:25:40 : Background follow-up handoff to WakeWordService; show-in-browser for all artifacts
+- 2026-08-04 22:44:44 : Answer questions directly; explicit searches open live in the browser panel
+- ad734b1 2026-08-04 22:24 Background follow-up handoff to WakeWordService; show-in-browser for all artifacts
 - 7887c18 2026-08-04 22:02 Drawer favorites + face pins, live browser agent loop on MeowLion
 - 43b4683 2026-08-04 21:41 HANDOFF: gesture/freeze/split/MeowLion notes
 - cfeea0f 2026-08-04 21:41 Gesture remap, overlay animation freeze, foldable split browser, MeowLion default brain
-- 265dda5 2026-08-04 20:54 Ignore .kotlin daemon log artifacts
 <!-- AUTOBUILD:END -->

@@ -120,6 +120,10 @@ class MainActivity : ComponentActivity() {
                                     it.onRoutineIntent(pendingRoutineId)
                                     pendingRoutineId = -1L
                                 }
+                                pendingWakeCommand?.let { cmd ->
+                                    pendingWakeCommand = null
+                                    it.onExternalWakeCommand(cmd)
+                                }
                             } as T
                         }
                     }
@@ -238,11 +242,23 @@ class MainActivity : ComponentActivity() {
         consumeWakeCommand(intent)
     }
 
+    /** Wake command arriving before the ViewModel exists (cold launch). */
+    private var pendingWakeCommand: String? = null
+
     private fun consumeWakeCommand(source: Intent?) {
         val command = source?.getStringExtra(WakeWordService.EXTRA_WAKE_COMMAND)
         if (command != null) {
             source.removeExtra(WakeWordService.EXTRA_WAKE_COMMAND)
-            companionViewModel?.onExternalWakeCommand(command)
+            val vm = companionViewModel
+            if (vm != null) {
+                vm.onExternalWakeCommand(command)
+            } else {
+                // Cold launch: the ViewModel is created during the first
+                // composition, which happens after onCreate's intent handling.
+                // Dropping the command here is why a tapped wake-command
+                // notification sometimes did nothing.
+                pendingWakeCommand = command
+            }
         }
         // Phase E: a routine alarm brought us to the front.
         val routineId = source?.getLongExtra(
