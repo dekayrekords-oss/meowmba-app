@@ -28,3 +28,6 @@ keystore.properties
 # auto-build artifacts
 build-out/
 __pycache__/
+
+# Kotlin daemon error logs
+.kotlin/
