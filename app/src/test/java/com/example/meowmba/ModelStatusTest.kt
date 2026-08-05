@@ -116,7 +116,7 @@ class ModelStatusTest {
         assertEquals(ModelSource.NETWORK, loaded.activeSource)
         // Standalone app: the network card always points at openrouter.ai,
         // never at a home server.
-        assertEquals("https://openrouter.ai/api/v1", loaded.networkEndpoint)
+        assertEquals("https://openrouter.ai/api", loaded.networkEndpoint)
         assertEquals("test-model:free", loaded.networkModel)
     }
 

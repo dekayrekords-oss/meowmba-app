@@ -41,6 +41,15 @@ class RemoteModelProvider(
 
     enum class ApiStyle { OLLAMA, OPENAI_COMPATIBLE }
 
+    /**
+     * Defense in depth: if a base url is ever stored with a trailing "/v1"
+     * (e.g. "https://openrouter.ai/api/v1"), appending "/v1/chat/completions"
+     * would hit "/v1/v1/chat/completions" — a guaranteed 404, which is exactly
+     * what shipped to the field. Stripping the suffix here makes the provider
+     * immune to that. Ollama-style base urls (no /v1) pass through unchanged.
+     */
+    private val normalizedBase: String = baseUrl.trimEnd('/').removeSuffix("/v1")
+
     private val client = HttpClient {
         install(ContentNegotiation) {
             json(Json { ignoreUnknownKeys = true })
@@ -69,7 +78,7 @@ class RemoteModelProvider(
     }
 
     private suspend fun kotlinx.coroutines.flow.FlowCollector<ModelResponse>.streamOllama(prompt: String) {
-        client.preparePost("$baseUrl/api/generate") {
+        client.preparePost("$normalizedBase/api/generate") {
             contentType(ContentType.Application.Json)
             setBody(OllamaRequest(model, prompt, stream = true))
         }.execute { response ->
@@ -88,7 +97,7 @@ class RemoteModelProvider(
     }
 
     private suspend fun kotlinx.coroutines.flow.FlowCollector<ModelResponse>.streamOpenAI(prompt: String) {
-        client.preparePost("$baseUrl/v1/chat/completions") {
+        client.preparePost("$normalizedBase/v1/chat/completions") {
             header(HttpHeaders.Authorization, "Bearer $apiKey")
             // OpenRouter attribution headers: harmless elsewhere, expected there.
             header("HTTP-Referer", "https://meowmba.local")
@@ -130,7 +139,7 @@ class RemoteModelProvider(
     suspend fun ping(): String = try {
         when (style) {
             ApiStyle.OLLAMA -> {
-                val response = client.get("$baseUrl/api/tags")
+                val response = client.get("$normalizedBase/api/tags")
                 if (response.status.isSuccess()) {
                     val count = StreamParsers.countOllamaModels(response.bodyAsText())
                     "Ollama reachable · $count model(s) installed"
@@ -142,7 +151,7 @@ class RemoteModelProvider(
                 if (apiKey.isNullOrBlank()) {
                     "No API key configured — add it in Settings"
                 } else {
-                    val response = client.get("$baseUrl/v1/models") {
+                    val response = client.get("$normalizedBase/v1/models") {
                         header(HttpHeaders.Authorization, "Bearer $apiKey")
                     }
                     if (response.status.isSuccess()) {

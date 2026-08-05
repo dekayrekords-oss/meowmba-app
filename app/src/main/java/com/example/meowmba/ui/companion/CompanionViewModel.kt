@@ -3849,8 +3849,10 @@ class CompanionViewModel(
 
         private const val KEY_PINNED_APPS = "pinned_apps"
 
-        /** OpenRouter — the standalone cloud brain (openrouter.ai). */
-        private const val OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1"
+        /** OpenRouter — the standalone cloud brain (openrouter.ai). No /v1 suffix:
+         *  RemoteModelProvider appends "/v1/chat/completions" itself, and a doubled
+         *  /v1/v1 path returns HTTP 404 (observed in the field). */
+        private const val OPENROUTER_ENDPOINT = "https://openrouter.ai/api"
         /** Sensible free default; any OpenRouter model id works via Settings. */
         private const val OPENROUTER_DEFAULT_MODEL = "nvidia/nemotron-3-super-120b-a12b:free"
         private const val KEY_MEMORY_PAUSED = "memory_paused"
