@@ -38,6 +38,17 @@ class MainActivity : ComponentActivity() {
     private lateinit var notificationHelper: NotificationHelper
     private var companionViewModel: CompanionViewModel? = null
 
+    /** One-time MediaProjection consent for watch mode. */
+    private val screenCaptureLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK && result.data != null) {
+            companionViewModel?.onScreenCaptureGranted(result.resultCode, result.data!!)
+        } else {
+            companionViewModel?.onScreenCaptureDenied()
+        }
+    }
+
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
@@ -108,6 +119,17 @@ class MainActivity : ComponentActivity() {
                 )
 
                 val uiState by viewModel.uiState.collectAsState()
+
+                // Watch mode: launch the system MediaProjection consent when requested.
+                val watchConsent by viewModel.screenWatchConsentRequested.collectAsState()
+                androidx.compose.runtime.LaunchedEffect(watchConsent) {
+                    if (watchConsent) {
+                        viewModel.consumeScreenWatchConsentRequest()
+                        val mgr = getSystemService(MEDIA_PROJECTION_SERVICE)
+                            as android.media.projection.MediaProjectionManager
+                        screenCaptureLauncher.launch(mgr.createScreenCaptureIntent())
+                    }
+                }
 
                 // Face mode: optionally hold the display awake while the bare
                 // companion face is on screen (Settings toggle, default ON).

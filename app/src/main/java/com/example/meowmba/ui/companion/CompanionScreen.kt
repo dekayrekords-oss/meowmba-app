@@ -4,6 +4,7 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -60,13 +61,21 @@ fun CompanionScreen(
             modifier = Modifier.matchParentSize(),
         )
 
-        // 1. Animated cat avatar (Memba 2 face) — full-bleed canvas
-        AvatarRenderer(
-            state = uiState,
-            onZoneClick = { viewModel.onAvatarZoneClick(it) },
-            onSwipeUp = { viewModel.openChat() },
-            onSwipeDown = { viewModel.openTiles() }
-        )
+        // 1. Animated cat avatar (Memba 2 face) — full-bleed canvas.
+        // Leans with the phone via the IMU (±8°, low-passed).
+        val motionTilt by viewModel.motionTiltDeg.collectAsState()
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .graphicsLayer { rotationZ = motionTilt }
+        ) {
+            AvatarRenderer(
+                state = uiState,
+                onZoneClick = { viewModel.onAvatarZoneClick(it) },
+                onSwipeUp = { viewModel.openChat() },
+                onSwipeDown = { viewModel.openTiles() }
+            )
+        }
 
         // 2. Controls layer — everything interactive respects the system bars
         //    (status bar, nav/gesture bar, display cutout) so it always fits.
@@ -445,6 +454,10 @@ fun CompanionScreen(
                 onWakeWordChange = { viewModel.setWakeWordEnabled(it) },
                 onConversationModeChange = { viewModel.setConversationMode(it) },
                 onKeepScreenOnChange = { viewModel.setKeepScreenOn(it) },
+                watchModeEnabled = uiState.watchModeEnabled,
+                onWatchModeChange = { viewModel.setWatchMode(it) },
+                commentaryEnabled = uiState.commentaryEnabled,
+                onCommentaryChange = { viewModel.setCommentaryMode(it) },
                 onSaved = { viewModel.rebuildOmniRoute() },
                 onAgentBrainChange = { viewModel.setAgentBrainEnabled(it) },
                 onHermesUrlChange = { viewModel.setHermesAgentUrl(it) },

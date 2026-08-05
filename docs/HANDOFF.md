@@ -72,11 +72,24 @@ with risk levels, audit trail).
   status/journalctl tail/docker ps), rejects shell metacharacters, TOFU host
   keys, 4KB output cap, 30s timeout. jsch = com.github.mwiede:jsch:0.2.21.
 
+## Phase C features (2026-08-04)
+
+- **IMU (MotionSense)**: avatar leans with the phone (±8° low-passed roll),
+  shake (>2.5g, 1s debounce) plays a startled animation. RobotPoseSource
+  interface is the hook for the future robot body.
+- **Watch mode**: MediaProjection foreground service captures 1 frame / 8s,
+  downscaled to ≤512px. Settings toggle triggers the one-time system consent;
+  the persistent notification has a Stop action.
+- **ContextDirector**: vision-describes watched frames (max 1 call/30s),
+  classifies (game/document/error/browser/media), maps to reactive
+  animations, and in Commentary mode speaks ≤1 comment per 5 min, never
+  while the user is talking. Both toggles default OFF (except animations).
+
 <!-- AUTOBUILD:START -->
 (regenerated after each commit)
-- 2026-08-04 18:11:17 : Merge remote-tracking branch 'origin/main'
+- 2026-08-04 18:28:26 : Phase B: BigPickle brain, ask-anything recall, SSH server management
+- 99172fc 2026-08-04 18:11 Merge remote-tracking branch 'origin/main'
 - f8f1d98 2026-08-04 18:09 Face mode: keep-screen-on toggle, random idle animations, live HANDOFF doc
-- df0aecb 2026-08-04 13:51 build: auto-build debug+release APKs after every commit
-- 7f8609c 2026-08-04 13:21 security: cert-check bridge callers, exclude private data from backup, release signing config
-- 3f2133c 2026-08-04 12:29 fix(build): build sd_jni_bridge 16KB-page-aligned for Android 15+ installs
+- 6e9cc38 2026-08-04 21:32 chore(sdd): record final review outcome, Task 3, and overall plan status
+- c4d62da 2026-08-04 21:31 fix(media): give MediaGenerateVideoTool's timeout real margin, add missing RemoteVideoGenerator test coverage
 <!-- AUTOBUILD:END -->

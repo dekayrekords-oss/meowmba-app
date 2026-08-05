@@ -287,6 +287,7 @@ class CompanionViewModel(
                 wakeWordEnabled = storage.getBooleanPreference(KEY_WAKE_WORD, false),
                 conversationMode = storage.getBooleanPreference(KEY_CONVERSATION, false),
                 keepScreenOnInFaceMode = storage.getBooleanPreference(KEY_KEEP_SCREEN_ON, true),
+                commentaryEnabled = storage.getBooleanPreference(KEY_COMMENTARY, false),
                 agentBrainEnabled = storage.getBooleanPreference(KEY_AGENT_BRAIN, true),
                 hermesAgentUrl = storage.getPreference(KEY_HERMES_URL) ?: "",
                 imageServerUrl = storage.getPreference(KEY_IMAGE_SERVER_URL) ?: "",
@@ -550,6 +551,30 @@ class CompanionViewModel(
                 toolRegistry.register(SshTool(sshHostRegistry!!))
             }
 
+            // IMU: lean with the phone, startle on shake. RobotPoseSource for
+            // the future body lives behind MotionSense's interface.
+            appContext?.let { ctx ->
+                motionSense = com.example.meowmba.core.sensor.MotionSense(ctx).also { sense ->
+                    if (sense.available) {
+                        sense.start()
+                        viewModelScope.launch {
+                            sense.motion.collect { st -> _motionTilt.value = st.rollDeg }
+                        }
+                        viewModelScope.launch {
+                            var lastSeen = 0
+                            sense.shakeCount.collect { count ->
+                                if (count > lastSeen) {
+                                    lastSeen = count
+                                    val spec = CustomAnimations.BUILT_INS["happy bop"]
+                                        ?: CustomAnimations.BUILT_INS.values.randomOrNull()
+                                    spec?.let { playCustomAnimation(it) }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             // Navigation. find_places is SAFE and read-only so the companion can look,
             // describe the options and ask "closest, or do you want to pick?" before
             // nav.navigate actually routes anywhere. Offline-first, so it works with no
@@ -754,6 +779,8 @@ class CompanionViewModel(
     }
 
     override fun onCleared() {
+        contextDirector?.stop()
+        motionSense?.stop()
         idleAnimationDirector?.stop()
         stopWakeLoopAndRelease()
         (currentProvider as? LiteRtProvider)?.close()
@@ -799,6 +826,22 @@ class CompanionViewModel(
     /** Remembered SSH servers (encrypted). Exposed for the Settings UI. */
     var sshHostRegistry: com.example.meowmba.core.ssh.SshHostRegistry? = null
         private set
+
+    /** IMU awareness — avatar leans with the phone; shake startles the cat. */
+    var motionSense: com.example.meowmba.core.sensor.MotionSense? = null
+        private set
+
+    /** Watches screen-watch frames and turns them into reactions/commentary. */
+    private var contextDirector: com.example.meowmba.core.context.ContextDirector? = null
+
+    private val _motionTilt = kotlinx.coroutines.flow.MutableStateFlow(0f)
+
+    /** One-shot flag: MainActivity watches this to launch the MediaProjection consent. */
+    private val _screenWatchConsentRequested = kotlinx.coroutines.flow.MutableStateFlow(false)
+    val screenWatchConsentRequested: kotlinx.coroutines.flow.StateFlow<Boolean> =
+        _screenWatchConsentRequested.asStateFlow()
+    /** Roll in degrees for the avatar lean (±8°), 0 when no IMU. */
+    val motionTiltDeg: kotlinx.coroutines.flow.StateFlow<Float> = _motionTilt.asStateFlow()
 
     private fun buildOmniRoute(): com.example.meowmba.core.agent.OmniRoute? {
         val storage = secureStorage ?: return null
@@ -1044,6 +1087,78 @@ class CompanionViewModel(
     }
 
     /** Face-mode display setting: keep the screen awake while the face shows. */
+    /**
+     * Watch mode: meow glances at the phone screen every few seconds.
+     * Enabling goes through the one-time MediaProjection consent dialog;
+     * disabling stops the capture service immediately.
+     */
+    fun setWatchMode(enabled: Boolean) {
+        if (enabled) {
+            _screenWatchConsentRequested.value = true
+        } else {
+            secureStorage?.context?.let { com.example.meowmba.core.screen.ScreenWatchService.stop(it) }
+            contextDirector?.stop()
+            contextDirector = null
+            secureStorage?.saveBooleanPreference(KEY_WATCH_MODE, false)
+            _uiState.value = _uiState.value.copy(watchModeEnabled = false)
+        }
+    }
+
+    fun consumeScreenWatchConsentRequest() {
+        _screenWatchConsentRequested.value = false
+    }
+
+    fun onScreenCaptureGranted(resultCode: Int, data: android.content.Intent) {
+        val ctx = secureStorage?.context ?: return
+        com.example.meowmba.core.screen.ScreenWatchService.start(ctx, resultCode, data)
+        secureStorage?.saveBooleanPreference(KEY_WATCH_MODE, true)
+        _uiState.value = _uiState.value.copy(watchModeEnabled = true)
+        startContextDirector()
+    }
+
+    /** Fuses screen-watch frames into reactions; see ContextDirector. */
+    private fun startContextDirector() {
+        if (contextDirector != null) return
+        contextDirector = com.example.meowmba.core.context.ContextDirector(
+            scope = viewModelScope,
+            describe = { jpeg ->
+                visionProviderFor()?.describe(
+                    jpeg,
+                    "In one short sentence, what is on this screen right now?",
+                )?.getOrNull()
+            },
+            onEvent = { event ->
+                val anim = when (event.kind) {
+                    "game" -> "happy bop"
+                    "error" -> "ear wiggle"
+                    "document", "browser", "media" -> "slow blink"
+                    else -> null
+                }
+                anim?.let { CustomAnimations.BUILT_INS[it] }?.let { spec ->
+                    if (_uiState.value.interactionState == InteractionState.IDLE &&
+                        _uiState.value.activeAnimation == null
+                    ) playCustomAnimation(spec)
+                }
+            },
+            onComment = { text -> speak(text) },
+            commentaryEnabled = _uiState.value.commentaryEnabled,
+            canSpeak = {
+                _uiState.value.interactionState == InteractionState.IDLE ||
+                    _uiState.value.interactionState == InteractionState.SPEAKING
+            },
+        ).also { it.start() }
+    }
+
+    fun setCommentaryMode(enabled: Boolean) {
+        secureStorage?.saveBooleanPreference(KEY_COMMENTARY, enabled)
+        contextDirector?.commentaryEnabled = enabled
+        _uiState.value = _uiState.value.copy(commentaryEnabled = enabled)
+    }
+
+    fun onScreenCaptureDenied() {
+        _uiState.value = _uiState.value.copy(watchModeEnabled = false)
+    }
+
     fun setKeepScreenOn(enabled: Boolean) {
         _uiState.value = _uiState.value.copy(keepScreenOnInFaceMode = enabled)
         secureStorage?.saveBooleanPreference(KEY_KEEP_SCREEN_ON, enabled)
@@ -3047,6 +3162,8 @@ class CompanionViewModel(
         private const val KEY_WAKE_WORD = "wake_word_enabled"
         private const val KEY_CONVERSATION = "conversation_mode"
         private const val KEY_KEEP_SCREEN_ON = "keep_screen_on_face"
+        private const val KEY_WATCH_MODE = "watch_mode"
+        private const val KEY_COMMENTARY = "commentary_mode"
         private const val KEY_MEMORY_PAUSED = "memory_paused"
         private const val KEY_RETENTION_DAYS = "retention_days"
         private const val KEY_AGENT_BRAIN = "agent_brain_enabled"

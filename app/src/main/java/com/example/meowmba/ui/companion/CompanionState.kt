@@ -58,6 +58,10 @@ data class CompanionState(
     val conversationMode: Boolean = false,
     /** Keep the display awake while the companion face is on screen. */
     val keepScreenOnInFaceMode: Boolean = true,
+    /** Low-rate screen awareness (MediaProjection) is on. */
+    val watchModeEnabled: Boolean = false,
+    /** Meow may speak short unsolicited comments about what it sees. */
+    val commentaryEnabled: Boolean = false,
     /** Speech energy 0..1 driven by TTS word boundaries; animates the mouth. */
     val mouthEnergy: Float = 0f,
     /** Result of the last "Test connection" action on the Hardware page. */

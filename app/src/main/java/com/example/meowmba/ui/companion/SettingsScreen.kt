@@ -29,6 +29,8 @@ fun SettingsScreen(
     wakeWordEnabled: Boolean = false,
     conversationMode: Boolean = false,
     keepScreenOnInFaceMode: Boolean = true,
+    watchModeEnabled: Boolean = false,
+    commentaryEnabled: Boolean = false,
     agentBrainEnabled: Boolean = true,
     hermesAgentUrl: String = "",
     imageServerUrl: String = "",
@@ -43,6 +45,8 @@ fun SettingsScreen(
     onWakeWordChange: (Boolean) -> Unit = {},
     onConversationModeChange: (Boolean) -> Unit = {},
     onKeepScreenOnChange: (Boolean) -> Unit = {},
+    onWatchModeChange: (Boolean) -> Unit = {},
+    onCommentaryChange: (Boolean) -> Unit = {},
     onAgentBrainChange: (Boolean) -> Unit = {},
     onHermesUrlChange: (String) -> Unit = {},
     onDownloadImageModel: () -> Unit = {},
@@ -129,6 +133,20 @@ fun SettingsScreen(
                 checked = keepScreenOnInFaceMode,
                 onCheckedChange = onKeepScreenOnChange
             )
+            VoiceToggle(
+                label = "Watch mode (screen awareness)",
+                description = "Meow glances at your screen every few seconds so it can react and comment on what you're doing.",
+                checked = watchModeEnabled,
+                onCheckedChange = onWatchModeChange
+            )
+
+            VoiceToggle(
+                label = "Commentary mode",
+                description = "While watching, Meow may speak a short helpful comment now and then (max once every 5 minutes).",
+                checked = commentaryEnabled,
+                onCheckedChange = onCommentaryChange
+            )
+
             VoiceToggle(
                 label = "Conversation mode",
                 description = "Stay for follow-up questions after responding. Say \"stop\" to end.",
