@@ -33,6 +33,7 @@ fun SettingsScreen(
     hermesAgentUrl: String = "",
     imageServerUrl: String = "",
     preferServerImageGen: Boolean = false,
+    videoServerUrl: String = "",
     imageModelInstalled: () -> Boolean = { false },
     imageModelDownload: com.example.meowmba.core.agent.ModelDownloader.DownloadProgress? = null,
     musicServerUrl: String = "",
@@ -49,6 +50,7 @@ fun SettingsScreen(
     onImageServerUrlChange: (String) -> Unit = {},
     onPreferServerImageGenChange: (Boolean) -> Unit = {},
     onMusicServerUrlChange: (String) -> Unit = {},
+    onVideoServerUrlChange: (String) -> Unit = {},
     onBackgroundListeningChange: (Boolean) -> Unit = {},
     onUsbAutoBridgeChange: ((Boolean) -> Unit)? = null,
     onClose: () -> Unit
@@ -252,6 +254,25 @@ fun SettingsScreen(
                 text = "Your own music-generation server, e.g. " +
                     "http://192.168.1.10:9200. Leave blank to use a simple " +
                     "procedural tone sequence instead.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.Gray
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Video generation (opt-in remote server — no on-device path exists)
+            Text("Video generation", style = MaterialTheme.typography.titleMedium, color = Color.White)
+            SettingsTextField(
+                value = videoServerUrl,
+                onValueChange = onVideoServerUrlChange,
+                label = { Text("Video server URL (optional)") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Text(
+                text = "Your own video-generation server, e.g. " +
+                    "http://192.168.1.10:9300. Leave blank to always use the " +
+                    "animated-frames placeholder. Real generation takes several " +
+                    "minutes per clip.",
                 style = MaterialTheme.typography.bodySmall,
                 color = Color.Gray
             )

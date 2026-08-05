@@ -154,6 +154,14 @@ class CompanionViewModelTest {
     }
 
     @Test
+    fun `setVideoServerUrl trims trailing slashes and persists the URL`() = runTest {
+        val viewModel = CompanionViewModel(secureStorage = mockSecureStorage)
+        viewModel.setVideoServerUrl("  http://192.168.1.10:9300/  ")
+        assertEquals("http://192.168.1.10:9300", viewModel.uiState.value.videoServerUrl)
+        verify(mockSecureStorage).savePreference("video_server_url", "http://192.168.1.10:9300")
+    }
+
+    @Test
     fun `preferServerImageGen defaults to false`() = runTest {
         val viewModel = CompanionViewModel(secureStorage = mockSecureStorage)
         assertFalse(viewModel.uiState.value.preferServerImageGen)
