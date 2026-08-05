@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.meowmba.ui.components.MicButton
@@ -49,11 +50,29 @@ fun CompanionScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
+    // Foldable split: on the unfolded inner display (wide, >=600dp) the
+    // agent browser lives in the right half while the companion keeps the
+    // left, so meow can drive the browser in real time while you watch.
+    val screenWidthDp = LocalConfiguration.current.screenWidthDp
+    val isUnfolded = screenWidthDp >= 600
+    val splitBrowser = isUnfolded && uiState.showBrowser
+    val halfWidth = (screenWidthDp / 2).dp
+    // Meow freezes while a surface covers the face — chat sheet, app menu,
+    // or the full-screen (folded) browser. In split view the avatar stays
+    // alive beside the browser.
+    val animationsPaused = uiState.showAppDrawer || uiState.isChatExpanded ||
+        (uiState.showBrowser && !splitBrowser)
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFF0D1117))
     ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .then(if (splitBrowser) Modifier.padding(end = halfWidth) else Modifier)
+        ) {
         // 0. Chosen background — first child, so it is genuinely behind the avatar.
         AppBackground(
             selection = uiState.background,
@@ -72,10 +91,11 @@ fun CompanionScreen(
             AvatarRenderer(
                 state = uiState,
                 onZoneClick = { viewModel.onAvatarZoneClick(it) },
-                onSwipeUp = { viewModel.openChat() },
+                onSwipeUp = { viewModel.toggleAppDrawer() },
                 onSwipeDown = { viewModel.openTiles() },
                 onSwipeLeft = { viewModel.toggleBrowser() },
-                onSwipeRight = { viewModel.toggleAppDrawer() }
+                onSwipeRight = { viewModel.openChat() },
+                paused = animationsPaused
             )
         }
 
@@ -532,12 +552,13 @@ fun CompanionScreen(
             )
         }
 
-        // Swipe right = app drawer (launcher); swipe left = agent browser.
+        // Swipe up = app drawer (launcher); swipe right = chat; swipe left
+        // = agent browser (full-screen when folded, split pane when unfolded).
         if (uiState.showAppDrawer) {
             AppDrawerScreen(onClose = { viewModel.toggleAppDrawer() })
         }
 
-        if (uiState.showBrowser) {
+        if (uiState.showBrowser && !splitBrowser) {
             BrowserScreen()
         }
 
@@ -619,6 +640,18 @@ fun CompanionScreen(
                         }
                     }
                 }
+            }
+        }
+        }
+
+        // Unfolded split: the agent-driven browser owns the right half.
+        if (splitBrowser) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(start = halfWidth)
+            ) {
+                BrowserScreen()
             }
         }
     }

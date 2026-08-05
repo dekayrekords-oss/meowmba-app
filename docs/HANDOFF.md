@@ -165,9 +165,9 @@ with risk levels, audit trail).
 
 <!-- AUTOBUILD:START -->
 (regenerated after each commit)
-- 2026-08-04 19:33:17 : Ignore python bytecode cache
+- 2026-08-04 20:57:39 : Ignore .kotlin daemon log artifacts
+- 3dfa052 2026-08-04 20:54 Phase G: LOOI mood engine, idle chatter, and motor control API
+- 1219c87 2026-08-04 19:24 Ignore python bytecode cache
 - e39d29b 2026-08-04 19:24 Phase F: desktop control bridge, phone system tools, opt-in UI automation
 - d91bfbf 2026-08-04 19:05 Phase E: routines engine, memory follow-ups, barge-in
-- 146f363 2026-08-04 18:55 Fix Phase D launch crash: _motionTilt must be initialized before init-block collectors
-- 6f44a95 2026-08-04 18:50 Phase D: optional launcher, app drawer, agent-driven browser
 <!-- AUTOBUILD:END -->

@@ -81,9 +81,9 @@ fun SettingsScreen(
     var sshPassword by remember { mutableStateOf("") }
     var savedServers by remember { mutableStateOf(sshRegistry.list().map { it.name }) }
     var hfToken by remember { mutableStateOf(secureStorage.getApiKey("huggingface") ?: "") }
-    var ollamaEndpoint by remember { mutableStateOf(secureStorage.getEndpoint("ollama") ?: "http://10.0.2.2:11434") }
-    var ollamaModel by remember { mutableStateOf(secureStorage.getModelName("ollama") ?: "gemma2") }
-    var ollamaVisionModel by remember { mutableStateOf(secureStorage.getModelName("ollama_vision") ?: "gemma4:12b-it-qat") }
+    var ollamaEndpoint by remember { mutableStateOf(secureStorage.getEndpoint("ollama") ?: "http://192.168.1.163:11434") }
+    var ollamaModel by remember { mutableStateOf(secureStorage.getModelName("ollama") ?: "qwen3.6-memba:35b-a3b") }
+    var ollamaVisionModel by remember { mutableStateOf(secureStorage.getModelName("ollama_vision") ?: "qwen3.6-memba:35b-a3b") }
     var localModelPath by remember { mutableStateOf(secureStorage.getEndpoint("local") ?: "/data/local/tmp/llm/gemma.bin") }
 
     Surface(
@@ -933,7 +933,7 @@ private fun brainLabel(id: String): String = BRAIN_CHOICES.firstOrNull { it.firs
 private val BRAIN_CHOICES = listOf(
     "auto" to "Auto (Omniroute)",
     "bigpickle" to "BigPickle",
-    "ollama" to "Ollama",
+    "ollama" to "MeowLion (Ollama)",
     "openai" to "OpenAI",
     "local" to "On-device",
 )

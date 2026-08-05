@@ -940,18 +940,20 @@ class CompanionViewModel(
         val storage = secureStorage ?: return null
         val routes = mutableListOf<com.example.meowmba.core.agent.OmniRoute.Route>()
 
-        storage.getEndpoint("ollama")?.takeIf { it.isNotBlank() }?.let { endpoint ->
-            routes += com.example.meowmba.core.agent.OmniRoute.Route(
-                id = "ollama",
-                label = "Ollama · ${storage.getModelName("ollama") ?: "gemma2"}",
-                provider = RemoteModelProvider(
-                    "Ollama", endpoint.trimEnd('/'), null,
-                    storage.getModelName("ollama") ?: "gemma2",
-                ),
-                tags = setOf(com.example.meowmba.core.agent.OmniRoute.RouteTag.CHAT, com.example.meowmba.core.agent.OmniRoute.RouteTag.CODING, com.example.meowmba.core.agent.OmniRoute.RouteTag.REASONING, com.example.meowmba.core.agent.OmniRoute.RouteTag.VISION),
-                priority = 20,
-            )
-        }
+        // MeowLion — the local Ollama box on the home network. Preferred
+        // brain for chat, agent work and browser driving (vision-capable);
+        // used out of the box even before Settings saves an endpoint.
+        val meowlionEndpoint = storage.getEndpoint("ollama")?.takeIf { it.isNotBlank() } ?: MEOWLION_ENDPOINT
+        val meowlionModel = storage.getModelName("ollama") ?: MEOWLION_MODEL
+        routes += com.example.meowmba.core.agent.OmniRoute.Route(
+            id = "ollama",
+            label = "MeowLion (Ollama) · $meowlionModel",
+            provider = RemoteModelProvider(
+                "MeowLion", meowlionEndpoint.trimEnd('/'), null, meowlionModel,
+            ),
+            tags = setOf(com.example.meowmba.core.agent.OmniRoute.RouteTag.CHAT, com.example.meowmba.core.agent.OmniRoute.RouteTag.CODING, com.example.meowmba.core.agent.OmniRoute.RouteTag.REASONING, com.example.meowmba.core.agent.OmniRoute.RouteTag.VISION),
+            priority = 10,
+        )
         storage.getApiKey("opencode")?.takeIf { it.isNotBlank() }?.let { key ->
             routes += com.example.meowmba.core.agent.OmniRoute.Route(
                 id = "bigpickle",
@@ -996,7 +998,10 @@ class CompanionViewModel(
         // "Default brain" setting: force one provider as the primary brain.
         // Everything else is dropped except the on-device fallback, which is
         // always kept so the cat never loses its voice offline.
-        val forced = storage.getPreference("default_brain")?.takeIf { it.isNotBlank() && it != "auto" }
+        // Default brain: MeowLion out of the box; an explicit Settings
+        // choice always wins.
+        val forced = (storage.getPreference("default_brain") ?: "ollama")
+            .takeIf { it.isNotBlank() && it != "auto" }
         val finalRoutes = if (forced != null && routes.any { it.id == forced }) {
             routes.filter { it.id == forced || it.offline }.map {
                 if (it.id == forced) it.copy(priority = 1) else it
@@ -3387,6 +3392,10 @@ class CompanionViewModel(
         private const val KEY_COMMENTARY = "commentary_mode"
         private const val KEY_BARGE_IN = "barge_in"
         private const val KEY_IDLE_CHATTER = "idle_chatter"
+
+        /** MeowLion — local Ollama box; the preferred brain when reachable. */
+        private const val MEOWLION_ENDPOINT = "http://192.168.1.163:11434"
+        private const val MEOWLION_MODEL = "qwen3.6-memba:35b-a3b"
         private const val KEY_MEMORY_PAUSED = "memory_paused"
         private const val KEY_RETENTION_DAYS = "retention_days"
         private const val KEY_AGENT_BRAIN = "agent_brain_enabled"

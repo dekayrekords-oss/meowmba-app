@@ -76,6 +76,7 @@ fun AvatarRenderer(
     onSwipeDown: () -> Unit = {},
     onSwipeLeft: () -> Unit = {},
     onSwipeRight: () -> Unit = {},
+    paused: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val basePose = CatAvatarStateMachine.resolvePose(state)
@@ -87,7 +88,8 @@ fun AvatarRenderer(
     // normally. Feeding it in here means the expression blending below smooths
     // the keyframe steps for free, and the clip simply stops applying when it
     // ends (sample returns null past the duration).
-    val customAnim = state.activeAnimation
+    // While an overlay covers the screen the face freezes: no custom clip.
+    val customAnim = if (paused) null else state.activeAnimation
     var animT by remember { mutableLongStateOf(0L) }
     LaunchedEffect(customAnim) {
         if (customAnim != null) {
@@ -123,7 +125,8 @@ fun AvatarRenderer(
 
     // ── Ambient animation layers (timings from the registry) ───────────────
     val blink = remember { Animatable(1f) }
-    LaunchedEffect(Unit) {
+    LaunchedEffect(paused) {
+        if (paused) return@LaunchedEffect
         val spec = CatAnimationRegistry.spec("idle.blink")
         while (true) {
             delay(Random.nextLong(spec.minDelayMs.toLong(), spec.maxDelayMs.toLong()))
@@ -139,7 +142,8 @@ fun AvatarRenderer(
 
     val earTwitchL = remember { Animatable(0f) }
     val earTwitchR = remember { Animatable(0f) }
-    LaunchedEffect(Unit) {
+    LaunchedEffect(paused) {
+        if (paused) return@LaunchedEffect
         val spec = CatAnimationRegistry.spec("idle.ear_twitch")
         while (true) {
             delay(Random.nextLong(spec.minDelayMs.toLong(), spec.maxDelayMs.toLong()))
@@ -154,17 +158,23 @@ fun AvatarRenderer(
     }
 
     fun registryInfinite(name: String) = CatAnimationRegistry.spec(name)
+    // Paused = frozen endpoints (from == to), so ambient loops stop moving
+    // instead of being torn out of the composition.
+    fun inf(name: String, target: Boolean): Float {
+        val s = CatAnimationRegistry.spec(name)
+        return if (paused) (s.from + s.to) / 2f else if (target) s.to else s.from
+    }
     val breathe by rememberInfiniteTransition(label = "breathe").animateFloat(
-        initialValue = registryInfinite("idle.breathe").from,
-        targetValue = registryInfinite("idle.breathe").to,
+        initialValue = inf("idle.breathe", false),
+        targetValue = inf("idle.breathe", true),
         animationSpec = infiniteRepeatable(
             tween(registryInfinite("idle.breathe").durationMs), RepeatMode.Reverse
         ),
         label = "breathe"
     )
     val driftX by rememberInfiniteTransition(label = "driftX").animateFloat(
-        initialValue = registryInfinite("idle.gaze_drift_x").from,
-        targetValue = registryInfinite("idle.gaze_drift_x").to,
+        initialValue = inf("idle.gaze_drift_x", false),
+        targetValue = inf("idle.gaze_drift_x", true),
         animationSpec = infiniteRepeatable(
             tween(registryInfinite("idle.gaze_drift_x").durationMs, easing = LinearEasing),
             RepeatMode.Reverse
@@ -172,8 +182,8 @@ fun AvatarRenderer(
         label = "driftX"
     )
     val driftY by rememberInfiniteTransition(label = "driftY").animateFloat(
-        initialValue = registryInfinite("idle.gaze_drift_y").from,
-        targetValue = registryInfinite("idle.gaze_drift_y").to,
+        initialValue = inf("idle.gaze_drift_y", false),
+        targetValue = inf("idle.gaze_drift_y", true),
         animationSpec = infiniteRepeatable(
             tween(registryInfinite("idle.gaze_drift_y").durationMs, easing = LinearEasing),
             RepeatMode.Reverse
@@ -181,16 +191,16 @@ fun AvatarRenderer(
         label = "driftY"
     )
     val talk by rememberInfiniteTransition(label = "talk").animateFloat(
-        initialValue = registryInfinite("speech.talk_cycle").from,
-        targetValue = registryInfinite("speech.talk_cycle").to,
+        initialValue = inf("speech.talk_cycle", false),
+        targetValue = inf("speech.talk_cycle", true),
         animationSpec = infiniteRepeatable(
             tween(registryInfinite("speech.talk_cycle").durationMs), RepeatMode.Reverse
         ),
         label = "talk"
     )
     val whiskerSway by rememberInfiniteTransition(label = "whiskers").animateFloat(
-        initialValue = registryInfinite("idle.whisker_sway").from,
-        targetValue = registryInfinite("idle.whisker_sway").to,
+        initialValue = inf("idle.whisker_sway", false),
+        targetValue = inf("idle.whisker_sway", true),
         animationSpec = infiniteRepeatable(
             tween(registryInfinite("idle.whisker_sway").durationMs, easing = LinearEasing),
             RepeatMode.Reverse
@@ -198,16 +208,16 @@ fun AvatarRenderer(
         label = "whiskers"
     )
     val mouthWobble by rememberInfiniteTransition(label = "mouth").animateFloat(
-        initialValue = registryInfinite("idle.mouth_wobble").from,
-        targetValue = registryInfinite("idle.mouth_wobble").to,
+        initialValue = inf("idle.mouth_wobble", false),
+        targetValue = inf("idle.mouth_wobble", true),
         animationSpec = infiniteRepeatable(
             tween(registryInfinite("idle.mouth_wobble").durationMs), RepeatMode.Reverse
         ),
         label = "mouth"
     )
     val haloPulse by rememberInfiniteTransition(label = "halo").animateFloat(
-        initialValue = registryInfinite("system.halo_pulse").from,
-        targetValue = registryInfinite("system.halo_pulse").to,
+        initialValue = inf("system.halo_pulse", false),
+        targetValue = inf("system.halo_pulse", true),
         animationSpec = infiniteRepeatable(
             tween(registryInfinite("system.halo_pulse").durationMs), RepeatMode.Reverse
         ),
