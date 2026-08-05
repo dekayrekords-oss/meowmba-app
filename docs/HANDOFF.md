@@ -125,11 +125,31 @@ with risk levels, audit trail).
   `CompanionViewModel.shouldEnterFollowUp`, timeout resumes wake standby.
 - Tests: `PhaseETest.kt` (9 tests: trigger math + barge-in decision table).
 
+## Phase F features (2026-08-04)
+
+- **Desktop bridge control (F1)**: new daemon RPC methods `open_app`,
+  `open_url`, `open_file`, `clipboard_get`, `clipboard_set`, `media`
+  (play/pause/next/volume), `screenshot` (returns PNG + base64) in
+  `bridge/meowmba-bridge.py` — cross-platform (macOS/Linux/Windows) with
+  graceful "tool not installed" errors. Kotlin side: matching
+  `DesktopBridgeManager` methods + `DesktopControlTool` (MODERATE, always
+  confirms); screenshots are saved to filesDir/desktop_screenshots and
+  described by the vision provider when available.
+- **Phone system tools (F2)** in `PhoneTools.kt`: `phone.set_alarm` /
+  `phone.set_timer` (system Clock intents), `phone.flashlight` (torch),
+  `phone.dnd` (requests DND policy access once, opens the settings page),
+  `phone.battery` (level + charging + saver readout).
+- **UI automation (F3)**: opt-in `MeowAccessibilityService` (OFF until the
+  user enables it in system accessibility settings) + `ui.automate` tool
+  (tap/type/scroll/read, MODERATE + ALWAYS confirmation; honest failure when
+  disabled). Settings has a UI-automation card linking to the system page.
+- Tests: `PhaseFTest.kt` (off-by-default honesty + approval policy).
+
 <!-- AUTOBUILD:START -->
 (regenerated after each commit)
-- 2026-08-04 18:56:41 : Fix Phase D launch crash: _motionTilt must be initialized before init-block collectors
+- 2026-08-04 19:07:24 : Phase E: routines engine, memory follow-ups, barge-in
+- 146f363 2026-08-04 18:55 Fix Phase D launch crash: _motionTilt must be initialized before init-block collectors
 - 6f44a95 2026-08-04 18:50 Phase D: optional launcher, app drawer, agent-driven browser
 - 5d8bbc4 2026-08-04 18:39 Phase C: IMU motion sense, screen watch mode, context director
 - 490fab4 2026-08-04 18:26 Phase B: BigPickle brain, ask-anything recall, SSH server management
-- 99172fc 2026-08-04 18:11 Merge remote-tracking branch 'origin/main'
 <!-- AUTOBUILD:END -->

@@ -189,6 +189,55 @@ class DesktopBridgeManager(
         )
     }
 
+    data class BridgeScreenshot(val path: String, val bytes: Long, val pngBase64: String)
+
+    // ------------------------------------------------------------------
+    // Control tools (Phase F1): desktop actions behind the paired bridge.
+    // Every call degrades to an honest failure when a helper (xdotool,
+    // xclip, playerctl, …) is missing on the desktop.
+    // ------------------------------------------------------------------
+
+    private fun messageOf(body: String, fallback: String): String = try {
+        val obj = Json.parseToJsonElement(body).jsonObject
+        obj["message"]?.jsonPrimitive?.content ?: fallback
+    } catch (e: Exception) { fallback }
+
+    suspend fun openApp(name: String): Result<String> =
+        rpc("open_app", mapOf("name" to name)).map { messageOf(it, "Opened $name.") }
+
+    suspend fun openUrl(url: String): Result<String> =
+        rpc("open_url", mapOf("url" to url)).map { messageOf(it, "Opened $url.") }
+
+    suspend fun openFile(path: String): Result<String> =
+        rpc("open_file", mapOf("path" to path)).map { messageOf(it, "Opened $path.") }
+
+    suspend fun clipboardGet(): Result<String> = rpc("clipboard_get").mapCatching { body ->
+        Json.parseToJsonElement(body).jsonObject["text"]?.jsonPrimitive?.content
+            ?: throw Exception("desktop clipboard was empty or unreadable")
+    }
+
+    suspend fun clipboardSet(text: String): Result<String> =
+        rpc("clipboard_set", mapOf("text" to text)).map { messageOf(it, "Clipboard updated.") }
+
+    /** action: play | pause | next | volume (with [volume] 0-100). */
+    suspend fun mediaControl(action: String, volume: Int? = null): Result<String> {
+        val params = mutableMapOf<String, Any?>("action" to action)
+        volume?.let { params["volume"] = it.coerceIn(0, 100) }
+        return rpc("media", params).map { messageOf(it, "Media: $action.") }
+    }
+
+    /** PNG screenshot of the desktop; daemon returns path + base64 data. */
+    suspend fun screenshot(): Result<BridgeScreenshot> = rpc("screenshot").mapCatching { body ->
+        val obj = Json.parseToJsonElement(body).jsonObject
+        val b64 = obj["data_b64"]?.jsonPrimitive?.content
+            ?: throw Exception("desktop returned no screenshot data")
+        BridgeScreenshot(
+            path = obj["path"]?.jsonPrimitive?.content ?: "",
+            bytes = obj["bytes"]?.jsonPrimitive?.long ?: 0L,
+            pngBase64 = b64
+        )
+    }
+
     // ------------------------------------------------------------------
     // File tools (P6b): read-only, workspace-confined by the daemon
     // ------------------------------------------------------------------

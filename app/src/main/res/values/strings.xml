@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Meowmba</string>
+    <string name="meow_accessibility_description">Lets Meow read and operate on-screen elements (find, tap, type, scroll) when you ask — every action asks for confirmation first. Off until you enable it.</string>
 </resources>

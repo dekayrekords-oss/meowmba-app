@@ -52,6 +52,8 @@ import hmac
 import json
 import os
 import secrets
+import shutil
+import tempfile
 import socket
 import ssl
 import subprocess
@@ -384,8 +386,22 @@ class BridgeHandler(BaseHTTPRequestHandler):
             self._rpc_run_build(data.get("params") or {}, pairing)
         elif method == "run_script":
             self._rpc_run_script(data.get("params") or {}, pairing)
+        elif method == "open_app":
+            self._rpc_open_app(data.get("params") or {})
+        elif method == "open_url":
+            self._rpc_open_url(data.get("params") or {})
+        elif method == "open_file":
+            self._rpc_open_file(data.get("params") or {})
+        elif method == "clipboard_get":
+            self._rpc_clipboard_get(data.get("params") or {})
+        elif method == "clipboard_set":
+            self._rpc_clipboard_set(data.get("params") or {}, pairing)
+        elif method == "media":
+            self._rpc_media(data.get("params") or {})
+        elif method == "screenshot":
+            self._rpc_screenshot(data.get("params") or {})
         else:
-            self._send(400, {"error": f"unknown method '{method}' (supports: ping, status, list_files, read_file, write_file, run_build, run_script)"})
+            self._send(400, {"error": f"unknown method '{method}'"})
 
     # -- workspace file tools (P6b, read-only) --------------------------------
 
@@ -626,6 +642,236 @@ class BridgeHandler(BaseHTTPRequestHandler):
             "duration_s": round(duration, 1),
             "timed_out": timed_out,
             "output": output,
+        })
+
+    # -- control tools (Phase F1): open/clipboard/media/screenshot ----------
+    # Every helper degrades to an honest error when the desktop lacks the
+    # underlying tool (xclip, playerctl, ...) — never a silent no-op.
+
+    @staticmethod
+    def _run_quiet(argv, input_bytes=None, timeout=20):
+        try:
+            return subprocess.run(
+                argv, input=input_bytes, capture_output=True, timeout=timeout, check=False
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+
+    def _rpc_open_url(self, params: dict) -> None:
+        url = str(params.get("url", "")).strip()
+        if not url.startswith(("http://", "https://")):
+            self._send(400, {"error": "only http(s) URLs are allowed"})
+            return
+        try:
+            import webbrowser
+            if webbrowser.open(url):
+                self._send(200, {"ok": True, "message": f"Opened {url} on the desktop."})
+            else:
+                self._send(500, {"error": "no browser available on this desktop"})
+        except Exception as ex:
+            self._send(500, {"error": f"could not open URL: {ex}"})
+
+    def _rpc_open_file(self, params: dict) -> None:
+        path = os.path.expanduser(str(params.get("path", "")).strip())
+        if not path or not os.path.exists(path):
+            self._send(404, {"error": "file not found"})
+            return
+        if sys.platform == "darwin":
+            argv = ["open", path]
+        elif os.name == "nt":
+            argv = ["cmd", "/c", "start", "", path]
+        else:
+            argv = ["xdg-open", path]
+        proc = self._run_quiet(argv)
+        if proc is None or proc.returncode != 0:
+            self._send(500, {"error": "could not open file (is xdg-open installed?)"})
+            return
+        self._send(200, {"ok": True, "message": f"Opened {path}."})
+
+    def _find_desktop_entry(self, name: str):
+        want = name.lower()
+        dirs = [Path("/usr/share/applications"), Path.home() / ".local/share/applications"]
+        for d in dirs:
+            if not d.is_dir():
+                continue
+            for f in sorted(d.glob("*.desktop")):
+                try:
+                    txt = f.read_text(errors="replace")
+                except OSError:
+                    continue
+                for line in txt.splitlines():
+                    if line.startswith("Name=") and want in line[5:].lower():
+                        return f
+        return None
+
+    def _rpc_open_app(self, params: dict) -> None:
+        name = str(params.get("name", "")).strip()
+        if not name:
+            self._send(400, {"error": "name required"})
+            return
+        if sys.platform == "darwin":
+            proc = self._run_quiet(["open", "-a", name])
+            if proc is None or proc.returncode != 0:
+                self._send(404, {"error": f"no app called '{name}' found"})
+            else:
+                self._send(200, {"ok": True, "message": f"Opened {name}."})
+            return
+        if os.name == "nt":
+            proc = self._run_quiet([
+                "powershell", "-NoProfile", "-Command",
+                f"Start-Process '{name.replace(chr(39), chr(39)+chr(39))}'",
+            ])
+            if proc is None or proc.returncode != 0:
+                self._send(404, {"error": f"could not start '{name}'"})
+            else:
+                self._send(200, {"ok": True, "message": f"Started {name}."})
+            return
+        entry = self._find_desktop_entry(name)
+        if entry is None:
+            self._send(404, {"error": f"no installed app matching '{name}'"})
+            return
+        proc = self._run_quiet(["gtk-launch", entry.stem])
+        if proc is None or proc.returncode != 0:
+            # Fallback: run the first token of the Exec= line.
+            exec_cmd = ""
+            try:
+                for line in entry.read_text(errors="replace").splitlines():
+                    if line.startswith("Exec="):
+                        exec_cmd = line[5:].split()[0]
+                        break
+            except OSError:
+                pass
+            if not exec_cmd or shutil.which(exec_cmd) is None:
+                self._send(500, {"error": f"found {entry.name} but could not launch it (gtk-launch missing?)"})
+                return
+            proc = self._run_quiet([exec_cmd])
+        self._send(200, {"ok": True, "message": f"Opened {name}."})
+
+    def _rpc_clipboard_get(self, params: dict) -> None:
+        proc = None
+        if sys.platform == "darwin":
+            proc = self._run_quiet(["pbpaste"])
+        elif os.name == "nt":
+            proc = self._run_quiet(["powershell", "-NoProfile", "-Command", "Get-Clipboard"])
+        else:
+            if shutil.which("xclip"):
+                proc = self._run_quiet(["xclip", "-selection", "clipboard", "-o"])
+            elif shutil.which("xsel"):
+                proc = self._run_quiet(["xsel", "--clipboard", "--output"])
+            elif shutil.which("wl-paste"):
+                proc = self._run_quiet(["wl-paste", "--no-newline"])
+            else:
+                self._send(500, {"error": "no clipboard tool installed (need xclip, xsel or wl-clipboard)"})
+                return
+        if proc is None or proc.returncode != 0:
+            self._send(500, {"error": "clipboard read failed"})
+            return
+        self._send(200, {"ok": True, "text": proc.stdout.decode("utf-8", "replace")[:16000]})
+
+    def _rpc_clipboard_set(self, params: dict, pairing: dict) -> None:
+        text = str(params.get("text", ""))
+        data = text.encode("utf-8")
+        proc = None
+        if sys.platform == "darwin":
+            proc = self._run_quiet(["pbcopy"], input_bytes=data)
+        elif os.name == "nt":
+            proc = self._run_quiet(["clip"], input_bytes=data)
+        else:
+            if shutil.which("xclip"):
+                proc = self._run_quiet(["xclip", "-selection", "clipboard", "-i"], input_bytes=data)
+            elif shutil.which("xsel"):
+                proc = self._run_quiet(["xsel", "--clipboard", "--input"], input_bytes=data)
+            elif shutil.which("wl-copy"):
+                proc = self._run_quiet(["wl-copy"], input_bytes=data)
+            else:
+                self._send(500, {"error": "no clipboard tool installed (need xclip, xsel or wl-clipboard)"})
+                return
+        if proc is None or proc.returncode != 0:
+            self._send(500, {"error": "clipboard write failed"})
+            return
+        _log(f"clipboard_set: {len(data)} B by '{pairing.get('phone_name')}'")
+        self._send(200, {"ok": True, "message": f"Clipboard updated ({len(data)} chars)."})
+
+    def _rpc_media(self, params: dict) -> None:
+        action = str(params.get("action", "")).lower().strip()
+        if action == "volume":
+            try:
+                vol = max(0, min(int(params.get("volume", 50)), 100))
+            except (TypeError, ValueError):
+                self._send(400, {"error": "volume must be 0-100"})
+                return
+            if sys.platform == "darwin":
+                proc = self._run_quiet(["osascript", "-e", f"set volume output volume {vol}"])
+            elif os.name == "nt":
+                self._send(500, {"error": "volume control not supported on this desktop"})
+                return
+            elif shutil.which("pactl"):
+                proc = self._run_quiet(["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{vol}%"])
+            elif shutil.which("playerctl"):
+                proc = self._run_quiet(["playerctl", "volume", str(vol / 100.0)])
+            else:
+                self._send(500, {"error": "no volume tool installed (need pactl or playerctl)"})
+                return
+            if proc is None or proc.returncode != 0:
+                self._send(500, {"error": "could not set volume"})
+                return
+            self._send(200, {"ok": True, "message": f"Volume set to {vol}%."})
+            return
+        if action not in ("play", "pause", "next"):
+            self._send(400, {"error": "action must be play, pause, next or volume"})
+            return
+        if sys.platform == "darwin":
+            keycode = {"play": 49, "pause": 49, "next": 47}[action]
+            proc = self._run_quiet([
+                "osascript", "-e", f"tell application \"System Events\" to key code {keycode}",
+            ])
+        elif os.name == "nt":
+            self._send(500, {"error": "media keys not supported on this desktop"})
+            return
+        elif shutil.which("playerctl"):
+            proc = self._run_quiet(["playerctl", action])
+        else:
+            self._send(500, {"error": "no media tool installed (need playerctl)"})
+            return
+        if proc is None or proc.returncode != 0:
+            self._send(500, {"error": f"media {action} failed"})
+            return
+        self._send(200, {"ok": True, "message": f"Media: {action}."})
+
+    def _rpc_screenshot(self, params: dict) -> None:
+        out = Path(tempfile.gettempdir()) / f"meowmba-shot-{int(time.time())}.png"
+        argv = None
+        if sys.platform == "darwin":
+            argv = ["screencapture", "-x", str(out)]
+        elif os.name == "nt":
+            ps = (
+                "Add-Type -AssemblyName System.Windows.Forms,System.Drawing; "
+                "$b=[System.Windows.Forms.SystemInformation]::VirtualScreen; "
+                "$bmp=New-Object Drawing.Bitmap $b.Width,$b.Height; "
+                "$g=[Drawing.Graphics]::FromImage($bmp); "
+                "$g.CopyFromScreen($b.X,$b.Y,0,0,$bmp.Size); "
+                f"$bmp.Save('{out}')"
+            )
+            argv = ["powershell", "-NoProfile", "-Command", ps]
+        else:
+            for cand in (["scrot", str(out)], ["gnome-screenshot", "-f", str(out)],
+                         ["import", "-window", "root", str(out)], ["grim", str(out)]):
+                if shutil.which(cand[0]):
+                    argv = cand
+                    break
+            if argv is None:
+                self._send(500, {"error": "no screenshot tool installed (need scrot, gnome-screenshot, imagemagick or grim)"})
+                return
+        proc = self._run_quiet(argv, timeout=30)
+        if proc is None or proc.returncode != 0 or not out.is_file():
+            self._send(500, {"error": "screenshot failed"})
+            return
+        data = out.read_bytes()
+        self._send(200, {
+            "ok": True,
+            "path": str(out),
+            "bytes": len(data),
+            "data_b64": base64.b64encode(data).decode("ascii"),
         })
 
     def _rpc_run_build(self, params: dict, pairing: dict) -> None:

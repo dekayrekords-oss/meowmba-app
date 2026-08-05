@@ -32,6 +32,13 @@ import com.example.meowmba.core.agent.runtime.ToolCallPromptMode
 import com.example.meowmba.core.agent.tools.FindPlacesTool
 import com.example.meowmba.core.agent.tools.MemoryRecallTool
 import com.example.meowmba.core.agent.tools.WebBrowserTool
+import com.example.meowmba.core.agent.tools.DesktopControlTool
+import com.example.meowmba.core.agent.tools.SetAlarmTool
+import com.example.meowmba.core.agent.tools.SetTimerTool
+import com.example.meowmba.core.agent.tools.FlashlightTool
+import com.example.meowmba.core.agent.tools.DndTool
+import com.example.meowmba.core.agent.tools.BatteryStatusTool
+import com.example.meowmba.core.agent.tools.UiAutomationTool
 import com.example.meowmba.core.agent.tools.SshTool
 import com.example.meowmba.core.agent.tools.WeatherTool
 import com.example.meowmba.core.agent.tools.ListSavedPlacesTool
@@ -485,6 +492,16 @@ class CompanionViewModel(
             toolRegistry.register(DesktopWriteFileTool(bridgeManager))
             toolRegistry.register(DesktopRunBuildTool(bridgeManager))
             toolRegistry.register(DesktopRunScriptTool(bridgeManager))
+            // Phase F1: open apps/URLs/files, clipboard, media, screenshot.
+            toolRegistry.register(
+                DesktopControlTool(
+                    bridgeManager,
+                    screenshotDir = java.io.File(it.context.filesDir, "desktop_screenshots"),
+                    describeImage = { bytes: ByteArray ->
+                        visionProviderFor()?.describe(bytes, "In one short sentence, what is on this desktop screen?")?.getOrNull()
+                    }
+                )
+            )
 
             // USB auto-bridge: auto-pair when tethered via USB
             val context = it.context
@@ -534,6 +551,14 @@ class CompanionViewModel(
             toolRegistry.register(ListAppsTool(appContext))
             toolRegistry.register(OpenUrlTool(appContext))
             toolRegistry.register(OpenSettingsTool(appContext))
+            // Phase F2: alarms, timers, flashlight, DND, battery readout.
+            toolRegistry.register(SetAlarmTool(appContext))
+            toolRegistry.register(SetTimerTool(appContext))
+            toolRegistry.register(FlashlightTool(appContext))
+            toolRegistry.register(DndTool(appContext))
+            toolRegistry.register(BatteryStatusTool(appContext))
+            // Phase F3: opt-in UI automation (off until enabled by the user).
+            toolRegistry.register(UiAutomationTool())
 
             // Invented avatar animations: the model writes keyframes, the app
             // validates and plays them — the same propose/constrain boundary as
@@ -1200,6 +1225,17 @@ class CompanionViewModel(
 
     fun closeOverlays() {
         _uiState.value = _uiState.value.copy(showAppDrawer = false, showBrowser = false)
+    }
+
+    /** Phase F3: jump the user to the system accessibility page. */
+    fun openAccessibilitySettings() {
+        val ctx = secureStorage?.context ?: return
+        runCatching {
+            ctx.startActivity(
+                android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        }
     }
 
     /** Phase E3: barge-in — stay listening 8 s after every exchange. */

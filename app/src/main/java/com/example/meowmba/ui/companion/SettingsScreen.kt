@@ -48,6 +48,7 @@ fun SettingsScreen(
     onConversationModeChange: (Boolean) -> Unit = {},
 
     onBargeInChange: (Boolean) -> Unit = {},
+    onOpenAccessibility: () -> Unit = {},
 
     onRoutineToggle: (Long, Boolean) -> Unit = { _, _ -> },
     onKeepScreenOnChange: (Boolean) -> Unit = {},
@@ -166,6 +167,23 @@ fun SettingsScreen(
                 checked = bargeInEnabled,
                 onCheckedChange = onBargeInChange
             )
+
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "UI automation",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = "Meow can find, tap, type and scroll on-screen when you ask. " +
+                    "It uses the system accessibility service and stays OFF until you enable it. " +
+                    "Every action asks for confirmation first.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            OutlinedButton(onClick = onOpenAccessibility) {
+                Text("Open accessibility settings")
+            }
 
             if (routines.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
