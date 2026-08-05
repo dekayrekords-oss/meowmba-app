@@ -216,6 +216,7 @@ class MainActivity : ComponentActivity() {
         mainHandler.removeCallbacks(followUpStart)
         WakeWordService.stop(this)
         companionViewModel?.reclaimWakeMicForForeground()
+        companionViewModel?.refreshRobot()
         consumeWakeCommand(intent)
     }
 

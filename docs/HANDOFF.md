@@ -369,11 +369,23 @@ Fold 7 (MeowAnim logcat).
    (`core/robot/MotorController` + `SimulatedMotorController` + `FaceMotorMap`);
    no LOOI hardware protocol is integrated. Answered to the user; no code change.
 
+## LOOI robot body (real motor control)
+
+The robot subsystem is no longer simulated-only. `core/robot/` now has:
+- `LooiProtocol` — tiny LF-terminated line protocol: `S <servo> <angle>` (clamped 0-180), `E <face>`, `PING`. Pure + unit-tested.
+- `RobotTransport` (+ `TcpRobotTransport` serial-over-TCP, `LoopbackTransport` for tests).
+- `LooiMotorController` — a `MotorController` that encodes frames and writes them to a transport; guards on `connected`.
+- `RobotManager` — owns the active controller, defaults to `SimulatedMotorController`, swaps to a live LOOI body via `connectLooi(host, port)`, and honestly reports `status` ("simulated (no body)" / "LOOI body @ h:p" / "LOOI unreachable ... - simulated").
+
+`CompanionViewModel` now drives `robotManager.active` (instead of a fixed simulated controller) for both the IMU balance demo and mood poses, and reconnects on foreground. New state fields `robotBodyEnabled/robotHost/robotPort/robotStatus` surface in Settings under a "Robot body (LOOI)" section (enable switch + host/port). With no base attached the cat stays simulated and says so.
+
+Tests: `app/src/test/java/com/example/meowmba/RobotTest.kt` (protocol clamping/validation, controller-over-transport, manager simulated fallback). Suite now 502 tests; only the 3 known ModelDownloadViewModelTest failures remain.
+
 <!-- AUTOBUILD:START -->
 (regenerated after each commit)
-- 2026-08-05 09:39:55 : Avatar: 20 new built-in animations (tricks, moods, body moves)
+- 2026-08-05 10:30:29 : Fix rotation black-screen (FGS promise race), home stickiness, OpenRouter error surfacing; audit LOO
+- 0cce31a 2026-08-05 09:37 Avatar: 20 new built-in animations (tricks, moods, body moves)
 - 247c9b8 2026-08-05 08:36 Avatar: tail hangs downward per user request
 - b63aa19 2026-08-05 08:31 Avatar: always-visible swaying tail, tail-wag built-in, earlier+showier idle animations
 - 836236c 2026-08-05 00:30 Stability: fix foreground-service crash, retry transient speech errors silently, always show artifacts
-- d1321e7 2026-08-04 23:55 Standalone build: OpenRouter cloud brain with on-device fallback, home server removed
 <!-- AUTOBUILD:END -->

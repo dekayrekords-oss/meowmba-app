@@ -47,6 +47,13 @@ fun SettingsScreen(
     musicServerUrl: String = "",
     backgroundListeningEnabled: Boolean = false,
     usbAutoBridgeEnabled: Boolean = false,
+    robotBodyEnabled: Boolean = false,
+    robotHost: String = "",
+    robotPort: String = "",
+    robotStatus: String = "simulated (no body)",
+    onRobotBodyChange: (Boolean) -> Unit = {},
+    onRobotHostChange: (String) -> Unit = {},
+    onRobotPortChange: (String) -> Unit = {},
     onCompanionNameChange: (String) -> Unit = {},
     onWakeWordChange: (Boolean) -> Unit = {},
     onConversationModeChange: (Boolean) -> Unit = {},
@@ -232,6 +239,45 @@ fun SettingsScreen(
                     Text("Set as home screen")
                 }
             }
+
+            // ── Robot body (LOOI) ─────────────────────────────────────────
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Robot body (LOOI)",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = "Drive a physical LOOI-style base. With no body attached the cat stays simulated. Current: " + robotStatus + ".",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Enable robot body", style = MaterialTheme.typography.bodyLarge)
+                }
+                Switch(checked = robotBodyEnabled, onCheckedChange = onRobotBodyChange)
+            }
+            OutlinedTextField(
+                value = robotHost,
+                onValueChange = onRobotHostChange,
+                label = { Text("Base host (IP)") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            OutlinedTextField(
+                value = robotPort,
+                onValueChange = onRobotPortChange,
+                label = { Text("Base port") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
 
             if (routines.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))

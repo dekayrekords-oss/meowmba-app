@@ -70,6 +70,10 @@ data class CompanionState(
     val routines: List<RoutineUi> = emptyList(),
     /** Phase G1: current mood label (content, excited, sleepy, ...). */
     val moodLabel: String = "content",
+    val robotBodyEnabled: Boolean = false,
+    val robotHost: String = "192.168.1.200",
+    val robotPort: String = "9100",
+    val robotStatus: String = "simulated (no body)",
     /** Phase G1: unprompted one-liners, max once per hour. */
     val idleChatterEnabled: Boolean = true,
     /** Keep the display awake while the companion face is on screen. */

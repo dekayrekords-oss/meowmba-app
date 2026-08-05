@@ -301,9 +301,27 @@ class CompanionViewModel(
 
     private val moodEngine = com.example.meowmba.core.personality.MoodEngine()
 
-    /** Phase G2: motor API — simulated until real hardware exists. */
-    private val motorController: com.example.meowmba.core.robot.MotorController =
-        com.example.meowmba.core.robot.SimulatedMotorController()
+    /** Phase G2: motor API. [RobotManager] swaps simulated <-> a live LOOI body. */
+    private val robotManager = com.example.meowmba.core.robot.RobotManager()
+    private val motorController: com.example.meowmba.core.robot.MotorController
+        get() = robotManager.active
+
+    init {
+        // Robot body: restore prefs into state, mirror live status, then connect.
+        secureStorage?.let { st ->
+            _uiState.value = _uiState.value.copy(
+                robotBodyEnabled = st.getBooleanPreference("robot_body_enabled", false),
+                robotHost = st.getPreference("robot_host") ?: "192.168.1.200",
+                robotPort = st.getPreference("robot_port") ?: "9100",
+            )
+        }
+        viewModelScope.launch {
+            robotManager.status.collect { st ->
+                _uiState.value = _uiState.value.copy(robotStatus = st)
+            }
+        }
+        refreshRobot()
+    }
 
     init {
         // Restore persisted voice preferences (name, wake word, conversation mode)
@@ -1545,6 +1563,33 @@ class CompanionViewModel(
             tts.setSpeechRate(moodEngine.ttsRate())
         }
         _uiState.value = _uiState.value.copy(moodLabel = moodEngine.mood.name.lowercase())
+    }
+
+    // ── Robot body (LOOI) ────────────────────────────────────────────────
+    /** (Re)resolve the active robot body from preferences. Non-blocking. */
+    fun refreshRobot() {
+        val enabled = secureStorage?.getBooleanPreference("robot_body_enabled", false) == true
+        val host = secureStorage?.getPreference("robot_host") ?: "192.168.1.200"
+        val port = (secureStorage?.getPreference("robot_port")?.toIntOrNull()) ?: 9100
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            if (enabled) robotManager.connectLooi(host, port) else robotManager.useSimulated()
+        }
+    }
+
+    fun setRobotBody(enabled: Boolean) {
+        secureStorage?.saveBooleanPreference("robot_body_enabled", enabled)
+        _uiState.value = _uiState.value.copy(robotBodyEnabled = enabled)
+        refreshRobot()
+    }
+
+    fun setRobotHost(host: String) {
+        secureStorage?.savePreference("robot_host", host)
+        _uiState.value = _uiState.value.copy(robotHost = host)
+    }
+
+    fun setRobotPort(port: String) {
+        secureStorage?.savePreference("robot_port", port)
+        _uiState.value = _uiState.value.copy(robotPort = port)
     }
 
     fun setIdleChatter(enabled: Boolean) {
