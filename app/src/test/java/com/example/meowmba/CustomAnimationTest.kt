@@ -345,4 +345,24 @@ class CustomAnimationTest {
         assertTrue(message.contains("backflip"))
         assertTrue(message.contains("ear wiggle"))
     }
+
+    @Test
+    fun `built-in library includes the twenty new tricks`() {
+        val names = CustomAnimations.BUILT_INS.keys
+        listOf(
+            "slow blink of trust", "zoomies burst", "belly flop", "head scratch tilt",
+            "bird stare", "loaf tuck", "nose boop", "morning stretch", "surprise dilate",
+            "purr loaf", "sassy tail flick", "double take", "sleepy collapse", "alert perch",
+            "blep", "wiggle pounce", "star gaze", "grumpy squint", "confetti pop",
+            "ear radar sweep",
+        ).forEach { assertTrue("missing $it", it in names) }
+        // every built-in samples cleanly across its whole duration
+        CustomAnimations.BUILT_INS.values.forEach { spec ->
+            var t = 0L
+            while (t <= spec.durationMs) {
+                CustomAnimations.sample(spec, t)
+                t += 100
+            }
+        }
+    }
 }

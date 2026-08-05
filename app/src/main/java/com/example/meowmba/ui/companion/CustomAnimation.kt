@@ -291,6 +291,199 @@ object CustomAnimations {
                 AnimFrame(atMs = 1600, tailWag = 0f, happyEyes = false, earPerk = 1.0f),
             ),
         ),
+        // ── Twenty new tricks ──────────────────────────────────────────────
+        CustomAnimationSpec(
+            "slow blink of trust",
+            listOf(
+                AnimFrame(atMs = 0, eyeOpen = 1.0f),
+                AnimFrame(atMs = 800, eyeOpen = 0.06f),
+                AnimFrame(atMs = 1500, eyeOpen = 0.06f),
+                AnimFrame(atMs = 2400, eyeOpen = 1.0f),
+            ),
+        ),
+        CustomAnimationSpec(
+            "zoomies burst",
+            listOf(
+                AnimFrame(atMs = 0, bodyBounce = 0f, tailWag = 0f, eyeOpen = 1.2f),
+                AnimFrame(atMs = 200, bodyBounce = 0.9f, tailWag = 0.9f, happyEyes = true),
+                AnimFrame(atMs = 400, bodyBounce = -0.3f, tailWag = -0.9f),
+                AnimFrame(atMs = 600, bodyBounce = 0.9f, tailWag = 0.9f),
+                AnimFrame(atMs = 800, bodyBounce = -0.3f, tailWag = -0.9f),
+                AnimFrame(atMs = 1100, bodyBounce = 0.6f, tailWag = 0.5f),
+                AnimFrame(atMs = 1600, bodyBounce = 0f, tailWag = 0f, happyEyes = false),
+            ),
+        ),
+        CustomAnimationSpec(
+            "belly flop",
+            listOf(
+                AnimFrame(atMs = 0, bodyBounce = 0f),
+                AnimFrame(atMs = 300, bodyBounce = 0.7f),
+                AnimFrame(atMs = 500, bodyBounce = -0.9f, eyeOpen = 0.5f),
+                AnimFrame(atMs = 1200, bodyBounce = -0.9f, eyeOpen = 0.5f),
+                AnimFrame(atMs = 1800, bodyBounce = 0f, eyeOpen = 1.0f),
+            ),
+        ),
+        CustomAnimationSpec(
+            "head scratch tilt",
+            listOf(
+                AnimFrame(atMs = 0, headTiltDeg = 0f),
+                AnimFrame(atMs = 500, headTiltDeg = 22f, happyEyes = true, whiskerFlutter = true),
+                AnimFrame(atMs = 1400, headTiltDeg = 22f, happyEyes = true, whiskerFlutter = true),
+                AnimFrame(atMs = 2200, headTiltDeg = 0f, happyEyes = false, whiskerFlutter = false),
+            ),
+        ),
+        CustomAnimationSpec(
+            "bird stare",
+            listOf(
+                AnimFrame(atMs = 0, pupilGazeUp = 0f, pupilSize = 0.28f, earPerk = 1.0f),
+                AnimFrame(atMs = 400, pupilGazeUp = 1f, pupilSize = 0.7f, earPerk = 1.6f),
+                AnimFrame(atMs = 1200, pupilGazeUp = 1f, pupilSize = 0.7f, earPerk = 1.6f),
+                AnimFrame(atMs = 1800, pupilGazeUp = 0f, pupilSize = 0.28f, earPerk = 1.0f),
+            ),
+        ),
+        CustomAnimationSpec(
+            "loaf tuck",
+            listOf(
+                AnimFrame(atMs = 0, bodyBounce = 0f, earDroopDeg = 0f, eyeOpen = 1.0f),
+                AnimFrame(atMs = 700, bodyBounce = -0.7f, earDroopDeg = 18f, eyeOpen = 0.4f),
+                AnimFrame(atMs = 1600, bodyBounce = -0.7f, earDroopDeg = 18f, eyeOpen = 0.4f),
+                AnimFrame(atMs = 2400, bodyBounce = 0f, earDroopDeg = 0f, eyeOpen = 1.0f),
+            ),
+        ),
+        CustomAnimationSpec(
+            "nose boop",
+            listOf(
+                AnimFrame(atMs = 0, headTiltDeg = 0f, sparkle = 0f),
+                AnimFrame(atMs = 250, headTiltDeg = 10f, sparkle = 1f, happyEyes = true),
+                AnimFrame(atMs = 600, headTiltDeg = 0f, sparkle = 0.3f),
+                AnimFrame(atMs = 1000, headTiltDeg = 0f, sparkle = 0f, happyEyes = false),
+            ),
+        ),
+        CustomAnimationSpec(
+            "morning stretch",
+            listOf(
+                AnimFrame(atMs = 0, bodyBounce = -0.6f, earPerk = 0.8f),
+                AnimFrame(atMs = 600, bodyBounce = -0.6f, earPerk = 0.8f, eyeOpen = 0.3f),
+                AnimFrame(atMs = 1100, bodyBounce = 0.8f, earPerk = 1.4f, eyeOpen = 1.2f),
+                AnimFrame(atMs = 1800, bodyBounce = 0f, earPerk = 1.0f, eyeOpen = 1.0f),
+            ),
+        ),
+        CustomAnimationSpec(
+            "surprise dilate",
+            listOf(
+                AnimFrame(atMs = 0, pupilSize = 0.28f, bodyBounce = 0f),
+                AnimFrame(atMs = 250, pupilSize = 0.9f, bodyBounce = 0.4f, eyeOpen = 1.5f),
+                AnimFrame(atMs = 900, pupilSize = 0.9f),
+                AnimFrame(atMs = 1400, pupilSize = 0.28f, bodyBounce = 0f, eyeOpen = 1.0f),
+            ),
+        ),
+        CustomAnimationSpec(
+            "purr loaf",
+            listOf(
+                AnimFrame(atMs = 0, whiskerFlutter = false, happyEyes = false, sparkle = 0f),
+                AnimFrame(atMs = 500, whiskerFlutter = true, happyEyes = true, sparkle = 0.5f),
+                AnimFrame(atMs = 1800, whiskerFlutter = true, happyEyes = true, sparkle = 0.6f),
+                AnimFrame(atMs = 3000, whiskerFlutter = false, happyEyes = false, sparkle = 0f),
+            ),
+        ),
+        CustomAnimationSpec(
+            "sassy tail flick",
+            listOf(
+                AnimFrame(atMs = 0, tailWag = 0f),
+                AnimFrame(atMs = 200, tailWag = -0.9f),
+                AnimFrame(atMs = 400, tailWag = 0.3f),
+                AnimFrame(atMs = 600, tailWag = -0.2f),
+                AnimFrame(atMs = 900, tailWag = 0f),
+            ),
+        ),
+        CustomAnimationSpec(
+            "double take",
+            listOf(
+                AnimFrame(atMs = 0, headTiltDeg = 0f, eyeOpen = 1.0f),
+                AnimFrame(atMs = 300, headTiltDeg = 18f, eyeOpen = 1.4f),
+                AnimFrame(atMs = 600, headTiltDeg = 0f, eyeOpen = 0.2f),
+                AnimFrame(atMs = 900, headTiltDeg = -18f, eyeOpen = 1.4f),
+                AnimFrame(atMs = 1600, headTiltDeg = 0f, eyeOpen = 1.0f),
+            ),
+        ),
+        CustomAnimationSpec(
+            "sleepy collapse",
+            listOf(
+                AnimFrame(atMs = 0, eyeOpen = 1.0f, earDroopDeg = 0f, bodyBounce = 0f),
+                AnimFrame(atMs = 800, eyeOpen = 0.3f, earDroopDeg = 16f, bodyBounce = -0.3f),
+                AnimFrame(atMs = 1600, eyeOpen = 0.1f, earDroopDeg = 28f, bodyBounce = -0.7f),
+                AnimFrame(atMs = 2200, eyeOpen = 0.3f, earDroopDeg = 20f, bodyBounce = -0.5f),
+                AnimFrame(atMs = 2600, eyeOpen = 1.0f, earDroopDeg = 0f, bodyBounce = 0f),
+            ),
+        ),
+        CustomAnimationSpec(
+            "alert perch",
+            listOf(
+                AnimFrame(atMs = 0, earPerk = 1.0f, pupilSize = 0.28f),
+                AnimFrame(atMs = 400, earPerk = 1.6f, pupilSize = 0.7f, bodyBounce = 0.4f, glowColorHex = 0xFFD29922),
+                AnimFrame(atMs = 1200, earPerk = 1.6f, pupilSize = 0.7f, bodyBounce = 0.4f),
+                AnimFrame(atMs = 1800, earPerk = 1.0f, pupilSize = 0.28f, bodyBounce = 0f, glowColorHex = 0xFF58A6FF),
+            ),
+        ),
+        CustomAnimationSpec(
+            "blep",
+            listOf(
+                AnimFrame(atMs = 0, tongueOut = 0f),
+                AnimFrame(atMs = 300, tongueOut = 0.5f, happyEyes = true),
+                AnimFrame(atMs = 800, tongueOut = 0.5f),
+                AnimFrame(atMs = 1200, tongueOut = 0f, happyEyes = false),
+            ),
+        ),
+        CustomAnimationSpec(
+            "wiggle pounce",
+            listOf(
+                AnimFrame(atMs = 0, bodyBounce = 0f, tailWag = 0f),
+                AnimFrame(atMs = 200, bodyBounce = -0.5f, tailWag = 0.7f),
+                AnimFrame(atMs = 400, bodyBounce = -0.5f, tailWag = -0.7f),
+                AnimFrame(atMs = 600, bodyBounce = -0.5f, tailWag = 0.7f),
+                AnimFrame(atMs = 800, bodyBounce = 1.0f, tailWag = 0f, eyeOpen = 1.4f),
+                AnimFrame(atMs = 1200, bodyBounce = 0f, eyeOpen = 1.0f),
+            ),
+        ),
+        CustomAnimationSpec(
+            "star gaze",
+            listOf(
+                AnimFrame(atMs = 0, pupilGazeUp = 0f, pupilSize = 0.28f, sparkle = 0f),
+                AnimFrame(atMs = 700, pupilGazeUp = 1f, pupilSize = 0.6f, sparkle = 0.5f, earPerk = 1.3f),
+                AnimFrame(atMs = 1800, pupilGazeUp = 1f, pupilSize = 0.6f, sparkle = 0.5f),
+                AnimFrame(atMs = 2600, pupilGazeUp = 0f, pupilSize = 0.28f, sparkle = 0f, earPerk = 1.0f),
+            ),
+        ),
+        CustomAnimationSpec(
+            "grumpy squint",
+            listOf(
+                AnimFrame(atMs = 0, eyeOpen = 1.0f, earPerk = 1.0f, earDroopDeg = 0f),
+                AnimFrame(atMs = 400, eyeOpen = 0.35f, earPerk = 0.7f, earDroopDeg = 8f),
+                AnimFrame(atMs = 1200, eyeOpen = 0.35f, earPerk = 0.7f, earDroopDeg = 8f),
+                AnimFrame(atMs = 1800, eyeOpen = 1.0f, earPerk = 1.0f, earDroopDeg = 0f),
+            ),
+        ),
+        CustomAnimationSpec(
+            "confetti pop",
+            listOf(
+                AnimFrame(atMs = 0, sparkle = 0f, bodyBounce = 0f, happyEyes = false, mouth = MouthMode.IDLE),
+                AnimFrame(atMs = 250, sparkle = 1f, bodyBounce = 0.8f, happyEyes = true, mouth = MouthMode.HAPPY),
+                AnimFrame(atMs = 700, sparkle = 0.7f, bodyBounce = -0.2f),
+                AnimFrame(atMs = 1000, sparkle = 1f, bodyBounce = 0.6f),
+                AnimFrame(atMs = 1400, sparkle = 0f, bodyBounce = 0f, happyEyes = false, mouth = MouthMode.IDLE),
+            ),
+        ),
+        CustomAnimationSpec(
+            "ear radar sweep",
+            listOf(
+                AnimFrame(atMs = 0, earPerk = 1.0f),
+                AnimFrame(atMs = 300, earPerk = 1.6f),
+                AnimFrame(atMs = 600, earPerk = 0.5f),
+                AnimFrame(atMs = 900, earPerk = 1.6f),
+                AnimFrame(atMs = 1200, earPerk = 0.5f),
+                AnimFrame(atMs = 1600, earPerk = 1.0f),
+            ),
+        ),
     ).associateBy { it.name }
 
     /** A built-in clip by name, or null. Store clips are the caller's fallback. */

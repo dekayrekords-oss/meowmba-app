@@ -321,11 +321,22 @@ behind the whiskers): quadratic curve now extends +Y with a slight outward
 curl, rest angle +12°, wag still ±35°. Device-verified on the Fold 7
 screenshot. (Also: the test phone is a Galaxy Z Fold **7**, not 6.)
 
+## Twenty new built-in animations (user request: "have meow create 20")
+
+Added 20 authored clips to CustomAnimations.BUILT_INS: slow blink of trust,
+zoomies burst, belly flop, head scratch tilt, bird stare, loaf tuck, nose
+boop, morning stretch, surprise dilate, purr loaf, sassy tail flick, double
+take, sleepy collapse, alert perch, blep, wiggle pounce, star gaze, grumpy
+squint, confetti pop, ear radar sweep. All replayable by name via
+avatar.animate and in the idle performance pool. New unit test asserts all 20
+exist and sample cleanly. Device-verified: idle performances firing on the
+Fold 7 (MeowAnim logcat).
+
 <!-- AUTOBUILD:START -->
 (regenerated after each commit)
-- 2026-08-05 08:32:49 : Avatar: always-visible swaying tail, tail-wag built-in, earlier+showier idle animations
+- 2026-08-05 08:37:14 : Avatar: tail hangs downward per user request
+- b63aa19 2026-08-05 08:31 Avatar: always-visible swaying tail, tail-wag built-in, earlier+showier idle animations
 - 836236c 2026-08-05 00:30 Stability: fix foreground-service crash, retry transient speech errors silently, always show artifacts
 - d1321e7 2026-08-04 23:55 Standalone build: OpenRouter cloud brain with on-device fallback, home server removed
 - ae96841 2026-08-04 23:27 Fix deflection: pin MeowLion for direct answers, deliver cold-launch wake commands, harden question detectors
-- 91fd92a 2026-08-04 22:43 Answer questions directly; explicit searches open live in the browser panel
 <!-- AUTOBUILD:END -->
