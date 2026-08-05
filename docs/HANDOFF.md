@@ -269,11 +269,34 @@ network. The MeowLion (Ollama) route is gone entirely:
 Tests: ModelStatus/VisionPipeline rewritten for OpenRouter; suite 486/3
 (3 known pre-existing). E2E cold-launch wake questions answered standalone.
 
+## Stability: crash, error 11, listening dropouts, artifact display (2026-08-04)
+
+- **Crash fixed: ForegroundServiceDidNotStartInTimeException.** The wake
+  service initialized EncryptedSharedPreferences BEFORE keeping its
+  startForeground promise; a rare keystore failure left the promise unkept and
+  Android killed the whole app. `WakeWordService.onCreate` now keeps the
+  foreground promise first, tolerates storage failure, and `companionName()`
+  works before storage exists. `start()`/`startFollowUp()` wrap
+  startForegroundService in runCatching.
+- **Error 11 no longer surfaces.** ERROR_SERVER_DISCONNECTED (11) and the
+  other network/server codes are classified transient; the VM silently
+  re-opens the capture session (max 2 retries, 600 ms apart) while staying
+  LISTENING, and the service's follow-up capture does the same. Only
+  persistent failures show the honest caption.
+- **Follow-up errors were silent resets.** The follow-up capture's onError was
+  a bare `resetState()` — now it goes through the shared retry/caption path.
+- **Artifacts always shown.** Saved browser pages now emit `MEDIA_FILE:` so
+  the panel opens them immediately; the frame-video path keeps one PNG in the
+  workspace (frames were deleted before display) and points MEDIA_FILE at it.
+
+Tests: +2 transient-error classification tests; suite 488/3 (3 known
+pre-existing).
+
 <!-- AUTOBUILD:START -->
 (regenerated after each commit)
-- 2026-08-04 23:30:13 : Fix deflection: pin MeowLion for direct answers, deliver cold-launch wake commands, harden question 
+- 2026-08-05 00:02:46 : Standalone build: OpenRouter cloud brain with on-device fallback, home server removed
+- ae96841 2026-08-04 23:27 Fix deflection: pin MeowLion for direct answers, deliver cold-launch wake commands, harden question detectors
 - 91fd92a 2026-08-04 22:43 Answer questions directly; explicit searches open live in the browser panel
 - ad734b1 2026-08-04 22:24 Background follow-up handoff to WakeWordService; show-in-browser for all artifacts
 - 7887c18 2026-08-04 22:02 Drawer favorites + face pins, live browser agent loop on MeowLion
-- 43b4683 2026-08-04 21:41 HANDOFF: gesture/freeze/split/MeowLion notes
 <!-- AUTOBUILD:END -->

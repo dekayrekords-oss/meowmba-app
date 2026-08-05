@@ -70,7 +70,9 @@ class WebBrowserTool(private val screenshotDir: File, private val pagesDir: File
                     dir.mkdirs()
                     val file = File(dir, "$name.html")
                     file.writeText(htmlResult.output)
-                    ToolResult.Success("Page saved: ${file.absolutePath}")
+                    // MEDIA_FILE makes the companion open the page in the
+                    // browser panel right away — everything meow makes gets shown.
+                    ToolResult.Success("Page saved: ${file.absolutePath}\nMEDIA_FILE:${file.absolutePath}")
                 }.getOrElse { ToolResult.Failure("Save failed: ${it.message}") }
             }
             "openlocal" -> {

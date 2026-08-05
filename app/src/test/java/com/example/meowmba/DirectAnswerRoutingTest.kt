@@ -69,4 +69,34 @@ class DirectAnswerRoutingTest {
         assertFalse(CompanionViewModel.looksLikeDirectQuestion("search for cat facts"))
         assertFalse(CompanionViewModel.looksLikeDirectQuestion("play something"))
     }
+
+    // ── transient speech errors ────────────────────────────────────────────
+
+    @Test
+    fun `error 11 and network codes are transient`() {
+        // ERROR_SERVER_DISCONNECTED is the infamous "error 11" the user sees
+        // when the recognition service drops; it must be retried, not shown.
+        assertTrue(CompanionViewModel.isTransientSpeechError(
+            android.speech.SpeechRecognizer.ERROR_SERVER_DISCONNECTED))
+        assertTrue(CompanionViewModel.isTransientSpeechError(
+            android.speech.SpeechRecognizer.ERROR_NETWORK))
+        assertTrue(CompanionViewModel.isTransientSpeechError(
+            android.speech.SpeechRecognizer.ERROR_NETWORK_TIMEOUT))
+        assertTrue(CompanionViewModel.isTransientSpeechError(
+            android.speech.SpeechRecognizer.ERROR_SERVER))
+        assertTrue(CompanionViewModel.isTransientSpeechError(
+            android.speech.SpeechRecognizer.ERROR_TOO_MANY_REQUESTS))
+    }
+
+    @Test
+    fun `setup and silence errors are not transient`() {
+        assertFalse(CompanionViewModel.isTransientSpeechError(
+            android.speech.SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS))
+        assertFalse(CompanionViewModel.isTransientSpeechError(
+            android.speech.SpeechRecognizer.ERROR_NO_MATCH))
+        assertFalse(CompanionViewModel.isTransientSpeechError(
+            android.speech.SpeechRecognizer.ERROR_SPEECH_TIMEOUT))
+        assertFalse(CompanionViewModel.isTransientSpeechError(
+            android.speech.SpeechRecognizer.ERROR_RECOGNIZER_BUSY))
+    }
 }

@@ -367,14 +367,22 @@ class MediaGenerateVideoTool(
         val baseName = if (safeName.isNotBlank()) "video_${safeName}" else "video_${System.currentTimeMillis()}"
         val noteFile = workspace.resolve("${baseName}_frames.txt")
             ?: return@withContext ToolResult.Failure("Could not write video — path is outside workspace.")
+        // Keep one real frame for display before the temp dir is wiped.
+        val displayFrame = frames.firstOrNull()?.let { first ->
+            workspace.resolve("${baseName}_frame.png")?.also { kept ->
+                runCatching { first.copyTo(kept, overwrite = true) }
+            }
+        }
         noteFile.writeText(
             "Video: $prompt\nStyle: $style\nFrames: ${frames.size}\n" +
             frames.joinToString("\n") { it.absolutePath }
         )
         frameDir.deleteRecursively()
 
+        // MEDIA_FILE points at the kept frame so the browser panel shows
+        // something real; the note file keeps the full frame list.
         ToolResult.Success(
-            "Video \"$baseName\" ($frameCount frames) created: $prompt\nMEDIA_FILE:${noteFile.absolutePath}"
+            "Video \"$baseName\" ($frameCount frames) created: $prompt\nMEDIA_FILE:${displayFrame?.absolutePath ?: noteFile.absolutePath}"
         )
     }
 

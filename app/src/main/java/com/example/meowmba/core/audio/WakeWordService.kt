@@ -18,6 +18,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * Background wake-phrase listener (Phase 2.5).
@@ -52,9 +54,15 @@ class WakeWordService : Service() {
         private const val ACTION_STOP = "com.example.meowmba.WAKE_SERVICE_STOP"
 
         fun start(context: Context) {
-            ContextCompat.startForegroundService(
-                context, Intent(context, WakeWordService::class.java)
-            )
+            // runCatching: a refused foreground-service start (background-start
+            // restrictions) must never take the whole app down with it.
+            runCatching {
+                ContextCompat.startForegroundService(
+                    context, Intent(context, WakeWordService::class.java)
+                )
+            }.onFailure {
+                android.util.Log.w("WakeWordService", "start refused: ${it.message}")
+            }
         }
 
         /**
@@ -62,11 +70,15 @@ class WakeWordService : Service() {
          * Skip the wake phrase and capture the user's reply directly.
          */
         fun startFollowUp(context: Context) {
-            ContextCompat.startForegroundService(
-                context,
-                Intent(context, WakeWordService::class.java)
-                    .putExtra(EXTRA_MODE, MODE_FOLLOW_UP)
-            )
+            runCatching {
+                ContextCompat.startForegroundService(
+                    context,
+                    Intent(context, WakeWordService::class.java)
+                        .putExtra(EXTRA_MODE, MODE_FOLLOW_UP)
+                )
+            }.onFailure {
+                android.util.Log.w("WakeWordService", "follow-up start refused: ${it.message}")
+            }
         }
 
         fun stop(context: Context) {
@@ -83,21 +95,30 @@ class WakeWordService : Service() {
     private var isForeground = false
     private var engineStarted = false
     private var followUpPending = false
+    private var followUpRetries = 0
 
     override fun onCreate() {
         super.onCreate()
-        secureStorage = SecureStorageManager(this)
-        createChannels()
+        runCatching { createChannels() }
 
-        // Android 16 refuses a microphone foreground service started from the
-        // background. Swallowing that failure and carrying on is what crashed
-        // the whole app: startForegroundService() promises the system a
-        // startForeground() call, and when none arrives the platform kills the
-        // process with ForegroundServiceDidNotStartInTimeException. If we can't
-        // go foreground we must stop instead — onStartCommand retries, since by
-        // then the app is often in the foreground and the start is permitted.
+        // The foreground promise comes BEFORE anything that can throw.
+        // startForegroundService() gives the system a startForeground()
+        // deadline; anything in between — even a rare keystore failure inside
+        // EncryptedSharedPreferences — left the promise unkept and the
+        // platform killed the whole app with
+        // ForegroundServiceDidNotStartInTimeException. Android 16 also refuses
+        // a microphone foreground service started from the background; if we
+        // can't go foreground we stop instead — onStartCommand retries, since
+        // by then the app is often in the foreground and the start is permitted.
         if (!promoteToForeground()) return
 
+        secureStorage = try {
+            SecureStorageManager(this)
+        } catch (e: Exception) {
+            android.util.Log.w("WakeWordService", "secure storage unavailable; stopping", e)
+            stopSelf()
+            return
+        }
         startEngine()
     }
 
@@ -219,17 +240,40 @@ class WakeWordService : Service() {
         }
         // The wake spotter and the recognizer must not fight over the mic.
         wakeEngine?.stop()
+        startFollowUpListen()
+    }
+
+    private fun startFollowUpListen() {
         speechService.startListening(
             onResult = { captured ->
+                followUpRetries = 0
                 capturingCommand = false
                 acknowledgeAndDeliver(captured)
             },
-            onError = {
-                capturingCommand = false
-                wakeEngine?.start()
+            onError = { code ->
+                // Error 11 and friends are service hiccups; retry silently a
+                // couple of times before falling back to the wake loop.
+                if (isTransientSpeechCode(code) && followUpRetries < 2) {
+                    followUpRetries++
+                    scope.launch {
+                        delay(600)
+                        // capturingCommand stays true across the retry.
+                        if (engineStarted) startFollowUpListen()
+                    }
+                } else {
+                    capturingCommand = false
+                    wakeEngine?.start()
+                }
             }
         )
     }
+
+    private fun isTransientSpeechCode(code: Int): Boolean =
+        code == android.speech.SpeechRecognizer.ERROR_NETWORK_TIMEOUT ||
+            code == android.speech.SpeechRecognizer.ERROR_NETWORK ||
+            code == android.speech.SpeechRecognizer.ERROR_SERVER ||
+            code == android.speech.SpeechRecognizer.ERROR_TOO_MANY_REQUESTS ||
+            code == android.speech.SpeechRecognizer.ERROR_SERVER_DISCONNECTED
 
     // ── Wake handling ───────────────────────────────────────────────────────
 
@@ -309,6 +353,7 @@ class WakeWordService : Service() {
         getSystemService(NotificationManager::class.java).notify(CMD_ID, notification)
     }
 
-    private fun companionName(): String =
-        secureStorage.getPreference("companion_name") ?: "Meow"
+    private fun companionName(): String = runCatching {
+        if (::secureStorage.isInitialized) secureStorage.getPreference("companion_name") else null
+    }.getOrNull() ?: "Meow"
 }

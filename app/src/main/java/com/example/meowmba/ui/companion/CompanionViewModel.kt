@@ -256,6 +256,8 @@ class CompanionViewModel(
 
     /** The turn currently being captured, so a new one can cancel it cleanly. */
     private var utteranceCapture: com.example.meowmba.core.audio.UtteranceCapture? = null
+    /** Silent-retry budget for transient recognizer errors (e.g. code 11). */
+    private var transientListenRetries = 0
 
     /**
      * Last seen status per task, so only real transitions are narrated.
@@ -1796,6 +1798,7 @@ class CompanionViewModel(
     }
 
     private fun startListening(prompt: String = "Listening...") {
+        transientListenRetries = 0
         followUpJob?.cancel()
         isFollowUpListen = false
         stopWakeLoopAndRelease()
@@ -1856,6 +1859,7 @@ class CompanionViewModel(
         capture.start(
             onFinal = { text ->
                 utteranceCapture = null
+                transientListenRetries = 0
                 onFinal(text)
             },
             onError = { code ->
@@ -1871,6 +1875,24 @@ class CompanionViewModel(
      * no service) are surfaced honestly instead of looking like a dead button.
      */
     private fun onListeningError(code: Int) {
+        // Error 11 (ERROR_SERVER_DISCONNECTED) and friends are transient hiccups
+        // of the recognition service, not a broken mic. Instead of surfacing a
+        // raw "error 11" caption and going deaf, re-open the session silently a
+        // couple of times; only give up (and say why) if it keeps happening.
+        if (isTransientSpeechError(code) &&
+            transientListenRetries < MAX_TRANSIENT_LISTEN_RETRIES &&
+            _uiState.value.interactionState == InteractionState.LISTENING
+        ) {
+            transientListenRetries++
+            viewModelScope.launch {
+                delay(600)
+                if (_uiState.value.interactionState != InteractionState.LISTENING) return@launch
+                val engine = speechService ?: return@launch
+                captureUtterance(engine) { result -> processUserSpeech(result) }
+            }
+            return
+        }
+        transientListenRetries = 0
         resetState()
         speechErrorCaption(code)?.let { msg ->
             _uiState.value = _uiState.value.copy(captionText = msg)
@@ -2498,8 +2520,9 @@ class CompanionViewModel(
                 engine.stopListening()
                 delay(120)
             }
-            // A follow-up is a spoken turn like any other: it has to survive a pause.
-            captureUtterance(engine, onError = { resetState() }) { result ->
+            // A follow-up is a spoken turn like any other: it has to survive a pause,
+            // and a transient recognizer hiccup must not kill it silently.
+            captureUtterance(engine, onError = { code -> onListeningError(code) }) { result ->
                 processUserSpeech(result)
             }
             delay(FOLLOW_UP_TIMEOUT_MS)
@@ -3729,6 +3752,18 @@ class CompanionViewModel(
          */
         private const val AGENT_PANEL_LINGER_MS = 6_000L
         private const val DEFAULT_RETENTION_DAYS = 90
+
+        /** Codes meaning "the recognition service hiccuped", not "broken setup". */
+        internal fun isTransientSpeechError(code: Int): Boolean = code in TRANSIENT_SPEECH_ERRORS
+
+        private const val MAX_TRANSIENT_LISTEN_RETRIES = 2
+        private val TRANSIENT_SPEECH_ERRORS = setOf(
+            SpeechRecognizer.ERROR_NETWORK_TIMEOUT,
+            SpeechRecognizer.ERROR_NETWORK,
+            SpeechRecognizer.ERROR_SERVER,
+            SpeechRecognizer.ERROR_TOO_MANY_REQUESTS,
+            SpeechRecognizer.ERROR_SERVER_DISCONNECTED,
+        )
         private const val FOLLOW_UP_TIMEOUT_MS = 8000L
 
         /**
