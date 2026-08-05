@@ -110,9 +110,9 @@ with risk levels, audit trail).
 
 <!-- AUTOBUILD:START -->
 (regenerated after each commit)
-- 2026-08-04 18:40:52 : Phase C: IMU motion sense, screen watch mode, context director
+- 2026-08-04 18:52:20 : Phase D: optional launcher, app drawer, agent-driven browser
+- 5d8bbc4 2026-08-04 18:39 Phase C: IMU motion sense, screen watch mode, context director
 - 490fab4 2026-08-04 18:26 Phase B: BigPickle brain, ask-anything recall, SSH server management
 - 99172fc 2026-08-04 18:11 Merge remote-tracking branch 'origin/main'
 - f8f1d98 2026-08-04 18:09 Face mode: keep-screen-on toggle, random idle animations, live HANDOFF doc
-- 6e9cc38 2026-08-04 21:32 chore(sdd): record final review outcome, Task 3, and overall plan status
 <!-- AUTOBUILD:END -->

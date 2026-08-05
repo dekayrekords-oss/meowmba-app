@@ -279,6 +279,9 @@ class CompanionViewModel(
     private var lastUserText: String? = null
     private var lastAssistantText: String? = null
 
+    // Declared BEFORE init: init launches collectors that write to this flow.
+    private val _motionTilt = kotlinx.coroutines.flow.MutableStateFlow(0f)
+
     init {
         // Restore persisted voice preferences (name, wake word, conversation mode)
         secureStorage?.let { storage ->
@@ -841,7 +844,6 @@ class CompanionViewModel(
     /** Watches screen-watch frames and turns them into reactions/commentary. */
     private var contextDirector: com.example.meowmba.core.context.ContextDirector? = null
 
-    private val _motionTilt = kotlinx.coroutines.flow.MutableStateFlow(0f)
 
     /** One-shot flag: MainActivity watches this to launch the MediaProjection consent. */
     private val _screenWatchConsentRequested = kotlinx.coroutines.flow.MutableStateFlow(false)
