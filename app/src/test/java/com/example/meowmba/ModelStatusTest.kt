@@ -106,24 +106,25 @@ class ModelStatusTest {
     }
 
     @Test
-    fun `ollama selection populates the network card`() = runTest {
-        `when`(mockSecureStorage.getEndpoint("ollama")).thenReturn("http://192.168.1.69:11434")
-        `when`(mockSecureStorage.getModelName("ollama")).thenReturn("qwen3.6:latest")
+    fun `openrouter selection populates the network card`() = runTest {
+        `when`(mockSecureStorage.getModelName("openrouter")).thenReturn("test-model:free")
         val vm = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
 
-        vm.onModelSelected("Ollama (Local Network)")
+        vm.onModelSelected("OpenRouter (Cloud)")
 
         val loaded = vm.uiState.value.loadedModels
         assertEquals(ModelSource.NETWORK, loaded.activeSource)
-        assertEquals("http://192.168.1.69:11434", loaded.networkEndpoint)
-        assertEquals("qwen3.6:latest", loaded.networkModel)
+        // Standalone app: the network card always points at openrouter.ai,
+        // never at a home server.
+        assertEquals("https://openrouter.ai/api/v1", loaded.networkEndpoint)
+        assertEquals("test-model:free", loaded.networkModel)
     }
 
     @Test
-    fun `selecting ollama marks network as the active source`() = runTest {
+    fun `selecting openrouter marks network as the active source`() = runTest {
         val vm = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
 
-        vm.onModelSelected("Ollama (Local Network)")
+        vm.onModelSelected("OpenRouter (Cloud)")
 
         assertEquals(ModelSource.NETWORK, vm.uiState.value.loadedModels.activeSource)
     }
@@ -146,10 +147,10 @@ class ModelStatusTest {
 
     @Test
     fun `provider selection persists across restarts`() = runTest {
-        `when`(mockSecureStorage.getPreference("selected_model")).thenReturn("Ollama (Local Network)")
+        `when`(mockSecureStorage.getPreference("selected_model")).thenReturn("OpenRouter (Cloud)")
         val vm = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
 
-        assertEquals("Ollama (Local Network)", vm.uiState.value.selectedModel)
+        assertEquals("OpenRouter (Cloud)", vm.uiState.value.selectedModel)
         assertEquals(ModelSource.NETWORK, vm.uiState.value.loadedModels.activeSource)
     }
 

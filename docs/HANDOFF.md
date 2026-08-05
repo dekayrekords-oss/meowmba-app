@@ -243,11 +243,37 @@ Verified end-to-end on the Fold 6: cold-launch wake commands
 `MeowDirect` logs and direct spoken answers from MeowLion (postThought
 notifications), zero FATAL.
 
+## Standalone build: OpenRouter brain, no home server (2026-08-04)
+
+meow is shipping to the Play Store, so the app may never depend on the home
+network. The MeowLion (Ollama) route is gone entirely:
+
+- **OpenRouter is the cloud brain.** `buildOmniRoute()` now registers route
+  `openrouter` (https://openrouter.ai/api/v1, OpenAI-compatible streaming via
+  `RemoteModelProvider`). User pastes their own key + optional model id in
+  Settings; default model `nvidia/nemotron-3-super-120b-a12b:free` (free).
+- **On-device fallback, always.** Without a key the OpenRouter route errors
+  before producing output, and OmniRoute's fallback chain hands the turn to
+  the local Gemma model. Verified on-device: "what is a quasar" answered
+  fully offline, zero connections to the old home server (checked
+  /proc/net/tcp).
+- **Default brain**: OpenRouter when a key is saved, else `local`; explicit
+  Settings choice still wins. `respondDirectly()` pins `"openrouter"`.
+- **UI**: picker entry "OpenRouter (Cloud)" replaces "Ollama (Local Network)";
+  Settings section swapped to OpenRouter key + model; model-manager card now
+  shows openrouter.ai; default-brain choices updated. Vision: the network lane
+  only works with a user-configured `network_vision` endpoint, else honest null.
+- All `MEOWLION_*` constants and the hardcoded 192.168.1.163 are deleted. The
+  desktop-bridge service keeps its opt-in configured-endpoint behavior only.
+
+Tests: ModelStatus/VisionPipeline rewritten for OpenRouter; suite 486/3
+(3 known pre-existing). E2E cold-launch wake questions answered standalone.
+
 <!-- AUTOBUILD:START -->
 (regenerated after each commit)
-- 2026-08-04 22:44:44 : Answer questions directly; explicit searches open live in the browser panel
+- 2026-08-04 23:30:13 : Fix deflection: pin MeowLion for direct answers, deliver cold-launch wake commands, harden question 
+- 91fd92a 2026-08-04 22:43 Answer questions directly; explicit searches open live in the browser panel
 - ad734b1 2026-08-04 22:24 Background follow-up handoff to WakeWordService; show-in-browser for all artifacts
 - 7887c18 2026-08-04 22:02 Drawer favorites + face pins, live browser agent loop on MeowLion
 - 43b4683 2026-08-04 21:41 HANDOFF: gesture/freeze/split/MeowLion notes
-- cfeea0f 2026-08-04 21:41 Gesture remap, overlay animation freeze, foldable split browser, MeowLion default brain
 <!-- AUTOBUILD:END -->

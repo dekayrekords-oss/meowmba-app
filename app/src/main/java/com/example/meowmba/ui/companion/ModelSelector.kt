@@ -101,7 +101,7 @@ val modelProviders = listOf(
     MODEL_OMNIROUTE,
     MODEL_GEMINI_NANO,
     "On-device (Local)",
-    "Ollama (Local Network)",
+    "OpenRouter (Cloud)",
     "OpenAI (Cloud)",
 )
 

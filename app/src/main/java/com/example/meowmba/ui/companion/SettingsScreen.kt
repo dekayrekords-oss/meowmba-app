@@ -81,9 +81,8 @@ fun SettingsScreen(
     var sshPassword by remember { mutableStateOf("") }
     var savedServers by remember { mutableStateOf(sshRegistry.list().map { it.name }) }
     var hfToken by remember { mutableStateOf(secureStorage.getApiKey("huggingface") ?: "") }
-    var ollamaEndpoint by remember { mutableStateOf(secureStorage.getEndpoint("ollama") ?: "http://192.168.1.163:11434") }
-    var ollamaModel by remember { mutableStateOf(secureStorage.getModelName("ollama") ?: "qwen3.6-memba:35b-a3b") }
-    var ollamaVisionModel by remember { mutableStateOf(secureStorage.getModelName("ollama_vision") ?: "qwen3.6-memba:35b-a3b") }
+    var openrouterKey by remember { mutableStateOf(secureStorage.getApiKey("openrouter") ?: "") }
+    var openrouterModel by remember { mutableStateOf(secureStorage.getModelName("openrouter") ?: "nvidia/nemotron-3-super-120b-a12b:free") }
     var localModelPath by remember { mutableStateOf(secureStorage.getEndpoint("local") ?: "/data/local/tmp/llm/gemma.bin") }
 
     Surface(
@@ -439,26 +438,21 @@ fun SettingsScreen(
             
             Spacer(modifier = Modifier.height(24.dp))
             
-            // Ollama Configuration
-            Text("Ollama Local Network", style = MaterialTheme.typography.titleMedium, color = Color.White)
+            // OpenRouter — the standalone cloud brain. No home server needed:
+            // one key from openrouter.ai and meow works anywhere. Free default
+            // model; any OpenRouter model id works in the field below.
+            Text("OpenRouter (openrouter.ai)", style = MaterialTheme.typography.titleMedium, color = Color.White)
             SettingsTextField(
-                value = ollamaEndpoint,
-                onValueChange = { ollamaEndpoint = it },
-                label = { Text("Endpoint (e.g. http://10.0.2.2:11434)") },
+                value = openrouterKey,
+                onValueChange = { openrouterKey = it },
+                label = { Text("API key (free at openrouter.ai/keys)") },
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(modifier = Modifier.height(8.dp))
             SettingsTextField(
-                value = ollamaModel,
-                onValueChange = { ollamaModel = it },
-                label = { Text("Model name (e.g. gemma4:12b-it-qat, memba-gemma4, hermes3-memba:8b)") },
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            SettingsTextField(
-                value = ollamaVisionModel,
-                onValueChange = { ollamaVisionModel = it },
-                label = { Text("Vision model for 'what do you see' (multimodal, e.g. gemma4:12b-it-qat)") },
+                value = openrouterModel,
+                onValueChange = { openrouterModel = it },
+                label = { Text("Model (any OpenRouter id, e.g. nvidia/nemotron-3-super-120b-a12b:free)") },
                 modifier = Modifier.fillMaxWidth()
             )
             
@@ -536,9 +530,8 @@ fun SettingsScreen(
                     secureStorage.saveApiKey("opencode", opencodeKey)
                     secureStorage.savePreference("default_brain", defaultBrain)
                     secureStorage.saveApiKey("huggingface", hfToken)
-                    secureStorage.saveEndpoint("ollama", ollamaEndpoint)
-                    secureStorage.saveModelName("ollama", ollamaModel)
-                    secureStorage.saveModelName("ollama_vision", ollamaVisionModel)
+                    secureStorage.saveApiKey("openrouter", openrouterKey)
+                    secureStorage.saveModelName("openrouter", openrouterModel)
                     secureStorage.saveEndpoint("local", localModelPath)
                     onSaved()
                     onClose()
@@ -933,7 +926,7 @@ private fun brainLabel(id: String): String = BRAIN_CHOICES.firstOrNull { it.firs
 private val BRAIN_CHOICES = listOf(
     "auto" to "Auto (Omniroute)",
     "bigpickle" to "BigPickle",
-    "ollama" to "MeowLion (Ollama)",
+    "openrouter" to "OpenRouter",
     "openai" to "OpenAI",
     "local" to "On-device",
 )

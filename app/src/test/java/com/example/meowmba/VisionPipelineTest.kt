@@ -122,15 +122,26 @@ class VisionPipelineTest {
     // ── Provider selection ─────────────────────────────────────────────────
 
     @Test
-    fun `ollama selection maps to ollama vision with configured model`() = runTest {
-        `when`(mockSecureStorage.getEndpoint("ollama")).thenReturn("http://192.168.1.69:11434")
-        `when`(mockSecureStorage.getModelName("ollama_vision")).thenReturn("gemma4:12b-it-qat")
+    fun `network selection with configured vision endpoint maps to ollama vision`() = runTest {
+        `when`(mockSecureStorage.getEndpoint("network_vision")).thenReturn("http://192.168.1.69:11434")
+        `when`(mockSecureStorage.getModelName("network_vision")).thenReturn("gemma4:12b-it-qat")
         val vm = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
 
-        vm.onModelSelected("Ollama (Local Network)")
+        vm.onModelSelected("OpenRouter (Cloud)")
 
         val provider = vm.visionProviderFor()
         assertTrue(provider is OllamaVisionProvider)
+    }
+
+    @Test
+    fun `network selection without a configured vision endpoint stays honest`() = runTest {
+        // Standalone app: no home server to fall back on — vision reports
+        // nothing rather than dialing a hardcoded LAN address.
+        val vm = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
+
+        vm.onModelSelected("OpenRouter (Cloud)")
+
+        assertNull(vm.visionProviderFor())
     }
 
     @Test

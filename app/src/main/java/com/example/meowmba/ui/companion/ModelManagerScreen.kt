@@ -133,8 +133,8 @@ fun ModelManagerScreen(
 
             LoadedModelCard(
                 icon = { Icon(Icons.Default.Cloud, contentDescription = null, tint = Color(0xFF3FB950)) },
-                title = "Network server · LAN",
-                primary = "Ollama · ${loaded.networkModel}",
+                title = "OpenRouter · cloud",
+                primary = "OpenRouter · ${loaded.networkModel}",
                 details = listOf("Endpoint: ${loaded.networkEndpoint}"),
                 status = if (loaded.activeSource == ModelSource.NETWORK) LoadStatus.ACTIVE else LoadStatus.STANDBY
             )

@@ -16,7 +16,7 @@ import kotlinx.serialization.json.intOrNull
 /**
  * The live browser agent: while the browser is open, this loop keeps a
  * standing goal, looks at the page (JPEG screenshot -> vision model, e.g.
- * MeowLion), decides the next action, executes it in the WebView, and
+ * OpenRouter), decides the next action, executes it in the WebView, and
  * verifies the result on the next cycle. New spoken instructions replace
  * the goal and re-plan immediately; touch edits by the user are simply
  * visible in the next screenshot.
@@ -83,7 +83,7 @@ class BrowserAgentLoop(
 
             val verdict = vision()?.describe(shot, planPrompt(g, dom, steps))
             if (verdict == null) {
-                announce("I can't reach my vision model — check MeowLion.")
+                announce("I can't reach my vision model — check my brain settings.")
                 delay(monitorEveryMs)
                 continue
             }
@@ -162,7 +162,7 @@ class BrowserAgentLoop(
                 .replace("\n", "\\n").replace("\r", "") + "'"
 
         fun planPrompt(goal: String, dom: String, stepsTaken: Int): String = """
-            You are MeowLion driving a phone browser. The user's standing goal:
+            You are meow driving a phone browser. The user's standing goal:
             """ + goal + """
 
             Current page HTML (truncated):

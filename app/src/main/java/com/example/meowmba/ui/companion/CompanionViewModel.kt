@@ -645,7 +645,7 @@ class CompanionViewModel(
                 toolRegistry.register(
                     WebBrowserTool(java.io.File(ctx.filesDir, "web_screenshots"), pagesDir)
                 )
-                // The live browser agent loop (vision = MeowLion by default).
+                // The live browser agent loop (vision = OpenRouter-configurable).
                 browserAgent = com.example.meowmba.core.agent.BrowserAgentLoop(
                     scope = viewModelScope,
                     vision = { visionProviderFor() },
@@ -990,18 +990,19 @@ class CompanionViewModel(
         val storage = secureStorage ?: return null
         val routes = mutableListOf<com.example.meowmba.core.agent.OmniRoute.Route>()
 
-        // MeowLion — the local Ollama box on the home network. Preferred
-        // brain for chat, agent work and browser driving (vision-capable);
-        // used out of the box even before Settings saves an endpoint.
-        val meowlionEndpoint = storage.getEndpoint("ollama")?.takeIf { it.isNotBlank() } ?: MEOWLION_ENDPOINT
-        val meowlionModel = storage.getModelName("ollama") ?: MEOWLION_MODEL
+        // OpenRouter — the standalone cloud brain. meow is a Play-Store app:
+        // no home server, no LAN dependency. The user pastes their own key in
+        // Settings; without one this route errors honestly and OmniRoute
+        // falls through to the on-device model, which always works offline.
+        val openRouterKey = storage.getApiKey("openrouter")
+        val openRouterModel = storage.getModelName("openrouter") ?: OPENROUTER_DEFAULT_MODEL
         routes += com.example.meowmba.core.agent.OmniRoute.Route(
-            id = "ollama",
-            label = "MeowLion (Ollama) · $meowlionModel",
+            id = "openrouter",
+            label = "OpenRouter · $openRouterModel",
             provider = RemoteModelProvider(
-                "MeowLion", meowlionEndpoint.trimEnd('/'), null, meowlionModel,
+                "OpenRouter", OPENROUTER_ENDPOINT, openRouterKey, openRouterModel,
             ),
-            tags = setOf(com.example.meowmba.core.agent.OmniRoute.RouteTag.CHAT, com.example.meowmba.core.agent.OmniRoute.RouteTag.CODING, com.example.meowmba.core.agent.OmniRoute.RouteTag.REASONING, com.example.meowmba.core.agent.OmniRoute.RouteTag.VISION),
+            tags = setOf(com.example.meowmba.core.agent.OmniRoute.RouteTag.CHAT, com.example.meowmba.core.agent.OmniRoute.RouteTag.CODING, com.example.meowmba.core.agent.OmniRoute.RouteTag.REASONING),
             priority = 10,
         )
         storage.getApiKey("opencode")?.takeIf { it.isNotBlank() }?.let { key ->
@@ -1048,9 +1049,10 @@ class CompanionViewModel(
         // "Default brain" setting: force one provider as the primary brain.
         // Everything else is dropped except the on-device fallback, which is
         // always kept so the cat never loses its voice offline.
-        // Default brain: MeowLion out of the box; an explicit Settings
-        // choice always wins.
-        val forced = (storage.getPreference("default_brain") ?: "ollama")
+        // Default brain: OpenRouter when the user has saved a key, else the
+        // on-device model; an explicit Settings choice always wins.
+        val forced = (storage.getPreference("default_brain")
+            ?: if (openRouterKey.isNullOrBlank()) "local" else "openrouter")
             .takeIf { it.isNotBlank() && it != "auto" }
         val finalRoutes = if (forced != null && routes.any { it.id == forced }) {
             routes.filter { it.id == forced || it.offline }.map {
@@ -1085,12 +1087,12 @@ class CompanionViewModel(
                     MediaPipeProvider(secureStorage.context, path)
                 }
             }
-            "Ollama (Local Network)" -> {
+            "OpenRouter (Cloud)" -> {
                 RemoteModelProvider(
-                    "Ollama",
-                    secureStorage.getEndpoint("ollama") ?: MEOWLION_ENDPOINT,
-                    null,
-                    secureStorage.getModelName("ollama") ?: "gemma2"
+                    "OpenRouter",
+                    OPENROUTER_ENDPOINT,
+                    secureStorage.getApiKey("openrouter"),
+                    secureStorage.getModelName("openrouter") ?: OPENROUTER_DEFAULT_MODEL
                 )
             }
             MODEL_OMNIROUTE -> buildOmniRoute()
@@ -1183,7 +1185,9 @@ class CompanionViewModel(
             // CLOUD and the Hardware page claimed it was a cloud model.
             selected == MODEL_GEMINI_NANO -> ModelSource.LOCAL
             selected.contains("(Local)") -> ModelSource.LOCAL
-            selected.contains("Network") -> ModelSource.NETWORK
+            // The old picker said "(Local Network)"; the standalone build's
+            // remote brain is OpenRouter — still the NETWORK lane.
+            selected.contains("Network") || selected.contains("OpenRouter") -> ModelSource.NETWORK
             else -> ModelSource.CLOUD
         }
         val localPath = resolvedLocalModelPath()
@@ -1197,8 +1201,8 @@ class CompanionViewModel(
                 cloudModel = secureStorage?.getModelName("openai") ?: "gpt-4o-mini",
                 cloudEndpoint = "https://api.openai.com",
                 cloudKeyConfigured = !secureStorage?.getApiKey("openai").isNullOrBlank(),
-                networkEndpoint = secureStorage?.getEndpoint("ollama") ?: MEOWLION_ENDPOINT,
-                networkModel = secureStorage?.getModelName("ollama") ?: "gemma2",
+                networkEndpoint = OPENROUTER_ENDPOINT,
+                networkModel = secureStorage?.getModelName("openrouter") ?: OPENROUTER_DEFAULT_MODEL,
                 localInstalled = java.io.File(localPath).exists(),
                 activeSource = source
             ),
@@ -1381,11 +1385,11 @@ class CompanionViewModel(
             var fullResponse = ""
             var spokenUpTo = 0
             omniRoute?.hintUserText(text)
-            // Pin MeowLion first: word-count routing tags short questions as FAST,
+            // Pin OpenRouter first: word-count routing tags short questions as FAST,
             // which only the small on-device model carries — and that model is
             // exactly the one that answers questions with more questions.
             val stream = if (provider is com.example.meowmba.core.agent.OmniRoute) {
-                provider.generateStreaming(prompt, preferRouteId = "ollama")
+                provider.generateStreaming(prompt, preferRouteId = "openrouter")
             } else {
                 provider.generateStreaming(prompt)
             }
@@ -2401,17 +2405,23 @@ class CompanionViewModel(
     }
 
     /**
-     * Vision provider selection mirrors the chat provider: Ollama → meow's
-     * multimodal lane, OpenAI → cloud vision, on-device → DeviceVisionProvider
+     * Vision provider selection mirrors the chat provider. The standalone
+     * build has no home server: the "Network" lane only works if the user
+     * configured an endpoint themselves, otherwise meow says honestly that
+     * it can't see. OpenAI → cloud vision, on-device → DeviceVisionProvider
      * using Google Play Services ML Kit (image labeling + text recognition).
      */
     internal fun visionProviderFor(): com.example.meowmba.core.vision.VisionProvider? {
         val selected = _uiState.value.selectedModel
         return when {
-            selected.contains("Network") -> com.example.meowmba.core.vision.OllamaVisionProvider(
-                secureStorage?.getEndpoint("ollama") ?: MEOWLION_ENDPOINT,
-                secureStorage?.getModelName("ollama_vision") ?: DEFAULT_VISION_MODEL
-            )
+            selected.contains("Network") || selected.contains("OpenRouter") -> secureStorage?.getEndpoint("network_vision")
+                ?.takeIf { it.isNotBlank() }
+                ?.let {
+                    com.example.meowmba.core.vision.OllamaVisionProvider(
+                        it.trimEnd('/'),
+                        secureStorage?.getModelName("network_vision") ?: "llava"
+                    )
+                }
             selected.contains("Cloud") -> com.example.meowmba.core.vision.OpenAIVisionProvider(
                 "https://api.openai.com",
                 secureStorage?.getApiKey("openai"),
@@ -3687,9 +3697,10 @@ class CompanionViewModel(
 
         private const val KEY_PINNED_APPS = "pinned_apps"
 
-        /** MeowLion — local Ollama box; the preferred brain when reachable. */
-        private const val MEOWLION_ENDPOINT = "http://192.168.1.163:11434"
-        private const val MEOWLION_MODEL = "qwen3.6-memba:35b-a3b"
+        /** OpenRouter — the standalone cloud brain (openrouter.ai). */
+        private const val OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1"
+        /** Sensible free default; any OpenRouter model id works via Settings. */
+        private const val OPENROUTER_DEFAULT_MODEL = "nvidia/nemotron-3-super-120b-a12b:free"
         private const val KEY_MEMORY_PAUSED = "memory_paused"
         private const val KEY_RETENTION_DAYS = "retention_days"
         private const val KEY_AGENT_BRAIN = "agent_brain_enabled"
@@ -3717,7 +3728,6 @@ class CompanionViewModel(
          * read a one-line result, short enough not to sit on the companion's face.
          */
         private const val AGENT_PANEL_LINGER_MS = 6_000L
-        private const val DEFAULT_VISION_MODEL = MEOWLION_MODEL
         private const val DEFAULT_RETENTION_DAYS = 90
         private const val FOLLOW_UP_TIMEOUT_MS = 8000L
 
