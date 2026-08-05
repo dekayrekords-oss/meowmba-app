@@ -163,6 +163,13 @@ with risk levels, audit trail).
 - Tests: `PhaseGTest.kt` (11 tests: mood transitions, chatter rate-limit,
   TTS modulation, servo mapping, clamp behavior).
 
+## UX overhaul + MeowLion brain (2026-08-05)
+
+- **Gestures**: swipe UP = app menu/drawer, swipe RIGHT = chat window, swipe DOWN = tiles, swipe LEFT = agent browser.
+- **Animation freeze**: the avatar stops animating while the chat sheet, app menu, or the full-screen (folded) browser is open. Ambient loops freeze at neutral values; blink/ear-twitch/idle clips are suspended and resume on close.
+- **Foldable split view**: on the unfolded inner display (screen width >= 600dp) opening the browser shows it in the right half with the companion (avatar + chat) in the left half, so meow can drive the browser in real time while visible. Folded keeps the full-screen overlay.
+- **MeowLion default brain**: the local Ollama box at http://192.168.1.163:11434 is now the out-of-the-box default brain (model `qwen3.6-memba:35b-a3b`, vision + tools). Route priority 10; on-device model remains the offline fallback. Settings still overrides endpoint/model/default-brain.
+
 <!-- AUTOBUILD:START -->
 (regenerated after each commit)
 - 2026-08-04 20:57:39 : Ignore .kotlin daemon log artifacts
