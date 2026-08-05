@@ -98,6 +98,19 @@
             </intent-filter>
         </activity>
 
+        <!-- Godot avatar prototype (idle + paw-lick side-by-side comparison
+             screen, see docs/godot-avatar-prototype-design.md). Separate
+             from MainActivity; configChanges/screenOrientation are required
+             by Godot's Android embedding docs since the engine doesn't
+             handle live resize/rotation itself. -->
+        <activity
+            android:name=".ui.companion.GodotAvatarPreviewActivity"
+            android:exported="false"
+            android:label="Godot Avatar Prototype"
+            android:theme="@style/Theme.Meowmba"
+            android:screenOrientation="portrait"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout" />
+
         <uses-native-library android:name="libvndksupport.so" android:required="false"/>
         <uses-native-library android:name="libOpenCL.so" android:required="false"/>
 

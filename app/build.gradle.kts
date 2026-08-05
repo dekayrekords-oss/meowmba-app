@@ -94,6 +94,17 @@ android {
     buildFeatures {
         compose = true
     }
+
+    // Godot avatar prototype: the Godot project lives directly (unsubfoldered)
+    // in src/main/assets/ — see docs/godot-avatar-prototype-design.md. Without
+    // this, Gradle's default asset-packaging ignore pattern strips the hidden
+    // directories Godot's project format uses (per Godot's own Android-library
+    // docs). aaptOptions was replaced by androidResources in AGP 9.
+    androidResources {
+        ignoreAssetsPatterns.add(
+            "!.svn:!.git:!.gitignore:!.ds_store:!*.scc:<dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"
+        )
+    }
 }
 
 ksp {
@@ -110,6 +121,11 @@ tasks.withType<Test>().configureEach {
 dependencies {
     // SSH client (mwiede fork is the maintained jsch).
     implementation("com.github.mwiede:jsch:0.2.21")
+
+    // Godot avatar prototype — prebuilt Android library AAR straight off
+    // Maven Central (org.godotengine:godot, "Godot Engine Android Library -
+    // Template Build"). See docs/godot-avatar-prototype-design.md.
+    implementation(libs.godot)
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)

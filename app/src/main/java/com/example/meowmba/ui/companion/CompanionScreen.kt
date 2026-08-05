@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.*
@@ -261,6 +262,27 @@ fun CompanionScreen(
                         Icons.Default.Close else Icons.Default.PlayArrow,
                     contentDescription = "Toggle camera preview",
                     tint = if (uiState.isPreviewVisible) Color(0xFF3FB950) else Color(0x55CFF9FF)
+                )
+            }
+
+            // Godot avatar prototype (top-start): launches the side-by-side
+            // comparison screen. See docs/godot-avatar-prototype-design.md —
+            // this is a prototype/evaluation entry point, not a real feature.
+            val godotContext = androidx.compose.ui.platform.LocalContext.current
+            IconButton(
+                onClick = {
+                    godotContext.startActivity(
+                        android.content.Intent(godotContext, GodotAvatarPreviewActivity::class.java)
+                    )
+                },
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(16.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Pets,
+                    contentDescription = "Open Godot avatar prototype (comparison screen)",
+                    tint = Color(0x55CFF9FF)
                 )
             }
         }

@@ -25,6 +25,9 @@ room = "2.8.4"
 ksp = "2.2.10-2.0.2"
 camerax = "1.6.1"
 aicore = "0.0.1-exp02"
+# Godot Android library, published straight to Maven Central by upstream —
+# see docs/godot-avatar-prototype-design.md for how this is embedded.
+godot = "4.7.1.stable"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -64,6 +67,7 @@ ktor-client-mock = { group = "io.ktor", name = "ktor-client-mock", version.ref =
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+godot = { group = "org.godotengine", name = "godot", version.ref = "godot" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
