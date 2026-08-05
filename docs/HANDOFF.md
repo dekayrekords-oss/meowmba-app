@@ -397,11 +397,21 @@ Tests: `WebViewBridgeTest.kt` (decode escapes/unicode/pass-through). Suite now 5
 
 Verified on device: settings opens with the robot section showing "Connect over Bluetooth" + MAC, and the advanced tail absent until expanded. 0 crashes.
 
+## LOOI auto-connect
+
+- The robot body now connects on its own: robot_body_enabled defaults to true,
+  and refreshRobot (ViewModel init + MainActivity.onResume) resolves the Bluetooth
+  address from the saved MAC, else RobotManager.discoverLooiAddress() picks the
+  first bonded device whose name contains "looi"/"meow" and connects via RFCOMM/SPP.
+  No paired base -> stays simulated (honest status).
+- BLUETOOTH_CONNECT added to the startup runtime-permission request (bondedDevices
+  throws on Android 12+ without it).
+
 <!-- AUTOBUILD:START -->
 (regenerated after each commit)
-- 2026-08-05 12:04:43 : LOOI Bluetooth hardware control; fix black-canvas web page (decode JS string) and harden WebView for
+- 2026-08-05 12:34:28 : Settings cleanup: collapse advanced options; LOOI defaults to Bluetooth
+- 574a3fd 2026-08-05 12:02 LOOI Bluetooth hardware control; fix black-canvas web page (decode JS string) and harden WebView for video (YouTube)
 - 6cf9c2d 2026-08-05 10:49 Add LOOI robot body: real motor control over a line protocol, RobotManager with honest simulated fallback, Settings section, unit tests
 - 748d953 2026-08-05 10:28 Fix rotation black-screen (FGS promise race), home stickiness, OpenRouter error surfacing; audit LOOI
 - 0cce31a 2026-08-05 09:37 Avatar: 20 new built-in animations (tricks, moods, body moves)
-- 247c9b8 2026-08-05 08:36 Avatar: tail hangs downward per user request
 <!-- AUTOBUILD:END -->

@@ -310,7 +310,7 @@ class CompanionViewModel(
         // Robot body: restore prefs into state, mirror live status, then connect.
         secureStorage?.let { st ->
             _uiState.value = _uiState.value.copy(
-                robotBodyEnabled = st.getBooleanPreference("robot_body_enabled", false),
+                robotBodyEnabled = st.getBooleanPreference("robot_body_enabled", true),
                 robotHost = st.getPreference("robot_host") ?: "192.168.1.200",
                 robotPort = st.getPreference("robot_port") ?: "9100",
                 robotUseBluetooth = st.getBooleanPreference("robot_use_bluetooth", true),
@@ -1570,17 +1570,18 @@ class CompanionViewModel(
     // ── Robot body (LOOI) ────────────────────────────────────────────────
     /** (Re)resolve the active robot body from preferences. Non-blocking. */
     fun refreshRobot() {
-        val enabled = secureStorage?.getBooleanPreference("robot_body_enabled", false) == true
+        val enabled = secureStorage?.getBooleanPreference("robot_body_enabled", true) == true
         val useBt = secureStorage?.getBooleanPreference("robot_use_bluetooth", true) == true
         val host = secureStorage?.getPreference("robot_host") ?: "192.168.1.200"
         val port = (secureStorage?.getPreference("robot_port")?.toIntOrNull()) ?: 9100
         val btAddress = secureStorage?.getPreference("robot_bt_address") ?: ""
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             if (!enabled) robotManager.useSimulated()
-            else if (useBt && btAddress.isNotBlank()) robotManager.connectBluetooth(btAddress)
             else if (useBt) {
-                // Bluetooth selected but no device address yet — stay honest.
-                robotManager.useSimulated()
+                // Auto-connect: use the saved MAC, else discover a paired LOOI base.
+                val address = btAddress.ifBlank { robotManager.discoverLooiAddress() ?: "" }
+                if (address.isNotBlank()) robotManager.connectBluetooth(address)
+                else robotManager.useSimulated()
             }
             else robotManager.connectLooi(host, port)
         }

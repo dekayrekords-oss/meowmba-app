@@ -348,6 +348,8 @@ class MainActivity : ComponentActivity() {
             // the runtime grant threw SecurityException and killed the app.
             Manifest.permission.READ_CALENDAR,
             Manifest.permission.WRITE_CALENDAR,
+            // Auto-connect to a paired LOOI base requires reading bonded devices.
+            Manifest.permission.BLUETOOTH_CONNECT,
         ).filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }

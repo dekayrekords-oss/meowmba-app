@@ -38,6 +38,21 @@ class RobotManager {
         bringUp(TcpRobotTransport(host, port), "LOOI body @ $host:$port",
             "LOOI unreachable ($host:$port) - simulated")
 
+    /**
+     * Auto-discovery: the first bonded (paired) device whose name looks like a LOOI
+     * base, so the body can connect without the user typing a MAC. Returns null when
+     * nothing is paired or the BLUETOOTH_CONNECT permission is missing.
+     */
+    fun discoverLooiAddress(): String? = try {
+        val adapter = android.bluetooth.BluetoothAdapter.getDefaultAdapter() ?: return null
+        adapter.bondedDevices?.firstOrNull { d ->
+            val n = d.name ?: ""
+            n.contains("looi", ignoreCase = true) || n.contains("meow", ignoreCase = true)
+        }?.address
+    } catch (e: Exception) {
+        null
+    }
+
     /** Bring up a LOOI base over classic Bluetooth (RFCOMM/SPP) to a paired device. */
     fun connectBluetooth(address: String): Boolean =
         bringUp(BluetoothRobotTransport(address), "LOOI body (BT) @ $address",
