@@ -349,14 +349,16 @@ fun AvatarRenderer(
             val tailBaseX = cx + s * 0.32f
             val tailBaseY = cy + s * 0.18f
             val tailLen = s * 0.22f
-            val tailAngle = -40f + wag * 35f  // -75° (left) to -5° (right)
+            // The tail hangs DOWNWARD from its base, curling slightly outward;
+            // wag swings it left/right around the base (user asked for down).
+            val tailAngle = 12f + wag * 35f  // gentle outward lean, ±35° wag
             val tailColor = EYE_COLOR.copy(alpha = 0.7f * faceAlpha)
             rotate(tailAngle, pivot = Offset(tailBaseX, tailBaseY)) {
                 val tail = Path().apply {
                     moveTo(tailBaseX, tailBaseY)
                     quadraticBezierTo(
-                        tailBaseX + tailLen * 0.4f, tailBaseY - tailLen * 0.8f,
-                        tailBaseX + tailLen * 0.1f, tailBaseY - tailLen
+                        tailBaseX + tailLen * 0.45f, tailBaseY + tailLen * 0.7f,
+                        tailBaseX + tailLen * 0.15f, tailBaseY + tailLen
                     )
                 }
                 drawPath(tail, tailColor, style = Stroke(width = s * 0.018f, cap = StrokeCap.Round))
