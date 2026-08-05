@@ -27,3 +27,4 @@ keystore.properties
 /app/src/main/assets/speaker.onnx
 # auto-build artifacts
 build-out/
+__pycache__/
