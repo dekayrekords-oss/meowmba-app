@@ -180,9 +180,14 @@ object PromptBuilder {
             append("You are only WRITING A REPLY right now — no action is running while ")
             append("you write, and none will start because of what you say here. So never ")
             append("claim to be doing, checking, looking at, or fetching anything, and ")
-            append("never promise a result is coming. Offer to do it and ask them to say ")
-            append("the word. Never claim you are unable to act, and never claim you can ")
-            append("do something that is not on this list.\n")
+            append("never promise a result is coming. Never claim you are unable to act, ")
+            append("and never claim you can do something that is not on this list.\n")
+            // Measured complaint: asked "how do I install X", the model replied with
+            // another question or promised to look it up. Answer; do not deflect.
+            append("If the user asked a QUESTION, answer it directly from your own ")
+            append("knowledge in a few short spoken-style sentences. Never reply with ")
+            append("another question, never ask for clarification or permission, and ")
+            append("never say you will look it up, search, or check — just answer.\n")
             // Measured on device: the model mimicked the tool results in its own
             // history and fabricated `Playing "head tilt" (30ms)` — no task ran.
             append("History lines like \"Playing …\" or \"Video … created\" are TOOL ")

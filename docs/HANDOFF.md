@@ -199,11 +199,27 @@ with risk levels, audit trail).
   in the orchestrator result path now calls `showFileInBrowser(file)`, so images
   and videos meow generates pop open in the browser panel automatically.
 
+## Direct answers + browser searches (2026-07-29)
+
+- **Questions are answered, not deflected.** `looksLikeDirectQuestion()` catches
+  informational questions (how/what/why…, "how to …", trailing "?") before agent
+  routing and sends them through `respondDirectly()` — the normal streaming chat
+  path with agent routing skipped, so a question can never become a queued task
+  narrating "looking it up". Commands ("open …", "can you play …") keep the agent
+  path. `PromptBuilder` also lost its "offer to do it and ask them to say the
+  word" instruction and gained an explicit rule: answer questions directly from
+  your own knowledge, never reply with another question, never promise a lookup.
+- **Searches open live in the browser.** `extractSearchQuery()` matches "search
+  for / search the web for / look up / google …" (memory/notes/photos searches
+  excluded, bare verbs ignored) and `showSearchInBrowser()` opens the side panel
+  on `google.com/search?q=…`. Checked before the browser-agent routing so it also
+  works while the panel is already open.
+
 <!-- AUTOBUILD:START -->
 (regenerated after each commit)
-- 2026-08-04 22:05:04 : Drawer favorites + face pins, live browser agent loop on MeowLion
+- 2026-08-04 22:25:40 : Background follow-up handoff to WakeWordService; show-in-browser for all artifacts
+- 7887c18 2026-08-04 22:02 Drawer favorites + face pins, live browser agent loop on MeowLion
 - 43b4683 2026-08-04 21:41 HANDOFF: gesture/freeze/split/MeowLion notes
 - cfeea0f 2026-08-04 21:41 Gesture remap, overlay animation freeze, foldable split browser, MeowLion default brain
 - 265dda5 2026-08-04 20:54 Ignore .kotlin daemon log artifacts
-- 3dfa052 2026-08-04 20:54 Phase G: LOOI mood engine, idle chatter, and motor control API
 <!-- AUTOBUILD:END -->

@@ -1335,6 +1335,95 @@ class CompanionViewModel(
         _uiState.value = _uiState.value.copy(showAppDrawer = false, showBrowser = false)
     }
 
+    /**
+     * Answer a question straight from the brain. Same chat pipeline as a normal
+     * turn, but agent routing is skipped entirely — a question is answered,
+     * not converted into a queued task that narrates "looking it up".
+     */
+    private fun respondDirectly(text: String) {
+        // Mirror the normal pipeline's turn bookkeeping so the UI (and the
+        // voice pipeline tests) see the same THINKING transition.
+        followUpJob?.cancel()
+        _uiState.value = _uiState.value.copy(
+            interactionState = InteractionState.THINKING,
+            captionText = text,
+            emotion = CompanionEmotion.CURIOUS
+        )
+        responseJob?.cancel()
+        responseJob = viewModelScope.launch {
+            val userMessageId = memoryRepository?.addMessage(MessageRole.USER, text)
+            val recalled = recallMemories(text)
+            if (recalled.isNotEmpty()) {
+                _uiState.value = _uiState.value.copy(
+                    recalledMemories = recalled.map {
+                        RecalledMemory(it.memory.content.take(80), it.reason)
+                    }
+                )
+                memoryRepository?.touchRecalled(recalled.map { it.memory.id })
+            }
+            if (currentProvider == null) {
+                delay(1500)
+                speak("No model is ready yet. Download one from the Hardware page, or configure a server in Settings.")
+                return@launch
+            }
+            val recentMessages = memoryRepository?.getRecentMessages(10) ?: emptyList()
+            val capabilities = agentToolRegistry?.definitions()
+                ?.map { "${it.displayName} — ${it.description.substringBefore('.')}" }
+                ?: emptyList()
+            val prompt = PromptBuilder.build(
+                _uiState.value.name, text, recentMessages, recalled, capabilities
+            )
+            var fullResponse = ""
+            var spokenUpTo = 0
+            omniRoute?.hintUserText(text)
+            awaitProvider()?.generateStreaming(prompt)?.collect { response ->
+                when (response) {
+                    is ModelResponse.Partial -> {
+                        fullResponse += response.text
+                        _uiState.value = _uiState.value.copy(captionText = fullResponse)
+                        val chunk = com.example.meowmba.core.audio.SpeechChunker
+                            .nextChunk(fullResponse, spokenUpTo)
+                        if (chunk != null) {
+                            spokenUpTo += chunk.length
+                            speakStreaming(chunk.trim(), first = spokenUpTo == chunk.length)
+                        }
+                    }
+                    is ModelResponse.Complete -> {
+                        if (fullResponse.isBlank()) {
+                            showProviderError("${_uiState.value.selectedModel} returned an empty response")
+                        } else {
+                            val tail = fullResponse.substring(spokenUpTo).trim()
+                            if (tail.isNotEmpty()) {
+                                speakStreaming(tail, first = spokenUpTo == 0)
+                            }
+                            recordSpokenResponse(fullResponse)
+                            if (!_uiState.value.memoryPaused) {
+                                memoryRepository?.saveEpisodicCheckpoint(text, fullResponse, userMessageId)
+                            }
+                        }
+                    }
+                    is ModelResponse.Error -> showProviderError(response.message)
+                }
+            }
+        }
+    }
+
+    /** Run a web search live in the browser panel. */
+    fun showSearchInBrowser(query: String) {
+        if (!_uiState.value.showBrowser) toggleBrowser()
+        val url = "https://www.google.com/search?q=" +
+            java.net.URLEncoder.encode(query, "UTF-8")
+        viewModelScope.launch {
+            // Give the WebView a beat to attach before we drive it.
+            delay(700)
+            com.example.meowmba.core.browser.WebViewBridge.evaluate(
+                "window.location.href = '$url'; 'searching'"
+            ) {}
+            _uiState.value = _uiState.value.copy(captionText = "Searching for \"$query\" in the browser.")
+        }
+        speak("Searching for that in the browser now.")
+    }
+
     // ── "Show it in the browser" ────────────────────────────────────────────
 
     /**
@@ -1803,6 +1892,21 @@ class CompanionViewModel(
         // is already open.
         if (looksLikeShowInBrowser(WakePhraseMatcher.normalize(text))) {
             showLatestArtifactInBrowser()
+            return
+        }
+        // Explicit searches ("search for...", "look up...", "google...") open
+        // live in the browser panel — the user sees results, not a queued task
+        // narrating "searching...". Checked before the browser-agent routing so
+        // it also works while the panel is already open. Memory/notes searches
+        // stay with the agent.
+        extractSearchQuery(WakePhraseMatcher.normalize(text))?.let { query ->
+            showSearchInBrowser(query)
+            return
+        }
+        // Informational questions get answered directly by the brain — never
+        // queued as agent tasks, never met with another question.
+        if (looksLikeDirectQuestion(WakePhraseMatcher.normalize(text))) {
+            respondDirectly(text)
             return
         }
         // While the browser is open, speech goes straight to the browser
@@ -3621,6 +3725,67 @@ class CompanionViewModel(
 
         /** Verbs that turn "…browser" into a show-in-the-browser request. */
         private val SHOW_BROWSER_VERBS = listOf("show", "open", "display", "put", "bring")
+
+        /** "search for X", "search the web for X", "look up X", "google X", "search X". */
+        private val SEARCH_PREFIXES = listOf(
+            "search the web for ", "search web for ", "search online for ",
+            "search for ", "look up ", "google ", "search "
+        )
+
+        /** Local-scope searches that stay with the agent (memory, notes, photos…). */
+        private val SEARCH_LOCAL_SCOPES = listOf(
+            "my memory", "my memories", "memory for", "memories for",
+            "my notes", "my photos", "my pictures", "my files", "my emails", "my calendar"
+        )
+
+        /**
+         * Explicit web-search phrasing → the query to run in the browser panel.
+         * Null when the utterance is not a search request (or searches local data).
+         */
+        fun extractSearchQuery(normalized: String): String? {
+            val t = normalized.trim()
+            // Bare verbs with no object are not searches.
+            if (t in setOf("search", "search for", "look up", "google")) return null
+            if (SEARCH_LOCAL_SCOPES.any { t.contains(it) }) return null
+            val rest = SEARCH_PREFIXES.firstOrNull { t.startsWith(it) }
+                ?.let { t.removePrefix(it).trim() }
+                ?: return null
+            return rest.takeIf { it.isNotBlank() }
+        }
+
+        private val QUESTION_STARTERS = listOf(
+            "how", "what", "why", "when", "where", "who", "which", "is", "are",
+            "can", "could", "do", "does", "did", "should", "will", "would"
+        )
+
+        /** "how do I install X" is a question; "open the browser" is a command. */
+        private val ACTION_STARTERS = listOf(
+            "open", "send", "show", "play", "set", "turn", "make", "create", "build",
+            "add", "put", "launch", "start", "call", "email", "remind", "schedule",
+            "write", "draw", "take", "search", "look", "google", "find", "bring", "display"
+        )
+
+        /** "can/could you open ..." is really a request, not a question. */
+        private val POLITE_ACTION = Regex(
+            "^(can|could|will|would|please) (you )?(please )?" +
+                "(open|send|show|play|set|turn|make|create|build|add|launch|start|call|" +
+                "email|remind|schedule|write|draw|take|search|look|google|find|bring|display)\\b"
+        )
+
+        /**
+         * Informational questions the brain should answer directly. Commands,
+         * requests, and searches keep their existing routing.
+         */
+        fun looksLikeDirectQuestion(normalized: String): Boolean {
+            val t = normalized.trim()
+            if (t.isEmpty()) return false
+            if (POLITE_ACTION.containsMatchIn(t)) return false
+            val first = t.substringBefore(' ')
+            val startsLikeQuestion = first in QUESTION_STARTERS
+            val hasHowTo = t.contains("how to ")
+            val actionRequest = ACTION_STARTERS.any { t.startsWith("$it ") }
+            return (startsLikeQuestion || hasHowTo || t.endsWith("?")) && !actionRequest
+        }
 
         /** Creation verbs keep the request with the browser agent instead. */
         private val SHOW_BROWSER_CREATION_VERBS = listOf(
