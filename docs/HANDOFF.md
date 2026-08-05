@@ -170,11 +170,20 @@ with risk levels, audit trail).
 - **Foldable split view**: on the unfolded inner display (screen width >= 600dp) opening the browser shows it in the right half with the companion (avatar + chat) in the left half, so meow can drive the browser in real time while visible. Folded keeps the full-screen overlay.
 - **MeowLion default brain**: the local Ollama box at http://192.168.1.163:11434 is now the out-of-the-box default brain (model `qwen3.6-memba:35b-a3b`, vision + tools). Route priority 10; on-device model remains the offline fallback. Settings still overrides endpoint/model/default-brain.
 
+## Drawer favorites, face pins, live browser agent (2026-08-05)
+
+- **App drawer**: solid black background; opens instantly (app list + icons load async on IO with a shared icon cache); Favorites row at the bottom with up to 8 pinned apps (drawer-only). Long-press any app to pin/unpin; pins persist in encrypted prefs (`pinned_apps`).
+- **Face pins**: the first two pinned apps show as tappable icons top-right on the companion screen.
+- **Live browser agent** (`core/agent/BrowserAgentLoop.kt`): while the browser is open, speech becomes the standing goal. The loop screenshots the page (JPEG), asks MeowLion vision for the next JSON action (inject/js/click/type/scroll/open/save/done/wait), executes it in the WebView, and verifies on the next cycle. Max 12 consecutive actions, then it reports; after "done" it keeps slow re-verification every 45s. User touch edits are picked up via the next screenshot. Pages can be saved to `filesDir/web_pages/` and reopened with `openlocal`.
+- **New DOM helpers / tool actions**: `inject(html)`, `pageHtml()`, plus web.browser actions inject/html/save/openlocal; `WebViewBridge.captureJpeg()` for vision.
+- **Vision defaults moved to MeowLion** (`qwen3.6-memba:35b-a3b` on http://192.168.1.163:11434) for all endpoint/model fallbacks.
+- meow-nb role: publish target for built pages via the existing SSH tool; MeowLion is the brain driving the loop.
+
 <!-- AUTOBUILD:START -->
 (regenerated after each commit)
-- 2026-08-04 20:57:39 : Ignore .kotlin daemon log artifacts
+- 2026-08-04 21:44:35 : HANDOFF: gesture/freeze/split/MeowLion notes
+- cfeea0f 2026-08-04 21:41 Gesture remap, overlay animation freeze, foldable split browser, MeowLion default brain
+- 265dda5 2026-08-04 20:54 Ignore .kotlin daemon log artifacts
 - 3dfa052 2026-08-04 20:54 Phase G: LOOI mood engine, idle chatter, and motor control API
 - 1219c87 2026-08-04 19:24 Ignore python bytecode cache
-- e39d29b 2026-08-04 19:24 Phase F: desktop control bridge, phone system tools, opt-in UI automation
-- d91bfbf 2026-08-04 19:05 Phase E: routines engine, memory follow-ups, barge-in
 <!-- AUTOBUILD:END -->

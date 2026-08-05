@@ -62,6 +62,29 @@ object WebViewBridge {
         }
     }
 
+    /** Renders the current page into in-memory JPEG bytes (vision feed). */
+    fun captureJpeg(quality: Int = 80, onResult: (ByteArray?) -> Unit) {
+        val view = viewRef.get()
+        if (view == null) {
+            onResult(null)
+            return
+        }
+        view.post {
+            runCatching {
+                val bmp = android.graphics.Bitmap.createBitmap(
+                    view.width.coerceAtLeast(1), view.height.coerceAtLeast(1),
+                    android.graphics.Bitmap.Config.ARGB_8888
+                )
+                val canvas = android.graphics.Canvas(bmp)
+                view.draw(canvas)
+                val out = java.io.ByteArrayOutputStream()
+                bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, quality, out)
+                bmp.recycle()
+                onResult(out.toByteArray())
+            }.getOrElse { onResult(null) }
+        }
+    }
+
     /** DOM helpers injected on every page load. */
     const val DOM_HELPERS = """
 (function(){
@@ -92,6 +115,14 @@ object WebViewBridge {
       return 'typed into: ' + sel;
     },
     scroll: function(dy) { window.scrollBy(0, dy); return 'scrolled ' + dy; },
+    inject: function(html) {
+      document.open(); document.write(html); document.close();
+      return 'injected ' + html.length + ' chars';
+    },
+    pageHtml: function() {
+      var h = (document.documentElement && document.documentElement.outerHTML) || '';
+      return h.length > 6000 ? h.slice(0, 6000) + '...[truncated]' : h;
+    },
     title: function() { return document.title + ' | ' + location.href; },
     links: function() {
       var out = [];

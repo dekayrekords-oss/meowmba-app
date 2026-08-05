@@ -12,7 +12,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
  * The browser must be open (swipe left on the face). All DOM work goes
  * through injected helpers; selectors support CSS or tag=exact text.
  */
-class WebBrowserTool(private val screenshotDir: File) : Tool {
+class WebBrowserTool(private val screenshotDir: File, private val pagesDir: File? = null) : Tool {
     override val definition = ToolDefinition(
         id = "web.browser",
         displayName = "Drive the browser",
@@ -55,6 +55,31 @@ class WebBrowserTool(private val screenshotDir: File) : Tool {
                 eval("window.__meow.scroll($px)")
             }
             "screenshot" -> screenshot()
+            "inject" -> {
+                val html = args["html"].orEmpty()
+                if (html.isBlank()) return ToolResult.Failure("No html given.")
+                eval("window.__meow.inject(`${html.replace("\\", "\\\\").replace("`", "\\`").replace("\${", "\\\${")}`)")
+            }
+            "html" -> eval("window.__meow ? window.__meow.pageHtml() : 'helpers missing'")
+            "save" -> {
+                val dir = pagesDir ?: return ToolResult.Failure("No pages directory configured.")
+                val name = (args["name"]?.trim() ?: "page").replace(Regex("[^A-Za-z0-9_-]"), "_").take(40)
+                val htmlResult = eval("window.__meow ? window.__meow.pageHtml() : ''")
+                if (htmlResult !is ToolResult.Success) return htmlResult
+                runCatching {
+                    dir.mkdirs()
+                    val file = File(dir, "$name.html")
+                    file.writeText(htmlResult.output)
+                    ToolResult.Success("Page saved: ${file.absolutePath}")
+                }.getOrElse { ToolResult.Failure("Save failed: ${it.message}") }
+            }
+            "openlocal" -> {
+                val name = (args["name"]?.trim() ?: "page").replace(Regex("[^A-Za-z0-9_-]"), "_").take(40)
+                val dir = pagesDir ?: return ToolResult.Failure("No pages directory configured.")
+                val file = File(dir, "$name.html")
+                if (!file.exists()) return ToolResult.Failure("No saved page named $name.html")
+                eval("window.location.href = 'file://${file.absolutePath}'; 'opening local page'")
+            }
             else -> ToolResult.Failure("Unknown action: $action (open/title/links/click/type/scroll/screenshot)")
         }
     }

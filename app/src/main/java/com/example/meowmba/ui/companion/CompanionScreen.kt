@@ -33,6 +33,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.meowmba.ui.components.MicButton
@@ -101,11 +103,37 @@ fun CompanionScreen(
 
         // 2. Controls layer — everything interactive respects the system bars
         //    (status bar, nav/gesture bar, display cutout) so it always fits.
+        val pinnedApps by viewModel.pinnedPackages.collectAsState()
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .safeDrawingPadding()
         ) {
+            // Two pinned apps on the face (first two favorites).
+            if (pinnedApps.isNotEmpty()) {
+                val faceContext = LocalContext.current
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 8.dp, end = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    pinnedApps.take(2).forEach { pkg ->
+                        Box(
+                            modifier = Modifier.clickable { launchApp(faceContext, pkg) },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            DrawerIcon(
+                                packageName = pkg,
+                                size = 44.dp,
+                                label = "pinned app",
+                            )
+                        }
+                    }
+                }
+            }
+
             // Privacy status line (bottom-start): explicit, text-based backup
             // for the face-level privacy marks.
             val privacyFlags = buildList {
@@ -555,7 +583,11 @@ fun CompanionScreen(
         // Swipe up = app drawer (launcher); swipe right = chat; swipe left
         // = agent browser (full-screen when folded, split pane when unfolded).
         if (uiState.showAppDrawer) {
-            AppDrawerScreen(onClose = { viewModel.toggleAppDrawer() })
+            AppDrawerScreen(
+                onClose = { viewModel.toggleAppDrawer() },
+                pins = pinnedApps,
+                onTogglePin = { viewModel.togglePin(it) },
+            )
         }
 
         if (uiState.showBrowser && !splitBrowser) {

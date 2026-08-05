@@ -292,6 +292,11 @@ class CompanionViewModel(
     private val _motionTilt = kotlinx.coroutines.flow.MutableStateFlow(0f)
 
     /** Phase G1: LOOI-style mood state machine (pure, unit-tested). */
+    /** Pinned apps: drawer favorites (up to 8); the first two also show on the face.
+     * Declared before init: the pin-restore block in init reads it. */
+    private val _pinnedPackages = MutableStateFlow<List<String>>(emptyList())
+    val pinnedPackages: kotlinx.coroutines.flow.StateFlow<List<String>> = _pinnedPackages.asStateFlow()
+
     private val moodEngine = com.example.meowmba.core.personality.MoodEngine()
 
     /** Phase G2: motor API — simulated until real hardware exists. */
@@ -633,9 +638,46 @@ class CompanionViewModel(
             }
 
             // Agent-driven browser: the companion can open, click, type and
-            // screenshot pages in the swipe-left browser.
+            // screenshot pages in the swipe-left browser. Pages the agent
+            // builds get persisted under web_pages/.
             appContext?.let { ctx ->
-                toolRegistry.register(WebBrowserTool(java.io.File(ctx.filesDir, "web_screenshots")))
+                val pagesDir = java.io.File(ctx.filesDir, "web_pages")
+                toolRegistry.register(
+                    WebBrowserTool(java.io.File(ctx.filesDir, "web_screenshots"), pagesDir)
+                )
+                // The live browser agent loop (vision = MeowLion by default).
+                browserAgent = com.example.meowmba.core.agent.BrowserAgentLoop(
+                    scope = viewModelScope,
+                    vision = { visionProviderFor() },
+                    brain = { prompt ->
+                        runCatching {
+                            (omniRoute?.generate(prompt) as? com.example.meowmba.core.agent.ModelResponse.Complete)?.text
+                        }.getOrNull()
+                    },
+                    captureJpeg = {
+                        kotlin.coroutines.suspendCoroutine { cont ->
+                            com.example.meowmba.core.browser.WebViewBridge.captureJpeg { bytes ->
+                                cont.resumeWith(Result.success(bytes))
+                            }
+                        }
+                    },
+                    evalJs = { script ->
+                        kotlin.coroutines.suspendCoroutine { cont ->
+                            com.example.meowmba.core.browser.WebViewBridge.evaluate(script) { r ->
+                                cont.resumeWith(Result.success(r))
+                            }
+                        }
+                    },
+                    pagesDir = pagesDir,
+                    announce = { msg ->
+                        _uiState.value = _uiState.value.copy(captionText = msg)
+                        speak(msg)
+                    },
+                )
+            }
+            // Restore pinned apps (drawer favorites + two face shortcuts).
+            secureStorage?.getPreference(KEY_PINNED_APPS)?.let { saved ->
+                _pinnedPackages.value = saved.split(',').filter { it.isNotBlank() }.take(8)
             }
 
             // IMU: lean with the phone, startle on shake. RobotPoseSource for
@@ -928,6 +970,11 @@ class CompanionViewModel(
     /** Watches screen-watch frames and turns them into reactions/commentary. */
     private var contextDirector: com.example.meowmba.core.context.ContextDirector? = null
 
+    /** Live browser agent: keeps a standing goal and monitors/edits the page. */
+    private var browserAgent: com.example.meowmba.core.agent.BrowserAgentLoop? = null
+
+
+
 
     /** One-shot flag: MainActivity watches this to launch the MediaProjection consent. */
     private val _screenWatchConsentRequested = kotlinx.coroutines.flow.MutableStateFlow(false)
@@ -1038,7 +1085,7 @@ class CompanionViewModel(
             "Ollama (Local Network)" -> {
                 RemoteModelProvider(
                     "Ollama",
-                    secureStorage.getEndpoint("ollama") ?: "http://10.0.2.2:11434",
+                    secureStorage.getEndpoint("ollama") ?: MEOWLION_ENDPOINT,
                     null,
                     secureStorage.getModelName("ollama") ?: "gemma2"
                 )
@@ -1147,7 +1194,7 @@ class CompanionViewModel(
                 cloudModel = secureStorage?.getModelName("openai") ?: "gpt-4o-mini",
                 cloudEndpoint = "https://api.openai.com",
                 cloudKeyConfigured = !secureStorage?.getApiKey("openai").isNullOrBlank(),
-                networkEndpoint = secureStorage?.getEndpoint("ollama") ?: "http://10.0.2.2:11434",
+                networkEndpoint = secureStorage?.getEndpoint("ollama") ?: MEOWLION_ENDPOINT,
                 networkModel = secureStorage?.getModelName("ollama") ?: "gemma2",
                 localInstalled = java.io.File(localPath).exists(),
                 activeSource = source
@@ -1247,6 +1294,22 @@ class CompanionViewModel(
         ).also { it.start() }
     }
 
+    /** Pin/unpin an app: up to 8 favorites; the first two sit on the face. */
+    fun togglePin(packageName: String) {
+        val current = _pinnedPackages.value
+        val next = if (packageName in current) {
+            current - packageName
+        } else {
+            if (current.size >= 8) {
+                speak("Favorites are full — unpin something first.")
+                return
+            }
+            current + packageName
+        }
+        _pinnedPackages.value = next
+        secureStorage?.savePreference(KEY_PINNED_APPS, next.joinToString(","))
+    }
+
     /** Swipe right on the face: app drawer. */
     fun toggleAppDrawer() {
         _uiState.value = _uiState.value.copy(
@@ -1257,10 +1320,12 @@ class CompanionViewModel(
 
     /** Swipe left on the face: the browser meow can drive. */
     fun toggleBrowser() {
+        val opening = !_uiState.value.showBrowser
         _uiState.value = _uiState.value.copy(
-            showBrowser = !_uiState.value.showBrowser,
+            showBrowser = opening,
             showAppDrawer = false,
         )
+        if (opening) browserAgent?.browserOpened() else browserAgent?.browserClosed()
     }
 
     fun closeOverlays() {
@@ -1637,6 +1702,13 @@ class CompanionViewModel(
     }
 
     private fun processUserSpeech(text: String) {
+        // While the browser is open, speech goes straight to the browser
+        // agent as the standing goal ("make me a page about...", "move the
+        // header down"...). The loop sees touch edits via its screenshots.
+        if (_uiState.value.showBrowser && text.isNotBlank()) {
+            browserAgent?.setGoal(text)
+            return
+        }
         // G1: user speech = curiosity; praise gets a proud wag.
         val lower = text.lowercase()
         val praise = listOf("good ", "nice ", "great ", "thank", "well done", "love you", "awesome")
@@ -2117,7 +2189,7 @@ class CompanionViewModel(
         val selected = _uiState.value.selectedModel
         return when {
             selected.contains("Network") -> com.example.meowmba.core.vision.OllamaVisionProvider(
-                secureStorage?.getEndpoint("ollama") ?: "http://10.0.2.2:11434",
+                secureStorage?.getEndpoint("ollama") ?: MEOWLION_ENDPOINT,
                 secureStorage?.getModelName("ollama_vision") ?: DEFAULT_VISION_MODEL
             )
             selected.contains("Cloud") -> com.example.meowmba.core.vision.OpenAIVisionProvider(
@@ -3393,6 +3465,8 @@ class CompanionViewModel(
         private const val KEY_BARGE_IN = "barge_in"
         private const val KEY_IDLE_CHATTER = "idle_chatter"
 
+        private const val KEY_PINNED_APPS = "pinned_apps"
+
         /** MeowLion — local Ollama box; the preferred brain when reachable. */
         private const val MEOWLION_ENDPOINT = "http://192.168.1.163:11434"
         private const val MEOWLION_MODEL = "qwen3.6-memba:35b-a3b"
@@ -3423,7 +3497,7 @@ class CompanionViewModel(
          * read a one-line result, short enough not to sit on the companion's face.
          */
         private const val AGENT_PANEL_LINGER_MS = 6_000L
-        private const val DEFAULT_VISION_MODEL = "gemma4:12b-it-qat"
+        private const val DEFAULT_VISION_MODEL = MEOWLION_MODEL
         private const val DEFAULT_RETENTION_DAYS = 90
         private const val FOLLOW_UP_TIMEOUT_MS = 8000L
 
