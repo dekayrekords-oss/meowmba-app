@@ -734,6 +734,22 @@ class CompanionViewModel(
                         speak(msg)
                     },
                 )
+
+                // Phone-control agent loop (accessibility-based, modeled on browserAgent)
+                phoneAgentLoop = com.example.meowmba.core.agent.PhoneAgentLoop(
+                    scope = viewModelScope,
+                    brain = { prompt ->
+                        runCatching {
+                            (omniRoute?.generate(prompt) as? com.example.meowmba.core.agent.ModelResponse.Complete)?.text
+                        }.getOrNull()
+                    },
+                    service = { com.example.meowmba.core.access.MeowAccessibilityService.instance },
+                    announce = { msg ->
+                        _uiState.value = _uiState.value.copy(captionText = msg)
+                        speak(msg)
+                    },
+                    onComplete = { summary -> speak(summary) },
+                )
             }
             // Restore pinned apps (drawer favorites + two face shortcuts).
             secureStorage?.getPreference(KEY_PINNED_APPS)?.let { saved ->
@@ -1035,6 +1051,9 @@ class CompanionViewModel(
 
     /** Live browser agent: keeps a standing goal and monitors/edits the page. */
     private var browserAgent: com.example.meowmba.core.agent.BrowserAgentLoop? = null
+
+    /** Phone-control agent: autonomous multi-step phone operation via accessibility. */
+    private var phoneAgentLoop: com.example.meowmba.core.agent.PhoneAgentLoop? = null
 
 
 
@@ -2177,6 +2196,18 @@ class CompanionViewModel(
             respondDirectly(text)
             return
         }
+        // Phone-control loop: if active, "stop"/"cancel" kills it; else new speech updates the goal.
+        if (phoneAgentLoop?.isActive == true) {
+            val stopWords = setOf("stop", "cancel", "never mind", "nevermind", "quit", "abort")
+            if (stopWords.any { text.lowercase().trim().startsWith(it) }) {
+                phoneAgentLoop?.cancel()
+                speak("Phone control stopped.")
+                return
+            }
+            // New speech while loop is active = new goal
+            phoneAgentLoop?.setGoal(text)
+            return
+        }
         // While the browser is open, speech goes straight to the browser
         // agent as the standing goal ("make me a page about...", "move the
         // header down"...). The loop sees touch edits via its screenshots.
@@ -2263,6 +2294,12 @@ class CompanionViewModel(
             // The model only proposes — approval gates still decide.
             val agentIntent = routeAgentIntent(text)
             if (agentIntent != null) {
+                // Multi-step phone control: if the LLM (not keyword) routed to phone_control,
+                // start the autonomous loop instead of single-shot execution.
+                if (agentIntent.agentId == "phone_control" && AgentRouter.route(text) == null) {
+                    phoneAgentLoop?.setGoal(text)
+                    return@launch
+                }
                 submitAgentIntent(agentIntent)
                 return@launch
             }

@@ -562,6 +562,42 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            // ── Phone Control (Accessibility) ─────────────────────────────
+            Text("Phone Control", style = MaterialTheme.typography.titleMedium, color = Color.White)
+            Text(
+                text = "Meow can control your phone — tap, swipe, type, and navigate any app " +
+                    "using voice commands. This requires the accessibility service to be enabled.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.Gray
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                val accessEnabled = remember { com.example.meowmba.core.access.MeowAccessibilityService.isEnabled() }
+                if (accessEnabled) {
+                    Text("✅ Connected", color = Color(0xFF4CAF50), style = MaterialTheme.typography.bodyLarge)
+                } else {
+                    Text("❌ Not enabled", color = Color(0xFFFF5252), style = MaterialTheme.typography.bodyLarge)
+                    Spacer(modifier = Modifier.width(12.dp))
+                    val context = LocalContext.current
+                    Button(onClick = {
+                        val intent = android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        context.startActivity(intent)
+                    }) {
+                        Text("Enable")
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Say things like “tap on Settings”, “scroll down”, “go back”, " +
+                    "or give multi-step goals like “play Sublime on Spotify”.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.Gray
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
             // OpenAI Configuration
             Text("OpenAI Cloud", style = MaterialTheme.typography.titleMedium, color = Color.White)
             SettingsTextField(

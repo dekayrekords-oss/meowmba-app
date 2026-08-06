@@ -355,7 +355,10 @@ class WakeWordService : Service() {
 
     private fun acknowledgeAndDeliver(command: String, launchNow: Boolean = false) {
         wakeEngine?.stop()
-        tts.speak("One moment.")
+        // Skip "One moment" when the phone-control loop is active — it handles its own TTS.
+        if (com.example.meowmba.core.agent.PhoneAgentLoop.activeGoal == null) {
+            tts.speak("One moment.")
+        }
         if (launchNow) {
             deliverToApp(command)
         } else {

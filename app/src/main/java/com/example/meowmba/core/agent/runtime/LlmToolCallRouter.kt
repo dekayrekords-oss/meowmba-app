@@ -29,6 +29,9 @@ object CommandHeuristics {
         // Phone and desktop control
         "app", "launch", "start", "call", "text", "settings", "camera",
         "run", "script", "build", "desktop", "computer",
+        // Phone control (accessibility-based)
+        "tap", "click", "press", "swipe", "scroll", "type", "back",
+        "control", "navigate", "play", "pause", "stop", "next", "previous",
         // Avatar performance + follow-up affirmations. Measured on device:
         // "lick your paw" and a bare "yes" were gated out here, so the CHAT
         // model answered — and it mimicked the tool results in its history,

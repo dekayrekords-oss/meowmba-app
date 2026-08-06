@@ -170,6 +170,64 @@ object AgentRouter {
                 "run build: $name")
         }
 
+        // ── Phone control (accessibility-based) ──────────────────────────
+        // Single-shot commands: immediate execution via ui.automate
+        if (normalized in setOf("go back", "press back", "hit back", "back")) {
+            return AgentIntent("phone_control", "ui.automate", mapOf("action" to "back"), "go back")
+        }
+        if (normalized in setOf("go home", "press home", "home button")) {
+            return AgentIntent("phone_control", "ui.automate", mapOf("action" to "home"), "go home")
+        }
+        if (normalized in setOf("show recents", "recent apps", "recents")) {
+            return AgentIntent("phone_control", "ui.automate", mapOf("action" to "recents"), "show recents")
+        }
+        if (normalized in setOf("show notifications", "open notifications", "pull down notifications")) {
+            return AgentIntent("phone_control", "ui.automate", mapOf("action" to "notifications"), "show notifications")
+        }
+        if (normalized in setOf("scroll down", "scroll the page down", "page down")) {
+            return AgentIntent("phone_control", "ui.automate", mapOf("action" to "scroll", "direction" to "down"), "scroll down")
+        }
+        if (normalized in setOf("scroll up", "scroll the page up", "page up")) {
+            return AgentIntent("phone_control", "ui.automate", mapOf("action" to "scroll", "direction" to "up"), "scroll up")
+        }
+        if (normalized in setOf("swipe left", "swipe to the left")) {
+            return AgentIntent("phone_control", "ui.automate", mapOf("action" to "swipe", "direction" to "left"), "swipe left")
+        }
+        if (normalized in setOf("swipe right", "swipe to the right")) {
+            return AgentIntent("phone_control", "ui.automate", mapOf("action" to "swipe", "direction" to "right"), "swipe right")
+        }
+        if (normalized in setOf("read the screen", "whats on screen", "what's on screen",
+                "what do you see", "what is on the screen")) {
+            return AgentIntent("phone_control", "ui.automate", mapOf("action" to "read_compact"), "read screen")
+        }
+        // "tap on X" / "tap X" / "click X" / "press X"
+        extractAfter(raw, listOf("tap on ", "tap the ", "tap ", "click on ", "click the ",
+            "click ", "press on ", "press the "))?.let { target ->
+            val name = boundTarget(target) ?: return@let
+            if (name.split(' ').size <= 5) {
+                return AgentIntent("phone_control", "ui.automate", mapOf("action" to "tap", "text" to name), "tap " + name)
+            }
+        }
+        // "type X" / "type X in Y"
+        extractAfter(raw, listOf("type "))?.let { rest ->
+            val inIdx = rest.lowercase().indexOf(" in ")
+            if (inIdx > 0) {
+                val value = rest.substring(0, inIdx).trim()
+                val field = rest.substring(inIdx + 4).trim()
+                return AgentIntent("phone_control", "ui.automate",
+                    mapOf("action" to "type", "field" to field, "value" to value), "type in " + field)
+            } else {
+                val value = boundTarget(rest) ?: return@let
+                return AgentIntent("phone_control", "ui.automate",
+                    mapOf("action" to "type", "field" to "", "value" to value), "type: " + value)
+            }
+        }
+        // "long press X" / "hold X"
+        extractAfter(raw, listOf("long press on ", "long press ", "hold on ", "hold "))?.let { target ->
+            val name = boundTarget(target) ?: return@let
+            return AgentIntent("phone_control", "ui.automate", mapOf("action" to "long_press", "text" to name), "long press " + name)
+        }
+
         // Phone control. "open the file X" is matched earlier, so a bare
         // "open X" reaching here means an app, not a workspace file.
         if (normalized in setOf("what apps do i have", "list my apps", "show my apps",

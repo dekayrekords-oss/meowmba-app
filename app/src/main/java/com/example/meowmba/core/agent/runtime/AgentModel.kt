@@ -118,6 +118,14 @@ object AgentRegistry {
             )
         ),
         AgentDefinition(
+            id = "phone_control", name = "Claw",
+            purpose = "Full phone control: operates any app via taps, types, swipes, and navigation.",
+            allowedTools = setOf(
+                "ui.automate", "phone.launch_app", "phone.list_apps"
+            ),
+            maxConcurrentTasks = 1
+        ),
+        AgentDefinition(
             id = "media", name = "Canvas",
             purpose = "Generates simple images from text descriptions.",
             allowedTools = setOf("media.generate_image", "media.generate_video", "media.generate_audio")
