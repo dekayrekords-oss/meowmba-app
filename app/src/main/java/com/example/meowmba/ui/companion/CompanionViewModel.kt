@@ -331,7 +331,10 @@ class CompanionViewModel(
                         if (cont.isActive) cont.resume(null) {}
                     }
                 }
-                if (result.isNullOrBlank()) continue
+                if (result.isNullOrBlank()) {
+                    kotlinx.coroutines.delay(2500) // Cooldown to avoid ERROR_TOO_MANY_REQUESTS
+                    continue
+                }
                 val norm = result.lowercase().trim()
                 if (norm in setOf("stop listening", "meow stop", "stop", "exit listening mode", "quit listening")) {
                     deactivateVoiceAccessMode(); break
@@ -346,6 +349,7 @@ class CompanionViewModel(
     }
 
     private fun isComplexCommand(text: String): Boolean {
+        if (isScreenContextualCommand(text)) return true
         if (isMultiStepPhoneGoal(text)) return true
         if (text.startsWith("how") || text.startsWith("why") || text.startsWith("what")
             || text.startsWith("find") || text.startsWith("search")
@@ -2426,7 +2430,7 @@ class CompanionViewModel(
         ) {
             transientListenRetries++
             viewModelScope.launch {
-                delay(600)
+                delay(if (code == 11) 3000L * transientListenRetries else 800L)
                 if (_uiState.value.interactionState != InteractionState.LISTENING) return@launch
                 val engine = speechService ?: return@launch
                 captureUtterance(engine) { result -> processUserSpeech(result) }
@@ -2595,6 +2599,13 @@ class CompanionViewModel(
             // has the full inventory tool set.
             com.example.meowmba.core.inventory.InventoryRequestParser.parse(text)?.let { req ->
                 answerInventory(req)
+                return@launch
+            }
+
+            // Screen-contextual commands: "open the video called X", "tap on X" etc.
+            // These need the phone agent loop to read the screen and interact with elements.
+            if (isScreenContextualCommand(text)) {
+                phoneAgentLoop?.setGoal(text)
                 return@launch
             }
 
@@ -4374,7 +4385,7 @@ class CompanionViewModel(
                 code == SpeechRecognizer.ERROR_CLIENT ||
                 code == SpeechRecognizer.ERROR_RECOGNIZER_BUSY
 
-        private const val MAX_TRANSIENT_LISTEN_RETRIES = 3
+        private const val MAX_TRANSIENT_LISTEN_RETRIES = 5
         private const val MAX_FOLLOW_UP_SILENCE_RETRIES = 10
         private val TRANSIENT_SPEECH_ERRORS = setOf(
             SpeechRecognizer.ERROR_NETWORK_TIMEOUT,
@@ -4457,6 +4468,20 @@ class CompanionViewModel(
             "amazon", "uber", "lyft", "maps", "chrome", "firefox", "gmail",
             "messages", "photos", "camera", "clock", "calculator", "calendar"
         )
+        fun isScreenContextualCommand(text: String): Boolean {
+            val t = text.lowercase().trim()
+            val screenVerbs = listOf(
+                "open the video ", "open the one called ", "open the one named ",
+                "tap on ", "tap the ", "click on ", "click the ",
+                "select the ", "press the ", "go to the ",
+            )
+            if (screenVerbs.any { t.startsWith(it) }) return true
+            val openTheMatch = Regex("^open the (video|song|post|article|photo|picture|image|file|document|link|message|chat|email|item|one|game|movie|show|episode|playlist|album|track|reel|story|notification)\\b").find(t)
+            if (openTheMatch != null) return true
+            if (t.startsWith("open ") && (t.contains("called ") || t.contains("named ") || t.contains("titled "))) return true
+            return false
+        }
+
         fun isMultiStepPhoneGoal(text: String): Boolean {
             val t = text.lowercase().trim()
             // "play X" / "play X on Y" — but not bare "play" or "play a game with me"

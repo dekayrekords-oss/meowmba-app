@@ -218,7 +218,7 @@ class PhoneAgentLoop(
             sb.append(goal)
             sb.append("\n\nScreen content (numbered interactive elements):\n")
             // Truncate overly verbose screen dumps to keep prompt within model limits
-            sb.append(if (screen.length > 4000) screen.take(4000) + "\n[...truncated]" else screen)
+            sb.append(if (screen.length > 6000) screen.take(6000) + "\n[...truncated]" else screen)
             if (history.isNotEmpty()) {
                 sb.append("\n\nAction history (most recent last):\n")
                 sb.append(history.joinToString("\n"))
@@ -245,6 +245,7 @@ class PhoneAgentLoop(
             sb.append("""{"action":"wait"}""")
             sb.append("\n")
             sb.append("""{"action":"done","summary":"what was accomplished"}""")
+            sb.append("\nIMPORTANT: When the goal mentions opening or tapping something \"called\" or \"named\" X, find that text in the interactive elements. If not found, scroll down and look again.")
             sb.append("\nIf the goal is achieved, use done. Pick ONE action only.")
             return sb.toString()
         }

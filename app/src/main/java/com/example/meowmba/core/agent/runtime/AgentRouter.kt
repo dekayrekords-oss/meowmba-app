@@ -258,6 +258,20 @@ object AgentRouter {
             "open the url ", "browse to "))?.let { url ->
             return AgentIntent("phone", "phone.open_url", mapOf("url" to url), "open $url")
         }
+        // Screen-contextual "open the video/song/..." routes to phone_control, not app launch.
+        if (normalized.startsWith("open ")) {
+            val afterOpen = normalized.removePrefix("open ").trimStart()
+            val contentTypes = listOf("video", "song", "post", "article", "photo", "picture", "image",
+                "file", "document", "link", "message", "chat", "email", "item", "one", "game",
+                "movie", "show", "episode", "playlist", "album", "track", "reel", "story", "notification")
+            if (contentTypes.any { afterOpen.startsWith("the $it") || afterOpen.startsWith("$it ") }) {
+                return AgentIntent("phone_control", "phone.screen_action", mapOf("goal" to raw), raw)
+            }
+            if (afterOpen.contains("called ") || afterOpen.contains("named ") || afterOpen.contains("titled ")) {
+                return AgentIntent("phone_control", "phone.screen_action", mapOf("goal" to raw), raw)
+            }
+        }
+
         extractAfter(raw, listOf("open the app ", "open app ", "launch the app ",
             "launch app ", "launch ", "start the app ", "open "))?.let { rest ->
             // Bounded: an app name is a name, not the rest of the sentence.

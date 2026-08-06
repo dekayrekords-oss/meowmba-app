@@ -425,9 +425,9 @@ Verified on device: settings opens with the robot section showing "Connect over 
 
 <!-- AUTOBUILD:START -->
 (regenerated after each commit)
-- 2026-08-06 11:03:07 : feat: LUMI edge agent — DualModeRouter, OfflineQueue, device settings tools
+- 2026-08-06 12:03:36 : fix: LOOI robot connection — GATT error 11 retry + Initialize button (from MEMBA 2)
+- f423d9a 2026-08-06 11:01 feat: LUMI edge agent — DualModeRouter, OfflineQueue, device settings tools
 - 3aff73b 2026-08-06 10:34 feat: 'meow start listening' — Voice Access + LLM hybrid mode
 - 2658c68 2026-08-06 09:54 feat: Loona-style features — notification listener, face attention, proactive nudges, focus mode
 - 5492a61 2026-08-06 08:31 fix: deterministic routing for multi-step phone goals
-- 20f90d0 2026-08-06 08:07 fix: phone-control loop now takes priority over browser search
 <!-- AUTOBUILD:END -->

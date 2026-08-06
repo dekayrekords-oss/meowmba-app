@@ -51,6 +51,7 @@ class MeowAccessibilityService : AccessibilityService() {
     private fun findNodes(query: String): List<AccessibilityNodeInfo> {
         val root = rootInActiveWindow ?: return emptyList()
         val want = query.trim().lowercase()
+        val wantWords = want.split(Regex("\\s+")).filter { it.length > 1 }
         val found = mutableListOf<AccessibilityNodeInfo>()
         val queue = ArrayDeque<AccessibilityNodeInfo>()
         queue.add(root)
@@ -60,7 +61,9 @@ class MeowAccessibilityService : AccessibilityService() {
             visited++
             val text = node.text?.toString()?.lowercase() ?: ""
             val desc = node.contentDescription?.toString()?.lowercase() ?: ""
-            if (want in text || want in desc) found.add(node) else node.recycle()
+            val combined = "$text $desc"
+            val matches = want in combined || (wantWords.size > 1 && wantWords.all { it in combined })
+            if (matches) found.add(node) else node.recycle()
             for (i in 0 until node.childCount) {
                 node.getChild(i)?.let { if (!found.contains(it)) queue.add(it) }
             }
@@ -225,7 +228,7 @@ class MeowAccessibilityService : AccessibilityService() {
      * Interactive elements get a numbered index; non-interactive text is
      * appended as context. Capped at [maxChars] for token budget.
      */
-    fun readScreenCompact(maxChars: Int = 800): String {
+    fun readScreenCompact(maxChars: Int = 2000): String {
         val root = rootInActiveWindow ?: return "No active window."
         val interactive = mutableListOf<String>()
         val context = mutableListOf<String>()
