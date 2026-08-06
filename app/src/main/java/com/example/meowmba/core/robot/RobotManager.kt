@@ -83,7 +83,14 @@ class RobotManager {
                     override fun onScanResult(callbackType: Int, result: android.bluetooth.le.ScanResult) {
                         runCatching {
                             val d = result.device
-                            if (d.address !in out) out[d.address] = result.scanRecord?.deviceName ?: d.address
+                            if (d.address !in out) {
+                                val name = result.scanRecord?.deviceName ?: d.name ?: ""
+                                // Nameless advertisers (beacons, trackers, TVs)
+                                // are noise in a base picker — that was the wall
+                                // of 30 raw MAC addresses. Only named devices are
+                                // tappable candidates; bonded ones are listed above.
+                                if (name.isNotBlank()) out[d.address] = name
+                            }
                         }
                     }
                     override fun onScanFailed(errorCode: Int) { latch.countDown() }
@@ -153,7 +160,12 @@ class RobotManager {
 
     /** Retry the LOOI initialization / handshake verification from UI. */
     fun retryLooiHandshake() {
-        bleLink?.retryHandshake()
+        val link = bleLink
+        if (link == null) {
+            _status.value = "no LOOI link yet — Initialize connects first"
+            return
+        }
+        link.retryHandshake()
     }
 
     /**

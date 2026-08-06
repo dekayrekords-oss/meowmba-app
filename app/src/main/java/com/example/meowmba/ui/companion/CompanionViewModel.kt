@@ -2033,7 +2033,17 @@ class CompanionViewModel(
     /** Initialize / retry the LOOI robot connection handshake (from MEMBA 2). */
     fun initializeRobot() {
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            robotManager.retryLooiHandshake()
+            val link = robotManager.getBleLink()
+            if (link == null ||
+                link.state == com.example.meowmba.core.robot.LooiBleLink.LinkState.OFFLINE
+            ) {
+                // No live link: "Initialize" means bring the body up — the full
+                // bring-up flow (attached GATT -> scan -> known-MAC -> RFCOMM
+                // fallback), with live status updates in Settings.
+                refreshRobot()
+            } else {
+                robotManager.retryLooiHandshake()
+            }
         }
     }
 

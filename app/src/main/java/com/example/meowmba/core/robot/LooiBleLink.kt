@@ -187,7 +187,7 @@ class LooiBleLink(private val context: Context) {
             }
             // GATT error codes (status != 0): 8=timeout, 11=internal error, 133=device not found
             if (status != BluetoothGatt.GATT_SUCCESS && newState == BluetoothProfile.STATE_DISCONNECTED) {
-                Log.w(TAG, "LOOI GATT error: status=0 (retry /)")
+                Log.w(TAG, "LOOI GATT error: status=$status (retry ${connectRetries + 1}/$MAX_CONNECT_RETRIES)")
                 runCatching { g.close() }
                 gatt = null
                 commandChar = null; headlightChar = null; sensorChar = null
@@ -195,14 +195,14 @@ class LooiBleLink(private val context: Context) {
                 if (connectRetries < MAX_CONNECT_RETRIES) {
                     connectRetries++
                     val addr = g.device?.address ?: KNOWN_LOOI_MAC
-                    setState(LinkState.CONNECTING, "GATT error 0 — retrying ()…")
+                    setState(LinkState.CONNECTING, "GATT error $status — retrying ($addr)…")
                     scope.launch {
                         delay(1500L * connectRetries) // backoff
                         connect(addr)
                     }
                 } else {
                     connectRetries = 0
-                    setState(LinkState.OFFLINE, "GATT error 0 after  retries")
+                    setState(LinkState.OFFLINE, "GATT error $status after $MAX_CONNECT_RETRIES retries")
                 }
                 return
             }
@@ -413,7 +413,7 @@ class LooiBleLink(private val context: Context) {
                 if (!runCatching { g.writeCharacteristic(ch) }.getOrDefault(false)) allOk = false
             }
         }
-        Log.i(TAG, "LOOI verification: neutral writes accepted=")
+        Log.i(TAG, "LOOI verification: neutral writes accepted=$allOk")
         allOk
     }
 
@@ -422,11 +422,14 @@ class LooiBleLink(private val context: Context) {
      * Re-runs the safe verification step without re-doing the full BLE scan.
      */
     fun retryHandshake() {
-        if (state == LinkState.HANDSHAKE_REQUIRED || state == LinkState.VERIFYING) {
-            startVerification()
-        } else if (state == LinkState.OFFLINE) {
+        when (state) {
+            LinkState.HANDSHAKE_REQUIRED, LinkState.VERIFYING -> startVerification()
             // Full reconnect
-            connectAuto()
+            LinkState.OFFLINE -> connectAuto()
+            // Visible feedback for EVERY state — a button that appears to do
+            // nothing is worse than a button that says "already done".
+            LinkState.READY -> setState(LinkState.READY, "already initialized")
+            else -> setState(state, "connection in progress — tap again if it stalls")
         }
     }
 
