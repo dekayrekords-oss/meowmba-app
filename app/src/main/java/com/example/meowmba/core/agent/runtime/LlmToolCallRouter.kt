@@ -44,6 +44,8 @@ object CommandHeuristics {
         // log. A false positive costs one model call that returns null; a
         // false negative here is a lie the user can see.
         "trick", "dance", "perform", "wiggle", "paw", "lick", "gesture",
+        // Robot motor control
+        "scoot", "motor", "neck", "headlight", "brake", "tilt", "drive", "robot",
         "yes", "yeah", "yep", "sure", "ok", "okay", "please",
     )
 

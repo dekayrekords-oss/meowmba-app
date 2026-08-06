@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -77,6 +78,8 @@ fun AvatarRenderer(
     onSwipeLeft: () -> Unit = {},
     onSwipeRight: () -> Unit = {},
     paused: Boolean = false,
+    onSfx: (String) -> Unit = {},
+    transparent: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val basePose = CatAvatarStateMachine.resolvePose(state)
@@ -91,13 +94,22 @@ fun AvatarRenderer(
     // While an overlay covers the screen the face freezes: no custom clip.
     val customAnim = if (paused) null else state.activeAnimation
     var animT by remember { mutableLongStateOf(0L) }
+    // Track which SFX frame index was last triggered to avoid repeats
+    var lastSfxFrameIdx by remember { mutableIntStateOf(-1) }
     LaunchedEffect(customAnim) {
+        lastSfxFrameIdx = -1
         if (customAnim != null) {
             var start = -1L
             while (true) {
                 withFrameMillis { now ->
                     if (start < 0L) start = now
                     animT = now - start
+                }
+                // Trigger SFX for the current frame (once per frame transition)
+                val frameIdx = customAnim.frames.indexOfLast { it.atMs <= animT }
+                if (frameIdx >= 0 && frameIdx != lastSfxFrameIdx) {
+                    lastSfxFrameIdx = frameIdx
+                    customAnim.frames[frameIdx].sfx?.let { onSfx(it) }
                 }
                 if (animT > customAnim.durationMs) break
             }
@@ -478,6 +490,24 @@ fun AvatarRenderer(
             drawPath(tonguePath, tongueColor)
         }
 
+        // ── LAYER 6b: Laser pointer dot (Module 2) ───────────────────────────
+        if (state.isLaserPointerActive) {
+            val laserGaze = touchGaze
+            if (laserGaze != null) {
+                val laserX = cx + laserGaze.x * s * 0.3f
+                val laserY = cy + laserGaze.y * s * 0.3f
+                drawCircle(
+                    brush = androidx.compose.ui.graphics.Brush.radialGradient(
+                        colors = listOf(Color.Red, Color.Red.copy(alpha = 0.4f), Color.Transparent),
+                        center = androidx.compose.ui.geometry.Offset(laserX, laserY),
+                        radius = s * 0.035f
+                    ),
+                    radius = s * 0.035f,
+                    center = androidx.compose.ui.geometry.Offset(laserX, laserY)
+                )
+            }
+        }
+
         // ── LAYER 7: Sparkle particles ──────────────────────────────────────
         val sparkleIntensity = effectivePose.sparkle.coerceIn(0f, 1f)
         if (sparkleIntensity > 0.01f) {
@@ -538,6 +568,14 @@ private fun zoneAt(offset: Offset, w: Int, h: Int): AvatarZone {
     }
     if (hypot(offset.x - (cx + eyeDX), offset.y - eyeCy) < eyeW * 0.85f) {
         return AvatarZone.EYE_RIGHT
+    }
+    // Nose (small zone near nose center)
+    if (hypot(offset.x - cx, offset.y - noseY) < s * 0.06f) {
+        return AvatarZone.NOSE
+    }
+    // Chin (below mouth area)
+    if (abs(offset.x - cx) < s * 0.15f && offset.y > mouthY + s * 0.03f && offset.y < mouthY + s * 0.15f) {
+        return AvatarZone.CHIN
     }
     // Mouth
     if (abs(offset.x - cx) < s * 0.13f && abs(offset.y - mouthY) < s * 0.08f) {
@@ -695,7 +733,7 @@ private fun DrawScope.drawMouth(
 ) {
     when (mode) {
         MouthMode.SPEAKING -> {
-            // Mouth rides the base talk cycle, amplified by real speech energy
+        // Mouth rides the base talk cycle, amplified by real speech energy
             // (TTS word boundaries). With no boundary callbacks (older API or
             // mock pipeline) the energy floor keeps the motion alive.
             val energy = 0.35f + 0.65f * mouthEnergy

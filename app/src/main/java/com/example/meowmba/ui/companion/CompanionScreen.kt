@@ -82,6 +82,14 @@ fun CompanionScreen(
             modifier = Modifier.matchParentSize(),
         )
 
+        // Module 5: Full-screen AR viewfinder — camera behind transparent avatar
+        if (uiState.showArViewfinder) {
+            Viewfinder(
+                visionManager = viewModel.getVisionManager(),
+                modifier = Modifier.matchParentSize()
+            )
+        }
+
         // 1. Animated cat avatar (Memba 2 face) — full-bleed canvas.
         // Leans with the phone via the IMU (±8°, low-passed).
         val motionTilt by viewModel.motionTiltDeg.collectAsState()
@@ -97,8 +105,26 @@ fun CompanionScreen(
                 onSwipeDown = { viewModel.openTiles() },
                 onSwipeLeft = { viewModel.toggleBrowser() },
                 onSwipeRight = { viewModel.openChat() },
-                paused = animationsPaused
+                paused = animationsPaused,
+                onSfx = { viewModel.playSfx(it) },
+                transparent = uiState.showArViewfinder
             )
+        }
+
+        // AR exit button
+        if (uiState.showArViewfinder) {
+            androidx.compose.material3.IconButton(
+                onClick = { viewModel.toggleArViewfinder(false) },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 48.dp, end = 16.dp)
+            ) {
+                Icon(
+                    Icons.Default.Close,
+                    contentDescription = "Exit AR mode",
+                    tint = Color.White
+                )
+            }
         }
 
         // 2. Controls layer — everything interactive respects the system bars

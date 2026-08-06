@@ -220,7 +220,11 @@ data class CompanionState(
     /** USB auto-bridge is monitoring for a tethered desktop connection. */
     val usbAutoBridgeEnabled: Boolean = false,
     /** True when the phone is plugged into USB (data connection). */
-    val usbConnected: Boolean = false
+    val usbConnected: Boolean = false,
+    /** Module 5: full-screen AR viewfinder (camera behind transparent avatar). */
+    val showArViewfinder: Boolean = false,
+    /** Module 2: laser pointer mode active. */
+    val isLaserPointerActive: Boolean = false,
 )
 
 /**

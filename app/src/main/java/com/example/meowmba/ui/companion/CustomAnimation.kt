@@ -45,6 +45,8 @@ data class AnimFrame(
     val tailWag: Float? = null,
     /** Sparkle particle intensity (0 = none, 1 = full sparkle). */
     val sparkle: Float? = null,
+    /** Sound effect to trigger when this frame is reached. */
+    val sfx: String? = null,
 )
 
 /** A named invented clip: sorted frames, last frame's time is the duration. */
@@ -182,7 +184,7 @@ object CustomAnimations {
         CustomAnimationSpec(
             "chirp",
             listOf(
-                AnimFrame(atMs = 0, pupilSize = 0.28f, earPerk = 1.0f, mouth = MouthMode.IDLE),
+                AnimFrame(atMs = 0, pupilSize = 0.28f, earPerk = 1.0f, mouth = MouthMode.IDLE, sfx = "chirp"),
                 AnimFrame(atMs = 180, pupilSize = 0.65f, earPerk = 1.4f, mouth = MouthMode.SPEAKING),
                 AnimFrame(atMs = 320, mouth = MouthMode.IDLE),
                 AnimFrame(atMs = 460, mouth = MouthMode.SPEAKING),
@@ -354,7 +356,7 @@ object CustomAnimations {
             "nose boop",
             listOf(
                 AnimFrame(atMs = 0, headTiltDeg = 0f, sparkle = 0f),
-                AnimFrame(atMs = 250, headTiltDeg = 10f, sparkle = 1f, happyEyes = true),
+                AnimFrame(atMs = 250, headTiltDeg = 10f, sparkle = 1f, happyEyes = true, sfx = "boop"),
                 AnimFrame(atMs = 600, headTiltDeg = 0f, sparkle = 0.3f),
                 AnimFrame(atMs = 1000, headTiltDeg = 0f, sparkle = 0f, happyEyes = false),
             ),
@@ -380,7 +382,7 @@ object CustomAnimations {
         CustomAnimationSpec(
             "purr loaf",
             listOf(
-                AnimFrame(atMs = 0, whiskerFlutter = false, happyEyes = false, sparkle = 0f),
+                AnimFrame(atMs = 0, whiskerFlutter = false, happyEyes = false, sparkle = 0f, sfx = "purr"),
                 AnimFrame(atMs = 500, whiskerFlutter = true, happyEyes = true, sparkle = 0.5f),
                 AnimFrame(atMs = 1800, whiskerFlutter = true, happyEyes = true, sparkle = 0.6f),
                 AnimFrame(atMs = 3000, whiskerFlutter = false, happyEyes = false, sparkle = 0f),
@@ -482,6 +484,33 @@ object CustomAnimations {
                 AnimFrame(atMs = 900, earPerk = 1.6f),
                 AnimFrame(atMs = 1200, earPerk = 0.5f),
                 AnimFrame(atMs = 1600, earPerk = 1.0f),
+            ),
+        ),
+            // ── Micro-motion clips (fast, subtle — for the 15-30s micro timer) ───
+        CustomAnimationSpec(
+            "ear twitch micro",
+            listOf(
+                AnimFrame(atMs = 0, earPerk = 1.0f),
+                AnimFrame(atMs = 100, earPerk = 1.5f),
+                AnimFrame(atMs = 200, earPerk = 1.0f),
+            ),
+        ),
+        CustomAnimationSpec(
+            "gaze drift",
+            listOf(
+                AnimFrame(atMs = 0, pupilGazeUp = 0f),
+                AnimFrame(atMs = 500, pupilGazeUp = 0.3f),
+                AnimFrame(atMs = 1000, pupilGazeUp = 0.15f),
+                AnimFrame(atMs = 1500, pupilGazeUp = 0f),
+            ),
+        ),
+        CustomAnimationSpec(
+            "nose wiggle",
+            listOf(
+                AnimFrame(atMs = 0, headTiltDeg = 0f),
+                AnimFrame(atMs = 100, headTiltDeg = 2f),
+                AnimFrame(atMs = 200, headTiltDeg = -2f),
+                AnimFrame(atMs = 300, headTiltDeg = 0f),
             ),
         ),
     ).associateBy { it.name }

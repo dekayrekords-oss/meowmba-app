@@ -23,6 +23,9 @@ class RobotManager {
     /** The controller the companion should drive right now. Never null. */
     val active: MotorController get() = controller
 
+    /** Expose the raw BLE link for direct motor commands (LooiMotorTool). */
+    fun getBleLink(): LooiBleLink? = bleLink
+
     /** Drop any connection and return to the honest simulated body. */
     fun useSimulated() {
         transport?.close()

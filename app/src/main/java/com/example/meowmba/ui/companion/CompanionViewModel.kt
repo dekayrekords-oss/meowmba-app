@@ -567,6 +567,25 @@ class CompanionViewModel(
 
     private val moodEngine = com.example.meowmba.core.personality.MoodEngine()
 
+        /** Module 5: toggle AR viewfinder overlay. */
+    fun toggleArViewfinder(enabled: Boolean) {
+        _uiState.value = _uiState.value.copy(showArViewfinder = enabled)
+    }
+
+    /** Module 2: toggle laser pointer mode. */
+    fun toggleLaserPointer() {
+        _uiState.value = _uiState.value.copy(isLaserPointerActive = !_uiState.value.isLaserPointerActive)
+    }
+
+    /** Module 1: play a named sound effect (called from AvatarRenderer via onSfx). */
+    fun playSfx(name: String) { sfxEngine?.play(name) }
+
+    /** Phase G4: circadian mood — time-of-day auto-mood injection. */
+    private val circadianMoodEngine = CircadianMoodEngine(moodEngine)
+
+    /** Module 1: local sound effects (SoundPool, pre-loaded). */
+    private var sfxEngine: com.example.meowmba.core.audio.LocalSoundEffectsEngine? = null
+
     /** Phase G2: motor API. [RobotManager] swaps simulated <-> a live LOOI body. */
     private val robotManager = com.example.meowmba.core.robot.RobotManager()
     private val motorController: com.example.meowmba.core.robot.MotorController
@@ -843,6 +862,7 @@ class CompanionViewModel(
                 delay(10 * 60_000L)
                 val now = System.currentTimeMillis()
                 moodEngine.tick(now)
+                circadianMoodEngine.evaluateAndApply(now)
                 applyMood()
                 val st = _uiState.value
                 if (st.idleChatterEnabled && st.interactionState == InteractionState.IDLE &&
@@ -902,6 +922,11 @@ class CompanionViewModel(
             toolRegistry.register(BatteryStatusTool(appContext))
             // Phase F3: opt-in UI automation (off until enabled by the user).
             toolRegistry.register(UiAutomationTool())
+            // LOOI robot motor control via BLE
+            toolRegistry.register(com.example.meowmba.core.agent.tools.LooiMotorTool(robotManager))
+
+            // Module 1: sound effects engine
+            sfxEngine = com.example.meowmba.core.audio.LocalSoundEffectsEngine(appContext)
 
             // Invented avatar animations: the model writes keyframes, the app
             // validates and plays them — the same propose/constrain boundary as
@@ -918,6 +943,8 @@ class CompanionViewModel(
             // one (tail wag, paw lick, zoomies...) so the user sees the body
             // animations early instead of only subtle ear wiggles.
             var idleClipShownThisSession = false
+            
+                val microClipNames = setOf("ear twitch micro", "gaze drift", "nose wiggle")
             if (idleAnimationsEnabled) idleAnimationDirector = IdleAnimationDirector(
                 scope = viewModelScope,
                 canPlay = {
@@ -942,6 +969,10 @@ class CompanionViewModel(
                     }
                 },
                 play = { spec -> playCustomAnimation(spec) },
+                pickMicroSpec = {
+                    val microPool = CustomAnimations.BUILT_INS.filterKeys { it in microClipNames }.values
+                    microPool.randomOrNull()
+                },
             ).also { it.start() }
 
             // Obsidian-compatible vault notes.
@@ -2471,6 +2502,7 @@ class CompanionViewModel(
     }
 
     private fun processUserSpeech(text: String) {
+        circadianMoodEngine.noteUserEvent()
         fuLog("processUserSpeech: \"$text\"")
         // "Show it in the browser": pull the newest artifact into the panel.
         // Checked before the agent routing so it also works while the browser
@@ -3203,6 +3235,12 @@ class CompanionViewModel(
                     ttsManager?.stop()
                 }
                 _uiState.value = _uiState.value.copy(isMuted = muting)
+            }
+            AvatarZone.NOSE -> {
+                CustomAnimations.BUILT_INS["nose boop"]?.let { playCustomAnimation(it) }
+            }
+            AvatarZone.CHIN -> {
+                CustomAnimations.BUILT_INS["purr loaf"]?.let { playCustomAnimation(it) }
             }
             AvatarZone.FOREHEAD -> {
                 _uiState.value = _uiState.value.copy(showSettings = !_uiState.value.showSettings)
@@ -4565,5 +4603,5 @@ class CompanionViewModel(
  * Defines interactive zones on the avatar screen.
  */
 enum class AvatarZone {
-    EAR_LEFT, EAR_RIGHT, EYE_LEFT, EYE_RIGHT, MOUTH, FOREHEAD, BACKGROUND
+    EAR_LEFT, EAR_RIGHT, EYE_LEFT, EYE_RIGHT, NOSE, CHIN, MOUTH, FOREHEAD, BACKGROUND
 }

@@ -238,6 +238,48 @@ object AgentRouter {
             return AgentIntent("phone_control", "ui.automate", mapOf("action" to "long_press", "text" to name), "long press " + name)
         }
 
+
+
+        // ── AR viewfinder mode ──────────────────────────────────────────────────
+        if (normalized in setOf("show ar", "camera mode", "ar view", "ar mode", "show camera")) {
+            return AgentIntent("companion", "companion.ar_mode", mapOf("enabled" to "true"), "AR mode on")
+        }
+        if (normalized in setOf("hide ar", "exit ar", "close camera", "normal mode", "exit camera")) {
+            return AgentIntent("companion", "companion.ar_mode", mapOf("enabled" to "false"), "AR mode off")
+        }
+
+        // ── Robot motor control (voice fast-path) ──────────────────────────────
+        if (normalized in setOf("scoot forward", "move forward", "go forward", "drive forward")) {
+            return AgentIntent("robot", "robot.motor", mapOf("command" to "scoot_forward"), "scoot forward")
+        }
+        if (normalized in setOf("scoot backward", "move backward", "go backward", "reverse")) {
+            return AgentIntent("robot", "robot.motor", mapOf("command" to "scoot_backward"), "scoot backward")
+        }
+        if (normalized in setOf("turn left", "rotate left", "spin left")) {
+            return AgentIntent("robot", "robot.motor", mapOf("command" to "turn_left"), "turn left")
+        }
+        if (normalized in setOf("turn right", "rotate right", "spin right")) {
+            return AgentIntent("robot", "robot.motor", mapOf("command" to "turn_right"), "turn right")
+        }
+        if (normalized in setOf("look up", "tilt up", "neck up", "tilt neck up")) {
+            return AgentIntent("robot", "robot.motor", mapOf("command" to "neck_up"), "look up")
+        }
+        if (normalized in setOf("look down", "tilt down", "neck down", "tilt neck down")) {
+            return AgentIntent("robot", "robot.motor", mapOf("command" to "neck_down"), "look down")
+        }
+        if (normalized in setOf("center neck", "level neck", "neck center", "straighten")) {
+            return AgentIntent("robot", "robot.motor", mapOf("command" to "neck_center"), "center neck")
+        }
+        if (normalized in setOf("light on", "headlight on", "turn on the light", "turn light on")) {
+            return AgentIntent("robot", "robot.motor", mapOf("command" to "light_on"), "light on")
+        }
+        if (normalized in setOf("light off", "headlight off", "turn off the light", "turn light off")) {
+            return AgentIntent("robot", "robot.motor", mapOf("command" to "light_off"), "light off")
+        }
+        if (normalized in setOf("robot stop", "stop moving", "brake")) {
+            return AgentIntent("robot", "robot.motor", mapOf("command" to "stop"), "robot stop")
+        }
+
         // Phone control. "open the file X" is matched earlier, so a bare
         // "open X" reaching here means an app, not a workspace file.
         if (normalized in setOf("what apps do i have", "list my apps", "show my apps",
