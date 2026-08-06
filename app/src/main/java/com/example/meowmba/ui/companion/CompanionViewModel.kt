@@ -1844,6 +1844,13 @@ class CompanionViewModel(
         speechService?.stopListening()
         stopWakeLoopAndRelease()
         resetState()
+        // resetState() left the state IDLE and therefore re-armed the in-app wake
+        // loop, which re-grabbed the mic. That blocked the foreground service we are
+        // about to start from ever owning the mic ("in-app wake loop owns the mic;
+        // not starting a second one"), so the background follow-up went deaf. Release
+        // the re-armed loop so the service can take the mic for this follow-up.
+        wakeRearmJob?.cancel()
+        stopWakeLoopAndRelease()
     }
 
     /** Called when the app returns to the foreground; retakes the wake mic. */

@@ -262,7 +262,10 @@ class WakeWordService : Service() {
             onResult = { captured ->
                 followUpRetries = 0
                 capturingCommand = false
-                acknowledgeAndDeliver(captured)
+                // A follow-up is mid-conversation with the screen on, so hand the
+                // command straight to the app instead of leaving it as a notification
+                // the user would have to tap while another app is in front.
+                acknowledgeAndDeliver(captured, launchNow = true)
             },
             onError = { code ->
                 // Error 11 and friends are service hiccups; retry silently a
@@ -310,11 +313,38 @@ class WakeWordService : Service() {
         }
     }
 
-    private fun acknowledgeAndDeliver(command: String) {
+    private fun acknowledgeAndDeliver(command: String, launchNow: Boolean = false) {
         wakeEngine?.stop()
         tts.speak("One moment.")
-        notifyCommand(command)
+        if (launchNow) {
+            deliverToApp(command)
+        } else {
+            notifyCommand(command)
+        }
         wakeEngine?.start()
+    }
+
+    /**
+     * Bring the companion to the front with the captured command so it runs through
+     * the normal voice pipeline. The activity is the home launcher, so surfacing it
+     * to act on a spoken follow-up is the expected behavior; onResume stops this
+     * service and reclaims the mic, ending the background session cleanly.
+     */
+    private fun deliverToApp(command: String) {
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(EXTRA_WAKE_COMMAND, command)
+        }
+        runCatching { startActivity(intent) }
+            .onFailure { e ->
+                // Fall back to the notification path rather than dropping the command.
+                android.util.Log.w("WakeWordService", "could not surface command; notifying", e)
+                notifyCommand(command)
+            }
+        // Keep a visible record either way.
+        notifyCommand(command)
     }
 
     // ── Notifications ───────────────────────────────────────────────────────
