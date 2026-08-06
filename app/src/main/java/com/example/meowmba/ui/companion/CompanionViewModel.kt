@@ -1588,10 +1588,16 @@ class CompanionViewModel(
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             if (!enabled) robotManager.useSimulated()
             else if (useBt) {
-                // Auto-connect: use the saved MAC, else discover a paired LOOI base.
-                val address = btAddress.ifBlank { robotManager.discoverLooiAddress() ?: "" }
-                if (address.isNotBlank()) robotManager.connectBluetooth(address)
-                else robotManager.useSimulated()
+                // BLE first, using the exact Memba 2 droid connection setup
+                // (attached-if-connected -> scan -> known-MAC fallback). The
+                // saved MAC short-circuits straight to that device. Falls back
+                // to the legacy RFCOMM path for classic-paired bases.
+                val ctx = secureStorage?.context
+                if (ctx == null) robotManager.useSimulated()
+                else {
+                    val bleOk = runCatching { robotManager.connectLooiBle(ctx, btAddress) }.getOrDefault(false)
+                    if (!bleOk && btAddress.isNotBlank()) robotManager.connectBluetooth(btAddress)
+                }
             }
             else robotManager.connectLooi(host, port)
         }

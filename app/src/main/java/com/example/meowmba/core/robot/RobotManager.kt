@@ -18,6 +18,7 @@ class RobotManager {
 
     @Volatile private var controller: MotorController = SimulatedMotorController()
     private var transport: RobotTransport? = null
+    private var bleLink: LooiBleLink? = null
 
     /** The controller the companion should drive right now. Never null. */
     val active: MotorController get() = controller
@@ -26,6 +27,8 @@ class RobotManager {
     fun useSimulated() {
         transport?.close()
         transport = null
+        bleLink?.close()
+        bleLink = null
         controller = SimulatedMotorController()
         _status.value = "simulated (no body)"
     }
@@ -107,6 +110,61 @@ class RobotManager {
         bringUp(BluetoothRobotTransport(address), "LOOI body (BT) @ $address",
             "LOOI BT unreachable ($address) - simulated")
 
+    /**
+     * Connect a LOOI base over BLE using the exact Memba 2 droid setup:
+     * already-connected GATT attach -> BLE scan -> known-MAC fallback ->
+     * connectGatt -> service discovery -> serial CCCD/read init -> keep-alive.
+     * Pass a saved MAC in [address] to skip straight to that device, or blank
+     * for full auto discovery. Blocking; call from a background thread.
+     */
+    fun connectLooiBle(context: android.content.Context, address: String = ""): Boolean {
+        val link = LooiBleLink(context.applicationContext)
+        link.onStateChange = { st, detail -> _status.value = "LOOI BLE: ${st.name.lowercase()} $detail".trim() }
+        val ok = if (address.isBlank()) link.connectAuto() else link.connectBlocking(address)
+        return if (ok) {
+            transport?.close()
+            transport = null
+            bleLink?.close()
+            bleLink = link
+            controller = BleMotorController(link)
+            _status.value = "LOOI body (BLE)" + if (address.isBlank()) "" else " @ $address"
+            true
+        } else {
+            link.close()
+            transport?.close()
+            transport = null
+            bleLink = null
+            controller = SimulatedMotorController()
+            _status.value = "LOOI BLE unreachable - simulated"
+            false
+        }
+    }
+
+    /**
+     * Maps Meow's servo/expression vocabulary onto the Memba-verified LOOI
+     * BLE channels: head-tilt servo -> neck pitch (fed1), body servo ->
+     * short rotate pulse (fe00 frames), expression -> headlight (fed2).
+     */
+    private class BleMotorController(private val link: LooiBleLink) : MotorController {
+        override fun setServo(id: Int, angleDeg: Float) {
+            val clamped = angleDeg.coerceIn(0f, 180f)
+            when (id) {
+                FaceMotorMap.SERVO_HEAD_TILT -> link.setNeckPitch((clamped - 90f) / 90f)
+                FaceMotorMap.SERVO_BODY -> {
+                    // Angle offset from center becomes a short, gentle rotate pulse.
+                    val delta = (clamped - 90f).toInt()
+                    if (delta != 0) link.turnPulse(kotlin.math.abs(delta).coerceIn(5, 40), 3)
+                }
+                else -> Unit // ears/tail/pan have no BLE actuator on the base
+            }
+        }
+
+        override fun setExpression(face: String) {
+            // Sleepy dims the light; anything awake turns it on.
+            link.setHeadlight(face.lowercase() != "sleepy")
+        }
+    }
+
     private fun bringUp(t: RobotTransport, okLabel: String, failLabel: String): Boolean =
         if (t.connect()) {
             transport?.close()
@@ -126,5 +184,7 @@ class RobotManager {
     fun close() {
         transport?.close()
         transport = null
+        bleLink?.close()
+        bleLink = null
     }
 }
