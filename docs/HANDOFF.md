@@ -425,9 +425,9 @@ Verified on device: settings opens with the robot section showing "Connect over 
 
 <!-- AUTOBUILD:START -->
 (regenerated after each commit)
-- 2026-08-06 01:41:44 : feat: full phone-control agent (Phase H)
+- 2026-08-06 08:08:09 : fix: phone-control loop now takes priority over browser search
+- 9cf645e 2026-08-06 01:39 feat: full phone-control agent (Phase H)
 - 820b4dc 2026-08-06 00:01 Fix background follow-up: freeze in-app listening after hand-off, stop TTS tail, faster+longer service capture
 - 27ef5d0 2026-08-05 23:23 fix: in-app follow-up no longer dies on session-conflict errors
 - 3d25a13 2026-08-05 22:45 fix: root-cause follow-up failures - TTS callbacks on main thread + silence resilience
-- 263f48d 2026-08-05 21:03 fix: background follow-up now actually hears and delivers commands
 <!-- AUTOBUILD:END -->

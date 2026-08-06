@@ -2291,6 +2291,14 @@ class CompanionViewModel(
                 return@launch
             }
 
+            // Multi-step phone goals: verbs that clearly need the autonomous
+            // loop. The on-device LLM router often misses these, so we catch
+            // them deterministically before falling into the model-based router.
+            if (isMultiStepPhoneGoal(text)) {
+                phoneAgentLoop?.setGoal(text)
+                return@launch
+            }
+
             // Agent routing: keyword fast path, then the on-device model brain.
             // The model only proposes — approval gates still decide.
             val agentIntent = routeAgentIntent(text)
@@ -4128,6 +4136,35 @@ class CompanionViewModel(
                 ?.let { t.removePrefix(it).trim() }
                 ?: return null
             return rest.takeIf { it.isNotBlank() }
+        }
+
+        /**
+         * Detects utterances that need the multi-step phone-control loop rather
+         * than single-shot execution or general conversation. Catches patterns
+         * the on-device LLM router frequently misses.
+         */
+        private val PHONE_GOAL_VERBS = listOf("play ", "pause ", "skip ", "resume ")
+        private val PHONE_GOAL_APPS = listOf(
+            "spotify", "youtube", "instagram", "tiktok", "netflix", "hulu",
+            "twitter", "snapchat", "whatsapp", "telegram", "discord", "reddit",
+            "amazon", "uber", "lyft", "maps", "chrome", "firefox", "gmail",
+            "messages", "photos", "camera", "clock", "calculator", "calendar"
+        )
+        fun isMultiStepPhoneGoal(text: String): Boolean {
+            val t = text.lowercase().trim()
+            // "play X" / "play X on Y" — but not bare "play" or "play a game with me"
+            if (PHONE_GOAL_VERBS.any { t.startsWith(it) }) {
+                val rest = PHONE_GOAL_VERBS.first { t.startsWith(it) }.let { t.removePrefix(it) }
+                // Must have an object (not just the verb)
+                if (rest.isNotBlank() && rest.split(' ').size <= 8) return true
+            }
+            // "X on/in [app]" — e.g. "search sublime on spotify", "find john on instagram"
+            val onInMatch = Regex("\\b(?:on|in)\\s+(\\w+)\\s*$").find(t)
+            if (onInMatch != null) {
+                val app = onInMatch.groupValues[1].lowercase()
+                if (PHONE_GOAL_APPS.any { app.contains(it) }) return true
+            }
+            return false
         }
 
         private val QUESTION_STARTERS = listOf(
