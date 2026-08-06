@@ -106,7 +106,12 @@ fun SettingsScreen(
     var showAdvanced by remember { mutableStateOf(false) }
 
     Surface(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .clickable(
+                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                indication = null,
+            ) {},
         color = Color(0xFF0D1117)
     ) {
         Column(

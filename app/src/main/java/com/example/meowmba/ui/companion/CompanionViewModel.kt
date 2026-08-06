@@ -1001,7 +1001,7 @@ class CompanionViewModel(
                         pool.randomOrNull()
                     }
                 },
-                play = { spec -> playCustomAnimation(spec) },
+                play = { spec -> playCustomAnimation(spec, closesPanels = false) },
                 pickMicroSpec = {
                     val microPool = CustomAnimations.BUILT_INS.filterKeys { it in microClipNames }.values
                     microPool.randomOrNull()
@@ -1133,7 +1133,7 @@ class CompanionViewModel(
                                     noteMoodEvent(com.example.meowmba.core.personality.MoodEvent.Shake)
                                     val spec = CustomAnimations.BUILT_INS["happy bop"]
                                         ?: CustomAnimations.BUILT_INS.values.randomOrNull()
-                                    spec?.let { playCustomAnimation(it) }
+                                    spec?.let { playCustomAnimation(it, closesPanels = false) }
                                 }
                             }
                         }
@@ -1723,7 +1723,7 @@ class CompanionViewModel(
                 anim?.let { CustomAnimations.BUILT_INS[it] }?.let { spec ->
                     if (_uiState.value.interactionState == InteractionState.IDLE &&
                         _uiState.value.activeAnimation == null
-                    ) playCustomAnimation(spec)
+                    ) playCustomAnimation(spec, closesPanels = false)
                 }
             },
             onComment = { text -> speak(text) },
@@ -1753,10 +1753,21 @@ class CompanionViewModel(
 
     /** Swipe right on the face: app drawer. */
     fun toggleAppDrawer() {
+        // Vertical drags that overscroll an open panel (Settings etc.) fall
+        // through to the canvas swipe handler; never yank the drawer over a
+        // panel the user is reading.
+        if (!_uiState.value.showAppDrawer && anyPanelOpen()) return
         _uiState.value = _uiState.value.copy(
             showAppDrawer = !_uiState.value.showAppDrawer,
             showBrowser = false,
         )
+    }
+
+    /** Any full-screen overlay panel that should swallow home gestures. */
+    private fun anyPanelOpen(): Boolean = with(_uiState.value) {
+        showSettings || showModelManager || showPrivacyDashboard || showMemoryScreen ||
+            showWeatherScreen || showBackgroundScreen || showNavScreen || showAgentsScreen ||
+            showVaultScreen || isChatExpanded
     }
 
     /** Swipe left on the face: the browser meow can drive. */
@@ -3306,6 +3317,7 @@ class CompanionViewModel(
 
     /** Swipe-down entry point: only opens, never closes. */
     fun openTiles() {
+        if (anyPanelOpen()) return
         if (!_uiState.value.showTiles) {
             onAvatarZoneClick(AvatarZone.BACKGROUND)
         }
@@ -4298,10 +4310,13 @@ class CompanionViewModel(
      * says "Playing X", and the user sees nothing. "Show me" means show me:
      * they all close for the clip and stay closed.
      */
-    fun playCustomAnimation(spec: CustomAnimationSpec) {
+    fun playCustomAnimation(
+        spec: CustomAnimationSpec,
+        closesPanels: Boolean = true,
+    ) {
         customAnimJob?.cancel()
         System.err.println("MeowAnim: playing \"${spec.name}\" (${spec.durationMs}ms)")
-        _uiState.value = _uiState.value.copy(
+        _uiState.value = if (closesPanels) _uiState.value.copy(
             activeAnimation = spec,
             isChatExpanded = false,
             showTiles = false,
@@ -4314,7 +4329,7 @@ class CompanionViewModel(
             showNavScreen = false,
             showAgentsScreen = false,
             showVaultScreen = false,
-        )
+        ) else _uiState.value.copy(activeAnimation = spec)
         customAnimJob = viewModelScope.launch {
             delay(spec.durationMs.toLong() + 300)
             _uiState.value = _uiState.value.copy(activeAnimation = null)
