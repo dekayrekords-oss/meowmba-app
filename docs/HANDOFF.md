@@ -425,9 +425,9 @@ Verified on device: settings opens with the robot section showing "Connect over 
 
 <!-- AUTOBUILD:START -->
 (regenerated after each commit)
-- 2026-08-06 09:59:33 : feat: Loona-style features — notification listener, face attention, proactive nudges, focus mode
+- 2026-08-06 10:36:20 : feat: 'meow start listening' — Voice Access + LLM hybrid mode
+- 2658c68 2026-08-06 09:54 feat: Loona-style features — notification listener, face attention, proactive nudges, focus mode
 - 5492a61 2026-08-06 08:31 fix: deterministic routing for multi-step phone goals
 - 20f90d0 2026-08-06 08:07 fix: phone-control loop now takes priority over browser search
 - 9cf645e 2026-08-06 01:39 feat: full phone-control agent (Phase H)
-- 820b4dc 2026-08-06 00:01 Fix background follow-up: freeze in-app listening after hand-off, stop TTS tail, faster+longer service capture
 <!-- AUTOBUILD:END -->

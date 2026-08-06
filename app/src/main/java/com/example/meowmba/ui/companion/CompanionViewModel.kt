@@ -71,6 +71,12 @@ import com.example.meowmba.core.context.NudgePriority
 import com.example.meowmba.core.personality.MoodEvent
 import com.example.meowmba.core.sensor.AttentionState
 import com.example.meowmba.core.sensor.FacePresenceDetector
+import com.example.meowmba.core.agent.DualModeRouter
+import com.example.meowmba.core.agent.EdgeState
+import com.example.meowmba.core.agent.OfflineQueue
+import com.example.meowmba.core.agent.tools.BrightnessTool
+import com.example.meowmba.core.agent.tools.VolumeTool
+import com.example.meowmba.core.agent.tools.LocationTool
 import com.example.meowmba.core.agent.tools.NotificationListTool
 import com.example.meowmba.core.agent.tools.NotificationSummaryTool
 import com.example.meowmba.core.vault.VaultRepository
@@ -209,6 +215,33 @@ class CompanionViewModel(
     }
 
     private var isPassiveListeningActive = false
+
+    // ---- Edge Agent: DualModeRouter + OfflineQueue ----
+    private var dualModeRouter: DualModeRouter? = null
+    private val offlineQueue = OfflineQueue()
+
+    fun getEdgeState(): EdgeState = dualModeRouter?.edgeState?.value ?: EdgeState.OFFLINE
+    fun getOfflineQueueSummary(): String = offlineQueue.summary()
+
+    /** Called when bridge reconnects — flush pending offline actions. */
+    fun onBridgeReconnected() {
+        viewModelScope.launch(ioDispatcher) {
+            dualModeRouter?.refreshState()
+            if (dualModeRouter?.isConnected() == true && !offlineQueue.isEmpty) {
+                val actions = offlineQueue.flush()
+                for (action in actions) {
+                    Log.d("EdgeAgent", "Flushing queued action: ${action.toolId}")
+                    try {
+                        val tool = toolRegistryRef?.byId(action.toolId)
+                        tool?.execute(action.args)
+                    } catch (e: Exception) {
+                        Log.e("EdgeAgent", "Failed to flush ${action.toolId}: ${e.message}")
+                    }
+                }
+                speak("Reconnected. Flushed ${actions.size} queued actions.")
+            }
+        }
+    }
 
     // ---- Proactive Engine + Focus Detector ----
     private val focusDetector = FocusDetector()
@@ -444,6 +477,7 @@ class CompanionViewModel(
 
     // ── Agent system (Phase 5) ──────────────────────────────────────────────
     private var agentOrchestrator: AgentOrchestrator? = null
+    private var toolRegistryRef: ToolRegistry? = null
 
     /**
      * Audit trail: ring-buffered into UI state and persisted to Room.
@@ -748,6 +782,7 @@ class CompanionViewModel(
 
         // ── Agent system (Phase 5) ─────────────────────────────────────────
         val toolRegistry = ToolRegistry()
+        toolRegistryRef = toolRegistry
         if (memoryRepository != null) {
             toolRegistry.register(MemorySaveTool(memoryRepository))
             toolRegistry.register(MemorySearchTool(memoryRepository))
@@ -764,6 +799,7 @@ class CompanionViewModel(
         // orchestrator's approval card gates them like any MODERATE/DESTRUCTIVE tool.
         secureStorage?.let {
             val bridgeManager = DesktopBridgeManager(it)
+            dualModeRouter = DualModeRouter(bridgeManager)
             toolRegistry.register(DesktopWriteFileTool(bridgeManager))
             toolRegistry.register(DesktopRunBuildTool(bridgeManager))
             toolRegistry.register(DesktopRunScriptTool(bridgeManager))
@@ -840,6 +876,10 @@ class CompanionViewModel(
             // Notification tools
             toolRegistry.register(NotificationListTool())
             toolRegistry.register(NotificationSummaryTool())
+            // Device settings tools (LUMI edge)
+            toolRegistry.register(BrightnessTool(appContext))
+            toolRegistry.register(VolumeTool(appContext))
+            toolRegistry.register(LocationTool(appContext))
             toolRegistry.register(CalendarListTool(appContext))
             toolRegistry.register(CalendarCreateTool(appContext))
         }

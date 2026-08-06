@@ -444,6 +444,44 @@ object AgentRouter {
                 "generate audio: $prompt")
         }
 
+        // ---- Device settings (LUMI edge) ----
+        // Brightness
+        if (normalized.contains("brightness") || normalized.contains("screen bright")
+            || normalized.contains("dim the screen") || normalized.contains("brighten")
+            || normalized.contains("how bright")) {
+            val level = Regex("""(\d+)""").find(raw)?.value
+            val args = if (level != null) mapOf("level" to level)
+                       else if (normalized.contains("auto")) mapOf("level" to "auto")
+                       else if (normalized.contains("max") || normalized.contains("full")) mapOf("level" to "255")
+                       else if (normalized.contains("dim") || normalized.contains("low")) mapOf("level" to "50")
+                       else emptyMap()
+            return AgentIntent("device", "phone.brightness", args, "screen brightness")
+        }
+        // Volume
+        if (normalized.contains("volume") || normalized.contains("turn it up")
+            || normalized.contains("turn it down") || normalized.contains("louder")
+            || normalized.contains("quieter") || normalized.contains("mute")
+            || normalized.contains("unmute") || normalized.contains("sound level")) {
+            val level = Regex("""(\d+)""").find(raw)?.value
+            val stream = when {
+                normalized.contains("ring") || normalized.contains("ringer") -> "ring"
+                normalized.contains("alarm") -> "alarm"
+                normalized.contains("notification") || normalized.contains("notif") -> "notification"
+                else -> "media"
+            }
+            val args = mutableMapOf("stream" to stream)
+            if (level != null) args["level"] = level
+            else if (normalized.contains("mute") || normalized.contains("silence")) args["level"] = "0"
+            else if (normalized.contains("max") || normalized.contains("full")) args["level"] = "15"
+            return AgentIntent("device", "phone.volume", args, "volume control")
+        }
+        // Location / GPS
+        if (normalized in setOf("where am i", "my location", "current location",
+                "what is my location", "gps", "show my location", "location")
+            || (normalized.contains("where") && normalized.contains("am i"))) {
+            return AgentIntent("device", "phone.location", emptyMap(), "current location")
+        }
+
         return null
     }
 

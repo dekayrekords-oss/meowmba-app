@@ -31,6 +31,9 @@ object CommandHeuristics {
         // Phone and desktop control
         "app", "launch", "start", "call", "text", "settings", "camera",
         "run", "script", "build", "desktop", "computer",
+        // Device settings (LUMI edge)
+        "brightness", "dim", "brighten", "volume", "louder", "quieter",
+        "mute", "unmute", "location", "gps", "where",
         // Phone control (accessibility-based)
         "tap", "click", "press", "swipe", "scroll", "type", "back",
         "control", "navigate", "play", "pause", "stop", "next", "previous",
