@@ -240,7 +240,10 @@ class MainActivity : ComponentActivity() {
         // Release BEFORE starting the service: it refuses to start while the in-app loop
         // still owns the mic, and the in-app loop cannot actually hear anything once we
         // are backgrounded (foreground-only mic grant).
-        val awaitingReply = companionViewModel?.isAwaitingFollowUp() == true
+        // Any live conversation turn (listening/thinking/speaking), not just
+        // LISTENING: right after opening an app the state is still SPEAKING the
+        // acknowledgement, and gating on LISTENING dropped the follow-up unheard.
+        val awaitingReply = companionViewModel?.isConversationLive() == true
         if (awaitingReply && micGranted) {
             // Mid-conversation background hop: the in-app recognizer goes deaf the
             // moment we lose the foreground, so hand the turn to the mic-exempt
@@ -274,7 +277,12 @@ class MainActivity : ComponentActivity() {
         val micGranted = ContextCompat.checkSelfPermission(
             this, Manifest.permission.RECORD_AUDIO
         ) == PackageManager.PERMISSION_GRANTED
-        if (micGranted && companionViewModel?.isAwaitingFollowUp() == true) {
+        // No conversation-state re-check here: the hand-off that scheduled this
+        // runnable already reset the state to IDLE, so re-checking it always failed
+        // and the follow-up service never started. onResume cancels this runnable if
+        // we returned to the foreground, so reaching this point still backgrounded is
+        // itself the confirmation that the follow-up should run.
+        if (micGranted) {
             WakeWordService.startFollowUp(this)
         }
     }

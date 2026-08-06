@@ -72,6 +72,7 @@ import com.example.meowmba.core.agent.tools.MediaGenerateVideoTool
 import com.example.meowmba.core.agent.tools.MediaGenerateAudioTool
 import com.example.meowmba.core.agent.tools.LaunchAppTool
 import com.example.meowmba.core.agent.tools.ListAppsTool
+import com.example.meowmba.core.agent.tools.PlayMusicTool
 import com.example.meowmba.core.agent.tools.OpenUrlTool
 import com.example.meowmba.core.agent.tools.OpenSettingsTool
 import com.example.meowmba.core.media.SDCppImageGenerator
@@ -614,6 +615,7 @@ class CompanionViewModel(
         if (appContext != null) {
             toolRegistry.register(LaunchAppTool(appContext))
             toolRegistry.register(ListAppsTool(appContext))
+            toolRegistry.register(PlayMusicTool(appContext))
             toolRegistry.register(OpenUrlTool(appContext))
             toolRegistry.register(OpenSettingsTool(appContext))
             // Phase F2: alarms, timers, flashlight, DND, battery readout.
@@ -1811,6 +1813,23 @@ class CompanionViewModel(
     /** True while meow is still listening for a spoken turn (conversation follow-up). */
     fun isAwaitingFollowUp(): Boolean =
         _uiState.value.interactionState == InteractionState.LISTENING
+
+    /**
+     * Broader than [isAwaitingFollowUp]: true for any live conversation turn
+     * (listening, thinking, or speaking) while the mic is usable. Used by the
+     * background hand-off so a follow-up keeps working even when the app loses
+     * the foreground mid-turn — e.g. right after opening Spotify, when the state
+     * is still SPEAKING the acknowledgement rather than LISTENING.
+     */
+    fun isConversationLive(): Boolean {
+        val s = _uiState.value
+        return s.isMicEnabled && !s.isMuted &&
+            s.interactionState in setOf(
+                InteractionState.LISTENING,
+                InteractionState.THINKING,
+                InteractionState.SPEAKING,
+            )
+    }
 
     /**
      * Background hand-off for a live conversation: the in-app recognizer goes

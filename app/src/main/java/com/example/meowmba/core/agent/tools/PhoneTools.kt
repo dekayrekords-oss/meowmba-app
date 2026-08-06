@@ -8,6 +8,7 @@ import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.os.PowerManager
 import android.provider.AlarmClock
+import android.provider.MediaStore
 import android.content.pm.PackageManager
 import android.content.pm.ResolveInfo
 import android.net.Uri
@@ -99,6 +100,69 @@ class LaunchAppTool(private val context: Context) : Tool {
             ToolResult.Success("Opened ${match.label}.")
         } catch (e: Exception) {
             ToolResult.Failure("Couldn't open ${match.label}: ${e.message}")
+        }
+    }
+}
+
+/**
+ * `phone.play_music` — start playback of a song, artist, playlist, podcast or
+ * album by search query.
+ *
+ * Uses Android's standard [MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH]
+ * intent, which Spotify, YouTube Music and other audio apps honor, so the
+ * user does not have to open the app first. "Play sublime" plays in the
+ * default music app (Spotify when installed); "play sublime on YouTube Music"
+ * routes to the named app instead.
+ *
+ * MODERATE risk: it changes what is audible, but that is exactly what the user
+ * asked for out loud and it is trivially reversible (pause/stop).
+ */
+class PlayMusicTool(private val context: Context) : Tool {
+    override val definition = ToolDefinition(
+        id = "phone.play_music",
+        displayName = "Play music",
+        description = "Play a song, artist, album, playlist, or podcast by name. " +
+            "Optionally say which app to play it in; otherwise the user's music app " +
+            "(usually Spotify) is used. Examples: \"play sublime\", " +
+            "\"play sublime on Spotify\", \"play lo-fi beats on YouTube Music\". " +
+            "Use this to start playback directly — do NOT open the app first.",
+        inputSchema = mapOf("query" to "string", "app" to "string"),
+        riskLevel = RiskLevel.MODERATE,
+        environments = setOf(ToolEnvironment.PHONE),
+        confirmationPolicy = ConfirmationPolicy.NONE,
+        timeoutMs = 10_000
+    )
+
+    override suspend fun execute(args: Map<String, String>): ToolResult = withContext(Dispatchers.IO) {
+        val query = args["query"]?.takeIf { it.isNotBlank() }
+            ?: return@withContext ToolResult.Failure("Missing 'query' — what should I play?")
+        val appName = args["app"]?.takeIf { it.isNotBlank() }
+
+        // Resolve the target audio app. A named app is looked up among installed
+        // apps; otherwise prefer Spotify when present, and fall back to an implicit
+        // intent so the user's default music handler picks it up.
+        val targetPackage: String? = when {
+            appName != null -> InstalledApps.find(context, appName)?.packageName
+                ?: return@withContext ToolResult.Failure(
+                    "No installed app matches \"$appName\". Ask me to list your apps."
+                )
+            InstalledApps.find(context, "spotify") != null ->
+                InstalledApps.find(context, "spotify")!!.packageName
+            else -> null
+        }
+
+        val play = Intent(MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH).apply {
+            putExtra(android.app.SearchManager.QUERY, query)
+            putExtra(MediaStore.EXTRA_MEDIA_FOCUS, MediaStore.Audio.Media.ENTRY_CONTENT_TYPE)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            targetPackage?.let { setPackage(it) }
+        }
+        val appLabel = appName ?: targetPackage?.let { "the music app" }
+        return@withContext try {
+            context.startActivity(play)
+            ToolResult.Success("Playing \"$query\"${appLabel?.let { " in $it" } ?: ""}.")
+        } catch (e: Exception) {
+            ToolResult.Failure("Couldn't start playback of \"$query\": ${e.message}")
         }
     }
 }

@@ -53,6 +53,9 @@ class WakeWordService : Service() {
         private const val CMD_ID = 43
         private const val ACTION_STOP = "com.example.meowmba.WAKE_SERVICE_STOP"
 
+        /** Let a short acknowledgement TTS finish before opening the follow-up mic. */
+        private const val FOLLOW_UP_SETTLE_MS = 1100L
+
         fun start(context: Context) {
             // runCatching: a refused foreground-service start (background-start
             // restrictions) must never take the whole app down with it.
@@ -245,7 +248,13 @@ class WakeWordService : Service() {
         }
         // The wake spotter and the recognizer must not fight over the mic.
         wakeEngine?.stop()
-        startFollowUpListen()
+        // Give the companion's short acknowledgement TTS ("Playing sublime…") a
+        // beat to finish, otherwise the recognizer opens on top of it and can
+        // capture Meow's own voice as the user's reply.
+        scope.launch {
+            delay(FOLLOW_UP_SETTLE_MS)
+            if (capturingCommand) startFollowUpListen()
+        }
     }
 
     private fun startFollowUpListen() {
