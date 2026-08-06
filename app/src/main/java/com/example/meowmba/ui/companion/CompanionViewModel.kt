@@ -2181,6 +2181,19 @@ class CompanionViewModel(
             showLatestArtifactInBrowser()
             return
         }
+        // Phone-control loop: if active, "stop"/"cancel" kills it; else new speech updates the goal.
+        if (phoneAgentLoop?.isActive == true) {
+            val stopWords = setOf("stop", "cancel", "never mind", "nevermind", "quit", "abort")
+            if (stopWords.any { text.lowercase().trim().startsWith(it) }) {
+                phoneAgentLoop?.cancel()
+                speak("Phone control stopped.")
+                return
+            }
+            // New speech while loop is active = new goal
+            phoneAgentLoop?.setGoal(text)
+            return
+        }
+
         // Explicit searches ("search for...", "look up...", "google...") open
         // live in the browser panel — the user sees results, not a queued task
         // narrating "searching...". Checked before the browser-agent routing so
@@ -2194,18 +2207,6 @@ class CompanionViewModel(
         // queued as agent tasks, never met with another question.
         if (looksLikeDirectQuestion(WakePhraseMatcher.normalize(text))) {
             respondDirectly(text)
-            return
-        }
-        // Phone-control loop: if active, "stop"/"cancel" kills it; else new speech updates the goal.
-        if (phoneAgentLoop?.isActive == true) {
-            val stopWords = setOf("stop", "cancel", "never mind", "nevermind", "quit", "abort")
-            if (stopWords.any { text.lowercase().trim().startsWith(it) }) {
-                phoneAgentLoop?.cancel()
-                speak("Phone control stopped.")
-                return
-            }
-            // New speech while loop is active = new goal
-            phoneAgentLoop?.setGoal(text)
             return
         }
         // While the browser is open, speech goes straight to the browser
@@ -4058,7 +4059,7 @@ class CompanionViewModel(
                 code == SpeechRecognizer.ERROR_CLIENT ||
                 code == SpeechRecognizer.ERROR_RECOGNIZER_BUSY
 
-        private const val MAX_TRANSIENT_LISTEN_RETRIES = 2
+        private const val MAX_TRANSIENT_LISTEN_RETRIES = 3
         private const val MAX_FOLLOW_UP_SILENCE_RETRIES = 10
         private val TRANSIENT_SPEECH_ERRORS = setOf(
             SpeechRecognizer.ERROR_NETWORK_TIMEOUT,
