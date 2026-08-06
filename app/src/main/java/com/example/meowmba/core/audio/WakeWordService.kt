@@ -53,8 +53,16 @@ class WakeWordService : Service() {
         private const val CMD_ID = 43
         private const val ACTION_STOP = "com.example.meowmba.WAKE_SERVICE_STOP"
 
-        /** Let a short acknowledgement TTS finish before opening the follow-up mic. */
-        private const val FOLLOW_UP_SETTLE_MS = 1100L
+        /**
+         * Brief beat before opening the follow-up mic. The app stops its TTS
+         * at hand-off, so this no longer has to outlast a full reply — just
+         * let the audio pipeline settle. The user's reply usually starts
+         * within a second, so the old 1100ms window ate the opening words.
+         */
+        private const val FOLLOW_UP_SETTLE_MS = 300L
+
+        /** How many extra quiet windows a follow-up gets before falling back to wake. */
+        private const val FOLLOW_UP_QUIET_WINDOWS = 2
 
         fun start(context: Context) {
             // runCatching: a refused foreground-service start (background-start
@@ -139,6 +147,7 @@ class WakeWordService : Service() {
 
         if (intent?.getStringExtra(EXTRA_MODE) == MODE_FOLLOW_UP) {
             followUpPending = true
+            android.util.Log.i("WakeWordService", "follow-up hand-off requested")
         }
         // Second chance at the promise onCreate may have failed to keep. Giving
         // up here is the graceful path; leaving it unkept is the fatal one.
@@ -213,6 +222,7 @@ class WakeWordService : Service() {
         }
         wakeEngine?.start()
         engineStarted = true
+        android.util.Log.i("WakeWordService", "engine started; mic owned by service")
     }
 
     override fun onDestroy() {
@@ -239,9 +249,17 @@ class WakeWordService : Service() {
      * reply right now and deliver it like any wake command.
      */
     private fun maybeStartFollowUpCapture() {
-        if (!followUpPending || !engineStarted || capturingCommand) return
+        if (!followUpPending || !engineStarted || capturingCommand) {
+            android.util.Log.i(
+                "WakeWordService",
+                "follow-up capture skipped (pending=$followUpPending engine=$engineStarted capturing=$capturingCommand)"
+            )
+            return
+        }
         followUpPending = false
         capturingCommand = true
+        followUpRetries = 0
+        android.util.Log.i("WakeWordService", "follow-up capture armed")
         // Reflect the conversation turn in the ongoing notification.
         runCatching {
             startForeground(FG_ID, buildPersistentNotification("Listening for your reply…"))
@@ -258,8 +276,10 @@ class WakeWordService : Service() {
     }
 
     private fun startFollowUpListen() {
+        android.util.Log.i("WakeWordService", "follow-up listen: session starting")
         speechService.startListening(
             onResult = { captured ->
+                android.util.Log.i("WakeWordService", "follow-up captured: \"$captured\"")
                 followUpRetries = 0
                 capturingCommand = false
                 // A follow-up is mid-conversation with the screen on, so hand the
@@ -268,6 +288,7 @@ class WakeWordService : Service() {
                 acknowledgeAndDeliver(captured, launchNow = true)
             },
             onError = { code ->
+                android.util.Log.w("WakeWordService", "follow-up listen error code=$code retry=$followUpRetries")
                 // Error 11 and friends are service hiccups; retry silently a
                 // couple of times before falling back to the wake loop.
                 if (isTransientSpeechCode(code) && followUpRetries < 2) {
@@ -277,6 +298,21 @@ class WakeWordService : Service() {
                         // capturingCommand stays true across the retry.
                         if (engineStarted) startFollowUpListen()
                     }
+                } else if (
+                    isSilenceCode(code) &&
+                    followUpRetries < FOLLOW_UP_QUIET_WINDOWS
+                ) {
+                    // Nothing heard in this window. The user may be about to
+                    // speak; open one more window before giving up.
+                    followUpRetries++
+                    android.util.Log.i(
+                        "WakeWordService",
+                        "follow-up quiet window; opening another (retry=$followUpRetries)"
+                    )
+                    scope.launch {
+                        delay(250)
+                        if (engineStarted && capturingCommand) startFollowUpListen()
+                    }
                 } else {
                     capturingCommand = false
                     wakeEngine?.start()
@@ -284,6 +320,10 @@ class WakeWordService : Service() {
             }
         )
     }
+
+    private fun isSilenceCode(code: Int): Boolean =
+        code == android.speech.SpeechRecognizer.ERROR_SPEECH_TIMEOUT ||
+            code == android.speech.SpeechRecognizer.ERROR_NO_MATCH
 
     private fun isTransientSpeechCode(code: Int): Boolean =
         code == android.speech.SpeechRecognizer.ERROR_NETWORK_TIMEOUT ||

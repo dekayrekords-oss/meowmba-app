@@ -287,6 +287,17 @@ class CompanionViewModel(
     /** True while capturing a follow-up turn inside conversation mode. */
     private var isFollowUpListen = false
 
+    /**
+     * True from the moment the conversation is handed to the background
+     * service ([handOffListeningToBackground]) until the activity reclaims
+     * the foreground. While set, NO in-app listening may be (re)started:
+     * the TTS callbacks can fire a beat or two after the hand-off and used
+     * to re-arm the in-app capture -- which is deaf in the background and
+     * steals the mic from the background service that can actually hear,
+     * silently dropping the user's follow-up.
+     */
+    private var handedOffToBackground = false
+
     /** Last turns, for "remember this" (content-free remember commands). */
     private var lastUserText: String? = null
     private var lastAssistantText: String? = null
@@ -446,7 +457,9 @@ class CompanionViewModel(
 
         ttsManager?.onSpeechStarted = {
             _uiState.value = _uiState.value.copy(interactionState = InteractionState.SPEAKING)
-            startInterruptionWatch()
+            // A speech start arriving AFTER the hand-off must not re-arm an
+            // in-app listener; the background service owns the turn now.
+            if (!handedOffToBackground) startInterruptionWatch()
         }
         ttsManager?.onSpeechFinished = { onSpeechFinished() }
         ttsManager?.onWordBoundary = { start, end ->
@@ -1837,6 +1850,12 @@ class CompanionViewModel(
      * WakeWordService capture the follow-up with its mic exemption.
      */
     fun handOffListeningToBackground() {
+        handedOffToBackground = true
+        fuLog("handOffListeningToBackground -> in-app listening frozen")
+        // Silence the tail of the reply: anything still queued keeps playing
+        // AFTER the background follow-up service opens its mic, and the
+        // service would capture Meow's own voice as the user's reply.
+        ttsManager?.stop()
         followUpJob?.cancel()
         isFollowUpListen = false
         utteranceCapture?.cancel()
@@ -1855,6 +1874,7 @@ class CompanionViewModel(
 
     /** Called when the app returns to the foreground; retakes the wake mic. */
     fun reclaimWakeMicForForeground() {
+        handedOffToBackground = false
         if (_uiState.value.wakeWordEnabled) startWakeStandby()
     }
 
@@ -1897,6 +1917,15 @@ class CompanionViewModel(
     }
 
     private fun startWakeStandby() {
+        if (handedOffToBackground) {
+            // The background service owns the mic after a hand-off. Late
+            // recognizer callbacks from the torn-down turn still route
+            // through resetState() and used to re-arm the in-app spotter,
+            // which then refused the service the mic ("in-app wake loop
+            // owns the mic") and the follow-up never started.
+            android.util.Log.i(TAG_WAKE, "not re-arming: conversation handed to background service")
+            return
+        }
         val state = _uiState.value.interactionState
         if (state != InteractionState.IDLE) {
             // "Wake word only works once" is what this looks like from outside, so say why.
@@ -2468,6 +2497,9 @@ class CompanionViewModel(
      */
     private fun speakStreaming(text: String, first: Boolean) {
         if (text.isBlank()) return
+        // After the hand-off the background service owns the mic; any speech
+        // enqueued from here on would leak into the user's reply window.
+        if (handedOffToBackground) return
         val tts = ttsManager
         if (tts == null) {
             if (first) startMockSpeaking(text)
@@ -2500,6 +2532,7 @@ class CompanionViewModel(
     }
 
     private fun speak(text: String) {
+        if (handedOffToBackground) return
         viewModelScope.launch {
             memoryRepository?.addMessage(MessageRole.ASSISTANT, text)
         }
@@ -2692,6 +2725,12 @@ class CompanionViewModel(
             return
         }
         selfVoiceFilter.clear()
+        if (handedOffToBackground) {
+            // The reply window is owned by the background service now; an
+            // in-app follow-up here would grab the mic and hear nothing.
+            fuLog("onSpeechFinished ignored: handed off to background service")
+            return
+        }
         val s = _uiState.value
         val follow = shouldEnterFollowUp(s) && speechService != null
         fuLog("onSpeechFinished -> ${if (follow) "FOLLOW-UP" else "reset"} (conv=${s.conversationMode} barge=${s.bargeInEnabled} wake=${s.wakeWordEnabled})")

@@ -425,9 +425,9 @@ Verified on device: settings opens with the robot section showing "Connect over 
 
 <!-- AUTOBUILD:START -->
 (regenerated after each commit)
-- 2026-08-05 22:46:51 : fix: root-cause follow-up failures - TTS callbacks on main thread + silence resilience
+- 2026-08-05 23:24:46 : fix: in-app follow-up no longer dies on session-conflict errors
+- 3d25a13 2026-08-05 22:45 fix: root-cause follow-up failures - TTS callbacks on main thread + silence resilience
 - 263f48d 2026-08-05 21:03 fix: background follow-up now actually hears and delivers commands
 - 643ddbc 2026-08-05 19:55 feat: play music by voice (Spotify default) + keep follow-up alive after opening apps
 - 736f030 2026-08-05 17:09 feat: connect LOOI over BLE using exact Memba 2 droid setup
-- 54077ed 2026-08-05 16:09 feat: LOOI base discovery — declare BLUETOOTH_SCAN, add scan picker to Settings
 <!-- AUTOBUILD:END -->
