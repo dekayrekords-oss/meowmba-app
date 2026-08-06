@@ -121,13 +121,21 @@ class RobotManager {
         val link = LooiBleLink(context.applicationContext)
         link.onStateChange = { st, detail -> _status.value = "LOOI BLE: ${st.name.lowercase()} $detail".trim() }
         val ok = if (address.isBlank()) link.connectAuto() else link.connectBlocking(address)
-        return if (ok) {
+        // Accept READY (fully verified) or HANDSHAKE_REQUIRED (connected but
+        // needs user to tap Initialize / the official app handshake first).
+        val linked = ok || link.handshakeRequired
+        return if (linked) {
             transport?.close()
             transport = null
             bleLink?.close()
             bleLink = link
             controller = BleMotorController(link)
-            _status.value = "LOOI body (BLE)" + if (address.isBlank()) "" else " @ $address"
+            val suffix = if (address.isBlank()) "" else " @ $address"
+            if (link.handshakeRequired) {
+                _status.value = "LOOI BLE: connected — tap Initialize to verify$suffix"
+            } else {
+                _status.value = "LOOI body (BLE)$suffix"
+            }
             true
         } else {
             link.close()
@@ -138,6 +146,11 @@ class RobotManager {
             _status.value = "LOOI BLE unreachable - simulated"
             false
         }
+    }
+
+    /** Retry the LOOI initialization / handshake verification from UI. */
+    fun retryLooiHandshake() {
+        bleLink?.retryHandshake()
     }
 
     /**

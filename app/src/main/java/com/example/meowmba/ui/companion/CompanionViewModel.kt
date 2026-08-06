@@ -1962,6 +1962,13 @@ class CompanionViewModel(
         }
     }
 
+    /** Initialize / retry the LOOI robot connection handshake (from MEMBA 2). */
+    fun initializeRobot() {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            robotManager.retryLooiHandshake()
+        }
+    }
+
     fun setIdleChatter(enabled: Boolean) {
         secureStorage?.saveBooleanPreference(KEY_IDLE_CHATTER, enabled)
         _uiState.value = _uiState.value.copy(idleChatterEnabled = enabled)

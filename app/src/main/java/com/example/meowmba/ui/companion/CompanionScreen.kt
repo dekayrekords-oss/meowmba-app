@@ -511,6 +511,7 @@ fun CompanionScreen(
                 robotScanning = uiState.robotScanning,
                 robotScanResults = uiState.robotScanResults,
                 onRobotScan = { viewModel.scanForRobotBases() },
+                onRobotInitialize = { viewModel.initializeRobot() },
                 onRobotBodyChange = { viewModel.setRobotBody(it) },
                 onRobotHostChange = { viewModel.setRobotHost(it) },
                 onRobotPortChange = { viewModel.setRobotPort(it) },

@@ -56,6 +56,7 @@ fun SettingsScreen(
     robotScanning: Boolean = false,
     robotScanResults: List<Pair<String, String>> = emptyList(),
     onRobotScan: () -> Unit = {},
+    onRobotInitialize: () -> Unit = {},
     onRobotBodyChange: (Boolean) -> Unit = {},
     onRobotHostChange: (String) -> Unit = {},
     onRobotPortChange: (String) -> Unit = {},
@@ -296,8 +297,17 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(6.dp))
-                OutlinedButton(onClick = onRobotScan, enabled = !robotScanning) {
-                    Text(if (robotScanning) "Scanning for bases…" else "Find base (scan)")
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = onRobotScan, enabled = !robotScanning, modifier = Modifier.weight(1f)) {
+                        Text(if (robotScanning) "Scanning…" else "Scan")
+                    }
+                    Button(
+                        onClick = onRobotInitialize,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Text("Initialize")
+                    }
                 }
                 if (robotScanResults.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(4.dp))

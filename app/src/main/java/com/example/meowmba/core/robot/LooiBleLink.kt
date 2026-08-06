@@ -44,13 +44,16 @@ import java.util.concurrent.TimeUnit
  */
 class LooiBleLink(private val context: Context) {
 
-    enum class LinkState { OFFLINE, SCANNING, CONNECTING, INITIALIZING, READY }
+    enum class LinkState { OFFLINE, SCANNING, CONNECTING, INITIALIZING, VERIFYING, HANDSHAKE_REQUIRED, READY }
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val adapter =
         (context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager).adapter
     @Volatile private var gatt: BluetoothGatt? = null
     private val seq = LooiBleProtocol.SequenceCounter()
+    @Volatile private var connectRetries = 0
+    private var verifyJob: kotlinx.coroutines.Job? = null
+    private val MAX_CONNECT_RETRIES = 2
 
     @Volatile var state: LinkState = LinkState.OFFLINE
         private set
@@ -170,7 +173,7 @@ class LooiBleLink(private val context: Context) {
     private fun setState(newState: LinkState, detail: String) {
         state = newState
         onStateChange?.invoke(newState, detail)
-        if (newState == LinkState.READY || newState == LinkState.OFFLINE) {
+        if (newState == LinkState.READY || newState == LinkState.OFFLINE || newState == LinkState.HANDSHAKE_REQUIRED) {
             readyLatch?.countDown()
         }
     }
@@ -182,11 +185,34 @@ class LooiBleLink(private val context: Context) {
                 runCatching { g.disconnect() }; runCatching { g.close() }
                 return
             }
+            // GATT error codes (status != 0): 8=timeout, 11=internal error, 133=device not found
+            if (status != BluetoothGatt.GATT_SUCCESS && newState == BluetoothProfile.STATE_DISCONNECTED) {
+                Log.w(TAG, "LOOI GATT error: status=0 (retry /)")
+                runCatching { g.close() }
+                gatt = null
+                commandChar = null; headlightChar = null; sensorChar = null
+                motorBoostChar = null; motorSlowChar = null; neckChar = null
+                if (connectRetries < MAX_CONNECT_RETRIES) {
+                    connectRetries++
+                    val addr = g.device?.address ?: KNOWN_LOOI_MAC
+                    setState(LinkState.CONNECTING, "GATT error 0 — retrying ()…")
+                    scope.launch {
+                        delay(1500L * connectRetries) // backoff
+                        connect(addr)
+                    }
+                } else {
+                    connectRetries = 0
+                    setState(LinkState.OFFLINE, "GATT error 0 after  retries")
+                }
+                return
+            }
             if (newState == BluetoothProfile.STATE_CONNECTED) {
+                connectRetries = 0
                 Log.i(TAG, "LOOI GATT connected, discovering services")
                 g.discoverServices()
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 keepAliveJob?.cancel()
+                verifyJob?.cancel()
                 gatt = null
                 commandChar = null; headlightChar = null; sensorChar = null
                 motorBoostChar = null; motorSlowChar = null; neckChar = null
@@ -276,8 +302,7 @@ class LooiBleLink(private val context: Context) {
         val op = gattOps.removeFirstOrNull()
         if (op == null) {
             drainingInit = false
-            setState(LinkState.READY, "GATT init complete")
-            startKeepAlive()
+            startVerification()
             return
         }
         gattOpInFlight = true
@@ -315,9 +340,101 @@ class LooiBleLink(private val context: Context) {
         readyLatch?.countDown()
     }
 
+    // ── Safe link verification (ported from Memba 2 LooiBleManager) ─────
+
+    /**
+     * After GATT init completes, verify the link accepts neutral writes.
+     * The LOOI base may ignore commands until a proprietary handshake has run
+     * (observed: GATT error 11, writes silently dropped). This sends safe neutral
+     * commands (brake, zero drive, center neck) to confirm the command path works.
+     */
+    private fun startVerification() {
+        verifyJob?.cancel()
+        setState(LinkState.VERIFYING, "verifying command path…")
+        verifyJob = scope.launch {
+            delay(600) // let GATT settle
+            val accepted = verifySafeCommandPath()
+            if (accepted) {
+                setState(LinkState.READY, "verified — link ready")
+                startKeepAlive()
+            } else {
+                setState(LinkState.HANDSHAKE_REQUIRED, "command path rejected — retry or use official app first")
+            }
+        }
+    }
+
+    /**
+     * Write neutral commands that CANNOT move the robot:
+     * 1. ff02 <- 0x00 (brake)
+     * 2. fed0 <- 0x00 (zero drive speed)
+     * 3. fed1 <- 0x40 (neck center)
+     *
+     * Returns true if all writes are locally accepted by Android's GATT stack.
+     * This does NOT guarantee the robot firmware acknowledged them (no-response writes
+     * never confirm), but a rejected write here means the BLE link is unusable.
+     */
+    @SuppressLint("MissingPermission")
+    @Suppress("DEPRECATION")
+    private fun verifySafeCommandPath(): Boolean = synchronized(writeLock) {
+        val g = gatt ?: return false
+        var allOk = true
+        // 1. Brake on ff02
+        motorBoostChar?.let { ch ->
+            val noResp = ch.properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE != 0
+            val write = ch.properties and BluetoothGattCharacteristic.PROPERTY_WRITE != 0
+            if (noResp || write) {
+                ch.writeType = if (noResp) BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
+                    else BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+                ch.value = byteArrayOf(0x00)
+                if (!runCatching { g.writeCharacteristic(ch) }.getOrDefault(false)) allOk = false
+            }
+        }
+        Thread.sleep(100)
+        // 2. Zero drive on fed0
+        motorSlowChar?.let { ch ->
+            val noResp = ch.properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE != 0
+            val write = ch.properties and BluetoothGattCharacteristic.PROPERTY_WRITE != 0
+            if (noResp || write) {
+                ch.writeType = if (noResp) BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
+                    else BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+                ch.value = byteArrayOf(0x00)
+                if (!runCatching { g.writeCharacteristic(ch) }.getOrDefault(false)) allOk = false
+            }
+        }
+        Thread.sleep(100)
+        // 3. Neck center on fed1
+        neckChar?.let { ch ->
+            val noResp = ch.properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE != 0
+            val write = ch.properties and BluetoothGattCharacteristic.PROPERTY_WRITE != 0
+            if (noResp || write) {
+                ch.writeType = if (noResp) BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
+                    else BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+                ch.value = byteArrayOf(0x40)
+                if (!runCatching { g.writeCharacteristic(ch) }.getOrDefault(false)) allOk = false
+            }
+        }
+        Log.i(TAG, "LOOI verification: neutral writes accepted=")
+        allOk
+    }
+
+    /**
+     * Manual retry — call from UI "Initialize" / "Retry" button.
+     * Re-runs the safe verification step without re-doing the full BLE scan.
+     */
+    fun retryHandshake() {
+        if (state == LinkState.HANDSHAKE_REQUIRED || state == LinkState.VERIFYING) {
+            startVerification()
+        } else if (state == LinkState.OFFLINE) {
+            // Full reconnect
+            connectAuto()
+        }
+    }
+
     // ── Motion channels ──────────────────────────────────────────────────
 
     val connected: Boolean get() = state == LinkState.READY
+    val verifying: Boolean get() = state == LinkState.VERIFYING
+    val handshakeRequired: Boolean get() = state == LinkState.HANDSHAKE_REQUIRED
 
     /** Script-Mode frame on fe00 with the rolling SEQ (turns/animations). */
     fun writeFrame(frame: LooiBleProtocol.Frame): Boolean = synchronized(writeLock) {
