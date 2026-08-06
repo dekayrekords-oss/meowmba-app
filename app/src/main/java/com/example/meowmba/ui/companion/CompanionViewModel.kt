@@ -1903,6 +1903,12 @@ class CompanionViewModel(
             android.util.Log.i(TAG_WAKE, "not re-arming: interaction state is $state")
             return
         }
+        if (utteranceCapture != null) {
+            // A capture/follow-up session is still live; re-arming the spotter here is
+            // what grabbed the mic and killed it. The capture's completion path re-arms.
+            android.util.Log.i(TAG_WAKE, "not re-arming: a capture is still in flight")
+            return
+        }
         if (_uiState.value.isMicEnabled) {
             // Exclusive with WakeWordService; whoever holds the mic wins.
             if (com.example.meowmba.core.audio.MicOwner
@@ -2046,11 +2052,14 @@ class CompanionViewModel(
      * no service) are surfaced honestly instead of looking like a dead button.
      */
     private fun onListeningError(code: Int) {
-        // Silence during an active follow-up (ERROR_SPEECH_TIMEOUT / ERROR_NO_MATCH)
-        // is expected -- the user simply has not spoken yet. Re-open the capture so a
-        // quiet pause does not drop the companion back to wake-word standby. Bounded
-        // so a permanently-silent window still ends via the follow-up timeout.
-        if (isFollowUpListen && isSilenceError(code) &&
+        // Errors that must not end an active follow-up: silence (6/7, the user has not
+        // spoken yet) and session-conflict (ERROR_CLIENT 5 / ERROR_RECOGNIZER_BUSY 8,
+        // the barge-in watch or a wake re-arm raced the capture). Hard-resetting on any
+        // of these is exactly what re-armed the wake spotter and killed the follow-up,
+        // so re-open the capture instead. Bounded so a dead window still ends via the
+        // follow-up timeout.
+        fuLog("onListeningError code=$code followUp=$isFollowUpListen state=${_uiState.value.interactionState}")
+        if (isFollowUpListen && isFollowUpKeepAliveError(code) &&
             transientListenRetries < MAX_FOLLOW_UP_SILENCE_RETRIES &&
             _uiState.value.interactionState == InteractionState.LISTENING
         ) {
@@ -2116,6 +2125,7 @@ class CompanionViewModel(
     }
 
     private fun processUserSpeech(text: String) {
+        fuLog("processUserSpeech: \"$text\"")
         // "Show it in the browser": pull the newest artifact into the panel.
         // Checked before the agent routing so it also works while the browser
         // is already open.
@@ -2683,7 +2693,9 @@ class CompanionViewModel(
         }
         selfVoiceFilter.clear()
         val s = _uiState.value
-        if (shouldEnterFollowUp(s) && speechService != null) {
+        val follow = shouldEnterFollowUp(s) && speechService != null
+        fuLog("onSpeechFinished -> ${if (follow) "FOLLOW-UP" else "reset"} (conv=${s.conversationMode} barge=${s.bargeInEnabled} wake=${s.wakeWordEnabled})")
+        if (follow) {
             startFollowUpListening()
         } else {
             resetState()
@@ -2692,6 +2704,7 @@ class CompanionViewModel(
 
     /** Conversation mode: stay for a follow-up question, then time out to idle. */
     private fun startFollowUpListening() {
+        fuLog("startFollowUpListening")
         followUpJob?.cancel()
         val engine = speechService ?: run {
             resetState()
@@ -3885,7 +3898,11 @@ class CompanionViewModel(
     /** JSON export of the memory store (user owns their data). */
     fun exportMemoriesJson(): String = MemoryExporter.toJson(_uiState.value.allMemories)
 
+    /** Test-safe lifecycle log: android.util.Log is not mocked in JVM unit tests. */
+    private fun fuLog(msg: String) { runCatching { android.util.Log.i("MeowFU", msg) } }
+
     private fun resetState() {
+        fuLog("resetState -> IDLE (was ${_uiState.value.interactionState})")
         followUpJob?.cancel()
         isFollowUpListen = false
         _uiState.value = _uiState.value.copy(
@@ -3954,8 +3971,19 @@ class CompanionViewModel(
             code == SpeechRecognizer.ERROR_SPEECH_TIMEOUT ||
                 code == SpeechRecognizer.ERROR_NO_MATCH
 
+        /**
+         * Errors that must NOT end an active follow-up. Silence (6/7) plus the two
+         * session-collision codes, ERROR_CLIENT (5) and ERROR_RECOGNIZER_BUSY (8):
+         * those mean another recognizer session (the barge-in watch or a wake re-arm)
+         * raced the capture, and they resolve by re-opening rather than resetting.
+         */
+        internal fun isFollowUpKeepAliveError(code: Int): Boolean =
+            isSilenceError(code) ||
+                code == SpeechRecognizer.ERROR_CLIENT ||
+                code == SpeechRecognizer.ERROR_RECOGNIZER_BUSY
+
         private const val MAX_TRANSIENT_LISTEN_RETRIES = 2
-        private const val MAX_FOLLOW_UP_SILENCE_RETRIES = 6
+        private const val MAX_FOLLOW_UP_SILENCE_RETRIES = 10
         private val TRANSIENT_SPEECH_ERRORS = setOf(
             SpeechRecognizer.ERROR_NETWORK_TIMEOUT,
             SpeechRecognizer.ERROR_NETWORK,
