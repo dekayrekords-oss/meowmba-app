@@ -484,6 +484,351 @@ object CustomAnimations {
                 AnimFrame(atMs = 1600, earPerk = 1.0f),
             ),
         ),
+        // ── 30 Additional Avatar Animations ──────────────────────────────────────
+        CustomAnimationSpec(
+            "airplane ears",
+            listOf(
+                AnimFrame(atMs = 0, earPerk = 1.0f, earDroopDeg = 0f, eyeOpen = 1.0f),
+                AnimFrame(atMs = 400, earPerk = 0.4f, earDroopDeg = 35f, eyeOpen = 0.75f),
+                AnimFrame(atMs = 1200, earPerk = 0.4f, earDroopDeg = 35f, eyeOpen = 0.75f),
+                AnimFrame(atMs = 1800, earPerk = 1.0f, earDroopDeg = 0f, eyeOpen = 1.0f),
+            ),
+        ),
+        CustomAnimationSpec(
+            "laser pointer chase",
+            listOf(
+                AnimFrame(atMs = 0, pupilSize = 0.28f, headTiltDeg = 0f, tailWag = 0f),
+                AnimFrame(atMs = 250, pupilSize = 0.88f, headTiltDeg = -14f, tailWag = 0.9f),
+                AnimFrame(atMs = 500, pupilSize = 0.88f, headTiltDeg = 16f, tailWag = -0.9f),
+                AnimFrame(atMs = 750, pupilSize = 0.88f, headTiltDeg = -10f, tailWag = 0.9f),
+                AnimFrame(atMs = 1000, pupilSize = 0.88f, headTiltDeg = 12f, tailWag = -0.9f),
+                AnimFrame(atMs = 1500, pupilSize = 0.28f, headTiltDeg = 0f, tailWag = 0f),
+            ),
+        ),
+        CustomAnimationSpec(
+            "dramatic gasp",
+            listOf(
+                AnimFrame(atMs = 0, eyeOpen = 1.0f, mouth = MouthMode.IDLE, glowColorHex = 0xFF58A6FF),
+                AnimFrame(
+                    atMs = 300, eyeOpen = 1.5f, mouth = MouthMode.SPEAKING,
+                    headTiltDeg = -8f, bodyBounce = 0.4f, glowColorHex = 0xFFA855F7,
+                ),
+                AnimFrame(atMs = 1000, eyeOpen = 1.4f, mouth = MouthMode.SPEAKING, glowColorHex = 0xFFA855F7),
+                AnimFrame(atMs = 1600, eyeOpen = 1.0f, mouth = MouthMode.IDLE, headTiltDeg = 0f, bodyBounce = 0f, glowColorHex = 0xFF58A6FF),
+            ),
+        ),
+        CustomAnimationSpec(
+            "catnap doze",
+            listOf(
+                AnimFrame(atMs = 0, eyeOpen = 1.0f, earDroopDeg = 0f, bodyBounce = 0f),
+                AnimFrame(atMs = 600, eyeOpen = 0.4f, earDroopDeg = 12f, bodyBounce = -0.3f),
+                AnimFrame(atMs = 1200, eyeOpen = 0.05f, earDroopDeg = 24f, bodyBounce = -0.6f),
+                AnimFrame(atMs = 2200, eyeOpen = 0.05f, earDroopDeg = 24f, bodyBounce = -0.6f),
+                AnimFrame(atMs = 3000, eyeOpen = 1.0f, earDroopDeg = 0f, bodyBounce = 0f),
+            ),
+        ),
+        CustomAnimationSpec(
+            "playful pounce prep",
+            listOf(
+                AnimFrame(atMs = 0, bodyBounce = 0f, tailWag = 0f, pupilSize = 0.28f),
+                AnimFrame(atMs = 350, bodyBounce = -0.8f, tailWag = -0.7f, pupilSize = 0.75f, earPerk = 1.4f),
+                AnimFrame(atMs = 700, bodyBounce = -0.8f, tailWag = 0.7f, pupilSize = 0.75f),
+                AnimFrame(atMs = 1000, bodyBounce = 0.9f, tailWag = 0f, eyeOpen = 1.4f, happyEyes = true),
+                AnimFrame(atMs = 1500, bodyBounce = 0f, eyeOpen = 1.0f, happyEyes = false),
+            ),
+        ),
+        CustomAnimationSpec(
+            "sneaky stealth crawl",
+            listOf(
+                AnimFrame(atMs = 0, bodyBounce = 0f, eyeOpen = 1.0f, earPerk = 1.0f),
+                AnimFrame(atMs = 500, bodyBounce = -0.6f, eyeOpen = 0.6f, earPerk = 0.6f),
+                AnimFrame(atMs = 1100, bodyBounce = -0.5f, eyeOpen = 0.65f, earPerk = 0.7f),
+                AnimFrame(atMs = 1700, bodyBounce = -0.6f, eyeOpen = 0.6f, earPerk = 0.6f),
+                AnimFrame(atMs = 2300, bodyBounce = 0f, eyeOpen = 1.0f, earPerk = 1.0f),
+            ),
+        ),
+        CustomAnimationSpec(
+            "ear pop",
+            listOf(
+                AnimFrame(atMs = 0, earPerk = 1.0f, eyeOpen = 1.0f),
+                AnimFrame(atMs = 250, earPerk = 1.5f, eyeOpen = 1.2f),
+                AnimFrame(atMs = 600, earPerk = 0.7f, eyeOpen = 1.0f),
+                AnimFrame(atMs = 950, earPerk = 1.5f, eyeOpen = 1.2f),
+                AnimFrame(atMs = 1400, earPerk = 1.0f, eyeOpen = 1.0f),
+            ),
+        ),
+        CustomAnimationSpec(
+            "tail spin",
+            listOf(
+                AnimFrame(atMs = 0, tailWag = 0f, happyEyes = false),
+                AnimFrame(atMs = 250, tailWag = -1.0f, happyEyes = true),
+                AnimFrame(atMs = 500, tailWag = 1.0f),
+                AnimFrame(atMs = 750, tailWag = -1.0f),
+                AnimFrame(atMs = 1000, tailWag = 1.0f),
+                AnimFrame(atMs = 1400, tailWag = 0f, happyEyes = false),
+            ),
+        ),
+        CustomAnimationSpec(
+            "curious head spin",
+            listOf(
+                AnimFrame(atMs = 0, headTiltDeg = 0f, pupilSize = 0.28f),
+                AnimFrame(atMs = 400, headTiltDeg = -18f, pupilSize = 0.55f),
+                AnimFrame(atMs = 800, headTiltDeg = 18f, pupilSize = 0.55f),
+                AnimFrame(atMs = 1200, headTiltDeg = -12f, pupilSize = 0.4f),
+                AnimFrame(atMs = 1600, headTiltDeg = 0f, pupilSize = 0.28f),
+            ),
+        ),
+        CustomAnimationSpec(
+            "snack smell",
+            listOf(
+                AnimFrame(atMs = 0, earPerk = 1.0f, pupilSize = 0.28f, tongueOut = 0f),
+                AnimFrame(atMs = 300, earPerk = 1.35f, pupilSize = 0.6f, tongueOut = 0.4f, mouth = MouthMode.HAPPY),
+                AnimFrame(atMs = 800, earPerk = 1.35f, pupilSize = 0.6f, tongueOut = 0.8f),
+                AnimFrame(atMs = 1400, earPerk = 1.0f, pupilSize = 0.28f, tongueOut = 0f, mouth = MouthMode.IDLE),
+            ),
+        ),
+        CustomAnimationSpec(
+            "mischief grin",
+            listOf(
+                AnimFrame(atMs = 0, headTiltDeg = 0f, happyEyes = false, tongueOut = 0f),
+                AnimFrame(
+                    atMs = 350, headTiltDeg = 14f, happyEyes = true,
+                    tongueOut = 0.6f, glowColorHex = 0xFFEC4899,
+                ),
+                AnimFrame(atMs = 1100, headTiltDeg = 14f, happyEyes = true, tongueOut = 0.6f),
+                AnimFrame(atMs = 1600, headTiltDeg = 0f, happyEyes = false, tongueOut = 0f, glowColorHex = 0xFF58A6FF),
+            ),
+        ),
+        CustomAnimationSpec(
+            "hiss fluff",
+            listOf(
+                AnimFrame(atMs = 0, earPerk = 1.0f, earDroopDeg = 0f, eyeOpen = 1.0f),
+                AnimFrame(
+                    atMs = 250, earPerk = 0.3f, earDroopDeg = 32f,
+                    eyeOpen = 0.4f, glowColorHex = 0xFFF85149,
+                ),
+                AnimFrame(atMs = 1000, earPerk = 0.3f, earDroopDeg = 32f, eyeOpen = 0.4f, glowColorHex = 0xFFF85149),
+                AnimFrame(atMs = 1600, earPerk = 1.0f, earDroopDeg = 0f, eyeOpen = 1.0f, glowColorHex = 0xFF58A6FF),
+            ),
+        ),
+        CustomAnimationSpec(
+            "gazing at moon",
+            listOf(
+                AnimFrame(atMs = 0, pupilGazeUp = 0f, pupilSize = 0.28f, sparkle = 0f),
+                AnimFrame(
+                    atMs = 600, pupilGazeUp = 0.95f, pupilSize = 0.65f,
+                    sparkle = 0.8f, glowColorHex = 0xFF38BDF8,
+                ),
+                AnimFrame(atMs = 1800, pupilGazeUp = 0.95f, pupilSize = 0.65f, sparkle = 0.8f),
+                AnimFrame(atMs = 2500, pupilGazeUp = 0f, pupilSize = 0.28f, sparkle = 0f, glowColorHex = 0xFF58A6FF),
+            ),
+        ),
+        CustomAnimationSpec(
+            "fast blink flutter",
+            listOf(
+                AnimFrame(atMs = 0, eyeOpen = 1.0f, earPerk = 1.0f),
+                AnimFrame(atMs = 150, eyeOpen = 0.1f, earPerk = 1.15f),
+                AnimFrame(atMs = 300, eyeOpen = 1.0f),
+                AnimFrame(atMs = 450, eyeOpen = 0.1f, earPerk = 1.15f),
+                AnimFrame(atMs = 600, eyeOpen = 1.0f),
+                AnimFrame(atMs = 750, eyeOpen = 0.1f),
+                AnimFrame(atMs = 1200, eyeOpen = 1.0f, earPerk = 1.0f),
+            ),
+        ),
+        CustomAnimationSpec(
+            "cozy loaf purr",
+            listOf(
+                AnimFrame(atMs = 0, bodyBounce = 0f, earDroopDeg = 0f, whiskerFlutter = false, sparkle = 0f),
+                AnimFrame(
+                    atMs = 500, bodyBounce = -0.7f, earDroopDeg = 16f,
+                    whiskerFlutter = true, sparkle = 0.6f, happyEyes = true,
+                ),
+                AnimFrame(atMs = 1800, bodyBounce = -0.7f, earDroopDeg = 16f, whiskerFlutter = true, sparkle = 0.6f),
+                AnimFrame(atMs = 2500, bodyBounce = 0f, earDroopDeg = 0f, whiskerFlutter = false, sparkle = 0f, happyEyes = false),
+            ),
+        ),
+        CustomAnimationSpec(
+            "confused tilt left",
+            listOf(
+                AnimFrame(atMs = 0, headTiltDeg = 0f, eyeOpen = 1.0f, earDroopDeg = 0f),
+                AnimFrame(atMs = 450, headTiltDeg = -20f, eyeOpen = 0.7f, earDroopDeg = 12f),
+                AnimFrame(atMs = 1300, headTiltDeg = -20f, eyeOpen = 0.7f, earDroopDeg = 12f),
+                AnimFrame(atMs = 1800, headTiltDeg = 0f, eyeOpen = 1.0f, earDroopDeg = 0f),
+            ),
+        ),
+        CustomAnimationSpec(
+            "victory dance",
+            listOf(
+                AnimFrame(atMs = 0, bodyBounce = 0f, tailWag = 0f, sparkle = 0f, happyEyes = false),
+                AnimFrame(
+                    atMs = 250, bodyBounce = 0.8f, tailWag = 0.9f,
+                    sparkle = 1.0f, happyEyes = true, glowColorHex = 0xFF3FB950,
+                ),
+                AnimFrame(atMs = 500, bodyBounce = -0.4f, tailWag = -0.9f),
+                AnimFrame(atMs = 750, bodyBounce = 0.8f, tailWag = 0.9f),
+                AnimFrame(atMs = 1000, bodyBounce = -0.4f, tailWag = -0.9f),
+                AnimFrame(atMs = 1500, bodyBounce = 0f, tailWag = 0f, sparkle = 0f, happyEyes = false, glowColorHex = 0xFF58A6FF),
+            ),
+        ),
+        CustomAnimationSpec(
+            "side eye glance",
+            listOf(
+                AnimFrame(atMs = 0, pupilSize = 0.28f, earPerk = 1.0f),
+                AnimFrame(atMs = 300, pupilSize = 0.45f, earPerk = 1.25f, headTiltDeg = 4f),
+                AnimFrame(atMs = 1100, pupilSize = 0.45f, earPerk = 1.25f, headTiltDeg = 4f),
+                AnimFrame(atMs = 1500, pupilSize = 0.28f, earPerk = 1.0f, headTiltDeg = 0f),
+            ),
+        ),
+        CustomAnimationSpec(
+            "paws up stretch",
+            listOf(
+                AnimFrame(atMs = 0, headTiltDeg = 0f, bodyBounce = 0f, mouth = MouthMode.IDLE),
+                AnimFrame(
+                    atMs = 400, headTiltDeg = -12f, bodyBounce = 0.95f,
+                    mouth = MouthMode.HAPPY, happyEyes = true, sparkle = 0.7f,
+                ),
+                AnimFrame(atMs = 1100, headTiltDeg = -12f, bodyBounce = 0.95f, happyEyes = true),
+                AnimFrame(atMs = 1700, headTiltDeg = 0f, bodyBounce = 0f, mouth = MouthMode.IDLE, happyEyes = false, sparkle = 0f),
+            ),
+        ),
+        CustomAnimationSpec(
+            "dizzy spin",
+            listOf(
+                AnimFrame(atMs = 0, headTiltDeg = 0f, pupilSize = 0.28f),
+                AnimFrame(atMs = 250, headTiltDeg = -18f, pupilSize = 0.6f, earDroopDeg = 10f),
+                AnimFrame(atMs = 500, headTiltDeg = 18f, pupilSize = 0.2f, earDroopDeg = 20f),
+                AnimFrame(atMs = 750, headTiltDeg = -18f, pupilSize = 0.6f, earDroopDeg = 10f),
+                AnimFrame(atMs = 1000, headTiltDeg = 18f, pupilSize = 0.2f, earDroopDeg = 20f),
+                AnimFrame(atMs = 1500, headTiltDeg = 0f, pupilSize = 0.28f, earDroopDeg = 0f),
+            ),
+        ),
+        CustomAnimationSpec(
+            "wall-e tilt",
+            listOf(
+                AnimFrame(atMs = 0, headTiltDeg = 0f, pupilSize = 0.28f),
+                AnimFrame(
+                    atMs = 500, headTiltDeg = 16f, pupilSize = 0.52f,
+                    glowColorHex = 0xFFD29922, earPerk = 1.3f,
+                ),
+                AnimFrame(atMs = 1300, headTiltDeg = 16f, pupilSize = 0.52f, glowColorHex = 0xFFD29922),
+                AnimFrame(atMs = 1800, headTiltDeg = 0f, pupilSize = 0.28f, glowColorHex = 0xFF58A6FF, earPerk = 1.0f),
+            ),
+        ),
+        CustomAnimationSpec(
+            "chatterbox",
+            listOf(
+                AnimFrame(atMs = 0, mouth = MouthMode.IDLE, earPerk = 1.0f, whiskerFlutter = false),
+                AnimFrame(atMs = 150, mouth = MouthMode.SPEAKING, earPerk = 1.3f, whiskerFlutter = true),
+                AnimFrame(atMs = 300, mouth = MouthMode.IDLE),
+                AnimFrame(atMs = 450, mouth = MouthMode.SPEAKING, earPerk = 1.3f),
+                AnimFrame(atMs = 600, mouth = MouthMode.IDLE),
+                AnimFrame(atMs = 750, mouth = MouthMode.SPEAKING, earPerk = 1.3f),
+                AnimFrame(atMs = 900, mouth = MouthMode.IDLE),
+                AnimFrame(atMs = 1300, earPerk = 1.0f, whiskerFlutter = false),
+            ),
+        ),
+        CustomAnimationSpec(
+            "sleepy twitch",
+            listOf(
+                AnimFrame(atMs = 0, eyeOpen = 0.1f, earDroopDeg = 25f, whiskerFlutter = false),
+                AnimFrame(atMs = 400, eyeOpen = 0.1f, earDroopDeg = 25f, whiskerFlutter = true, earPerk = 0.7f),
+                AnimFrame(atMs = 800, eyeOpen = 0.1f, earDroopDeg = 25f, whiskerFlutter = false),
+                AnimFrame(atMs = 1200, eyeOpen = 0.1f, earDroopDeg = 25f, whiskerFlutter = true, earPerk = 0.7f),
+                AnimFrame(atMs = 1800, eyeOpen = 0.1f, earDroopDeg = 25f, whiskerFlutter = false),
+            ),
+        ),
+        CustomAnimationSpec(
+            "spooky cat",
+            listOf(
+                AnimFrame(atMs = 0, eyeOpen = 1.0f, pupilSize = 0.28f, bodyBounce = 0f),
+                AnimFrame(
+                    atMs = 300, eyeOpen = 1.5f, pupilSize = 0.85f,
+                    bodyBounce = 0.6f, glowColorHex = 0xFFA855F7, sparkle = 0.9f,
+                ),
+                AnimFrame(atMs = 1200, eyeOpen = 1.5f, pupilSize = 0.85f, bodyBounce = 0.6f),
+                AnimFrame(atMs = 1800, eyeOpen = 1.0f, pupilSize = 0.28f, bodyBounce = 0f, glowColorHex = 0xFF58A6FF, sparkle = 0f),
+            ),
+        ),
+        CustomAnimationSpec(
+            "happy nuzzle",
+            listOf(
+                AnimFrame(atMs = 0, headTiltDeg = 0f, happyEyes = false, sparkle = 0f),
+                AnimFrame(
+                    atMs = 350, headTiltDeg = 14f, happyEyes = true,
+                    sparkle = 0.8f, glowColorHex = 0xFF3FB950,
+                ),
+                AnimFrame(atMs = 700, headTiltDeg = -14f, happyEyes = true, sparkle = 0.8f),
+                AnimFrame(atMs = 1050, headTiltDeg = 14f, happyEyes = true, sparkle = 0.8f),
+                AnimFrame(atMs = 1500, headTiltDeg = 0f, happyEyes = false, sparkle = 0f, glowColorHex = 0xFF58A6FF),
+            ),
+        ),
+        CustomAnimationSpec(
+            "ear flop surprise",
+            listOf(
+                AnimFrame(atMs = 0, earDroopDeg = 0f, earPerk = 1.0f, eyeOpen = 1.0f),
+                AnimFrame(atMs = 300, earDroopDeg = 30f, earPerk = 0.4f, eyeOpen = 0.5f),
+                AnimFrame(atMs = 700, earDroopDeg = 0f, earPerk = 1.55f, eyeOpen = 1.4f),
+                AnimFrame(atMs = 1400, earPerk = 1.0f, eyeOpen = 1.0f),
+            ),
+        ),
+        CustomAnimationSpec(
+            "tail slap",
+            listOf(
+                AnimFrame(atMs = 0, tailWag = 0f, earPerk = 1.0f),
+                AnimFrame(atMs = 150, tailWag = -0.95f, earPerk = 1.3f),
+                AnimFrame(atMs = 350, tailWag = 0.95f, earPerk = 1.3f),
+                AnimFrame(atMs = 600, tailWag = -0.5f),
+                AnimFrame(atMs = 900, tailWag = 0f, earPerk = 1.0f),
+            ),
+        ),
+        CustomAnimationSpec(
+            "starry dazzle",
+            listOf(
+                AnimFrame(atMs = 0, sparkle = 0f, pupilGazeUp = 0f, happyEyes = false),
+                AnimFrame(
+                    atMs = 500, sparkle = 1.0f, pupilGazeUp = 0.8f,
+                    happyEyes = true, glowColorHex = 0xFFEAB308,
+                ),
+                AnimFrame(atMs = 1500, sparkle = 1.0f, pupilGazeUp = 0.8f, happyEyes = true),
+                AnimFrame(atMs = 2200, sparkle = 0f, pupilGazeUp = 0f, happyEyes = false, glowColorHex = 0xFF58A6FF),
+            ),
+        ),
+        CustomAnimationSpec(
+            "head tilts left and right",
+            listOf(
+                AnimFrame(atMs = 0, headTiltDeg = 0f, earPerk = 1.0f),
+                AnimFrame(atMs = 300, headTiltDeg = -16f, earPerk = 1.2f),
+                AnimFrame(atMs = 600, headTiltDeg = 16f, earPerk = 1.2f),
+                AnimFrame(atMs = 900, headTiltDeg = -16f, earPerk = 1.2f),
+                AnimFrame(atMs = 1200, headTiltDeg = 16f, earPerk = 1.2f),
+                AnimFrame(atMs = 1600, headTiltDeg = 0f, earPerk = 1.0f),
+            ),
+        ),
+        CustomAnimationSpec(
+            "happy purr vibration",
+            listOf(
+                AnimFrame(atMs = 0, bodyBounce = 0f, whiskerFlutter = false, happyEyes = false),
+                AnimFrame(
+                    atMs = 300, bodyBounce = 0.2f, whiskerFlutter = true,
+                    happyEyes = true, glowColorHex = 0xFF3FB950,
+                ),
+                AnimFrame(atMs = 600, bodyBounce = -0.1f, whiskerFlutter = true),
+                AnimFrame(atMs = 900, bodyBounce = 0.2f, whiskerFlutter = true),
+                AnimFrame(atMs = 1200, bodyBounce = -0.1f, whiskerFlutter = true),
+                AnimFrame(atMs = 1700, bodyBounce = 0f, whiskerFlutter = false, happyEyes = false, glowColorHex = 0xFF58A6FF),
+            ),
+        ),
+        CustomAnimationSpec(
+            "ear radar sweep",
+            listOf(
+                AnimFrame(atMs = 0, earPerk = 1.0f),
+                AnimFrame(atMs = 300, earPerk = 1.6f),
+                AnimFrame(atMs = 600, earPerk = 0.5f),
+                AnimFrame(atMs = 900, earPerk = 1.6f),
+                AnimFrame(atMs = 1200, earPerk = 0.5f),
+                AnimFrame(atMs = 1600, earPerk = 1.0f),
+            ),
+        ),
     ).associateBy { it.name }
 
     /** A built-in clip by name, or null. Store clips are the caller's fallback. */

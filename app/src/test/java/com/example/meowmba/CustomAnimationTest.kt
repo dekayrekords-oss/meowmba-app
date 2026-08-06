@@ -347,14 +347,20 @@ class CustomAnimationTest {
     }
 
     @Test
-    fun `built-in library includes the twenty new tricks`() {
+    fun `built-in library includes the twenty original and thirty new tricks`() {
         val names = CustomAnimations.BUILT_INS.keys
         listOf(
             "slow blink of trust", "zoomies burst", "belly flop", "head scratch tilt",
             "bird stare", "loaf tuck", "nose boop", "morning stretch", "surprise dilate",
             "purr loaf", "sassy tail flick", "double take", "sleepy collapse", "alert perch",
             "blep", "wiggle pounce", "star gaze", "grumpy squint", "confetti pop",
-            "ear radar sweep",
+            "ear radar sweep", "airplane ears", "laser pointer chase", "dramatic gasp",
+            "catnap doze", "playful pounce prep", "sneaky stealth crawl", "ear pop",
+            "tail spin", "curious head spin", "snack smell", "mischief grin", "hiss fluff",
+            "gazing at moon", "fast blink flutter", "cozy loaf purr", "confused tilt left",
+            "victory dance", "side eye glance", "paws up stretch", "dizzy spin", "wall-e tilt",
+            "chatterbox", "sleepy twitch", "spooky cat", "happy nuzzle", "ear flop surprise",
+            "tail slap", "starry dazzle", "head tilts left and right", "happy purr vibration",
         ).forEach { assertTrue("missing $it", it in names) }
         // every built-in samples cleanly across its whole duration
         CustomAnimations.BUILT_INS.values.forEach { spec ->
