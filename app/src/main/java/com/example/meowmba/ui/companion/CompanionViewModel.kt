@@ -62,6 +62,7 @@ import com.example.meowmba.core.agent.tools.DesktopRunBuildTool
 import com.example.meowmba.core.agent.tools.DesktopRunScriptTool
 import com.example.meowmba.core.agent.tools.WebSearchTool
 import com.example.meowmba.core.agent.tools.registerVaultTools
+import kotlinx.coroutines.isActive
 import com.example.meowmba.core.context.FocusDetector
 import com.example.meowmba.core.context.FocusLevel
 import com.example.meowmba.core.context.ProactiveEngine
@@ -247,6 +248,106 @@ class CompanionViewModel(
     /** Called by accessibility service when foreground app changes. */
     fun onForegroundAppChanged(packageName: String) {
         focusDetector.onForegroundAppChanged(packageName)
+    }
+
+    // ---- Voice Access + LLM Hybrid Mode ----
+    private var voiceAccessMode = false
+    private var continuousListenJob: kotlinx.coroutines.Job? = null
+
+    private fun activateVoiceAccessMode() {
+        if (voiceAccessMode) { speak("I'm already listening."); return }
+        voiceAccessMode = true
+        speak("Listening mode active. I'll handle the smart stuff, Voice Access handles the taps.")
+        enableVoiceAccess()
+        startContinuousListening()
+    }
+
+    private fun deactivateVoiceAccessMode() {
+        voiceAccessMode = false
+        continuousListenJob?.cancel()
+        continuousListenJob = null
+        speak("Listening mode off.")
+    }
+
+    private fun enableVoiceAccess() {
+        val ctx = secureStorage?.context ?: return
+        try {
+            val intent = android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
+            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            ctx.startActivity(intent)
+        } catch (_: Exception) {}
+    }
+
+    private fun startContinuousListening() {
+        continuousListenJob?.cancel()
+        continuousListenJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(2000)
+            while (voiceAccessMode && isActive) {
+                while (_uiState.value.interactionState != InteractionState.IDLE) {
+                    kotlinx.coroutines.delay(500)
+                }
+                kotlinx.coroutines.delay(1500)
+                if (!voiceAccessMode) break
+                val engine = speechService ?: break
+                val result = kotlinx.coroutines.suspendCancellableCoroutine<String?> { cont ->
+                    captureUtterance(engine) { text ->
+                        if (cont.isActive) cont.resume(text) {}
+                    }
+                    viewModelScope.launch {
+                        kotlinx.coroutines.delay(10_000)
+                        if (cont.isActive) cont.resume(null) {}
+                    }
+                }
+                if (result.isNullOrBlank()) continue
+                val norm = result.lowercase().trim()
+                if (norm in setOf("stop listening", "meow stop", "stop", "exit listening mode", "quit listening")) {
+                    deactivateVoiceAccessMode(); break
+                }
+                if (isComplexCommand(norm)) {
+                    phoneAgentLoop?.setGoal(result)
+                } else {
+                    routeSimpleVoiceCommand(result)
+                }
+            }
+        }
+    }
+
+    private fun isComplexCommand(text: String): Boolean {
+        if (isMultiStepPhoneGoal(text)) return true
+        if (text.startsWith("how") || text.startsWith("why") || text.startsWith("what")
+            || text.startsWith("find") || text.startsWith("search")
+            || text.contains("cheapest") || text.contains("best")
+            || text.contains("compare") || text.contains("help me")) return true
+        if (text.contains(" and then ") || text.contains(" after that ")
+            || text.split(' ').size > 8) return true
+        return false
+    }
+
+    private fun routeSimpleVoiceCommand(text: String) {
+        val norm = text.lowercase().trim()
+        val svc = com.example.meowmba.core.access.MeowAccessibilityService.instance
+        if (svc == null) { speak("Accessibility service not connected."); return }
+        viewModelScope.launch(ioDispatcher) {
+            val result = when {
+                norm.startsWith("tap ") || norm.startsWith("click ") -> {
+                    svc.tapByText(text.substringAfter(' ').trim())
+                }
+                norm == "scroll down" || norm == "swipe up" -> svc.globalAction("scroll_down")
+                norm == "scroll up" || norm == "swipe down" -> svc.globalAction("scroll_up")
+                norm == "go back" || norm == "back" -> svc.globalAction("back")
+                norm == "go home" || norm == "home" -> svc.globalAction("home")
+                norm == "recents" || norm == "recent apps" -> svc.globalAction("recents")
+                norm.startsWith("type ") -> svc.typeIntoText("", text.substringAfter(' ').trim())
+                norm.startsWith("open ") -> {
+                    phoneAgentLoop?.setGoal("open " + text.substringAfter(' ').trim())
+                    "opening " + text.substringAfter(' ').trim()
+                }
+                else -> { phoneAgentLoop?.setGoal(text); "working on it" }
+            }
+            if (result.isNotBlank()) {
+                _uiState.value = _uiState.value.copy(captionText = result)
+            }
+        }
     }
 
     /**
@@ -2327,6 +2428,19 @@ class CompanionViewModel(
             showLatestArtifactInBrowser()
             return
         }
+        // "Start listening" -> Voice Access + LLM hybrid mode
+        val normalizedCmd = WakePhraseMatcher.normalize(text)
+        if (normalizedCmd in setOf("start listening", "meow start listening", "listening mode",
+                "voice control", "start voice control", "voice access")) {
+            activateVoiceAccessMode()
+            return
+        }
+        if (voiceAccessMode && normalizedCmd in setOf("stop listening", "meow stop listening",
+                "exit listening mode", "quit listening")) {
+            deactivateVoiceAccessMode()
+            return
+        }
+
         // Phone-control loop: if active, "stop"/"cancel" kills it; else new speech updates the goal.
         if (phoneAgentLoop?.isActive == true) {
             val stopWords = setOf("stop", "cancel", "never mind", "nevermind", "quit", "abort")

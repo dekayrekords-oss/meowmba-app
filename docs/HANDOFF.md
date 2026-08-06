@@ -425,9 +425,9 @@ Verified on device: settings opens with the robot section showing "Connect over 
 
 <!-- AUTOBUILD:START -->
 (regenerated after each commit)
-- 2026-08-06 08:32:40 : fix: deterministic routing for multi-step phone goals
+- 2026-08-06 09:59:33 : feat: Loona-style features — notification listener, face attention, proactive nudges, focus mode
+- 5492a61 2026-08-06 08:31 fix: deterministic routing for multi-step phone goals
 - 20f90d0 2026-08-06 08:07 fix: phone-control loop now takes priority over browser search
 - 9cf645e 2026-08-06 01:39 feat: full phone-control agent (Phase H)
 - 820b4dc 2026-08-06 00:01 Fix background follow-up: freeze in-app listening after hand-off, stop TTS tail, faster+longer service capture
-- 27ef5d0 2026-08-05 23:23 fix: in-app follow-up no longer dies on session-conflict errors
 <!-- AUTOBUILD:END -->
