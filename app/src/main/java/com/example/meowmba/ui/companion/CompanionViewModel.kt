@@ -290,6 +290,10 @@ class CompanionViewModel(
     private fun activateVoiceAccessMode() {
         if (voiceAccessMode) { speak("I'm already listening."); return }
         voiceAccessMode = true
+        // The wake spotter and the continuous capture must not both hold the mic:
+        // two concurrent listeners is exactly the session churn that gets the app
+        // rate-limited by the recognition service (ERROR_TOO_MANY_REQUESTS / 11).
+        stopWakeLoopAndRelease()
         speak("Listening mode active. I'll handle the smart stuff, Voice Access handles the taps.")
         enableVoiceAccess()
         startContinuousListening()
@@ -299,7 +303,11 @@ class CompanionViewModel(
         voiceAccessMode = false
         continuousListenJob?.cancel()
         continuousListenJob = null
+        utteranceCapture?.cancel()
+        utteranceCapture = null
         speak("Listening mode off.")
+        // Give the wake spotter its mic back (startWakeStandby checks state/mic itself).
+        startWakeStandby()
     }
 
     private fun enableVoiceAccess() {
@@ -322,17 +330,42 @@ class CompanionViewModel(
                 kotlinx.coroutines.delay(1500)
                 if (!voiceAccessMode) break
                 val engine = speechService ?: break
+                // The recognizer's error lands HERE, not in onListeningError: this
+                // loop runs while interactionState is IDLE, so the transient-retry
+                // path (which requires LISTENING) never fires — which is how a raw
+                // "Speech recognition error (11)" caption came back on screen.
+                var lastErrorCode = 0
                 val result = kotlinx.coroutines.suspendCancellableCoroutine<String?> { cont ->
-                    captureUtterance(engine) { text ->
+                    captureUtterance(
+                        engine,
+                        onError = { code ->
+                            lastErrorCode = code
+                            // Rate-limit (11) and friends: back off in the loop below
+                            // instead of surfacing a caption.
+                            if (cont.isActive) cont.resume(null) {}
+                        }
+                    ) { text ->
                         if (cont.isActive) cont.resume(text) {}
                     }
                     viewModelScope.launch {
                         kotlinx.coroutines.delay(10_000)
-                        if (cont.isActive) cont.resume(null) {}
+                        if (cont.isActive) {
+                            // Free the session immediately instead of letting the
+                            // capture keep listening past its usefulness.
+                            utteranceCapture?.cancel()
+                            utteranceCapture = null
+                            cont.resume(null) {}
+                        }
                     }
                 }
                 if (result.isNullOrBlank()) {
-                    kotlinx.coroutines.delay(2500) // Cooldown to avoid ERROR_TOO_MANY_REQUESTS
+                    utteranceCapture?.cancel()
+                    utteranceCapture = null
+                    // Longer cooldown after a rate-limit so the recognition service
+                    // actually clears its limit before we knock again.
+                    kotlinx.coroutines.delay(
+                        if (lastErrorCode == android.speech.SpeechRecognizer.ERROR_TOO_MANY_REQUESTS) 5000L else 2500L
+                    )
                     continue
                 }
                 val norm = result.lowercase().trim()
@@ -2451,10 +2484,11 @@ class CompanionViewModel(
             }
             return
         }
-        // Error 11 (ERROR_SERVER_DISCONNECTED) and friends are transient hiccups
-        // of the recognition service, not a broken mic. Instead of surfacing a
-        // raw "error 11" caption and going deaf, re-open the session silently a
-        // couple of times; only give up (and say why) if it keeps happening.
+        // Error 11 is ERROR_TOO_MANY_REQUESTS — the recognition service is
+        // rate-limiting us — and friends are transient hiccups, not a broken mic.
+        // Instead of surfacing a raw "error 11" caption and going deaf, re-open
+        // the session silently a couple of times; only give up (and say why) if
+        // it keeps happening.
         if (isTransientSpeechError(code) &&
             transientListenRetries < MAX_TRANSIENT_LISTEN_RETRIES &&
             _uiState.value.interactionState == InteractionState.LISTENING

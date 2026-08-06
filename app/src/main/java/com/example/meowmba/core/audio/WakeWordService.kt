@@ -294,7 +294,12 @@ class WakeWordService : Service() {
                 if (isTransientSpeechCode(code) && followUpRetries < 2) {
                     followUpRetries++
                     scope.launch {
-                        delay(600)
+                        // A rate-limit (11) needs a real pause before retrying; a
+                        // fixed 600ms just keeps knocking while the limit is hot.
+                        delay(
+                            if (code == android.speech.SpeechRecognizer.ERROR_TOO_MANY_REQUESTS) 2000L
+                            else 600L
+                        )
                         // capturingCommand stays true across the retry.
                         if (engineStarted) startFollowUpListen()
                     }
