@@ -143,6 +143,7 @@ dependencies {
     implementation(libs.aicore.edge)
     implementation(libs.mlkit.image.labeling)
     implementation(libs.mlkit.text.recognition)
+    implementation(libs.mlkit.face.detection)
     implementation(libs.ktor.client.android)
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)

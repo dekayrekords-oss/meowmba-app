@@ -5,7 +5,7 @@ package com.example.meowmba.core.personality
  * Events push the companion between moods; time pulls it back. Mood then
  * biases idle animations, TTS pitch/rate, and the occasional idle chatter.
  */
-enum class Mood { CONTENT, EXCITED, SLEEPY, CURIOUS, STARTLED, PROUD }
+enum class Mood { CONTENT, EXCITED, SLEEPY, CURIOUS, STARTLED, PROUD, FOCUSED }
 
 sealed class MoodEvent {
     object WakeGreeting : MoodEvent()
@@ -14,6 +14,8 @@ sealed class MoodEvent {
     object TaskSuccess : MoodEvent()
     object UserSpoke : MoodEvent()
     object Settled : MoodEvent()
+    object FocusEntered : MoodEvent()
+    object FocusExited : MoodEvent()
 }
 
 class MoodEngine(
@@ -38,6 +40,8 @@ class MoodEngine(
             is MoodEvent.TaskSuccess -> Mood.PROUD
             is MoodEvent.UserSpoke -> Mood.CURIOUS
             is MoodEvent.Settled -> Mood.CONTENT
+            is MoodEvent.FocusEntered -> Mood.FOCUSED
+            is MoodEvent.FocusExited -> Mood.CONTENT
         }
         return mood
     }
@@ -58,6 +62,7 @@ class MoodEngine(
         Mood.CURIOUS -> 1.05f
         Mood.SLEEPY -> 0.9f
         Mood.CONTENT -> 1.0f
+        Mood.FOCUSED -> 0.95f
     }
 
     fun ttsRate(m: Mood = mood): Float = when (m) {
@@ -75,10 +80,11 @@ class MoodEngine(
         Mood.PROUD -> if (animName == "happy bop") 1.5f else 1f
         Mood.CURIOUS -> if (animName == "ear wiggle") 1.8f else 1f
         Mood.CONTENT -> 1f
+        Mood.FOCUSED -> 0.3f // very subdued during focus
     }
 
-    /** Chatter is rate-limited to once per cooldown window. */
-    fun mayChatter(now: Long): Boolean = now - lastChatterAt >= chatterCooldownMs
+    /** Chatter is suppressed during FOCUSED mood and rate-limited otherwise. */
+    fun mayChatter(now: Long): Boolean = mood != Mood.FOCUSED && now - lastChatterAt >= chatterCooldownMs
 
     fun markChattered(now: Long) {
         lastChatterAt = now

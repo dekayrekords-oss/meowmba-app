@@ -24,7 +24,21 @@ class MeowAccessibilityService : AccessibilityService() {
         instance = this
     }
 
-    override fun onAccessibilityEvent(event: android.view.accessibility.AccessibilityEvent?) = Unit
+    /** Track foreground app changes for focus detection. */
+    var onForegroundChanged: ((String) -> Unit)? = null
+
+    override fun onAccessibilityEvent(event: android.view.accessibility.AccessibilityEvent?) {
+        event ?: return
+        if (event.eventType == android.view.accessibility.AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            val pkg = event.packageName?.toString() ?: return
+            if (pkg != lastForegroundPackage) {
+                lastForegroundPackage = pkg
+                onForegroundChanged?.invoke(pkg)
+            }
+        }
+    }
+
+    private var lastForegroundPackage: String? = null
 
     override fun onInterrupt() = Unit
 

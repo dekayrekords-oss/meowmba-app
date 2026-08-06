@@ -14,6 +14,8 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
 import kotlinx.coroutines.suspendCancellableCoroutine
+import androidx.camera.core.ImageAnalysis
+import com.example.meowmba.core.sensor.FacePresenceDetector
 import java.io.ByteArrayOutputStream
 import kotlin.coroutines.resume
 import kotlin.math.roundToInt
@@ -34,6 +36,11 @@ class VisionManager(
     private val lifecycleOwner: LifecycleOwner
 ) {
     private var imageCapture: ImageCapture? = null
+    private var imageAnalysis: ImageAnalysis? = null
+
+    /** Face presence detector for attention mode. */
+    var faceDetector: FacePresenceDetector? = null
+        private set
     private var preview: Preview? = null
     private var boundSelector: CameraSelector? = null
     private var _useFrontCamera = false
@@ -160,6 +167,57 @@ class VisionManager(
                 else -> throw IllegalStateException("no camera on this device")
             }
         }
+
+
+    /**
+     * Starts face detection on the front camera for attention mode.
+     * Low-res ImageAnalysis (~320px), throttled by the detector itself.
+     */
+    @androidx.camera.core.ExperimentalGetImage
+    fun startFaceDetection() {
+        if (faceDetector != null) return
+        faceDetector = FacePresenceDetector()
+        val analysis = ImageAnalysis.Builder()
+            .setTargetResolution(android.util.Size(320, 240))
+            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+            .build()
+        analysis.setAnalyzer(ContextCompat.getMainExecutor(context)) { imageProxy ->
+            faceDetector?.analyze(imageProxy)
+        }
+        imageAnalysis = analysis
+        // Re-bind with the analysis use-case
+        rebindWithFaceAnalysis()
+    }
+
+    fun stopFaceDetection() {
+        faceDetector?.release()
+        faceDetector = null
+        imageAnalysis = null
+        // Re-bind without analysis
+        bindPreviewAsync()
+    }
+
+    private fun rebindWithFaceAnalysis() {
+        val future = ProcessCameraProvider.getInstance(context)
+        future.addListener(
+            {
+                try {
+                    val provider = future.get()
+                    // Face detection always uses front camera
+                    val selector = CameraSelector.DEFAULT_FRONT_CAMERA
+                    provider.unbindAll()
+                    val useCases = mutableListOf<androidx.camera.core.UseCase>()
+                    preview?.let { p -> p.surfaceProvider?.let { useCases.add(p) } }
+                    imageCapture?.let { useCases.add(it) }
+                    imageAnalysis?.let { useCases.add(it) }
+                    if (useCases.isNotEmpty()) {
+                        provider.bindToLifecycle(lifecycleOwner, selector, *useCases.toTypedArray())
+                    }
+                } catch (_: Exception) { }
+            },
+            ContextCompat.getMainExecutor(context)
+        )
+    }
 
     private fun unbind() {
         imageCapture = null

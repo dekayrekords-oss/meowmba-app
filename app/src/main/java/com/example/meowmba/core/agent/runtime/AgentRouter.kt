@@ -70,6 +70,16 @@ object AgentRouter {
             return AgentIntent("main", "task.list", emptyMap(), "list agent tasks")
         }
 
+
+        // Notification queries
+        if (normalized in setOf("any notifications", "notifications", "what did i miss",
+                "unread messages", "new messages", "any new messages",
+                "check notifications", "check my notifications",
+                "what notifications do i have", "read notifications",
+                "any messages")) {
+            return AgentIntent("notification", "notification.list", emptyMap(), "list notifications")
+        }
+
         // Prefix commands: match case-insensitively, but extract arguments
         // from the RAW text so filenames keep their punctuation ("notes.txt")
         // and projects keep their capitalization ("Website").

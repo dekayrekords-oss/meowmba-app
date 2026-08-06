@@ -23,6 +23,8 @@ object CommandHeuristics {
         // without their own signal words, so the router never saw the request.
         "email", "mail", "send", "draft", "reply", "compose", "inbox",
         "calendar", "event", "schedule", "meeting", "appointment", "remind",
+        // Notifications
+        "notification", "notifications", "unread", "missed", "messages",
         // Media generation
         "image", "picture", "photo", "draw", "paint", "sketch", "render",
         "generate", "video", "animation", "animate", "song", "audio", "sound",

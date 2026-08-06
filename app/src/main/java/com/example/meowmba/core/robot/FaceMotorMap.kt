@@ -33,6 +33,7 @@ object FaceMotorMap {
         Mood.STARTLED -> mapOf(SERVO_EAR_LEFT to 60f, SERVO_EAR_RIGHT to 60f, SERVO_HEAD_TILT to 100f) to "alert"
         Mood.PROUD -> mapOf(SERVO_HEAD_TILT to 100f, SERVO_TAIL to 110f) to "proud"
         Mood.CURIOUS -> mapOf(SERVO_HEAD_PAN to 100f, SERVO_EAR_LEFT to 105f) to "curious"
+        Mood.FOCUSED -> mapOf(SERVO_HEAD_TILT to CENTER, SERVO_BODY to 85f) to "focused"
         Mood.CONTENT -> mapOf(SERVO_HEAD_TILT to CENTER, SERVO_BODY to CENTER) to "content"
     }
 

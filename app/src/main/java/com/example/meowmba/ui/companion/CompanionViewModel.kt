@@ -62,6 +62,16 @@ import com.example.meowmba.core.agent.tools.DesktopRunBuildTool
 import com.example.meowmba.core.agent.tools.DesktopRunScriptTool
 import com.example.meowmba.core.agent.tools.WebSearchTool
 import com.example.meowmba.core.agent.tools.registerVaultTools
+import com.example.meowmba.core.context.FocusDetector
+import com.example.meowmba.core.context.FocusLevel
+import com.example.meowmba.core.context.ProactiveEngine
+import com.example.meowmba.core.context.ProactiveNudge
+import com.example.meowmba.core.context.NudgePriority
+import com.example.meowmba.core.personality.MoodEvent
+import com.example.meowmba.core.sensor.AttentionState
+import com.example.meowmba.core.sensor.FacePresenceDetector
+import com.example.meowmba.core.agent.tools.NotificationListTool
+import com.example.meowmba.core.agent.tools.NotificationSummaryTool
 import com.example.meowmba.core.vault.VaultRepository
 import com.example.meowmba.core.agent.tools.EmailSendTool
 import com.example.meowmba.core.agent.tools.EmailDraftTool
@@ -161,6 +171,111 @@ class CompanionViewModel(
 
     /** Tools available for agent routing; null when no workspace/repo exists. */
     private var agentToolRegistry: ToolRegistry? = null
+
+    // ---- Attention mode (face detection → wake-word-free) ----
+    private var attentionModeEnabled = false
+    private var attentionCollectJob: kotlinx.coroutines.Job? = null
+
+    fun setAttentionMode(enabled: Boolean) {
+        attentionModeEnabled = enabled
+        if (enabled) {
+            visionManager?.startFaceDetection()
+            startAttentionCollector()
+        } else {
+            visionManager?.stopFaceDetection()
+            attentionCollectJob?.cancel()
+            attentionCollectJob = null
+        }
+    }
+
+    /**
+     * Collects face-presence state. When user is looking AND we detect speech
+     * onset, skip the wake word and go straight to listening mode.
+     */
+    private fun startAttentionCollector() {
+        attentionCollectJob?.cancel()
+        attentionCollectJob = viewModelScope.launch {
+            visionManager?.faceDetector?.state?.collect { attention ->
+                if (attention.lookingAtScreen && _uiState.value.interactionState == InteractionState.IDLE) {
+                    // User is looking at screen while idle → switch to passive listening
+                    // (speech recognizer will pick up any speech without wake word)
+                    if (!isPassiveListeningActive) {
+                        startPassiveListening()
+                    }
+                }
+            }
+        }
+    }
+
+    private var isPassiveListeningActive = false
+
+    // ---- Proactive Engine + Focus Detector ----
+    private val focusDetector = FocusDetector()
+    private var proactiveEngine: ProactiveEngine? = null
+    private var proactiveJob: kotlinx.coroutines.Job? = null
+
+    fun initProactiveEngine(context: android.content.Context?) {
+        proactiveEngine = ProactiveEngine(context, focusDetector)
+        startProactiveHeartbeat()
+    }
+
+    fun setProactiveNudges(enabled: Boolean) {
+        proactiveEngine?.enabled = enabled
+    }
+
+    private fun startProactiveHeartbeat() {
+        proactiveJob?.cancel()
+        proactiveJob = viewModelScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(60_000L) // every 60 seconds
+                focusDetector.recalculate()
+                // Update mood based on focus
+                val focus = focusDetector.focusLevel.value
+                if (focus == FocusLevel.DEEP) {
+                    moodEngine.onEvent(MoodEvent.FocusEntered, System.currentTimeMillis())
+                }
+                // Check for proactive nudge
+                val isSpeaking = _uiState.value.interactionState != InteractionState.IDLE
+                val nudge = proactiveEngine?.tick(canSpeak = !isSpeaking)
+                if (nudge != null) {
+                    speak(nudge.text)
+                }
+            }
+        }
+    }
+
+    /** Called by accessibility service when foreground app changes. */
+    fun onForegroundAppChanged(packageName: String) {
+        focusDetector.onForegroundAppChanged(packageName)
+    }
+
+    /**
+     * Passive listening: like startListening but triggered by face presence.
+     * If nothing is said within 5s, returns to idle. If speech is detected,
+     * processes it directly (no wake word needed).
+     */
+    private fun startPassiveListening() {
+        if (_uiState.value.interactionState != InteractionState.IDLE) return
+        isPassiveListeningActive = true
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(200) // small debounce
+            val attention = visionManager?.faceDetector?.state?.value
+            if (attention?.lookingAtScreen != true) {
+                isPassiveListeningActive = false
+                return@launch
+            }
+            // Start a short capture — if user speaks, process it
+            captureUtterance(speechService ?: run { isPassiveListeningActive = false; return@launch }) { result ->
+                isPassiveListeningActive = false
+                if (result.isNotBlank()) {
+                    processUserSpeech(result)
+                }
+            }
+            // Auto-timeout: if no speech in 5s, cancel
+            kotlinx.coroutines.delay(5000)
+            isPassiveListeningActive = false
+        }
+    }
 
     /**
      * Weather source. Open-Meteo needs no API key and no account, so "what's the weather"
@@ -621,6 +736,9 @@ class CompanionViewModel(
         }
         if (appContext != null) {
             toolRegistry.register(EmailSendTool(appContext))
+            // Notification tools
+            toolRegistry.register(NotificationListTool())
+            toolRegistry.register(NotificationSummaryTool())
             toolRegistry.register(CalendarListTool(appContext))
             toolRegistry.register(CalendarCreateTool(appContext))
         }
@@ -710,9 +828,23 @@ class CompanionViewModel(
                     scope = viewModelScope,
                     vision = { visionProviderFor() },
                     brain = { prompt ->
-                        runCatching {
+                        // Try cloud model first, fall back to on-device (Qwen/Gemma4)
+                        val cloudResult = runCatching {
                             (omniRoute?.generate(prompt) as? com.example.meowmba.core.agent.ModelResponse.Complete)?.text
+                        }.onFailure { e ->
+                            android.util.Log.e("PhoneLoop", "Cloud brain failed: ${e.message}")
                         }.getOrNull()
+                        if (cloudResult != null) {
+                            android.util.Log.d("PhoneLoop", "Cloud brain OK (${cloudResult.length} chars)")
+                            cloudResult
+                        } else {
+                            android.util.Log.w("PhoneLoop", "Cloud unreachable, falling back to local model")
+                            runCatching {
+                                (currentProvider?.generate(prompt) as? com.example.meowmba.core.agent.ModelResponse.Complete)?.text
+                            }.onFailure { e ->
+                                android.util.Log.e("PhoneLoop", "Local brain also failed: ${e.message}")
+                            }.getOrNull()
+                        }
                     },
                     captureJpeg = {
                         kotlin.coroutines.suspendCoroutine { cont ->
@@ -739,9 +871,23 @@ class CompanionViewModel(
                 phoneAgentLoop = com.example.meowmba.core.agent.PhoneAgentLoop(
                     scope = viewModelScope,
                     brain = { prompt ->
-                        runCatching {
+                        // Try cloud model first, fall back to on-device (Qwen/Gemma4)
+                        val cloudResult = runCatching {
                             (omniRoute?.generate(prompt) as? com.example.meowmba.core.agent.ModelResponse.Complete)?.text
+                        }.onFailure { e ->
+                            android.util.Log.e("PhoneLoop", "Cloud brain failed: ${e.message}")
                         }.getOrNull()
+                        if (cloudResult != null) {
+                            android.util.Log.d("PhoneLoop", "Cloud brain OK (${cloudResult.length} chars)")
+                            cloudResult
+                        } else {
+                            android.util.Log.w("PhoneLoop", "Cloud unreachable, falling back to local model")
+                            runCatching {
+                                (currentProvider?.generate(prompt) as? com.example.meowmba.core.agent.ModelResponse.Complete)?.text
+                            }.onFailure { e ->
+                                android.util.Log.e("PhoneLoop", "Local brain also failed: ${e.message}")
+                            }.getOrNull()
+                        }
                     },
                     service = { com.example.meowmba.core.access.MeowAccessibilityService.instance },
                     announce = { msg ->
