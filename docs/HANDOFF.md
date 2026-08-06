@@ -425,9 +425,9 @@ Verified on device: settings opens with the robot section showing "Connect over 
 
 <!-- AUTOBUILD:START -->
 (regenerated after each commit)
-- 2026-08-05 15:36:27 : OpenRouter: fix 404 — endpoint carried a /v1 the provider appends itself; normalize base urls
-- 32e5285 2026-08-05 15:19 Wake: widen hey-carrier tuning + missed-wake audio diagnostic; log cloud-brain route failures
-- d7fb985 2026-08-05 13:45 Wake phrase: tolerate AIAI ERROR_CLIENT churn; expand and loosen hey/ok KWS variants
-- 3893308 2026-08-05 12:55 LOOI auto-connect: discover paired base and enable body by default
-- 7f50bdb 2026-08-05 12:32 Settings cleanup: collapse advanced options; LOOI defaults to Bluetooth
+- 2026-08-05 21:04:21 : fix: background follow-up now actually hears and delivers commands
+- 643ddbc 2026-08-05 19:55 feat: play music by voice (Spotify default) + keep follow-up alive after opening apps
+- 736f030 2026-08-05 17:09 feat: connect LOOI over BLE using exact Memba 2 droid setup
+- 54077ed 2026-08-05 16:09 feat: LOOI base discovery — declare BLUETOOTH_SCAN, add scan picker to Settings
+- 868246f 2026-08-05 15:35 OpenRouter: fix 404 — endpoint carried a /v1 the provider appends itself; normalize base urls
 <!-- AUTOBUILD:END -->

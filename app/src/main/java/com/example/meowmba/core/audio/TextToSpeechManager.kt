@@ -43,11 +43,22 @@ class TextToSpeechManager(context: Context) : SpeechSynthesizer {
 
     private var pendingUtterances = 0
 
+    /**
+     * UtteranceProgressListener callbacks arrive on a TTS binder thread, but the
+     * ViewModel uses them to start/stop a SpeechRecognizer, which Android only
+     * allows on the application's main thread (off-thread calls log
+     * “SpeechRecognizer should be used only from the application's main thread”
+     * and then collide with the follow-up session, surfacing as error 5/7 and a
+     * dead follow-up). Deliver every listener callback on the main thread.
+     */
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private fun onMain(block: () -> Unit) { mainHandler.post(block) }
+
     private fun setupListener() {
         tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) {
                 // Only the first utterance of a reply is a transition into speaking.
-                if (pendingUtterances <= 1) onSpeechStarted?.invoke()
+                if (pendingUtterances <= 1) onMain { onSpeechStarted?.invoke() }
             }
 
             override fun onDone(utteranceId: String?) {
@@ -64,14 +75,14 @@ class TextToSpeechManager(context: Context) : SpeechSynthesizer {
                     pendingUtterances = (pendingUtterances - 1).coerceAtLeast(0)
                     if (pendingUtterances > 0) return
                 }
-                onSpeechFinished?.invoke()
+                onMain { onSpeechFinished?.invoke() }
             }
 
             // API 26+: word-boundary events drive the avatar's mouth rhythm.
             // On older devices this simply never fires and the renderer
             // falls back to its base talk cycle.
             override fun onRangeStart(utteranceId: String?, start: Int, end: Int, frame: Int) {
-                onWordBoundary?.invoke(start, end)
+                onMain { onWordBoundary?.invoke(start, end) }
             }
         })
     }

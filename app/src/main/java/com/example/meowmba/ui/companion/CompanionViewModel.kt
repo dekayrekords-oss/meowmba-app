@@ -2046,6 +2046,25 @@ class CompanionViewModel(
      * no service) are surfaced honestly instead of looking like a dead button.
      */
     private fun onListeningError(code: Int) {
+        // Silence during an active follow-up (ERROR_SPEECH_TIMEOUT / ERROR_NO_MATCH)
+        // is expected -- the user simply has not spoken yet. Re-open the capture so a
+        // quiet pause does not drop the companion back to wake-word standby. Bounded
+        // so a permanently-silent window still ends via the follow-up timeout.
+        if (isFollowUpListen && isSilenceError(code) &&
+            transientListenRetries < MAX_FOLLOW_UP_SILENCE_RETRIES &&
+            _uiState.value.interactionState == InteractionState.LISTENING
+        ) {
+            transientListenRetries++
+            viewModelScope.launch {
+                delay(250)
+                if (_uiState.value.interactionState != InteractionState.LISTENING || !isFollowUpListen) return@launch
+                val engine = speechService ?: return@launch
+                captureUtterance(engine, onError = { c -> onListeningError(c) }) { result ->
+                    processUserSpeech(result)
+                }
+            }
+            return
+        }
         // Error 11 (ERROR_SERVER_DISCONNECTED) and friends are transient hiccups
         // of the recognition service, not a broken mic. Instead of surfacing a
         // raw "error 11" caption and going deaf, re-open the session silently a
@@ -3930,7 +3949,13 @@ class CompanionViewModel(
         /** Codes meaning "the recognition service hiccuped", not "broken setup". */
         internal fun isTransientSpeechError(code: Int): Boolean = code in TRANSIENT_SPEECH_ERRORS
 
+        /** Codes meaning "heard nothing yet" (silence), not an error. */
+        internal fun isSilenceError(code: Int): Boolean =
+            code == SpeechRecognizer.ERROR_SPEECH_TIMEOUT ||
+                code == SpeechRecognizer.ERROR_NO_MATCH
+
         private const val MAX_TRANSIENT_LISTEN_RETRIES = 2
+        private const val MAX_FOLLOW_UP_SILENCE_RETRIES = 6
         private val TRANSIENT_SPEECH_ERRORS = setOf(
             SpeechRecognizer.ERROR_NETWORK_TIMEOUT,
             SpeechRecognizer.ERROR_NETWORK,
