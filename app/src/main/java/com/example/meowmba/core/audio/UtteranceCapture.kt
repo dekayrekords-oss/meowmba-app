@@ -211,7 +211,7 @@ class UtteranceCapture(
          * not feel like waiting for a reply. Two and a half seconds is roughly the pause
          * people take before "…um", and well past the ~1s the platform ends on.
          */
-        const val SILENCE_TO_FINISH_MS = 2_500L
+        const val SILENCE_TO_FINISH_MS = 1_200L
 
         /** Nobody speaks one turn for this long; a stuck session must not hold the mic. */
         const val MAX_UTTERANCE_MS = 45_000L

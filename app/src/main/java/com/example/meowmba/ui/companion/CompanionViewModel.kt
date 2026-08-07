@@ -2376,7 +2376,6 @@ class CompanionViewModel(
         viewModelScope.launch {
             memoryRepository?.addMessage(MessageRole.ASSISTANT, full)
         }
-        notificationHelper?.postThought(full)
         lastAssistantText = full
     }
 
@@ -2384,8 +2383,6 @@ class CompanionViewModel(
         viewModelScope.launch {
             memoryRepository?.addMessage(MessageRole.ASSISTANT, text)
         }
-
-        notificationHelper?.postThought(text)
 
         if (ttsManager == null) {
             startMockSpeaking(text)
