@@ -209,11 +209,14 @@ class SpeechService(private val context: Context) : SpeechEngine {
             }
             val gap = MIN_SESSION_GAP_MS -
                 (android.os.SystemClock.uptimeMillis() - lastStartAt)
+            pendingStart = launch
             if (gap > 0) {
-                pendingStart = launch
                 mainHandler.postDelayed(launch, gap)
             } else {
-                launch.run()
+                // startListening() may be called from a binder thread (TTS
+                // callbacks); SpeechRecognizer is main-thread-only, so even
+                // the immediate path must hop to the main looper.
+                mainHandler.post(launch)
             }
         }
 

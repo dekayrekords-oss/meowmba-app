@@ -40,6 +40,15 @@ class RemoteModelProvider(
 
     enum class ApiStyle { OLLAMA, OPENAI_COMPATIBLE }
 
+    /**
+     * Defense in depth: if a base url is ever stored with a trailing "/v1"
+     * (e.g. "https://openrouter.ai/api/v1"), appending "/v1/chat/completions"
+     * would hit "/v1/v1/chat/completions" — a guaranteed 404. Stripping the
+     * suffix here makes the provider immune to that. Ollama-style base urls
+     * (no /v1) pass through unchanged.
+     */
+    private val normalizedBase: String = baseUrl.trimEnd('/').removeSuffix("/v1")
+
     private val client = HttpClient {
         install(ContentNegotiation) {
             json(Json { ignoreUnknownKeys = true })
@@ -67,7 +76,7 @@ class RemoteModelProvider(
     }
 
     private suspend fun kotlinx.coroutines.flow.FlowCollector<ModelResponse>.streamOllama(prompt: String) {
-        client.preparePost("$baseUrl/api/generate") {
+        client.preparePost("$normalizedBase/api/generate") {
             contentType(ContentType.Application.Json)
             setBody(OllamaRequest(model, prompt, stream = true))
         }.execute { response ->
@@ -85,7 +94,7 @@ class RemoteModelProvider(
     }
 
     private suspend fun kotlinx.coroutines.flow.FlowCollector<ModelResponse>.streamOpenAI(prompt: String) {
-        client.preparePost("$baseUrl/v1/chat/completions") {
+        client.preparePost("$normalizedBase/v1/chat/completions") {
             header(HttpHeaders.Authorization, "Bearer $apiKey")
             // OpenRouter attribution headers: harmless elsewhere, expected there.
             header("HTTP-Referer", "https://meowmba.local")
