@@ -1954,17 +1954,19 @@ class CompanionViewModel(
      * no service) are surfaced honestly instead of looking like a dead button.
      */
     private fun onListeningError(code: Int) {
-        // Error 11 (ERROR_SERVER_DISCONNECTED) and friends are transient hiccups
-        // of the recognition service, not a broken mic. Instead of surfacing a
-        // raw "error 11" caption and going deaf, re-open the session silently a
-        // couple of times; only give up (and say why) if it keeps happening.
+        // Error 11 is ERROR_TOO_MANY_REQUESTS — the recognition service is
+        // rate-limiting us — and friends are transient hiccups, not a broken mic.
+        // Instead of surfacing a raw "error 11" caption and going deaf, re-open
+        // the session silently a couple of times; only give up (and say why) if
+        // it keeps happening. Error 11 needs multi-second backoff; other
+        // transient codes recover in under a second.
         if (isTransientSpeechError(code) &&
             transientListenRetries < MAX_TRANSIENT_LISTEN_RETRIES &&
             _uiState.value.interactionState == InteractionState.LISTENING
         ) {
             transientListenRetries++
             viewModelScope.launch {
-                delay(600)
+                delay(if (code == SpeechRecognizer.ERROR_TOO_MANY_REQUESTS) 3000L * transientListenRetries else 800L)
                 if (_uiState.value.interactionState != InteractionState.LISTENING) return@launch
                 val engine = speechService ?: return@launch
                 captureUtterance(engine) { result -> processUserSpeech(result) }
@@ -3836,7 +3838,7 @@ class CompanionViewModel(
         /** Codes meaning "the recognition service hiccuped", not "broken setup". */
         internal fun isTransientSpeechError(code: Int): Boolean = code in TRANSIENT_SPEECH_ERRORS
 
-        private const val MAX_TRANSIENT_LISTEN_RETRIES = 2
+        private const val MAX_TRANSIENT_LISTEN_RETRIES = 5
         private val TRANSIENT_SPEECH_ERRORS = setOf(
             SpeechRecognizer.ERROR_NETWORK_TIMEOUT,
             SpeechRecognizer.ERROR_NETWORK,
