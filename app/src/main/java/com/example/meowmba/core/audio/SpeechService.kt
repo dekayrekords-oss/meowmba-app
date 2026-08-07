@@ -112,13 +112,12 @@ class SpeechService(private val context: Context) : SpeechEngine {
                     _isListening.value = false
                     Log.w(TAG, "session error code=$error ($componentName)")
 
-                    // No automatic service switching. Rotating on error walked off the
-                    // correct recognizer (AiAi) after a few transient CLIENT errors,
-                    // down through Home Assistant and Claude, to "no candidates left"
-                    // and a false "keeps failing on this device". Picking the right
-                    // service ONCE is what actually fixed recognition; the rotation
-                    // only ever made it worse. The engine above decides what an error
-                    // means.
+                    if (error == SpeechRecognizer.ERROR_SERVER_DISCONNECTED) {
+                        runCatching {
+                            recognizer?.destroy()
+                            recognizer = buildRecognizer()
+                        }
+                    }
                     onError?.invoke(error)
                 }
                 override fun onResults(results: Bundle?) {
@@ -151,15 +150,12 @@ class SpeechService(private val context: Context) : SpeechEngine {
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+                putExtra("android.speech.extra.PREFER_OFFLINE", true)
 
                 // Capture window. Android's defaults end a session after a beat of
                 // quiet, which cuts people off mid-sentence and makes the companion
-                // feel like a walkie-talkie instead of a call. These ask for a much
-                // longer tolerance for pauses.
-                //
-                // Honoured as a HINT only — several recognizers ignore them outright
-                // (they are documented as not guaranteed). Setting them costs nothing
-                // and helps on the ones that do listen.
+                // feel like a call.
                 putExtra(
                     RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS,
                     COMPLETE_SILENCE_MS,
@@ -172,8 +168,6 @@ class SpeechService(private val context: Context) : SpeechEngine {
                     RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS,
                     MINIMUM_SESSION_MS,
                 )
-                // Keep recognition on the device whenever possible (privacy-first)
-                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
             }
             _partialResults.value = ""
             r.startListening(intent)
