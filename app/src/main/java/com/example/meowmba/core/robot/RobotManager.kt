@@ -23,9 +23,6 @@ class RobotManager {
     /** The controller the companion should drive right now. Never null. */
     val active: MotorController get() = controller
 
-    /** Expose the raw BLE link for direct motor commands (LooiMotorTool). */
-    fun getBleLink(): LooiBleLink? = bleLink
-
     /** Drop any connection and return to the honest simulated body. */
     fun useSimulated() {
         transport?.close()
@@ -83,14 +80,7 @@ class RobotManager {
                     override fun onScanResult(callbackType: Int, result: android.bluetooth.le.ScanResult) {
                         runCatching {
                             val d = result.device
-                            if (d.address !in out) {
-                                val name = result.scanRecord?.deviceName ?: d.name ?: ""
-                                // Nameless advertisers (beacons, trackers, TVs)
-                                // are noise in a base picker — that was the wall
-                                // of 30 raw MAC addresses. Only named devices are
-                                // tappable candidates; bonded ones are listed above.
-                                if (name.isNotBlank()) out[d.address] = name
-                            }
+                            if (d.address !in out) out[d.address] = result.scanRecord?.deviceName ?: d.address
                         }
                     }
                     override fun onScanFailed(errorCode: Int) { latch.countDown() }
@@ -128,24 +118,30 @@ class RobotManager {
      * for full auto discovery. Blocking; call from a background thread.
      */
     fun connectLooiBle(context: android.content.Context, address: String = ""): Boolean {
-        val link = LooiBleLink(context.applicationContext)
+        // Idempotent: if a healthy live link already exists, keep it. Repeated
+        // refreshRobot()/onResume calls must not reconnect and drop the GATT.
+        if (bleLink?.state == LooiBleLink.LinkState.READY) {
+            _status.value = "LOOI body (BLE)" + if (address.isBlank()) "" else " @ $address"
+            return true
+        }
+        var link = LooiBleLink(context.applicationContext)
         link.onStateChange = { st, detail -> _status.value = "LOOI BLE: ${st.name.lowercase()} $detail".trim() }
-        val ok = if (address.isBlank()) link.connectAuto() else link.connectBlocking(address)
-        // Accept READY (fully verified) or HANDSHAKE_REQUIRED (connected but
-        // needs user to tap Initialize / the official app handshake first).
-        val linked = ok || link.handshakeRequired
-        return if (linked) {
+        var ok = if (address.isBlank()) link.connectAuto() else link.connectBlocking(address)
+        if (!ok && address.isNotBlank()) {
+            // Saved address failed (stale/wrong MAC). Fall back to the full
+            // auto policy: attach-if-connected -> scan -> known-MAC connect.
+            link.close()
+            link = LooiBleLink(context.applicationContext)
+            link.onStateChange = { st, detail -> _status.value = "LOOI BLE: ${st.name.lowercase()} $detail".trim() }
+            ok = link.connectAuto()
+        }
+        return if (ok) {
             transport?.close()
             transport = null
             bleLink?.close()
             bleLink = link
             controller = BleMotorController(link)
-            val suffix = if (address.isBlank()) "" else " @ $address"
-            if (link.handshakeRequired) {
-                _status.value = "LOOI BLE: connected — tap Initialize to verify$suffix"
-            } else {
-                _status.value = "LOOI body (BLE)$suffix"
-            }
+            _status.value = "LOOI body (BLE)" + if (address.isBlank()) "" else " @ $address"
             true
         } else {
             link.close()
@@ -156,16 +152,6 @@ class RobotManager {
             _status.value = "LOOI BLE unreachable - simulated"
             false
         }
-    }
-
-    /** Retry the LOOI initialization / handshake verification from UI. */
-    fun retryLooiHandshake() {
-        val link = bleLink
-        if (link == null) {
-            _status.value = "no LOOI link yet — Initialize connects first"
-            return
-        }
-        link.retryHandshake()
     }
 
     /**

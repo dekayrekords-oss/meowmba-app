@@ -26,11 +26,8 @@ class IdleAnimationDirector(
     /** Built-in clips plus any user-saved inventions. */
     private val pickSpec: () -> CustomAnimationSpec?,
     private val play: (CustomAnimationSpec) -> Unit,
-    /** Micro-clips: tiny movements (ear twitch, gaze drift) every 15-30s. */
-    private val pickMicroSpec: () -> CustomAnimationSpec? = { null },
 ) {
     private var job: Job? = null
-    private var microJob: Job? = null
     private var hasPlayed = false
 
     fun start() {
@@ -46,24 +43,11 @@ class IdleAnimationDirector(
                 }
             }
         }
-        // Micro-motion layer: subtle movements every 15-30s
-        if (microJob?.isActive != true) {
-            microJob = scope.launch {
-                while (isActive) {
-                    delay(microWaitMs())
-                    if (canPlay()) {
-                        pickMicroSpec()?.let { play(it) }
-                    }
-                }
-            }
-        }
     }
 
     fun stop() {
         job?.cancel()
         job = null
-        microJob?.cancel()
-        microJob = null
     }
 
     /** First-clip cadence: 12–25 s so a performance happens early. Internal for unit tests. */
@@ -71,7 +55,4 @@ class IdleAnimationDirector(
 
     /** Random cadence in 25–80 s; internal for unit tests. */
     internal fun nextWaitMs(): Long = (25_000L + random.nextLong(55_000L))
-
-    /** Micro-motion cadence: 15–30 s; internal for unit tests. */
-    internal fun microWaitMs(): Long = (15_000L + random.nextLong(15_000L))
 }

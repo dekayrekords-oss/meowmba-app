@@ -139,10 +139,19 @@ class ModelStatusTest {
         // availableModelProviders — an offered entry must always build.
         com.example.meowmba.ui.companion
             .availableModelProviders(mockSecureStorage.context)
+            // "On-device (Local)" is the one honest exception: with no model file
+            // installed it builds nothing *and says so* — asserted below.
+            .filter { it != "On-device (Local)" }
             .forEach { label ->
             vm.onModelSelected(label)
             org.junit.Assert.assertNotNull("picker entry '$label' builds no provider", vm.currentProvider)
         }
+
+        // Selecting local with no model installed must not fake a provider;
+        // it points the user at the fix instead of trapping them.
+        vm.onModelSelected("On-device (Local)")
+        org.junit.Assert.assertNull(vm.currentProvider)
+        assertTrue(vm.uiState.value.captionText!!.contains("No on-device model installed"))
     }
 
     @Test

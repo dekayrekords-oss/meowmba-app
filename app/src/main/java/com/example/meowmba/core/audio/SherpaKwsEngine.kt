@@ -107,6 +107,7 @@ class SherpaKwsEngine(
 
     private var captureJob: Job? = null
     private var spotter: KeywordSpotter? = null
+    private var dumpSeq = 0
 
     /** True while the engine intends to be capturing. */
     @Volatile
@@ -252,7 +253,33 @@ class SherpaKwsEngine(
                     if (loudAtFrame < 0) loudAtFrame = frames
                     if (frames - loudAtFrame >= MISS_DUMP_DELAY_FRAMES) {
                         Log.i(TAG, "loud speech without wake; dumping pre-roll for diagnosis")
-                        onLoudNoWake?.invoke(preRoll.snapshot())
+                        val dump = preRoll.snapshot()
+                        try {
+                            val dir = context.getExternalFilesDir(null)
+                            if (dir != null) {
+                                val wav = java.io.File(dir, "kws_preroll_${dumpSeq++}.wav")
+                                java.io.DataOutputStream(java.io.FileOutputStream(wav)).use { d ->
+                                    val bytes = ByteArray(44 + dump.size * 2)
+                                    fun w(p: Int, v: Int) {
+                                        bytes[p] = (v and 0xff).toByte(); bytes[p + 1] = ((v shr 8) and 0xff).toByte()
+                                    }
+                                    bytes[0] = 'R'.code.toByte(); bytes[1] = 'I'.code.toByte(); bytes[2] = 'F'.code.toByte(); bytes[3] = 'F'.code.toByte()
+                                    w(4, bytes.size - 8); bytes[8] = 'W'.code.toByte(); bytes[9] = 'A'.code.toByte(); bytes[10] = 'V'.code.toByte(); bytes[11] = 'E'.code.toByte()
+                                    bytes[12] = 'f'.code.toByte(); bytes[13] = 'm'.code.toByte(); bytes[14] = 't'.code.toByte(); bytes[15] = ' '.code.toByte()
+                                    w(16, 16); w(20, 1); w(22, 1); w(24, 16000); w(28, 32000); w(32, 2); w(34, 16)
+                                    bytes[36] = 'd'.code.toByte(); bytes[37] = 'a'.code.toByte(); bytes[38] = 't'.code.toByte(); bytes[39] = 'a'.code.toByte()
+                                    w(40, dump.size * 2)
+                                    for ((i, v) in dump.withIndex()) {
+                                        bytes[44 + i * 2] = (v.toInt() and 0xff).toByte(); bytes[45 + i * 2] = ((v.toInt() shr 8) and 0xff).toByte()
+                                    }
+                                    d.write(bytes)
+                                }
+                                Log.i(TAG, "pre-roll dumped to ${wav.absolutePath} (${dump.size} samples)")
+                            }
+                        } catch (e: Exception) {
+                            Log.w(TAG, "pre-roll dump failed", e)
+                        }
+                        onLoudNoWake?.invoke(dump)
                         loudAtFrame = -1L
                     }
                 } else {
@@ -459,9 +486,9 @@ class SherpaKwsEngine(
         private const val KEYWORDS_THRESHOLD = 0.20f
 
         /** Peak (0..32768) above which a frame counts as loud speech/noise. */
-        private const val LOUD_PEAK_THRESHOLD = 8_192
+        private const val LOUD_PEAK_THRESHOLD = 4_096
 
-        /** ~2s of continuous loud audio without a hit triggers the missed-wake dump. */
-        private const val MISS_DUMP_DELAY_FRAMES = 20L
+        /** ~0.6s of continuous loud audio without a hit triggers the missed-wake dump. */
+        private const val MISS_DUMP_DELAY_FRAMES = 6L
     }
 }

@@ -5,8 +5,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -39,11 +37,6 @@ class MainActivity : ComponentActivity() {
     private lateinit var visionManager: com.example.meowmba.core.vision.VisionManager
     private lateinit var notificationHelper: NotificationHelper
     private var companionViewModel: CompanionViewModel? = null
-
-    /** Debounced hand-off to the background wake service (see onPause). */
-    private val mainHandler = Handler(Looper.getMainLooper())
-    private val wakeStandbyStart = Runnable { startWakeStandbyNow() }
-    private val followUpStart = Runnable { startFollowUpNow() }
 
     /** One-time MediaProjection consent for watch mode. */
     private val screenCaptureLauncher = registerForActivityResult(
@@ -84,9 +77,21 @@ class MainActivity : ComponentActivity() {
         companionViewModel?.onCameraPermissionResult(isGranted)
     }
 
+    private val locationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        companionViewModel?.onLocationPermissionResult(isGranted)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // Transparent window so the Godot face + glow float over wallpaper.
+        // Keep the window touchable — FLAG_NOT_TOUCHABLE must never be set.
+        window.setBackgroundDrawableResource(android.R.color.transparent)
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED)
+        // Dim amount 0: still a proper activity window that owns the touch stream.
+        window.setDimAmount(0f)
 
         speechService = SpeechService(this)
         ttsManager = TextToSpeechManager(this)
@@ -118,11 +123,20 @@ class MainActivity : ComponentActivity() {
                                 auditDao = auditDao,
                                 workspaceRoot = workspaceRoot,
                                 modelsDir = modelsDir,
+                                downloadServiceStarter = { ctx, url, fn, id, token, dir ->
+                                    com.example.meowmba.core.download.DownloadService.start(
+                                        ctx, url, fn, id, token, dir
+                                    )
+                                },
                                 visionManager = visionManager,
                                 notificationHelper = notificationHelper,
                                 routineDao = database.routineDao()
                             ).also {
                                 companionViewModel = it
+                                // onResume often runs before first composition assigns
+                                // the VM — arm always-on / wake here so the face mic
+                                // is not left dead until the next resume.
+                                it.reclaimWakeMicForForeground()
                                 if (pendingRoutineId >= 0) {
                                     it.onRoutineIntent(pendingRoutineId)
                                     pendingRoutineId = -1L
@@ -171,6 +185,13 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
+                // Places: the VM asks for LOCATION only when saving a named place
+                androidx.compose.runtime.LaunchedEffect(uiState.locationPermissionRequested) {
+                    if (uiState.locationPermissionRequested) {
+                        locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                    }
+                }
+
                 // Handle system back button
                 // Every full-screen overlay must be listed here, or back leaves the app
                 // from a page that clearly has somewhere to go back TO.
@@ -212,11 +233,11 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         // If a background hand-off was scheduled by a transient pause, it is now
         // stale: we are visible again and the in-app engine owns the mic.
-        mainHandler.removeCallbacks(wakeStandbyStart)
-        mainHandler.removeCallbacks(followUpStart)
         WakeWordService.stop(this)
         companionViewModel?.reclaimWakeMicForForeground()
         companionViewModel?.refreshRobot()
+        // Re-arm face tracking every resume (permission may have just been granted).
+        companionViewModel?.ensureFaceTrackingOn()
         consumeWakeCommand(intent)
     }
 
@@ -248,46 +269,38 @@ class MainActivity : ComponentActivity() {
             // Mid-conversation background hop: the in-app recognizer goes deaf the
             // moment we lose the foreground, so hand the turn to the mic-exempt
             // foreground service instead of letting the follow-up die unheard.
-            // Debounced like the plain start: an immediate startForegroundService
-            // here, immediately undone by onResume's stopService during a transient
-            // pause (HOME press as the launcher, rotation), broke the platform's
-            // startForeground() promise and got the process killed.
+            //
+            // Started SYNCHRONOUSLY here (no debounce): Android 14+ forbids starting
+            // a microphone-typed foreground service once the app is fully in the
+            // background, and the old debounced start fired after the activity had
+            // stopped -> SecurityException every time on targetSdk 36. The service
+            // promotes to foreground synchronously in onCreate(), so onResume's
+            // stopService for a transient pause cannot beat the startForeground()
+            // deadline.
             companionViewModel?.handOffListeningToBackground()
-            mainHandler.removeCallbacks(followUpStart)
-            mainHandler.postDelayed(followUpStart, WAKE_STANDBY_DEBOUNCE_MS)
+            startFollowUpNow()
         } else {
             companionViewModel?.releaseWakeMicForBackground()
             if (wakeOn && backgroundOn && micGranted) {
-                // Debounce: a pause that is immediately followed by a resume
-                // (rotation, home re-resolution, app-switcher flick) must NOT
-                // start the foreground service, because onResume's stopService
-                // would then tear it down before startForeground() runs and the
-                // platform kills the process for breaking the FGS promise.
-                // Genuine backgrounding outlasts the window, so the service
-                // still starts for real.
-                mainHandler.removeCallbacks(wakeStandbyStart)
-                mainHandler.postDelayed(wakeStandbyStart, WAKE_STANDBY_DEBOUNCE_MS)
+                // See the follow-up branch: synchronous onPause start so the mic FGS
+                // is created while the activity is still eligible, not after it stops.
+                startWakeStandbyNow()
             }
         }
     }
 
-    /** Re-checks state at fire time, then hands the mic to follow-up capture. */
+    /** Follow-up hand-off: the app just went to the background mid-conversation. */
     private fun startFollowUpNow() {
         if (isFinishing || isChangingConfigurations) return
         val micGranted = ContextCompat.checkSelfPermission(
             this, Manifest.permission.RECORD_AUDIO
         ) == PackageManager.PERMISSION_GRANTED
-        // No conversation-state re-check here: the hand-off that scheduled this
-        // runnable already reset the state to IDLE, so re-checking it always failed
-        // and the follow-up service never started. onResume cancels this runnable if
-        // we returned to the foreground, so reaching this point still backgrounded is
-        // itself the confirmation that the follow-up should run.
         if (micGranted) {
             WakeWordService.startFollowUp(this)
         }
     }
 
-    /** Re-checks state at fire time, then starts the background wake service. */
+    /** Background wake standby, started while the activity is still eligible. */
     private fun startWakeStandbyNow() {
         if (isFinishing || isChangingConfigurations) return
         val wakeOn = secureStorage.getBooleanPreference("wake_word_enabled", false)
@@ -308,12 +321,6 @@ class MainActivity : ComponentActivity() {
 
     /** Wake command arriving before the ViewModel exists (cold launch). */
     private var pendingWakeCommand: String? = null
-
-    companion object {
-        /** Long enough to swallow transient pause/resume churn, short enough that
-         *  real backgrounding still gets the wake service promptly. */
-        private const val WAKE_STANDBY_DEBOUNCE_MS = 500L
-    }
 
     private fun consumeWakeCommand(source: Intent?) {
         val command = source?.getStringExtra(WakeWordService.EXTRA_WAKE_COMMAND)

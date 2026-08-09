@@ -64,10 +64,6 @@ class RecognizerWakeWordEngine(
     @Volatile
     private var clientFailures = 0
 
-    /** Escalation stage for contention backoff; reset on success or start(). */
-    @Volatile
-    private var contentionBackoff = 0
-
     /** Collector for this session's partial transcripts. */
     private var partialJob: Job? = null
 
@@ -88,7 +84,6 @@ class RecognizerWakeWordEngine(
         running = true
         consecutiveErrors = 0
         clientFailures = 0
-        contentionBackoff = 0
         _isRunning.value = true
         listen()
     }
@@ -129,7 +124,6 @@ class RecognizerWakeWordEngine(
                 // A completed session proves the recognizer works.
                 consecutiveErrors = 0
                 clientFailures = 0
-                contentionBackoff = 0
                 // Already woken from a partial in this session — the final transcript
                 // is the same utterance, so do not wake twice.
                 if (firedThisSession) return@startListening
@@ -151,16 +145,12 @@ class RecognizerWakeWordEngine(
                     isContention(code) -> {
                         // Something ELSE holds the recognizer — most often the
                         // foreground WakeWordService and this in-app loop overlapping
-                        // during the mic handoff on resume/pause, or the recognition
-                        // service rate-limiting us (ERROR_TOO_MANY_REQUESTS). That is
-                        // transient and says nothing about the device, so it must not
-                        // count toward "keeps failing"; counting it is what produced
-                        // the false "wake phrase stopped" report while the recognizer
-                        // was fine. Hammering at a fixed 1.5s during a rate-limit only
-                        // extends it, so the backoff escalates while contention lasts.
+                        // during the mic handoff on resume/pause. That is transient and
+                        // says nothing about the device, so it must not count toward
+                        // "keeps failing"; counting it is what produced the false
+                        // "wake phrase stopped" report while the recognizer was fine.
                         consecutiveErrors = 0
-                        val backoff = CONTENTION_BACKOFF_MS * contentionEscalation()
-                        restart(backoff)
+                        restart(CONTENTION_BACKOFF_MS)
                     }
                     code == android.speech.SpeechRecognizer.ERROR_CLIENT -> {
                         // Observed on-device (Fold 7, bound to AIAI): bursts of code=5
@@ -193,17 +183,6 @@ class RecognizerWakeWordEngine(
                 }
             }
         )
-    }
-
-    /**
-     * Escalating multiplier while contention errors keep arriving: 1.5s, 3s, 6s,
-     * capped at 12s. Any successful result or [start] resets it. Fixed-delay retry
-     * against a rate-limiting service just keeps the limit hot.
-     */
-    private fun contentionEscalation(): Long {
-        val factor = 1L shl minOf(contentionBackoff, 3)
-        contentionBackoff = minOf(contentionBackoff + 1, 3)
-        return factor
     }
 
     private fun restart(delayMs: Long) {
@@ -268,10 +247,7 @@ class RecognizerWakeWordEngine(
         internal fun isContention(code: Int): Boolean = when (code) {
             android.speech.SpeechRecognizer.ERROR_RECOGNIZER_BUSY,
             android.speech.SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS,
-            android.speech.SpeechRecognizer.ERROR_SERVER_DISCONNECTED,
-            // The service is rate-limiting this app. Same nature as BUSY: transient,
-            // nothing wrong with the device, and retrying fast makes it worse.
-            android.speech.SpeechRecognizer.ERROR_TOO_MANY_REQUESTS -> true
+            android.speech.SpeechRecognizer.ERROR_SERVER_DISCONNECTED -> true
             else -> false
         }
 

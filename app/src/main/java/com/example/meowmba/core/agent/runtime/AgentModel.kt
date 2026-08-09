@@ -114,7 +114,10 @@ object AgentRegistry {
             id = "phone", name = "Paws",
             purpose = "Controls this phone: opens apps, links, and settings pages.",
             allowedTools = setOf(
-                "phone.launch_app", "phone.list_apps", "phone.open_url", "phone.open_settings"
+                "phone.launch_app", "phone.list_apps", "phone.open_url", "phone.open_settings",
+                "phone.play_music", "phone.set_alarm", "phone.set_timer", "phone.flashlight",
+                "phone.dnd", "phone.battery", "phone.set_volume", "phone.take_photo",
+                "phone.compose_sms", "phone.dial_call", "phone.media_control", "phone.set_brightness"
             )
         ),
         AgentDefinition(

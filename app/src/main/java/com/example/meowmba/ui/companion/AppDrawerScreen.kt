@@ -2,6 +2,7 @@ package com.example.meowmba.ui.companion
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -35,16 +36,80 @@ import kotlinx.coroutines.withContext
  * list and icons load in the background), with a Favorites row at the bottom
  * holding up to 8 pinned apps. Long-press any app to pin/unpin it. The first
  * two pins also appear on the companion face itself.
+ *
+ * Search is context-aware, not just label matching: each app carries a
+ * [DrawerApp.searchText] built from its name, its package tokens, its Play
+ * category, and topic aliases. Typing "google" surfaces every Google app,
+ * "ai" surfaces assistants/ChatGPT/Gemini-style apps, "games" surfaces the
+ * whole game library.
  */
-data class DrawerApp(val label: String, val packageName: String)
+data class DrawerApp(
+    val label: String,
+    val packageName: String,
+    val searchText: String,
+)
 
 /** Shared icon cache so reopening the drawer costs nothing. */
 private val iconCache = HashMap<String, ImageBitmap>()
+
+/** Topic aliases so a category word matches apps that share a vibe, not just a name. */
+private val GAME_ALIASES = listOf("game", "games", "gaming")
+private val AI_MARKERS = listOf(
+    "ai", "gpt", "chatgpt", "chatbot", "copilot", "gemini", "assistant",
+    "openai", "anthropic", "claude", "llama", "llm", "mistral", "neural",
+)
 
 fun launchApp(context: Context, packageName: String) {
     runCatching {
         val launch = context.packageManager.getLaunchIntentForPackage(packageName)
         if (launch != null) context.startActivity(launch)
+    }
+}
+
+/** Searchable text for one app: label + package tokens + category + topic aliases. */
+private fun searchTextFor(
+    label: String,
+    packageName: String,
+    info: android.content.pm.ResolveInfo,
+): String {
+    val tokens = buildList {
+        addAll(label.lowercase().split(Regex("[^a-z0-9]+")).filter { it.isNotBlank() })
+        addAll(packageName.lowercase().split(Regex("[^a-z0-9]+")).filter { it.isNotBlank() })
+    }.distinct()
+
+    val categoryWords = when (info.activityInfo.applicationInfo.category) {
+        ApplicationInfo.CATEGORY_GAME -> "game games gaming"
+        ApplicationInfo.CATEGORY_AUDIO -> "music audio sound"
+        ApplicationInfo.CATEGORY_VIDEO -> "video movie movies film tv streaming"
+        ApplicationInfo.CATEGORY_IMAGE -> "photo photos camera gallery image"
+        ApplicationInfo.CATEGORY_SOCIAL -> "social chat messaging messages"
+        ApplicationInfo.CATEGORY_NEWS -> "news magazine media"
+        ApplicationInfo.CATEGORY_MAPS -> "map maps navigation gps"
+        ApplicationInfo.CATEGORY_PRODUCTIVITY -> "productivity work office docs"
+        else -> ""
+    }
+
+    val extras = mutableListOf<String>()
+    if (info.activityInfo.applicationInfo.category == ApplicationInfo.CATEGORY_GAME ||
+        tokens.any { it in GAME_ALIASES }
+    ) {
+        extras += GAME_ALIASES
+    }
+    if (tokens.any { it in AI_MARKERS }) {
+        extras += AI_MARKERS
+    }
+    return (tokens + categoryWords.split(" ").filter { it.isNotBlank() } + extras)
+        .distinct()
+        .joinToString(" ")
+}
+
+/** Every query word must hit — exact, or a prefix of a search token (len >= 3). */
+private fun matchesSearch(app: DrawerApp, query: String): Boolean {
+    val words = query.lowercase().trim().split(Regex("\\s+")).filter { it.isNotBlank() }
+    if (words.isEmpty()) return true
+    val tokens = app.searchText.split(" ")
+    return words.all { w ->
+        tokens.any { it == w || (w.length >= 3 && it.startsWith(w)) }
     }
 }
 
@@ -54,7 +119,11 @@ private fun loadApps(context: Context): List<DrawerApp> {
     return pm.queryIntentActivities(intent, PackageManager.MATCH_ALL)
         .mapNotNull { info ->
             val label = info.loadLabel(pm)?.toString() ?: return@mapNotNull null
-            DrawerApp(label, info.activityInfo.packageName)
+            DrawerApp(
+                label = label,
+                packageName = info.activityInfo.packageName,
+                searchText = searchTextFor(label, info.activityInfo.packageName, info),
+            )
         }
         .filter { it.packageName != context.packageName }
         .distinctBy { it.packageName }
@@ -79,7 +148,7 @@ fun AppDrawerScreen(
 
     val visible = remember(query, apps) {
         if (query.isBlank()) apps
-        else apps.filter { it.label.contains(query, ignoreCase = true) }
+        else apps.filter { matchesSearch(it, query) }
     }
 
     Column(

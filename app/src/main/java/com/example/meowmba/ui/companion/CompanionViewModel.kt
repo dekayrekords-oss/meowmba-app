@@ -38,6 +38,12 @@ import com.example.meowmba.core.agent.tools.SetTimerTool
 import com.example.meowmba.core.agent.tools.FlashlightTool
 import com.example.meowmba.core.agent.tools.DndTool
 import com.example.meowmba.core.agent.tools.BatteryStatusTool
+import com.example.meowmba.core.agent.tools.SetVolumeTool
+import com.example.meowmba.core.agent.tools.TakePhotoTool
+import com.example.meowmba.core.agent.tools.ComposeSmsTool
+import com.example.meowmba.core.agent.tools.DialCallTool
+import com.example.meowmba.core.agent.tools.MediaControlTool
+import com.example.meowmba.core.agent.tools.SetBrightnessTool
 import com.example.meowmba.core.agent.tools.UiAutomationTool
 import com.example.meowmba.core.agent.tools.SshTool
 import com.example.meowmba.core.agent.tools.WeatherTool
@@ -62,23 +68,6 @@ import com.example.meowmba.core.agent.tools.DesktopRunBuildTool
 import com.example.meowmba.core.agent.tools.DesktopRunScriptTool
 import com.example.meowmba.core.agent.tools.WebSearchTool
 import com.example.meowmba.core.agent.tools.registerVaultTools
-import kotlinx.coroutines.isActive
-import com.example.meowmba.core.context.FocusDetector
-import com.example.meowmba.core.context.FocusLevel
-import com.example.meowmba.core.context.ProactiveEngine
-import com.example.meowmba.core.context.ProactiveNudge
-import com.example.meowmba.core.context.NudgePriority
-import com.example.meowmba.core.personality.MoodEvent
-import com.example.meowmba.core.sensor.AttentionState
-import com.example.meowmba.core.sensor.FacePresenceDetector
-import com.example.meowmba.core.agent.DualModeRouter
-import com.example.meowmba.core.agent.EdgeState
-import com.example.meowmba.core.agent.OfflineQueue
-import com.example.meowmba.core.agent.tools.BrightnessTool
-import com.example.meowmba.core.agent.tools.VolumeTool
-import com.example.meowmba.core.agent.tools.LocationTool
-import com.example.meowmba.core.agent.tools.NotificationListTool
-import com.example.meowmba.core.agent.tools.NotificationSummaryTool
 import com.example.meowmba.core.vault.VaultRepository
 import com.example.meowmba.core.agent.tools.EmailSendTool
 import com.example.meowmba.core.agent.tools.EmailDraftTool
@@ -92,6 +81,14 @@ import com.example.meowmba.core.agent.tools.ListAppsTool
 import com.example.meowmba.core.agent.tools.PlayMusicTool
 import com.example.meowmba.core.agent.tools.OpenUrlTool
 import com.example.meowmba.core.agent.tools.OpenSettingsTool
+import com.example.meowmba.core.agent.tools.CarStatusTool
+import com.example.meowmba.core.agent.tools.CarDriveModeTool
+import com.example.meowmba.core.agent.tools.CarTripTool
+import com.example.meowmba.core.agent.tools.CarEtaTool
+import com.example.meowmba.core.agent.tools.CarHelpTool
+import com.example.meowmba.core.car.DrivingDetector
+import com.example.meowmba.core.car.TripTracker
+import com.example.meowmba.core.car.CrashEvent
 import com.example.meowmba.core.media.SDCppImageGenerator
 import com.example.meowmba.core.audio.AudioStreamingManager
 import com.example.meowmba.core.bridge.DesktopBridgeManager
@@ -112,6 +109,7 @@ import com.example.meowmba.core.memory.LocalHashEmbedder
 import com.example.meowmba.core.memory.MemoryCommandParser
 import com.example.meowmba.core.memory.MemoryExporter
 import com.example.meowmba.core.memory.IpcMetaMemoryConnector
+import com.example.meowmba.core.memory.Mem0MetaMemoryConnector
 import com.example.meowmba.core.memory.MemoryRepository
 import com.example.meowmba.core.memory.MetaMemoryConnector
 import com.example.meowmba.core.memory.NoOpMetaMemoryConnector
@@ -125,6 +123,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.launch
 import android.util.Log
 import kotlinx.coroutines.CompletableDeferred
@@ -157,6 +159,12 @@ class CompanionViewModel(
     private val modelsDir: java.io.File? = null,
     /** Injectable for tests; defaults to a real downloader over [modelsDir]. */
     private val modelDownloader: ModelDownloader? = null,
+    /**
+     * Starts the foreground download service (survives backgrounding). Null in
+     * tests: [downloadModel]/[downloadCustomModel] then download in-process via
+     * the injected [modelDownloader], which is what the plain-JUnit tests drive.
+     */
+    private val downloadServiceStarter: ((android.content.Context, String, String, String, String?, java.io.File) -> Unit)? = null,
     /** Dispatcher for blocking work (on-device inference). Injected for tests. */
     private val ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO,
     /** CameraX capture for the vision path; null in tests → honest "no camera". */
@@ -171,282 +179,26 @@ class CompanionViewModel(
     private var idleAnimationDirector: IdleAnimationDirector? = null
     val uiState = _uiState.asStateFlow()
 
+    /**
+     * High-frequency face-track offsets. Kept OFF [uiState] so each sample does
+     * not recompose weather/tiles/chat/settings — that was the choppiness.
+     * Avatar look is unchanged; only the Compose subscription graph is fixed.
+     */
+    private val _faceGaze = MutableStateFlow<Pair<Float, Float>?>(null)
+    val faceGaze = _faceGaze.asStateFlow()
+
     fun getVisionManager(): com.example.meowmba.core.vision.VisionManager? = visionManager
+
+    /** Named GPS places ("remember this as my mailbox"). */
+    private val placesStore: com.example.meowmba.core.nav.PlacesStore? by lazy {
+        secureStorage?.let { com.example.meowmba.core.nav.PlacesStore(it) }
+    }
 
     /** Active model provider. Internal (not private) so tests can inject fakes. */
     internal var currentProvider: ModelProvider? = null
 
     /** Tools available for agent routing; null when no workspace/repo exists. */
     private var agentToolRegistry: ToolRegistry? = null
-
-    // ---- Attention mode (face detection → wake-word-free) ----
-    private var attentionModeEnabled = false
-    private var attentionCollectJob: kotlinx.coroutines.Job? = null
-
-    fun setAttentionMode(enabled: Boolean) {
-        attentionModeEnabled = enabled
-        if (enabled) {
-            visionManager?.startFaceDetection()
-            startAttentionCollector()
-        } else {
-            visionManager?.stopFaceDetection()
-            attentionCollectJob?.cancel()
-            attentionCollectJob = null
-        }
-    }
-
-    /**
-     * Collects face-presence state. When user is looking AND we detect speech
-     * onset, skip the wake word and go straight to listening mode.
-     */
-    private fun startAttentionCollector() {
-        attentionCollectJob?.cancel()
-        attentionCollectJob = viewModelScope.launch {
-            visionManager?.faceDetector?.state?.collect { attention ->
-                if (attention.lookingAtScreen && _uiState.value.interactionState == InteractionState.IDLE) {
-                    // User is looking at screen while idle → switch to passive listening
-                    // (speech recognizer will pick up any speech without wake word)
-                    if (!isPassiveListeningActive) {
-                        startPassiveListening()
-                    }
-                }
-            }
-        }
-    }
-
-    private var isPassiveListeningActive = false
-
-    // ---- Edge Agent: DualModeRouter + OfflineQueue ----
-    private var dualModeRouter: DualModeRouter? = null
-    private val offlineQueue = OfflineQueue()
-
-    fun getEdgeState(): EdgeState = dualModeRouter?.edgeState?.value ?: EdgeState.OFFLINE
-    fun getOfflineQueueSummary(): String = offlineQueue.summary()
-
-    /** Called when bridge reconnects — flush pending offline actions. */
-    fun onBridgeReconnected() {
-        viewModelScope.launch(ioDispatcher) {
-            dualModeRouter?.refreshState()
-            if (dualModeRouter?.isConnected() == true && !offlineQueue.isEmpty) {
-                val actions = offlineQueue.flush()
-                for (action in actions) {
-                    Log.d("EdgeAgent", "Flushing queued action: ${action.toolId}")
-                    try {
-                        val tool = toolRegistryRef?.byId(action.toolId)
-                        tool?.execute(action.args)
-                    } catch (e: Exception) {
-                        Log.e("EdgeAgent", "Failed to flush ${action.toolId}: ${e.message}")
-                    }
-                }
-                speak("Reconnected. Flushed ${actions.size} queued actions.")
-            }
-        }
-    }
-
-    // ---- Proactive Engine + Focus Detector ----
-    private val focusDetector = FocusDetector()
-    private var proactiveEngine: ProactiveEngine? = null
-    private var proactiveJob: kotlinx.coroutines.Job? = null
-
-    fun initProactiveEngine(context: android.content.Context?) {
-        proactiveEngine = ProactiveEngine(context, focusDetector)
-        startProactiveHeartbeat()
-    }
-
-    fun setProactiveNudges(enabled: Boolean) {
-        proactiveEngine?.enabled = enabled
-    }
-
-    private fun startProactiveHeartbeat() {
-        proactiveJob?.cancel()
-        proactiveJob = viewModelScope.launch {
-            while (true) {
-                kotlinx.coroutines.delay(60_000L) // every 60 seconds
-                focusDetector.recalculate()
-                // Update mood based on focus
-                val focus = focusDetector.focusLevel.value
-                if (focus == FocusLevel.DEEP) {
-                    moodEngine.onEvent(MoodEvent.FocusEntered, System.currentTimeMillis())
-                }
-                // Check for proactive nudge
-                val isSpeaking = _uiState.value.interactionState != InteractionState.IDLE
-                val nudge = proactiveEngine?.tick(canSpeak = !isSpeaking)
-                if (nudge != null) {
-                    speak(nudge.text)
-                }
-            }
-        }
-    }
-
-    /** Called by accessibility service when foreground app changes. */
-    fun onForegroundAppChanged(packageName: String) {
-        focusDetector.onForegroundAppChanged(packageName)
-    }
-
-    // ---- Voice Access + LLM Hybrid Mode ----
-    private var voiceAccessMode = false
-    private var continuousListenJob: kotlinx.coroutines.Job? = null
-
-    private fun activateVoiceAccessMode() {
-        if (voiceAccessMode) { speak("I'm already listening."); return }
-        voiceAccessMode = true
-        // The wake spotter and the continuous capture must not both hold the mic:
-        // two concurrent listeners is exactly the session churn that gets the app
-        // rate-limited by the recognition service (ERROR_TOO_MANY_REQUESTS / 11).
-        stopWakeLoopAndRelease()
-        speak("Listening mode active. I'll handle the smart stuff, Voice Access handles the taps.")
-        enableVoiceAccess()
-        startContinuousListening()
-    }
-
-    private fun deactivateVoiceAccessMode() {
-        voiceAccessMode = false
-        continuousListenJob?.cancel()
-        continuousListenJob = null
-        utteranceCapture?.cancel()
-        utteranceCapture = null
-        speak("Listening mode off.")
-        // Give the wake spotter its mic back (startWakeStandby checks state/mic itself).
-        startWakeStandby()
-    }
-
-    private fun enableVoiceAccess() {
-        val ctx = secureStorage?.context ?: return
-        try {
-            val intent = android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
-            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-            ctx.startActivity(intent)
-        } catch (_: Exception) {}
-    }
-
-    private fun startContinuousListening() {
-        continuousListenJob?.cancel()
-        continuousListenJob = viewModelScope.launch {
-            kotlinx.coroutines.delay(2000)
-            while (voiceAccessMode && isActive) {
-                while (_uiState.value.interactionState != InteractionState.IDLE) {
-                    kotlinx.coroutines.delay(500)
-                }
-                kotlinx.coroutines.delay(1500)
-                if (!voiceAccessMode) break
-                val engine = speechService ?: break
-                // The recognizer's error lands HERE, not in onListeningError: this
-                // loop runs while interactionState is IDLE, so the transient-retry
-                // path (which requires LISTENING) never fires — which is how a raw
-                // "Speech recognition error (11)" caption came back on screen.
-                var lastErrorCode = 0
-                val result = kotlinx.coroutines.suspendCancellableCoroutine<String?> { cont ->
-                    captureUtterance(
-                        engine,
-                        onError = { code ->
-                            lastErrorCode = code
-                            // Rate-limit (11) and friends: back off in the loop below
-                            // instead of surfacing a caption.
-                            if (cont.isActive) cont.resume(null) {}
-                        }
-                    ) { text ->
-                        if (cont.isActive) cont.resume(text) {}
-                    }
-                    viewModelScope.launch {
-                        kotlinx.coroutines.delay(10_000)
-                        if (cont.isActive) {
-                            // Free the session immediately instead of letting the
-                            // capture keep listening past its usefulness.
-                            utteranceCapture?.cancel()
-                            utteranceCapture = null
-                            cont.resume(null) {}
-                        }
-                    }
-                }
-                if (result.isNullOrBlank()) {
-                    utteranceCapture?.cancel()
-                    utteranceCapture = null
-                    // Longer cooldown after a rate-limit so the recognition service
-                    // actually clears its limit before we knock again.
-                    kotlinx.coroutines.delay(
-                        if (lastErrorCode == android.speech.SpeechRecognizer.ERROR_TOO_MANY_REQUESTS) 5000L else 2500L
-                    )
-                    continue
-                }
-                val norm = result.lowercase().trim()
-                if (norm in setOf("stop listening", "meow stop", "stop", "exit listening mode", "quit listening")) {
-                    deactivateVoiceAccessMode(); break
-                }
-                if (isComplexCommand(norm)) {
-                    phoneAgentLoop?.setGoal(result)
-                } else {
-                    routeSimpleVoiceCommand(result)
-                }
-            }
-        }
-    }
-
-    private fun isComplexCommand(text: String): Boolean {
-        if (isScreenContextualCommand(text)) return true
-        if (isMultiStepPhoneGoal(text)) return true
-        if (text.startsWith("how") || text.startsWith("why") || text.startsWith("what")
-            || text.startsWith("find") || text.startsWith("search")
-            || text.contains("cheapest") || text.contains("best")
-            || text.contains("compare") || text.contains("help me")) return true
-        if (text.contains(" and then ") || text.contains(" after that ")
-            || text.split(' ').size > 8) return true
-        return false
-    }
-
-    private fun routeSimpleVoiceCommand(text: String) {
-        val norm = text.lowercase().trim()
-        val svc = com.example.meowmba.core.access.MeowAccessibilityService.instance
-        if (svc == null) { speak("Accessibility service not connected."); return }
-        viewModelScope.launch(ioDispatcher) {
-            val result = when {
-                norm.startsWith("tap ") || norm.startsWith("click ") -> {
-                    svc.tapByText(text.substringAfter(' ').trim())
-                }
-                norm == "scroll down" || norm == "swipe up" -> svc.globalAction("scroll_down")
-                norm == "scroll up" || norm == "swipe down" -> svc.globalAction("scroll_up")
-                norm == "go back" || norm == "back" -> svc.globalAction("back")
-                norm == "go home" || norm == "home" -> svc.globalAction("home")
-                norm == "recents" || norm == "recent apps" -> svc.globalAction("recents")
-                norm.startsWith("type ") -> svc.typeIntoText("", text.substringAfter(' ').trim())
-                norm.startsWith("open ") -> {
-                    phoneAgentLoop?.setGoal("open " + text.substringAfter(' ').trim())
-                    "opening " + text.substringAfter(' ').trim()
-                }
-                else -> { phoneAgentLoop?.setGoal(text); "working on it" }
-            }
-            if (result.isNotBlank()) {
-                _uiState.value = _uiState.value.copy(captionText = result)
-            }
-        }
-    }
-
-    /**
-     * Passive listening: like startListening but triggered by face presence.
-     * If nothing is said within 5s, returns to idle. If speech is detected,
-     * processes it directly (no wake word needed).
-     */
-    private fun startPassiveListening() {
-        if (_uiState.value.interactionState != InteractionState.IDLE) return
-        isPassiveListeningActive = true
-        viewModelScope.launch {
-            kotlinx.coroutines.delay(200) // small debounce
-            val attention = visionManager?.faceDetector?.state?.value
-            if (attention?.lookingAtScreen != true) {
-                isPassiveListeningActive = false
-                return@launch
-            }
-            // Start a short capture — if user speaks, process it
-            captureUtterance(speechService ?: run { isPassiveListeningActive = false; return@launch }) { result ->
-                isPassiveListeningActive = false
-                if (result.isNotBlank()) {
-                    processUserSpeech(result)
-                }
-            }
-            // Auto-timeout: if no speech in 5s, cancel
-            kotlinx.coroutines.delay(5000)
-            isPassiveListeningActive = false
-        }
-    }
 
     /**
      * Weather source. Open-Meteo needs no API key and no account, so "what's the weather"
@@ -489,6 +241,26 @@ class CompanionViewModel(
             }
     }
 
+    /**
+     * meow-mem0 semantic memory adapter. Enabled only when a server URL is
+     * configured (Settings), never assumed; [Mem0MetaMemoryConnector.isAvailable]
+     * does a real /health check before anything claims a link exists. The
+     * per-install user_id is persisted so every device/account scopes its own
+     * semantic memories on the shared store.
+     */
+    internal val mem0: MetaMemoryConnector by lazy {
+        val url = _uiState.value.mem0ServerUrl.trim().trimEnd('/')
+        if (url.isBlank() || secureStorage == null) {
+            NoOpMetaMemoryConnector()
+        } else {
+            val storage = secureStorage!!
+            val userId = storage.getPreference(KEY_MEM0_USER_ID)
+                ?: java.util.UUID.randomUUID().toString()
+                    .also { storage.savePreference(KEY_MEM0_USER_ID, it) }
+            Mem0MetaMemoryConnector(baseUrl = url, userId = userId)
+        }
+    }
+
     /** Model downloads into app-private storage, HF token from encrypted prefs. */
     private val downloader: ModelDownloader? by lazy {
         modelDownloader ?: modelsDir?.let { dir ->
@@ -514,7 +286,6 @@ class CompanionViewModel(
 
     // ── Agent system (Phase 5) ──────────────────────────────────────────────
     private var agentOrchestrator: AgentOrchestrator? = null
-    private var toolRegistryRef: ToolRegistry? = null
 
     /**
      * Audit trail: ring-buffered into UI state and persisted to Room.
@@ -574,6 +345,25 @@ class CompanionViewModel(
     /** True while capturing a follow-up turn inside conversation mode. */
     private var isFollowUpListen = false
 
+    /** Always-on conversation mode (face mode + screen on). See [startAlwaysOnListening]. */
+    private var alwaysOnActive = false
+    /** Wall-clock of last always-on startListening — debounce AiAi thrash. */
+    private var lastAlwaysOnArmAtMs = 0L
+
+    /**
+     * True while the always-on recognizer session is open. A plain session flag
+     * rather than an [com.example.meowmba.core.audio.UtteranceCapture]: always-on
+     * listens session-by-session (a watchdog that pings forever would keep the
+     * test virtual clock busy), re-arming from session end/resetState.
+     */
+    private var alwaysOnSessionOpen = false
+    private var alwaysOnRearmJob: Job? = null
+    private var alwaysOnPartialJob: Job? = null
+    private var wakeAckPending = false
+    private var wakeAckListenJob: Job? = null
+    /** True once the app has handed off to the background (set on pause, cleared on resume). */
+    private var appInBackground = false
+
     /**
      * True from the moment the conversation is handed to the background
      * service ([handOffListeningToBackground]) until the activity reclaims
@@ -600,29 +390,20 @@ class CompanionViewModel(
 
     private val moodEngine = com.example.meowmba.core.personality.MoodEngine()
 
-        /** Module 5: toggle AR viewfinder overlay. */
-    fun toggleArViewfinder(enabled: Boolean) {
-        _uiState.value = _uiState.value.copy(showArViewfinder = enabled)
-    }
-
-    /** Module 2: toggle laser pointer mode. */
-    fun toggleLaserPointer() {
-        _uiState.value = _uiState.value.copy(isLaserPointerActive = !_uiState.value.isLaserPointerActive)
-    }
-
-    /** Module 1: play a named sound effect (called from AvatarRenderer via onSfx). */
-    fun playSfx(name: String) { sfxEngine?.play(name) }
-
-    /** Phase G4: circadian mood — time-of-day auto-mood injection. */
-    private val circadianMoodEngine = CircadianMoodEngine(moodEngine)
-
-    /** Module 1: local sound effects (SoundPool, pre-loaded). */
-    private var sfxEngine: com.example.meowmba.core.audio.LocalSoundEffectsEngine? = null
-
     /** Phase G2: motor API. [RobotManager] swaps simulated <-> a live LOOI body. */
     private val robotManager = com.example.meowmba.core.robot.RobotManager()
+    private val robotConnectGuard = java.util.concurrent.atomic.AtomicBoolean(false)
     private val motorController: com.example.meowmba.core.robot.MotorController
         get() = robotManager.active
+
+    // Declared BEFORE init: the init block wires the car assistant and its
+    // collectors write to these fields.
+    private var carDetector: DrivingDetector? = null
+    private var carTripTracker: TripTracker? = null
+    private var driveCardSuppressed = false
+
+    /** When the current transient drive reaction began. */
+    private var driveReactionStartedAtMs = 0L
 
     init {
         // Robot body: restore prefs into state, mirror live status, then connect.
@@ -641,6 +422,27 @@ class CompanionViewModel(
             }
         }
         refreshRobot()
+        // Face tracking → avatar gaze + Looi head pan. Auto-on at launch (front
+        // camera); null track just idles the gaze when nobody is in frame.
+        viewModelScope.launch {
+            visionManager?.faceTrack?.collect { track ->
+                val offX = track?.offsetX
+                val offY = track?.offsetY
+                val next = if (offX != null && offY != null) offX to offY else null
+                val cur = _faceGaze.value
+                val sameNull = next == null && cur == null
+                val samePos = next != null && cur != null &&
+                    kotlin.math.abs(next.first - cur.first) < 0.012f &&
+                    kotlin.math.abs(next.second - cur.second) < 0.012f
+                if (!sameNull && !samePos) {
+                    _faceGaze.value = next
+                    com.example.meowmba.core.robot.FaceMotorMap.panForFace(offX)
+                        .forEach { (servo, angle) -> motorController.setServo(servo, angle) }
+                }
+            }
+        }
+        // Kick face tracking as soon as the VM is alive (permission may defer it).
+        ensureFaceTrackingOn()
     }
 
     init {
@@ -650,6 +452,7 @@ class CompanionViewModel(
             _uiState.value = _uiState.value.copy(
                 name = if (savedName.isNullOrBlank()) _uiState.value.name else savedName,
                 wakeWordEnabled = storage.getBooleanPreference(KEY_WAKE_WORD, false),
+                requireWakeWordInFace = storage.getBooleanPreference(KEY_REQUIRE_WAKE_IN_FACE, false),
                 conversationMode = storage.getBooleanPreference(KEY_CONVERSATION, false),
                 bargeInEnabled = storage.getBooleanPreference(KEY_BARGE_IN, true),
                 idleChatterEnabled = storage.getBooleanPreference(KEY_IDLE_CHATTER, true),
@@ -658,10 +461,18 @@ class CompanionViewModel(
                 agentBrainEnabled = storage.getBooleanPreference(KEY_AGENT_BRAIN, true),
                 hermesAgentUrl = storage.getPreference(KEY_HERMES_URL) ?: "",
                 imageServerUrl = storage.getPreference(KEY_IMAGE_SERVER_URL) ?: "",
+                mem0ServerUrl = storage.getPreference(KEY_MEM0_SERVER_URL) ?: "",
                 videoServerUrl = storage.getPreference(KEY_VIDEO_SERVER_URL) ?: "",
                 preferServerImageGen = storage.getBooleanPreference(KEY_PREFER_SERVER_IMAGE_GEN, false),
                 musicServerUrl = storage.getPreference(KEY_MUSIC_SERVER_URL) ?: "",
                 backgroundListeningEnabled = storage.getBooleanPreference(KEY_BACKGROUND_LISTENING, false),
+                carModeEnabled = storage.getBooleanPreference(KEY_CAR_MODE, false),
+                avatarStyle = AvatarStyle.fromKey(storage.getPreference(KEY_AVATAR_STYLE)),
+                avatarEyeColor = AvatarColors.parse(
+                    storage.getPreference(KEY_AVATAR_EYE_COLOR), AvatarColors.DEFAULT_EYE),
+                avatarGlowColor = AvatarColors.parse(
+                    storage.getPreference(KEY_AVATAR_GLOW_COLOR), AvatarColors.DEFAULT_GLOW),
+                emergencyContact = storage.getPreference(KEY_EMERGENCY_CONTACT) ?: "",
                 // Restore the provider picked last session — but only if it is
                 // still a buildable provider; a stale/removed label falls back
                 // to the default instead of producing a silent null provider.
@@ -757,7 +568,9 @@ class CompanionViewModel(
                             .onFailure { android.util.Log.w("WakeMissDiag", "wake-miss save failed: ${it.message}") }
                     }
                 }
-                if (_uiState.value.wakeWordEnabled) startWakeStandby()
+                // Face always-on claims the mic on resume — don't start KWS only to
+                // tear it down (that race is ERROR_RECOGNIZER_BUSY / code 11 thrash).
+                if (_uiState.value.wakeWordEnabled && !shouldAlwaysOnMic()) startWakeStandby()
             }
         }
 
@@ -790,6 +603,20 @@ class CompanionViewModel(
                         interrupt()
                     }
                 }
+            }
+        }
+
+        // Face mode owns the mic. The instant the bare face (or the screen)
+        // goes away, always-on conversation hands the mic back to the wake
+        // phrase; when it returns, the mic goes hot again. Reacting only to
+        // the face-mode *transition* keeps this free of the caption churn.
+        // The initial emission is skipped on purpose: at construction the app
+        // has not resumed yet, and arming the open mic then would also make
+        // every JVM unit test drive a perpetual listener. The activity's
+        // onResume -> reclaimWakeMicForForeground() arms on first launch.
+        viewModelScope.launch {
+            _uiState.map { faceModeActive(it) }.distinctUntilChanged().drop(1).collect {
+                updateVoiceListeningMode()
             }
         }
 
@@ -838,7 +665,6 @@ class CompanionViewModel(
 
         // ── Agent system (Phase 5) ─────────────────────────────────────────
         val toolRegistry = ToolRegistry()
-        toolRegistryRef = toolRegistry
         if (memoryRepository != null) {
             toolRegistry.register(MemorySaveTool(memoryRepository))
             toolRegistry.register(MemorySearchTool(memoryRepository))
@@ -855,7 +681,6 @@ class CompanionViewModel(
         // orchestrator's approval card gates them like any MODERATE/DESTRUCTIVE tool.
         secureStorage?.let {
             val bridgeManager = DesktopBridgeManager(it)
-            dualModeRouter = DualModeRouter(bridgeManager)
             toolRegistry.register(DesktopWriteFileTool(bridgeManager))
             toolRegistry.register(DesktopRunBuildTool(bridgeManager))
             toolRegistry.register(DesktopRunScriptTool(bridgeManager))
@@ -895,7 +720,6 @@ class CompanionViewModel(
                 delay(10 * 60_000L)
                 val now = System.currentTimeMillis()
                 moodEngine.tick(now)
-                circadianMoodEngine.evaluateAndApply(now)
                 applyMood()
                 val st = _uiState.value
                 if (st.idleChatterEnabled && st.interactionState == InteractionState.IDLE &&
@@ -930,13 +754,6 @@ class CompanionViewModel(
         }
         if (appContext != null) {
             toolRegistry.register(EmailSendTool(appContext))
-            // Notification tools
-            toolRegistry.register(NotificationListTool())
-            toolRegistry.register(NotificationSummaryTool())
-            // Device settings tools (LUMI edge)
-            toolRegistry.register(BrightnessTool(appContext))
-            toolRegistry.register(VolumeTool(appContext))
-            toolRegistry.register(LocationTool(appContext))
             toolRegistry.register(CalendarListTool(appContext))
             toolRegistry.register(CalendarCreateTool(appContext))
         }
@@ -953,19 +770,30 @@ class CompanionViewModel(
             toolRegistry.register(FlashlightTool(appContext))
             toolRegistry.register(DndTool(appContext))
             toolRegistry.register(BatteryStatusTool(appContext))
+            // Phase F4: assistant-class phone tools.
+            toolRegistry.register(SetVolumeTool(appContext))
+            toolRegistry.register(TakePhotoTool(appContext))
+            toolRegistry.register(ComposeSmsTool(appContext))
+            toolRegistry.register(DialCallTool(appContext))
+            toolRegistry.register(MediaControlTool(appContext))
+            toolRegistry.register(SetBrightnessTool(appContext))
             // Phase F3: opt-in UI automation (off until enabled by the user).
             toolRegistry.register(UiAutomationTool())
-            // LOOI robot motor control via BLE
-            toolRegistry.register(com.example.meowmba.core.agent.tools.LooiMotorTool(robotManager))
-
-            // Module 1: sound effects engine
-            sfxEngine = com.example.meowmba.core.audio.LocalSoundEffectsEngine(appContext)
 
             // Invented avatar animations: the model writes keyframes, the app
             // validates and plays them — the same propose/constrain boundary as
             // every other tool. Saved clips persist as plain JSON files.
             val animStore = CustomAnimationStore(File(appContext.filesDir, "custom_animations"))
-            toolRegistry.register(AvatarAnimateTool(animStore) { spec -> playCustomAnimation(spec) })
+            toolRegistry.register(AvatarAnimateTool(animStore) { spec ->
+                // Prefer the Godot channel engine when the clip name is a known expression
+                // and the model only sent a bare name (or the frames are empty).
+                val composed = CatExpressions.resolve(spec.name)
+                if (composed != null && spec.frames.size <= 1) {
+                    playComposedExpression(composed, spec.name)
+                } else {
+                    playCustomAnimation(spec)
+                }
+            })
             toolRegistry.register(DescribeAnimationTool { spec -> playCustomAnimation(spec) })
 
             // Occasional random idle animations so the face feels alive.
@@ -976,8 +804,6 @@ class CompanionViewModel(
             // one (tail wag, paw lick, zoomies...) so the user sees the body
             // animations early instead of only subtle ear wiggles.
             var idleClipShownThisSession = false
-            
-                val microClipNames = setOf("ear twitch micro", "gaze drift", "nose wiggle")
             if (idleAnimationsEnabled) idleAnimationDirector = IdleAnimationDirector(
                 scope = viewModelScope,
                 canPlay = {
@@ -1001,11 +827,7 @@ class CompanionViewModel(
                         pool.randomOrNull()
                     }
                 },
-                play = { spec -> playCustomAnimation(spec, closesPanels = false) },
-                pickMicroSpec = {
-                    val microPool = CustomAnimations.BUILT_INS.filterKeys { it in microClipNames }.values
-                    microPool.randomOrNull()
-                },
+                play = { spec -> playCustomAnimation(spec) },
             ).also { it.start() }
 
             // Obsidian-compatible vault notes.
@@ -1037,23 +859,9 @@ class CompanionViewModel(
                     scope = viewModelScope,
                     vision = { visionProviderFor() },
                     brain = { prompt ->
-                        // Try cloud model first, fall back to on-device (Qwen/Gemma4)
-                        val cloudResult = runCatching {
+                        runCatching {
                             (omniRoute?.generate(prompt) as? com.example.meowmba.core.agent.ModelResponse.Complete)?.text
-                        }.onFailure { e ->
-                            android.util.Log.e("PhoneLoop", "Cloud brain failed: ${e.message}")
                         }.getOrNull()
-                        if (cloudResult != null) {
-                            android.util.Log.d("PhoneLoop", "Cloud brain OK (${cloudResult.length} chars)")
-                            cloudResult
-                        } else {
-                            android.util.Log.w("PhoneLoop", "Cloud unreachable, falling back to local model")
-                            runCatching {
-                                (currentProvider?.generate(prompt) as? com.example.meowmba.core.agent.ModelResponse.Complete)?.text
-                            }.onFailure { e ->
-                                android.util.Log.e("PhoneLoop", "Local brain also failed: ${e.message}")
-                            }.getOrNull()
-                        }
                     },
                     captureJpeg = {
                         kotlin.coroutines.suspendCoroutine { cont ->
@@ -1080,23 +888,9 @@ class CompanionViewModel(
                 phoneAgentLoop = com.example.meowmba.core.agent.PhoneAgentLoop(
                     scope = viewModelScope,
                     brain = { prompt ->
-                        // Try cloud model first, fall back to on-device (Qwen/Gemma4)
-                        val cloudResult = runCatching {
+                        runCatching {
                             (omniRoute?.generate(prompt) as? com.example.meowmba.core.agent.ModelResponse.Complete)?.text
-                        }.onFailure { e ->
-                            android.util.Log.e("PhoneLoop", "Cloud brain failed: ${e.message}")
                         }.getOrNull()
-                        if (cloudResult != null) {
-                            android.util.Log.d("PhoneLoop", "Cloud brain OK (${cloudResult.length} chars)")
-                            cloudResult
-                        } else {
-                            android.util.Log.w("PhoneLoop", "Cloud unreachable, falling back to local model")
-                            runCatching {
-                                (currentProvider?.generate(prompt) as? com.example.meowmba.core.agent.ModelResponse.Complete)?.text
-                            }.onFailure { e ->
-                                android.util.Log.e("PhoneLoop", "Local brain also failed: ${e.message}")
-                            }.getOrNull()
-                        }
                     },
                     service = { com.example.meowmba.core.access.MeowAccessibilityService.instance },
                     announce = { msg ->
@@ -1119,7 +913,10 @@ class CompanionViewModel(
                         sense.start()
                         viewModelScope.launch {
                             sense.motion.collect { st ->
-                                _motionTilt.value = st.rollDeg
+                                val roll = st.rollDeg
+                                if (kotlin.math.abs(roll - _motionTilt.value) > 0.4f) {
+                                    _motionTilt.value = roll
+                                }
                                 // G2 balance demo: head counter-rotates against tilt.
                                 com.example.meowmba.core.robot.FaceMotorMap.balanceTilt(st.rollDeg)
                                     .forEach { (servo, angle) -> motorController.setServo(servo, angle) }
@@ -1133,7 +930,7 @@ class CompanionViewModel(
                                     noteMoodEvent(com.example.meowmba.core.personality.MoodEvent.Shake)
                                     val spec = CustomAnimations.BUILT_INS["happy bop"]
                                         ?: CustomAnimations.BUILT_INS.values.randomOrNull()
-                                    spec?.let { playCustomAnimation(it, closesPanels = false) }
+                                    spec?.let { playCustomAnimation(it) }
                                 }
                             }
                         }
@@ -1166,6 +963,113 @@ class CompanionViewModel(
             toolRegistry.register(NavigateTool(appContext))
             toolRegistry.register(SavePlaceTool(appContext, savedPlaces))
             toolRegistry.register(ListSavedPlacesTool(savedPlaces))
+
+            // Car assistant: fuse GPS speed + accelerometer + a configured car
+            // Bluetooth device to know when the user is driving, track the trip, and
+            // watch for a crash. Sensors/location only run while car mode is enabled.
+            val drivingDetector = DrivingDetector(appContext, viewModelScope).also {
+                it.setCarDeviceAddress(secureStorage?.getPreference(KEY_CAR_DEVICE))
+            }
+            carDetector = drivingDetector
+            val tripTracker = TripTracker()
+            carTripTracker = tripTracker
+
+            // Always mirror the persisted switch, so the detector's state and the
+            // Settings toggle can never disagree (fresh detector starts disabled).
+            drivingDetector.setCarModeEnabled(_uiState.value.carModeEnabled)
+
+            viewModelScope.launch {
+                drivingDetector.driving.collect { s ->
+                    if (!s.isDriving) driveCardSuppressed = false
+                    // Latch transient reactions so a lurch plays out even though
+                    // the detector only publishes every couple of seconds.
+                    val now = System.currentTimeMillis()
+                    val incoming = if (s.isDriving) {
+                        driveReactionFor(s.speedMph, s.lateralG, s.longitudinalG)
+                    } else {
+                        DriveReaction.NONE
+                    }
+                    val (reaction, startedAt) = nextDriveReaction(
+                        current = _uiState.value.driveReaction,
+                        startedAtMs = driveReactionStartedAtMs,
+                        incoming = incoming,
+                        nowMs = now,
+                    )
+                    driveReactionStartedAtMs = startedAt
+                    _uiState.value = _uiState.value.copy(
+                        driving = s.isDriving,
+                        driveCardVisible = s.isDriving && !driveCardSuppressed,
+                        driveSpeedMph = s.speedMph,
+                        driveGForce = s.gForce,
+                        driveLateralG = s.lateralG,
+                        driveLongitudinalG = s.longitudinalG,
+                        driveReaction = reaction,
+                        driveReason = s.reason,
+                        driveManual = s.manualOverride,
+                    )
+                    val fix = drivingDetector.lastFix
+                    tripTracker.update(
+                        s.isDriving, s.speedMph,
+                        fix?.first, fix?.second,
+                    )
+                }
+            }
+            viewModelScope.launch {
+                tripTracker.trip.collect { t ->
+                    _uiState.value = _uiState.value.copy(driveTrip = t)
+                }
+            }
+            viewModelScope.launch {
+                drivingDetector.crashEvents.collect { crash -> onCrashDetected(crash) }
+            }
+
+            if (com.example.meowmba.BuildConfig.DEBUG) {
+                // Debug-only crash simulator: lets a connected computer exercise
+                // the camera-verify + alert path without actually driving.
+                val crashFilter = android.content.IntentFilter(
+                    "com.example.meowmba.debug.SIMULATE_CRASH",
+                )
+                appContext.registerReceiver(
+                    object : android.content.BroadcastReceiver() {
+                        override fun onReceive(c: android.content.Context?, i: android.content.Intent?) {
+                            simulateCrash(8.4f, 52f)
+                        }
+                    },
+                    crashFilter,
+                    android.content.Context.RECEIVER_EXPORTED,
+                )
+            }
+
+            toolRegistry.register(
+                CarStatusTool(
+                    state = { drivingDetector.driving.value },
+                    trip = { tripTracker.trip.value },
+                )
+            )
+            toolRegistry.register(
+                CarDriveModeTool(
+                    currentManual = { drivingDetector.driving.value.manualOverride },
+                    onSet = { on -> setManualDriving(on) },
+                )
+            )
+            toolRegistry.register(
+                CarTripTool(
+                    trip = { tripTracker.trip.value },
+                    lastTrip = { tripTracker.lastTrip.value },
+                )
+            )
+            toolRegistry.register(
+                CarEtaTool(appContext, savedPlaces) {
+                    drivingDetector.driving.value.speedMph
+                }
+            )
+            toolRegistry.register(
+                CarHelpTool(
+                    context = appContext,
+                    emergencyContact = { _uiState.value.emergencyContact },
+                    trip = { tripTracker.trip.value },
+                )
+            )
         }
         if (workspaceRoot != null) {
             val ws = Workspace(workspaceRoot)
@@ -1346,6 +1250,8 @@ class CompanionViewModel(
 
         // Load initial provider
         updateProvider(_uiState.value.selectedModel)
+        // Listening is armed by MainActivity after the VM is assigned
+        // (reclaimWakeMicForForeground) — arming here too double-opened STT.
     }
 
     override fun onCleared() {
@@ -1400,6 +1306,7 @@ class CompanionViewModel(
     /** IMU awareness — avatar leans with the phone; shake startles the cat. */
     var motionSense: com.example.meowmba.core.sensor.MotionSense? = null
         private set
+
 
     /** Watches screen-watch frames and turns them into reactions/commentary. */
     private var contextDirector: com.example.meowmba.core.context.ContextDirector? = null
@@ -1462,22 +1369,31 @@ class CompanionViewModel(
                 priority = 30,
             )
         }
-        // On-device, always, and always the fallback: no network, no configuration.
+        // On-device fallback only when a real model file is present. A missing
+        // path used to register a broken route that failed every offline turn
+        // with "Model file not found" and looked like "local model is dead".
         runCatching {
             val path = resolvedLocalModelPath()
-            val local: ModelProvider = if (path.endsWith(".litertlm")) {
-                LiteRtProvider(storage.context, path)
+            if (!java.io.File(path).isFile || java.io.File(path).length() == 0L) {
+                android.util.Log.w(
+                    "CompanionViewModel",
+                    "skipping on-device route: no model at $path"
+                )
             } else {
-                MediaPipeProvider(storage.context, path)
+                val local: ModelProvider = if (path.endsWith(".litertlm")) {
+                    LiteRtProvider(storage.context, path)
+                } else {
+                    MediaPipeProvider(storage.context, path)
+                }
+                routes += com.example.meowmba.core.agent.OmniRoute.Route(
+                    id = "local",
+                    label = "On-device",
+                    provider = local,
+                    tags = setOf(com.example.meowmba.core.agent.OmniRoute.RouteTag.FAST, com.example.meowmba.core.agent.OmniRoute.RouteTag.CHAT),
+                    priority = 90,
+                    offline = true,
+                )
             }
-            routes += com.example.meowmba.core.agent.OmniRoute.Route(
-                id = "local",
-                label = "On-device",
-                provider = local,
-                tags = setOf(com.example.meowmba.core.agent.OmniRoute.RouteTag.FAST, com.example.meowmba.core.agent.OmniRoute.RouteTag.CHAT),
-                priority = 90,
-                offline = true,
-            )
         }
         if (routes.isEmpty()) return null
         // "Default brain" setting: force one provider as the primary brain.
@@ -1515,7 +1431,19 @@ class CompanionViewModel(
             MODEL_GEMINI_NANO -> null
             "On-device (Local)" -> {
                 val path = resolvedLocalModelPath()
-                if (path.endsWith(".litertlm")) {
+                if (!java.io.File(path).isFile || java.io.File(path).length() == 0L) {
+                    // runCatching like fuLog: android.util.Log is a stub under plain JUnit.
+                    runCatching {
+                        android.util.Log.w(
+                            "CompanionViewModel",
+                            "On-device selected but no model file at $path"
+                        )
+                    }
+                    _uiState.value = _uiState.value.copy(
+                        captionText = "No on-device model installed — open Hardware and download one",
+                    )
+                    null
+                } else if (path.endsWith(".litertlm")) {
                     LiteRtProvider(secureStorage.context, path)
                 } else {
                     MediaPipeProvider(secureStorage.context, path)
@@ -1570,7 +1498,9 @@ class CompanionViewModel(
                 try {
                     GeminiNanoProvider.create(secureStorage.context)
                 } catch (e: Exception) {
-                    Log.w("CompanionViewModel", "Gemini Nano warm-up failed: ${e.message}")
+                    runCatching {
+                        Log.w("CompanionViewModel", "Gemini Nano warm-up failed: ${e.message}")
+                    }
                     null
                 }
             }
@@ -1598,10 +1528,15 @@ class CompanionViewModel(
      */
     private fun resolvedLocalModelPath(): String {
         val configured = secureStorage?.getEndpoint("local")
-        if (configured != null) return configured
-        return downloader?.firstInstalledOption()
+        if (configured != null && java.io.File(configured).exists()) return configured
+        // Catalog pick first, then any .task/.litertlm sitting in models/
+        downloader?.firstInstalledOption()
             ?.let { option -> downloader?.installedFile(option)?.absolutePath }
-            ?: "/data/local/tmp/llm/gemma.bin"
+            ?.let { return it }
+        downloader?.listInstalled()?.firstOrNull()?.absolutePath?.let { return it }
+        // Last resort: configured path (even if missing) so error messages show it,
+        // else the historical adb path.
+        return configured ?: "/data/local/tmp/llm/gemma.bin"
     }
 
     /**
@@ -1656,14 +1591,24 @@ class CompanionViewModel(
     fun setWakeWordEnabled(enabled: Boolean) {
         _uiState.value = _uiState.value.copy(wakeWordEnabled = enabled)
         secureStorage?.saveBooleanPreference(KEY_WAKE_WORD, enabled)
-        if (enabled) {
-            startWakeStandby()
-        } else {
-            stopWakeLoopAndRelease()
-            if (_uiState.value.interactionState == InteractionState.IDLE) {
-                _uiState.value = _uiState.value.copy(captionText = null)
-            }
+        updateVoiceListeningMode()
+    }
+
+    /**
+     * Require the wake phrase even in face mode (persisted).
+     *
+     * With it on, face mode listens for "hey [name]" instead of staying always-on, which is
+     * the pre-5741ace behavior. Turning it on when the wake word is off also arms the wake
+     * word — requiring a wake word that is disabled would leave face mode silent.
+     */
+    fun setRequireWakeInFace(enabled: Boolean) {
+        secureStorage?.saveBooleanPreference(KEY_REQUIRE_WAKE_IN_FACE, enabled)
+        if (enabled && !_uiState.value.wakeWordEnabled) {
+            secureStorage?.saveBooleanPreference(KEY_WAKE_WORD, true)
+            _uiState.value = _uiState.value.copy(wakeWordEnabled = true)
         }
+        _uiState.value = _uiState.value.copy(requireWakeWordInFace = enabled)
+        updateVoiceListeningMode()
     }
 
     /** Enable/disable conversation follow-up mode (persisted). */
@@ -1723,7 +1668,7 @@ class CompanionViewModel(
                 anim?.let { CustomAnimations.BUILT_INS[it] }?.let { spec ->
                     if (_uiState.value.interactionState == InteractionState.IDLE &&
                         _uiState.value.activeAnimation == null
-                    ) playCustomAnimation(spec, closesPanels = false)
+                    ) playCustomAnimation(spec)
                 }
             },
             onComment = { text -> speak(text) },
@@ -1753,21 +1698,10 @@ class CompanionViewModel(
 
     /** Swipe right on the face: app drawer. */
     fun toggleAppDrawer() {
-        // Vertical drags that overscroll an open panel (Settings etc.) fall
-        // through to the canvas swipe handler; never yank the drawer over a
-        // panel the user is reading.
-        if (!_uiState.value.showAppDrawer && anyPanelOpen()) return
         _uiState.value = _uiState.value.copy(
             showAppDrawer = !_uiState.value.showAppDrawer,
             showBrowser = false,
         )
-    }
-
-    /** Any full-screen overlay panel that should swallow home gestures. */
-    private fun anyPanelOpen(): Boolean = with(_uiState.value) {
-        showSettings || showModelManager || showPrivacyDashboard || showMemoryScreen ||
-            showWeatherScreen || showBackgroundScreen || showNavScreen || showAgentsScreen ||
-            showVaultScreen || isChatExpanded
     }
 
     /** Swipe left on the face: the browser meow can drive. */
@@ -1861,6 +1795,7 @@ class CompanionViewModel(
                             recordSpokenResponse(fullResponse)
                             if (!_uiState.value.memoryPaused) {
                                 memoryRepository?.saveEpisodicCheckpoint(text, fullResponse, userMessageId)
+                                pushMemoriesToMem0()
                             }
                         }
                     }
@@ -1884,6 +1819,25 @@ class CompanionViewModel(
             _uiState.value = _uiState.value.copy(captionText = "Searching for \"$query\" in the browser.")
         }
         speak("Searching for that in the browser now.")
+    }
+
+    /** "search X in/on <app>": launch the app's search screen via deep link. */
+    private fun deepLinkSearch(target: AgentRouter.DeepLinkTarget) {
+        val ctx = secureStorage?.context ?: run {
+            speak("I can't open ${target.app} in this build.")
+            return
+        }
+        viewModelScope.launch {
+            try {
+                ctx.startActivity(
+                    android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(target.url))
+                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+                speak("Opening ${target.app} and searching for \"${target.query}\".")
+            } catch (e: Exception) {
+                speak("I couldn't open ${target.app}: ${e.message}")
+            }
+        }
     }
 
     // ── "Show it in the browser" ────────────────────────────────────────────
@@ -1980,26 +1934,34 @@ class CompanionViewModel(
     // ── Robot body (LOOI) ────────────────────────────────────────────────
     /** (Re)resolve the active robot body from preferences. Non-blocking. */
     fun refreshRobot() {
+        // Concurrency guard: screen on/off and settings toggles can call this
+        // in rapid succession. Only one connect attempt runs at a time, or
+        // competing LooiBleLink instances drop each other's GATT link.
+        if (!robotConnectGuard.compareAndSet(false, true)) return
         val enabled = secureStorage?.getBooleanPreference("robot_body_enabled", true) == true
         val useBt = secureStorage?.getBooleanPreference("robot_use_bluetooth", true) == true
         val host = secureStorage?.getPreference("robot_host") ?: "192.168.1.200"
         val port = (secureStorage?.getPreference("robot_port")?.toIntOrNull()) ?: 9100
         val btAddress = secureStorage?.getPreference("robot_bt_address") ?: ""
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            if (!enabled) robotManager.useSimulated()
-            else if (useBt) {
-                // BLE first, using the exact Memba 2 droid connection setup
-                // (attached-if-connected -> scan -> known-MAC fallback). The
-                // saved MAC short-circuits straight to that device. Falls back
-                // to the legacy RFCOMM path for classic-paired bases.
-                val ctx = secureStorage?.context
-                if (ctx == null) robotManager.useSimulated()
-                else {
-                    val bleOk = runCatching { robotManager.connectLooiBle(ctx, btAddress) }.getOrDefault(false)
-                    if (!bleOk && btAddress.isNotBlank()) robotManager.connectBluetooth(btAddress)
+            try {
+                if (!enabled) robotManager.useSimulated()
+                else if (useBt) {
+                    // BLE first, using the exact Memba 2 droid connection setup
+                    // (attached-if-connected -> scan -> known-MAC fallback). The
+                    // saved MAC short-circuits straight to that device. Falls back
+                    // to the legacy RFCOMM path for classic-paired bases.
+                    val ctx = secureStorage?.context
+                    if (ctx == null) robotManager.useSimulated()
+                    else {
+                        val bleOk = runCatching { robotManager.connectLooiBle(ctx, btAddress) }.getOrDefault(false)
+                        if (!bleOk && btAddress.isNotBlank()) robotManager.connectBluetooth(btAddress)
+                    }
                 }
+                else robotManager.connectLooi(host, port)
+            } finally {
+                robotConnectGuard.set(false)
             }
-            else robotManager.connectLooi(host, port)
         }
     }
 
@@ -2038,23 +2000,6 @@ class CompanionViewModel(
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val found = robotManager.discoverAllBases()
             _uiState.value = _uiState.value.copy(robotScanning = false, robotScanResults = found)
-        }
-    }
-
-    /** Initialize / retry the LOOI robot connection handshake (from MEMBA 2). */
-    fun initializeRobot() {
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            val link = robotManager.getBleLink()
-            if (link == null ||
-                link.state == com.example.meowmba.core.robot.LooiBleLink.LinkState.OFFLINE
-            ) {
-                // No live link: "Initialize" means bring the body up — the full
-                // bring-up flow (attached GATT -> scan -> known-MAC -> RFCOMM
-                // fallback), with live status updates in Settings.
-                refreshRobot()
-            } else {
-                robotManager.retryLooiHandshake()
-            }
         }
     }
 
@@ -2182,7 +2127,12 @@ class CompanionViewModel(
         }
     }
 
-    private fun wakeHint() = "Say \"Hey ${_uiState.value.name}\"…"
+    /** The idle caption hint, or null while always-on listening (live partials replace it). */
+    private fun wakeHint(): String? = when {
+        shouldAlwaysOnMic() -> null
+        _uiState.value.wakeWordEnabled -> "Say \"Hey ${_uiState.value.name}\"…"
+        else -> null
+    }
 
     /** Wake phrase heard: run the spoken command, or listen for one. */
     internal fun onWakeDetected(command: String?) {
@@ -2194,7 +2144,30 @@ class CompanionViewModel(
         if (command != null) {
             processUserSpeech(command)
         } else {
-            startListening(prompt = "Yes?")
+            speakWakeAckThenListen()
+        }
+    }
+
+    /**
+     * Immediate audible callback when the wake phrase is heard with no command
+     * attached: Meow says "Yes?" out loud, then opens the mic for the command.
+     * A [wakeAckListenJob] opens the mic ~1.5s later so a silent or slow TTS
+     * engine never strands the user waiting; [onSpeechFinished] consumes the
+     * pending ack so the normal follow-up path doesn't double-own the mic.
+     */
+    private fun speakWakeAckThenListen() {
+        wakeAckPending = true
+        _uiState.value = _uiState.value.copy(
+            interactionState = InteractionState.SPEAKING,
+            captionText = "Yes?",
+            emotion = CompanionEmotion.HAPPY
+        )
+        speakStreaming("Yes?", first = true)
+        wakeAckListenJob?.cancel()
+        wakeAckListenJob = viewModelScope.launch {
+            delay(1_500L)
+            wakeAckPending = false
+            startFollowUpListening()
         }
     }
 
@@ -2222,6 +2195,8 @@ class CompanionViewModel(
      * listening at all, with every log line claiming it was.
      */
     fun releaseWakeMicForBackground() {
+        appInBackground = true
+        stopAlwaysOnListening()
         stopWakeLoopAndRelease()
     }
 
@@ -2253,6 +2228,7 @@ class CompanionViewModel(
      */
     fun handOffListeningToBackground() {
         handedOffToBackground = true
+        appInBackground = true
         fuLog("handOffListeningToBackground -> in-app listening frozen")
         // Silence the tail of the reply: anything still queued keeps playing
         // AFTER the background follow-up service opens its mic, and the
@@ -2263,6 +2239,7 @@ class CompanionViewModel(
         utteranceCapture?.cancel()
         utteranceCapture = null
         speechService?.stopListening()
+        stopAlwaysOnListening()
         stopWakeLoopAndRelease()
         resetState()
         // resetState() left the state IDLE and therefore re-armed the in-app wake
@@ -2277,7 +2254,8 @@ class CompanionViewModel(
     /** Called when the app returns to the foreground; retakes the wake mic. */
     fun reclaimWakeMicForForeground() {
         handedOffToBackground = false
-        if (_uiState.value.wakeWordEnabled) startWakeStandby()
+        appInBackground = false
+        updateVoiceListeningMode()
     }
 
     /**
@@ -2326,6 +2304,12 @@ class CompanionViewModel(
             // which then refused the service the mic ("in-app wake loop
             // owns the mic") and the follow-up never started.
             android.util.Log.i(TAG_WAKE, "not re-arming: conversation handed to background service")
+            return
+        }
+        if (shouldAlwaysOnMic()) {
+            // The bare face owns the mic in always-on conversation mode; the
+            // wake phrase would be noise on top of it.
+            android.util.Log.i(TAG_WAKE, "not re-arming: face mode owns the mic")
             return
         }
         val state = _uiState.value.interactionState
@@ -2379,6 +2363,165 @@ class CompanionViewModel(
     }
 
     /**
+     * True while the bare companion face is up and the screen is on — the
+     * always-on conversation window. The hot word is pointless here, so the
+     * mic just stays open and anything spoken is a command.
+     */
+    private fun shouldAlwaysOnMic(): Boolean {
+        val s = _uiState.value
+        // Face mode owns an open mic by default so speech is a command without a
+        // hot word. Wake still runs when the face is covered (settings/drawer) or
+        // when requireWakeWordInFace opts back into hot-word gating.
+        return s.isMicEnabled && !s.isMuted && !handedOffToBackground && faceModeActive(s) &&
+            !s.requireWakeWordInFace
+    }
+
+    /**
+     * Chooses which listener owns the mic: always-on conversation while the
+     * face is up, wake-phrase standby otherwise. Called on every mode
+     * transition (face in/out, mic toggle, mute, foreground return, end of a
+     * turn) so the two can never disagree.
+     */
+    private fun updateVoiceListeningMode() {
+        if (shouldAlwaysOnMic()) {
+            // Face always-on owns the mic (74f6 behavior). Immediate start — a
+            // delayed arm left the face deaf after cold launch / resume.
+            stopWakeLoopAndRelease()
+            startAlwaysOnListening()
+        } else {
+            stopAlwaysOnListening()
+            if (_uiState.value.wakeWordEnabled && !handedOffToBackground &&
+                _uiState.value.interactionState == InteractionState.IDLE
+            ) {
+                startWakeStandby()
+            }
+        }
+    }
+
+    /**
+     * Always-on conversation: the recognizer stays open in face mode, session by
+     * session. While it waits it mirrors live partials into the caption; when a
+     * turn is recognised it feeds [processUserSpeech] and re-arms once the reply
+     * (and any follow-up) has finished. The wake phrase is off the whole time.
+     *
+     * Sessions are deliberately plain `startListening` calls rather than a
+     * stitched [com.example.meowmba.core.audio.UtteranceCapture]: always-on has
+     * no "turn" to wait out — the platform ending a session on quiet is fine, the
+     * next session re-arms — and a capture watchdog that pings forever would
+     * never let a virtual test clock go idle.
+     */
+    private fun startAlwaysOnListening() {
+        val engine = speechService ?: return
+        if (!engine.isAvailable) return
+        if (alwaysOnActive && alwaysOnSessionOpen) return
+        alwaysOnActive = true
+        armAlwaysOnCapture(engine)
+        if (alwaysOnPartialJob == null) {
+            alwaysOnPartialJob = viewModelScope.launch {
+                engine.partialResults.collect { partial ->
+                    if (alwaysOnActive && shouldAlwaysOnMic() && partial.isNotBlank() &&
+                        _uiState.value.interactionState == InteractionState.IDLE
+                    ) {
+                        _uiState.value = _uiState.value.copy(
+                            interactionState = InteractionState.LISTENING,
+                            captionText = partial,
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private fun stopAlwaysOnListening() {
+        alwaysOnActive = false
+        alwaysOnRearmJob?.cancel()
+        alwaysOnRearmJob = null
+        alwaysOnPartialJob?.cancel()
+        alwaysOnPartialJob = null
+        if (alwaysOnSessionOpen) {
+            alwaysOnSessionOpen = false
+            speechService?.stopListening()
+        }
+    }
+
+    /** Opens the always-on mic once the turn is idle (never on top of a live turn). */
+    private fun armAlwaysOnCapture(engine: com.example.meowmba.core.audio.SpeechEngine) {
+        if (!alwaysOnActive) return
+        if (!shouldAlwaysOnMic()) {
+            stopAlwaysOnListening()
+            return
+        }
+        if (alwaysOnSessionOpen) return
+        if (_uiState.value.interactionState != InteractionState.IDLE || utteranceCapture != null) {
+            // A turn is live. No polling: resetState() runs updateVoiceListeningMode()
+            // when the turn ends, which re-arms us from a clean idle.
+            return
+        }
+        val now = System.currentTimeMillis()
+        val since = now - lastAlwaysOnArmAtMs
+        if (since in 0 until 2_000L) {
+            // AiAi still tearing down the previous slot — schedule, don't stack.
+            alwaysOnRearmJob?.cancel()
+            alwaysOnRearmJob = viewModelScope.launch {
+                delay(2_000L - since)
+                if (alwaysOnActive && shouldAlwaysOnMic() &&
+                    _uiState.value.interactionState == InteractionState.IDLE &&
+                    !alwaysOnSessionOpen
+                ) {
+                    armAlwaysOnCapture(engine)
+                }
+            }
+            return
+        }
+        lastAlwaysOnArmAtMs = now
+        alwaysOnSessionOpen = true
+        engine.startListening(
+            onResult = { text ->
+                alwaysOnSessionOpen = false
+                if (alwaysOnActive && text.isNotBlank()) processUserSpeech(text)
+            },
+            onError = { code ->
+                alwaysOnSessionOpen = false
+                // Nobody spoke (quiet-open timeout / no match) is the normal
+                // idle state of always-on listening — put the face back to
+                // idle and reopen the mic. Real recognizer hiccups retry with
+                // a short backoff instead of leaving the face silently deaf.
+                if (_uiState.value.interactionState == InteractionState.LISTENING) {
+                    _uiState.value = _uiState.value.copy(interactionState = InteractionState.IDLE)
+                }
+                if (alwaysOnActive && shouldAlwaysOnMic() &&
+                    _uiState.value.interactionState == InteractionState.IDLE
+                ) {
+                    val quiet = code == android.speech.SpeechRecognizer.ERROR_NO_MATCH ||
+                        code == android.speech.SpeechRecognizer.ERROR_SPEECH_TIMEOUT
+                    // 8 = BUSY, 5 = CLIENT, 11 = SERVER_DISCONNECTED: hot-looping
+                    // these is what made always-on face mic look dead.
+                    val contention = code == android.speech.SpeechRecognizer.ERROR_RECOGNIZER_BUSY ||
+                        code == android.speech.SpeechRecognizer.ERROR_CLIENT ||
+                        code == android.speech.SpeechRecognizer.ERROR_SERVER_DISCONNECTED
+                    alwaysOnRearmJob?.cancel()
+                    alwaysOnRearmJob = viewModelScope.launch {
+                        // AIAI on Fold thrash-loops if we re-open too fast after 7/8/11.
+                        // SpeechService destroys+rebinds every session; AiAi needs a
+                        // long gap or it returns BUSY/11 in a loop ("capacity is full").
+                        delay(when {
+                            quiet -> 1_500L
+                            contention -> 2_500L
+                            else -> 1_800L
+                        })
+                        if (alwaysOnActive && shouldAlwaysOnMic() &&
+                            _uiState.value.interactionState == InteractionState.IDLE &&
+                            !alwaysOnSessionOpen
+                        ) {
+                            armAlwaysOnCapture(engine)
+                        }
+                    }
+                }
+            },
+        )
+    }
+
+    /**
      * Toggles the voice listening state (push-to-talk / tap-to-toggle).
      * Tapping while the companion speaks interrupts it and starts a new turn.
      */
@@ -2399,6 +2542,7 @@ class CompanionViewModel(
                 // capture must stop too — otherwise it just opens another session.
                 utteranceCapture?.cancel()
                 utteranceCapture = null
+                alwaysOnSessionOpen = false
                 speechService?.stopListening()
                 resetState()
             }
@@ -2409,6 +2553,10 @@ class CompanionViewModel(
         transientListenRetries = 0
         followUpJob?.cancel()
         isFollowUpListen = false
+        // A focused, push-to-talk turn takes priority over the always-on
+        // listener: stop the open-mic capture and its partial mirror so only
+        // this capture drives the caption for the duration of the turn.
+        stopAlwaysOnListening()
         stopWakeLoopAndRelease()
 
         val engine = speechService
@@ -2424,9 +2572,11 @@ class CompanionViewModel(
         }
 
         audioFocusManager?.requestFocus()
+        // No "Listening…" prompt: captions appear only for live speech (partials)
+        // or the reply, never for a waiting state.
         _uiState.value = _uiState.value.copy(
             interactionState = InteractionState.LISTENING,
-            captionText = prompt,
+            captionText = null,
             emotion = CompanionEmotion.ALERT
         )
 
@@ -2505,18 +2655,17 @@ class CompanionViewModel(
             }
             return
         }
-        // Error 11 is ERROR_TOO_MANY_REQUESTS — the recognition service is
-        // rate-limiting us — and friends are transient hiccups, not a broken mic.
-        // Instead of surfacing a raw "error 11" caption and going deaf, re-open
-        // the session silently a couple of times; only give up (and say why) if
-        // it keeps happening.
+        // Error 11 (ERROR_SERVER_DISCONNECTED) and friends are transient hiccups
+        // of the recognition service, not a broken mic. Instead of surfacing a
+        // raw "error 11" caption and going deaf, re-open the session silently a
+        // couple of times; only give up (and say why) if it keeps happening.
         if (isTransientSpeechError(code) &&
             transientListenRetries < MAX_TRANSIENT_LISTEN_RETRIES &&
             _uiState.value.interactionState == InteractionState.LISTENING
         ) {
             transientListenRetries++
             viewModelScope.launch {
-                delay(if (code == 11) 3000L * transientListenRetries else 800L)
+                delay(600)
                 if (_uiState.value.interactionState != InteractionState.LISTENING) return@launch
                 val engine = speechService ?: return@launch
                 captureUtterance(engine) { result -> processUserSpeech(result) }
@@ -2548,7 +2697,7 @@ class CompanionViewModel(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
                 interactionState = InteractionState.LISTENING,
-                captionText = "Listening...",
+                captionText = null,
                 emotion = CompanionEmotion.ALERT
             )
             delay(3000)
@@ -2557,7 +2706,6 @@ class CompanionViewModel(
     }
 
     private fun processUserSpeech(text: String) {
-        circadianMoodEngine.noteUserEvent()
         fuLog("processUserSpeech: \"$text\"")
         // "Show it in the browser": pull the newest artifact into the panel.
         // Checked before the agent routing so it also works while the browser
@@ -2566,19 +2714,32 @@ class CompanionViewModel(
             showLatestArtifactInBrowser()
             return
         }
-        // "Start listening" -> Voice Access + LLM hybrid mode
-        val normalizedCmd = WakePhraseMatcher.normalize(text)
-        if (normalizedCmd in setOf("start listening", "meow start listening", "listening mode",
-                "voice control", "start voice control", "voice access")) {
-            activateVoiceAccessMode()
+        // Phone-control engage: "start listening" / "control my phone" arms a
+        // state where the NEXT utterance becomes the phone-control goal, so the
+        // user can chain "read the screen", "write an email", "fill this form"...
+        if (PHONE_CONTROL_ENGAGE.any { WakePhraseMatcher.normalize(text) == it }) {
+            if (!com.example.meowmba.core.access.MeowAccessibilityService.isEnabled()) {
+                speak("Phone control needs the accessibility service. I'm opening Settings — enable Meow Companion there, then say start listening again.")
+                openAccessibilitySettings()
+                return
+            }
+            _uiState.value = _uiState.value.copy(phoneControlAwaitingGoal = true)
+            speak("I'm ready. Tell me what to do on the phone — read the screen, look things up, fill forms, or send messages.")
             return
         }
-        if (voiceAccessMode && normalizedCmd in setOf("stop listening", "meow stop listening",
-                "exit listening mode", "quit listening")) {
-            deactivateVoiceAccessMode()
+        if (_uiState.value.phoneControlAwaitingGoal) {
+            val stopWords = setOf(
+                "stop", "cancel", "never mind", "nevermind", "quit", "abort",
+                "thank you", "thanks", "goodbye", "bye", "that's all", "thats all"
+            )
+            _uiState.value = _uiState.value.copy(phoneControlAwaitingGoal = false)
+            if (stopWords.any { text.lowercase().trim().startsWith(it) }) {
+                speak("Phone control stopped.")
+                return
+            }
+            phoneAgentLoop?.setGoal(text)
             return
         }
-
         // Phone-control loop: if active, "stop"/"cancel" kills it; else new speech updates the goal.
         if (phoneAgentLoop?.isActive == true) {
             val stopWords = setOf("stop", "cancel", "never mind", "nevermind", "quit", "abort")
@@ -2592,6 +2753,14 @@ class CompanionViewModel(
             return
         }
 
+        // "search X in/on <app>": deep-link straight into the app's search
+        // screen. Must run before the browser-search block below, which would
+        // otherwise grab "search cats on youtube" as a web query and open the
+        // browser panel instead of the app.
+        AgentRouter.routeDeepLink(WakePhraseMatcher.normalize(text))?.let { target ->
+            deepLinkSearch(target)
+            return
+        }
         // Explicit searches ("search for...", "look up...", "google...") open
         // live in the browser panel — the user sees results, not a queued task
         // narrating "searching...". Checked before the browser-agent routing so
@@ -2600,6 +2769,22 @@ class CompanionViewModel(
         extractSearchQuery(WakePhraseMatcher.normalize(text))?.let { query ->
             showSearchInBrowser(query)
             return
+        }
+        // Named GPS locations: "remember this as my mailbox" saves the current
+        // fix, "where is my mailbox" recalls it. Runs BEFORE the direct-question
+        // and generic remember-handling so "where is my X" never leaks to the
+        // chat brain, and the place form is never stored as a fact.
+        val parsedLocation = parseNamedLocation(text)
+        when (val locationCmd = parsedLocation) {
+            is LocationCommand.Save -> {
+                saveNamedLocation(locationCmd.name)
+                return
+            }
+            is LocationCommand.Recall -> {
+                recallNamedLocation(locationCmd.name)
+                return
+            }
+            null -> {}
         }
         // Informational questions get answered directly by the brain — never
         // queued as agent tasks, never met with another question.
@@ -2653,6 +2838,12 @@ class CompanionViewModel(
             // Save user message to memory
             val userMessageId = memoryRepository?.addMessage(MessageRole.USER, text)
 
+            // Face-presence: "can you see me" uses the live face tracker first.
+            if (com.example.meowmba.core.vision.VisionRouter.isSeeMeQuery(text)) {
+                answerSeeMe()
+                return@launch
+            }
+
             // Vision fast path: "what do you see" is immediate companion
             // behavior (capture + describe), never an agent tool call.
             com.example.meowmba.core.vision.VisionRouter.parse(text)?.let { query ->
@@ -2686,13 +2877,6 @@ class CompanionViewModel(
             // has the full inventory tool set.
             com.example.meowmba.core.inventory.InventoryRequestParser.parse(text)?.let { req ->
                 answerInventory(req)
-                return@launch
-            }
-
-            // Screen-contextual commands: "open the video called X", "tap on X" etc.
-            // These need the phone agent loop to read the screen and interact with elements.
-            if (isScreenContextualCommand(text)) {
-                phoneAgentLoop?.setGoal(text)
                 return@launch
             }
 
@@ -2779,6 +2963,7 @@ class CompanionViewModel(
                             // Episodic checkpoint: resume exactly where we left off
                             if (!_uiState.value.memoryPaused) {
                                 memoryRepository?.saveEpisodicCheckpoint(text, fullResponse, userMessageId)
+                                pushMemoriesToMem0()
                             }
                         }
                     }
@@ -2886,7 +3071,7 @@ class CompanionViewModel(
                         captionText = null,
                         emotion = CompanionEmotion.IDLE,
                     )
-                    if (_uiState.value.wakeWordEnabled) startWakeStandby()
+                    updateVoiceListeningMode()
                     return
                 }
                 val agentName = AgentRegistry.byId(intent.agentId)?.name ?: "Agent"
@@ -2899,6 +3084,113 @@ class CompanionViewModel(
                 )
             }
         }
+    }
+
+    private sealed interface LocationCommand {
+        data class Save(val name: String) : LocationCommand
+        data class Recall(val name: String) : LocationCommand
+    }
+
+    /**
+     * Named-place voice forms. Recall only fires for a name we actually have
+     * saved, so "where is the best sushi" still reaches chat.
+     */
+    private fun parseNamedLocation(text: String): LocationCommand? {
+        val normalized = WakePhraseMatcher.normalize(text)
+        // Save forms may keep a possessive/determiner ("my mailbox", "the gym");
+        // recall forms drop it ("where is my mailbox" -> "mailbox"). Strip it
+        // here so both sides canonicalise to the same key.
+        fun saveName(raw: String): String {
+            var n = raw.trim()
+            for (p in listOf("my ", "the ")) {
+                if (n.startsWith(p)) n = n.removePrefix(p).trim()
+            }
+            return n
+        }
+        for (prefix in listOf("remember this place as ", "remember this as ")) {
+            if (normalized.startsWith(prefix)) {
+                val name = saveName(normalized.removePrefix(prefix))
+                if (name.isNotBlank()) return LocationCommand.Save(name)
+            }
+        }
+        if (normalized.startsWith("remember this is my ")) {
+            val name = saveName(normalized.removePrefix("remember this is my "))
+            if (name.isNotBlank()) return LocationCommand.Save(name)
+        }
+        if (normalized.startsWith("remember this is the ")) {
+            val name = saveName(normalized.removePrefix("remember this is the "))
+            if (name.isNotBlank()) return LocationCommand.Save(name)
+        }
+        if (normalized.startsWith("remember ") && normalized.endsWith(" here")) {
+            val name = saveName(normalized.removePrefix("remember ").removeSuffix(" here"))
+            if (name.isNotBlank()) return LocationCommand.Save(name)
+        }
+        if (normalized.startsWith("this is my ") || normalized.startsWith("this is the ")) {
+            val prefix = if (normalized.startsWith("this is my ")) "this is my " else "this is the "
+            val name = saveName(normalized.removePrefix(prefix))
+            if (name.isNotBlank()) return LocationCommand.Save(name)
+        }
+        for (prefix in listOf(
+            "where is my ", "where's my ", "where is the ", "where's the ", "where is ", "where's "
+        )) {
+            if (normalized.startsWith(prefix)) {
+                val name = normalized.removePrefix(prefix).trim()
+                if (name.isNotBlank() && placesStore?.find(name) != null) {
+                    return LocationCommand.Recall(name)
+                }
+            }
+        }
+        return null
+    }
+
+    private fun saveNamedLocation(name: String) {
+        val context = secureStorage?.context
+        val store = placesStore
+        if (context == null || store == null) {
+            speak("I can't save places right now.")
+            resetState()
+            return
+        }
+        if (!com.example.meowmba.core.nav.CurrentLocation.hasPermission(context)) {
+            _uiState.value = _uiState.value.copy(locationPermissionRequested = true)
+            speak("I need location permission to save places — allow it, then ask me again.")
+            return
+        }
+        val fix = com.example.meowmba.core.nav.CurrentLocation.last(context)
+        if (fix == null) {
+            fuLog("saveNamedLocation: no cached fix — requesting fresh one-shot for '$name'")
+            speak("Let me get a GPS fix first…")
+            viewModelScope.launch {
+                val fresh = suspendCancellableCoroutine<com.example.meowmba.core.nav.CurrentLocation.Fix?> { cont ->
+                    com.example.meowmba.core.nav.CurrentLocation.requestOnce(
+                        context,
+                        timeoutMs = 12_000L,
+                    ) { fix -> cont.resumeWith(kotlin.Result.success(fix)) }
+                }
+                if (fresh != null) {
+                    fuLog("saveNamedLocation: got fresh fix ${fresh.lat},${fresh.lon} — saving '$name'")
+                    store.save(name, fresh.lat, fresh.lon)
+                    speak("Saved ${name.lowercase()} at ${"%.4f".format(fresh.lat)}, ${"%.4f".format(fresh.lon)}.")
+                } else {
+                    fuLog("saveNamedLocation: still no fix for '$name'")
+                    speak("I can't get a GPS fix right now — try again in a few seconds.")
+                    resetState()
+                }
+            }
+            return
+        }
+        store.save(name, fix.lat, fix.lon)
+        speak("Saved ${name.lowercase()} at ${"%.4f".format(fix.lat)}, ${"%.4f".format(fix.lon)}.")
+    }
+
+    private fun recallNamedLocation(name: String) {
+        val place = placesStore?.find(name)
+        if (place == null) {
+            speak("I don't have that place saved yet.")
+            resetState()
+            return
+        }
+        speak("${name.lowercase()} is at ${"%.4f".format(place.lat)}, ${"%.4f".format(place.lon)}.")
     }
 
     /** Explicit "remember that …" / "remember this" commands. */
@@ -2978,17 +3270,22 @@ class CompanionViewModel(
         viewModelScope.launch {
             memoryRepository?.addMessage(MessageRole.ASSISTANT, full)
         }
-        notificationHelper?.postThought(full)
+        // Response notifications only when the app is in the background — in
+        // the foreground the face + spoken reply are the feedback.
+        if (appInBackground) notificationHelper?.postThought(full)
         lastAssistantText = full
     }
 
     private fun speak(text: String) {
+        fuLog("speak: \"${text.take(80)}\"")
         if (handedOffToBackground) return
         viewModelScope.launch {
             memoryRepository?.addMessage(MessageRole.ASSISTANT, text)
         }
 
-        notificationHelper?.postThought(text)
+        // Same background-only rule as recordSpokenResponse: no notification
+        // while the face is in front of the user.
+        if (appInBackground) notificationHelper?.postThought(text)
 
         if (ttsManager == null) {
             startMockSpeaking(text)
@@ -3076,7 +3373,8 @@ class CompanionViewModel(
 
             val provider = visionProviderFor()
             if (provider == null) {
-                speak("I can't see right now — no vision provider is available.")
+                // Defensive — visionProviderFor always falls back to on-device.
+                speak("I can't see right now — vision isn't ready. Try again in a moment.")
                 resetState()
                 return@launch
             }
@@ -3103,9 +3401,28 @@ class CompanionViewModel(
     fun onCameraPermissionResult(granted: Boolean) {
         _uiState.value = _uiState.value.copy(cameraPermissionRequested = false)
         if (granted) {
-            speak("Camera's on — ask me to look again.")
+            // Start auto face tracking; only announce if a look was mid-flight.
+            ensureFaceTrackingOn()
+            if (_uiState.value.interactionState == InteractionState.THINKING ||
+                _uiState.value.captionText != null
+            ) {
+                speak("Camera's on — ask me to look again.")
+                resetState()
+            }
         } else {
+            visionManager?.setFaceTrackingEnabled(false)
             speak("No camera permission, so I can't see. You can enable it later in system settings.")
+            resetState()
+        }
+    }
+
+    /** Location permission result from saving a named place. */
+    fun onLocationPermissionResult(granted: Boolean) {
+        _uiState.value = _uiState.value.copy(locationPermissionRequested = false)
+        if (granted) {
+            speak("Location's on — say \"remember this as\" a place name and I'll save it.")
+        } else {
+            speak("No location permission, so I can't save places. You can enable it later in system settings.")
         }
         resetState()
     }
@@ -3176,6 +3493,11 @@ class CompanionViewModel(
             return
         }
         selfVoiceFilter.clear()
+        if (wakeAckPending) {
+            // The wake-ack job owns the hand-off to the mic; don't let the
+            // normal follow-up/reset path run on top of it.
+            return
+        }
         if (handedOffToBackground) {
             // The reply window is owned by the background service now; an
             // in-app follow-up here would grab the mic and hear nothing.
@@ -3200,10 +3522,14 @@ class CompanionViewModel(
             resetState()
             return
         }
+        // Free the continuous wake AudioRecord and any always-on session first —
+        // otherwise SpeechRecognizer opens deaf and follow-up looks broken.
+        stopAlwaysOnListening()
+        stopWakeLoopAndRelease()
         isFollowUpListen = true
         _uiState.value = _uiState.value.copy(
             interactionState = InteractionState.LISTENING,
-            captionText = "Listening for follow-up…",
+            captionText = null,
             emotion = CompanionEmotion.ALERT
         )
         followUpJob = viewModelScope.launch {
@@ -3212,6 +3538,9 @@ class CompanionViewModel(
             if (engine.isListening.value) {
                 engine.stopListening()
                 delay(120)
+            } else {
+                // KWS AudioRecord teardown needs a beat before STT can bind.
+                delay(80)
             }
             // A follow-up is a spoken turn like any other: it has to survive a pause,
             // and a transient recognizer hiccup must not kill it silently.
@@ -3265,6 +3594,7 @@ class CompanionViewModel(
                 val newMicState = !_uiState.value.isMicEnabled
                 if (!newMicState) {
                     // Mic privacy cut: everything voice-related stops now
+                    stopAlwaysOnListening()
                     stopWakeLoopAndRelease()
                     speechService?.stopListening()
                 }
@@ -3272,16 +3602,19 @@ class CompanionViewModel(
                     isMicEnabled = newMicState,
                     interactionState = if (!newMicState) InteractionState.MUTED else InteractionState.IDLE
                 )
-                if (newMicState && _uiState.value.wakeWordEnabled) {
-                    // Re-enabling the mic must bring wake listening back. Without this the
-                    // ear tap flipped isMicEnabled but nothing called startWakeStandby(),
-                    // so the wake phrase stayed dead until the next background/foreground
-                    // cycle — which reads exactly as "the wake word stopped working".
-                    startWakeStandby()
+                if (newMicState) {
+                    // Re-enabling the mic must bring listening back. Which kind —
+                    // always-on (face mode) or the wake phrase — is decided here,
+                    // so the mic never sits dead after an ear tap. The stale
+                    // "microphone is off" sentinel caption is cleared too.
+                    _uiState.value = _uiState.value.copy(captionText = null)
+                    updateVoiceListeningMode()
                 }
             }
             AvatarZone.EYE_LEFT, AvatarZone.EYE_RIGHT -> {
-                _uiState.value = _uiState.value.copy(isCameraEnabled = !_uiState.value.isCameraEnabled)
+                val camOn = !_uiState.value.isCameraEnabled
+                _uiState.value = _uiState.value.copy(isCameraEnabled = camOn)
+                if (camOn) ensureFaceTrackingOn() else visionManager?.setFaceTrackingEnabled(false)
             }
             AvatarZone.MOUTH -> {
                 val muting = !_uiState.value.isMuted
@@ -3290,12 +3623,6 @@ class CompanionViewModel(
                     ttsManager?.stop()
                 }
                 _uiState.value = _uiState.value.copy(isMuted = muting)
-            }
-            AvatarZone.NOSE -> {
-                CustomAnimations.BUILT_INS["nose boop"]?.let { playCustomAnimation(it) }
-            }
-            AvatarZone.CHIN -> {
-                CustomAnimations.BUILT_INS["purr loaf"]?.let { playCustomAnimation(it) }
             }
             AvatarZone.FOREHEAD -> {
                 _uiState.value = _uiState.value.copy(showSettings = !_uiState.value.showSettings)
@@ -3317,7 +3644,6 @@ class CompanionViewModel(
 
     /** Swipe-down entry point: only opens, never closes. */
     fun openTiles() {
-        if (anyPanelOpen()) return
         if (!_uiState.value.showTiles) {
             onAvatarZoneClick(AvatarZone.BACKGROUND)
         }
@@ -3358,13 +3684,108 @@ class CompanionViewModel(
     }
 
     fun togglePreview() {
-        _uiState.value = _uiState.value.copy(isPreviewVisible = !_uiState.value.isPreviewVisible)
+        val visible = !_uiState.value.isPreviewVisible
+        _uiState.value = _uiState.value.copy(isPreviewVisible = visible)
+        if (visible) {
+            // Preview is a viewfinder only — face tracking stays auto-on.
+            _uiState.value = _uiState.value.copy(isFrontCamera = true)
+            visionManager?.setUseFrontCamera(true)
+        }
+        // Keep face tracking running regardless of PiP preview visibility.
+        if (_uiState.value.isCameraEnabled) ensureFaceTrackingOn()
+    }
+
+    /**
+     * Auto face tracking: front camera + ML Kit analysis, no PiP required.
+     * Requests CAMERA if needed; re-tries from [onCameraPermissionResult].
+     */
+    fun ensureFaceTrackingOn() {
+        if (!_uiState.value.isCameraEnabled) {
+            // Privacy mark was off — re-enable camera for seeing the user.
+            _uiState.value = _uiState.value.copy(isCameraEnabled = true)
+        }
+        val vm = visionManager ?: return
+        if (!vm.hasPermission()) {
+            _uiState.value = _uiState.value.copy(cameraPermissionRequested = true)
+            return
+        }
+        _uiState.value = _uiState.value.copy(isFrontCamera = true, isCameraEnabled = true)
+        vm.setUseFrontCamera(true)
+        val ok = vm.setFaceTrackingEnabled(true)
+        android.util.Log.i("MeowVision", "ensureFaceTrackingOn ok=$ok perm=${vm.hasPermission()}")
+    }
+
+    /**
+     * "Can you see me?" — answer from the face tracker, not a cloud model.
+     * Falls back to a quick on-device describe if no face is in frame yet.
+     */
+    private fun answerSeeMe() {
+        val vm = visionManager
+        if (vm == null) {
+            speak("I don't have a camera in this build.")
+            return
+        }
+        if (!vm.hasPermission()) {
+            _uiState.value = _uiState.value.copy(cameraPermissionRequested = true)
+            speak("I need camera permission to see you — allow it, then ask me again.")
+            return
+        }
+        ensureFaceTrackingOn()
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                interactionState = InteractionState.THINKING,
+                captionText = "Looking for you…",
+                emotion = CompanionEmotion.CURIOUS,
+            )
+            // Give the detector a beat to publish a face after (re)bind.
+            var track = vm.faceTrack.value
+            if (track == null) {
+                kotlinx.coroutines.delay(900)
+                track = vm.faceTrack.value
+            }
+            if (track != null) {
+                val side = when {
+                    track.offsetX < -0.25f -> " a bit to my left"
+                    track.offsetX > 0.25f -> " a bit to my right"
+                    else -> ""
+                }
+                val vert = when {
+                    track.offsetY < -0.30f -> " and a little high"
+                    track.offsetY > 0.30f -> " and a little low"
+                    else -> ""
+                }
+                speak("Yes — I see you$side$vert!")
+                return@launch
+            }
+            // No face box yet: still try a frame describe so we aren't mute.
+            val jpeg = vm.captureJpeg(768).getOrNull()
+            if (jpeg != null) {
+                lastVisionJpeg = jpeg
+                val desc = visionProviderFor()?.describe(
+                    jpeg,
+                    "In one short sentence: is there a person visible? If yes, say you can see them."
+                )?.getOrNull()
+                if (!desc.isNullOrBlank()) {
+                    speak(desc)
+                    return@launch
+                }
+            }
+            speak(
+                "I'm looking with the front camera, but I don't have a clear face yet. " +
+                    "Face me and try again — and make sure nothing else is using the camera."
+            )
+        }
     }
 
     fun flipCamera() {
         val useFront = !_uiState.value.isFrontCamera
         _uiState.value = _uiState.value.copy(isFrontCamera = useFront)
         visionManager?.setUseFrontCamera(useFront)
+        // Pan the head back to center; the new camera is a fresh face-track session.
+        if (!useFront) {
+            com.example.meowmba.core.robot.FaceMotorMap.panForFace(null)
+                .forEach { (servo, angle) -> motorController.setServo(servo, angle) }
+        }
     }
 
     fun toggleSettings() {
@@ -3454,13 +3875,33 @@ class CompanionViewModel(
         val existing = _uiState.value.modelDownloads[option.id]
         if (existing != null && !existing.done && existing.error == null) return
 
-        // Start foreground service so download survives app backgrounding
-        secureStorage?.context?.let { ctx ->
-            DownloadService.start(
-                ctx, option.downloadUrl, option.fileName, option.id,
-                secureStorage?.getApiKey("huggingface"), dl.destinationFor(option.fileName).parentFile!!
-            )
+        val starter = downloadServiceStarter
+        val ctx = secureStorage?.context
+        if (starter == null || ctx == null) {
+            // In-process path (unit tests): run the download through the injected
+            // ModelDownloader so its engine drives progress and install.
+            viewModelScope.launch {
+                setDownloadProgress(option.id, ModelDownloader.DownloadProgress())
+                try {
+                    val file = dl.download(option.downloadUrl, option.fileName) { p ->
+                        setDownloadProgress(option.id, p)
+                    }
+                    installDownloadedModel(file.absolutePath)
+                } catch (e: Exception) {
+                    setDownloadProgress(
+                        option.id,
+                        ModelDownloader.DownloadProgress(error = e.message ?: "Download failed")
+                    )
+                }
+            }
+            return
         }
+
+        // Start foreground service so download survives app backgrounding
+        starter(
+            ctx, option.downloadUrl, option.fileName, option.id,
+            secureStorage?.getApiKey("huggingface"), dl.destinationFor(option.fileName).parentFile!!
+        )
 
         // Lightweight ViewModel-side progress from file size (updates while in foreground).
         // The service handles the actual download and posts a system notification;
@@ -3502,12 +3943,29 @@ class CompanionViewModel(
                 return setDownloadError(id, "File name must be simple and end in .task")
         }
 
-        secureStorage?.context?.let { ctx ->
-            DownloadService.start(
-                ctx, url, fileName, id,
-                secureStorage?.getApiKey("huggingface"), dl.destinationFor(fileName).parentFile!!
-            )
+        val starter = downloadServiceStarter
+        val ctx = secureStorage?.context
+        if (starter == null || ctx == null) {
+            // In-process path (unit tests), same as downloadModel.
+            viewModelScope.launch {
+                setDownloadProgress(id, ModelDownloader.DownloadProgress())
+                try {
+                    val file = dl.download(url, fileName) { p -> setDownloadProgress(id, p) }
+                    installDownloadedModel(file.absolutePath)
+                } catch (e: Exception) {
+                    setDownloadProgress(
+                        id,
+                        ModelDownloader.DownloadProgress(error = e.message ?: "Download failed")
+                    )
+                }
+            }
+            return
         }
+
+        starter(
+            ctx, url, fileName, id,
+            secureStorage?.getApiKey("huggingface"), dl.destinationFor(fileName).parentFile!!
+        )
 
         val target = dl.destinationFor(fileName)
         viewModelScope.launch {
@@ -3711,6 +4169,258 @@ class CompanionViewModel(
     fun setPreferServerImageGen(enabled: Boolean) {
         _uiState.value = _uiState.value.copy(preferServerImageGen = enabled)
         secureStorage?.saveBooleanPreference(KEY_PREFER_SERVER_IMAGE_GEN, enabled)
+    }
+
+    /** meow-mem0 semantic memory server. "" disables sync. */
+    fun setMem0ServerUrl(url: String) {
+        val clean = url.trim().trimEnd('/')
+        _uiState.value = _uiState.value.copy(mem0ServerUrl = clean)
+        secureStorage?.savePreference(KEY_MEM0_SERVER_URL, clean)
+        refreshMem0Link()
+    }
+
+    /** Linked only when the mem0 server actually answered /health. */
+    private fun refreshMem0Link() {
+        viewModelScope.launch {
+            val linked = runCatching { mem0.isAvailable() }.getOrDefault(false)
+            _uiState.value = _uiState.value.copy(mem0Linked = linked)
+        }
+    }
+
+    // ── Avatar ───────────────────────────────────────────────────────────────
+
+    /**
+     * Clips the companion invented, on disk. Same directory the animate tool
+     * writes to, so anything it made shows up on the Avatar card.
+     */
+    private val avatarAnimationStore: CustomAnimationStore? by lazy {
+        secureStorage?.let { CustomAnimationStore(File(it.context.filesDir, "custom_animations")) }
+    }
+
+    /** Which face to draw. Persisted, so it survives a restart. */
+    fun setAvatarStyle(style: AvatarStyle) {
+        _uiState.value = _uiState.value.copy(avatarStyle = style)
+        secureStorage?.savePreference(KEY_AVATAR_STYLE, style.key)
+    }
+
+    fun setAvatarEyeColor(argb: Long) {
+        _uiState.value = _uiState.value.copy(avatarEyeColor = argb)
+        secureStorage?.savePreference(KEY_AVATAR_EYE_COLOR, AvatarColors.toPref(argb))
+    }
+
+    fun setAvatarGlowColor(argb: Long) {
+        _uiState.value = _uiState.value.copy(avatarGlowColor = argb)
+        secureStorage?.savePreference(KEY_AVATAR_GLOW_COLOR, AvatarColors.toPref(argb))
+    }
+
+    fun toggleAvatarScreen() {
+        _uiState.value = _uiState.value.copy(showAvatarScreen = !_uiState.value.showAvatarScreen)
+    }
+
+    /** Channel expressions (Godot port) first, then keyframe built-ins, then saved. */
+    fun avatarAnimationNames(): List<String> =
+        (CatExpressions.names() +
+            CustomAnimations.BUILT_INS.keys.toList() +
+            (avatarAnimationStore?.list() ?: emptyList())).distinct()
+
+    /** Plays a clip by name: channel composition when known, else keyframe built-in/saved. */
+    fun playAnimationNamed(name: String) {
+        CatExpressions.resolve(name)?.let {
+            playComposedExpression(it, name)
+            return
+        }
+        val spec = CustomAnimations.builtIn(name) ?: avatarAnimationStore?.load(name)
+        if (spec != null) playCustomAnimation(spec)
+    }
+
+    /**
+     * Drive the face with the Godot-style channel motion engine.
+     * Closes panels like [playCustomAnimation] so the performance is visible.
+     */
+    fun playComposedExpression(expr: ComposedExpression, label: String = "composed") {
+        customAnimJob?.cancel()
+        System.err.println(
+            "MeowAnim: composed \"$label\" " +
+                "(${expr.eye}/${expr.ear}/${expr.jaw}/${expr.body}, ${expr.durationSeconds}s)",
+        )
+        _uiState.value = _uiState.value.copy(
+            activeComposed = expr,
+            activeAnimation = null,
+            isChatExpanded = false,
+            showTiles = false,
+            showSettings = false,
+            showModelManager = false,
+            showPrivacyDashboard = false,
+            showMemoryScreen = false,
+            showWeatherScreen = false,
+            showBackgroundScreen = false,
+            showNavScreen = false,
+            showAgentsScreen = false,
+            showVaultScreen = false,
+            showAvatarScreen = false,
+        )
+        customAnimJob = viewModelScope.launch {
+            delay((expr.durationSeconds * 1000f).toLong() + 350L)
+            _uiState.value = _uiState.value.copy(activeComposed = null)
+        }
+    }
+
+    // ── Car assistant ────────────────────────────────────────────────────────
+
+    /** Master switch: starts/stops the driving detector (sensors + GPS). */
+    fun setCarModeEnabled(enabled: Boolean) {
+        _uiState.value = _uiState.value.copy(carModeEnabled = enabled)
+        secureStorage?.saveBooleanPreference(KEY_CAR_MODE, enabled)
+        carDetector?.setCarModeEnabled(enabled)
+    }
+
+    /** Voice/UI drive-mode override. The tool's reply is what gets spoken. */
+    fun setManualDriving(on: Boolean) {
+        carDetector?.setManualDriving(on)
+    }
+
+    /** Emergency contact number used by the car.help tool. */
+    fun setEmergencyContact(number: String) {
+        val clean = number.trim()
+        _uiState.value = _uiState.value.copy(emergencyContact = clean)
+        secureStorage?.savePreference(KEY_EMERGENCY_CONTACT, clean)
+    }
+
+    /** MAC address of the user's car hands-free unit (a BT-connected-device cue). */
+    fun setCarDeviceAddress(address: String) {
+        val clean = address.trim()
+        carDetector?.setCarDeviceAddress(clean)
+        secureStorage?.savePreference(KEY_CAR_DEVICE, clean)
+    }
+
+    /** Dismiss the crash alert card. */
+    fun dismissCrashAlert() {
+        _uiState.value = _uiState.value.copy(crashAlert = null)
+    }
+
+    /** Hide the drive HUD for the rest of this trip. */
+    fun dismissDriveCard() {
+        driveCardSuppressed = true
+        _uiState.value = _uiState.value.copy(driveCardVisible = false)
+    }
+
+    /**
+     * Quick "text my contact" from the crash card — same flow as the car.help tool,
+     * minus the agent. Tells the user (out loud) if no contact is configured yet.
+     */
+    fun sendEmergencyText() {
+        val number = _uiState.value.emergencyContact.trim()
+        if (number.isBlank()) {
+            speak("I don't have an emergency contact yet. Add one in Settings, under Car assistant.")
+            return
+        }
+        val context = secureStorage?.context
+        if (context == null) {
+            speak("I can't reach the messaging app right now.")
+            return
+        }
+        try {
+            val intent = com.example.meowmba.core.agent.tools.buildEmergencyTextIntent(
+                context, number, carTripTracker?.trip?.value,
+            )
+            context.startActivity(intent)
+            speak("Opened a text to $number with your location. Press send when you're ready.")
+        } catch (e: Exception) {
+            speak("I couldn't open the messaging app. Ask me to call for help instead.")
+        }
+    }
+
+    /** Debug-only: run the full crash path (camera check + alert) on demand. */
+    fun simulateCrash(g: Float = 8.4f, mph: Float = 52f) {
+        onCrashDetected(
+            com.example.meowmba.core.car.CrashEvent(
+                detectedAtMs = System.currentTimeMillis(),
+                speedBeforeMph = mph,
+                gForce = g,
+            ),
+        )
+    }
+
+    /** A possible collision was detected: surface it loudly, and offer help. */
+    private fun onCrashDetected(crash: CrashEvent) {
+        val g = String.format(java.util.Locale.US, "%.1f", crash.gForce)
+        val mph = String.format(java.util.Locale.US, "%.0f", crash.speedBeforeMph)
+        android.util.Log.i("MeowCrash", "onCrashDetected g=$g mph=$mph")
+        val vm = visionManager
+        if (vm == null || !vm.hasPermission()) {
+            // No camera to check with — alert honestly rather than risk silence.
+            android.util.Log.i("MeowCrash", "no camera/permission -> alert null")
+            raiseCrashAlert(g, mph, verifiedDanger = null)
+            return
+        }
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                crashAlert = "Hard impact felt — checking the camera…",
+                emotion = CompanionEmotion.ALERT,
+            )
+            // Look at the scene BEFORE alarming: a bump must not call mom. The whole
+            // verify block is bounded so that no CameraX or network stall can ever
+            // swallow the alert — worst case we hit 30s and alert with "couldn't check".
+            val description = kotlinx.coroutines.withTimeoutOrNull(30_000) {
+                vm.captureJpeg(768)
+                    .mapCatching { jpeg ->
+                        visionProviderFor()?.describe(jpeg, DANGER_VERIFY_PROMPT)
+                    }
+                    .getOrNull()
+                    ?.getOrNull()
+            }
+            android.util.Log.i("MeowCrash", "verify done description=${description?.take(80) ?: "null"}")
+            raiseCrashAlert(g, mph, verifiedDanger = classifyCrashDanger(description))
+        }
+    }
+
+    /** Full alarm, downgraded check-in, or honest "couldn't check" alert. */
+    private fun raiseCrashAlert(g: String, mph: String, verifiedDanger: Boolean?) {
+        android.util.Log.i("MeowCrash", "raiseCrashAlert g=$g mph=$mph verifiedDanger=$verifiedDanger")
+        when (verifiedDanger) {
+            true -> {
+                _uiState.value = _uiState.value.copy(
+                    crashAlert = "Possible crash detected — hard impact at $g g, speed before it was $mph mph.",
+                    emotion = CompanionEmotion.ALERT,
+                )
+                speak("Are you okay? I felt a hard impact and the camera shows what looks like a crash scene. Say \"text mom\" and I'll send your location to your emergency contact.")
+            }
+            false -> {
+                _uiState.value = _uiState.value.copy(
+                    crashAlert = "I felt a hard jolt at $g g, but the camera doesn't show an obvious crash scene.",
+                    emotion = CompanionEmotion.ALERT,
+                )
+                speak("I felt a hard jolt, but the camera doesn't show an obvious crash scene. Are you okay? Say \"text mom\" if you need me to send your location.")
+            }
+            null -> {
+                _uiState.value = _uiState.value.copy(
+                    crashAlert = "Possible crash detected — hard impact at $g g, speed before it was $mph mph. I couldn't check the camera to confirm.",
+                    emotion = CompanionEmotion.ALERT,
+                )
+                speak("Are you okay? I felt a hard impact but couldn't see the camera to check. Say \"text mom\" and I'll send your location to your emergency contact.")
+            }
+        }
+    }
+
+    private fun classifyCrashDanger(description: String?): Boolean? {
+        if (description == null) return null
+        val d = description.lowercase()
+        val danger = listOf(
+            "danger", "crash", "wreck", "accident", "debris", "glass", "smoke",
+            "fire", "flam", "injured", "blood", "flipped", "overturn", "collision",
+            "airbag", "shattered", "damaged", "bent", "emergency", "scene",
+        )
+        val safe = listOf(
+            "safe", "no danger", "no sign", "no obvious", "normal", "nothing",
+            "cannot", "can't", "unable", "not see", "clear", "empty",
+        )
+        val isDanger = danger.any { d.contains(it) }
+        return when {
+            isDanger -> true
+            safe.any { d.contains(it) } -> false
+            // The camera looked and found nothing alarming — don't false-alarm.
+            else -> false
+        }
     }
 
     fun setMusicServerUrl(url: String) {
@@ -4296,7 +5006,10 @@ class CompanionViewModel(
     fun toggleMemoryScreen() {
         val opening = !_uiState.value.showMemoryScreen
         _uiState.value = _uiState.value.copy(showMemoryScreen = opening)
-        if (opening) refreshMetaMemoryLink()
+        if (opening) {
+            refreshMetaMemoryLink()
+            refreshMem0Link()
+        }
     }
 
     /**
@@ -4310,14 +5023,12 @@ class CompanionViewModel(
      * says "Playing X", and the user sees nothing. "Show me" means show me:
      * they all close for the clip and stay closed.
      */
-    fun playCustomAnimation(
-        spec: CustomAnimationSpec,
-        closesPanels: Boolean = true,
-    ) {
+    fun playCustomAnimation(spec: CustomAnimationSpec) {
         customAnimJob?.cancel()
         System.err.println("MeowAnim: playing \"${spec.name}\" (${spec.durationMs}ms)")
-        _uiState.value = if (closesPanels) _uiState.value.copy(
+        _uiState.value = _uiState.value.copy(
             activeAnimation = spec,
+            activeComposed = null,
             isChatExpanded = false,
             showTiles = false,
             showSettings = false,
@@ -4329,7 +5040,8 @@ class CompanionViewModel(
             showNavScreen = false,
             showAgentsScreen = false,
             showVaultScreen = false,
-        ) else _uiState.value.copy(activeAnimation = spec)
+            showAvatarScreen = false,
+        )
         customAnimJob = viewModelScope.launch {
             delay(spec.durationMs.toLong() + 300)
             _uiState.value = _uiState.value.copy(activeAnimation = null)
@@ -4341,6 +5053,30 @@ class CompanionViewModel(
         viewModelScope.launch {
             val linked = runCatching { metaMemory.isAvailable() }.getOrDefault(false)
             _uiState.value = _uiState.value.copy(metaMemoryLinked = linked)
+        }
+    }
+
+    /**
+     * Mirror newly created local memories to the meow-mem0 semantic store.
+     * Best-effort and non-blocking: only memories created since the last sync
+     * watermark are pushed, and a failure just leaves the watermark in place
+     * so the next turn retries. Room stays the source of truth either way.
+     */
+    private fun pushMemoriesToMem0() {
+        viewModelScope.launch {
+            val repo = memoryRepository ?: return@launch
+            if (runCatching { mem0.isAvailable() }.getOrDefault(false)) {
+                val storage = secureStorage ?: return@launch
+                val watermark = storage.getPreference(KEY_MEM0_SYNC_WATERMARK)?.toLongOrNull() ?: 0L
+                val pending = repo.getRecentMemories(200).filter { it.id > watermark }
+                if (pending.isNotEmpty()) {
+                    val pushed = mem0.push(pending)
+                    if (pushed.isSuccess) {
+                        storage.savePreference(KEY_MEM0_SYNC_WATERMARK, pending.maxOf { it.id }.toString())
+                        _uiState.value = _uiState.value.copy(mem0Linked = true)
+                    }
+                }
+            }
         }
     }
 
@@ -4413,12 +5149,29 @@ class CompanionViewModel(
             mouthEnergy = 0f
         )
         audioFocusManager?.abandonFocus()
-        if (_uiState.value.wakeWordEnabled) startWakeStandby()
+        updateVoiceListeningMode()
     }
 
     companion object {
         private const val KEY_COMPANION_NAME = "companion_name"
         private const val KEY_WAKE_WORD = "wake_word_enabled"
+        private const val KEY_REQUIRE_WAKE_IN_FACE = "require_wake_in_face"
+
+        /** Phrases that arm the phone-control agent for the next utterance. */
+        private val PHONE_CONTROL_ENGAGE = setOf(
+            "start listening",
+            "begin listening",
+            "control my phone",
+            "control the phone",
+            "take over the phone",
+            "drive the phone",
+            "phone control"
+        )
+
+        /** Camera check before raising a crash alarm: decide DANGER vs SAFE. */
+        private const val DANGER_VERIFY_PROMPT = """A crash sensor just fired on this phone. Look at this photo of the scene around the phone. Reply on ONE line starting with DANGER: or SAFE: followed by a short reason.
+DANGER if you see a badly damaged vehicle, deployed airbags, smoke or fire, debris or glass on the road, an overturned car, injured people, blood, or anything that looks like a real collision scene.
+SAFE if the scene looks like a normal road, car interior, sidewalk, or room, or if nothing crash-related is visible."""
         private const val KEY_CONVERSATION = "conversation_mode"
         private const val KEY_KEEP_SCREEN_ON = "keep_screen_on_face"
         private const val KEY_WATCH_MODE = "watch_mode"
@@ -4439,6 +5192,15 @@ class CompanionViewModel(
         private const val KEY_AGENT_BRAIN = "agent_brain_enabled"
         private const val KEY_HERMES_URL = "hermes_agent_url"
         private const val KEY_IMAGE_SERVER_URL = "image_server_url"
+        private const val KEY_MEM0_SERVER_URL = "mem0_server_url"
+        private const val KEY_MEM0_USER_ID = "mem0_user_id"
+        private const val KEY_MEM0_SYNC_WATERMARK = "mem0_sync_watermark"
+        private const val KEY_CAR_MODE = "car_mode"
+        private const val KEY_AVATAR_STYLE = "avatar_style"
+        private const val KEY_AVATAR_EYE_COLOR = "avatar_eye_color"
+        private const val KEY_AVATAR_GLOW_COLOR = "avatar_glow_color"
+        private const val KEY_EMERGENCY_CONTACT = "emergency_contact"
+        private const val KEY_CAR_DEVICE = "car_bluetooth_device"
         private const val KEY_VIDEO_SERVER_URL = "video_server_url"
         private const val KEY_PREFER_SERVER_IMAGE_GEN = "prefer_server_image_gen"
         private const val KEY_MUSIC_SERVER_URL = "music_server_url"
@@ -4482,7 +5244,7 @@ class CompanionViewModel(
                 code == SpeechRecognizer.ERROR_CLIENT ||
                 code == SpeechRecognizer.ERROR_RECOGNIZER_BUSY
 
-        private const val MAX_TRANSIENT_LISTEN_RETRIES = 5
+        private const val MAX_TRANSIENT_LISTEN_RETRIES = 3
         private const val MAX_FOLLOW_UP_SILENCE_RETRIES = 10
         private val TRANSIENT_SPEECH_ERRORS = setOf(
             SpeechRecognizer.ERROR_NETWORK_TIMEOUT,
@@ -4565,20 +5327,6 @@ class CompanionViewModel(
             "amazon", "uber", "lyft", "maps", "chrome", "firefox", "gmail",
             "messages", "photos", "camera", "clock", "calculator", "calendar"
         )
-        fun isScreenContextualCommand(text: String): Boolean {
-            val t = text.lowercase().trim()
-            val screenVerbs = listOf(
-                "open the video ", "open the one called ", "open the one named ",
-                "tap on ", "tap the ", "click on ", "click the ",
-                "select the ", "press the ", "go to the ",
-            )
-            if (screenVerbs.any { t.startsWith(it) }) return true
-            val openTheMatch = Regex("^open the (video|song|post|article|photo|picture|image|file|document|link|message|chat|email|item|one|game|movie|show|episode|playlist|album|track|reel|story|notification)\\b").find(t)
-            if (openTheMatch != null) return true
-            if (t.startsWith("open ") && (t.contains("called ") || t.contains("named ") || t.contains("titled "))) return true
-            return false
-        }
-
         fun isMultiStepPhoneGoal(text: String): Boolean {
             val t = text.lowercase().trim()
             // "play X" / "play X on Y" — but not bare "play" or "play a game with me"
@@ -4662,5 +5410,5 @@ class CompanionViewModel(
  * Defines interactive zones on the avatar screen.
  */
 enum class AvatarZone {
-    EAR_LEFT, EAR_RIGHT, EYE_LEFT, EYE_RIGHT, NOSE, CHIN, MOUTH, FOREHEAD, BACKGROUND
+    EAR_LEFT, EAR_RIGHT, EYE_LEFT, EYE_RIGHT, MOUTH, FOREHEAD, BACKGROUND
 }

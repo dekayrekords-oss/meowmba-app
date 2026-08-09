@@ -70,16 +70,6 @@ object AgentRouter {
             return AgentIntent("main", "task.list", emptyMap(), "list agent tasks")
         }
 
-
-        // Notification queries
-        if (normalized in setOf("any notifications", "notifications", "what did i miss",
-                "unread messages", "new messages", "any new messages",
-                "check notifications", "check my notifications",
-                "what notifications do i have", "read notifications",
-                "any messages")) {
-            return AgentIntent("notification", "notification.list", emptyMap(), "list notifications")
-        }
-
         // Prefix commands: match case-insensitively, but extract arguments
         // from the RAW text so filenames keep their punctuation ("notes.txt")
         // and projects keep their capitalization ("Website").
@@ -114,6 +104,14 @@ object AgentRouter {
         extractAfter(raw, listOf("search my memory for ", "search memory for ",
             "search memories for "))?.let { query ->
             return AgentIntent("memory", "memory.search", mapOf("query" to query), "search memory: $query")
+        }
+
+        // Deep-link search: "search X in/on <app>" jumps straight into the app's
+        // search screen instead of the browser. Checked before the web-search
+        // block so "search cats on youtube" doesn't become a web query.
+        routeDeepLink(normalized)?.let { dl ->
+            return AgentIntent("phone", "phone.open_url", mapOf("url" to dl.url),
+                "search ${dl.query} in ${dl.app}")
         }
 
         // Research / web search
@@ -238,48 +236,6 @@ object AgentRouter {
             return AgentIntent("phone_control", "ui.automate", mapOf("action" to "long_press", "text" to name), "long press " + name)
         }
 
-
-
-        // ── AR viewfinder mode ──────────────────────────────────────────────────
-        if (normalized in setOf("show ar", "camera mode", "ar view", "ar mode", "show camera")) {
-            return AgentIntent("companion", "companion.ar_mode", mapOf("enabled" to "true"), "AR mode on")
-        }
-        if (normalized in setOf("hide ar", "exit ar", "close camera", "normal mode", "exit camera")) {
-            return AgentIntent("companion", "companion.ar_mode", mapOf("enabled" to "false"), "AR mode off")
-        }
-
-        // ── Robot motor control (voice fast-path) ──────────────────────────────
-        if (normalized in setOf("scoot forward", "move forward", "go forward", "drive forward")) {
-            return AgentIntent("robot", "robot.motor", mapOf("command" to "scoot_forward"), "scoot forward")
-        }
-        if (normalized in setOf("scoot backward", "move backward", "go backward", "reverse")) {
-            return AgentIntent("robot", "robot.motor", mapOf("command" to "scoot_backward"), "scoot backward")
-        }
-        if (normalized in setOf("turn left", "rotate left", "spin left")) {
-            return AgentIntent("robot", "robot.motor", mapOf("command" to "turn_left"), "turn left")
-        }
-        if (normalized in setOf("turn right", "rotate right", "spin right")) {
-            return AgentIntent("robot", "robot.motor", mapOf("command" to "turn_right"), "turn right")
-        }
-        if (normalized in setOf("look up", "tilt up", "neck up", "tilt neck up")) {
-            return AgentIntent("robot", "robot.motor", mapOf("command" to "neck_up"), "look up")
-        }
-        if (normalized in setOf("look down", "tilt down", "neck down", "tilt neck down")) {
-            return AgentIntent("robot", "robot.motor", mapOf("command" to "neck_down"), "look down")
-        }
-        if (normalized in setOf("center neck", "level neck", "neck center", "straighten")) {
-            return AgentIntent("robot", "robot.motor", mapOf("command" to "neck_center"), "center neck")
-        }
-        if (normalized in setOf("light on", "headlight on", "turn on the light", "turn light on")) {
-            return AgentIntent("robot", "robot.motor", mapOf("command" to "light_on"), "light on")
-        }
-        if (normalized in setOf("light off", "headlight off", "turn off the light", "turn light off")) {
-            return AgentIntent("robot", "robot.motor", mapOf("command" to "light_off"), "light off")
-        }
-        if (normalized in setOf("robot stop", "stop moving", "brake")) {
-            return AgentIntent("robot", "robot.motor", mapOf("command" to "stop"), "robot stop")
-        }
-
         // Phone control. "open the file X" is matched earlier, so a bare
         // "open X" reaching here means an app, not a workspace file.
         if (normalized in setOf("what apps do i have", "list my apps", "show my apps",
@@ -300,20 +256,6 @@ object AgentRouter {
             "open the url ", "browse to "))?.let { url ->
             return AgentIntent("phone", "phone.open_url", mapOf("url" to url), "open $url")
         }
-        // Screen-contextual "open the video/song/..." routes to phone_control, not app launch.
-        if (normalized.startsWith("open ")) {
-            val afterOpen = normalized.removePrefix("open ").trimStart()
-            val contentTypes = listOf("video", "song", "post", "article", "photo", "picture", "image",
-                "file", "document", "link", "message", "chat", "email", "item", "one", "game",
-                "movie", "show", "episode", "playlist", "album", "track", "reel", "story", "notification")
-            if (contentTypes.any { afterOpen.startsWith("the $it") || afterOpen.startsWith("$it ") }) {
-                return AgentIntent("phone_control", "phone.screen_action", mapOf("goal" to raw), raw)
-            }
-            if (afterOpen.contains("called ") || afterOpen.contains("named ") || afterOpen.contains("titled ")) {
-                return AgentIntent("phone_control", "phone.screen_action", mapOf("goal" to raw), raw)
-            }
-        }
-
         extractAfter(raw, listOf("open the app ", "open app ", "launch the app ",
             "launch app ", "launch ", "start the app ", "open "))?.let { rest ->
             // Bounded: an app name is a name, not the rest of the sentence.
@@ -325,7 +267,80 @@ object AgentRouter {
             return AgentIntent("phone", "phone.launch_app", mapOf("name" to name), "open $name")
         }
 
-        // Vault / Obsidian note tools
+        // ── Assistant-class phone actions (Phase F4) ─────────────────────────
+        // Volume: "turn the volume to 50", "volume up", "mute it".
+        val volumeText = raw.lowercase().trim()
+        if (volumeText.contains("volume") || volumeText.contains("turn it down") ||
+            volumeText.contains("turn it up") || volumeText.contains("mute")) {
+            val levelMatch = Regex("(\\d{1,3})\\s*(%|percent)?").find(volumeText)
+            if (volumeText.contains("volume") || volumeText.contains("mute") ||
+                volumeText.contains("turn it down") || volumeText.contains("turn it up")) {
+                val level = levelMatch?.groupValues?.get(1)?.toIntOrNull()
+                val action = when {
+                    level != null -> "level"
+                    volumeText.contains("down") || volumeText.contains("lower") -> "down"
+                    volumeText.contains("up") || volumeText.contains("raise") || volumeText.contains("louder") -> "up"
+                    volumeText.contains("mute") || volumeText.contains("silent") -> "mute"
+                    else -> null
+                }
+                if (action != null) {
+                    return AgentIntent(
+                        "phone", "phone.set_volume",
+                        if (action == "level") mapOf("level" to level.toString()) else mapOf("action" to action),
+                        "set volume"
+                    )
+                }
+            }
+        }
+        // Brightness: "set the brightness to 70", "screen too dark".
+        if (volumeText.contains("brightness")) {
+            val level = Regex("(\\d{1,3})\\s*(%|percent)?").find(volumeText)?.groupValues?.get(1)?.toIntOrNull()
+            if (level != null) {
+                return AgentIntent("phone", "phone.set_brightness", mapOf("level" to level.toString()), "set brightness")
+            }
+        }
+        // Camera: "take a picture", "take a photo", "open the camera".
+        if (normalized in setOf("take a picture", "take a photo", "take a pic", "open the camera",
+                "open camera", "take some photos", "take a selfie")) {
+            return AgentIntent("phone", "phone.take_photo", emptyMap(), "open the camera")
+        }
+        // Messaging: "text mom", "send a text to mom saying ...", "sms dad".
+        extractAfter(raw, listOf("text ", "send a text to ", "send a text ", "sms ",
+            "send an sms to ", "send an sms "))?.let { rest ->
+            val pieces = rest.trim().split(" saying ", " saying ", " that ", " the message ")
+            val recipient = pieces.firstOrNull()?.takeIf { it.isNotBlank() }
+            val body = pieces.getOrNull(1)?.trim()
+            if (recipient != null && recipient.split(' ').size <= 4) {
+                return AgentIntent(
+                    "phone", "phone.compose_sms",
+                    if (body.isNullOrBlank()) mapOf("to" to recipient) else mapOf("to" to recipient, "body" to body),
+                    "text $recipient"
+                )
+            }
+        }
+        // Calling: "call mom", "call the store" — but not "call the robot/base".
+        if (normalized.startsWith("call ") && !normalized.contains("robot") &&
+            !normalized.contains("base") && !normalized.contains("looi")) {
+            val rest = normalized.removePrefix("call ").trim()
+            if (rest.isNotBlank() && rest.split(' ').size <= 4) {
+                return AgentIntent("phone", "phone.dial_call", mapOf("to" to rest), "call $rest")
+            }
+        }
+        // Media transport: pause/play/resume/skip the music without the full loop.
+        if (normalized in setOf("pause the music", "pause music", "stop the music",
+                "resume the music", "resume music", "play the music", "next song",
+                "next track", "skip song", "skip track", "skip this song",
+                "previous song", "previous track", "go back a song")) {
+            val action = when {
+                normalized.contains("pause") || normalized.contains("stop") -> "pause"
+                normalized.contains("resume") || normalized.contains("play") -> "play"
+                normalized.contains("next") || normalized.contains("skip") -> "next"
+                else -> "previous"
+            }
+            return AgentIntent("phone", "phone.media_control", mapOf("action" to action), "$action music")
+        }
+
+
         if (normalized in setOf("list my notes", "show my notes", "what notes do i have",
                 "show notes", "list notes", "my notes", "open notes", "open my notes",
                 "open vault", "show vault", "show me my notes")) {
@@ -500,44 +515,6 @@ object AgentRouter {
                 "generate audio: $prompt")
         }
 
-        // ---- Device settings (LUMI edge) ----
-        // Brightness
-        if (normalized.contains("brightness") || normalized.contains("screen bright")
-            || normalized.contains("dim the screen") || normalized.contains("brighten")
-            || normalized.contains("how bright")) {
-            val level = Regex("""(\d+)""").find(raw)?.value
-            val args = if (level != null) mapOf("level" to level)
-                       else if (normalized.contains("auto")) mapOf("level" to "auto")
-                       else if (normalized.contains("max") || normalized.contains("full")) mapOf("level" to "255")
-                       else if (normalized.contains("dim") || normalized.contains("low")) mapOf("level" to "50")
-                       else emptyMap()
-            return AgentIntent("device", "phone.brightness", args, "screen brightness")
-        }
-        // Volume
-        if (normalized.contains("volume") || normalized.contains("turn it up")
-            || normalized.contains("turn it down") || normalized.contains("louder")
-            || normalized.contains("quieter") || normalized.contains("mute")
-            || normalized.contains("unmute") || normalized.contains("sound level")) {
-            val level = Regex("""(\d+)""").find(raw)?.value
-            val stream = when {
-                normalized.contains("ring") || normalized.contains("ringer") -> "ring"
-                normalized.contains("alarm") -> "alarm"
-                normalized.contains("notification") || normalized.contains("notif") -> "notification"
-                else -> "media"
-            }
-            val args = mutableMapOf("stream" to stream)
-            if (level != null) args["level"] = level
-            else if (normalized.contains("mute") || normalized.contains("silence")) args["level"] = "0"
-            else if (normalized.contains("max") || normalized.contains("full")) args["level"] = "15"
-            return AgentIntent("device", "phone.volume", args, "volume control")
-        }
-        // Location / GPS
-        if (normalized in setOf("where am i", "my location", "current location",
-                "what is my location", "gps", "show my location", "location")
-            || (normalized.contains("where") && normalized.contains("am i"))) {
-            return AgentIntent("device", "phone.location", emptyMap(), "current location")
-        }
-
         return null
     }
 
@@ -622,6 +599,54 @@ object AgentRouter {
             }
         }
         return null
+    }
+
+    // ── Deep-link search ("search X in/on <app>") ───────────────────────────
+
+    data class DeepLinkTarget(val app: String, val query: String, val url: String)
+
+    /**
+     * Parse an in-app search request: "search the beatles on spotify",
+     * "search spotify for beatles". Returns null unless a KNOWN app is named,
+     * so a generic "search the web for X" never becomes an app deep link.
+     */
+    fun routeDeepLink(normalized: String): DeepLinkTarget? {
+        val t = normalized.trim()
+        val inOn = Regex("^search (?:for )?(.+?) (?:in|on) (.+)$").find(t)
+        val forQuery = Regex("^search (\\w+) for (.+)$").find(t)
+        val (app, query) = when {
+            inOn != null -> inOn.groupValues[2].trim() to inOn.groupValues[1].trim()
+            forQuery != null -> forQuery.groupValues[1].trim() to forQuery.groupValues[2].trim()
+            else -> return null
+        }
+        if (app.isEmpty() || query.isEmpty()) return null
+        // "search the web for X on spotify" is a web search that merely names an app.
+        if (query.contains("the web") || query.contains("online") || query.contains("internet")) return null
+        val url = buildSearchUrl(app, query) ?: return null
+        return DeepLinkTarget(app, query, url)
+    }
+
+    /** Known-app search URL; null for an app we don't deep-link. */
+    fun buildSearchUrl(app: String, query: String): String? {
+        val q = java.net.URLEncoder.encode(query.trim(), "UTF-8")
+        val a = app.lowercase()
+        return when {
+            a.contains("youtube music") -> "https://music.youtube.com/search?q=$q"
+            a.contains("youtube") -> "https://www.youtube.com/results?search_query=$q"
+            a.contains("spotify") -> "https://open.spotify.com/search/$q"
+            a.contains("google maps") || a.contains("maps") -> "geo:0,0?q=$q"
+            a.contains("gmail") -> "https://mail.google.com/mail/?q=$q"
+            a.contains("instagram") -> "https://www.instagram.com/explore/search/keyword/?q=$q"
+            a.contains("tiktok") -> "https://www.tiktok.com/search?q=$q"
+            a.contains("netflix") -> "https://www.netflix.com/search?q=$q"
+            a.contains("reddit") -> "https://www.reddit.com/search/?q=$q"
+            a.contains("twitter") || a == "x" -> "https://twitter.com/search?q=$q"
+            a.contains("amazon") -> "https://www.amazon.com/s?k=$q"
+            a.contains("wikipedia") -> "https://en.wikipedia.org/w/index.php?search=$q"
+            a.contains("pinterest") -> "https://www.pinterest.com/search/pins/?q=$q"
+            a.contains("google") || a.contains("chrome") -> "https://www.google.com/search?q=$q"
+            else -> null
+        }
     }
 
     /**

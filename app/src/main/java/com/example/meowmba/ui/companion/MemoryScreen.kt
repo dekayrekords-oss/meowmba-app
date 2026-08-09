@@ -100,6 +100,20 @@ fun MemoryScreen(
                 color = if (state.metaMemoryLinked) Color(0xFF58A6FF) else Color.Gray,
                 fontSize = 12.sp
             )
+            // Semantic memory sync is opt-in via a configured mem0 server URL.
+            Text(
+                when {
+                    state.mem0Linked -> "Semantic memory synced — facts shared with Meow's brain"
+                    state.mem0ServerUrl.isNotBlank() -> "Semantic memory server unreachable"
+                    else -> "Semantic memory sync off (set a server in Settings)"
+                },
+                color = when {
+                    state.mem0Linked -> Color(0xFF58A6FF)
+                    state.mem0ServerUrl.isNotBlank() -> Color(0xFFD29922)
+                    else -> Color.Gray
+                },
+                fontSize = 12.sp
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 

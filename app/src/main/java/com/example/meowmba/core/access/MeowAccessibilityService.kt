@@ -24,21 +24,7 @@ class MeowAccessibilityService : AccessibilityService() {
         instance = this
     }
 
-    /** Track foreground app changes for focus detection. */
-    var onForegroundChanged: ((String) -> Unit)? = null
-
-    override fun onAccessibilityEvent(event: android.view.accessibility.AccessibilityEvent?) {
-        event ?: return
-        if (event.eventType == android.view.accessibility.AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
-            val pkg = event.packageName?.toString() ?: return
-            if (pkg != lastForegroundPackage) {
-                lastForegroundPackage = pkg
-                onForegroundChanged?.invoke(pkg)
-            }
-        }
-    }
-
-    private var lastForegroundPackage: String? = null
+    override fun onAccessibilityEvent(event: android.view.accessibility.AccessibilityEvent?) = Unit
 
     override fun onInterrupt() = Unit
 
@@ -51,7 +37,6 @@ class MeowAccessibilityService : AccessibilityService() {
     private fun findNodes(query: String): List<AccessibilityNodeInfo> {
         val root = rootInActiveWindow ?: return emptyList()
         val want = query.trim().lowercase()
-        val wantWords = want.split(Regex("\\s+")).filter { it.length > 1 }
         val found = mutableListOf<AccessibilityNodeInfo>()
         val queue = ArrayDeque<AccessibilityNodeInfo>()
         queue.add(root)
@@ -61,9 +46,7 @@ class MeowAccessibilityService : AccessibilityService() {
             visited++
             val text = node.text?.toString()?.lowercase() ?: ""
             val desc = node.contentDescription?.toString()?.lowercase() ?: ""
-            val combined = "$text $desc"
-            val matches = want in combined || (wantWords.size > 1 && wantWords.all { it in combined })
-            if (matches) found.add(node) else node.recycle()
+            if (want in text || want in desc) found.add(node) else node.recycle()
             for (i in 0 until node.childCount) {
                 node.getChild(i)?.let { if (!found.contains(it)) queue.add(it) }
             }
@@ -228,7 +211,7 @@ class MeowAccessibilityService : AccessibilityService() {
      * Interactive elements get a numbered index; non-interactive text is
      * appended as context. Capped at [maxChars] for token budget.
      */
-    fun readScreenCompact(maxChars: Int = 2000): String {
+    fun readScreenCompact(maxChars: Int = 800): String {
         val root = rootInActiveWindow ?: return "No active window."
         val interactive = mutableListOf<String>()
         val context = mutableListOf<String>()

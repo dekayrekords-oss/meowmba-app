@@ -65,67 +65,45 @@ fun CompanionScreen(
     val animationsPaused = uiState.showAppDrawer || uiState.isChatExpanded ||
         (uiState.showBrowser && !splitBrowser)
 
+    val isNeo = uiState.avatarStyle == AvatarStyle.NEO
+    val hasUserBg = uiState.background.kind !=
+        com.example.meowmba.core.background.BackgroundKind.NONE
+    // Transparent desk for Godot when no user wallpaper is set. Use a 1/255
+    // black instead of fully transparent so the window still receives touches
+    // (true 0-alpha lets taps fall through on some OEMs — cards looked "dead").
+    val voidColor = when {
+        isNeo && !hasUserBg -> Color(0x03000000)
+        else -> Color(0xFF0D1117)
+    }
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF0D1117))
+            .background(voidColor)
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .then(if (splitBrowser) Modifier.padding(end = halfWidth) else Modifier)
         ) {
-        // 0. Chosen background — first child, so it is genuinely behind the avatar.
-        AppBackground(
-            selection = uiState.background,
-            weather = uiState.ambientWeather ?: uiState.weather,
+        // 0. User-chosen background always draws when set. Live weather sky too.
+        // Only the empty NEO desk stays see-through.
+        if (!isNeo || hasUserBg) {
+            AppBackground(
+                selection = uiState.background,
+                weather = uiState.ambientWeather ?: uiState.weather,
+                modifier = Modifier.matchParentSize(),
+            )
+        }
+
+        // 1. Avatar + high-frequency motion isolated so face-track/IMU never
+        // recompose weather, tiles, chat, captions, or settings (choppiness fix).
+        // Avatar drawing code is unchanged.
+        AvatarMotionHost(
+            viewModel = viewModel,
+            uiState = uiState,
+            paused = animationsPaused,
             modifier = Modifier.matchParentSize(),
         )
-
-        // Module 5: Full-screen AR viewfinder — camera behind transparent avatar
-        if (uiState.showArViewfinder) {
-            Viewfinder(
-                visionManager = viewModel.getVisionManager(),
-                modifier = Modifier.matchParentSize()
-            )
-        }
-
-        // 1. Animated cat avatar (Memba 2 face) — full-bleed canvas.
-        // Leans with the phone via the IMU (±8°, low-passed).
-        val motionTilt by viewModel.motionTiltDeg.collectAsState()
-        Box(
-            modifier = Modifier
-                .matchParentSize()
-                .graphicsLayer { rotationZ = motionTilt }
-        ) {
-            AvatarRenderer(
-                state = uiState,
-                onZoneClick = { viewModel.onAvatarZoneClick(it) },
-                onSwipeUp = { viewModel.toggleAppDrawer() },
-                onSwipeDown = { viewModel.openTiles() },
-                onSwipeLeft = { viewModel.toggleBrowser() },
-                onSwipeRight = { viewModel.openChat() },
-                paused = animationsPaused,
-                onSfx = { viewModel.playSfx(it) },
-                transparent = uiState.showArViewfinder
-            )
-        }
-
-        // AR exit button
-        if (uiState.showArViewfinder) {
-            androidx.compose.material3.IconButton(
-                onClick = { viewModel.toggleArViewfinder(false) },
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = 48.dp, end = 16.dp)
-            ) {
-                Icon(
-                    Icons.Default.Close,
-                    contentDescription = "Exit AR mode",
-                    tint = Color.White
-                )
-            }
-        }
 
         // 2. Controls layer — everything interactive respects the system bars
         //    (status bar, nav/gesture bar, display cutout) so it always fits.
@@ -180,9 +158,11 @@ fun CompanionScreen(
                 )
             }
 
-            // Animated Captions
+            // Animated Captions — only while a turn is actually live: your
+            // speech (live transcript) or the reply. Never the idle hint.
             AnimatedVisibility(
-                visible = uiState.captionText != null,
+                visible = uiState.captionText != null &&
+                    uiState.interactionState != InteractionState.IDLE,
                 enter = fadeIn() + expandVertically(),
                 exit = fadeOut() + shrinkVertically(),
                 modifier = Modifier
@@ -297,13 +277,17 @@ fun CompanionScreen(
             }
 
             // Command Center (Mic)
+            // Landscape: stay in the reserved bottom band so we never sit on the mouth.
+            val micBottom = if (LocalConfiguration.current.screenWidthDp >
+                LocalConfiguration.current.screenHeightDp
+            ) 16.dp else 40.dp
             MicButton(
                 interactionState = uiState.interactionState,
                 isMicEnabled = uiState.isMicEnabled,
                 onClick = { viewModel.onMicClick() },
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 40.dp)
+                    .padding(bottom = micBottom)
             )
 
             // Chat shortcut (bottom-end); swipe-up on the avatar does the same.
@@ -382,8 +366,12 @@ fun CompanionScreen(
         // double the particles and half the frame rate.
         val liveWeatherIsBackground = uiState.background.kind ==
             com.example.meowmba.core.background.BackgroundKind.LIVE_WEATHER
-        val atmosphere = uiState.weather
-            ?: uiState.ambientWeather?.takeIf { uiState.ambientWeatherEnabled }
+        // Particle atmosphere is several full-screen blurred Canvases — very expensive.
+        // Only run it when ambient weather is explicitly enabled. Weather *cards*
+        // still show numbers without the continuous particle storm.
+        // (After any weather fetch, uiState.weather stays non-null forever, which
+        // used to leave WeatherScene running and chop the UI.)
+        val atmosphere = uiState.ambientWeather?.takeIf { uiState.ambientWeatherEnabled }
         if (!liveWeatherIsBackground) {
             atmosphere?.let { w ->
                 val clockTimeOfDay = rememberTimeOfDay(w.isDay)
@@ -414,6 +402,7 @@ fun CompanionScreen(
                     "NAV" -> viewModel.toggleNavScreen()
                     "Weather" -> viewModel.toggleWeatherScreen()
                     "Background" -> viewModel.toggleBackgroundScreen()
+                    "Avatar" -> viewModel.toggleAvatarScreen()
                     "Agents", "Tools" -> viewModel.toggleAgentsScreen()
                     "Notes" -> viewModel.toggleVaultScreen()
                 }
@@ -441,6 +430,43 @@ fun CompanionScreen(
                     onCycleCondition = { viewModel.cycleForcedWeatherCondition() },
                     previewTimeOfDay = uiState.previewTimeOfDay,
                     onCycleTimeOfDay = { viewModel.cyclePreviewTimeOfDay() },
+                )
+            }
+        }
+
+        // A possible collision is the most urgent thing on screen — it wins the top slot
+        // over the weather and drive cards, so it is impossible to miss while driving.
+        uiState.crashAlert?.let { alert ->
+            androidx.compose.foundation.layout.Box(
+                modifier = Modifier
+                    .align(androidx.compose.ui.Alignment.TopCenter)
+                    .padding(horizontal = 16.dp, vertical = 48.dp)
+            ) {
+                CrashAlertCard(
+                    message = alert,
+                    onTextContact = { viewModel.sendEmergencyText() },
+                    onDismiss = { viewModel.dismissCrashAlert() },
+                )
+            }
+        }
+
+        // Drive card: while the user is driving, a glanceable heads-up with speed,
+        // G-force and trip stats. Pushed below the weather/crash cards when those
+        // are up so the top of the screen doesn't stack three panels.
+        if (uiState.driveCardVisible && uiState.crashAlert == null) {
+            androidx.compose.foundation.layout.Box(
+                modifier = Modifier
+                    .align(androidx.compose.ui.Alignment.TopCenter)
+                    .padding(horizontal = 16.dp, vertical = 48.dp)
+            ) {
+                DriveCard(
+                    speedMph = uiState.driveSpeedMph,
+                    gForce = uiState.driveGForce,
+                    reason = uiState.driveReason,
+                    manual = uiState.driveManual,
+                    trip = uiState.driveTrip,
+                    onDismiss = { viewModel.dismissDriveCard() },
+                    modifier = Modifier.padding(top = if (uiState.weather != null) 200.dp else 0.dp),
                 )
             }
         }
@@ -500,9 +526,24 @@ fun CompanionScreen(
             )
         }
 
+        if (uiState.showAvatarScreen) {
+            AvatarScreen(
+                style = uiState.avatarStyle,
+                onSelectStyle = { viewModel.setAvatarStyle(it) },
+                eyeColor = uiState.avatarEyeColor,
+                glowColor = uiState.avatarGlowColor,
+                onSelectEyeColor = { viewModel.setAvatarEyeColor(it) },
+                onSelectGlowColor = { viewModel.setAvatarGlowColor(it) },
+                animations = viewModel.avatarAnimationNames(),
+                onPlayAnimation = { viewModel.playAnimationNamed(it) },
+                onClose = { viewModel.toggleAvatarScreen() },
+            )
+        }
+
         if (uiState.showNavScreen) {
             NavScreen(
                 secureStorage = secureStorage,
+                state = uiState,
                 onClose = { viewModel.toggleNavScreen() },
             )
         }
@@ -512,6 +553,7 @@ fun CompanionScreen(
                 secureStorage = secureStorage,
                 companionName = uiState.name,
                 wakeWordEnabled = uiState.wakeWordEnabled,
+                requireWakeWordInFace = uiState.requireWakeWordInFace,
                 conversationMode = uiState.conversationMode,
                 bargeInEnabled = uiState.bargeInEnabled,
                 routines = uiState.routines,
@@ -519,6 +561,7 @@ fun CompanionScreen(
                 agentBrainEnabled = uiState.agentBrainEnabled,
                 hermesAgentUrl = uiState.hermesAgentUrl,
                 imageServerUrl = uiState.imageServerUrl,
+                mem0ServerUrl = uiState.mem0ServerUrl,
                 preferServerImageGen = uiState.preferServerImageGen,
                 videoServerUrl = uiState.videoServerUrl,
                 imageModelInstalled = { viewModel.imageModelInstalled() },
@@ -536,8 +579,13 @@ fun CompanionScreen(
                 robotBtAddress = uiState.robotBtAddress,
                 robotScanning = uiState.robotScanning,
                 robotScanResults = uiState.robotScanResults,
+                carModeEnabled = uiState.carModeEnabled,
+                avatarStyle = uiState.avatarStyle,
+                onAvatarStyleChange = { viewModel.setAvatarStyle(it) },
+                emergencyContact = uiState.emergencyContact,
+                onCarModeChange = { viewModel.setCarModeEnabled(it) },
+                onEmergencyContactChange = { viewModel.setEmergencyContact(it) },
                 onRobotScan = { viewModel.scanForRobotBases() },
-                onRobotInitialize = { viewModel.initializeRobot() },
                 onRobotBodyChange = { viewModel.setRobotBody(it) },
                 onRobotHostChange = { viewModel.setRobotHost(it) },
                 onRobotPortChange = { viewModel.setRobotPort(it) },
@@ -545,6 +593,7 @@ fun CompanionScreen(
                 onRobotBtAddressChange = { viewModel.setRobotBtAddress(it) },
                 onCompanionNameChange = { viewModel.renameCompanion(it) },
                 onWakeWordChange = { viewModel.setWakeWordEnabled(it) },
+                onRequireWakeInFaceChange = { viewModel.setRequireWakeInFace(it) },
                 onConversationModeChange = { viewModel.setConversationMode(it) },
 
                 onBargeInChange = { viewModel.setBargeIn(it) },
@@ -564,6 +613,7 @@ fun CompanionScreen(
                 onDownloadImageModel = { viewModel.downloadImageModel() },
                 onDeleteImageModel = { viewModel.deleteImageModel() },
                 onImageServerUrlChange = { viewModel.setImageServerUrl(it) },
+                onMem0ServerUrlChange = { viewModel.setMem0ServerUrl(it) },
                 onPreferServerImageGenChange = { viewModel.setPreferServerImageGen(it) },
                 onMusicServerUrlChange = { viewModel.setMusicServerUrl(it) },
                 onVideoServerUrlChange = { viewModel.setVideoServerUrl(it) },
@@ -729,3 +779,34 @@ fun CompanionScreen(
         }
     }
 }
+
+/** Collects faceGaze + IMU only here — keeps the rest of CompanionScreen stable. */
+@Composable
+private fun AvatarMotionHost(
+    viewModel: CompanionViewModel,
+    uiState: CompanionState,
+    paused: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val motionTilt by viewModel.motionTiltDeg.collectAsState()
+    val faceGaze by viewModel.faceGaze.collectAsState()
+    Box(
+        modifier = modifier.graphicsLayer {
+            rotationZ = motionTilt.coerceIn(-4f, 4f)
+            clip = false
+        }
+    ) {
+        AvatarRenderer(
+            state = uiState,
+            onZoneClick = { viewModel.onAvatarZoneClick(it) },
+            onSwipeUp = { viewModel.toggleAppDrawer() },
+            onSwipeDown = { viewModel.openTiles() },
+            onSwipeLeft = { viewModel.toggleBrowser() },
+            onSwipeRight = { viewModel.openChat() },
+            paused = paused,
+            faceGazeX = faceGaze?.first,
+            faceGazeY = faceGaze?.second,
+        )
+    }
+}
+

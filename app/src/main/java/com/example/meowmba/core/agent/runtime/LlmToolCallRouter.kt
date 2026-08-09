@@ -23,17 +23,12 @@ object CommandHeuristics {
         // without their own signal words, so the router never saw the request.
         "email", "mail", "send", "draft", "reply", "compose", "inbox",
         "calendar", "event", "schedule", "meeting", "appointment", "remind",
-        // Notifications
-        "notification", "notifications", "unread", "missed", "messages",
         // Media generation
         "image", "picture", "photo", "draw", "paint", "sketch", "render",
         "generate", "video", "animation", "animate", "song", "audio", "sound",
         // Phone and desktop control
         "app", "launch", "start", "call", "text", "settings", "camera",
         "run", "script", "build", "desktop", "computer",
-        // Device settings (LUMI edge)
-        "brightness", "dim", "brighten", "volume", "louder", "quieter",
-        "mute", "unmute", "location", "gps", "where",
         // Phone control (accessibility-based)
         "tap", "click", "press", "swipe", "scroll", "type", "back",
         "control", "navigate", "play", "pause", "stop", "next", "previous",
@@ -44,8 +39,6 @@ object CommandHeuristics {
         // log. A false positive costs one model call that returns null; a
         // false negative here is a lie the user can see.
         "trick", "dance", "perform", "wiggle", "paw", "lick", "gesture",
-        // Robot motor control
-        "scoot", "motor", "neck", "headlight", "brake", "tilt", "drive", "robot",
         "yes", "yeah", "yep", "sure", "ok", "okay", "please",
     )
 

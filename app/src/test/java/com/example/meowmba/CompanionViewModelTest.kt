@@ -183,6 +183,10 @@ class CompanionViewModelTest {
         // the user's side exactly as "the wake word stopped working".
         val viewModel = CompanionViewModel(secureStorage = mockSecureStorage)
         viewModel.setWakeWordEnabled(true)
+        // Face mode defaults to always-on listening (no wake phrase, no MicOwner),
+        // which is the other half of the re-enable path. This regression is about
+        // the wake-standby half, so gate face mode behind the wake phrase here.
+        viewModel.setRequireWakeInFace(true)
 
         // Ear tap cuts the mic...
         viewModel.onAvatarZoneClick(AvatarZone.EAR_LEFT)

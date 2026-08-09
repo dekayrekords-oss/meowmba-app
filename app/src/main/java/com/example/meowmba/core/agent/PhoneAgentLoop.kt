@@ -7,7 +7,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import android.content.pm.PackageManager
-import android.util.Log
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -78,18 +77,12 @@ class PhoneAgentLoop(
             val activePackage = svc.getActivePackage()
             val prompt = buildPrompt(g, activePackage, screenContent, history)
 
-            Log.d("PhoneLoop", "Step $steps | prompt length=${prompt.length} chars | pkg=$activePackage")
-            val response = try { brain(prompt) } catch (e: Exception) {
-                Log.e("PhoneLoop", "Brain exception: ${e.message}", e)
-                null
-            }
+            val response = try { brain(prompt) } catch (_: Exception) { null }
             if (response == null) {
-                Log.w("PhoneLoop", "Brain returned null (omniRoute may be null or API error)")
                 announce("Brain unreachable — retrying.")
                 delay(3_000L)
                 continue
             }
-            Log.d("PhoneLoop", "Brain response (${response.length} chars): ${response.take(120)}")
 
             val action = parseAction(response)
             if (action == null) {
@@ -217,8 +210,7 @@ class PhoneAgentLoop(
             sb.append("\nGoal: ")
             sb.append(goal)
             sb.append("\n\nScreen content (numbered interactive elements):\n")
-            // Truncate overly verbose screen dumps to keep prompt within model limits
-            sb.append(if (screen.length > 6000) screen.take(6000) + "\n[...truncated]" else screen)
+            sb.append(screen)
             if (history.isNotEmpty()) {
                 sb.append("\n\nAction history (most recent last):\n")
                 sb.append(history.joinToString("\n"))
@@ -245,7 +237,6 @@ class PhoneAgentLoop(
             sb.append("""{"action":"wait"}""")
             sb.append("\n")
             sb.append("""{"action":"done","summary":"what was accomplished"}""")
-            sb.append("\nIMPORTANT: When the goal mentions opening or tapping something \"called\" or \"named\" X, find that text in the interactive elements. If not found, scroll down and look again.")
             sb.append("\nIf the goal is achieved, use done. Pick ONE action only.")
             return sb.toString()
         }

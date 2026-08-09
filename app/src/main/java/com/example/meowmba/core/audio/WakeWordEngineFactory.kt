@@ -19,14 +19,24 @@ import kotlinx.coroutines.CoroutineScope
 object WakeWordEngineFactory {
 
     /**
-     * Kill switch for the VAD + speaker-verification stages.
-     *
-     * Kept because it earned its place: adding those stages made the mic deliver digital
-     * silence a few seconds after start, and flipping this to false is how the cause was
-     * isolated to the VAD (wrong window size) rather than guessed at. If wake detection
-     * ever regresses again, set false and re-measure before theorising.
+     * Kill switch for the speaker-verification stage ("is that you?"). Kept separate from
+     * the VAD gate: the verifier is a plain native forward pass and has been stable, so it
+     * stays on.
      */
-    private const val GATES_ENABLED = true
+    private const val SPEAKER_GATE_ENABLED = true
+
+    /**
+     * Kill switch for the Silero VAD gate.
+     *
+     * OFF because the native VAD crashes this exact build of the app: sherpa-onnx v1.13.4's
+     * Java_com_k2fsa_sherpa_onnx_Vad_acceptWaveform does an over-read memmove that dies with
+     * SIGSEGV (SEGV_ACCERR), faulting ~200ms into the first capture. Tombstones show the
+     * same backtrace repeatedly (__memmove_aarch64_nt -> libsherpa-onnx-jni.so ->
+     * Vad.acceptWaveform). The keyword spotter's own OnlineStream.acceptWaveform is a
+     * different native path and is unaffected, so with the gate off the wake word runs
+     * ungated on every frame: it works, at the cost of the gate's battery savings.
+     */
+    private const val VAD_GATE_ENABLED = false
 
     /**
      * Wake phrases offered regardless of the companion's name.
@@ -120,8 +130,8 @@ object WakeWordEngineFactory {
             context = context,
             scope = scope,
             keywords = keywords,
-            verifier = if (GATES_ENABLED) verifier else null,
-            speechGate = if (GATES_ENABLED) VadGate.create(context) else null,
+            verifier = if (SPEAKER_GATE_ENABLED) verifier else null,
+            speechGate = if (VAD_GATE_ENABLED) VadGate.create(context) else null,
         )
         return engine to verifier
     }

@@ -31,6 +31,7 @@ fun SettingsScreen(
     secureStorage: SecureStorageManager,
     companionName: String = "Meow",
     wakeWordEnabled: Boolean = false,
+    requireWakeWordInFace: Boolean = false,
     conversationMode: Boolean = false,
     bargeInEnabled: Boolean = true,
     routines: List<RoutineUi> = emptyList(),
@@ -40,6 +41,7 @@ fun SettingsScreen(
     agentBrainEnabled: Boolean = true,
     hermesAgentUrl: String = "",
     imageServerUrl: String = "",
+    mem0ServerUrl: String = "",
     preferServerImageGen: Boolean = false,
     videoServerUrl: String = "",
     imageModelInstalled: () -> Boolean = { false },
@@ -55,8 +57,13 @@ fun SettingsScreen(
     robotBtAddress: String = "",
     robotScanning: Boolean = false,
     robotScanResults: List<Pair<String, String>> = emptyList(),
+    carModeEnabled: Boolean = false,
+    avatarStyle: AvatarStyle = AvatarStyle.DEFAULT,
+    onAvatarStyleChange: (AvatarStyle) -> Unit = {},
+    emergencyContact: String = "",
+    onCarModeChange: (Boolean) -> Unit = {},
+    onEmergencyContactChange: (String) -> Unit = {},
     onRobotScan: () -> Unit = {},
-    onRobotInitialize: () -> Unit = {},
     onRobotBodyChange: (Boolean) -> Unit = {},
     onRobotHostChange: (String) -> Unit = {},
     onRobotPortChange: (String) -> Unit = {},
@@ -64,6 +71,7 @@ fun SettingsScreen(
     onRobotBtAddressChange: (String) -> Unit = {},
     onCompanionNameChange: (String) -> Unit = {},
     onWakeWordChange: (Boolean) -> Unit = {},
+    onRequireWakeInFaceChange: (Boolean) -> Unit = {},
     onConversationModeChange: (Boolean) -> Unit = {},
 
     onBargeInChange: (Boolean) -> Unit = {},
@@ -80,6 +88,7 @@ fun SettingsScreen(
     onDownloadImageModel: () -> Unit = {},
     onDeleteImageModel: () -> Unit = {},
     onImageServerUrlChange: (String) -> Unit = {},
+    onMem0ServerUrlChange: (String) -> Unit = {},
     onPreferServerImageGenChange: (Boolean) -> Unit = {},
     onMusicServerUrlChange: (String) -> Unit = {},
     onVideoServerUrlChange: (String) -> Unit = {},
@@ -106,12 +115,7 @@ fun SettingsScreen(
     var showAdvanced by remember { mutableStateOf(false) }
 
     Surface(
-        modifier = Modifier
-            .fillMaxSize()
-            .clickable(
-                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                indication = null,
-            ) {},
+        modifier = Modifier.fillMaxSize(),
         color = Color(0xFF0D1117)
     ) {
         Column(
@@ -150,6 +154,13 @@ fun SettingsScreen(
                 description = "Always-on listening for the wake phrase while the app is open. Runs on-device.",
                 checked = wakeWordEnabled,
                 onCheckedChange = onWakeWordChange
+            )
+            VoiceToggle(
+                label = "Always-on mic in face mode",
+                description = "Keeps the mic live while the companion face is up: just talk, " +
+                    "no wake phrase needed. Turn off to require the wake phrase in face mode.",
+                checked = !requireWakeWordInFace,
+                onCheckedChange = { onRequireWakeInFaceChange(!it) }
             )
             VoiceToggle(
                 label = "Background wake phrase",
@@ -302,17 +313,8 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(6.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = onRobotScan, enabled = !robotScanning, modifier = Modifier.weight(1f)) {
-                        Text(if (robotScanning) "Scanning…" else "Scan")
-                    }
-                    Button(
-                        onClick = onRobotInitialize,
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                    ) {
-                        Text("Initialize")
-                    }
+                OutlinedButton(onClick = onRobotScan, enabled = !robotScanning) {
+                    Text(if (robotScanning) "Scanning for bases…" else "Find base (scan)")
                 }
                 if (robotScanResults.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(4.dp))
@@ -562,6 +564,85 @@ fun SettingsScreen(
                     "http://192.168.1.10:9300. Leave blank to always use the " +
                     "animated-frames placeholder. Real generation takes several " +
                     "minutes per clip.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.Gray
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Semantic memory (meow-mem0): share on-device facts with Meow's brain.
+            Text("Semantic memory", style = MaterialTheme.typography.titleMedium, color = Color.White)
+            Spacer(modifier = Modifier.height(8.dp))
+            SettingsTextField(
+                value = mem0ServerUrl,
+                onValueChange = onMem0ServerUrlChange,
+                label = { Text("Semantic memory server URL (optional)") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Text(
+                text = "Meow's shared semantic memory service, e.g. " +
+                    "http://192.168.1.69:11438. New conversation facts are synced " +
+                    "here so the server-side brain can recall them. Leave blank to " +
+                    "keep memory on-device only.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.Gray
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Avatar: which face the companion wears. The full picker (with previews
+            // and the animation shelf) lives on the Avatar tile; this is the same
+            // setting for anyone who looks for it here first.
+            Text("Avatar", style = MaterialTheme.typography.titleMedium, color = Color.White)
+            Spacer(modifier = Modifier.height(8.dp))
+            AvatarStyle.entries.forEach { option ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onAvatarStyleChange(option) }
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RadioButton(
+                        selected = option == avatarStyle,
+                        onClick = { onAvatarStyleChange(option) },
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column {
+                        Text(option.label, color = Color.White)
+                        Text(
+                            option.description,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.Gray,
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Car assistant: knows when you're driving, tracks trips, watches for crashes.
+            Text("Car assistant", style = MaterialTheme.typography.titleMedium, color = Color.White)
+            Spacer(modifier = Modifier.height(8.dp))
+            VoiceToggle(
+                label = "Drive mode",
+                description = "Meow senses when you're in a car (GPS speed, your car's " +
+                    "Bluetooth, or a voice \"drive mode on\"), shows a speed/trip card, " +
+                    "and can answer \"how fast\", \"are we there yet\", or find gas and " +
+                    "food along the way. Uses GPS + accelerometer only while enabled.",
+                checked = carModeEnabled,
+                onCheckedChange = onCarModeChange
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            SettingsTextField(
+                value = emergencyContact,
+                onValueChange = onEmergencyContactChange,
+                label = { Text("Emergency contact phone (optional)") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Text(
+                text = "Used by the crash alert — say \"text mom\" after a detected " +
+                    "impact and Meow will open a text with your location ready to send.",
                 style = MaterialTheme.typography.bodySmall,
                 color = Color.Gray
             )

@@ -7,7 +7,6 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <!-- Navigation: needed to rank nearby places by distance from the user. -->
-    <uses-permission android:name="android.permission.WRITE_SETTINGS" tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.CAMERA" />
@@ -155,16 +154,6 @@
                 android:resource="@xml/meow_accessibility_config" />
         </service>
 
-
-        <service
-            android:name=".core.notification.MeowNotificationListener"
-            android:exported="true"
-            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
-            <intent-filter>
-                <action android:name="android.service.notification.NotificationListenerService" />
-            </intent-filter>
-        </service>
-
         <receiver
             android:name=".core.routines.RoutineAlarmReceiver"
             android:exported="false" />
@@ -173,6 +162,13 @@
             android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+        <receiver
+            android:name=".core.debug.DebugConfigReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.example.meowmba.debug.CONFIG" />
             </intent-filter>
         </receiver>
     </application>

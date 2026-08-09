@@ -1,12 +1,11 @@
 package com.example.meowmba.ui.companion
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -15,13 +14,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -38,6 +39,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.min
@@ -69,6 +71,39 @@ private val PUPIL_COLOR = Color(0xFF06232B)
 private val NOSE_COLOR = Color(0xFFFFA6C9)
 private val WHISKER_COLOR = Color(0x66CFF9FF)
 
+
+/**
+ * Godot face extents (relative to head radius R, from GodotCatFace):
+ *   ear tip ≈ 1.10 R above center, chin ≈ 0.75 R below, whiskers ≈ 0.85 R wide.
+ * Leave margins for the status/cutout band and the mic row so landscape
+ * never clips the ears or stacks the mic on the mouth.
+ */
+internal fun fitGodotFaceRadius(w: Float, h: Float): Float {
+    val landscape = w > h * 1.15f
+    // Landscape has little vertical room — use tight margins so the head fills
+    // the short axis; portrait keeps mic/status headroom.
+    val topMargin = if (landscape) h * 0.07f else h * 0.07f
+    val bottomMargin = if (landscape) h * 0.12f else h * 0.15f
+    val sideMargin = if (landscape) w * 0.10f else w * 0.05f
+    val availW = (w - 2f * sideMargin).coerceAtLeast(1f)
+    val availH = (h - topMargin - bottomMargin).coerceAtLeast(1f)
+    // Full face ~1.85R tall (ears+chin). Landscape uses a tighter budget so R
+    // is not crushed by over-padding (was 2.05 + 42% margins → tiny head).
+    val heightBudget = if (landscape) 1.70f else 1.92f
+    val r = min(availW / 1.70f, availH / heightBudget)
+    val maxFrac = if (landscape) 0.54f else 0.46f
+    return r.coerceIn(120f, min(w, h) * maxFrac)
+}
+
+internal fun fitGodotFaceCenterY(w: Float, h: Float): Float {
+    val landscape = w > h * 1.15f
+    val topMargin = if (landscape) h * 0.07f else h * 0.07f
+    val bottomMargin = if (landscape) h * 0.12f else h * 0.15f
+    // Slightly above geometric mid so the mic row doesn't crowd the chin.
+    val bandMid = (topMargin + (h - bottomMargin)) * 0.5f
+    return if (landscape) bandMid - h * 0.02f else bandMid
+}
+
 @Composable
 fun AvatarRenderer(
     state: CompanionState,
@@ -78,8 +113,8 @@ fun AvatarRenderer(
     onSwipeLeft: () -> Unit = {},
     onSwipeRight: () -> Unit = {},
     paused: Boolean = false,
-    onSfx: (String) -> Unit = {},
-    transparent: Boolean = false,
+    faceGazeX: Float? = null,
+    faceGazeY: Float? = null,
     modifier: Modifier = Modifier
 ) {
     val basePose = CatAvatarStateMachine.resolvePose(state)
@@ -93,11 +128,9 @@ fun AvatarRenderer(
     // ends (sample returns null past the duration).
     // While an overlay covers the screen the face freezes: no custom clip.
     val customAnim = if (paused) null else state.activeAnimation
+    val composed = if (paused) null else state.activeComposed
     var animT by remember { mutableLongStateOf(0L) }
-    // Track which SFX frame index was last triggered to avoid repeats
-    var lastSfxFrameIdx by remember { mutableIntStateOf(-1) }
     LaunchedEffect(customAnim) {
-        lastSfxFrameIdx = -1
         if (customAnim != null) {
             var start = -1L
             while (true) {
@@ -105,19 +138,85 @@ fun AvatarRenderer(
                     if (start < 0L) start = now
                     animT = now - start
                 }
-                // Trigger SFX for the current frame (once per frame transition)
-                val frameIdx = customAnim.frames.indexOfLast { it.atMs <= animT }
-                if (frameIdx >= 0 && frameIdx != lastSfxFrameIdx) {
-                    lastSfxFrameIdx = frameIdx
-                    customAnim.frames[frameIdx].sfx?.let { onSfx(it) }
-                }
                 if (animT > customAnim.durationMs) break
             }
         }
     }
-    val pose = customAnim?.let { clip ->
-        CustomAnimations.sample(clip, animT)?.let { with(CustomAnimations) { basePose.overlay(it) } }
-    } ?: basePose
+
+    // Godot face / classic idle: ONE vsync-locked draw clock (not 9 infinite transitions).
+    // CatMotionEngine is ONE-SHOT only for named expressions.
+    val motionEngine = remember { CatMotionEngine() }
+    var shotPose by remember { mutableStateOf<MotionPose?>(null) }
+    var faceRadiusPx by remember { mutableStateOf(200f) }
+    val useGodotFace = state.avatarStyle == AvatarStyle.NEO
+    // Single ambient clock (seconds). Advanced at ~60 fps and only while visible.
+    // Reading this in the Canvas draw lambda invalidates draw only — not a
+    // full-composition thrash of 9 rememberInfiniteTransition states @ vsync.
+    var clockSec by remember { mutableFloatStateOf(0f) }
+    var drawEpoch by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(paused) {
+        if (paused) return@LaunchedEffect
+        var lastNs = 0L
+        var accum = 0.0
+        var baseSec = 0.0
+        // Frame-lock to the display refresh (~60Hz on this panel). At 30fps each
+        // pose held for two vsyncs and motion read steppy; at 60fps every pose
+        // change lands on a vsync so the face moves as smoothly as the screen.
+        // Accumulation is in Double with an epsilon: the Float 1f/60f boundary
+        // sits just above a single 60Hz vsync, which silently ticked every 2nd
+        // vsync and kept the clock at ~30fps.
+        val frame = 1.0 / 60.0
+        var ticks = 0L
+        while (true) {
+            withFrameNanos { now ->
+                if (lastNs == 0L) lastNs = now
+                val dt = ((now - lastNs) / 1_000_000_000.0).coerceIn(0.0, 0.05)
+                lastNs = now
+                accum += dt
+                // One tick per vsync, carrying the remainder so a hitch never
+                // permanently slows the ambient cycle.
+                if (accum >= frame - 1e-7) {
+                    baseSec += frame
+                    clockSec = baseSec.toFloat()
+                    drawEpoch++
+                    accum -= frame
+                    ticks++
+                    if (ticks % 120 == 0L) {
+                        android.util.Log.i("AV", "clock=${"%.3f".format(clockSec)} ticks=$ticks")
+                    }
+                }
+            }
+        }
+    }
+    LaunchedEffect(composed, paused) {
+        if (paused || composed == null) {
+            motionEngine.stop()
+            shotPose = null
+            return@LaunchedEffect
+        }
+        motionEngine.play(composed)
+        var last = 0L
+        while (true) {
+            var frame: MotionPose? = null
+            withFrameMillis { now ->
+                val dt = if (last == 0L) 0.016f else ((now - last) / 1000f).coerceIn(0f, 1f / 60f)
+                last = now
+                frame = motionEngine.update(dt, faceRadiusPx.coerceIn(80f, 800f))
+                // Publish every vsync so one-shot keyframes move smoothly.
+                shotPose = frame
+            }
+            if (frame == null) break
+        }
+        shotPose = null
+    }
+
+    val pose = when {
+        shotPose != null -> shotPose!!.applyTo(basePose, faceRadiusPx)
+        customAnim != null -> customAnim.let { clip ->
+            CustomAnimations.sample(clip, animT)?.let { with(CustomAnimations) { basePose.overlay(it) } }
+        } ?: basePose
+        else -> basePose
+    }
 
     // ── Expression blending: every pose field eases toward its target ──────
     // When a custom animation is playing, CustomAnimations.sample() already
@@ -125,15 +224,34 @@ fun AvatarRenderer(
     // blend ON TOP causes the animated value to never reach its keyframe target
     // before the next one arrives — the motion is cancelled out. Use a near-
     // instant spec during playback so the sample values are honored directly.
-    val blendMs = if (customAnim != null) 16 else CatAnimationRegistry.spec("system.expression_blend").durationMs
-    val blendSpec = tween<Float>(blendMs)
-    val eyeOpen by animateFloatAsState(pose.eyeOpen, blendSpec, label = "eyeOpen")
-    val pupilSize by animateFloatAsState(pose.pupilSize, blendSpec, label = "pupil")
-    val gazeUp by animateFloatAsState(pose.pupilGazeUp, blendSpec, label = "gazeUp")
-    val headTilt by animateFloatAsState(pose.headTiltDeg, blendSpec, label = "tilt")
-    val earPerk by animateFloatAsState(pose.earPerk, blendSpec, label = "earPerk")
-    val earDroop by animateFloatAsState(pose.earDroopDeg, blendSpec, label = "earDroop")
-    val faceAlpha by animateFloatAsState(if (pose.dimmed) 0.55f else 1f, blendSpec, label = "dim")
+    // During one-shot / custom playback the sample already interpolates —
+    // animateFloatAsState on top (even at 16ms) fights the keyframes. Live
+    // values only blend when idle/reacting.
+    val playingClip = customAnim != null || composed != null
+    // Live values ride a spring so emotion/interaction shifts settle with a
+    // hint of overshoot (organic) instead of a linear ease (mechanical).
+    // During clip playback the sampler already interpolates keyframes — snap.
+    val blendSpec = if (playingClip) {
+        tween<Float>(16)
+    } else {
+        spring<Float>(dampingRatio = 0.62f, stiffness = Spring.StiffnessMediumLow)
+    }
+    val eyeOpenAnim by animateFloatAsState(pose.eyeOpen, blendSpec, label = "eyeOpen")
+    val pupilSizeAnim by animateFloatAsState(pose.pupilSize, blendSpec, label = "pupil")
+    val gazeUpAnim by animateFloatAsState(pose.pupilGazeUp, blendSpec, label = "gazeUp")
+    val headTiltAnim by animateFloatAsState(pose.headTiltDeg, blendSpec, label = "tilt")
+    val earPerkAnim by animateFloatAsState(pose.earPerk, blendSpec, label = "earPerk")
+    val earDroopAnim by animateFloatAsState(pose.earDroopDeg, blendSpec, label = "earDroop")
+    // Dim on its own short tween — a spring could overshoot alpha past 1.
+    val dimSpec = if (playingClip) tween<Float>(16) else tween<Float>(250)
+    val faceAlphaAnim by animateFloatAsState(if (pose.dimmed) 0.55f else 1f, dimSpec, label = "dim")
+    val eyeOpen = if (playingClip) pose.eyeOpen else eyeOpenAnim
+    val pupilSize = if (playingClip) pose.pupilSize else pupilSizeAnim
+    val gazeUp = if (playingClip) pose.pupilGazeUp else gazeUpAnim
+    val headTilt = if (playingClip) pose.headTiltDeg else headTiltAnim
+    val earPerk = if (playingClip) pose.earPerk else earPerkAnim
+    val earDroop = if (playingClip) pose.earDroopDeg else earDroopAnim
+    val faceAlpha = if (playingClip) (if (pose.dimmed) 0.55f else 1f) else faceAlphaAnim
 
     // ── Ambient animation layers (timings from the registry) ───────────────
     val blink = remember { Animatable(1f) }
@@ -169,83 +287,48 @@ fun AvatarRenderer(
         }
     }
 
-    // Gentle at-rest tail sway so the tail exists between clips instead of
-    // only appearing mid-wag. Clips override it (customAnim != null zeroes it).
-    val tailSway by rememberInfiniteTransition(label = "tailSway").animateFloat(
-        initialValue = if (paused) 0f else -0.14f,
-        targetValue = if (paused) 0f else 0.14f,
-        animationSpec = infiniteRepeatable(
-            tween(3600), RepeatMode.Reverse
-        ),
-        label = "tailSway"
-    )
-
-    fun registryInfinite(name: String) = CatAnimationRegistry.spec(name)
-    // Paused = frozen endpoints (from == to), so ambient loops stop moving
-    // instead of being torn out of the composition.
-    fun inf(name: String, target: Boolean): Float {
-        val s = CatAnimationRegistry.spec(name)
-        return if (paused) (s.from + s.to) / 2f else if (target) s.to else s.from
+    // Hold last face sample; never fall through to idle drift while tracking —
+    // drift is a second motion source and made the head thrash.
+    var heldFaceGaze by remember { mutableStateOf<Offset?>(null) }
+    var recentlyTracking by remember { mutableStateOf(false) }
+    LaunchedEffect(faceGazeX, faceGazeY) {
+        if (faceGazeX != null && faceGazeY != null) {
+            heldFaceGaze = Offset(faceGazeX, faceGazeY)
+            recentlyTracking = true
+        } else {
+            delay(550)
+            if (faceGazeX == null && faceGazeY == null) {
+                heldFaceGaze = null
+                recentlyTracking = false
+            }
+        }
     }
-    val breathe by rememberInfiniteTransition(label = "breathe").animateFloat(
-        initialValue = inf("idle.breathe", false),
-        targetValue = inf("idle.breathe", true),
-        animationSpec = infiniteRepeatable(
-            tween(registryInfinite("idle.breathe").durationMs), RepeatMode.Reverse
-        ),
-        label = "breathe"
-    )
-    val driftX by rememberInfiniteTransition(label = "driftX").animateFloat(
-        initialValue = inf("idle.gaze_drift_x", false),
-        targetValue = inf("idle.gaze_drift_x", true),
-        animationSpec = infiniteRepeatable(
-            tween(registryInfinite("idle.gaze_drift_x").durationMs, easing = LinearEasing),
-            RepeatMode.Reverse
-        ),
-        label = "driftX"
-    )
-    val driftY by rememberInfiniteTransition(label = "driftY").animateFloat(
-        initialValue = inf("idle.gaze_drift_y", false),
-        targetValue = inf("idle.gaze_drift_y", true),
-        animationSpec = infiniteRepeatable(
-            tween(registryInfinite("idle.gaze_drift_y").durationMs, easing = LinearEasing),
-            RepeatMode.Reverse
-        ),
-        label = "driftY"
-    )
-    val talk by rememberInfiniteTransition(label = "talk").animateFloat(
-        initialValue = inf("speech.talk_cycle", false),
-        targetValue = inf("speech.talk_cycle", true),
-        animationSpec = infiniteRepeatable(
-            tween(registryInfinite("speech.talk_cycle").durationMs), RepeatMode.Reverse
-        ),
-        label = "talk"
-    )
-    val whiskerSway by rememberInfiniteTransition(label = "whiskers").animateFloat(
-        initialValue = inf("idle.whisker_sway", false),
-        targetValue = inf("idle.whisker_sway", true),
-        animationSpec = infiniteRepeatable(
-            tween(registryInfinite("idle.whisker_sway").durationMs, easing = LinearEasing),
-            RepeatMode.Reverse
-        ),
-        label = "whiskers"
-    )
-    val mouthWobble by rememberInfiniteTransition(label = "mouth").animateFloat(
-        initialValue = inf("idle.mouth_wobble", false),
-        targetValue = inf("idle.mouth_wobble", true),
-        animationSpec = infiniteRepeatable(
-            tween(registryInfinite("idle.mouth_wobble").durationMs), RepeatMode.Reverse
-        ),
-        label = "mouth"
-    )
-    val haloPulse by rememberInfiniteTransition(label = "halo").animateFloat(
-        initialValue = inf("system.halo_pulse", false),
-        targetValue = inf("system.halo_pulse", true),
-        animationSpec = infiniteRepeatable(
-            tween(registryInfinite("system.halo_pulse").durationMs), RepeatMode.Reverse
-        ),
-        label = "halo"
-    )
+    val trackingNow = faceGazeX != null || heldFaceGaze != null || recentlyTracking
+
+    // ── Idle gaze: real saccades (quick fixate → hold), not constant sine
+    //    drift — a perpetual smooth wander reads as a mechanical search loop.
+    val saccadeX = remember { Animatable(0f) }
+    val saccadeY = remember { Animatable(0f) }
+    LaunchedEffect(paused, trackingNow) {
+        if (paused) return@LaunchedEffect
+        if (trackingNow) {
+            // While face-tracked, pin idle gaze at center so it can't snap back
+            // to a mid-saccade value when tracking ends.
+            saccadeX.snapTo(0f)
+            saccadeY.snapTo(0f)
+            return@LaunchedEffect
+        }
+        while (true) {
+            // A cat stares at one spot, then glances at something else.
+            delay(Random.nextLong(1100L, 3800L))
+            val tx = (Random.nextFloat() * 2f - 1f) * 0.7f
+            val ty = (Random.nextFloat() * 2f - 1f) * 0.45f
+            val moveX = launch { saccadeX.animateTo(tx, tween(140)) }
+            val moveY = launch { saccadeY.animateTo(ty, tween(140)) }
+            moveX.join()
+            moveY.join()
+        }
+    }
 
     // ── Gaze: pupils follow the user's touch, then wander off ──────────────
     var touchGaze by remember { mutableStateOf<Offset?>(null) }
@@ -255,10 +338,39 @@ fun AvatarRenderer(
             touchGaze = null
         }
     }
-    val gazeTargetX = touchGaze?.x ?: driftX
-    val gazeTargetY = touchGaze?.y ?: driftY
-    val gazeX by animateFloatAsState(gazeTargetX, tween(420), label = "gazeX")
-    val gazeY by animateFloatAsState(gazeTargetY, tween(420), label = "gazeY")
+    // Idle ambient drift is applied in the draw scope from clockSec so we do
+    // not recompose 60×/s just to wander the pupils.
+    val gazeTargetX = faceGazeX
+        ?: heldFaceGaze?.x
+        ?: touchGaze?.x
+        ?: 0f
+    val gazeTargetY = faceGazeY
+        ?: heldFaceGaze?.y
+        ?: touchGaze?.y
+        ?: 0f
+    // Continuous spring (not a short tween) so each face sample glides into
+    // the next — short tweens restarting every publish looked like dropped frames.
+    // StiffnessMedium (not MediumLow) so the head actually tracks the user's
+    // motion instead of floating behind it with a visible chase delay.
+    val gazeSpec = if (trackingNow) {
+        spring<Float>(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMedium,
+        )
+    } else {
+        tween(500)
+    }
+    val gazeX by animateFloatAsState(gazeTargetX, gazeSpec, label = "gazeX")
+    val gazeY by animateFloatAsState(gazeTargetY, gazeSpec, label = "gazeY")
+    // Ramped tracking weight. A face appearing/disappearing used to flip the
+    // pan scale (0.06↔0.32) and kill idle gaze instantly, snapping the whole
+    // head several px in one frame every time the detector toggled. Easing the
+    // weight makes enter/leave-follow glide instead of step.
+    val trackingWeight by animateFloatAsState(
+        targetValue = if (trackingNow) 1f else 0f,
+        animationSpec = tween(durationMillis = 450, easing = FastOutSlowInEasing),
+        label = "trackingWeight"
+    )
 
     // ── Petting: stroking the cat makes it purr ────────────────────────────
     var lastPetAt by remember { mutableLongStateOf(0L) }
@@ -279,6 +391,10 @@ fun AvatarRenderer(
     Canvas(
         modifier = modifier
             .fillMaxSize()
+            .onSizeChanged { sz ->
+                // Match draw-time fit so CatMotion scales stay consistent.
+                faceRadiusPx = fitGodotFaceRadius(sz.width.toFloat(), sz.height.toFloat())
+            }
             .semantics {
                 contentDescription =
                     "Memba cat avatar, currently ${state.interactionState.name.lowercase()}"
@@ -331,6 +447,33 @@ fun AvatarRenderer(
                 }
             }
     ) {
+        // Subscribe draw pass to the single vsync-locked clock (not composition).
+        val _epoch = drawEpoch
+        val tSec = clockSec
+        // Triangle / sine waves matching CatAnimationRegistry periods.
+        fun triWave(periodSec: Float, from: Float, to: Float, phaseSec: Float = 0f): Float {
+            if (periodSec <= 0f) return (from + to) * 0.5f
+            val phase = (((tSec + phaseSec) / periodSec) % 1f)
+            val tri = if (phase < 0.5f) phase * 2f else 2f - phase * 2f
+            return from + (to - from) * tri
+        }
+        fun sinWave(periodSec: Float, from: Float, to: Float, phaseSec: Float = 0f): Float {
+            if (periodSec <= 0f) return (from + to) * 0.5f
+            val mid = (from + to) * 0.5f
+            val amp = (to - from) * 0.5f
+            return mid + amp * kotlin.math.sin((tSec + phaseSec) * (2f * Math.PI.toFloat() / periodSec))
+        }
+        // Per-channel phase offsets break the phase-lock: every ambient motion
+        // started at t=0, so the cycles ran in sync and read as one rigid,
+        // metronomic loop. Offsets de-correlate them into independent motions.
+        val breathe = triWave(2.6f, 0.98f, 1.02f)
+        val talk = triWave(0.16f, 0.15f, 1f)
+        val whiskerSway = sinWave(1.5f, -1f, 1f, phaseSec = 2.1f)
+        val mouthWobble = triWave(1.9f, 0.88f, 1.12f, phaseSec = 0.7f)
+        val haloPulse = triWave(1.0f, 0.25f, 0.6f, phaseSec = 1.3f)
+        val tailSway = sinWave(3.6f, -0.14f, 0.14f, phaseSec = 3.9f)
+        val godotClockT = tSec  // seconds; Godot face uses sin(t * k)
+
         val w = size.width
         val h = size.height
         val s = min(w, h)
@@ -341,8 +484,17 @@ fun AvatarRenderer(
         // exactly like its siblings (tailWag/tongue/sparkle) so no out-of-range or
         // non-finite value can ever reach the canvas transforms.
         val bounceY = effectivePose.bodyBounce.coerceIn(-1f, 1f) * s * 0.06f
-        val cx = w / 2f + gazeX * s * 0.03f + driftX * s * 0.004f
-        val cy = h * 0.47f + gazeY * s * 0.02f - bounceY
+        val leanShift = effectivePose.leanX.coerceIn(-1f, 1f) * s * 0.055f
+        // Classic path: larger body pan when face-tracking so the whole face follows.
+        // Pan scale ramps with trackingWeight so enter/leave follow glides.
+        val bodyGaze = 0.03f + 0.07f * trackingWeight
+        // Idle gaze wander only when not face-tracking. Driven by saccades
+        // (fixate → hold → glance) instead of continuous sine drift; the
+        // movement itself prevents burn-in on always-on displays.
+        val idleGazeX = saccadeX.value * (1f - trackingWeight)
+        val idleGazeY = saccadeY.value * (1f - trackingWeight)
+        val cx = w / 2f + (gazeX + idleGazeX) * s * bodyGaze + leanShift
+        val cy = h * 0.47f + (gazeY + idleGazeY) * s * (0.02f + 0.04f * trackingWeight) - bounceY
 
         val eyeDX = s * 0.26f
         val eyeW = s * 0.19f
@@ -350,6 +502,110 @@ fun AvatarRenderer(
         val eyeH = (baseEyeH * eyeOpen * blink.value * breathe).coerceAtLeast(s * 0.012f)
         val eyeCy = cy - s * 0.06f
         val stroke = s * 0.014f
+
+        // ── Godot Cat Assistant face (exact look + CatMotion) ───────────────
+        if (useGodotFace) {
+            // Transparent canvas — system wallpaper / desk shows through.
+            // Fit full head (ears + chin) inside the canvas with room for
+            // status bar / cutout and the mic controls — landscape used to
+            // clip ear tips and stack the mic on the mouth.
+            val R = fitGodotFaceRadius(w, h)
+            val faceCy = fitGodotFaceCenterY(w, h)
+            val idleBob = (breathe - 1f) * R * 2.2f
+            // Whole-head sway kept faint — the saccades (idleGaze) carry the
+            // "looking around" motion now; a constant sine sway reads fake.
+            val idleSway = kotlin.math.sin(godotClockT * 0.72f + 1.9f) * R * 0.014f
+            // Face-track active → move the WHOLE head (pan + tilt), not just pupils.
+            // Pupils only glance a little; the body carries the follow.
+            val tracking = faceGazeX != null || heldFaceGaze != null || recentlyTracking
+            // Whole-head follow scaled by the ramped tracking weight: entering
+            // and leaving follow glides the head instead of snapping (the old
+            // 0.42/18° hard toggles read as stepping).
+            val bodyPanX = gazeX * R * (0.06f + 0.26f * trackingWeight)
+            val bodyPanY = gazeY * R * (0.04f + 0.18f * trackingWeight)
+            val bodyTilt = (gazeX * 12f).coerceIn(-12f, 12f) * trackingWeight
+            // Pupils track hard — body pan carries the head, iris must still
+            // glance toward the user inside the sockets (0.50 looked static).
+            val pupilGazeX = if (tracking) {
+                (gazeX * 1.15f).coerceIn(-1f, 1f)
+            } else {
+                (gazeX + idleGazeX * 0.55f).coerceIn(-1f, 1f)
+            }
+            val pupilGazeY = if (tracking) {
+                (gazeY * 1.15f).coerceIn(-1f, 1f)
+            } else {
+                (gazeY + idleGazeY * 0.55f).coerceIn(-1f, 1f)
+            }
+            // Voice drive: talk cycle is always running; only apply when listening/speaking.
+            val speaking = effectivePose.mouth == MouthMode.SPEAKING
+            val listening = state.interactionState ==
+                com.example.meowmba.ui.companion.InteractionState.LISTENING
+            val voice = talk.coerceIn(0f, 1f)
+            val voiceEyeOpen = when {
+                speaking -> (eyeOpen * (0.88f + 0.28f * voice)).coerceIn(0.15f, 1.35f)
+                listening -> (eyeOpen * (1.0f + 0.18f * voice)).coerceIn(0.15f, 1.35f)
+                else -> eyeOpen
+            }
+            val voicePupil = when {
+                speaking -> (pupilSize * (0.85f + 0.45f * voice)).coerceIn(0.08f, 0.95f)
+                listening -> (pupilSize * (0.95f + 0.35f * voice)).coerceIn(0.08f, 0.95f)
+                else -> pupilSize
+            }
+            // Prefer live talking pose over a finished one-shot so the jaw always
+            // moves while TTS/mic is active (shotPose was freezing the mouth).
+            val liveTalking = speaking || listening
+            val gPose = if (shotPose != null && !liveTalking) shotPose!! else MotionPose(
+                eyeOpen = (voiceEyeOpen * blink.value).coerceIn(0.12f, 1.35f),
+                pupilSize = voicePupil,
+                eyeWidthScale = if (speaking) 1f + 0.04f * voice else 1f,
+                eyeHeightScale = if (speaking) 1f - 0.06f * voice else 1f,
+                eyeTiltDeg = if (tracking) gazeX * 4f else 0f,
+                lowerLid = if (effectivePose.happyEyes) 0.35f else if (speaking) 0.12f + 0.15f * voice else 0.10f,
+                earPitchDeg = (earPerk - 1f) * 36f + if (listening) voice * 8f else 0f,
+                earSplayDeg = 10f + earDroop * 0.35f,
+                earSplitDeg = earTwitchL.value - earTwitchR.value,
+                jawOpen = when {
+                    speaking -> (0.28f + voice * 0.62f).coerceIn(0.2f, 0.95f)
+                    listening -> 0.04f + voice * 0.06f // tiny reactive part
+                    effectivePose.mouth == MouthMode.HAPPY -> 0.12f
+                    else -> 0f
+                },
+                mouthWidth = if (speaking) 0.95f + 0.25f * voice else 1f,
+                lipCurl = 0f,
+                offsetX = idleSway + idleGazeX * R * 0.12f + effectivePose.leanX * R * 0.06f + bodyPanX,
+                offsetY = idleBob + idleGazeY * R * 0.08f + effectivePose.bodyBounce * R * 0.08f + bodyPanY,
+                headTiltDeg = headTilt + bodyTilt,
+                scaleDelta = 0f,
+            )
+            // Anchor at screen center band; pose offsets carry the whole face.
+            val center = Offset(
+                w / 2f + gPose.offsetX + effectivePose.leanX * R * 0.02f,
+                faceCy + gPose.offsetY,
+            )
+            rotate(gPose.headTiltDeg, pivot = center) {
+                drawGodotCatFace(
+                    origin = center,
+                    R = R * (1f + gPose.scaleDelta).coerceIn(0.9f, 1.15f),
+                    pose = gPose,
+                    clock = GodotFaceClock(
+                        t = godotClockT,
+                        blink = blink.value,
+                        earTwitchL = earTwitchL.value,
+                        earTwitchR = earTwitchR.value,
+                        gazeX = pupilGazeX,
+                        gazeY = pupilGazeY - gazeUp * 0.25f,
+                        talk = talk,
+                        faceAlpha = faceAlpha,
+                    ),
+                    showTail = false,
+                    eyeColor = Color(state.avatarEyeColor),
+                    glowColor = Color(state.avatarGlowColor),
+                    glowStrength = if (effectivePose.glowPulse) 0.42f else 0.28f,
+                )
+            }
+            return@Canvas
+        }
+
 
         // ── LAYER -1: Tail (behind the face, wags during animations) ────────
         // Tail is ALWAYS drawn: at rest it sways gently via tailSway, during
@@ -399,10 +655,23 @@ fun AvatarRenderer(
             earPerk, earDroop, eyeColor, effectivePose.micOffMark)
 
         // ── LAYER 2: Eyes (happy arcs, or open eyes with tracking pupils) ──
-        drawEye(-1f, -headTilt, cx, eyeCy, s, eyeDX, eyeW, baseEyeH, eyeH,
-            blink.value, effectivePose, pupilSize, gazeX, gazeY, gazeUp, eyeColor)
-        drawEye(1f, headTilt, cx, eyeCy, s, eyeDX, eyeW, baseEyeH, eyeH,
-            blink.value, effectivePose, pupilSize, gazeX, gazeY, gazeUp, eyeColor)
+        // The eyes are the only thing the style changes: same pose, same gaze,
+        // same blink clock, so switching mid-animation is seamless.
+        if (state.avatarStyle == AvatarStyle.NEO) {
+            drawEyeNeo(-1f, -headTilt, cx, eyeCy, s, eyeDX, eyeW, baseEyeH, eyeH,
+                blink.value, effectivePose, pupilSize, (gazeX + idleGazeX * 0.55f).coerceIn(-1f, 1f),
+                (gazeY + idleGazeY * 0.55f).coerceIn(-1f, 1f), gazeUp, eyeColor)
+            drawEyeNeo(1f, headTilt, cx, eyeCy, s, eyeDX, eyeW, baseEyeH, eyeH,
+                blink.value, effectivePose, pupilSize, (gazeX + idleGazeX * 0.55f).coerceIn(-1f, 1f),
+                (gazeY + idleGazeY * 0.55f).coerceIn(-1f, 1f), gazeUp, eyeColor)
+        } else {
+            drawEye(-1f, -headTilt, cx, eyeCy, s, eyeDX, eyeW, baseEyeH, eyeH,
+                blink.value, effectivePose, pupilSize, (gazeX + idleGazeX * 0.55f).coerceIn(-1f, 1f),
+                (gazeY + idleGazeY * 0.55f).coerceIn(-1f, 1f), gazeUp, eyeColor)
+            drawEye(1f, headTilt, cx, eyeCy, s, eyeDX, eyeW, baseEyeH, eyeH,
+                blink.value, effectivePose, pupilSize, (gazeX + idleGazeX * 0.55f).coerceIn(-1f, 1f),
+                (gazeY + idleGazeY * 0.55f).coerceIn(-1f, 1f), gazeUp, eyeColor)
+        }
 
         // ── LAYER 3: Nose ──────────────────────────────────────────────────
         val noseY = cy + s * 0.115f
@@ -490,24 +759,6 @@ fun AvatarRenderer(
             drawPath(tonguePath, tongueColor)
         }
 
-        // ── LAYER 6b: Laser pointer dot (Module 2) ───────────────────────────
-        if (state.isLaserPointerActive) {
-            val laserGaze = touchGaze
-            if (laserGaze != null) {
-                val laserX = cx + laserGaze.x * s * 0.3f
-                val laserY = cy + laserGaze.y * s * 0.3f
-                drawCircle(
-                    brush = androidx.compose.ui.graphics.Brush.radialGradient(
-                        colors = listOf(Color.Red, Color.Red.copy(alpha = 0.4f), Color.Transparent),
-                        center = androidx.compose.ui.geometry.Offset(laserX, laserY),
-                        radius = s * 0.035f
-                    ),
-                    radius = s * 0.035f,
-                    center = androidx.compose.ui.geometry.Offset(laserX, laserY)
-                )
-            }
-        }
-
         // ── LAYER 7: Sparkle particles ──────────────────────────────────────
         val sparkleIntensity = effectivePose.sparkle.coerceIn(0f, 1f)
         if (sparkleIntensity > 0.01f) {
@@ -568,14 +819,6 @@ private fun zoneAt(offset: Offset, w: Int, h: Int): AvatarZone {
     }
     if (hypot(offset.x - (cx + eyeDX), offset.y - eyeCy) < eyeW * 0.85f) {
         return AvatarZone.EYE_RIGHT
-    }
-    // Nose (small zone near nose center)
-    if (hypot(offset.x - cx, offset.y - noseY) < s * 0.06f) {
-        return AvatarZone.NOSE
-    }
-    // Chin (below mouth area)
-    if (abs(offset.x - cx) < s * 0.15f && offset.y > mouthY + s * 0.03f && offset.y < mouthY + s * 0.15f) {
-        return AvatarZone.CHIN
     }
     // Mouth
     if (abs(offset.x - cx) < s * 0.13f && abs(offset.y - mouthY) < s * 0.08f) {
@@ -733,7 +976,7 @@ private fun DrawScope.drawMouth(
 ) {
     when (mode) {
         MouthMode.SPEAKING -> {
-        // Mouth rides the base talk cycle, amplified by real speech energy
+            // Mouth rides the base talk cycle, amplified by real speech energy
             // (TTS word boundaries). With no boundary callbacks (older API or
             // mock pipeline) the energy floor keeps the motion alive.
             val energy = 0.35f + 0.65f * mouthEnergy

@@ -425,9 +425,9 @@ Verified on device: settings opens with the robot section showing "Connect over 
 
 <!-- AUTOBUILD:START -->
 (regenerated after each commit)
-- 2026-08-06 12:30:15 : fix: error 11 backoff + screen-contextual command routing + improved screen reading
-- deba3f9 2026-08-06 12:01 fix: LOOI robot connection — GATT error 11 retry + Initialize button (from MEMBA 2)
-- f423d9a 2026-08-06 11:01 feat: LUMI edge agent — DualModeRouter, OfflineQueue, device settings tools
-- 3aff73b 2026-08-06 10:34 feat: 'meow start listening' — Voice Access + LLM hybrid mode
-- 2658c68 2026-08-06 09:54 feat: Loona-style features — notification listener, face attention, proactive nudges, focus mode
+- 2026-08-06 16:15:51 : fix: idle micro-motions no longer close panels; drawer/taps blocked under Settings
+- 772c688 2026-08-06 15:18 fix: LOOI Initialize now connects when no link exists; scan hides nameless MAC noise
+- 7c0516d 2026-08-06 14:53 fix: error 11 (TOO_MANY_REQUESTS) — pace recognizer sessions, silent backoff in Voice Access
+- bf3d894 2026-08-06 14:08 feat: implement 5-module on-device expansion
+- 9a165b1 2026-08-06 12:28 fix: error 11 backoff + screen-contextual command routing + improved screen reading
 <!-- AUTOBUILD:END -->

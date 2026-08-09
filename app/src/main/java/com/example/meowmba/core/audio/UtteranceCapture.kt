@@ -159,7 +159,15 @@ class UtteranceCapture(
         val heardNothing = code == SpeechRecognizer.ERROR_NO_MATCH ||
             code == SpeechRecognizer.ERROR_SPEECH_TIMEOUT
         if (!heardNothing) {
-            // A genuine failure: report it rather than looping on a broken recognizer.
+            // A genuine failure. But the user may already have said something this turn
+            // before it hit: AiAi delivers a result and then a late
+            // ERROR_SERVER_DISCONNECTED (the restart's destroy racing the service's
+            // final callbacks), and failing there throws a complete utterance away.
+            // Deliver what was heard — never discard real words for a transport hiccup.
+            if (segments.isNotEmpty()) {
+                finish()
+                return
+            }
             fail(code)
             return
         }

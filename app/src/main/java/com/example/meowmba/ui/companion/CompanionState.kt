@@ -58,10 +58,21 @@ data class CompanionState(
     val showSettings: Boolean = false,
     val showModelManager: Boolean = false,
     val showPrivacyDashboard: Boolean = false,
+    val showAvatarScreen: Boolean = false,
+    /** Which eye style the face is drawn in. Persisted across launches. */
+    val avatarStyle: AvatarStyle = AvatarStyle.DEFAULT,
+    /** Godot face eye color (opaque ARGB). Default mint green. */
+    val avatarEyeColor: Long = AvatarColors.DEFAULT_EYE,
+    /** Soft halo glow behind the Godot face (opaque ARGB). */
+    val avatarGlowColor: Long = AvatarColors.DEFAULT_GLOW,
     val selectedModel: String = "On-device (Local)",
     val loadedModels: LoadedModelsInfo = LoadedModelsInfo(),
     /** Always-on wake phrase ("Hey Meow" / "Hey Memba" / "Hey [name]") listening. */
     val wakeWordEnabled: Boolean = false,
+    /** Require the wake phrase even while the face is up; else face mode listens always-on. */
+    val requireWakeWordInFace: Boolean = false,
+    /** "start listening" armed the phone-control agent; the next utterance is its goal. */
+    val phoneControlAwaitingGoal: Boolean = false,
     /** Stay in conversation after responding, for natural follow-ups. */
     val conversationMode: Boolean = false,
     /** Phase E3: keep listening 8 s after each exchange so you can cut in. */
@@ -107,8 +118,50 @@ data class CompanionState(
     val showMemoryScreen: Boolean = false,
     /** Invented clip currently playing over the face, or null. Clears itself when done. */
     val activeAnimation: CustomAnimationSpec? = null,
+    /** Godot-style channel composition currently driving the face, if any. */
+    val activeComposed: ComposedExpression? = null,
     /** True only when the MetaMemory glasses app is actually installed — never assumed. */
     val metaMemoryLinked: Boolean = false,
+    /** meow-mem0 semantic memory server URL ("" = not configured → feature off). */
+    val mem0ServerUrl: String = "",
+    /** True only when the mem0 server answered /health. */
+    val mem0Linked: Boolean = false,
+    /**
+     * Car assistant master switch. When true the driving detector runs and the
+     * drive card can appear; when false no location/sensor fusion happens at all.
+     */
+    val carModeEnabled: Boolean = false,
+    /** Whether the user is currently in a car (any cue). */
+    val driving: Boolean = false,
+    /** True while the drive card should be up; false after the user dismisses it. */
+    val driveCardVisible: Boolean = false,
+    /** Live GPS speed, mph. */
+    val driveSpeedMph: Float = 0f,
+    /** Live linear-acceleration magnitude, in g. */
+    val driveGForce: Float = 0f,
+    /**
+     * Live car-frame acceleration split (approximate). Positive longitudinal =
+     * accelerating, negative = braking; signed lateral = turning. Used to drive
+     * the cat's reaction animations.
+     */
+    val driveLateralG: Float = 0f,
+    val driveLongitudinalG: Float = 0f,
+    /**
+     * What the cat is currently reacting to while driving. Managed by the car
+     * collector and read by the avatar state machine + nav overlay. This is an
+     * additive animation signal — it never changes [emotion] or [interactionState].
+     */
+    val driveReaction: DriveReaction = DriveReaction.NONE,
+    /** Which cue detected driving: "GPS speed", "Manual", "Bluetooth", … */
+    val driveReason: String = "",
+    /** True when drive mode was forced on by voice/UI. */
+    val driveManual: Boolean = false,
+    /** Stats for the trip in progress, or null when parked. */
+    val driveTrip: com.example.meowmba.core.car.TripStats? = null,
+    /** Crash alert text while one is pending; cleared by dismissing it. */
+    val crashAlert: String? = null,
+    /** Emergency-contact phone number for the car.help tool (Settings). */
+    val emergencyContact: String = "",
     /**
      * Weather to show as a card, or null for none.
      *
@@ -207,12 +260,18 @@ data class CompanionState(
     val backgroundListeningEnabled: Boolean = false,
     /** Vision: set when a look request needs the CAMERA runtime permission. */
     val cameraPermissionRequested: Boolean = false,
+    /** Locations: set when saving a named place needs location permission. */
+    val locationPermissionRequested: Boolean = false,
     /** Vision: thumbnail of the last captured frame (shown while describing). */
     val capturedFrame: android.graphics.Bitmap? = null,
     /** Vision: show live camera preview. */
     val isPreviewVisible: Boolean = false,
     /** Vision: use front-facing camera. */
     val isFrontCamera: Boolean = false,
+    /** Face tracking: the face's horizontal offset (-1..1), null when no face. */
+    val faceGazeX: Float? = null,
+    /** Face tracking: the face's vertical offset (-1..1), null when no face. */
+    val faceGazeY: Float? = null,
     /** Gemini Nano is active as the light model alongside the main model. */
     val geminiNanoActive: Boolean = false,
     /** Generated media (image, video, audio) to show in a popup. */
@@ -220,11 +279,7 @@ data class CompanionState(
     /** USB auto-bridge is monitoring for a tethered desktop connection. */
     val usbAutoBridgeEnabled: Boolean = false,
     /** True when the phone is plugged into USB (data connection). */
-    val usbConnected: Boolean = false,
-    /** Module 5: full-screen AR viewfinder (camera behind transparent avatar). */
-    val showArViewfinder: Boolean = false,
-    /** Module 2: laser pointer mode active. */
-    val isLaserPointerActive: Boolean = false,
+    val usbConnected: Boolean = false
 )
 
 /**
@@ -305,4 +360,81 @@ fun faceModeActive(state: CompanionState): Boolean =
         !state.showBackgroundScreen &&
         !state.showWeatherScreen &&
         !state.showNavScreen &&
+        !state.showAvatarScreen &&
         !state.showVaultScreen
+
+/**
+ * Additive animation signal for the car: what the cat is reacting to right now.
+ * Managed by the car collector; read by the avatar state machine and the nav
+ * overlay. Never changes [CompanionState.emotion] or interaction state.
+ */
+enum class DriveReaction {
+    /** Cruising, or not driving. */
+    NONE,
+    /** Hard turn to the cat's left (negative lateral G). */
+    LEAN_LEFT,
+    /** Hard turn to the cat's right (positive lateral G). */
+    LEAN_RIGHT,
+    /** Hard braking (strong negative longitudinal G) — lurch forward. */
+    LURCH,
+    /** Sustained highway speed. */
+    SPEED;
+
+    companion object {
+        /** |lateral G| above this reads as a hard turn. */
+        const val HARD_TURN_G = 0.35f
+        /** Deceleration (negative longitudinal G) below this reads as hard braking. */
+        const val HARD_BRAKE_G = 0.55f
+        /** Speed above this reads as "fast". */
+        const val FAST_MPH = 60f
+        /** How long a transient reaction (lean/lurch) is held before relaxing. */
+        const val HOLD_MS = 1_500L
+    }
+}
+
+/**
+ * Pure mapping from a live driving snapshot to a face reaction. Braking beats
+ * turning beats speed, so the scariest thing wins. Thresholds come from
+ * [DriveReaction.Companion] so detector and UI cannot drift apart.
+ */
+fun driveReactionFor(speedMph: Float, lateralG: Float, longitudinalG: Float): DriveReaction = when {
+    longitudinalG <= -DriveReaction.HARD_BRAKE_G -> DriveReaction.LURCH
+    lateralG >= DriveReaction.HARD_TURN_G -> DriveReaction.LEAN_RIGHT
+    lateralG <= -DriveReaction.HARD_TURN_G -> DriveReaction.LEAN_LEFT
+    speedMph >= DriveReaction.FAST_MPH -> DriveReaction.SPEED
+    else -> DriveReaction.NONE
+}
+
+/** True for reactions that are momentary events rather than sustained states. */
+private fun DriveReaction.isTransient(): Boolean =
+    this == DriveReaction.LEAN_LEFT ||
+        this == DriveReaction.LEAN_RIGHT ||
+        this == DriveReaction.LURCH
+
+/**
+ * Latch a transient reaction for [holdMs], then relax.
+ *
+ * A hard brake is an EVENT, not a state: the face should play a lurch for a beat
+ * and recover. Deriving the reaction straight from the latest sample cannot do
+ * that, because the detector only publishes every couple of seconds - so the cat
+ * stayed stuck mid-lurch until the next publish happened to arrive.
+ *
+ * SPEED is deliberately NOT latched: it is a sustained condition, so it should
+ * follow the samples and end the moment the car slows down.
+ *
+ * @return the reaction to show, paired with the timestamp it started.
+ */
+fun nextDriveReaction(
+    current: DriveReaction,
+    startedAtMs: Long,
+    incoming: DriveReaction,
+    nowMs: Long,
+    holdMs: Long = DriveReaction.HOLD_MS,
+): Pair<DriveReaction, Long> {
+    // A fresh transient always wins and restarts the clock, so a second jolt
+    // during the first one re-triggers rather than being swallowed.
+    if (incoming.isTransient()) return incoming to nowMs
+    // An unexpired transient keeps playing even though the samples have calmed.
+    if (current.isTransient() && nowMs - startedAtMs < holdMs) return current to startedAtMs
+    return incoming to nowMs
+}

@@ -53,6 +53,7 @@ import com.example.meowmba.core.security.SecureStorageManager
 @Composable
 fun NavScreen(
     secureStorage: SecureStorageManager? = null,
+    state: CompanionState = CompanionState(),
     onClose: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -93,6 +94,10 @@ fun NavScreen(
                 .padding(24.dp)
                 .verticalScroll(rememberScrollState())
         ) {
+            // Live direction animation while the car is moving: the arrow leans
+            // with real turns/braking, speed shown live. Hidden when parked.
+            DriveDirectionStrip(state = state)
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,

@@ -15,8 +15,21 @@ object VisionRouter {
         "what is this", "what's this", "what is that", "what's that",
         "what am i holding", "what am i looking at", "describe the scene",
         "what's in front of you", "what is in front of you", "read this",
-        "take a look", "see this", "check this out"
+        "take a look", "see this", "check this out",
+        // Face-presence checks — answered from the face tracker, not a vision model.
+        "can you see me", "do you see me", "are you looking at me",
+        "can you see me?", "do you see me?", "are you looking at me?",
+        "look at me", "see me",
     )
+
+    /** True when the user is asking whether the companion can see *them*. */
+    fun isSeeMeQuery(text: String): Boolean {
+        val n = WakePhraseMatcher.normalize(text.trim()).removeSuffix("?")
+        return n in setOf(
+            "can you see me", "do you see me", "are you looking at me",
+            "look at me", "see me", "can you see me now", "do you see me now",
+        ) || n.startsWith("can you see me") || n.startsWith("do you see me")
+    }
 
     private val FOCUS_PREFIXES = listOf(
         "look at the ", "look at my ", "look at ",

@@ -10,8 +10,10 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -138,8 +140,16 @@ class VoicePipelineTest {
     @Test
     fun `bare wake word listens for a command`() = runTest {
         viewModel.onWakeDetected(null)
-        assertEquals(InteractionState.LISTENING, viewModel.uiState.value.interactionState)
+        // The ack is spoken aloud first ("Yes?"), then the mic opens for the command.
+        assertEquals(InteractionState.SPEAKING, viewModel.uiState.value.interactionState)
         assertEquals("Yes?", viewModel.uiState.value.captionText)
+        assertEquals(listOf("Yes?"), fakeTts.spokenTexts)
+
+        advanceTimeBy(1_700) // ack hand-off (~1.5s), then the mic hand-off beat
+        runCurrent()
+
+        assertEquals(InteractionState.LISTENING, viewModel.uiState.value.interactionState)
+        assertTrue(fakeStt.startListeningCalls > 0)
     }
 
     @Test
@@ -179,7 +189,10 @@ class VoicePipelineTest {
         fakeTts.onSpeechFinished?.invoke()
 
         assertEquals(InteractionState.LISTENING, viewModel.uiState.value.interactionState)
-        assertEquals("Listening for follow-up…", viewModel.uiState.value.captionText)
+        // Waiting states carry no caption: captions are for live speech and replies.
+        assertNull(viewModel.uiState.value.captionText)
+        advanceTimeBy(150) // mic hand-off beat, then the capture session opens
+        runCurrent()
         assertTrue(fakeStt.startListeningCalls > callsBefore)
     }
 
@@ -194,7 +207,9 @@ class VoicePipelineTest {
     fun `stop command ends the conversation politely`() = runTest {
         viewModel.setConversationMode(true)
         fakeTts.onSpeechStarted?.invoke()
-        fakeTts.onSpeechFinished?.invoke() // now in follow-up LISTENING
+        fakeTts.onSpeechFinished?.invoke() // follow-up opens after the mic hand-off beat
+        advanceTimeBy(150)
+        runCurrent()
 
         fakeStt.simulateResult("never mind")
 
@@ -334,7 +349,8 @@ class VoicePipelineTest {
         viewModel.onMicClick()
         fakeStt.simulateError(7) // ERROR_NO_MATCH — "nothing heard yet"
         assertEquals(InteractionState.LISTENING, viewModel.uiState.value.interactionState)
-        assertEquals("Listening...", viewModel.uiState.value.captionText)
+        // No waiting-state caption: only live speech and the reply caption the face.
+        assertNull(viewModel.uiState.value.captionText)
     }
 
     @Test

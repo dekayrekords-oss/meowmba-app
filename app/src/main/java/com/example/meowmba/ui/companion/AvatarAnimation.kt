@@ -61,6 +61,8 @@ data class AvatarPose(
     val tongueOut: Float = 0f,
     /** Vertical body bounce (-1 = squish down, 1 = pop up). */
     val bodyBounce: Float = 0f,
+    /** Sideways body shift (-1 = left, 1 = right), used for hard-turn leans. */
+    val leanX: Float = 0f,
     /** Tail wag angle (-1 = left, 1 = right, 0 = center). */
     val tailWag: Float = 0f,
     /** Sparkle particle intensity (0 = none, 1 = full sparkle). */
@@ -80,9 +82,18 @@ object CatAvatarStateMachine {
         val cameraOn = state.isCameraEnabled
         val happy = emotion == CompanionEmotion.HAPPY || emotion == CompanionEmotion.PROUD
 
+        // Driving reactions are additive animation: lean into turns, lurch on
+        // hard braking, sparkle at highway speed. They never touch emotion or
+        // interaction state, so the chat/mood pipeline is not fought.
+        val reaction = state.driveReaction
+        val maneuvering = reaction == DriveReaction.LEAN_LEFT ||
+            reaction == DriveReaction.LEAN_RIGHT ||
+            reaction == DriveReaction.LURCH
+
         val eyeOpen = when {
             !cameraOn -> 0.30f                       // camera privacy: eyes nearly closed
             emotion == CompanionEmotion.SLEEPY -> 0.15f
+            maneuvering -> 1.25f                     // wide-eyed into the maneuver
             interaction == InteractionState.LISTENING -> 1.15f
             interaction == InteractionState.THINKING -> 0.72f
             emotion == CompanionEmotion.CURIOUS -> 1.15f
@@ -93,6 +104,7 @@ object CatAvatarStateMachine {
 
         val pupilSize = when {
             !cameraOn -> 0.20f
+            maneuvering -> 0.55f
             interaction == InteractionState.LISTENING -> 0.60f
             emotion == CompanionEmotion.CURIOUS -> 0.62f
             emotion == CompanionEmotion.ALERT -> 0.50f
@@ -103,6 +115,7 @@ object CatAvatarStateMachine {
 
         val earPerk = when {
             interaction == InteractionState.LISTENING -> 1.18f   // ears rotate toward the voice
+            maneuvering -> 1.22f
             emotion == CompanionEmotion.ALERT -> 1.20f
             emotion == CompanionEmotion.CURIOUS -> 1.15f
             emotion == CompanionEmotion.SLEEPY -> 0.55f
@@ -144,14 +157,23 @@ object CatAvatarStateMachine {
             headTiltDeg = headTilt,
             earPerk = earPerk,
             earDroopDeg = earDroop,
-            happyEyes = happy && cameraOn,
-            whiskerFlutter = interaction == InteractionState.SPEAKING,
+            happyEyes = (happy && cameraOn) || reaction == DriveReaction.SPEED,
+            whiskerFlutter = interaction == InteractionState.SPEAKING ||
+                reaction == DriveReaction.SPEED,
             mouth = mouth,
             micOffMark = !state.isMicEnabled,
             cameraOffMark = !cameraOn,
             glowColorHex = glowColor,
             glowPulse = interaction == InteractionState.LISTENING,
-            dimmed = !state.isMicEnabled || interaction == InteractionState.MUTED
+            dimmed = !state.isMicEnabled || interaction == InteractionState.MUTED,
+            bodyBounce = if (reaction == DriveReaction.LURCH) -0.7f else 0f,
+            leanX = when (reaction) {
+                DriveReaction.LEAN_LEFT -> -1f
+                DriveReaction.LEAN_RIGHT -> 1f
+                else -> 0f
+            },
+            tailWag = if (reaction == DriveReaction.SPEED) 0.5f else 0f,
+            sparkle = if (reaction == DriveReaction.SPEED) 0.6f else 0f
         )
     }
 }

@@ -34,6 +34,10 @@ import kotlinx.coroutines.flow.asStateFlow
  *    no preceding startListening"; mic tap instantly reset = "button does
  *    nothing"). The wake-word loop therefore gets its OWN recognizer via
  *    [createSessionEngine]; each engine owns exactly one session at a time.
+ *    And each [SessionEngine.startListening] destroys the previous recognizer
+ *    and binds a fresh instance, so back-to-back sessions never collide with
+ *    the Google recognition service's lingering teardown ("capacity is full"
+ *    refusals that made both the mic button and always-on listening dead).
  */
 class SpeechService(private val context: Context) : SpeechEngine {
 
@@ -89,17 +93,6 @@ class SpeechService(private val context: Context) : SpeechEngine {
         private var onResult: ((String) -> Unit)? = null
         private var onError: ((Int) -> Unit)? = null
 
-        // Session pacing. ERROR_TOO_MANY_REQUESTS (11) is the recognition service
-        // rate-limiting this app; back-to-back session opens with no gap are what
-        // trip it. Every start is forced to be at least MIN_SESSION_GAP_MS after
-        // the previous one — a start that arrives too soon is posted a few hundred
-        // milliseconds out instead of hammering the service. Measured recognizer
-        // startup is ~280ms, so a gap below that was pure churn anyway.
-        private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
-        private var pendingStart: Runnable? = null
-        private var lastStartAt = 0L
-        private var sessionGen = 0
-
         init {
             recognizer = buildRecognizer()
         }
@@ -107,19 +100,28 @@ class SpeechService(private val context: Context) : SpeechEngine {
         private fun attachListener(r: SpeechRecognizer) {
             r.setRecognitionListener(object : RecognitionListener {
                 override fun onReadyForSpeech(params: Bundle?) {
+                    if (recognizer !== r) return
                     _isListening.value = true
                     Log.i(TAG, "session ready ($componentName)")
                 }
                 override fun onBeginningOfSpeech() {
+                    if (recognizer !== r) return
                     Log.i(TAG, "speech started")
                 }
                 override fun onRmsChanged(rmsdB: Float) {}
                 override fun onBufferReceived(buffer: ByteArray?) {}
                 override fun onEndOfSpeech() {
+                    if (recognizer !== r) return
                     _isListening.value = false
                     Log.i(TAG, "speech ended")
                 }
                 override fun onError(error: Int) {
+                    // A recognizer we destroyed must not corrupt the live session: AiAi
+                    // delivers a result and then a late ERROR_SERVER_DISCONNECTED when the
+                    // restart destroys it mid-delivery. If that landed, a follow-up
+                    // capture would end on it and the second half of the sentence ("...
+                    // on spotify") would be cut off. Stale callbacks are dropped outright.
+                    if (recognizer !== r) return
                     _isListening.value = false
                     Log.w(TAG, "session error code=$error ($componentName)")
 
@@ -133,6 +135,7 @@ class SpeechService(private val context: Context) : SpeechEngine {
                     onError?.invoke(error)
                 }
                 override fun onResults(results: Bundle?) {
+                    if (recognizer !== r) return
                     val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     Log.i(TAG, "session result: ${matches?.firstOrNull()?.take(60) ?: "(empty)"}")
                     if (!matches.isNullOrEmpty()) {
@@ -140,6 +143,7 @@ class SpeechService(private val context: Context) : SpeechEngine {
                     }
                 }
                 override fun onPartialResults(partialResults: Bundle?) {
+                    if (recognizer !== r) return
                     val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     if (!matches.isNullOrEmpty()) {
                         _partialResults.value = matches[0]
@@ -153,10 +157,22 @@ class SpeechService(private val context: Context) : SpeechEngine {
             get() = component?.flattenToShortString() ?: "platform default"
 
         override fun startListening(onResult: (String) -> Unit, onError: (Int) -> Unit) {
-            val r = recognizer ?: run {
+            // One recognizer instance is bound to ONE AiAi session slot, and a
+            // finished session's teardown lingers on the service side — reusing the
+            // same instance back-to-back lands the next open in "capacity is full"
+            // (ERROR_CLIENT / BUSY) and the whole retry loop churns forever. Destroy
+            // the previous instance and bind a fresh one so every session starts from
+            // a clean slot. This is what makes both always-on face listening and the
+            // mic button reliable against the strict Google recognition service.
+            recognizer?.destroy()
+            recognizer = null
+            _isListening.value = false
+            _partialResults.value = ""
+            val r = buildRecognizer() ?: run {
                 onError(SpeechRecognizer.ERROR_CLIENT)
                 return
             }
+            recognizer = r
             this.onResult = onResult
             this.onError = onError
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
@@ -186,23 +202,7 @@ class SpeechService(private val context: Context) : SpeechEngine {
                 // Keep recognition on the device whenever possible (privacy-first)
                 putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
             }
-            _partialResults.value = ""
-            val gen = ++sessionGen
-            val launch = Runnable {
-                pendingStart = null
-                // Superseded by a newer start, or stopped/destroyed since scheduling.
-                if (gen != sessionGen) return@Runnable
-                lastStartAt = android.os.SystemClock.uptimeMillis()
-                recognizer?.startListening(intent)
-            }
-            val gap = MIN_SESSION_GAP_MS -
-                (android.os.SystemClock.uptimeMillis() - lastStartAt)
-            if (gap > 0) {
-                pendingStart = launch
-                mainHandler.postDelayed(launch, gap)
-            } else {
-                launch.run()
-            }
+            r.startListening(intent)
         }
 
         override fun swapCallbacks(onResult: (String) -> Unit, onError: (Int) -> Unit) {
@@ -211,19 +211,14 @@ class SpeechService(private val context: Context) : SpeechEngine {
         }
 
         override fun stopListening() {
-            // A start deferred by pacing must not fire after we were told to stop.
-            pendingStart?.let { mainHandler.removeCallbacks(it) }
-            pendingStart = null
-            sessionGen++
             recognizer?.stopListening()
             _isListening.value = false
         }
 
         override fun destroy() {
-            pendingStart?.let { mainHandler.removeCallbacks(it) }
-            pendingStart = null
-            sessionGen++
             recognizer?.destroy()
+            recognizer = null
+            _isListening.value = false
         }
     }
 
@@ -239,13 +234,6 @@ class SpeechService(private val context: Context) : SpeechEngine {
         private const val COMPLETE_SILENCE_MS = 2_500L
         private const val POSSIBLY_COMPLETE_SILENCE_MS = 2_000L
         private const val MINIMUM_SESSION_MS = 15_000L
-
-        /**
-         * Minimum gap between recognizer session starts. Below this, sessions
-         * overlap their own binding (~280ms measured) and the recognition service
-         * starts answering ERROR_TOO_MANY_REQUESTS.
-         */
-        private const val MIN_SESSION_GAP_MS = 350L
 
         /** Android System Intelligence — the real modern on-device recognizer. */
         private const val AIAI_PACKAGE = "com.google.android.as"

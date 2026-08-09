@@ -13,6 +13,13 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.example.meowmba.MainActivity
 import com.example.meowmba.R
+import com.example.meowmba.core.agent.tools.BatteryStatusTool
+import com.example.meowmba.core.agent.tools.FlashlightTool
+import com.example.meowmba.core.agent.tools.InstalledApps
+import com.example.meowmba.core.agent.tools.LaunchAppTool
+import com.example.meowmba.core.agent.tools.SetAlarmTool
+import com.example.meowmba.core.agent.tools.SetTimerTool
+import com.example.meowmba.core.agent.tools.ToolResult
 import com.example.meowmba.core.security.SecureStorageManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -64,7 +71,24 @@ class WakeWordService : Service() {
         /** How many extra quiet windows a follow-up gets before falling back to wake. */
         private const val FOLLOW_UP_QUIET_WINDOWS = 2
 
+        /**
+         * Start/stop race guard. MainActivity.onResume calls stop() — stopService —
+         * and can land milliseconds after onPause's startForegroundService(). The
+         * platform then tears the still-starting service down and kills the whole
+         * process for never calling startForeground() in time
+         * (ForegroundServiceDidNotStartInTimeException). These three flags make
+         * stop() a no-op while a start is on the wire, deferring the stop to the
+         * service once it is safely foreground.
+         */
+        @Volatile private var serviceForeground = false
+        @Volatile private var startPending = false
+        @Volatile private var stopDuringStartPending = false
+
         fun start(context: Context) {
+            // A fresh start supersedes any stop deferred by a background ->
+            // foreground -> background bounce in the same frame.
+            stopDuringStartPending = false
+            startPending = true
             // runCatching: a refused foreground-service start (background-start
             // restrictions) must never take the whole app down with it.
             runCatching {
@@ -72,6 +96,7 @@ class WakeWordService : Service() {
                     context, Intent(context, WakeWordService::class.java)
                 )
             }.onFailure {
+                startPending = false
                 android.util.Log.w("WakeWordService", "start refused: ${it.message}")
             }
         }
@@ -81,6 +106,8 @@ class WakeWordService : Service() {
          * Skip the wake phrase and capture the user's reply directly.
          */
         fun startFollowUp(context: Context) {
+            stopDuringStartPending = false
+            startPending = true
             runCatching {
                 ContextCompat.startForegroundService(
                     context,
@@ -88,11 +115,20 @@ class WakeWordService : Service() {
                         .putExtra(EXTRA_MODE, MODE_FOLLOW_UP)
                 )
             }.onFailure {
+                startPending = false
                 android.util.Log.w("WakeWordService", "follow-up start refused: ${it.message}")
             }
         }
 
         fun stop(context: Context) {
+            // Never stopService() while a start is in flight: the system reports
+            // "bringing down service while still waiting for start foreground" and
+            // kills the process. Defer instead — the service stops itself right
+            // after it has promoted, once the startForeground() deadline is met.
+            if (!serviceForeground) {
+                if (startPending) stopDuringStartPending = true
+                return
+            }
             context.stopService(Intent(context, WakeWordService::class.java))
         }
     }
@@ -119,7 +155,15 @@ class WakeWordService : Service() {
         // letting a stopService race win) got the whole app killed with
         // ForegroundServiceDidNotStartInTimeException, which as the HOME app
         // showed up as a black screen on every rotation.
-        if (!promoteToForeground()) return
+        if (!promoteToForeground()) {
+            startPending = false
+            return
+        }
+        startPending = false
+        serviceForeground = true
+        // A stop() raced this start. The startForeground() deadline is already
+        // satisfied, so stopping is safe; onStartCommand performs the stop.
+        if (stopDuringStartPending) return
 
         secureStorage = try {
             SecureStorageManager(this)
@@ -153,6 +197,13 @@ class WakeWordService : Service() {
         // up here is the graceful path; leaving it unkept is the fatal one.
         if (!isForeground && !promoteToForeground()) {
             followUpPending = false
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        // A stop() landed while this start was still on the wire. The deadline is
+        // satisfied now, so tearing down is safe.
+        if (stopDuringStartPending) {
+            stopDuringStartPending = false
             stopSelf()
             return START_NOT_STICKY
         }
@@ -226,6 +277,7 @@ class WakeWordService : Service() {
     }
 
     override fun onDestroy() {
+        serviceForeground = false
         MicOwner.release(MicOwner.SERVICE)
         wakeEngine?.stop()
         // These are lateinit and are only assigned by startEngine(), which is
@@ -294,12 +346,7 @@ class WakeWordService : Service() {
                 if (isTransientSpeechCode(code) && followUpRetries < 2) {
                     followUpRetries++
                     scope.launch {
-                        // A rate-limit (11) needs a real pause before retrying; a
-                        // fixed 600ms just keeps knocking while the limit is hot.
-                        delay(
-                            if (code == android.speech.SpeechRecognizer.ERROR_TOO_MANY_REQUESTS) 2000L
-                            else 600L
-                        )
+                        delay(600)
                         // capturingCommand stays true across the retry.
                         if (engineStarted) startFollowUpListen()
                     }
@@ -366,11 +413,120 @@ class WakeWordService : Service() {
         }
         if (launchNow) {
             deliverToApp(command)
-        } else {
+        } else if (!tryRunInstantCommand(command)) {
             notifyCommand(command)
         }
         wakeEngine?.start()
     }
+
+    // ── Instant commands (no app surfacing needed) ──────────────────────────
+
+    /**
+     * Commands the background service can execute on its own, so the user never
+     * has to tap a notification. The big one is opening an app: "open YouTube"
+     * while in Facebook. Background activity starts are permitted here because
+     * the companion's accessibility service is enabled (Android 10+ exemption).
+     *
+     * Returns true when handled (the result is spoken); false when the command
+     * should fall through to the notification path so the full pipeline runs.
+     */
+    private fun tryRunInstantCommand(command: String): Boolean {
+        val text = command.lowercase().trim()
+
+        // Open / launch an app. Only when a real installed app matches — a miss
+        // falls through so "start listening" or "open up about your feelings"
+        // never get eaten here.
+        val appName = APP_OPEN_PREFIXES.firstOrNull { text.startsWith(it) }
+            ?.let { text.removePrefix(it).trim() }
+            ?.takeIf { it.isNotBlank() && it.split(' ').size <= 5 }
+        if (appName != null) {
+            if (InstalledApps.find(this, appName) != null) {
+                runInstant { LaunchAppTool(applicationContext).execute(mapOf("name" to appName)) }
+                return true
+            }
+            return false
+        }
+
+        if (text.startsWith("flashlight") || text.startsWith("flash light") || text.startsWith("torch")) {
+            val state = when {
+                text.contains("off") -> "off"
+                text.contains("on") || text.contains("flash light") || text.startsWith("flashlight") || text.startsWith("torch") -> "on"
+                else -> "toggle"
+            }
+            runInstant { FlashlightTool(applicationContext).execute(mapOf("state" to state)) }
+            return true
+        }
+
+        if (text in setOf("battery", "battery level", "battery percentage", "how's my battery",
+                "how is my battery", "how much battery", "my battery")) {
+            runInstant { BatteryStatusTool(applicationContext).execute(emptyMap()) }
+            return true
+        }
+
+        // "set (an) alarm for/at <time>"
+        if (text.startsWith("set an alarm") || text.startsWith("set alarm") || text.startsWith("wake me")) {
+            val time = parseClockTime(text)
+            if (time != null) {
+                runInstant { SetAlarmTool(applicationContext).execute(mapOf("hour" to time.hour.toString(), "minutes" to time.minute.toString())) }
+                return true
+            }
+            return false
+        }
+
+        // "set a timer for <N> minutes/seconds"
+        if (text.startsWith("set a timer") || text.startsWith("set timer") || text.startsWith("timer for")) {
+            val minutes = Regex("(\\d{1,4})\\s*(min|minute|minutes|mins)").find(text)?.groupValues?.get(1)?.toIntOrNull()
+            val seconds = Regex("(\\d{1,4})\\s*(sec|second|seconds|secs)").find(text)?.groupValues?.get(1)?.toIntOrNull()
+            val arg = when {
+                seconds != null -> mapOf("seconds" to seconds.toString())
+                minutes != null -> mapOf("minutes" to minutes.toString())
+                else -> null
+            }
+            if (arg != null) {
+                runInstant { SetTimerTool(applicationContext).execute(arg) }
+                return true
+            }
+            return false
+        }
+
+        return false
+    }
+
+    /** Runs a tool in the service scope and speaks its outcome. */
+    private fun runInstant(block: suspend () -> ToolResult) {
+        scope.launch {
+            val result = try {
+                block()
+            } catch (e: Exception) {
+                ToolResult.Failure(e.message ?: "Something went wrong.")
+            }
+            when (result) {
+                is ToolResult.Success -> tts.speak(result.output)
+                is ToolResult.Failure -> tts.speak(result.error)
+            }
+        }
+    }
+
+    private data class ClockTime(val hour: Int, val minute: Int)
+
+    /** "7:30 pm" → 19:30. Handles "7", "7 am", "7:05 pm". Null if no time is recognizable. */
+    private fun parseClockTime(text: String): ClockTime? {
+        val m = Regex("(\\d{1,2})(?:[:.](\\d{2}))?\\s*(am|pm|a\\.m\\.?|p\\.m\\.?)?").find(text)
+            ?: return null
+        val hourRaw = m.groupValues[1].toIntOrNull() ?: return null
+        val minute = m.groupValues[2].toIntOrNull() ?: 0
+        if (hourRaw !in 0..12 || minute !in 0..59) return null
+        var hour = hourRaw
+        val pm = m.groupValues[3].contains("p")
+        if (pm && hourRaw != 12) hour += 12
+        if (!pm && hourRaw == 12) hour = 0
+        return ClockTime(hour, minute)
+    }
+
+    private val APP_OPEN_PREFIXES = listOf(
+        "open the app ", "open app ", "launch the app ", "launch app ",
+        "launch ", "start the app ", "open up ", "open "
+    )
 
     /**
      * Bring the companion to the front with the captured command so it runs through

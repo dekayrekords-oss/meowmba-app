@@ -33,7 +33,6 @@ object FaceMotorMap {
         Mood.STARTLED -> mapOf(SERVO_EAR_LEFT to 60f, SERVO_EAR_RIGHT to 60f, SERVO_HEAD_TILT to 100f) to "alert"
         Mood.PROUD -> mapOf(SERVO_HEAD_TILT to 100f, SERVO_TAIL to 110f) to "proud"
         Mood.CURIOUS -> mapOf(SERVO_HEAD_PAN to 100f, SERVO_EAR_LEFT to 105f) to "curious"
-        Mood.FOCUSED -> mapOf(SERVO_HEAD_TILT to CENTER, SERVO_BODY to 85f) to "focused"
         Mood.CONTENT -> mapOf(SERVO_HEAD_TILT to CENTER, SERVO_BODY to CENTER) to "content"
     }
 
@@ -44,5 +43,19 @@ object FaceMotorMap {
     fun balanceTilt(tiltDeg: Float): Map<Int, Float> {
         val correction = (-tiltDeg).coerceIn(-15f, 15f)
         return mapOf(SERVO_HEAD_TILT to CENTER + correction)
+    }
+
+    /**
+     * Face tracking → head pan. [offsetX] is the face's horizontal position
+     * normalized to -1..1 (negative = subject left of frame). A small deadzone
+     * (±0.1) keeps jitter from chattering the servo at center; the head pans
+     * ±35° to follow the face and recenters when the face leaves the frame
+     * ([offsetX] is null there — callers pass a centered value or empty map).
+     */
+    fun panForFace(offsetX: Float?): Map<Int, Float> {
+        if (offsetX == null) return mapOf(SERVO_HEAD_PAN to CENTER)
+        val clamped = offsetX.coerceIn(-1f, 1f)
+        if (kotlin.math.abs(clamped) < 0.1f) return mapOf(SERVO_HEAD_PAN to CENTER)
+        return mapOf(SERVO_HEAD_PAN to CENTER + clamped * 35f)
     }
 }

@@ -3,9 +3,16 @@ package com.example.meowmba.core.nav
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.location.Location
+import android.location.LocationListener
 import android.location.LocationManager
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.core.content.ContextCompat
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Where the phone is, via the platform [LocationManager].
@@ -35,16 +42,79 @@ object CurrentLocation {
         val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
             ?: return null
         return try {
-            lm.getProviders(true)
+            val providers = lm.getProviders(true)
+            val result = providers
                 .mapNotNull { p ->
                     @Suppress("MissingPermission")
                     runCatching { lm.getLastKnownLocation(p) }.getOrNull()
                 }
                 .maxByOrNull { it.time }
                 ?.let { Fix(it.latitude, it.longitude) }
+            Log.i("CurrentLocation", "last(): providers=${providers.joinToString(",")} result=$result")
+            result
         } catch (e: SecurityException) {
             Log.w("CurrentLocation", "Location denied at call time: ${e.message}")
             null
         }
+    }
+
+    /**
+     * Actively asks the platform for a fresh fix instead of relying on a cached one.
+     * Some OEMs (notably Samsung) return null from [last] until the app has actually
+     * received a delivery, so a voice "remember this place" can fail right after
+     * launch even though GPS has a fix. Request a one-shot update and time-box it.
+     *
+     * [onResult] is always invoked on the main thread, exactly once, with null on
+     * timeout / denial / no fix. Safe to call from any thread; returns immediately.
+     */
+    fun requestOnce(context: Context, timeoutMs: Long = 12_000L, onResult: (Fix?) -> Unit) {
+        val main = Handler(Looper.getMainLooper())
+        if (!hasPermission(context)) {
+            main.post { onResult(null) }
+            return
+        }
+        val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+        if (lm == null) {
+            main.post { onResult(null) }
+            return
+        }
+        val delivered = AtomicBoolean(false)
+        val finish = { fix: Fix? ->
+            if (delivered.compareAndSet(false, true)) main.post { onResult(fix) }
+        }
+        val listener = object : LocationListener {
+            override fun onLocationChanged(location: Location) {
+                lm.removeUpdates(this)
+                finish(Fix(location.latitude, location.longitude))
+            }
+
+            @Deprecated("Deprecated in Android")
+            override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+
+            override fun onProviderEnabled(provider: String) {}
+
+            override fun onProviderDisabled(provider: String) {}
+        }
+        val providers = listOf(
+            LocationManager.GPS_PROVIDER,
+            LocationManager.NETWORK_PROVIDER,
+        )
+        var any = false
+        for (p in providers) {
+            if (lm.getProviders(true).contains(p)) {
+                @Suppress("MissingPermission")
+                runCatching { lm.requestSingleUpdate(p, listener, Looper.getMainLooper()) }
+                    .onSuccess { any = true }
+            }
+        }
+        if (!any) {
+            finish(null)
+            return
+        }
+        val timer = Executors.newSingleThreadScheduledExecutor()
+        timer.schedule({
+            lm.removeUpdates(listener)
+            finish(null)
+        }, timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
     }
 }

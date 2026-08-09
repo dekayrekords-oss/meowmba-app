@@ -4,10 +4,15 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.database.Cursor
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
+import android.media.AudioManager
+import android.media.session.MediaSessionManager
+import android.media.session.PlaybackState
 import android.os.PowerManager
 import android.provider.AlarmClock
+import android.provider.ContactsContract
 import android.provider.MediaStore
 import android.content.pm.PackageManager
 import android.content.pm.ResolveInfo
@@ -29,8 +34,8 @@ import kotlinx.coroutines.withContext
  * modern Android or shouldn't be done without a visible confirmation.
  */
 
-/** Shared app-lookup used by launch and list. */
-private object InstalledApps {
+/** Shared app-lookup used by launch and list (and the background wake service). */
+internal object InstalledApps {
 
     data class Entry(val label: String, val packageName: String)
 
@@ -460,6 +465,229 @@ class BatteryStatusTool(private val context: Context) : Tool {
             })
         } catch (e: Exception) {
             ToolResult.Failure("Couldn't read battery status: ${e.message}")
+        }
+    }
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// Phase F4: assistant-class phone tools — volume, camera, messaging, calls,
+// media transport, brightness.
+// ────────────────────────────────────────────────────────────────────────
+
+/** Resolves "mom" → "+1 555…" via the contacts provider, or passes through digits. */
+private fun lookupPhoneNumber(context: Context, raw: String): String {
+    val candidate = raw.trim()
+    if (candidate.isEmpty()) return ""
+    if (candidate.any { it.isDigit() }) {
+        val digits = candidate.filter { it.isDigit() }
+        if (digits.length >= 3) return candidate
+    }
+    // It's a name — query the contact book once.
+    return try {
+        val projection = arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER)
+        val nameLike = "%${candidate.replace("%", "")}%"
+        context.contentResolver.query(
+            ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+            projection,
+            "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} LIKE ?",
+            arrayOf(nameLike),
+            null
+        )?.use { c: Cursor ->
+            if (c.moveToFirst()) c.getString(0) ?: "" else ""
+        } ?: ""
+    } catch (_: Exception) {
+        ""
+    }
+}
+
+/** `phone.set_volume` — media volume as a percentage, or up/down/mute. */
+class SetVolumeTool(private val context: Context) : Tool {
+    override val definition = ToolDefinition(
+        id = "phone.set_volume",
+        displayName = "Set media volume",
+        description = "Set the media volume to a percentage, or nudge it. " +
+            "Args: level 0-100 for an exact value, or action = up|down|mute.",
+        inputSchema = mapOf("level" to "0-100", "action" to "up|down|mute"),
+        riskLevel = RiskLevel.SAFE
+    )
+
+    override suspend fun execute(args: Map<String, String>): ToolResult = withContext(Dispatchers.IO) {
+        val am = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+            ?: return@withContext ToolResult.Failure("No audio service on this device.")
+        val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+        try {
+            args["level"]?.toIntOrNull()?.let { pct ->
+                val target = (pct.coerceIn(0, 100) * max / 100).coerceIn(0, max)
+                am.setStreamVolume(AudioManager.STREAM_MUSIC, target, 0)
+                return@withContext ToolResult.Success("Media volume at $pct%.")
+            }
+            when (args["action"]?.lowercase()) {
+                "up" -> {
+                    am.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_RAISE, 0)
+                    ToolResult.Success("Volume up.")
+                }
+                "down" -> {
+                    am.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_LOWER, 0)
+                    ToolResult.Success("Volume down.")
+                }
+                "mute" -> {
+                    am.setStreamVolume(AudioManager.STREAM_MUSIC, 0, 0)
+                    ToolResult.Success("Muted.")
+                }
+                else -> ToolResult.Failure("Tell me a level (0-100) or up, down, or mute.")
+            }
+        } catch (e: Exception) {
+            ToolResult.Failure("Couldn't change the volume: ${e.message}")
+        }
+    }
+}
+
+/** `phone.take_photo` — opens the camera app to take a photo. */
+class TakePhotoTool(private val context: Context) : Tool {
+    override val definition = ToolDefinition(
+        id = "phone.take_photo",
+        displayName = "Take a photo",
+        description = "Open the phone's camera so a photo can be taken.",
+        inputSchema = emptyMap(),
+        riskLevel = RiskLevel.MODERATE
+    )
+
+    override suspend fun execute(args: Map<String, String>): ToolResult = withContext(Dispatchers.IO) {
+        val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return@withContext try {
+            context.startActivity(intent)
+            ToolResult.Success("Camera is open — say cheese.")
+        } catch (e: Exception) {
+            ToolResult.Failure("Couldn't open the camera: ${e.message}")
+        }
+    }
+}
+
+/** `phone.compose_sms` — opens the messaging app with a number and draft ready. */
+class ComposeSmsTool(private val context: Context) : Tool {
+    override val definition = ToolDefinition(
+        id = "phone.compose_sms",
+        displayName = "Text someone",
+        description = "Open the messaging app with a recipient and message pre-filled. " +
+            "Args: to = contact name or phone number, body = the message. The user presses send.",
+        inputSchema = mapOf("to" to "string", "body" to "string"),
+        riskLevel = RiskLevel.MODERATE
+    )
+
+    override suspend fun execute(args: Map<String, String>): ToolResult = withContext(Dispatchers.IO) {
+        val recipient = lookupPhoneNumber(context, args["to"] ?: "")
+        if (recipient.isEmpty()) return@withContext ToolResult.Failure("Who should I text? Tell me a name or number.")
+        val sms = Uri.fromParts("sms", recipient, null)
+        val intent = Intent(Intent.ACTION_SENDTO, sms)
+            .putExtra("sms_body", args["body"] ?: "")
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return@withContext try {
+            context.startActivity(intent)
+            ToolResult.Success("Opened a text to $recipient — ready when you are.")
+        } catch (e: Exception) {
+            ToolResult.Failure("Couldn't open the messaging app: ${e.message}")
+        }
+    }
+}
+
+/** `phone.dial_call` — opens the dialer with a number (user presses call). */
+class DialCallTool(private val context: Context) : Tool {
+    override val definition = ToolDefinition(
+        id = "phone.dial_call",
+        displayName = "Call someone",
+        description = "Open the dialer with a contact's number ready — the user presses call. " +
+            "Args: to = contact name or phone number.",
+        inputSchema = mapOf("to" to "string"),
+        riskLevel = RiskLevel.MODERATE
+    )
+
+    override suspend fun execute(args: Map<String, String>): ToolResult = withContext(Dispatchers.IO) {
+        val number = lookupPhoneNumber(context, args["to"] ?: "")
+        if (number.isEmpty()) return@withContext ToolResult.Failure("Who should I call? Tell me a name or number.")
+        val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$number"))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return@withContext try {
+            context.startActivity(intent)
+            ToolResult.Success("Dialer ready for $number.")
+        } catch (e: Exception) {
+            ToolResult.Failure("Couldn't open the dialer: ${e.message}")
+        }
+    }
+}
+
+/** `phone.media_control` — play/pause/skip on the active media session. */
+class MediaControlTool(private val context: Context) : Tool {
+    override val definition = ToolDefinition(
+        id = "phone.media_control",
+        displayName = "Control music",
+        description = "Play, pause, resume, or skip to the next or previous track on the " +
+            "current media app. Args: action = play|pause|next|previous.",
+        inputSchema = mapOf("action" to "play|pause|next|previous"),
+        riskLevel = RiskLevel.SAFE
+    )
+
+    override suspend fun execute(args: Map<String, String>): ToolResult = withContext(Dispatchers.IO) {
+        val action = args["action"]?.trim()?.lowercase()
+        if (action !in setOf("play", "pause", "next", "previous")) {
+            return@withContext ToolResult.Failure("I need play, pause, next, or previous.")
+        }
+        try {
+            val msm = context.getSystemService(Context.MEDIA_SESSION_SERVICE) as? MediaSessionManager
+            val sessions = msm?.getActiveSessions(null)?.toList() ?: emptyList()
+            val controller = sessions.firstOrNull { s ->
+                s.playbackState?.state == PlaybackState.STATE_PLAYING
+            } ?: sessions.firstOrNull()
+                ?: return@withContext ToolResult.Failure("Nothing is playing right now.")
+            val controls = controller.transportControls
+            when (action) {
+                "play" -> controls.play()
+                "pause" -> controls.pause()
+                "next" -> controls.skipToNext()
+                "previous" -> controls.skipToPrevious()
+            }
+            ToolResult.Success(
+                when (action) {
+                    "play" -> "Playing."
+                    "pause" -> "Paused."
+                    "next" -> "Skipped to the next track."
+                    else -> "Back to the previous track."
+                }
+            )
+        } catch (e: Exception) {
+            ToolResult.Failure("Couldn't control playback: ${e.message}")
+        }
+    }
+}
+
+/** `phone.set_brightness` — screen brightness percent; needs one-time write-settings grant. */
+class SetBrightnessTool(private val context: Context) : Tool {
+    override val definition = ToolDefinition(
+        id = "phone.set_brightness",
+        displayName = "Set screen brightness",
+        description = "Set the screen brightness to a percentage. Requires the user to " +
+            "grant one-time write-settings permission the first time.",
+        inputSchema = mapOf("level" to "0-100"),
+        riskLevel = RiskLevel.SAFE
+    )
+
+    override suspend fun execute(args: Map<String, String>): ToolResult = withContext(Dispatchers.Main) {
+        val level = args["level"]?.toIntOrNull() ?: return@withContext ToolResult.Failure("Tell me a brightness level 0-100.")
+        if (level !in 0..100) return@withContext ToolResult.Failure("Brightness goes from 0 to 100.")
+        try {
+            if (!Settings.System.canWrite(context)) {
+                context.startActivity(
+                    Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:${context.packageName}"))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+                return@withContext ToolResult.Failure(
+                    "I need one-time permission to change the screen — I opened it; allow Meow, then ask again."
+                )
+            }
+            Settings.System.putInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS, level)
+            Settings.System.putInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS_MODE, Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL)
+            ToolResult.Success("Screen brightness at $level%.")
+        } catch (e: Exception) {
+            ToolResult.Failure("Couldn't change the brightness: ${e.message}")
         }
     }
 }
