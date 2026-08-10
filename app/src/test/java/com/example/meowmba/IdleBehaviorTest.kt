@@ -48,34 +48,34 @@ class IdleBehaviorTest {
     }
 
     @Test
-    fun `idle cadence stays in the 25 to 80 second window`() {
+    fun `idle cadence stays in the 9 to 26 second window`() {
         val director = IdleAnimationDirector(
             scope = TestScope(),
             random = Random(42),
             canPlay = { true },
-            pickSpec = { null },
+            pickName = { null },
             play = {},
         )
         repeat(1000) {
             val wait = director.nextWaitMs()
-            assertTrue("wait $wait below floor", wait >= 25_000L)
-            assertTrue("wait $wait above ceiling", wait < 80_000L)
+            assertTrue("wait $wait below floor", wait >= 9_000L)
+            assertTrue("wait $wait above ceiling", wait < 26_000L)
         }
     }
 
     @Test
-    fun `first idle clip arrives within 12 to 25 seconds`() {
+    fun `first idle clip arrives within 4 to 9 seconds`() {
         val director = IdleAnimationDirector(
             scope = TestScope(),
             random = Random(7),
             canPlay = { true },
-            pickSpec = { null },
+            pickName = { null },
             play = {},
         )
         repeat(1000) {
             val wait = director.firstWaitMs()
-            assertTrue("first wait $wait below floor", wait >= 12_000L)
-            assertTrue("first wait $wait above ceiling", wait < 25_000L)
+            assertTrue("first wait $wait below floor", wait >= 4_000L)
+            assertTrue("first wait $wait above ceiling", wait < 9_000L)
         }
     }
 
@@ -83,7 +83,7 @@ class IdleBehaviorTest {
     fun `director plays only when canPlay allows`() = runTest {
         var played = 0
         var allow = false
-        val spec = com.example.meowmba.ui.companion.CustomAnimations.BUILT_INS.values.first()
+        val name = com.example.meowmba.ui.companion.CustomAnimations.BUILT_INS.keys.first()
         // Own dispatcher + TestScope bound to it: the director's loop is
         // fully under this test's virtual clock and can never escape onto
         // the shared Main dispatcher.
@@ -93,7 +93,7 @@ class IdleBehaviorTest {
             scope = testScope,
             random = Random(1),
             canPlay = { allow },
-            pickSpec = { spec },
+            pickName = { name },
             play = { played++ },
         )
         director.start()

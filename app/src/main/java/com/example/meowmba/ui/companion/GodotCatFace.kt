@@ -234,8 +234,14 @@ private fun DrawScope.drawGodotEye(
     upBase = upBase + (mid - upBase) * closing
     loBase = loBase + (mid - loBase) * closing
 
-    val up = upBase * pose.eyeHeightScale * max(0.075f, openness) * (1f - pose.lowerLid * 0.18f)
-    val lo = loBase * pose.eyeHeightScale * max(0.075f, openness) * (1f - pose.lowerLid * 0.85f)
+    // NOT `* pose.eyeHeightScale` again: `eh` above is already that value, and
+    // already clamped to 0.70..1.12. Multiplying the raw field in a second time
+    // both squared the channel and bypassed its own clamp — an eyeHeightScale
+    // of 1.40 rendered at 1.12 × 1.40 ≈ 1.57, which is the bug-eyed look the
+    // user reported. Every tall eye (WIDE, ALERT) was inflated by it, not just
+    // the pose that has since been removed.
+    val up = upBase * max(0.075f, openness) * (1f - pose.lowerLid * 0.18f)
+    val lo = loBase * max(0.075f, openness) * (1f - pose.lowerLid * 0.85f)
 
     val slantK = 0.30f + 0.70f * openness.coerceIn(0f, 1f)
     // Default slant ~5–16° outer high; mood tilts via pose.eyeTiltDeg
@@ -600,7 +606,7 @@ fun godotLayersFor(state: CompanionState): ComposedExpression {
         interaction == InteractionState.LISTENING -> EyeL.ALERT
         interaction == InteractionState.THINKING -> EyeL.HARD
         emotion == CompanionEmotion.HAPPY || emotion == CompanionEmotion.PROUD -> EyeL.SOFT
-        emotion == CompanionEmotion.CURIOUS -> EyeL.SAUCER
+        emotion == CompanionEmotion.CURIOUS -> EyeL.WIDE
         emotion == CompanionEmotion.ALERT -> EyeL.ALERT
         else -> EyeL.NEUTRAL
     }

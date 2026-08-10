@@ -41,6 +41,24 @@ fun bell(t: Float): Float =
     smoothStep01(kotlin.math.min(t / 0.18f, 1f)) *
         smoothStep01(kotlin.math.min((1f - t) / 0.22f, 1f))
 
+/**
+ * Attack/release envelope for a clip's FACE channels, in absolute seconds.
+ *
+ * [bell] does this for the body but works in normalised clip time, which makes
+ * a 0.9s clip ease for 0.16s and a 3.4s clip ease for 0.6s — the short one
+ * feels mushy and the long one lazy. Fixing the ramp in real seconds (capped so
+ * a very short clip still gets a full arc) gives every performance the same
+ * crispness regardless of length.
+ */
+fun envelope(elapsedSeconds: Float, durationSeconds: Float): Float {
+    if (durationSeconds <= 0f) return 0f
+    val attack = kotlin.math.min(0.16f, durationSeconds * 0.22f)
+    val release = kotlin.math.min(0.34f, durationSeconds * 0.32f)
+    val rising = smoothStep01(elapsedSeconds / attack)
+    val falling = smoothStep01((durationSeconds - elapsedSeconds) / release)
+    return (rising * falling).coerceIn(0f, 1f)
+}
+
 /** Positive lobes only — a rhythmic beat rather than an oscillation. */
 fun pulse(t: Float, n: Float): Float = max(0f, sin(t * PI.toFloat() * n))
 
@@ -52,9 +70,26 @@ fun spike(t: Float, at: Float, fall: Float = 2f): Float {
 
 private fun degRad(deg: Float): Float = (deg * PI / 180.0).toFloat()
 
+/**
+ * Fades a sustained motion out over the tail of its clip.
+ *
+ * SINK, RISE and WIGGLE all reach their maximum displacement at t=1 and then
+ * the clip simply ends, so the head teleports back to rest in one frame — a
+ * visible pop at the end of every one of them. Easing the last fifth to zero
+ * means the pose arrives home instead of being cut.
+ */
+fun releaseRamp(t: Float, from: Float = 0.80f): Float =
+    1f - smoothStep01(((t - from) / (1f - from)).coerceIn(0f, 1f))
+
 // ── channels ────────────────────────────────────────────────────────────────
 
-enum class EyeL { NEUTRAL, WIDE, SAUCER, NARROW, SLIT, CLOSED, SQUINT, SOFT, HARD, SLEEPY, WOUNDED, ALERT }
+/**
+ * SAUCER is deliberately absent: a 1.30 open / 1.40 tall / full-round pupil
+ * pose read as bug-eyed rather than surprised, and it was removed on user
+ * report. Surprise and alarm are carried by WIDE and ALERT, whose proportions
+ * stay inside the eye shape the face is drawn around.
+ */
+enum class EyeL { NEUTRAL, WIDE, NARROW, SLIT, CLOSED, SQUINT, SOFT, HARD, SLEEPY, WOUNDED, ALERT }
 enum class EarL { NEUTRAL, FORWARD, PERK, BACK, FLAT, SPLAY, DROOP, SWIVEL, ONE_BACK, ALERT }
 enum class JawL { SHUT, PARTED, WIDE, CHATTER, PULSE, SNARL, SNEER, LICK, PURSE }
 
@@ -102,7 +137,6 @@ fun ChannelPose.mergedWith(other: ChannelPose) = ChannelPose(
 
 fun eyeLayer(k: EyeL): ChannelPose = when (k) {
     EyeL.WIDE -> ChannelPose(open = 1.15f, eh = 1.18f, pupil = 0.70f)
-    EyeL.SAUCER -> ChannelPose(open = 1.30f, eh = 1.40f, ew = 1.08f, pupil = 1.0f)
     EyeL.NARROW -> ChannelPose(open = 0.70f, eh = 0.72f, ew = 1.10f, lower = 0.35f)
     EyeL.SLIT -> ChannelPose(open = 1.05f, eh = 0.80f, ew = 1.16f, pupil = 0.05f)
     EyeL.CLOSED -> ChannelPose(open = 0.06f, lower = 0.30f)
@@ -131,7 +165,11 @@ fun earLayer(k: EarL, t: Float): ChannelPose = when (k) {
 
 fun jawLayer(k: JawL, t: Float): ChannelPose = when (k) {
     JawL.PARTED -> ChannelPose(jaw = 0.26f, mw = 1.0f)
-    JawL.WIDE -> ChannelPose(jaw = 0.92f, mw = 1.14f)
+    // An arc, not a hold: a mouth that stays wide open for the clip's whole
+    // duration reads as a scream. Peaks at 38% and closes by the end.
+    JawL.WIDE -> spike(t, 0.38f, 1.7f).let { s ->
+        ChannelPose(jaw = 0.10f + 0.82f * s, mw = 1f + 0.14f * s)
+    }
     JawL.PURSE -> ChannelPose(jaw = 0.62f, mw = 0.66f)
     JawL.CHATTER -> ChannelPose(jaw = 0.12f + pulse(t, 24f) * 0.20f, mw = 0.88f, curl = 0.5f)
     JawL.PULSE -> ChannelPose(jaw = 0.14f + pulse(t, 9f) * 0.28f, mw = 0.80f)
@@ -148,10 +186,24 @@ class Motion {
     var offX = 0f
     var offY = 0f
     var tiltDeg = 0f
+
+    /**
+     * Uniform size change — the head moving toward or away from the viewer.
+     * Perspective, not deformation: LEAN_IN gets bigger, it does not stretch.
+     */
     var scale = 0f
 
+    /**
+     * Deformation, kept separate from [scale] because they mean opposite
+     * things. Positive stretches the head tall and narrow, negative squashes it
+     * flat and wide, always conserving silhouette area (see [squashStretch]).
+     * Only the motions with real acceleration set it — a bounce squashes at
+     * the bottom and stretches at the top; a lean-in does neither.
+     */
+    var squash = 0f
+
     fun reset() {
-        offX = 0f; offY = 0f; tiltDeg = 0f; scale = 0f
+        offX = 0f; offY = 0f; tiltDeg = 0f; scale = 0f; squash = 0f
     }
 }
 
@@ -174,7 +226,9 @@ fun bodyMotion(kind: Body, t: Float, actT: Float, R: Float, amp: Float, m: Motio
         Body.BOB -> {
             val b = sin(t * pi * 4f)
             m.offY += b * R * 0.085f * amp * e
-            m.scale += 0.030f * b * amp * e
+            // Stretch at the top of the bounce, squash at the bottom. offY is
+            // screen-space (+Y down), so the sign follows the travel.
+            m.squash += 0.075f * -b * amp * e
         }
         Body.SWAY -> {
             val w = sin(t * pi * 2f)
@@ -197,12 +251,12 @@ fun bodyMotion(kind: Body, t: Float, actT: Float, R: Float, amp: Float, m: Motio
             m.offY -= R * 0.13f * p * amp
         }
         Body.SINK -> {
-            val s = smoothStep01(t)
+            val s = smoothStep01(t) * releaseRamp(t)
             m.offY += R * 0.16f * s * amp
             m.scale -= 0.045f * s * amp
         }
         Body.RISE -> {
-            val r = smoothStep01(t)
+            val r = smoothStep01(t) * releaseRamp(t)
             m.offY -= R * 0.13f * r * amp
             m.scale += 0.045f * r * amp
         }
@@ -221,7 +275,7 @@ fun bodyMotion(kind: Body, t: Float, actT: Float, R: Float, amp: Float, m: Motio
         }
         // Builds through the action — the pre-pounce shimmy.
         Body.WIGGLE -> {
-            val ramp = smoothStep01(t / 0.75f)
+            val ramp = smoothStep01(t / 0.75f) * releaseRamp(t, 0.70f)
             val o = sin(actT * 14f)
             m.offX += o * R * 0.15f * ramp * amp
             m.offY += abs(o) * R * 0.035f * ramp * amp
@@ -240,17 +294,23 @@ fun bodyMotion(kind: Body, t: Float, actT: Float, R: Float, amp: Float, m: Motio
             }
             m.scale += 0.11f * c * amp
             m.offY += R * 0.10f * c * amp
+            // The coil is the anticipation; flattening into it is what sells
+            // the spring being loaded.
+            m.squash += 0.14f * c * amp
         }
         Body.RECOIL -> {
             val d = (1f - t).pow(1.9f)
             m.offY -= R * 0.17f * d * amp
             m.scale -= 0.075f * d * amp
             m.tiltDeg += sin(actT * 26f) * 3.5f * d * amp
+            m.squash += 0.10f * d * amp
         }
         Body.SNAP_FWD -> {
             val f = spike(t, 0.30f, 2.2f)
             m.scale += 0.16f * f * amp
             m.offY += R * 0.13f * f * amp
+            // Impact: the head flattens on the hit rather than only growing.
+            m.squash -= 0.13f * f * amp
         }
         // Irregular jerks rather than a clean oscillation.
         Body.STAGGER -> {
@@ -281,7 +341,117 @@ fun bodyMotion(kind: Body, t: Float, actT: Float, R: Float, amp: Float, m: Motio
             m.offY += R * 0.14f * lu * amp
             m.tiltDeg += -9f * lu * amp
             m.scale += 0.08f * max(0f, lu) * amp
+            // Stretch on the throw forward, nothing on the slow wind-back.
+            m.squash += 0.11f * max(0f, lu) * amp
         }
+    }
+}
+
+// ── ambient life ────────────────────────────────────────────────────────────
+
+/**
+ * Breath curve over one cycle, in 0..1: a slow rise (inhale), a faster fall
+ * (exhale). A symmetric wave is the tell that something is generated — a real
+ * chest does not spend equal time going up and down.
+ */
+internal fun breathSkew(phase: Float): Float {
+    val p = ((phase % 1f) + 1f) % 1f
+    return if (p < 0.46f) smoothStep01(p / 0.46f) else 1f - smoothStep01((p - 0.46f) / 0.54f)
+}
+
+/**
+ * The layer that never stops: breath, weight shift, micro-drift.
+ *
+ * Unlike [bodyMotion] this is NOT gated by [bell] and has no clip boundary, so
+ * it cannot pulse to zero at a loop seam — it is what the face does when it is
+ * doing nothing, and it keeps running underneath every performance. A cat that
+ * holds a pose is still breathing; freezing the ambient layer while a clip
+ * plays is what made held expressions read as a still image.
+ *
+ * Every component is a sine at a deliberately non-harmonic period, so the sum
+ * has no visible repeat — the eye picks up a repeating idle within seconds.
+ * [energy] scales the whole layer: ~0.4 asleep, 1.0 awake, >1 alert.
+ */
+fun ambientLife(actT: Float, R: Float, energy: Float, m: Motion) {
+    val e = energy.coerceIn(0f, 1.6f)
+    // Breath: the primary motion, and the one that carries "alive". Centered
+    // to ±1 so the head oscillates around its rest position rather than
+    // floating permanently above it.
+    val breath = (breathSkew(actT / 3.7f) - 0.5f) * 2f
+    m.offY -= breath * R * 0.028f * e
+    // A chest expanding is a deformation, not a change of distance — the head
+    // lengthens fractionally on the inhale rather than growing overall.
+    m.squash += breath * 0.020f * e
+    // Weight shift: a slow lateral lean with the tilt trailing it. Two
+    // non-harmonic sines so the drift never returns to the same place.
+    val shift = sin(actT * 0.41f) * 0.62f + sin(actT * 0.23f + 2.2f) * 0.38f
+    m.offX += shift * R * 0.026f * e
+    m.tiltDeg += shift * 1.8f * e
+    // Micro-drift: below conscious notice, above the threshold of "frozen".
+    m.offY += sin(actT * 1.31f + 0.7f) * R * 0.0065f * e
+    m.tiltDeg += sin(actT * 0.87f + 1.4f) * 0.55f * e
+}
+
+// ── the classical principles ────────────────────────────────────────────────
+
+/**
+ * Volume-preserving squash and stretch.
+ *
+ * [amount] > 0 stretches vertically, < 0 squashes. The horizontal scale moves
+ * the opposite way so the silhouette keeps its area: a head that only scales
+ * uniformly reads as "moving toward the camera", while one that widens as it
+ * flattens reads as *made of something*. This is the first principle in the
+ * Disney list and the one whose absence makes procedural faces look rigid.
+ *
+ * [preserve] dials it: 1 = full area conservation, 0 = pure vertical scale.
+ * Faces want ~0.7 — full conservation on a head this wide looks rubbery.
+ */
+fun squashStretch(amount: Float, preserve: Float = 0.7f): Pair<Float, Float> {
+    val a = amount.coerceIn(-0.45f, 0.45f)
+    val sy = 1f + a
+    val sx = 1f + (1f / sy - 1f) * preserve.coerceIn(0f, 1f)
+    return sx to sy
+}
+
+/**
+ * How far along a shallow arc a horizontal move should rise.
+ *
+ * Straight-line translation is the other great tell of computed motion: living
+ * things move their mass along arcs because everything pivots about a joint.
+ * Returns a positive rise (in fractions of R) that peaks at the extremes of
+ * travel, so panning the head left or right lifts it slightly rather than
+ * sliding it flat across the screen.
+ */
+fun arcRise(travel: Float, depth: Float = 0.06f): Float {
+    val x = travel.coerceIn(-1f, 1f)
+    return (1f - sqrt((1f - x * x).coerceAtLeast(0f))) * depth
+}
+
+/**
+ * Inertial lag for a light appendage attached to a moving mass.
+ *
+ * Ears do not arrive with the skull: the head starts, the ears stay behind,
+ * then whip past the pose and settle. That trailing overshoot ("follow through
+ * and overlapping action") is most of what separates a character from a
+ * diagram, and it is free once head velocity is known — the ear's target is
+ * simply the negative of that velocity.
+ */
+class Trailing(stiffness: Float = 90f, bounce: Float = 0.30f) {
+    private val spring = Spring(stiffness, bounce)
+    private var last = 0f
+
+    /**
+     * [position] is what the appendage is attached to. Returns the trailing
+     * offset, in the same units per second of travel scaled by [gain].
+     */
+    fun update(position: Float, dtSeconds: Float, gain: Float = 1f): Float {
+        val dt = dtSeconds.coerceIn(1e-4f, 1f / 30f)
+        val velocity = (position - last) / dt
+        last = position
+        // Clamped: a teleport (config change, first frame) must not fling the
+        // ears off the head.
+        val target = (-velocity * gain).coerceIn(-1f, 1f)
+        return spring.update(target, dt)
     }
 }
 
@@ -354,6 +524,19 @@ class CatMotionEngine {
 
     val isPlaying: Boolean get() = expression != null
 
+    /**
+     * Start a clip.
+     *
+     * The springs are NOT reset. That is deliberate and it is the difference
+     * between a cut and a performance: a spring carrying the previous pose's
+     * position and velocity eases into the new one, which is how a real face
+     * transitions. Snapping every channel to neutral first would put a
+     * one-frame jump at the start of every clip.
+     *
+     * What DOES reset is the clock, and [update] now envelopes the channels
+     * toward neutral at both ends, so a clip no longer inherits a stale target
+     * from a clip that was interrupted mid-pose.
+     */
     fun play(e: ComposedExpression) {
         expression = e
         elapsed = 0f
@@ -389,7 +572,7 @@ class CatMotionEngine {
         }
 
         val t = (elapsed / e.durationSeconds).coerceIn(0f, 1f)
-        val target = eyeLayer(e.eye)
+        val raw = eyeLayer(e.eye)
             .mergedWith(earLayer(e.ear, t))
             .mergedWith(jawLayer(e.jaw, t))
 
@@ -400,15 +583,43 @@ class CatMotionEngine {
         val neutralEar = earLayer(EarL.NEUTRAL, t)
         val neutralJaw = jawLayer(JawL.SHUT, t)
 
+        // Ease the expression in and back out.
+        //
+        // The channels used to be step functions: full target value on frame
+        // one, full target value on the last frame, then the clip ends and
+        // every spring is suddenly chasing neutral again. The body had `bell()`
+        // for exactly this and the face had nothing, so performances popped on,
+        // held rigid, and popped off — the opposite of the slow-in/slow-out
+        // that makes motion read as deliberate. The envelope is in ABSOLUTE
+        // seconds so a 0.9s clip and a 3.4s clip get the same crisp attack
+        // rather than the short one easing for a third of its length.
+        val env = envelope(elapsed, e.durationSeconds)
+        fun ease(target: Float?, neutral: Float): Float? =
+            target?.let { neutral + (it - neutral) * env }
+        val target = ChannelPose(
+            open = ease(raw.open, neutralEye.open!!),
+            eh = ease(raw.eh, 1f),
+            ew = ease(raw.ew, 1f),
+            pupil = ease(raw.pupil, neutralEye.pupil!!),
+            lower = ease(raw.lower, 0f),
+            etilt = ease(raw.etilt, 0f),
+            ear = ease(raw.ear, neutralEar.ear!!),
+            splay = ease(raw.splay, neutralEar.splay!!),
+            jaw = ease(raw.jaw, 0f),
+            mw = ease(raw.mw, 1f),
+            curl = ease(raw.curl, 0f),
+            earSplit = ease(raw.earSplit, 0f),
+        )
+
         return MotionPose(
-            eyeOpen = open.update(target.open ?: neutralEye.open!!, dtSeconds),
-            pupilSize = pupil.update(target.pupil ?: neutralEye.pupil!!, dtSeconds),
+            eyeOpen = open.update(target.open ?: neutralEye.open, dtSeconds),
+            pupilSize = pupil.update(target.pupil ?: neutralEye.pupil, dtSeconds),
             eyeWidthScale = eyeW.update(target.ew ?: 1f, dtSeconds),
             eyeHeightScale = eyeH.update(target.eh ?: 1f, dtSeconds),
             eyeTiltDeg = eyeTilt.update(target.etilt ?: 0f, dtSeconds),
             lowerLid = lowerLid.update(target.lower ?: 0f, dtSeconds),
-            earPitchDeg = ear.update(target.ear ?: neutralEar.ear!!, dtSeconds),
-            earSplayDeg = splay.update(target.splay ?: neutralEar.splay!!, dtSeconds),
+            earPitchDeg = ear.update(target.ear ?: neutralEar.ear, dtSeconds),
+            earSplayDeg = splay.update(target.splay ?: neutralEar.splay, dtSeconds),
             earSplitDeg = earSplit.update(target.earSplit ?: 0f, dtSeconds),
             jawOpen = jaw.update(target.jaw ?: neutralJaw.jaw!!, dtSeconds),
             mouthWidth = mouthW.update(target.mw ?: neutralJaw.mw!!, dtSeconds),
@@ -417,6 +628,7 @@ class CatMotionEngine {
             offsetY = motion.offY,
             headTiltDeg = motion.tiltDeg,
             scaleDelta = motion.scale,
+            squash = motion.squash,
         )
     }
     /** Neutral rest frame used when nothing is playing. */
@@ -485,5 +697,8 @@ data class MotionPose(
     val offsetX: Float,
     val offsetY: Float,
     val headTiltDeg: Float,
+    /** Uniform size — perspective (nearer / further). */
     val scaleDelta: Float,
+    /** Area-conserving deformation — see [Motion.squash]. */
+    val squash: Float = 0f,
 )

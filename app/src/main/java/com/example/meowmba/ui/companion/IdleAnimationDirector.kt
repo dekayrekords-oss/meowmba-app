@@ -23,9 +23,14 @@ class IdleAnimationDirector(
     private val random: Random = Random.Default,
     /** Interactions are quiet and nothing else is animating. */
     private val canPlay: () -> Boolean,
-    /** Built-in clips plus any user-saved inventions. */
-    private val pickSpec: () -> CustomAnimationSpec?,
-    private val play: (CustomAnimationSpec) -> Unit,
+    /**
+     * Name of the next clip: a composed [CatExpressions] name, a keyframe
+     * built-in, or a user invention. Names rather than specs, because the two
+     * animation systems are resolved by name downstream and a director that
+     * carried one system's spec type could only ever pick from that system.
+     */
+    private val pickName: () -> String?,
+    private val play: (String) -> Unit,
 ) {
     private var job: Job? = null
     private var hasPlayed = false
@@ -36,9 +41,9 @@ class IdleAnimationDirector(
             while (isActive) {
                 delay(if (hasPlayed) nextWaitMs() else firstWaitMs())
                 if (canPlay()) {
-                    pickSpec()?.let { spec ->
+                    pickName()?.let { name ->
                         hasPlayed = true
-                        play(spec)
+                        play(name)
                     }
                 }
             }
@@ -50,9 +55,18 @@ class IdleAnimationDirector(
         job = null
     }
 
-    /** First-clip cadence: 12–25 s so a performance happens early. Internal for unit tests. */
-    internal fun firstWaitMs(): Long = (12_000L + random.nextLong(13_000L))
+    /** First-clip cadence: 4–9 s so a performance happens early. Internal for unit tests. */
+    internal fun firstWaitMs(): Long = (4_000L + random.nextLong(5_000L))
 
-    /** Random cadence in 25–80 s; internal for unit tests. */
-    internal fun nextWaitMs(): Long = (25_000L + random.nextLong(55_000L))
+    /**
+     * Random cadence in 9–26 s; internal for unit tests.
+     *
+     * Was 25–80 s. A clip runs 1.5–3.5 s, so at the old cadence the face spent
+     * up to 95% of an idle minute with nothing but the ambient layer — long
+     * enough that the ambient reads as the whole behaviour and the cat looks
+     * switched off between performances. Deskmate-class companions land a
+     * visible beat every few seconds; this plus the always-on [ambientLife]
+     * layer is what closes that gap.
+     */
+    internal fun nextWaitMs(): Long = (9_000L + random.nextLong(17_000L))
 }
