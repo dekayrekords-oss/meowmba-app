@@ -338,6 +338,18 @@ class LooiBleLink(private val context: Context) {
 
     val connected: Boolean get() = state == LinkState.READY
 
+    /**
+     * MAC of the device this link is actually attached to, or null when not
+     * connected. The requested address and the connected one diverge whenever
+     * the auto/known-MAC fallback wins, and reporting the request instead of
+     * the reality made a healthy base look like the wrong device.
+     */
+    val connectedAddress: String?
+        @SuppressLint("MissingPermission")
+        get() = if (state == LinkState.READY) {
+            runCatching { gatt?.device?.address }.getOrNull()
+        } else null
+
     /** Script-Mode frame on fe00 with the rolling SEQ (turns/animations). */
     fun writeFrame(frame: LooiBleProtocol.Frame): Boolean = synchronized(writeLock) {
         val g = gatt ?: return false
