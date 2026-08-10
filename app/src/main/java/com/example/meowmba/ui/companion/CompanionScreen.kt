@@ -277,17 +277,26 @@ fun CompanionScreen(
             }
 
             // Command Center (Mic)
-            // Landscape: stay in the reserved bottom band so we never sit on the mouth.
-            val micBottom = if (LocalConfiguration.current.screenWidthDp >
+            // Landscape puts it on the left edge, vertically centered: the wide
+            // canvas has spare room at the sides and none under the chin, so a
+            // bottom-center mic crowds the mouth. Portrait keeps it under the
+            // face, where the thumb expects it. BottomStart is already taken by
+            // the privacy flags, so centering vertically avoids that overlap.
+            val landscape = LocalConfiguration.current.screenWidthDp >
                 LocalConfiguration.current.screenHeightDp
-            ) 16.dp else 40.dp
             MicButton(
                 interactionState = uiState.interactionState,
                 isMicEnabled = uiState.isMicEnabled,
                 onClick = { viewModel.onMicClick() },
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = micBottom)
+                modifier = if (landscape) {
+                    Modifier
+                        .align(Alignment.CenterStart)
+                        .padding(start = 24.dp)
+                } else {
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 40.dp)
+                }
             )
 
             // Chat shortcut (bottom-end); swipe-up on the avatar does the same.

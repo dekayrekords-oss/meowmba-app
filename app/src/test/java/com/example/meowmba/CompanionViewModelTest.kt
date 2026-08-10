@@ -89,21 +89,54 @@ class CompanionViewModelTest {
     }
 
     @Test
-    fun `playing an animation closes the chat sheet so the face is visible`() = runTest {
+    fun `a requested animation closes the chat sheet so the face is visible`() = runTest {
         // The sheet covers the bottom 60% — face included. Real tasks played in
         // the audit log while the user read chat and saw nothing.
         val viewModel = CompanionViewModel()
         viewModel.toggleChat()
         assertTrue(viewModel.uiState.value.isChatExpanded)
         viewModel.playCustomAnimation(
-            com.example.meowmba.ui.companion.CustomAnimations.BUILT_INS.getValue("ear wiggle")
+            com.example.meowmba.ui.companion.CustomAnimations.BUILT_INS.getValue("ear wiggle"),
+            userRequested = true,
         )
         assertFalse(viewModel.uiState.value.isChatExpanded)
         assertEquals("ear wiggle", viewModel.uiState.value.activeAnimation?.name)
     }
 
     @Test
-    fun `playing an animation closes every full-screen panel, not just chat`() = runTest {
+    fun `an ambient animation never closes what the user is reading`() = runTest {
+        // The reported bug: Settings shut itself every time the cat performed.
+        // Idle performances come through the same function, so revealing the
+        // face must be opt-in rather than the default.
+        val viewModel = CompanionViewModel()
+        viewModel.toggleSettings()
+        viewModel.toggleChat()
+        assertTrue(viewModel.uiState.value.showSettings)
+
+        viewModel.playCustomAnimation(
+            com.example.meowmba.ui.companion.CustomAnimations.BUILT_INS.getValue("ear wiggle")
+        )
+
+        val state = viewModel.uiState.value
+        assertTrue("Settings must stay open through an ambient clip", state.showSettings)
+        assertTrue("chat must stay open through an ambient clip", state.isChatExpanded)
+        assertEquals("ear wiggle", state.activeAnimation?.name)
+    }
+
+    @Test
+    fun `an idle performance never fires while a panel is covering the face`() = runTest {
+        // faceModeActive is the gate: performing behind Settings is invisible
+        // work, and the fix for it must not be to close Settings.
+        val viewModel = CompanionViewModel()
+        viewModel.toggleSettings()
+        assertFalse(
+            "idle must not play while a panel is open",
+            com.example.meowmba.ui.companion.faceModeActive(viewModel.uiState.value),
+        )
+    }
+
+    @Test
+    fun `a requested animation closes every full-screen panel, not just chat`() = runTest {
         // Each panel added since the chat-sheet fix (tiles, Settings, Model
         // Manager, Privacy, Memory, Weather, Background, Nav, Agents, Vault)
         // is a later Box child than AvatarRenderer, so any one left open
@@ -121,7 +154,8 @@ class CompanionViewModelTest {
         viewModel.toggleVaultScreen()
 
         viewModel.playCustomAnimation(
-            com.example.meowmba.ui.companion.CustomAnimations.BUILT_INS.getValue("ear wiggle")
+            com.example.meowmba.ui.companion.CustomAnimations.BUILT_INS.getValue("ear wiggle"),
+            userRequested = true,
         )
 
         val state = viewModel.uiState.value

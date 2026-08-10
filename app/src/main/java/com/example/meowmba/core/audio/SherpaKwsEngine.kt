@@ -362,6 +362,14 @@ class SherpaKwsEngine(
             runCatching { record.stop() }
             runCatching { record.release() }
             runCatching { stream?.release() }
+            // `running` MUST be cleared here, not on the success path. It is the
+            // guard `start()` checks, so any throw out of the capture loop (mic
+            // stolen, AudioRecord dead after a route change) used to leave it
+            // latched true with the mic already released: every later start()
+            // logged "already running" and returned, and the wake word never
+            // came back for the life of the process. The finally block is the
+            // only exit every path takes.
+            running = false
             _isRunning.value = false
         }
 

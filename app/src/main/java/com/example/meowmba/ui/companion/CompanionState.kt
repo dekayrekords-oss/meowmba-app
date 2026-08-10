@@ -274,6 +274,8 @@ data class CompanionState(
     val faceGazeY: Float? = null,
     /** Gemini Nano is active as the light model alongside the main model. */
     val geminiNanoActive: Boolean = false,
+    /** Gemini Nano is warming up (downloading model / preparing inference). */
+    val geminiNanoWarming: Boolean = false,
     /** Generated media (image, video, audio) to show in a popup. */
     val generatedMedia: GeneratedMedia? = null,
     /** USB auto-bridge is monitoring for a tethered desktop connection. */
@@ -286,6 +288,15 @@ data class CompanionState(
  * Which kind of provider is currently driving the companion.
  */
 enum class ModelSource { LOCAL, NETWORK, CLOUD }
+
+/**
+ * Check if the screen is currently in landscape orientation.
+ * Uses the provided context to query the display rotation.
+ */
+fun isLandscapeScreen(context: android.content.Context?): Boolean {
+    val config = context?.resources?.configuration
+    return config?.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+}
 
 /**
  * Snapshot of what model is loaded where, shown on the Hardware (LLM Manager)

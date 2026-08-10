@@ -73,6 +73,25 @@ class SpeechService(private val context: Context) : SpeechEngine {
 
         private var recognizer: SpeechRecognizer? = null
 
+        /**
+         * Give up the recognition slot for another engine. Silent: the loser
+         * gets no onError, because it did not fail — it was pre-empted, and
+         * reporting an error here would drive its retry loop straight back into
+         * a fight with the engine that just took over.
+         */
+        fun yieldSession() {
+            runCatching { recognizer?.cancel() }
+            runCatching { recognizer?.destroy() }
+            recognizer = null
+            _isListening.value = false
+            _partialResults.value = ""
+        }
+
+        /** Release the shared slot if this engine still holds it. */
+        fun releaseSessionSlot() {
+            activeSession.compareAndSet(this, null)
+        }
+
         private fun buildRecognizer(): SpeechRecognizer? {
             if (!isAvailable) return null
             return runCatching {
@@ -123,6 +142,7 @@ class SpeechService(private val context: Context) : SpeechEngine {
                     // on spotify") would be cut off. Stale callbacks are dropped outright.
                     if (recognizer !== r) return
                     _isListening.value = false
+                    releaseSessionSlot()
                     Log.w(TAG, "session error code=$error ($componentName)")
 
                     // No automatic service switching. Rotating on error walked off the
@@ -136,6 +156,7 @@ class SpeechService(private val context: Context) : SpeechEngine {
                 }
                 override fun onResults(results: Bundle?) {
                     if (recognizer !== r) return
+                    releaseSessionSlot()
                     val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     Log.i(TAG, "session result: ${matches?.firstOrNull()?.take(60) ?: "(empty)"}")
                     if (!matches.isNullOrEmpty()) {
@@ -157,13 +178,25 @@ class SpeechService(private val context: Context) : SpeechEngine {
             get() = component?.flattenToShortString() ?: "platform default"
 
         override fun startListening(onResult: (String) -> Unit, onError: (Int) -> Unit) {
-            // One recognizer instance is bound to ONE AiAi session slot, and a
-            // finished session's teardown lingers on the service side — reusing the
-            // same instance back-to-back lands the next open in "capacity is full"
-            // (ERROR_CLIENT / BUSY) and the whole retry loop churns forever. Destroy
-            // the previous instance and bind a fresh one so every session starts from
-            // a clean slot. This is what makes both always-on face listening and the
-            // mic button reliable against the strict Google recognition service.
+            // Only ONE engine may hold a session at a time, process-wide.
+            //
+            // Separate SessionEngine instances (see createSessionEngine) keep the
+            // wake loop's callbacks away from the mic button's — but they do NOT
+            // give each engine its own slot in the recognition service. AiAi
+            // serves a single session for the whole app, so when the always-on
+            // capture and the wake spotter both opened one, each refused the
+            // other: measured on device as bursts of ERROR_SERVER_DISCONNECTED
+            // (11), ERROR_RECOGNIZER_BUSY (8) and ERROR_CLIENT (5) arriving
+            // within ten milliseconds of each other, over and over, with no
+            // session ever succeeding. The mic button, always-on face listening
+            // and the wake word all appeared dead at once, which is the giveaway
+            // that they were killing each other rather than each being broken.
+            //
+            // The newest request wins: it is the one that reflects what the user
+            // just did. The previous holder is torn down first so the service
+            // sees a clean handover instead of two live binds.
+            (activeSession.getAndSet(this) as? SessionEngine)
+                ?.takeIf { it !== this }?.yieldSession()
             recognizer?.destroy()
             recognizer = null
             _isListening.value = false
@@ -225,6 +258,15 @@ class SpeechService(private val context: Context) : SpeechEngine {
     // ----------------------------------------------------------------------
 
     internal companion object {
+        /**
+         * The engine currently holding the recognition service's single session
+         * slot, across every SpeechService and SessionEngine in the process.
+         * AiAi serves one session for the whole app; without this, concurrent
+         * engines refuse each other forever.
+         */
+        private val activeSession =
+            java.util.concurrent.atomic.AtomicReference<Any?>(null)
+
         private const val TAG = "MeowmbaVoice"
 
         /**

@@ -308,6 +308,9 @@ class CompanionViewModel(
     private var lastVisionJpeg: ByteArray? = null
 
     private var responseJob: Job? = null
+
+    /** Backstop that returns the machine to IDLE if a turn never completes. */
+    private var thinkingWatchdogJob: Job? = null
     private var followUpJob: Job? = null
 
     /** Ambient sky refresh loop; null when the ambient scene is off. */
@@ -357,6 +360,12 @@ class CompanionViewModel(
      * test virtual clock busy), re-arming from session end/resetState.
      */
     private var alwaysOnSessionOpen = false
+
+    /** Clears [alwaysOnSessionOpen] if the recognizer never calls back. */
+    private var alwaysOnSessionWatchdog: Job? = null
+
+    /** Consecutive recognizer refusals (BUSY/CLIENT/DISCONNECTED). */
+    private var contentionStreak = 0
     private var alwaysOnRearmJob: Job? = null
     private var alwaysOnPartialJob: Job? = null
     private var wakeAckPending = false
@@ -436,7 +445,14 @@ class CompanionViewModel(
                     kotlin.math.abs(next.second - cur.second) < 0.012f
                 if (!sameNull && !samePos) {
                     _faceGaze.value = next
-                    com.example.meowmba.core.robot.FaceMotorMap.panForFace(offX)
+                    // FaceTrack.offsetX is already screen-space horizontal for
+                    // every rotation and both lenses (VisionManager syncs the
+                    // analysis targetRotation), so the robot pan reads it
+                    // directly. The orientation branch that used to be here
+                    // swapped axes a second time on top of the renderer's own
+                    // swap — the two corrections cancelled at some angles and
+                    // doubled at others.
+                    com.example.meowmba.core.robot.FaceMotorMap.panForFace(offX ?: 0f)
                         .forEach { (servo, angle) -> motorController.setServo(servo, angle) }
                 }
             }
@@ -779,6 +795,11 @@ class CompanionViewModel(
             toolRegistry.register(SetBrightnessTool(appContext))
             // Phase F3: opt-in UI automation (off until enabled by the user).
             toolRegistry.register(UiAutomationTool())
+            // The body. Without this the companion could describe moving but
+            // never actually move.
+            toolRegistry.register(
+                com.example.meowmba.core.agent.tools.RobotMoveTool(robotManager),
+            )
 
             // Invented avatar animations: the model writes keyframes, the app
             // validates and plays them — the same propose/constrain boundary as
@@ -788,13 +809,17 @@ class CompanionViewModel(
                 // Prefer the Godot channel engine when the clip name is a known expression
                 // and the model only sent a bare name (or the frames are empty).
                 val composed = CatExpressions.resolve(spec.name)
+                // Reached only when something asked for a performance, so the
+                // face is worth revealing.
                 if (composed != null && spec.frames.size <= 1) {
-                    playComposedExpression(composed, spec.name)
+                    playComposedExpression(composed, spec.name, userRequested = true)
                 } else {
-                    playCustomAnimation(spec)
+                    playCustomAnimation(spec, userRequested = true)
                 }
             })
-            toolRegistry.register(DescribeAnimationTool { spec -> playCustomAnimation(spec) })
+            toolRegistry.register(
+                DescribeAnimationTool { spec -> playCustomAnimation(spec, userRequested = true) },
+            )
 
             // Occasional random idle animations so the face feels alive.
             // Opt-out flag for JVM unit tests: their virtual clocks would
@@ -808,26 +833,47 @@ class CompanionViewModel(
                 scope = viewModelScope,
                 canPlay = {
                     val s = _uiState.value
-                    s.interactionState == InteractionState.IDLE &&
+                    // faceModeActive is the "the bare face is on screen" test.
+                    // Without it the cat performed behind Settings, the chat
+                    // sheet or the browser — invisible, and (before the panel
+                    // fix) slamming them shut to show a performance nobody
+                    // asked for.
+                    faceModeActive(s) &&
+                        s.interactionState == InteractionState.IDLE &&
                         s.activeAnimation == null &&
+                        s.activeComposed == null &&
                         s.activeTask == null &&
                         // TTS energy decays toward zero; compare with slack so a
                         // lingering 0.001f never blocks performances forever.
                         s.mouthEnergy <= 0.02f
                 },
-                pickSpec = {
-                    val saved = animStore.list().mapNotNull { animStore.load(it) }
-                    val pool = CustomAnimations.BUILT_INS.values + saved
+                pickName = {
+                    val saved = animStore.list()
+                    // Mood-filtered, so an idle cat never hisses at nothing.
+                    val moodPool = CatExpressions.idlePoolFor(_uiState.value.emotion)
+                    // Idle now draws mostly from CatExpressions — the channel
+                    // compositions that run through CatMotionEngine's springs
+                    // and body motions. The keyframe BUILT_INS interpolate
+                    // linearly between poses with no follow-through, so an idle
+                    // pool made only of them (what shipped before) never showed
+                    // the motion system off. Keyframe clips and the user's own
+                    // inventions stay in the pool, just no longer all of it.
+                    val pool = moodPool +
+                        CustomAnimations.BUILT_INS.keys.toList() +
+                        saved
                     if (!idleClipShownThisSession) {
                         idleClipShownThisSession = true
-                        val showyNames = setOf("tail wag", "zoomies", "paw lick", "happy bop", "stretch", "headshake")
-                        val showy = pool.filter { it.name in showyNames } + saved
-                        (showy.ifEmpty { pool.toList() }).randomOrNull()
+                        val showyNames = setOf("tail wag", "paw lick", "happy bop", "stretch", "headshake")
+                        val showy = pool.filter { it in showyNames } + saved
+                        (showy.ifEmpty { pool }).randomOrNull()
                     } else {
                         pool.randomOrNull()
                     }
                 },
-                play = { spec -> playCustomAnimation(spec) },
+                // By name, so a composed expression routes to the spring engine
+                // and only genuine keyframe clips take the keyframe path.
+                // Ambient, not asked for: never dismisses what is on screen.
+                play = { name -> playAnimationNamed(name, userRequested = false) },
             ).also { it.start() }
 
             // Obsidian-compatible vault notes.
@@ -1258,6 +1304,14 @@ class CompanionViewModel(
         contextDirector?.stop()
         motionSense?.stop()
         idleAnimationDirector?.stop()
+        // The driving detector holds an accelerometer registration AND a GPS
+        // request at 0 ms / 0 m — the most expensive subscription in the app.
+        // Nothing released them when the ViewModel died, so they kept draining
+        // the battery for the life of the process. setCarModeEnabled(false) is
+        // the public route to its stop().
+        carDetector?.setCarModeEnabled(false)
+        thinkingWatchdogJob?.cancel()
+        alwaysOnSessionWatchdog?.cancel()
         stopWakeLoopAndRelease()
         (currentProvider as? LiteRtProvider)?.close()
         // Leaving the inventory service bound would keep that app's process alive for as
@@ -1479,7 +1533,10 @@ class CompanionViewModel(
         // Whatever is usable immediately. For Nano this is null until the warm-up
         // finishes; [providerReady] is what callers actually await.
         currentProvider = mainProvider
-        _uiState.value = _uiState.value.copy(geminiNanoActive = false)
+        _uiState.value = _uiState.value.copy(
+            geminiNanoActive = false,
+            geminiNanoWarming = nanoIsMain && nanoUsable
+        )
 
         providerWarmUp?.cancel()
         providerWarmUp = null
@@ -1490,27 +1547,50 @@ class CompanionViewModel(
         }
 
         // AICore warm-up is slow and MUST stay off the main thread — doing it inline
-        // is what hung the app at the boot screen.
+        // is what hung the app at the boot screen. Retry with backoff so a missing
+        // model download doesn't leave the user staring at "No model is ready".
         val pending = CompletableDeferred<ModelProvider?>()
         providerReady = pending
         providerWarmUp = viewModelScope.launch {
-            val nano = withContext(Dispatchers.IO) {
-                try {
-                    GeminiNanoProvider.create(secureStorage.context)
-                } catch (e: Exception) {
-                    runCatching {
-                        Log.w("CompanionViewModel", "Gemini Nano warm-up failed: ${e.message}")
+            var nano: ModelProvider? = null
+            var attempt = 0
+            val maxAttempts = 12  // ~5 minutes with increasing backoff
+            while (attempt < maxAttempts && nano == null) {
+                nano = withContext(Dispatchers.IO) {
+                    try {
+                        GeminiNanoProvider.create(secureStorage.context)
+                    } catch (e: Exception) {
+                        fuLog("Gemini Nano warm-up attempt ${attempt + 1} failed: ${e.message}")
+                        null
                     }
-                    null
+                }
+                if (nano != null) break
+                attempt++
+                if (attempt < maxAttempts) {
+                    // Exponential backoff: 10s, 20s, 40s, 80s... capped at 5 min
+                    val delayMs = minOf(10_000L * (1L shl attempt), 5 * 60 * 1000L)
+                    fuLog("Gemini Nano warm-up retrying in ${delayMs / 1000}s (attempt ${attempt + 1}/$maxAttempts)")
+                    delay(delayMs)
                 }
             }
             val resolved: ModelProvider? = when {
-                nano == null -> mainProvider          // fall back honestly
+                nano == null -> {
+                    // Warm-up exhausted: keep the user on Nano with an honest caption,
+                    // don't silently fall back to null which shows "No model is ready".
+                    _uiState.value = _uiState.value.copy(
+                        captionText = "Gemini Nano model still downloading — check AICore settings if stuck",
+                        geminiNanoWarming = false
+                    )
+                    mainProvider
+                }
                 nanoIsMain -> nano
                 else -> ModelRouter(lightProvider = nano, mainProvider = mainProvider!!)
             }
             currentProvider = resolved
-            _uiState.value = _uiState.value.copy(geminiNanoActive = nano != null)
+            _uiState.value = _uiState.value.copy(
+                geminiNanoActive = (nanoIsMain && nano != null),
+                geminiNanoWarming = false
+            )
             pending.complete(resolved)
         }
     }
@@ -1666,9 +1746,12 @@ class CompanionViewModel(
                     else -> null
                 }
                 anim?.let { CustomAnimations.BUILT_INS[it] }?.let { spec ->
-                    if (_uiState.value.interactionState == InteractionState.IDLE &&
+                    // Watch-mode reaction to screen content — ambient, so it
+                    // must not dismiss the screen the user is looking at.
+                    if (faceModeActive(_uiState.value) &&
+                        _uiState.value.interactionState == InteractionState.IDLE &&
                         _uiState.value.activeAnimation == null
-                    ) playCustomAnimation(spec)
+                    ) playCustomAnimation(spec, userRequested = false)
                 }
             },
             onComment = { text -> speak(text) },
@@ -1775,7 +1858,13 @@ class CompanionViewModel(
             stream.collect { response ->
                 when (response) {
                     is ModelResponse.Partial -> {
-                        fullResponse += response.text
+                        // On-device models can emit literal \n \t etc; unescape so SpeechChunker
+                        // splits on real newlines and TTS speaks natural pauses.
+                        val partial = response.text
+                            .replace("\\n", "\n")
+                            .replace("\\t", "\t")
+                            .replace("\\r", "\r")
+                        fullResponse += partial
                         _uiState.value = _uiState.value.copy(captionText = fullResponse)
                         val chunk = com.example.meowmba.core.audio.SpeechChunker
                             .nextChunk(fullResponse, spokenUpTo)
@@ -2303,25 +2392,25 @@ class CompanionViewModel(
             // through resetState() and used to re-arm the in-app spotter,
             // which then refused the service the mic ("in-app wake loop
             // owns the mic") and the follow-up never started.
-            android.util.Log.i(TAG_WAKE, "not re-arming: conversation handed to background service")
+            wakeLog( "not re-arming: conversation handed to background service")
             return
         }
         if (shouldAlwaysOnMic()) {
             // The bare face owns the mic in always-on conversation mode; the
             // wake phrase would be noise on top of it.
-            android.util.Log.i(TAG_WAKE, "not re-arming: face mode owns the mic")
+            wakeLog( "not re-arming: face mode owns the mic")
             return
         }
         val state = _uiState.value.interactionState
         if (state != InteractionState.IDLE) {
             // "Wake word only works once" is what this looks like from outside, so say why.
-            android.util.Log.i(TAG_WAKE, "not re-arming: interaction state is $state")
+            wakeLog( "not re-arming: interaction state is $state")
             return
         }
         if (utteranceCapture != null) {
             // A capture/follow-up session is still live; re-arming the spotter here is
             // what grabbed the mic and killed it. The capture's completion path re-arms.
-            android.util.Log.i(TAG_WAKE, "not re-arming: a capture is still in flight")
+            wakeLog( "not re-arming: a capture is still in flight")
             return
         }
         if (_uiState.value.isMicEnabled) {
@@ -2345,7 +2434,7 @@ class CompanionViewModel(
                         com.example.meowmba.core.audio.MicOwner
                             .acquire(com.example.meowmba.core.audio.MicOwner.IN_APP)
                     ) {
-                        android.util.Log.i(TAG_WAKE, "re-armed on retry")
+                        wakeLog( "re-armed on retry")
                         wakeWordEngine?.start()
                     } else {
                         android.util.Log.w(
@@ -2357,7 +2446,7 @@ class CompanionViewModel(
                 }
             }
         } else {
-            android.util.Log.i(TAG_WAKE, "not re-arming: mic disabled by the user")
+            wakeLog( "not re-arming: mic disabled by the user")
         }
         _uiState.value = _uiState.value.copy(captionText = wakeHint())
     }
@@ -2475,12 +2564,43 @@ class CompanionViewModel(
         }
         lastAlwaysOnArmAtMs = now
         alwaysOnSessionOpen = true
+        // The latch above is what stops us stacking sessions — but it is only
+        // ever cleared by a recognizer callback, and a callback is not
+        // guaranteed: if another consumer takes the single shared
+        // SpeechRecognizer out from under us, neither onResult nor onError ever
+        // fires and the latch stays true for the life of the process. Every
+        // later arm then returns at the `if (alwaysOnSessionOpen) return` guard
+        // and the always-on mic is dead until the app is restarted — the
+        // reported "the always on mic stops working". A latch with no timeout
+        // is a deadlock, so give it one.
+        alwaysOnSessionWatchdog?.cancel()
+        alwaysOnSessionWatchdog = viewModelScope.launch {
+            delay(ALWAYS_ON_SESSION_TIMEOUT_MS)
+            if (alwaysOnSessionOpen) {
+                System.err.println(
+                    "$TAG_WAKE: always-on session produced no callback in " +
+                        "${ALWAYS_ON_SESSION_TIMEOUT_MS}ms — releasing the latch",
+                )
+                // Release the latch ONLY. Re-arming from here would schedule a
+                // fresh watchdog that can time out and re-arm again, a loop
+                // with nothing to break it if the recognizer is permanently
+                // gone. The existing re-arm paths (resetState →
+                // updateVoiceListeningMode, and the recognizer error handler)
+                // already fire from a clean idle; all they needed was for this
+                // latch to stop lying about a session being open.
+                alwaysOnSessionOpen = false
+            }
+        }
         engine.startListening(
             onResult = { text ->
+                alwaysOnSessionWatchdog?.cancel()
                 alwaysOnSessionOpen = false
+                // The service answered, so whatever was blocking it is over.
+                contentionStreak = 0
                 if (alwaysOnActive && text.isNotBlank()) processUserSpeech(text)
             },
             onError = { code ->
+                alwaysOnSessionWatchdog?.cancel()
                 alwaysOnSessionOpen = false
                 // Nobody spoke (quiet-open timeout / no match) is the normal
                 // idle state of always-on listening — put the face back to
@@ -2499,14 +2619,22 @@ class CompanionViewModel(
                     val contention = code == android.speech.SpeechRecognizer.ERROR_RECOGNIZER_BUSY ||
                         code == android.speech.SpeechRecognizer.ERROR_CLIENT ||
                         code == android.speech.SpeechRecognizer.ERROR_SERVER_DISCONNECTED
+                    // Quiet means the recognizer is healthy and simply heard
+                    // nothing, so it clears the streak; contention means the
+                    // service refused us and the streak grows.
+                    if (contention) contentionStreak++ else contentionStreak = 0
                     alwaysOnRearmJob?.cancel()
                     alwaysOnRearmJob = viewModelScope.launch {
-                        // AIAI on Fold thrash-loops if we re-open too fast after 7/8/11.
-                        // SpeechService destroys+rebinds every session; AiAi needs a
-                        // long gap or it returns BUSY/11 in a loop ("capacity is full").
+                        // AiAi thrash-loops if we re-open too fast after 5/8/11,
+                        // and a FIXED retry gap never escapes it: measured on
+                        // device, a constant 2.5s retry produced alternating
+                        // code=11/code=8 every few seconds indefinitely, because
+                        // each attempt re-wedged the service we were waiting on.
+                        // The retry has to get out of the way — double the gap
+                        // per consecutive refusal, up to a minute.
                         delay(when {
                             quiet -> 1_500L
-                            contention -> 2_500L
+                            contention -> contentionBackoffMs(contentionStreak)
                             else -> 1_800L
                         })
                         if (alwaysOnActive && shouldAlwaysOnMic() &&
@@ -2834,6 +2962,37 @@ class CompanionViewModel(
             emotion = CompanionEmotion.CURIOUS
         )
 
+        // A new turn supersedes the old one. Without this the previous
+        // generation kept streaming and speaking underneath the new one — two
+        // voices, two caption writers, and whichever finished last decided the
+        // final state.
+        responseJob?.cancel()
+        // THINKING is the state every mic re-arm path refuses to run in, and
+        // nothing else guarantees we leave it: a provider that never emits a
+        // terminal token, a TTS engine that swallows the utterance, or a
+        // cancelled job all stranded the companion there permanently — the
+        // reported "it works for a bit, then the wake word stops". This watchdog
+        // is the backstop that always returns the machine to IDLE.
+        thinkingWatchdogJob?.cancel()
+        thinkingWatchdogJob = viewModelScope.launch {
+            delay(THINKING_TIMEOUT_MS)
+            if (_uiState.value.interactionState == InteractionState.THINKING) {
+                // System.err, not android.util.Log: this line runs under the
+                // JVM unit tests, where the Log stubs throw.
+                System.err.println(
+                    "MeowState: THINKING exceeded ${THINKING_TIMEOUT_MS}ms — recovering to IDLE",
+                )
+                responseJob?.cancel()
+                _uiState.value = _uiState.value.copy(
+                    interactionState = InteractionState.IDLE,
+                    captionText = "That took too long — I gave up on it. Ask me again?",
+                )
+                // Order matters: the state must already read IDLE, because
+                // startWakeStandby refuses to re-arm from anything else.
+                startWakeStandby()
+            }
+        }
+
         responseJob = viewModelScope.launch {
             // Save user message to memory
             val userMessageId = memoryRepository?.addMessage(MessageRole.USER, text)
@@ -2915,7 +3074,13 @@ class CompanionViewModel(
 
             if (currentProvider == null) {
                 delay(1500)
-                speak("No model is ready yet. Download one from the Hardware page, or configure a server in Settings.")
+                // If Gemini Nano is warming up, give an honest status instead of
+                // the generic "no model" message.
+                if (_uiState.value.geminiNanoWarming) {
+                    speak("Gemini Nano is still warming up — AICore is downloading the model. This can take a minute on first run.")
+                } else {
+                    speak("No model is ready yet. Download one from the Hardware page, or configure a server in Settings.")
+                }
                 return@launch
             }
 
@@ -2941,7 +3106,13 @@ class CompanionViewModel(
             awaitProvider()?.generateStreaming(prompt)?.collect { response ->
                 when (response) {
                     is ModelResponse.Partial -> {
-                        fullResponse += response.text
+                        // On-device models can emit literal \n \t etc; unescape so SpeechChunker
+                        // splits on real newlines and TTS speaks natural pauses.
+                        val partial = response.text
+                            .replace("\\n", "\n")
+                            .replace("\\t", "\t")
+                            .replace("\\r", "\r")
+                        fullResponse += partial
                         _uiState.value = _uiState.value.copy(captionText = fullResponse)
                         val chunk = com.example.meowmba.core.audio.SpeechChunker
                             .nextChunk(fullResponse, spokenUpTo)
@@ -4223,42 +4394,39 @@ class CompanionViewModel(
             CustomAnimations.BUILT_INS.keys.toList() +
             (avatarAnimationStore?.list() ?: emptyList())).distinct()
 
-    /** Plays a clip by name: channel composition when known, else keyframe built-in/saved. */
-    fun playAnimationNamed(name: String) {
+    /**
+     * Plays a clip by name: channel composition when known, else keyframe
+     * built-in/saved. [userRequested] passes through to panel dismissal — see
+     * [playCustomAnimation].
+     */
+    fun playAnimationNamed(name: String, userRequested: Boolean = true) {
         CatExpressions.resolve(name)?.let {
-            playComposedExpression(it, name)
+            playComposedExpression(it, name, userRequested)
             return
         }
         val spec = CustomAnimations.builtIn(name) ?: avatarAnimationStore?.load(name)
-        if (spec != null) playCustomAnimation(spec)
+        if (spec != null) playCustomAnimation(spec, userRequested)
     }
 
     /**
      * Drive the face with the Godot-style channel motion engine.
      * Closes panels like [playCustomAnimation] so the performance is visible.
      */
-    fun playComposedExpression(expr: ComposedExpression, label: String = "composed") {
+    fun playComposedExpression(
+        expr: ComposedExpression,
+        label: String = "composed",
+        userRequested: Boolean = false,
+    ) {
         customAnimJob?.cancel()
         System.err.println(
             "MeowAnim: composed \"$label\" " +
                 "(${expr.eye}/${expr.ear}/${expr.jaw}/${expr.body}, ${expr.durationSeconds}s)",
         )
-        _uiState.value = _uiState.value.copy(
+        val next = _uiState.value.copy(
             activeComposed = expr,
             activeAnimation = null,
-            isChatExpanded = false,
-            showTiles = false,
-            showSettings = false,
-            showModelManager = false,
-            showPrivacyDashboard = false,
-            showMemoryScreen = false,
-            showWeatherScreen = false,
-            showBackgroundScreen = false,
-            showNavScreen = false,
-            showAgentsScreen = false,
-            showVaultScreen = false,
-            showAvatarScreen = false,
         )
+        _uiState.value = if (userRequested) next.withPanelsClosed() else next
         customAnimJob = viewModelScope.launch {
             delay((expr.durationSeconds * 1000f).toLong() + 350L)
             _uiState.value = _uiState.value.copy(activeComposed = null)
@@ -5013,35 +5181,48 @@ class CompanionViewModel(
     }
 
     /**
+     * Clears every full-screen panel so the face is visible.
+     *
+     * Only ever called for an animation the USER asked for. Every panel (chat
+     * sheet, tiles, Settings, Model Manager, Privacy, Memory, Weather,
+     * Background, Nav, Agents, Vault) is a later child than AvatarRenderer in
+     * CompanionScreen's Box, so any one of them left open paints over the face:
+     * without this, "show me a trick" plays to a covered screen.
+     */
+    private fun CompanionState.withPanelsClosed() = copy(
+        isChatExpanded = false,
+        showTiles = false,
+        showSettings = false,
+        showModelManager = false,
+        showPrivacyDashboard = false,
+        showMemoryScreen = false,
+        showWeatherScreen = false,
+        showBackgroundScreen = false,
+        showNavScreen = false,
+        showAgentsScreen = false,
+        showVaultScreen = false,
+        showAvatarScreen = false,
+    )
+
+    /**
      * Plays an invented clip over the face, then clears it. A new clip replaces
      * the old — the face is one screen, and the renderer blends the handoff.
      *
-     * Every full-screen panel (chat sheet, tiles, Settings, Model Manager,
-     * Privacy, Memory, Weather, Background, Nav, Agents, Vault, ...) is a
-     * later child than AvatarRenderer in CompanionScreen's Box, so any one of
-     * them left open paints over the face — the clip plays, the audit log
-     * says "Playing X", and the user sees nothing. "Show me" means show me:
-     * they all close for the clip and stay closed.
+     * [userRequested] decides whether panels are dismissed to reveal the face.
+     * It defaults to FALSE, because getting this backwards was a real bug: idle
+     * performances also came through here and closed whatever the user had
+     * open, so Settings (or chat, or the vault) shut itself every time the cat
+     * decided to stretch. An ambient performance is never worth interrupting
+     * the screen the user is reading; only "show me a trick" is.
      */
-    fun playCustomAnimation(spec: CustomAnimationSpec) {
+    fun playCustomAnimation(spec: CustomAnimationSpec, userRequested: Boolean = false) {
         customAnimJob?.cancel()
         System.err.println("MeowAnim: playing \"${spec.name}\" (${spec.durationMs}ms)")
-        _uiState.value = _uiState.value.copy(
+        val next = _uiState.value.copy(
             activeAnimation = spec,
             activeComposed = null,
-            isChatExpanded = false,
-            showTiles = false,
-            showSettings = false,
-            showModelManager = false,
-            showPrivacyDashboard = false,
-            showMemoryScreen = false,
-            showWeatherScreen = false,
-            showBackgroundScreen = false,
-            showNavScreen = false,
-            showAgentsScreen = false,
-            showVaultScreen = false,
-            showAvatarScreen = false,
         )
+        _uiState.value = if (userRequested) next.withPanelsClosed() else next
         customAnimJob = viewModelScope.launch {
             delay(spec.durationMs.toLong() + 300)
             _uiState.value = _uiState.value.copy(activeAnimation = null)
@@ -5137,9 +5318,20 @@ class CompanionViewModel(
     /** Test-safe lifecycle log: android.util.Log is not mocked in JVM unit tests. */
     private fun fuLog(msg: String) { runCatching { android.util.Log.i("MeowFU", msg) } }
 
+    /**
+     * Wake-standby diagnostics. runCatching for the same reason as [fuLog]:
+     * android.util.Log is an unmocked stub under the JVM unit tests and throws
+     * on call, and these lines sit on paths the tests exercise.
+     */
+    private fun wakeLog(msg: String) { runCatching { android.util.Log.i(TAG_WAKE, msg) } }
+
     private fun resetState() {
         fuLog("resetState -> IDLE (was ${_uiState.value.interactionState})")
         followUpJob?.cancel()
+        // The turn is over, so the stuck-turn watchdog has nothing left to
+        // guard. Leaving it armed would keep a 45-second timer alive after
+        // every single turn for no reason.
+        thinkingWatchdogJob?.cancel()
         isFollowUpListen = false
         _uiState.value = _uiState.value.copy(
             interactionState = InteractionState.IDLE,
@@ -5266,6 +5458,36 @@ SAFE if the scene looks like a normal road, car interior, sidewalk, or room, or 
         private const val ERROR_DISPLAY_MS = 3500L
 
         private const val TAG_WAKE = "WakeStandby"
+
+        /**
+         * How long a turn may sit in THINKING before it is abandoned.
+         *
+         * Generous enough for a slow on-device generation on a cold model
+         * (which can genuinely take ~30s), short enough that a wedged turn does
+         * not cost the user their microphone for the rest of the session.
+         */
+        private const val THINKING_TIMEOUT_MS = 45_000L
+
+        /**
+         * Longest a single always-on recognizer session may run without any
+         * callback. Real sessions end on speech-timeout well inside this;
+         * exceeding it means the session was lost, not that the user is quiet.
+         */
+        private const val ALWAYS_ON_SESSION_TIMEOUT_MS = 20_000L
+
+        /**
+         * Retry gap after the recognizer refuses us, doubling per consecutive
+         * refusal: 2.5s, 5s, 10s, 20s, 40s, then a 60s ceiling.
+         *
+         * The ceiling matters as much as the growth. A wedged AiAi can stay
+         * wedged for minutes, and a retry that keeps arriving is part of why —
+         * but we must never stop retrying entirely, or the mic would need an
+         * app restart to come back. Internal so the curve is unit-testable.
+         */
+        internal fun contentionBackoffMs(streak: Int): Long {
+            val step = (streak - 1).coerceIn(0, 4)
+            return (2_500L shl step).coerceAtMost(60_000L)
+        }
 
         /** Long enough for a recognizer to finish tearing down, short enough to feel instant. */
         private const val WAKE_REARM_RETRY_MS = 900L
