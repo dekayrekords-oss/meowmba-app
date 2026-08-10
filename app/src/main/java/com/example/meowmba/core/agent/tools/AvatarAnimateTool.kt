@@ -174,6 +174,17 @@ class AvatarAnimateTool(
             )
         } catch (e: CustomAnimations.SpecException) {
             ToolResult.Failure("Animation rejected: ${e.message}")
+        } catch (e: Exception) {
+            // The frames argument is authored by a language model, so it is
+            // arbitrary text. SpecException only covers what the validator
+            // itself rejects — a JSONException from malformed JSON, or a
+            // NumberFormatException from "0.5f" or "twenty", sailed past this
+            // catch and out of the tool. Every rejection must come back as a
+            // Failure the companion can say out loud.
+            ToolResult.Failure(
+                "Animation rejected: could not read the keyframes " +
+                    "(${e.message ?: e::class.java.simpleName})"
+            )
         }
     }
 }

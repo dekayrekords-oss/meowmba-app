@@ -188,10 +188,33 @@ class AgentOrchestrator(
             updateTask(task.id) { it.copy(status = TaskStatus.RUNNING) }
         }
 
-        // Execute with the tool's own timeout
-        val result = withTimeoutOrNull(tool.definition.timeoutMs) {
-            tool.execute(task.args)
-        } ?: ToolResult.Failure("Tool timed out after ${tool.definition.timeoutMs}ms")
+        // Execute with the tool's own timeout.
+        //
+        // A tool that THROWS rather than returning ToolResult.Failure used to
+        // take the whole process with it: this runs in a coroutine scope with
+        // no exception handler, so a single unchecked exception anywhere in any
+        // tool — a malformed intent, a SecurityException from a revoked
+        // permission, a parser meeting input it did not expect — became a crash
+        // instead of a failed task. Tools are the least trusted code in the
+        // app (several parse model-authored arguments), so the boundary belongs
+        // here rather than in each of the two dozen implementations.
+        //
+        // CancellationException is deliberately not caught: swallowing it would
+        // break the timeout above and leave tasks un-cancellable.
+        val result = try {
+            withTimeoutOrNull(tool.definition.timeoutMs) {
+                tool.execute(task.args)
+            } ?: ToolResult.Failure("Tool timed out after ${tool.definition.timeoutMs}ms")
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            runCatching {
+                android.util.Log.w("AgentOrchestrator", "tool ${tool.definition.id} threw", e)
+            }
+            ToolResult.Failure(
+                "${tool.definition.displayName} failed: ${e.message ?: e::class.java.simpleName}"
+            )
+        }
 
         when (result) {
             is ToolResult.Success -> completeTask(task, result.output)

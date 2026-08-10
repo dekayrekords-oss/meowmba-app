@@ -262,7 +262,15 @@ class MeowAccessibilityService : AccessibilityService() {
         if (context.isNotEmpty()) {
             if (sb.isNotEmpty()) sb.append("\n\n")
             sb.append("Text: ")
-            sb.append(context.joinToString("; ").take(maxChars - sb.length).trimEnd())
+            // coerceAtLeast(0): once the interactive list alone exceeds
+            // maxChars — routine on a button-dense screen — this budget goes
+            // negative and String.take throws IllegalArgumentException, taking
+            // down the accessibility service mid-read.
+            sb.append(
+                context.joinToString("; ")
+                    .take((maxChars - sb.length).coerceAtLeast(0))
+                    .trimEnd()
+            )
         }
         return if (sb.isEmpty()) "Screen appears empty." else sb.toString().take(maxChars)
     }

@@ -36,15 +36,58 @@ import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 
 /**
- * One face-detection frame. Offsets are normalized to -1..1 relative to the
- * frame center: negative X = subject left of the frame, negative Y = above
- * center. [confidence] is the detector's probability that this is a real face.
+ * One face-detection frame. Offsets are normalized to -1..1 in **screen space**:
+ * +X is toward the right edge of the display as the user sees it, +Y toward the
+ * bottom, regardless of device rotation or which lens is active.
+ *
+ * Screen space (rather than sensor space) is the contract because every consumer
+ * — avatar gaze, head pan, robot servos — works in screen terms. Publishing
+ * sensor coordinates pushed a rotation correction into each consumer, and they
+ * disagreed: see [rotatedFrameSize] for what that cost.
  */
 data class FaceTrack(
     val offsetX: Float,
     val offsetY: Float,
     val confidence: Float,
 )
+
+/**
+ * Dimensions of the frame ML Kit measured, given the raw buffer size and the
+ * rotation applied to make it upright.
+ *
+ * `InputImage.fromMediaImage(image, rotationDegrees)` hands ML Kit a rotation
+ * and gets boxes back in the *rotated* space, so a 90°/270° frame has its width
+ * and height swapped relative to the buffer. Normalizing against the raw buffer
+ * size instead squashes one axis by the aspect ratio.
+ */
+internal fun rotatedFrameSize(bufferW: Int, bufferH: Int, rotationDegrees: Int): Pair<Int, Int> {
+    val quarter = ((rotationDegrees % 360) + 360) % 360
+    return if (quarter == 90 || quarter == 270) bufferH to bufferW else bufferW to bufferH
+}
+
+/**
+ * Face box center → screen-space offset in -1..1, or null for a degenerate frame.
+ *
+ * [mirrored] flips X for a front lens, whose preview the user reads as a mirror:
+ * moving to their own right must move the avatar's gaze to the right of the
+ * screen, and the un-mirrored sensor reports the opposite.
+ *
+ * This is pure so the axis convention is pinned by tests rather than by
+ * rediscovering it on a device — the horizontal axis silently inverted or
+ * swapped with vertical three times before it was extracted.
+ */
+internal fun faceOffsetInScreenSpace(
+    boxCenterX: Float,
+    boxCenterY: Float,
+    frameW: Int,
+    frameH: Int,
+    mirrored: Boolean,
+): Pair<Float, Float>? {
+    if (frameW <= 0 || frameH <= 0) return null
+    val nx = (boxCenterX / frameW * 2f - 1f).coerceIn(-1f, 1f)
+    val ny = (boxCenterY / frameH * 2f - 1f).coerceIn(-1f, 1f)
+    return (if (mirrored) -nx else nx) to ny
+}
 
 /**
  * CameraX frame capture and face tracking for the vision path (Phase 7a).
@@ -173,9 +216,50 @@ class VisionManager(
         }
         unbind()
         bindPreviewAsync()
-        registerDisplayListener()
+        // Only while tracking. This used to run unconditionally, so the OFF
+        // branch above unregistered the display listener and then this line
+        // immediately registered a NEW one: turning face tracking off leaked a
+        // listener every time, and each surviving listener kept calling
+        // bindPreviewAsync() on every fold and rotation — phantom camera
+        // rebinds for a feature the user had switched off.
+        if (_faceTrackingEnabled) registerDisplayListener()
         return _faceTrackingEnabled
     }
+
+    /**
+     * Point [ImageAnalysis] at the display's current rotation.
+     *
+     * This is the fix for "the head only follows me vertically". CameraX freezes
+     * `targetRotation` at the value the display had when the use case was built,
+     * and every frame's `rotationDegrees` is measured against it. MainActivity
+     * declares `configChanges="orientation|screenLayout|..."` so the Activity is
+     * never recreated and CameraX is never rebound — meaning after a rotation
+     * (or a fold, where the cover and inner displays have different natural
+     * orientations) the boxes arrive in a space 90° off the screen. The user's
+     * horizontal movement then drives the avatar's vertical axis.
+     *
+     * setTargetRotation is explicitly safe to call on a bound use case, so this
+     * is a per-frame no-op once the values agree.
+     */
+    private fun syncAnalysisRotation() {
+        val analysis = imageAnalysis ?: return
+        val rotation = currentDisplayRotation() ?: return
+        if (analysis.targetRotation != rotation) {
+            analysis.targetRotation = rotation
+            android.util.Log.i("VM", "analysis targetRotation -> $rotation")
+        }
+    }
+
+    /** Surface.ROTATION_* of the display actually showing the app, or null. */
+    private fun currentDisplayRotation(): Int? = runCatching {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            context.display?.rotation
+        } else {
+            @Suppress("DEPRECATION")
+            (context.getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager)
+                .defaultDisplay?.rotation
+        }
+    }.getOrNull()
 
     /** Rebind when the fold changes so the user-facing lens follows the display. */
     private fun registerDisplayListener() {
@@ -186,6 +270,10 @@ class VisionManager(
             override fun onDisplayAdded(displayId: Int) = Unit
             override fun onDisplayRemoved(displayId: Int) = Unit
             override fun onDisplayChanged(displayId: Int) {
+                // Fires on rotation too, not just fold — take the cheap
+                // rotation resync here so the first frame after a turn is
+                // already in the right space.
+                syncAnalysisRotation()
                 val cover = isCoverDisplayActive()
                 if (cover != lastCoverState) {
                     lastCoverState = cover
@@ -227,23 +315,27 @@ class VisionManager(
             proxy.close()
             return
         }
+        // Match the analysis rotation to the display BEFORE detecting, and do it
+        // whether or not a face is in frame — otherwise the correction only
+        // lands once someone is already being tracked, and the first frames of
+        // every new face arrive in the stale space.
+        syncAnalysisRotation()
         val input = InputImage.fromMediaImage(mediaImage, proxy.imageInfo.rotationDegrees)
         detector.process(input)
             .addOnSuccessListener { faces ->
                 val face = faces.maxByOrNull { it.boundingBox.width() * it.boundingBox.height() }
                 val now = System.currentTimeMillis()
                 if (face != null) {
-                    val is90 = (proxy.imageInfo.rotationDegrees % 180) != 0
-                    val w = if (is90) proxy.height else proxy.width
-                    val h = if (is90) proxy.width else proxy.height
-                    if (w <= 0 || h <= 0) return@addOnSuccessListener
-                    val cx = face.boundingBox.exactCenterX() / w.toFloat()
-                    val cy = face.boundingBox.exactCenterY() / h.toFloat()
-                    var rawX = (cx * 2f - 1f).coerceIn(-1f, 1f)
-                    // Front camera is mirrored — flip X so +X is the user's right
-                    // on screen, matching how the avatar preview renders.
-                    if (_useFrontCamera) rawX = -rawX
-                    val rawY = (cy * 2f - 1f).coerceIn(-1f, 1f)
+                    val (w, h) = rotatedFrameSize(
+                        proxy.width, proxy.height, proxy.imageInfo.rotationDegrees,
+                    )
+                    val (rawX, rawY) = faceOffsetInScreenSpace(
+                        boxCenterX = face.boundingBox.exactCenterX(),
+                        boxCenterY = face.boundingBox.exactCenterY(),
+                        frameW = w,
+                        frameH = h,
+                        mirrored = _useFrontCamera,
+                    ) ?: return@addOnSuccessListener
                     // Medium EMA: follows clearly, still damps ML Kit box noise.
                     // (0.10 + center-bias was so strong following looked dead.)
                     val a = if (hasSmooth) 0.32f else 0.65f

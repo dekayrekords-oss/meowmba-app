@@ -111,10 +111,20 @@ object CurrentLocation {
             finish(null)
             return
         }
-        val timer = Executors.newSingleThreadScheduledExecutor()
+        // Daemon thread, and shut down as soon as the timeout task is queued.
+        // The default factory makes a NON-daemon thread and nothing ever shut
+        // this executor down, so every location request leaked a live thread
+        // for the life of the process — and non-daemon threads keep the runtime
+        // from exiting. shutdown() still runs the already-scheduled delayed
+        // task (ScheduledThreadPoolExecutor keeps them by default), it just
+        // stops the pool accepting new work and lets the thread die afterwards.
+        val timer = Executors.newSingleThreadScheduledExecutor { r ->
+            Thread(r, "meow-location-timeout").apply { isDaemon = true }
+        }
         timer.schedule({
             lm.removeUpdates(listener)
             finish(null)
         }, timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+        timer.shutdown()
     }
 }

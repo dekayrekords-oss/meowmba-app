@@ -365,6 +365,13 @@ class MainActivity : ComponentActivity() {
             Manifest.permission.WRITE_CALENDAR,
             // Auto-connect to a paired LOOI base requires reading bonded devices.
             Manifest.permission.BLUETOOTH_CONNECT,
+            // FINDING a base requires BLUETOOTH_SCAN as well, and declaring it
+            // in the manifest is not the same as holding it: it is a runtime
+            // permission on Android 12+. Without the grant every startScan
+            // throws SecurityException, so "Find base (scan)" silently listed
+            // only already-bonded devices — which never includes an unpaired
+            // LOOI, making the base look undiscoverable.
+            Manifest.permission.BLUETOOTH_SCAN,
         ).filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
