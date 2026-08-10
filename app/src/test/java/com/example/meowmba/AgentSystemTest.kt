@@ -180,8 +180,14 @@ class AgentRouterTest {
         val laugh = AgentRouter.route("laugh")!!
         assertEquals("avatar.describe_animation", laugh.toolId)
 
+        // "spin" moved from the face to the BODY on user request ("it should
+        // spin in a circle if I tell it to"). A face cannot spin; the LOOI base
+        // can, and that is what a person asking for it means. The expressive
+        // motions the face CAN do — nod, shake head, wiggle — stay with the
+        // avatar, which drives the servos anyway via FaceMotorMap.
         val spin = AgentRouter.route("spin")!!
-        assertEquals("avatar.describe_animation", spin.toolId)
+        assertEquals("robot.move", spin.toolId)
+        assertEquals("spin", spin.args["action"])
     }
 }
 

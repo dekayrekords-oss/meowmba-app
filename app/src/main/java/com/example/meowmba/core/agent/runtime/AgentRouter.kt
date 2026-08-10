@@ -237,6 +237,16 @@ object AgentRouter {
         }
 
         // Phone control. "open the file X" is matched earlier, so a bare
+        // Alarms and timers. Deterministic and checked BEFORE the app-launch
+        // prefix: "set an alarm" is a thing to DO, not an app to hunt for, and
+        // the system already knows where alarms live — ACTION_SET_ALARM is
+        // handled by the Clock app, so the companion never needs to open Clock
+        // and drive its UI. This used to exist only inside WakeWordService, so
+        // it worked when spoken to the background service and silently fell
+        // through to the language model everywhere else.
+        parseAlarm(raw)?.let { return it }
+        parseTimer(raw)?.let { return it }
+
         // "open X" reaching here means an app, not a workspace file.
         if (normalized in setOf("what apps do i have", "list my apps", "show my apps",
                 "list apps", "show apps", "what apps are installed")) {
@@ -475,10 +485,21 @@ object AgentRouter {
             return AgentIntent("main", "avatar.describe_animation",
                 mapOf("description" to normalized), normalized)
         }
-        if (normalized in setOf("spin", "do a spin", "spin around")) {
-            return AgentIntent("main", "avatar.describe_animation",
-                mapOf("description" to normalized), normalized)
-        }
+        // "spin" deliberately does NOT live here any more. It used to generate a
+        // face animation, but a face cannot spin — the base can, and that is
+        // what a person means by it. It falls through to the robot rule below.
+        // The robot body — checked AFTER every face rule above.
+        //
+        // The face wins any phrase it owns ("wiggle your ears", "shake your
+        // head"), and that is not a compromise: FaceMotorMap already drives the
+        // servos from the played clip, so a face performance moves the physical
+        // head too. What reaches here is everything the face cannot do —
+        // driving, spinning in place, the headlight — where the hardware is the
+        // only possible meaning. Deterministic, because a physical action
+        // should not wait on a model call, and "turn off the lights" would
+        // otherwise be a coin flip between the headlight and a smart-home tool.
+        parseRobotMotion(raw)?.let { return it }
+
         // "play the ear wiggle animation" — replay a saved or built-in clip by name.
         extractAfter(raw, listOf("play the ", "play "))?.let { rest ->
             val name = rest.removeSuffix(" animation").removeSuffix(" Animation").trim()
@@ -588,6 +609,170 @@ object AgentRouter {
             if (idx > 0) value = value.substring(0, idx)
         }
         return value.trim().trim(',', '.', '!', '?').trim().ifBlank { null }
+    }
+
+    /**
+     * Phrases that mean "move the body", spoken TO the companion.
+     *
+     * A motion phrase alone is not enough — "I need to turn left at the lights"
+     * is navigation, not a command. Requiring either an address to the
+     * companion, an imperative opening, or an unambiguous body word keeps
+     * conversation out of the motors.
+     */
+    private val BODY_CUES = listOf(
+        "spin", "wiggle", "nod", "shake your head", "headlight", "head light",
+        "look up", "look down", "look ahead", "drive", "roll",
+    )
+
+    /** "spin around", "turn off the headlights", "shake your head", "stop". */
+    private fun parseRobotMotion(raw: String): AgentIntent? {
+        val t = raw.lowercase().trim()
+        if (t.isBlank()) return null
+        val motion = com.example.meowmba.core.robot.RobotManager.Motion
+            .fromPhrase(t, includeFaceOwned = false)
+            ?: return null
+
+        // Guard against sentences that merely mention a direction. A bare
+        // "left"/"right"/"forward"/"back"/"stop" is only a command when it is
+        // essentially the whole utterance or clearly addressed to the robot.
+        val hasBodyCue = BODY_CUES.any { it in t } ||
+            t.startsWith("go ") || t.startsWith("turn ") || t.startsWith("move ") ||
+            t.startsWith("stop") || t.startsWith("come ")
+        val short = t.split(' ').size <= 4
+        if (!hasBodyCue && !short) return null
+        // Questions are questions: "can you spin around?" is a request, but
+        // "which way did it spin?" is not a command.
+        if (t.startsWith("what") || t.startsWith("which") || t.startsWith("why") ||
+            t.startsWith("when") || t.startsWith("where") || t.startsWith("did ")
+        ) return null
+
+        return AgentIntent(
+            "robot",
+            "robot.move",
+            mapOf("action" to motion.name.lowercase()),
+            "robot: ${motion.name.lowercase().replace('_', ' ')}",
+        )
+    }
+
+    /** A spoken wall-clock time, already converted to 24-hour. */
+    data class SpokenTime(val hour: Int, val minute: Int)
+
+    private val NUMBER_WORDS = mapOf(
+        "one" to 1, "two" to 2, "three" to 3, "four" to 4, "five" to 5, "six" to 6,
+        "seven" to 7, "eight" to 8, "nine" to 9, "ten" to 10, "eleven" to 11,
+        "twelve" to 12, "fifteen" to 15, "twenty" to 20, "thirty" to 30,
+        "forty" to 40, "forty five" to 45, "fortyfive" to 45, "fifty" to 50,
+    )
+
+    /**
+     * Parse a spoken wall-clock time: "7", "7am", "7:30", "seven thirty",
+     * "half past seven", "quarter to eight", "19:05", "noon", "midnight".
+     *
+     * Returns null when there is no time in the text at all, so the caller can
+     * fall through rather than inventing one — an alarm set for a guessed hour
+     * is worse than an honest "when?".
+     */
+    internal fun parseSpokenTime(text: String): SpokenTime? {
+        val t = text.lowercase()
+        if (Regex("\\bnoon|\\bmidday\\b").containsMatchIn(t)) return SpokenTime(12, 0)
+        if (t.contains("midnight")) return SpokenTime(0, 0)
+
+        // NOT \bpm\b: in "7pm" the digit and the letter are both word characters,
+        // so there is no word boundary between them and the meridiem was missed
+        // entirely — "7pm" set a 7am alarm. Guard on adjacent LETTERS instead, so
+        // "7pm" and "7 pm" both match while "spam" and "campus" do not.
+        val meridiemPm = Regex("(?<![a-z])(pm|p\\.m\\.?)(?![a-z])").containsMatchIn(t) ||
+            Regex("\\b(afternoon|evening|tonight)\\b").containsMatchIn(t)
+        val meridiemAm = Regex("(?<![a-z])(am|a\\.m\\.?)(?![a-z])").containsMatchIn(t) ||
+            Regex("\\bmorning\\b").containsMatchIn(t)
+
+        // "half past seven" / "quarter past 7" / "quarter to 8"
+        Regex("\\b(half|quarter)\\s+(past|to|till|before)\\s+(\\d{1,2}|[a-z]+)\\b")
+            .find(t)?.let { m ->
+                val base = m.groupValues[3].toIntOrNull() ?: NUMBER_WORDS[m.groupValues[3]]
+                if (base != null && base in 1..12) {
+                    val offset = if (m.groupValues[1] == "half") 30 else 15
+                    val toward = m.groupValues[2] != "past"
+                    var hour = if (toward) base - 1 else base
+                    val minute = if (toward) 60 - offset else offset
+                    if (hour <= 0) hour = 12
+                    return SpokenTime(to24(hour, meridiemPm, meridiemAm), minute)
+                }
+            }
+
+        // Digits: "7", "7:30", "7.30", "1905"
+        Regex("\\b(\\d{1,2})[:.](\\d{2})\\b").find(t)?.let { m ->
+            val h = m.groupValues[1].toInt()
+            val min = m.groupValues[2].toInt()
+            if (h in 0..23 && min in 0..59) {
+                return SpokenTime(if (h > 12) h else to24(h, meridiemPm, meridiemAm), min)
+            }
+        }
+        Regex("\\b(\\d{1,2})\\s*(am|pm|a\\.m\\.?|p\\.m\\.?)?\\b").find(t)?.let { m ->
+            val h = m.groupValues[1].toInt()
+            if (h in 0..23) {
+                return SpokenTime(if (h > 12) h else to24(h, meridiemPm, meridiemAm), 0)
+            }
+        }
+
+        // Words: "seven thirty", "seven"
+        val words = t.split(Regex("[^a-z]+")).filter { it.isNotBlank() }
+        words.forEachIndexed { i, w ->
+            val h = NUMBER_WORDS[w] ?: return@forEachIndexed
+            if (h !in 1..12) return@forEachIndexed
+            val min = words.getOrNull(i + 1)?.let { NUMBER_WORDS[it] }?.takeIf { it in 1..59 } ?: 0
+            return SpokenTime(to24(h, meridiemPm, meridiemAm), min)
+        }
+        return null
+    }
+
+    /**
+     * 12-hour to 24-hour. With no am/pm said aloud, a bare hour of 1–7 means the
+     * afternoon far more often than 1am–7am ("set an alarm for 6" is 6pm only if
+     * you say so; "wake me at 6" is 6am) — so the default stays AM, which is
+     * both the safer miss for an alarm and what the old parser did.
+     */
+    private fun to24(hour12: Int, pm: Boolean, am: Boolean): Int = when {
+        pm && hour12 != 12 -> hour12 + 12
+        am && hour12 == 12 -> 0
+        !pm && hour12 == 12 -> 0
+        else -> hour12
+    }
+
+    /** "set an alarm for 7am", "wake me up at 6:30", "alarm for quarter past 8". */
+    private fun parseAlarm(raw: String): AgentIntent? {
+        val t = raw.lowercase()
+        val asked = Regex("\\bset\\s+(an?\\s+)?alarm\\b").containsMatchIn(t) ||
+            Regex("\\bwake me( up)?\\b").containsMatchIn(t) ||
+            Regex("\\balarm for\\b").containsMatchIn(t)
+        if (!asked) return null
+        val time = parseSpokenTime(t) ?: return null
+        val label = extractAfter(raw, listOf(" labeled ", " called ", " labelled "))
+        return AgentIntent(
+            "phone",
+            "phone.set_alarm",
+            buildMap {
+                put("hour", time.hour.toString())
+                put("minutes", time.minute.toString())
+                label?.let { put("label", it) }
+            },
+            "set alarm for ${time.hour}:${time.minute.toString().padStart(2, '0')}",
+        )
+    }
+
+    /** "set a timer for 10 minutes", "timer for 90 seconds". */
+    private fun parseTimer(raw: String): AgentIntent? {
+        val t = raw.lowercase()
+        if (!Regex("\\b(set\\s+(a\\s+)?)?timer\\b").containsMatchIn(t)) return null
+        val hours = Regex("(\\d{1,3})\\s*(hour|hours|hr|hrs)").find(t)?.groupValues?.get(1)?.toIntOrNull()
+        val minutes = Regex("(\\d{1,4})\\s*(min|mins|minute|minutes)").find(t)?.groupValues?.get(1)?.toIntOrNull()
+        val seconds = Regex("(\\d{1,4})\\s*(sec|secs|second|seconds)").find(t)?.groupValues?.get(1)?.toIntOrNull()
+        val total = (hours ?: 0) * 3600 + (minutes ?: 0) * 60 + (seconds ?: 0)
+        if (total <= 0) return null
+        return AgentIntent(
+            "phone", "phone.set_timer", mapOf("seconds" to total.toString()),
+            "set timer for ${total}s",
+        )
     }
 
     /** Case-insensitive prefix match; returns the RAW remainder (punctuation intact). */

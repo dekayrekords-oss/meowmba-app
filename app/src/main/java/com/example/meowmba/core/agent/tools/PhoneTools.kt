@@ -54,14 +54,49 @@ internal object InstalledApps {
      * mangles names ("you tube", "insta gram"), so match on squashed text
      * rather than requiring an exact label.
      */
-    fun find(context: Context, query: String): Entry? {
-        val target = squash(query)
+    fun find(context: Context, query: String): Entry? = match(all(context), query)
+
+    /**
+     * Words a speaker puts around an app name that are never part of it.
+     *
+     * "open the clock" used to fail outright: squashing produced "theclock",
+     * which is not equal to, a prefix of, or a substring of "clock", so every
+     * rule missed and the user got 'No installed app matches "the clock"'.
+     */
+    private val FILLER = setOf(
+        "the", "a", "an", "my", "please", "app", "application", "up", "some",
+    )
+
+    /**
+     * Pure matcher over a supplied app list, so the rules are unit-testable
+     * without a PackageManager.
+     *
+     * Order matters and is least-surprising-first: an exact label wins over a
+     * prefix, a prefix over a substring, and only then do we accept the app
+     * label appearing *inside* the spoken phrase. That last rule is what makes
+     * "open the clock app for me" work, and it prefers the LONGEST matching
+     * label so "play music" cannot be won by an app called "Play".
+     */
+    fun match(apps: List<Entry>, query: String): Entry? {
+        val words = query.lowercase()
+            .map { if (it.isLetterOrDigit() || it.isWhitespace()) it else ' ' }
+            .joinToString("")
+            .split(' ')
+            .filter { it.isNotBlank() }
+        // Strip filler from both ends but never from the middle: "play store"
+        // must keep both words, while "the clock app" reduces to "clock".
+        val core = words.dropWhile { it in FILLER }.dropLastWhile { it in FILLER }
+        val target = core.joinToString("").ifEmpty { squash(query) }
         if (target.isEmpty()) return null
-        val apps = all(context)
-        return apps.firstOrNull { squash(it.label) == target }
-            ?: apps.firstOrNull { squash(it.label).startsWith(target) }
-            ?: apps.firstOrNull { squash(it.label).contains(target) }
-            ?: apps.firstOrNull { squash(it.packageName).contains(target) }
+
+        apps.firstOrNull { squash(it.label) == target }?.let { return it }
+        apps.firstOrNull { squash(it.label).startsWith(target) }?.let { return it }
+        apps.firstOrNull { squash(it.label).contains(target) }?.let { return it }
+        // The spoken phrase contains a label: "set my alarm in the clock" → Clock.
+        apps.filter { squash(it.label).length >= 3 && target.contains(squash(it.label)) }
+            .maxByOrNull { squash(it.label).length }
+            ?.let { return it }
+        return apps.firstOrNull { squash(it.packageName).contains(target) }
     }
 
     private fun squash(text: String): String =
