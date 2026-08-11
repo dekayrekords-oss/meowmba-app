@@ -96,7 +96,8 @@ class GeminiNanoProvider private constructor(
                     val model = GenerativeModel(generationConfig = genConfig)
                     model.prepareInferenceEngine()
                     GeminiNanoProvider(model)
-                } catch (_: Exception) {
+                } catch (e: Exception) {
+                    android.util.Log.w("NanoProbe", "create failed: ${e::class.java.simpleName}: ${e.message}")
                     null
                 }
             }
