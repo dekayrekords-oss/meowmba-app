@@ -84,6 +84,24 @@ internal fun rotatedFrameSize(bufferW: Int, bufferH: Int, rotationDegrees: Int):
  * left off is what made the head sweep across the screen when someone new
  * stepped into frame.
  */
+/**
+ * Device tilt in degrees (0..359, as OrientationEventListener reports it) to
+ * the matching `Surface.ROTATION_*` constant.
+ *
+ * The 45-degree bands are deliberate: a phone held at 44 degrees is still being
+ * used upright, and flipping the analyzer's rotation at every small tilt would
+ * make detection stutter in and out near the boundary.
+ */
+internal fun surfaceRotationOf(degrees: Int): Int {
+    val d = ((degrees % 360) + 360) % 360
+    return when {
+        d >= 315 || d < 45 -> android.view.Surface.ROTATION_0
+        d < 135 -> android.view.Surface.ROTATION_270
+        d < 225 -> android.view.Surface.ROTATION_180
+        else -> android.view.Surface.ROTATION_90
+    }
+}
+
 internal fun faceSmoothingAlpha(hasHistory: Boolean): Float = if (hasHistory) 0.32f else 0.65f
 
 /**
@@ -239,6 +257,7 @@ class VisionManager(
         }
         unbind()
         bindPreviewAsync()
+        if (_faceTrackingEnabled) startOrientationTracking() else stopOrientationTracking()
         // Only while tracking. This used to run unconditionally, so the OFF
         // branch above unregistered the display listener and then this line
         // immediately registered a NEW one: turning face tracking off leaked a
@@ -273,16 +292,55 @@ class VisionManager(
         }
     }
 
-    /** Surface.ROTATION_* of the display actually showing the app, or null. */
-    private fun currentDisplayRotation(): Int? = runCatching {
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-            context.display?.rotation
-        } else {
-            @Suppress("DEPRECATION")
-            (context.getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager)
-                .defaultDisplay?.rotation
-        }
-    }.getOrNull()
+    /**
+     * Rotation to hand the analyzer: the device's PHYSICAL orientation, falling
+     * back to the display's.
+     *
+     * Faces are upright with respect to GRAVITY, not with respect to the
+     * window manager. Driving this from `display.rotation` fails whenever the
+     * two disagree, and on this app they disagree often: Meowmba can be the
+     * home launcher, it declares `configChanges` for orientation, and it can be
+     * docked or rotation-locked. Measured with the display forced to landscape
+     * while the phone lay flat, same scene seconds apart — portrait applied
+     * rot=270 and found a face; landscape applied rot=0, handed ML Kit an
+     * unrotated frame, and found none. A sideways face is invisible to the FAST
+     * detector, so tracking simply stopped.
+     *
+     * [physicalRotation] is maintained by an OrientationEventListener, which is
+     * the orientation the camera actually experiences.
+     */
+    private fun currentDisplayRotation(): Int? =
+        physicalRotation ?: runCatching {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                context.display?.rotation
+            } else {
+                @Suppress("DEPRECATION")
+                (context.getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager)
+                    .defaultDisplay?.rotation
+            }
+        }.getOrNull()
+
+    /** Latest physical orientation as a Surface.ROTATION_* value, or null. */
+    @Volatile
+    private var physicalRotation: Int? = null
+
+    private var orientationListener: android.view.OrientationEventListener? = null
+
+    private fun startOrientationTracking() {
+        if (orientationListener != null) return
+        orientationListener = object : android.view.OrientationEventListener(context) {
+            override fun onOrientationChanged(degrees: Int) {
+                if (degrees == ORIENTATION_UNKNOWN) return
+                physicalRotation = surfaceRotationOf(degrees)
+            }
+        }.also { if (it.canDetectOrientation()) it.enable() }
+    }
+
+    private fun stopOrientationTracking() {
+        orientationListener?.disable()
+        orientationListener = null
+        physicalRotation = null
+    }
 
     /** Rebind when the fold changes so the user-facing lens follows the display. */
     private fun registerDisplayListener() {
@@ -346,6 +404,25 @@ class VisionManager(
         val input = InputImage.fromMediaImage(mediaImage, proxy.imageInfo.rotationDegrees)
         detector.process(input)
             .addOnSuccessListener { faces ->
+                // Orientation diagnostic. "Tracks only in portrait" has two very
+                // different causes that look identical from outside: the frame
+                // reaching ML Kit rotated wrongly (so an upright face arrives
+                // sideways and the FAST detector cannot see it), or simply
+                // nobody being in shot. Logging the rotation actually applied,
+                // the frame it produced, and the face count separates them in
+                // one test. Rate-limited to one line every two seconds.
+                if (System.currentTimeMillis() - lastLogMs >= 2000L) {
+                    val (dw, dh) = rotatedFrameSize(
+                        proxy.width, proxy.height, proxy.imageInfo.rotationDegrees,
+                    )
+                    android.util.Log.i(
+                        "VMrot",
+                        "rot=${proxy.imageInfo.rotationDegrees} " +
+                            "target=${imageAnalysis?.targetRotation} " +
+                            "buf=${proxy.width}x${proxy.height} upright=${dw}x$dh " +
+                            "front=$_useFrontCamera faces=${faces.size}",
+                    )
+                }
                 val face = faces.maxByOrNull { it.boundingBox.width() * it.boundingBox.height() }
                 val now = System.currentTimeMillis()
                 if (face != null) {
