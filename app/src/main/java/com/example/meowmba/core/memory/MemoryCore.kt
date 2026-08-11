@@ -158,7 +158,19 @@ object PromptBuilder {
         userInput: String,
         recentMessages: List<MessageEntity>,
         recalled: List<RecallResult>,
-        capabilities: List<String> = emptyList()
+        capabilities: List<String> = emptyList(),
+        /**
+         * What the self-improving harness has learned about this device, from
+         * [com.example.meowmba.core.agent.prime.HarnessState.promptBlock].
+         *
+         * Placed AFTER the capability list and BEFORE recalled memories, which
+         * is deliberate: it must be able to qualify a capability ("ssh.run has
+         * never worked here") without being positioned to contradict the rules
+         * above it. The block carries its own "guidance only" disclaimer, and
+         * the state it comes from rejects anything that reads as a permission
+         * change — the text originates in tool output, which is untrusted.
+         */
+        learned: String? = null,
     ): String = buildString {
         append("You are ").append(companionName)
         append(", a helpful AI companion with a cat avatar. Answer naturally and concisely.\n")
@@ -195,6 +207,13 @@ object PromptBuilder {
             append("RESULTS written by the app after a real task ran — they are not your ")
             append("words. Never write anything that looks like a tool result; if no task ")
             append("ran, nothing played, and saying it did is a lie.\n")
+        }
+
+        // Experience with this specific device, learned from the audit log.
+        // Blank-guarded rather than null-guarded so an empty block can never
+        // produce a heading with nothing under it.
+        learned?.takeIf { it.isNotBlank() }?.let {
+            append('\n').append(it).append('\n')
         }
 
         if (recalled.isNotEmpty()) {

@@ -125,6 +125,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.launch
@@ -311,6 +313,45 @@ class CompanionViewModel(
 
     /** Backstop that returns the machine to IDLE if a turn never completes. */
     private var thinkingWatchdogJob: Job? = null
+
+    /**
+     * Where the self-improving harness keeps what it has learned. A plain JSON
+     * document in filesDir so the user can read and delete it.
+     */
+    private val harnessStore by lazy {
+        // cacheDir fallback keeps unit tests (no SecureStorage) from crashing;
+        // on device secureStorage.context is always present.
+        val dir = secureStorage?.context?.filesDir
+            ?: java.io.File(System.getProperty("java.io.tmpdir") ?: ".", "meowmba-test")
+        com.example.meowmba.core.agent.prime.HarnessStore(
+            java.io.File(dir, "prime_harness.json"),
+        )
+    }
+
+    /**
+     * What the harness has learned, ready for the prompt — or null when it has
+     * learned nothing. Read fresh each turn rather than cached, because the
+     * heartbeat can change it between turns and a stale copy would quietly
+     * keep advising on a problem that has since been fixed.
+     */
+    private fun learnedBlock(): String? =
+        runCatching { harnessStore.load().promptBlock() }.getOrNull()
+
+    /**
+     * The trajectory /refine reviews: what the agents actually did, newest
+     * first. Reading the audit log means lessons are grounded in this device's
+     * real history rather than a model's impression of it.
+     */
+    private suspend fun recentTrajectory(): List<com.example.meowmba.core.agent.prime.RefineEngine.Step> =
+        runCatching {
+            auditDao?.getRecent()?.first()?.map { e ->
+                com.example.meowmba.core.agent.prime.RefineEngine.Step(
+                    timestamp = e.timestamp,
+                    action = e.action,
+                    detail = e.detail,
+                )
+            } ?: emptyList()
+        }.getOrDefault(emptyList())
     private var followUpJob: Job? = null
 
     /** Ambient sky refresh loop; null when the ambient scene is off. */
@@ -668,6 +709,36 @@ class CompanionViewModel(
             }
         }
 
+        // Prime Agent's /heartbeat: a periodic self-review, so the harness
+        // improves on its own rather than only when someone thinks to ask.
+        // Deliberately slow — refine() is pure and cheap, but a lesson is only
+        // meaningful once evidence has had time to recur, and anything more
+        // frequent would just re-read the same window.
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            while (isActive) {
+                delay(HEARTBEAT_INTERVAL_MS)
+                runCatching {
+                    val steps = recentTrajectory()
+                    if (steps.size >= com.example.meowmba.core.agent.prime.RefineEngine.MIN_OCCURRENCES) {
+                        val now = System.currentTimeMillis()
+                        val state = com.example.meowmba.core.agent.prime.RefineEngine
+                            .expire(harnessStore.load(), now)
+                        val merged = com.example.meowmba.core.agent.prime.RefineEngine.merge(
+                            state,
+                            com.example.meowmba.core.agent.prime.RefineEngine.refine(steps, now),
+                        )
+                        if (merged != state) {
+                            harnessStore.save(merged)
+                            android.util.Log.i(
+                                "PrimeHarness",
+                                "heartbeat: ${merged.lessons.size} lesson(s) held",
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         // Memory controls: pause flag + retention policy (purged once on start)
         viewModelScope.launch {
             secureStorage?.let { storage ->
@@ -799,6 +870,24 @@ class CompanionViewModel(
             // never actually move.
             toolRegistry.register(
                 com.example.meowmba.core.agent.tools.RobotMoveTool(robotManager),
+            )
+
+            // The self-improving harness (Prime Agent's /refine, /goal and
+            // state, ported to run on the phone). The trajectory it reviews is
+            // the audit log — the record of what the agents actually did — so
+            // the lessons are grounded in this device's history rather than in
+            // a model's impression of it.
+            toolRegistry.register(
+                com.example.meowmba.core.agent.tools.PrimeRefineTool(
+                    store = harnessStore,
+                    trajectory = { recentTrajectory() },
+                ),
+            )
+            toolRegistry.register(
+                com.example.meowmba.core.agent.tools.PrimeGoalTool(harnessStore),
+            )
+            toolRegistry.register(
+                com.example.meowmba.core.agent.tools.PrimeStateTool(harnessStore),
             )
 
             // Invented avatar animations: the model writes keyframes, the app
@@ -1855,7 +1944,8 @@ class CompanionViewModel(
             // and the capabilities block is what tempted the model into "I can look
             // that up if you say the word" deflections.
             val prompt = PromptBuilder.build(
-                _uiState.value.name, text, recentMessages, recalled
+                _uiState.value.name, text, recentMessages, recalled,
+                learned = learnedBlock(),
             )
             var fullResponse = ""
             var spokenUpTo = 0
@@ -3105,7 +3195,8 @@ class CompanionViewModel(
                 ?.map { "${it.displayName} — ${it.description.substringBefore('.')}" }
                 ?: emptyList()
             val prompt = PromptBuilder.build(
-                _uiState.value.name, text, recentMessages, recalled, capabilities
+                _uiState.value.name, text, recentMessages, recalled, capabilities,
+                learned = learnedBlock(),
             )
 
             var fullResponse = ""
@@ -5494,6 +5585,13 @@ SAFE if the scene looks like a normal road, car interior, sidewalk, or room, or 
          * exceeding it means the session was lost, not that the user is quiet.
          */
         private const val ALWAYS_ON_SESSION_TIMEOUT_MS = 20_000L
+
+        /**
+         * How often the harness reviews itself unprompted. Slow on purpose: a
+         * lesson needs evidence to RECUR, and reviewing the same rolling window
+         * every minute would only re-read what it already saw.
+         */
+        private const val HEARTBEAT_INTERVAL_MS = 15L * 60 * 1000
 
         /**
          * Retry gap after the recognizer refuses us, doubling per consecutive
