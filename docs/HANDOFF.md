@@ -425,9 +425,9 @@ Verified on device: settings opens with the robot section showing "Connect over 
 
 <!-- AUTOBUILD:START -->
 (regenerated after each commit)
-- 2026-08-10 22:43:17 : perf(avatar): stop TTS word boundaries recomposing the whole face
-- db5b2ba 2026-08-10 22:33 chore: ignore local .bak backups
-- b99e3e5 2026-08-10 22:30 fix(models): don't let a Gemini Nano probe crash the model picker
-- 5606657 2026-08-10 22:30 perf(avatar): invalidate draw, not composition, on every animation frame
-- f8bbc61 2026-08-10 13:11 fix(voice): the mic, always-on listening and the wake word all come back
+- 2026-08-11 16:04:52 : fix(voice): settle handovers, escalate never-ready sessions to a failover
+- bffe665 2026-08-11 14:51 feat(anim): 8 expressions that spend the engine's unused channels, + rot guards
+- d629f7b 2026-08-11 14:38 fix(voice): stop suppressing ERROR_CLIENT, it was the only signal we had
+- 536bfc1 2026-08-11 14:35 diag(voice): log every recognizer callback arrival before the gate decides
+- bb762aa 2026-08-11 14:13 fix(voice): capture-window extras were Long, so every session ended instantly
 <!-- AUTOBUILD:END -->
