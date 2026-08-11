@@ -68,9 +68,11 @@ class GeminiNanoProvider private constructor(
         /** True when this device can run Gemini Nano via AICore. */
         fun isAvailable(context: Context): Boolean {
             if (Build.VERSION.SDK_INT < 31) return false
+            val pm = context.packageManager
+            if (pm == null) return false
             return AICORE_PACKAGES.any { pkg ->
                 try {
-                    context.packageManager.getPackageInfo(pkg, 0)
+                    pm.getPackageInfo(pkg, 0)
                     true
                 } catch (_: Exception) {
                     false

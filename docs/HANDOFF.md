@@ -425,9 +425,9 @@ Verified on device: settings opens with the robot section showing "Connect over 
 
 <!-- AUTOBUILD:START -->
 (regenerated after each commit)
-- 2026-08-06 16:15:51 : fix: idle micro-motions no longer close panels; drawer/taps blocked under Settings
-- 772c688 2026-08-06 15:18 fix: LOOI Initialize now connects when no link exists; scan hides nameless MAC noise
-- 7c0516d 2026-08-06 14:53 fix: error 11 (TOO_MANY_REQUESTS) — pace recognizer sessions, silent backoff in Voice Access
-- bf3d894 2026-08-06 14:08 feat: implement 5-module on-device expansion
-- 9a165b1 2026-08-06 12:28 fix: error 11 backoff + screen-contextual command routing + improved screen reading
+- 2026-08-10 13:29:27 : fix(voice): the mic, always-on listening and the wake word all come back
+- afe941d 2026-08-10 13:11 fix(stability): stop silent data loss, process crashes and leaks
+- 0408440 2026-08-10 13:11 fix(avatar): give the face weight, and stop the stutter and dead frames
+- c17f7aa 2026-08-10 13:10 fix(routing): use context for app names, alarms and body commands
+- 5bce2aa 2026-08-10 13:10 feat(robot): voice-controlled body, and stop offering a speaker as the base
 <!-- AUTOBUILD:END -->

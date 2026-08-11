@@ -114,6 +114,12 @@ val modelProviders = listOf(
  */
 fun availableModelProviders(context: android.content.Context?): List<String> =
     modelProviders.filter { label ->
-        label != MODEL_GEMINI_NANO ||
-            (context != null && com.example.meowmba.core.agent.GeminiNanoProvider.isAvailable(context))
+        if (label != MODEL_GEMINI_NANO) return@filter true
+        context?.let { ctx ->
+            try {
+                com.example.meowmba.core.agent.GeminiNanoProvider.isAvailable(ctx)
+            } catch (_: Throwable) {
+                false
+            }
+        } ?: false
     }
