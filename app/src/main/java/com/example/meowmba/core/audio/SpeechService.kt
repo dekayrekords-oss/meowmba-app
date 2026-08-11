@@ -69,9 +69,25 @@ class SpeechService(private val context: Context) : SpeechEngine {
 
     private inner class SessionEngine : SpeechEngine {
 
-        private val component: ComponentName? = recognitionService(context)
+        private var component: ComponentName? = recognitionService(context)
+        private var candidateIndex = 0
 
         private var recognizer: SpeechRecognizer? = null
+
+        /**
+         * Consecutive starts that never reported onReadyForSpeech. A never-ready
+         * connection is a wedged one (see [onNeverReady]); this counter drives the
+         * rebuild-then-failover escalation instead of retrying on the same wedged
+         * connection forever (which is what held every voice mode dead for the
+         * life of the process).
+         */
+        private var consecutiveNeverReady = 0
+
+        /** When this engine last stopped/cancelled its recognizer (settle math). */
+        private var lastInterruptAtMs = 0L
+
+        /** Monotonic per-start token; invalidates superseded delayed starts. */
+        private var startEpoch = 0L
 
         /**
          * Decides which callbacks belong to the live session.
@@ -102,6 +118,8 @@ class SpeechService(private val context: Context) : SpeechEngine {
          */
         fun yieldSession() {
             runCatching { recognizer?.cancel() }
+            startEpoch++
+            lastInterruptAtMs = System.currentTimeMillis()
             // Silence this engine BEFORE the cancel artifact can arrive: the
             // gate is what makes "the loser gets no onError" true now that the
             // recognizer is no longer destroyed out from under its callbacks.
@@ -152,6 +170,8 @@ class SpeechService(private val context: Context) : SpeechEngine {
                     }
                     _isListening.value = true
                     Log.i(TAG, "session ready ($componentName)")
+                    // A session that went live proves the connection is healthy.
+                    consecutiveNeverReady = 0
                 }
                 override fun onBeginningOfSpeech() {
                     Log.i(TAG, "<- onBeginningOfSpeech")
@@ -196,6 +216,7 @@ class SpeechService(private val context: Context) : SpeechEngine {
                     Log.i(TAG, "<- onResults")
                     if (!gate.acceptResults()) return
                     releaseSessionSlot()
+                    consecutiveNeverReady = 0
                     val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     Log.i(TAG, "session result: ${matches?.firstOrNull()?.take(60) ?: "(empty)"}")
                     if (!matches.isNullOrEmpty()) {
@@ -237,6 +258,39 @@ class SpeechService(private val context: Context) : SpeechEngine {
             // sees a clean handover instead of two live binds.
             (activeSession.getAndSet(this) as? SessionEngine)
                 ?.takeIf { it !== this }?.yieldSession()
+
+            this.onResult = onResult
+            this.onError = onError
+            _isListening.value = false
+            _partialResults.value = ""
+
+            // The actual start may be delayed so the recognizer can finish
+            // tearing down the session we are taking over: stop/cancel followed
+            // by an immediate startListening lands ERROR_CLIENT (5) on AiAi and
+            // the new session's ready is "dropped by gate" — which is exactly
+            // what made the mic button look dead while always-on or the wake
+            // standby held the mic. Waiting out the settle window keeps the
+            // handover clean. A start that supersedes this one (startEpoch bump
+            // from a newer request, stop, yield or destroy) invalidates the
+            // delayed open via the epoch token.
+            val epoch = ++startEpoch
+            val settle = lastInterruptAtMs + HANDOFF_SETTLE_MS - System.currentTimeMillis()
+            if (settle > 0) {
+                Log.i(TAG, "handoff: delaying start ${settle}ms for the service to settle")
+            }
+            mainHandler.postDelayed({ doStartListening(epoch) }, maxOf(0L, settle))
+        }
+
+        /** Opens the session; runs immediately or after the handoff settle delay. */
+        private fun doStartListening(epoch: Long) {
+            if (startEpoch != epoch) {
+                Log.i(TAG, "start superseded during settle delay — not starting")
+                return
+            }
+            if (activeSession.get() !== this) {
+                Log.i(TAG, "start superseded by another engine during settle delay")
+                return
+            }
             gate.onStart(System.currentTimeMillis())
             // Remember whether this connection has ever been used: a recognizer
             // built just now must NOT be cancelled (see below).
@@ -244,13 +298,9 @@ class SpeechService(private val context: Context) : SpeechEngine {
             val r = recognizer ?: buildRecognizer()?.also { recognizer = it }
             if (r == null) {
                 gate.onDestroy()
-                onError(SpeechRecognizer.ERROR_CLIENT)
+                onError?.invoke(SpeechRecognizer.ERROR_CLIENT)
                 return
             }
-            this.onResult = onResult
-            this.onError = onError
-            _isListening.value = false
-            _partialResults.value = ""
             // Settle any in-flight session on the SAME connection. Reopening a
             // fresh connection per session is what stacks sessions on AiAi's
             // tiny per-app capacity — measured as "capacity is full" after just
@@ -267,6 +317,7 @@ class SpeechService(private val context: Context) : SpeechEngine {
             // whole bug — mic and wake word appeared dead with a bound
             // recognizer and not one callback ever arriving.
             if (reused) runCatching { r.cancel() }
+            lastInterruptAtMs = 0L
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
@@ -308,15 +359,64 @@ class SpeechService(private val context: Context) : SpeechEngine {
             // never reports ready would otherwise wait forever. One delayed
             // check turns that silence into a normal error the engine retries
             // on. readyTimedOut() self-cancels once the session goes live, so a
-            // late-firing check on a healthy session is a no-op.
+            // late-firing check on a healthy session is a no-op. A never-ready
+            // connection is a wedged one, so onNeverReady() escalates (rebind,
+            // then fail over to the next recognizer) instead of retrying the
+            // same broken connection forever.
             mainHandler.postDelayed({
                 if (gate.readyTimedOut(System.currentTimeMillis())) {
                     Log.w(TAG, "session never became ready ($componentName)")
                     _isListening.value = false
                     releaseSessionSlot()
-                    this.onError?.invoke(SpeechRecognizer.ERROR_NETWORK_TIMEOUT)
+                    onNeverReady()
                 }
             }, READY_TIMEOUT_MS)
+        }
+
+        /**
+         * A start that never reported ready is the signature of a wedged
+         * connection — the recognizer accepts the request and then goes silent,
+         * leaving every voice mode dead at once for the life of the process.
+         * Retrying on the same connection just re-wedges it, so escalate:
+         * first rebind a fresh recognizer, and if that still does not help,
+         * fail over to the next recognition service. The caller on the other
+         * side of [onError] still decides what repeated failure means (its
+         * backoff / fatal-stop logic).
+         */
+        private fun onNeverReady() {
+            consecutiveNeverReady++
+            if (consecutiveNeverReady >= NEVER_READY_REBIND_THRESHOLD) {
+                Log.w(TAG, "never-ready x$consecutiveNeverReady — rebinding a fresh recognizer")
+                rebindRecognizer()
+            }
+            if (consecutiveNeverReady >= NEVER_READY_FAILOVER_THRESHOLD) {
+                if (advanceCandidate()) {
+                    Log.i(TAG, "never-ready x$consecutiveNeverReady — failed over to $component")
+                    consecutiveNeverReady = 0
+                } else {
+                    Log.e(TAG, "every recognition service failed to become ready ($componentName)")
+                }
+            }
+            onError?.invoke(SpeechRecognizer.ERROR_NETWORK_TIMEOUT)
+        }
+
+        /** Destroys the current recognizer so the next start binds a fresh connection. */
+        private fun rebindRecognizer() {
+            if (recognizer != null) {
+                runCatching { recognizer?.destroy() }
+                liveRecognizers.decrementAndGet()
+                recognizer = null
+            }
+        }
+
+        /** Moves to the next recognition service; returns false when none are left. */
+        private fun advanceCandidate(): Boolean {
+            val candidates = recognitionCandidates(context)
+            if (candidateIndex + 1 >= candidates.size) return false
+            candidateIndex++
+            component = candidates[candidateIndex]
+            rebindRecognizer()
+            return true
         }
 
         override fun swapCallbacks(onResult: (String) -> Unit, onError: (Int) -> Unit) {
@@ -330,6 +430,8 @@ class SpeechService(private val context: Context) : SpeechEngine {
             // here would force a fresh connection (and a fresh slot) on the next
             // start, which is what overloads AiAi when sessions churn.
             recognizer?.stopListening()
+            startEpoch++
+            lastInterruptAtMs = System.currentTimeMillis()
             _isListening.value = false
             releaseSessionSlot()
         }
@@ -337,6 +439,8 @@ class SpeechService(private val context: Context) : SpeechEngine {
         override fun destroy() {
             gate.onDestroy()
             mainHandler.removeCallbacksAndMessages(null)
+            startEpoch++
+            lastInterruptAtMs = System.currentTimeMillis()
             recognizer?.destroy()
             if (recognizer != null) liveRecognizers.decrementAndGet()
             recognizer = null
@@ -404,6 +508,31 @@ class SpeechService(private val context: Context) : SpeechEngine {
         private const val GOOGLE_RECOGNITION_PACKAGE = "com.google.android.googlequicksearchbox"
 
         /**
+         * How long to wait after a stop/cancel/yield before reopening a session.
+         * AiAi serves ONE session for the whole app; a start that lands while the
+         * previous session is still tearing down is refused with ERROR_CLIENT (5),
+         * and the new session's onReadyForSpeech is dropped by the gate. Measured
+         * on device: the mic button looked dead whenever always-on or the wake
+         * standby held the mic, purely because its start raced the teardown.
+         */
+        private const val HANDOFF_SETTLE_MS = 500L
+
+        /**
+         * Never-ready starts before we rebuild a fresh recognizer connection.
+         * A connection that accepted startListening and then went silent is
+         * wedged; retrying on it re-wedges. Rebind first (cheap), fail over
+         * after [NEVER_READY_FAILOVER_THRESHOLD].
+         */
+        private const val NEVER_READY_REBIND_THRESHOLD = 2
+
+        /**
+         * Never-ready starts before failing over to the next recognition
+         * service. Two rebuilds of a dead connection is enough; the wedged
+         * engine is clearly not going to recover, so move on.
+         */
+        private const val NEVER_READY_FAILOVER_THRESHOLD = 4
+
+        /**
          * Packages whose RecognitionService must never be bound.
          *
          * `com.google.android.tts` is a text-to-SPEECH package that also publishes a
@@ -425,16 +554,18 @@ class SpeechService(private val context: Context) : SpeechEngine {
         private val DENYLISTED_PACKAGES = setOf("com.google.android.tts")
 
         /**
-         * Recognition services to try, best first. Returns more than one so a
-         * device whose preferred service turns out to be deaf can fail over
-         * (see [SessionEngine] suspect detection) instead of looping forever.
+         * Recognition services to try, best first, ending in a possible
+         * platform-default slot (`null`). Used once to pick the initial service
+         * and again by [SessionEngine.onNeverReady] to fail over, so a device
+         * whose preferred service turns out to be deaf can move to the next one
+         * instead of looping forever on a wedged connection.
          *
-         * Order: Android System Intelligence, then the Google app, then whatever the
-         * system is configured to use, then anything else. The system setting is
-         * demoted rather than trusted first — it is exactly what pointed at the TTS
-         * service here.
+         * Order: Android System Intelligence, then the Google app, then whatever
+         * the system is configured to use, then anything else. The system
+         * setting is demoted rather than trusted first — it is exactly what
+         * pointed at the TTS service here.
          */
-        fun recognitionService(context: Context): ComponentName? {
+        fun recognitionCandidates(context: Context): List<ComponentName?> {
             val installed = runCatching {
                 context.packageManager.queryIntentServices(
                     Intent(RecognitionService.SERVICE_INTERFACE), 0
@@ -443,10 +574,13 @@ class SpeechService(private val context: Context) : SpeechEngine {
                 .map { ComponentName(it.serviceInfo.packageName, it.serviceInfo.name) }
                 .filter { it.packageName !in DENYLISTED_PACKAGES }
 
+            val candidates = ArrayList<ComponentName?>()
+
             // Prefer a general-purpose ASR provider.
-            installed.firstOrNull { it.packageName == AIAI_PACKAGE }?.let { return it }
+            installed.firstOrNull { it.packageName == AIAI_PACKAGE }?.let { candidates += it }
             installed.firstOrNull { it.packageName == GOOGLE_RECOGNITION_PACKAGE }
-                ?.let { return it }
+                ?.takeIf { it !in candidates }
+                ?.let { candidates += it }
 
             // Then the system's own choice, if it is not the denylisted TTS one.
             runCatching {
@@ -455,14 +589,21 @@ class SpeechService(private val context: Context) : SpeechEngine {
                 ?.takeIf { it.isNotBlank() }
                 ?.let { ComponentName.unflattenFromString(it) }
                 ?.takeIf { it.packageName !in DENYLISTED_PACKAGES }
-                ?.let { return it }
+                ?.takeIf { it !in candidates }
+                ?.let { candidates += it }
 
-            // Deliberately NOT falling through to arbitrary third-party assist services.
-            // Devices here expose Home Assistant's and Claude's RecognitionServices;
-            // both are assistant integrations, not general dictation back-ends, and both
-            // error immediately (5/9) when driven as one. Returning null lets the
-            // platform pick instead of us binding something known-wrong.
-            return null
+            // Deliberately NOT falling through to arbitrary third-party assist
+            // services. Devices here expose Home Assistant's and Claude's
+            // RecognitionServices; both are assistant integrations, not general
+            // dictation back-ends, and both error immediately (5/9) when driven
+            // as one. The trailing null lets the platform pick instead of us
+            // binding something known-wrong.
+            candidates += null
+            return candidates
         }
+
+        /** The initial, best-first choice of recognition service. */
+        fun recognitionService(context: Context): ComponentName? =
+            recognitionCandidates(context).firstOrNull()
     }
 }

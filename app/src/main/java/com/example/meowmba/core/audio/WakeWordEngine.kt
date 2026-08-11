@@ -247,7 +247,14 @@ class RecognizerWakeWordEngine(
         internal fun isContention(code: Int): Boolean = when (code) {
             android.speech.SpeechRecognizer.ERROR_RECOGNIZER_BUSY,
             android.speech.SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS,
-            android.speech.SpeechRecognizer.ERROR_SERVER_DISCONNECTED -> true
+            android.speech.SpeechRecognizer.ERROR_SERVER_DISCONNECTED,
+            // ERROR_NETWORK_TIMEOUT is how SpeechService reports a wedged
+            // connection (a start that never became ready). That is a service
+            // hiccup being self-healed by the rebind/fail-over escalation, not
+            // a broken device, so it must ride the contention path (short,
+            // non-fatal backoff) instead of the infrastructure-error path that
+            // trips the 5-strike breaker into "keeps failing on this device".
+            android.speech.SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> true
             else -> false
         }
 
