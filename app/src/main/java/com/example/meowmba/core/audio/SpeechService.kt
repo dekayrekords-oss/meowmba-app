@@ -74,15 +74,38 @@ class SpeechService(private val context: Context) : SpeechEngine {
         private var recognizer: SpeechRecognizer? = null
 
         /**
+         * Decides which callbacks belong to the live session.
+         *
+         * One recognizer now serves many sequential sessions, so a callback
+         * carries no evidence of which session produced it — and re-attaching a
+         * listener does not restore that, because a late callback from the old
+         * session is still delivered to the new listener. [VoiceSessionGate]
+         * therefore decides from state and timing, which is the only evidence
+         * that exists. See its docs for why the previous epoch-capture approach
+         * silently killed voice from the second session onward.
+         */
+        private val gate = VoiceSessionGate()
+
+        /** Watchdog for a start that never reports ready. */
+        private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+
+        /**
          * Give up the recognition slot for another engine. Silent: the loser
          * gets no onError, because it did not fail — it was pre-empted, and
          * reporting an error here would drive its retry loop straight back into
          * a fight with the engine that just took over.
+         *
+         * Cancels but KEEPS the connection: this engine will listen again
+         * (always-on re-arms constantly), and creating a fresh SpeechRecognizer
+         * per session is what piles sessions onto AiAi's small per-app capacity
+         * until it refuses everyone.
          */
         fun yieldSession() {
             runCatching { recognizer?.cancel() }
-            runCatching { recognizer?.destroy() }
-            recognizer = null
+            // Silence this engine BEFORE the cancel artifact can arrive: the
+            // gate is what makes "the loser gets no onError" true now that the
+            // recognizer is no longer destroyed out from under its callbacks.
+            gate.onYield()
             _isListening.value = false
             _partialResults.value = ""
         }
@@ -92,16 +115,20 @@ class SpeechService(private val context: Context) : SpeechEngine {
             activeSession.compareAndSet(this, null)
         }
 
-        private fun buildRecognizer(): SpeechRecognizer? {
-            if (!isAvailable) return null
-            return runCatching {
-                if (component != null) {
-                    SpeechRecognizer.createSpeechRecognizer(context, component)
-                } else {
-                    SpeechRecognizer.createSpeechRecognizer(context)
-                }
-            }.getOrNull()?.also { attachListener(it) }
-        }
+         private fun buildRecognizer(): SpeechRecognizer? {
+             if (!isAvailable) return null
+             return runCatching {
+                 if (component != null) {
+                     SpeechRecognizer.createSpeechRecognizer(context, component)
+                 } else {
+                     SpeechRecognizer.createSpeechRecognizer(context)
+                 }
+             }.getOrNull()?.also {
+                 liveRecognizers.incrementAndGet()
+                 Log.i(TAG, "recognizer bound, live=$liveRecognizers")
+                 attachListener(it)
+             }
+         }
 
         private val _isListening = MutableStateFlow(false)
         override val isListening = _isListening.asStateFlow()
@@ -112,35 +139,36 @@ class SpeechService(private val context: Context) : SpeechEngine {
         private var onResult: ((String) -> Unit)? = null
         private var onError: ((Int) -> Unit)? = null
 
-        init {
-            recognizer = buildRecognizer()
-        }
-
         private fun attachListener(r: SpeechRecognizer) {
             r.setRecognitionListener(object : RecognitionListener {
                 override fun onReadyForSpeech(params: Bundle?) {
-                    if (recognizer !== r) return
+                    if (!gate.acceptReady()) return
                     _isListening.value = true
                     Log.i(TAG, "session ready ($componentName)")
                 }
                 override fun onBeginningOfSpeech() {
-                    if (recognizer !== r) return
+                    if (!gate.acceptSpeechEdge()) return
                     Log.i(TAG, "speech started")
                 }
                 override fun onRmsChanged(rmsdB: Float) {}
                 override fun onBufferReceived(buffer: ByteArray?) {}
                 override fun onEndOfSpeech() {
-                    if (recognizer !== r) return
+                    if (!gate.acceptSpeechEdge()) return
                     _isListening.value = false
                     Log.i(TAG, "speech ended")
                 }
                 override fun onError(error: Int) {
-                    // A recognizer we destroyed must not corrupt the live session: AiAi
-                    // delivers a result and then a late ERROR_SERVER_DISCONNECTED when the
-                    // restart destroys it mid-delivery. If that landed, a follow-up
-                    // capture would end on it and the second half of the sentence ("...
-                    // on spotify") would be cut off. Stale callbacks are dropped outright.
-                    if (recognizer !== r) return
+                    // A pre-empted session must not corrupt the live one: AiAi
+                    // delivers a result and then a late ERROR_SERVER_DISCONNECTED
+                    // when the session is replaced mid-delivery. If that landed,
+                    // a follow-up capture would end on it and the second half of
+                    // the sentence ("... on spotify") would be cut off. The gate
+                    // drops those, while still letting a genuine refusal
+                    // (RECOGNIZER_BUSY) through so the engine can back off.
+                    if (!gate.acceptError(error, System.currentTimeMillis())) {
+                        Log.i(TAG, "stale error code=$error ignored")
+                        return
+                    }
                     _isListening.value = false
                     releaseSessionSlot()
                     Log.w(TAG, "session error code=$error ($componentName)")
@@ -155,7 +183,7 @@ class SpeechService(private val context: Context) : SpeechEngine {
                     onError?.invoke(error)
                 }
                 override fun onResults(results: Bundle?) {
-                    if (recognizer !== r) return
+                    if (!gate.acceptResults()) return
                     releaseSessionSlot()
                     val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     Log.i(TAG, "session result: ${matches?.firstOrNull()?.take(60) ?: "(empty)"}")
@@ -164,7 +192,7 @@ class SpeechService(private val context: Context) : SpeechEngine {
                     }
                 }
                 override fun onPartialResults(partialResults: Bundle?) {
-                    if (recognizer !== r) return
+                    if (!gate.acceptPartial()) return
                     val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     if (!matches.isNullOrEmpty()) {
                         _partialResults.value = matches[0]
@@ -197,17 +225,36 @@ class SpeechService(private val context: Context) : SpeechEngine {
             // sees a clean handover instead of two live binds.
             (activeSession.getAndSet(this) as? SessionEngine)
                 ?.takeIf { it !== this }?.yieldSession()
-            recognizer?.destroy()
-            recognizer = null
-            _isListening.value = false
-            _partialResults.value = ""
-            val r = buildRecognizer() ?: run {
+            gate.onStart(System.currentTimeMillis())
+            // Remember whether this connection has ever been used: a recognizer
+            // built just now must NOT be cancelled (see below).
+            val reused = recognizer != null
+            val r = recognizer ?: buildRecognizer()?.also { recognizer = it }
+            if (r == null) {
+                gate.onDestroy()
                 onError(SpeechRecognizer.ERROR_CLIENT)
                 return
             }
-            recognizer = r
             this.onResult = onResult
             this.onError = onError
+            _isListening.value = false
+            _partialResults.value = ""
+            // Settle any in-flight session on the SAME connection. Reopening a
+            // fresh connection per session is what stacks sessions on AiAi's
+            // tiny per-app capacity — measured as "capacity is full" after just
+            // a few always-on re-arms. One recognizer per engine, forever.
+            //
+            // ONLY on a connection that has actually been used. Cancelling a
+            // recognizer built moments ago tears the binding down before it has
+            // ever listened — the framework says so outright:
+            //   "Connection to speech recognition service lost, but no
+            //    #startListening has been invoked yet."
+            // followed by AiAiSpeechRecognitionService#onCancel and #onDestroy.
+            // The startListening below then runs on a dead binding and NOTHING
+            // comes back: no ready, no result, no error. That silence was the
+            // whole bug — mic and wake word appeared dead with a bound
+            // recognizer and not one callback ever arriving.
+            if (reused) runCatching { r.cancel() }
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
@@ -236,6 +283,20 @@ class SpeechService(private val context: Context) : SpeechEngine {
                 putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
             }
             r.startListening(intent)
+
+            // The gate drops cancel artifacts during startup, so a start that
+            // never reports ready would otherwise wait forever. One delayed
+            // check turns that silence into a normal error the engine retries
+            // on. readyTimedOut() self-cancels once the session goes live, so a
+            // late-firing check on a healthy session is a no-op.
+            mainHandler.postDelayed({
+                if (gate.readyTimedOut(System.currentTimeMillis())) {
+                    Log.w(TAG, "session never became ready ($componentName)")
+                    _isListening.value = false
+                    releaseSessionSlot()
+                    this.onError?.invoke(SpeechRecognizer.ERROR_NETWORK_TIMEOUT)
+                }
+            }, READY_TIMEOUT_MS)
         }
 
         override fun swapCallbacks(onResult: (String) -> Unit, onError: (Int) -> Unit) {
@@ -244,14 +305,23 @@ class SpeechService(private val context: Context) : SpeechEngine {
         }
 
         override fun stopListening() {
+            // Stop, don't destroy: the connection is kept so the next
+            // [startListening] is a cheap reopen on a known-good slot. Destroying
+            // here would force a fresh connection (and a fresh slot) on the next
+            // start, which is what overloads AiAi when sessions churn.
             recognizer?.stopListening()
             _isListening.value = false
+            releaseSessionSlot()
         }
 
         override fun destroy() {
+            gate.onDestroy()
+            mainHandler.removeCallbacksAndMessages(null)
             recognizer?.destroy()
+            if (recognizer != null) liveRecognizers.decrementAndGet()
             recognizer = null
             _isListening.value = false
+            releaseSessionSlot()
         }
     }
 
@@ -267,15 +337,35 @@ class SpeechService(private val context: Context) : SpeechEngine {
         private val activeSession =
             java.util.concurrent.atomic.AtomicReference<Any?>(null)
 
+        /** Live SpeechRecognizer instances, process-wide (diagnostic). */
+        private val liveRecognizers =
+            java.util.concurrent.atomic.AtomicInteger(0)
+
         private const val TAG = "MeowmbaVoice"
 
         /**
          * Capture-window hints. ~2.5s of silence before a sentence is considered
          * finished, and sessions run at least 15s so a slow speaker is not cut off.
          */
-        private const val COMPLETE_SILENCE_MS = 2_500L
-        private const val POSSIBLY_COMPLETE_SILENCE_MS = 2_000L
-        private const val MINIMUM_SESSION_MS = 15_000L
+        // Int, NOT Long. These go into the recognizer Intent, and the framework
+        // reads them with getInt(): a Long value silently misses and the
+        // DEFAULT (0) is used instead. The device says so out loud —
+        //   W/Bundle: Key ...SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS
+        //   expected Integer but value was a java.lang.Long. The default value
+        //   0 was returned.
+        // Zero complete-silence and zero minimum length tell the recognizer to
+        // end the session immediately, so it starts and dies before anyone can
+        // speak. That is what "the mic and wake word do nothing" looked like.
+        private const val COMPLETE_SILENCE_MS = 2_500
+        private const val POSSIBLY_COMPLETE_SILENCE_MS = 2_000
+        private const val MINIMUM_SESSION_MS = 15_000
+
+        /**
+         * How long a start may go without onReadyForSpeech before the engine is
+         * told it failed. Must be >= VoiceSessionGate's own readyTimeoutMs; the
+         * gate is the authority, this is just when we ask it.
+         */
+        private const val READY_TIMEOUT_MS = 5_500L
 
         /** Android System Intelligence — the real modern on-device recognizer. */
         private const val AIAI_PACKAGE = "com.google.android.as"
