@@ -94,4 +94,62 @@ class FaceTrackGeometryTest {
         assertNull(faceOffsetInScreenSpace(10f, 10f, 0, 640, mirrored = false))
         assertNull(faceOffsetInScreenSpace(10f, 10f, 480, 0, mirrored = false))
     }
+
+    // ── smoothing: a stream to integrate, not a staircase ───────────────────
+
+    @Test
+    fun `following converges without ever stepping a fixed distance`() {
+        // The reported symptom: the head lurched in discrete increments. A
+        // maxStep clamp capped travel at 0.14 per sample regardless of how far
+        // the face had moved, so every fast movement produced equal-sized
+        // stairs. An EMA step is proportional to the distance REMAINING, so
+        // each step must be strictly smaller than the last.
+        var smoothed = 0f
+        val target = 1f
+        val steps = mutableListOf<Float>()
+        repeat(12) {
+            val before = smoothed
+            smoothed = com.example.meowmba.core.vision.smoothFaceOffset(
+                smoothed, target, com.example.meowmba.core.vision.faceSmoothingAlpha(true),
+            )
+            steps += smoothed - before
+        }
+        for (i in 1 until steps.size) {
+            assertTrue(
+                "step $i (${steps[i]}) must be smaller than step ${i - 1} (${steps[i - 1]})",
+                steps[i] < steps[i - 1],
+            )
+        }
+        assertTrue("must actually converge, got $smoothed", smoothed > 0.98f)
+    }
+
+    @Test
+    fun `a small movement is not swallowed`() {
+        // Slow movement used to clear no threshold at all and be discarded,
+        // then arrive as a jump once drift accumulated.
+        val moved = com.example.meowmba.core.vision.smoothFaceOffset(
+            0f, 0.02f, com.example.meowmba.core.vision.faceSmoothingAlpha(true),
+        )
+        assertTrue("a 0.02 movement must produce some motion, got $moved", moved > 0f)
+        assertTrue("and must not overshoot it", moved < 0.02f)
+    }
+
+    @Test
+    fun `the first sample of a new face is trusted more than later ones`() {
+        // Otherwise the head eases in from wherever the previous face left off,
+        // sweeping across the screen when someone new steps into frame.
+        assertTrue(
+            com.example.meowmba.core.vision.faceSmoothingAlpha(false) >
+                com.example.meowmba.core.vision.faceSmoothingAlpha(true)
+        )
+    }
+
+    @Test
+    fun `smoothing never overshoots the target`() {
+        for (alpha in listOf(0.32f, 0.65f)) {
+            var v = -1f
+            repeat(200) { v = com.example.meowmba.core.vision.smoothFaceOffset(v, 1f, alpha) }
+            assertTrue("overshot: $v", v <= 1f + 1e-4f)
+        }
+    }
 }

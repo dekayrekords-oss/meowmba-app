@@ -480,11 +480,13 @@ class CompanionViewModel(
                 val offY = track?.offsetY
                 val next = if (offX != null && offY != null) offX to offY else null
                 val cur = _faceGaze.value
-                val sameNull = next == null && cur == null
-                val samePos = next != null && cur != null &&
-                    kotlin.math.abs(next.first - cur.first) < 0.012f &&
-                    kotlin.math.abs(next.second - cur.second) < 0.012f
-                if (!sameNull && !samePos) {
+                // No movement threshold here. VisionManager already smooths
+                // (EMA) and already rate-limits (a steady 40ms cadence); a
+                // SECOND dead-band on top meant a sample had to clear 0.012
+                // twice to reach the face, so slow movement was discarded
+                // entirely and then arrived as a jump. Only the identical-value
+                // case is skipped, which is free.
+                if (next != cur) {
                     _faceGaze.value = next
                     // FaceTrack.offsetX is already screen-space horizontal for
                     // every rotation and both lenses (VisionManager syncs the

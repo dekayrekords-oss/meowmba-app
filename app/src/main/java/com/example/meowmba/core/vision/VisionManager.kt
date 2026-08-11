@@ -76,6 +76,29 @@ internal fun rotatedFrameSize(bufferW: Int, bufferH: Int, rotationDegrees: Int):
  * rediscovering it on a device — the horizontal axis silently inverted or
  * swapped with vertical three times before it was extracted.
  */
+/**
+ * How much of a new face sample to take, as an exponential moving average.
+ *
+ * The FIRST sample after acquiring a face is trusted much more heavily: there
+ * is no history worth blending with, and easing in from wherever the last face
+ * left off is what made the head sweep across the screen when someone new
+ * stepped into frame.
+ */
+internal fun faceSmoothingAlpha(hasHistory: Boolean): Float = if (hasHistory) 0.32f else 0.65f
+
+/**
+ * One smoothing step: blend [raw] into [smoothed].
+ *
+ * The EMA is the ONLY rate limit. A `maxStep` clamp used to sit on top of it,
+ * capping travel at 0.14 per published frame — so moving quickly produced a
+ * staircase, because the head was allowed to cover only a fixed distance per
+ * sample no matter how far the face had actually moved. The EMA already bounds
+ * the step (it can never exceed `alpha` × the distance remaining) and it does
+ * so proportionally, which is the difference between easing and stepping.
+ */
+internal fun smoothFaceOffset(smoothed: Float, raw: Float, alpha: Float): Float =
+    smoothed + (raw - smoothed) * alpha
+
 internal fun faceOffsetInScreenSpace(
     boxCenterX: Float,
     boxCenterY: Float,
@@ -338,19 +361,25 @@ class VisionManager(
                     ) ?: return@addOnSuccessListener
                     // Medium EMA: follows clearly, still damps ML Kit box noise.
                     // (0.10 + center-bias was so strong following looked dead.)
-                    val a = if (hasSmooth) 0.32f else 0.65f
-                    val targetX = smoothOffX * (1f - a) + rawX * a
-                    val targetY = smoothOffY * (1f - a) + rawY * a
-                    val maxStep = 0.14f
-                    smoothOffX += (targetX - smoothOffX).coerceIn(-maxStep, maxStep)
-                    smoothOffY += (targetY - smoothOffY).coerceIn(-maxStep, maxStep)
+                    val a = faceSmoothingAlpha(hasSmooth)
+                    smoothOffX = smoothFaceOffset(smoothOffX, rawX, a)
+                    smoothOffY = smoothFaceOffset(smoothOffY, rawY, a)
                     hasSmooth = true
                     lastFaceAtMs = now
                     val pub = _faceTrack.value
-                    val dx = if (pub == null) 1f else kotlin.math.abs(smoothOffX - pub.offsetX)
-                    val dy = if (pub == null) 1f else kotlin.math.abs(smoothOffY - pub.offsetY)
+                    // Publish on a STEADY cadence, with no movement threshold.
+                    //
+                    // There used to be a dead-band here (and an identical one
+                    // again in the ViewModel, so a sample had to clear 0.012
+                    // twice). Between them, moving slowly published nothing at
+                    // all until the accumulated drift finally crossed the line
+                    // and the head jumped — the "erratic tracking" was the
+                    // renderer's spring being handed a staircase and faithfully
+                    // reproducing it. The spring wants an even sample stream to
+                    // integrate; 25Hz of that is trivial, and StateFlow already
+                    // conflates a value identical to the last one.
                     val due = now - lastPublishAtMs >= 40L
-                    if (pub == null || (due && (dx > 0.012f || dy > 0.012f))) {
+                    if (pub == null || due) {
                         lastPublishAtMs = now
                         _faceTrack.value = FaceTrack(
                             offsetX = smoothOffX.coerceIn(-1f, 1f),
