@@ -107,13 +107,30 @@ touch/cliff; TOF/status partial". Therefore:
 Consumes `(commandedHeading, SensorEvent)` pairs; holds decaying per-heading
 evidence; outputs a profile and a confidence.
 
-`commandedHeading` is **dead-reckoned**, not measured. The scheduler integrates
-the turns it commands (speed × ticks × sign) into an approximate accumulated
-heading. There is no encoder or compass feedback, so this estimate drifts, and
-the model must treat headings as coarse buckets — eight sectors, not degrees.
-The estimate resets to unknown on pick-up, link drop, and app restart. A
-confinement conclusion is never drawn from a single heading; it requires
-evidence spread across sectors, which is what makes the drift tolerable.
+**Heading cannot be tracked yet, so the model does not use it.**
+`LooiBleProtocol.rotateFrame(speedPercent, ticks)` exposes no direction
+parameter — it was derived from a single sniffed rotation packet, and any
+direction bit in `param1`/`param3`/`maskB` is unverified. Turn direction is
+therefore neither commandable nor observable, which makes signed dead reckoning
+impossible rather than merely imprecise.
+
+The model instead accumulates **motion-window evidence**, which needs no
+heading:
+
+- A *motion window* is a contiguous stretch of commanded rotation or drive.
+- A window that completes with no `Cliff` is one unit of clean evidence,
+  weighted by its duration.
+- Any `Cliff` zeroes the accumulated evidence and sets `DESK`.
+- `FLOOR` unlocks only after clean evidence exceeds a threshold spanning
+  several separate windows, so one lucky spin is never enough.
+- Evidence decays over ten minutes; `Unknown` frames, link drop, pick-up, and
+  app restart reset it to zero.
+
+This is strictly weaker than per-sector evidence — it can conclude "not
+confined" while a cliff sits in an untested direction. That is why `FLOOR`
+requires several windows and why `Cliff` is absolute and immediate. Sector
+logic becomes possible once turn direction is decoded, and is a natural
+follow-up to the same capture work `LooiSensorParser` needs.
 
 - Any `Cliff` → `DESK` immediately, and remember the heading.
 - A full expressive rotation that samples every heading without a cliff →
@@ -160,12 +177,25 @@ The channel that means pitch is `gaze_up`.
 | Face channel | Body verb | Rationale |
 |---|---|---|
 | `gaze_up` 0..1 | `Neck(pitch)` | Looking up *is* neck pitch — the correct primary mapping |
-| `head_tilt` ±25° | paired opposite `Turn` micro-pulses | Roll has no actuator; a slight swivel reads as a cocked head. Nets to zero displacement |
+| `head_tilt` ±25° | single short `Turn` pulse | Roll has no actuator; a slight swivel reads as a cocked head |
 | `body_bounce` ±1 | `DESK`: `Neck` bob · `FLOOR`: short forward `Drive` pulse | The only verb that differs by profile |
-| `tail_wag` ±1 | paired opposite `Turn` pulses | Wiggle, nets to zero. Safe in both profiles |
+| `tail_wag` ±1 | single short `Turn` pulse per wag extreme | Reads as a wiggle |
 | `glow` / `sparkle` | `Light(on)` | Bright or sparkling → headlight on |
 | clip end | `Brake` | Always, unconditionally |
 | `ear_perk`, `ear_droop` | *(unmapped)* | No actuator exists. Left unmapped rather than faked |
+
+**On turn direction.** An earlier draft of this design paired each `Turn` with
+an opposite one so the gesture would net to zero heading. That is not
+implementable today: `rotateFrame` has no direction parameter, so both pulses
+would rotate the same way and the pair would double the drift instead of
+cancelling it. `BodyVerb.Turn` still carries a `sign` field, and
+`BodyMotionMap` still populates it from the source channel, because the
+information is real and free to compute — but `LooiBleBodyOutput` ignores it
+and documents why. When direction is decoded, the pairing becomes a change to
+one class.
+
+Rotation is in-place, so uncontrolled direction is a *heading* problem, never a
+*falling* problem. Turn pulses remain safe in both profiles.
 
 The profile is an **input to the pure function**, so "DESK never drives" is a
 property that can be tested exhaustively rather than a promise made in prose.
