@@ -70,6 +70,36 @@ object CatExpressions {
         Named("paw lick", ComposedExpression(EyeL.SQUINT, EarL.NEUTRAL, JawL.LICK, Body.TIP, 1.8f, 0.55f)),
         Named("tail wag", ComposedExpression(EyeL.SOFT, EarL.FORWARD, JawL.SHUT, Body.SWAY, 2.0f, 0.7f)),
         Named("zoomies burst", ComposedExpression(EyeL.WIDE, EarL.PERK, JawL.PARTED, Body.WIGGLE, 1.4f, 1.15f)),
+
+        // ── Channels the catalog had never spent ────────────────────────────
+        // The motion engine already supported EyeL.SLIT, EarL.ALERT,
+        // JawL.CHATTER and Body.ORBIT / LURCH / SHAKE_V, but nothing named
+        // reached them, so that range simply never appeared on the face. These
+        // exist to spend it rather than to restate expressions we already have.
+
+        // The bird-at-the-window chatter. The only user of JawL.CHATTER.
+        Named("chatter", ComposedExpression(EyeL.ALERT, EarL.FORWARD, JawL.CHATTER, Body.BUZZ, 2.0f, 0.85f)),
+
+        // Pupils down to slits, ears hard forward: the pre-pounce lock-on.
+        Named("prowl", ComposedExpression(EyeL.SLIT, EarL.ALERT, JawL.SHUT, Body.SWAY, 3.0f, 0.8f)),
+
+        // Slower and heavier than "stalk" — committed, not just interested.
+        Named("predator focus", ComposedExpression(EyeL.SLIT, EarL.FORWARD, JawL.SHUT, Body.COIL, 2.6f, 0.95f)),
+
+        // Comic beat. The only user of Body.ORBIT.
+        Named("dizzy", ComposedExpression(EyeL.WIDE, EarL.SPLAY, JawL.PARTED, Body.ORBIT, 2.2f, 0.9f)),
+
+        // One sharp involuntary jolt. The only user of Body.LURCH.
+        Named("hiccup", ComposedExpression(EyeL.WIDE, EarL.PERK, JawL.PARTED, Body.LURCH, 0.8f, 1.0f)),
+
+        // The head-drop-and-catch of a cat losing the fight with sleep.
+        Named("nod off", ComposedExpression(EyeL.SLEEPY, EarL.DROOP, JawL.SHUT, Body.SHAKE_V, 3.4f, 0.45f)),
+
+        // Full theatrical outrage — wide eyes, flat ears, a step back.
+        Named("scandalised", ComposedExpression(EyeL.WIDE, EarL.FLAT, JawL.WIDE, Body.PULL_BACK, 1.6f, 1.05f)),
+
+        // Boneless contentment: the long slow slump into a warm spot.
+        Named("melt", ComposedExpression(EyeL.CLOSED, EarL.DROOP, JawL.PARTED, Body.SINK, 3.8f, 0.3f)),
     )
 
     private val byKey: Map<String, ComposedExpression> =
@@ -82,20 +112,31 @@ object CatExpressions {
      * way. Idle used to draw uniformly from all 51, so a calm, idle cat would
      * hiss, recoil, or perform a startle at a fair 1-in-51 every cycle — the
      * literal cause of "sometimes moves without making sense".
+     *
+     * These are keyed by NAME, which makes them quietly fragile: a renamed or
+     * deleted expression turns its filter entry into a no-op with no error,
+     * no warning, and no log — the mood rule simply stops applying. Five dead
+     * names had accumulated here from the older keyframe preset system
+     * ("grumpy squint", "wounded", "wiggle pounce", "purr loaf", "sleepy
+     * collapse") before anything checked.
+     *
+     * `internal` so CatExpressionCatalogTest can assert every name still
+     * resolves. That test is the only thing standing between a routine rename
+     * and a silently disabled mood rule.
      */
-    private val NEGATIVE = setOf(
-        "hiss", "growl", "sneer", "disgust", "annoyed flick", "sad", "wounded",
-        "startle", "recoil", "shiver", "crouch", "look away", "grumpy squint",
+    internal val NEGATIVE = setOf(
+        "hiss", "growl", "sneer", "disgust", "annoyed flick", "sad",
+        "startle", "recoil", "shiver", "crouch", "look away", "scandalised",
     )
 
-    private val HIGH_ENERGY = setOf(
+    internal val HIGH_ENERGY = setOf(
         "zoomies", "zoomies burst", "play wiggle", "excited", "pounce",
-        "wiggle pounce", "double take", "surprise", "perk up", "trill",
+        "double take", "surprise", "perk up", "trill", "chatter", "hiccup",
     )
 
-    private val SLEEPY = setOf(
+    internal val SLEEPY = setOf(
         "settle", "fall asleep", "content sigh", "loaf", "slow blink", "relief",
-        "squint", "sleepy collapse", "purr loaf",
+        "squint", "nod off", "melt",
     )
 
     /**
