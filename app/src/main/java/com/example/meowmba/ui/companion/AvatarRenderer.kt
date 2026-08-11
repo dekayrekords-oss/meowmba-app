@@ -763,11 +763,19 @@ fun AvatarRenderer(
                 // Ramped like every other follow term, not toggled.
                 eyeTiltDeg = gazeX * 4f * trackingWeight,
                 lowerLid = if (effectivePose.happyEyes) 0.35f else if (speaking) 0.12f + 0.15f * voice else 0.10f,
-                earPitchDeg = (earPerk - 1f) * 36f + if (listening) voice * 8f else 0f,
+                // Head-tracking inertia belongs on PITCH, symmetrically: both
+                // ears hang behind the skull together. It used to be summed
+                // into earSplitDeg, which the ear draw applies with opposite
+                // signs per side — so following a face scissored the ears
+                // apart instead of dragging them.
+                earPitchDeg = (earPerk - 1f) * 36f +
+                    (if (listening) voice * 8f else 0f) +
+                    earLag * 14f,
                 earSplayDeg = 10f + earDroop * 0.35f,
                 // Follow-through: the ears trail the skull and overshoot when
                 // it stops, on top of their own ambient twitch.
-                earSplitDeg = earTwitchL.value - earTwitchR.value + earLag * 26f,
+                // Genuine asymmetry only — the independent per-ear twitches.
+                earSplitDeg = earTwitchL.value - earTwitchR.value,
                 jawOpen = when {
                     speaking -> (0.28f + voice * 0.62f).coerceIn(0.2f, 0.95f)
                     listening -> 0.04f + voice * 0.06f // tiny reactive part
@@ -809,6 +817,11 @@ fun AvatarRenderer(
                     mouthWidth = if (liveTalking) restingPose.mouthWidth else shot.mouthWidth,
                     // Ambient ear twitch rides on top of the clip's ear split.
                     earSplitDeg = shot.earSplitDeg + restingPose.earSplitDeg,
+                    // The clip still owns the ear pose; its own head motion
+                    // just drags the ears behind it. Only the lag is additive —
+                    // folding in restingPose.earPitchDeg here would re-apply
+                    // the ambient perk the clip is deliberately overriding.
+                    earPitchDeg = shot.earPitchDeg + shot.earLagDeg,
                     // Breath, weight shift, gaze pan and face-follow are additive.
                     offsetX = shot.offsetX + restingPose.offsetX,
                     offsetY = shot.offsetY + restingPose.offsetY,

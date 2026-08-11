@@ -50,13 +50,54 @@ fun bell(t: Float): Float =
  * a very short clip still gets a full arc) gives every performance the same
  * crispness regardless of length.
  */
-fun envelope(elapsedSeconds: Float, durationSeconds: Float): Float {
+fun envelope(
+    elapsedSeconds: Float,
+    durationSeconds: Float,
+    anticipate: Float = 0f,
+): Float {
     if (durationSeconds <= 0f) return 0f
+    // Anticipation: a signed pre-move. The envelope multiplies each channel's
+    // deviation FROM NEUTRAL, so returning a negative value here swings the
+    // channel to the far side of rest before it travels to the pose — ears go
+    // forward before they flatten, lids drop a hair before the eyes go wide.
+    // Without this the envelope is capped at [0,1] and no amount of spring
+    // tuning can produce a wind-up: springs only ring AFTER the pose (settle),
+    // which is a different thing entirely.
+    val ant = if (anticipate > 0f) kotlin.math.min(0.09f, durationSeconds * 0.12f) else 0f
+    if (ant > 0f && elapsedSeconds < ant) {
+        // One negative half-lobe: 0 -> -anticipate -> 0 across `ant` seconds.
+        val u = elapsedSeconds / ant
+        return -anticipate * sin(u * PI.toFloat())
+    }
     val attack = kotlin.math.min(0.16f, durationSeconds * 0.22f)
     val release = kotlin.math.min(0.34f, durationSeconds * 0.32f)
-    val rising = smoothStep01(elapsedSeconds / attack)
+    // Shifted by `ant` so the lobe hands off at exactly 0 — no discontinuity.
+    val rising = smoothStep01((elapsedSeconds - ant) / attack)
     val falling = smoothStep01((durationSeconds - elapsedSeconds) / release)
     return (rising * falling).coerceIn(0f, 1f)
+}
+
+/**
+ * [envelope] with a per-channel start delay, so channels do not all arrive on
+ * the same frame.
+ *
+ * Overlapping action is a hierarchy of arrival times: the eyes lead (they are
+ * the intent), the jaw follows, the ears land last (lightest, most inertial).
+ * A 35-70ms stagger is below conscious notice and is most of what separates a
+ * rig having a pose applied from a character performing one.
+ */
+fun envelopeAt(
+    elapsedSeconds: Float,
+    durationSeconds: Float,
+    delaySeconds: Float,
+    anticipate: Float = 0f,
+): Float {
+    if (delaySeconds <= 0f) return envelope(elapsedSeconds, durationSeconds, anticipate)
+    // A delay that would eat the whole clip is not worth staggering.
+    if (durationSeconds <= delaySeconds * 2f) {
+        return envelope(elapsedSeconds, durationSeconds, anticipate)
+    }
+    return envelope(elapsedSeconds - delaySeconds, durationSeconds - delaySeconds, anticipate)
 }
 
 /** Positive lobes only — a rhythmic beat rather than an oscillation. */
@@ -299,17 +340,38 @@ fun bodyMotion(kind: Body, t: Float, actT: Float, R: Float, amp: Float, m: Motio
             m.squash += 0.14f * c * amp
         }
         Body.RECOIL -> {
-            val d = (1f - t).pow(1.9f)
+            // A real recoil is preceded by the thing that caused it. Pure
+            // (1-t)^n starts at full displacement on frame one — the head is
+            // already thrown back before anything hit it. Two frames of
+            // forward lean first give it something to recoil FROM.
+            val d = if (t < 0.06f) -0.35f * smoothStep01(t / 0.06f)
+            else (1f - t).pow(1.9f)
             m.offY -= R * 0.17f * d * amp
             m.scale -= 0.075f * d * amp
             m.tiltDeg += sin(actT * 26f) * 3.5f * d * amp
             m.squash += 0.10f * d * amp
         }
         Body.SNAP_FWD -> {
-            val f = spike(t, 0.30f, 2.2f)
+            // Wind back, strike, overshoot past rest, ring home.
+            //
+            // spike() is strictly non-negative: attack then decay, no wind-up
+            // and no rebound, which is why a bonk read as a lunge rather than
+            // a hit. The wind-back is what makes the strike read as fast — the
+            // strike phase here covers a 1.28 swing in 0.12 of the clip, so it
+            // is genuinely quicker than the old 1.0 over 0.30 despite the
+            // added anticipation.
+            val f = when {
+                t < 0.22f -> -0.28f * smoothStep01(t / 0.22f)
+                t < 0.34f -> -0.28f + 1.28f * smoothStep01((t - 0.22f) / 0.12f)
+                else -> {
+                    val u = (t - 0.34f) / 0.66f
+                    (1f - u).coerceAtLeast(0f).pow(1.6f) * cos(u * PI.toFloat() * 1.5f)
+                }
+            }
             m.scale += 0.16f * f * amp
             m.offY += R * 0.13f * f * amp
-            // Impact: the head flattens on the hit rather than only growing.
+            // Squash follows travel: stretched on the wind-back, flattened on
+            // the hit, stretched again through the rebound.
             m.squash -= 0.13f * f * amp
         }
         // Irregular jerks rather than a clean oscillation.
@@ -513,7 +575,39 @@ class CatMotionEngine {
     private val mouthW = Spring(170f, 0.40f, initial = 1f)
     private val curl = Spring(170f, 0.40f)
 
+    // The head. Deliberately the loosest springs in the engine (k=70 -> ~1.3Hz,
+    // zeta 0.30 -> ~37% overshoot) so it reads as the heaviest thing on screen
+    // and settles last. Body fields used to be copied raw out of the frame
+    // accumulator, which meant the head could not overshoot, could not settle,
+    // and hard-cut to zero the instant a clip ended.
+    private val bodyX = Spring(70f, 0.30f)
+    private val bodyY = Spring(70f, 0.30f)
+    private val bodyTiltS = Spring(80f, 0.32f)
+    private val bodyScaleS = Spring(95f, 0.36f)
+    private val bodySquashS = Spring(95f, 0.30f)
+
+    // Ear follow-through, driven by the head's own motion. Light appendages lag
+    // the heavy mass on the SAME axis and as a PAIR — the faster the head, the
+    // bigger the lag.
+    private val trailX = Trailing(88f, 0.28f)
+    private val trailY = Trailing(110f, 0.26f)
+
     private val motion = Motion()
+
+    /**
+     * Seconds spent decaying to rest after a clip ends; <0 means not settling.
+     *
+     * Without this, a clip ending is a teleport: Body.COIL's release branch
+     * evaluates to +0.55 at t->1, so a pounce's last drawn frame is still
+     * displaced and the next frame is flat zero. Follow-through means the
+     * motion decays home, it does not cut.
+     */
+    private var settleT = -1f
+
+    private companion object {
+        /** Length of the post-clip decay tail. */
+        const val SETTLE_SECONDS = 0.45f
+    }
 
     private var expression: ComposedExpression? = null
     private var elapsed = 0f
@@ -540,10 +634,13 @@ class CatMotionEngine {
     fun play(e: ComposedExpression) {
         expression = e
         elapsed = 0f
+        // An interrupting clip cancels the settle rather than fighting it.
+        settleT = -1f
     }
 
     fun stop() {
         expression = null
+        settleT = -1f
     }
 
     /**
@@ -560,15 +657,49 @@ class CatMotionEngine {
     }
 
     /**
+     * The decay tail after a clip ends: every target is rest, and the springs
+     * carry their own velocity home. Returns null once settled, restoring the
+     * old "caller uses its own resting pose" contract.
+     */
+    private fun settleFrame(dtSeconds: Float): MotionPose? {
+        if (settleT < 0f) return null
+        settleT += dtSeconds
+        if (settleT > SETTLE_SECONDS) {
+            settleT = -1f
+            return null
+        }
+        return MotionPose(
+            eyeOpen = open.update(1f, dtSeconds),
+            pupilSize = pupil.update(0.45f, dtSeconds),
+            eyeWidthScale = eyeW.update(1f, dtSeconds),
+            eyeHeightScale = eyeH.update(1f, dtSeconds),
+            eyeTiltDeg = eyeTilt.update(0f, dtSeconds),
+            lowerLid = lowerLid.update(0.10f, dtSeconds),
+            earPitchDeg = ear.update(0f, dtSeconds),
+            earSplayDeg = splay.update(12f, dtSeconds),
+            earSplitDeg = earSplit.update(0f, dtSeconds),
+            jawOpen = jaw.update(0f, dtSeconds),
+            mouthWidth = mouthW.update(1f, dtSeconds),
+            lipCurl = curl.update(0f, dtSeconds),
+            offsetX = bodyX.update(0f, dtSeconds),
+            offsetY = bodyY.update(0f, dtSeconds),
+            headTiltDeg = bodyTiltS.update(0f, dtSeconds),
+            scaleDelta = bodyScaleS.update(0f, dtSeconds),
+            squash = bodySquashS.update(0f, dtSeconds),
+        )
+    }
+
+    /**
      * Advances one frame and returns the pose to draw, or null when nothing is
      * playing and the caller should use its own resting pose.
      */
     fun update(dtSeconds: Float, faceRadius: Float): MotionPose? {
-        val e = expression ?: return null
+        val e = expression ?: return settleFrame(dtSeconds)
         elapsed += dtSeconds
         if (elapsed >= e.durationSeconds) {
             expression = null
-            return null
+            settleT = 0f
+            return settleFrame(dtSeconds)
         }
 
         val t = (elapsed / e.durationSeconds).coerceIn(0f, 1f)
@@ -578,6 +709,12 @@ class CatMotionEngine {
 
         motion.reset()
         bodyMotion(e.body, t, elapsed, faceRadius, e.bodyAmp, motion)
+
+        // Ear inertia is measured in face-radius units so the lag is the same
+        // gesture on a phone and a tablet.
+        val rInv = 1f / faceRadius.coerceAtLeast(1f)
+        val lagY = trailY.update(motion.offY * rInv, dtSeconds, gain = 0.55f)
+        val lagX = trailX.update(motion.offX * rInv, dtSeconds, gain = 0.45f)
 
         val neutralEye = eyeLayer(EyeL.NEUTRAL)
         val neutralEar = earLayer(EarL.NEUTRAL, t)
@@ -593,22 +730,35 @@ class CatMotionEngine {
         // that makes motion read as deliberate. The envelope is in ABSOLUTE
         // seconds so a 0.9s clip and a 3.4s clip get the same crisp attack
         // rather than the short one easing for a third of its length.
-        val env = envelope(elapsed, e.durationSeconds)
-        fun ease(target: Float?, neutral: Float): Float? =
+        //
+        // Three envelopes, not one. A single scalar released all twelve fields
+        // from the starting gate on the same frame; the springs then settled at
+        // different rates, but simultaneous departure is the read that says
+        // "pose applied" rather than "action performed". Eyes lead, jaw follows
+        // 35ms later, ears land last at 70ms — and each gets its own
+        // anticipation depth, because a lid and an ear do not wind up equally.
+        //
+        // A blink is exempt: pre-widening before the lids shut looks like a
+        // flinch, not an intention.
+        val antEye = if (e.eye == EyeL.CLOSED) 0f else 0.10f
+        val envEye = envelopeAt(elapsed, e.durationSeconds, 0f, anticipate = antEye)
+        val envJaw = envelopeAt(elapsed, e.durationSeconds, 0.035f, anticipate = 0.12f)
+        val envEar = envelopeAt(elapsed, e.durationSeconds, 0.070f, anticipate = 0.18f)
+        fun ease(target: Float?, neutral: Float, env: Float): Float? =
             target?.let { neutral + (it - neutral) * env }
         val target = ChannelPose(
-            open = ease(raw.open, neutralEye.open!!),
-            eh = ease(raw.eh, 1f),
-            ew = ease(raw.ew, 1f),
-            pupil = ease(raw.pupil, neutralEye.pupil!!),
-            lower = ease(raw.lower, 0f),
-            etilt = ease(raw.etilt, 0f),
-            ear = ease(raw.ear, neutralEar.ear!!),
-            splay = ease(raw.splay, neutralEar.splay!!),
-            jaw = ease(raw.jaw, 0f),
-            mw = ease(raw.mw, 1f),
-            curl = ease(raw.curl, 0f),
-            earSplit = ease(raw.earSplit, 0f),
+            open = ease(raw.open, neutralEye.open!!, envEye),
+            eh = ease(raw.eh, 1f, envEye),
+            ew = ease(raw.ew, 1f, envEye),
+            pupil = ease(raw.pupil, neutralEye.pupil!!, envEye),
+            lower = ease(raw.lower, 0f, envEye),
+            etilt = ease(raw.etilt, 0f, envEye),
+            ear = ease(raw.ear, neutralEar.ear!!, envEar),
+            splay = ease(raw.splay, neutralEar.splay!!, envEar),
+            jaw = ease(raw.jaw, 0f, envJaw),
+            mw = ease(raw.mw, 1f, envJaw),
+            curl = ease(raw.curl, 0f, envJaw),
+            earSplit = ease(raw.earSplit, 0f, envEar),
         )
 
         return MotionPose(
@@ -624,11 +774,17 @@ class CatMotionEngine {
             jawOpen = jaw.update(target.jaw ?: neutralJaw.jaw!!, dtSeconds),
             mouthWidth = mouthW.update(target.mw ?: neutralJaw.mw!!, dtSeconds),
             lipCurl = curl.update(target.curl ?: 0f, dtSeconds),
-            offsetX = motion.offX,
-            offsetY = motion.offY,
-            headTiltDeg = motion.tiltDeg,
-            scaleDelta = motion.scale,
-            squash = motion.squash,
+            // Ears lag the skull. Negative on Y because offY is screen-space
+            // +down: the head drops, the ears hang behind it going up.
+            earLagDeg = -lagY * 20f,
+            earYawLagDeg = lagX * 16f,
+            // Through springs, not raw: this is what gives the head overshoot
+            // on a snap and a real settle when it stops.
+            offsetX = bodyX.update(motion.offX, dtSeconds),
+            offsetY = bodyY.update(motion.offY, dtSeconds),
+            headTiltDeg = bodyTiltS.update(motion.tiltDeg, dtSeconds),
+            scaleDelta = bodyScaleS.update(motion.scale, dtSeconds),
+            squash = bodySquashS.update(motion.squash, dtSeconds),
         )
     }
     /** Neutral rest frame used when nothing is playing. */
@@ -701,4 +857,15 @@ data class MotionPose(
     val scaleDelta: Float,
     /** Area-conserving deformation — see [Motion.squash]. */
     val squash: Float = 0f,
+    /**
+     * Symmetric ear pitch lag: the ears trailing the skull's vertical motion.
+     *
+     * Applied to BOTH ears equally, unlike [earSplitDeg] which is deliberately
+     * antisymmetric (one ear up, the other down) and reads as a single
+     * deliberate flick. Feeding inertia into the split channel makes the ears
+     * scissor, which is the opposite of follow-through.
+     */
+    val earLagDeg: Float = 0f,
+    /** Symmetric ear yaw lag from the skull's horizontal motion. */
+    val earYawLagDeg: Float = 0f,
 )

@@ -425,9 +425,9 @@ Verified on device: settings opens with the robot section showing "Connect over 
 
 <!-- AUTOBUILD:START -->
 (regenerated after each commit)
-- 2026-08-10 22:36:01 : chore: ignore local .bak backups
+- 2026-08-10 22:43:17 : perf(avatar): stop TTS word boundaries recomposing the whole face
+- db5b2ba 2026-08-10 22:33 chore: ignore local .bak backups
 - b99e3e5 2026-08-10 22:30 fix(models): don't let a Gemini Nano probe crash the model picker
 - 5606657 2026-08-10 22:30 perf(avatar): invalidate draw, not composition, on every animation frame
 - f8bbc61 2026-08-10 13:11 fix(voice): the mic, always-on listening and the wake word all come back
-- afe941d 2026-08-10 13:11 fix(stability): stop silent data loss, process crashes and leaks
 <!-- AUTOBUILD:END -->

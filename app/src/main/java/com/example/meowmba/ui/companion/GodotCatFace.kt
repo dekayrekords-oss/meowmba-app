@@ -159,7 +159,12 @@ private fun DrawScope.drawGodotEar(
     val wobble = sin((1f - twitch) * PI.toFloat() * 5f) * twitch * 7f
     val idle = sin(clock.t * 1.15f + idx * 2.4f) * 2.4f
     val split = pose.earSplitDeg * (if (idx == 0) 1f else -1f)
-    val rot = GodotCatDraw.deg(side * (pose.earSplayDeg - pose.earPitchDeg * 0.5f) + wobble + idle + split)
+    // Yaw lag is symmetric in body space, so it takes `side` like splay does —
+    // both ears drag the same way when the head moves sideways.
+    val yawLag = side * pose.earYawLagDeg
+    val rot = GodotCatDraw.deg(
+        side * (pose.earSplayDeg - pose.earPitchDeg * 0.5f) + wobble + idle + split + yawLag
+    )
     val hw = R * 0.30f
     val hh = R * 0.62f
 
@@ -522,11 +527,26 @@ private fun DrawScope.drawGodotWhiskers(
 ) {
     val a = clock.faceAlpha
     val base = origin + Offset(0f, R * 0.48f)
-    val energy = if (pose.jawOpen > 0.12f) clock.talk * 2f - 1f else sin(clock.t * 1.4f)
-    val amp = R * (if (pose.jawOpen > 0.12f) 0.016f else 0.009f)
+    val talking = pose.jawOpen > 0.12f
+    val amp = R * (if (talking) 0.016f else 0.009f)
     for (i in -1..1) {
         val y0 = base.y + i * R * 0.028f
-        val phase = energy * (1f - 0.3f * (i + 1))
+        // Overlapping action: each whisker lags the one above it, so the group
+        // ripples instead of translating. Sampling ONE shared `energy` and
+        // merely scaling it per whisker staggers amplitude but not time — all
+        // three then cross zero on the same frame and read as a rigid comb.
+        val lag = (i + 1) * 0.055f // 0 / 55 / 110 ms
+        val tw = clock.t - lag
+        val energy = if (talking) {
+            // Rebuild the talk triangle at the lagged time; clock.talk is a
+            // single instantaneous sample and cannot be shifted.
+            val ph = ((tw / 0.16f) % 1f + 1f) % 1f
+            val tri = if (ph < 0.5f) ph * 2f else 2f - ph * 2f
+            smoothStep01(tri) * 2f - 1f
+        } else {
+            sin(tw * 1.4f)
+        }
+        val phase = energy * (1f - 0.18f * (i + 1))
         drawLine(
             color = WhiskCyan.copy(alpha = 0.45f * a),
             start = Offset(origin.x + side * R * 0.12f, y0),
