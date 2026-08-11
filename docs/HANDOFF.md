@@ -425,9 +425,9 @@ Verified on device: settings opens with the robot section showing "Connect over 
 
 <!-- AUTOBUILD:START -->
 (regenerated after each commit)
-- 2026-08-10 13:29:27 : fix(voice): the mic, always-on listening and the wake word all come back
+- 2026-08-10 22:36:01 : chore: ignore local .bak backups
+- b99e3e5 2026-08-10 22:30 fix(models): don't let a Gemini Nano probe crash the model picker
+- 5606657 2026-08-10 22:30 perf(avatar): invalidate draw, not composition, on every animation frame
+- f8bbc61 2026-08-10 13:11 fix(voice): the mic, always-on listening and the wake word all come back
 - afe941d 2026-08-10 13:11 fix(stability): stop silent data loss, process crashes and leaks
-- 0408440 2026-08-10 13:11 fix(avatar): give the face weight, and stop the stutter and dead frames
-- c17f7aa 2026-08-10 13:10 fix(routing): use context for app names, alarms and body commands
-- 5bce2aa 2026-08-10 13:10 feat(robot): voice-controlled body, and stop offering a speaker as the base
 <!-- AUTOBUILD:END -->

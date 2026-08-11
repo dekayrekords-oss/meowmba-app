@@ -799,6 +799,10 @@ private fun AvatarMotionHost(
 ) {
     val motionTilt by viewModel.motionTiltDeg.collectAsState()
     val faceGaze by viewModel.faceGaze.collectAsState()
+    // Deliberately NOT `by`: delegating would read the value here, in
+    // composition, and every TTS word boundary would recompose this screen.
+    // Handed to the avatar as a State and read only inside its draw lambda.
+    val mouthEnergy = viewModel.mouthEnergy.collectAsState()
     Box(
         modifier = modifier.graphicsLayer {
             rotationZ = motionTilt.coerceIn(-4f, 4f)
@@ -815,6 +819,7 @@ private fun AvatarMotionHost(
             paused = paused,
             faceGazeX = faceGaze?.first,
             faceGazeY = faceGaze?.second,
+            mouthEnergy = mouthEnergy,
         )
     }
 }

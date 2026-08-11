@@ -845,7 +845,8 @@ class CompanionViewModel(
                         s.activeTask == null &&
                         // TTS energy decays toward zero; compare with slack so a
                         // lingering 0.001f never blocks performances forever.
-                        s.mouthEnergy <= 0.02f
+                        // Read off its own flow now, not the state snapshot.
+                        _mouthEnergy.value <= 0.02f
                 },
                 pickName = {
                     val saved = animStore.list()
@@ -1380,6 +1381,18 @@ class CompanionViewModel(
         _screenWatchConsentRequested.asStateFlow()
     /** Roll in degrees for the avatar lean (±8°), 0 when no IMU. */
     val motionTiltDeg: kotlinx.coroutines.flow.StateFlow<Float> = _motionTilt.asStateFlow()
+
+    /**
+     * Speech energy 0..1 from TTS word boundaries; animates the mouth.
+     *
+     * Its own flow rather than a [CompanionState] field: this changes ~14x a
+     * second while speaking, and CompanionState is passed by value to the
+     * avatar, so a copy() per boundary recomposed the entire face for the
+     * length of every reply. AvatarRenderer reads it only inside the draw
+     * lambda, so a pulse now invalidates draw and nothing else.
+     */
+    private val _mouthEnergy = kotlinx.coroutines.flow.MutableStateFlow(0f)
+    val mouthEnergy: kotlinx.coroutines.flow.StateFlow<Float> = _mouthEnergy.asStateFlow()
 
     private fun buildOmniRoute(): com.example.meowmba.core.agent.OmniRoute? {
         val storage = secureStorage ?: return null
@@ -3423,9 +3436,9 @@ class CompanionViewModel(
         selfVoiceFilter.begin(text)
         if (first) {
             audioFocusManager?.requestFocus()
+            resetMouthEnergy()
             _uiState.value = _uiState.value.copy(
                 emotion = CompanionEmotion.HAPPY,
-                mouthEnergy = 0f,
             )
             tts.speak(text)
         } else {
@@ -3466,10 +3479,10 @@ class CompanionViewModel(
         selfVoiceFilter.begin(text)
         audioFocusManager?.requestFocus()
         lastAssistantText = text
+        resetMouthEnergy()
         _uiState.value = _uiState.value.copy(
             captionText = text,
-            emotion = CompanionEmotion.HAPPY,
-            mouthEnergy = 0f
+            emotion = CompanionEmotion.HAPPY
         )
         ttsManager.speak(text)
     }
@@ -3743,14 +3756,21 @@ class CompanionViewModel(
 
     /** TTS hit a word boundary: pulse the mouth, then let the energy decay. */
     private fun bumpMouthEnergy() {
-        _uiState.value = _uiState.value.copy(mouthEnergy = 1f)
+        _mouthEnergy.value = 1f
         mouthDecayJob?.cancel()
         mouthDecayJob = viewModelScope.launch {
             for (level in listOf(0.7f, 0.45f, 0.25f)) {
                 delay(70)
-                _uiState.value = _uiState.value.copy(mouthEnergy = level)
+                _mouthEnergy.value = level
             }
         }
+    }
+
+    /** Silence the mouth: cancel any in-flight decay, then zero the energy. */
+    private fun resetMouthEnergy() {
+        mouthDecayJob?.cancel()
+        mouthDecayJob = null
+        _mouthEnergy.value = 0f
     }
 
     // ── Avatar zones & overlays ─────────────────────────────────────────────
@@ -5333,12 +5353,12 @@ class CompanionViewModel(
         // every single turn for no reason.
         thinkingWatchdogJob?.cancel()
         isFollowUpListen = false
+        resetMouthEnergy()
         _uiState.value = _uiState.value.copy(
             interactionState = InteractionState.IDLE,
             captionText = null,
             emotion = CompanionEmotion.IDLE,
-            errorMessage = null,
-            mouthEnergy = 0f
+            errorMessage = null
         )
         audioFocusManager?.abandonFocus()
         updateVoiceListeningMode()

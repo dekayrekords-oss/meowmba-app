@@ -229,9 +229,9 @@ class VoicePipelineTest {
 
     @Test
     fun `word boundaries pulse the mouth energy`() = runTest {
-        assertEquals(0f, viewModel.uiState.value.mouthEnergy, 0.001f)
+        assertEquals(0f, viewModel.mouthEnergy.value, 0.001f)
         fakeTts.onWordBoundary?.invoke(0, 3)
-        assertEquals(1f, viewModel.uiState.value.mouthEnergy, 0.001f)
+        assertEquals(1f, viewModel.mouthEnergy.value, 0.001f)
     }
 
     @Test

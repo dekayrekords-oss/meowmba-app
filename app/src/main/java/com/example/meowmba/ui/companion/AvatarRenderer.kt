@@ -13,6 +13,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -160,6 +161,14 @@ fun AvatarRenderer(
     paused: Boolean = false,
     faceGazeX: Float? = null,
     faceGazeY: Float? = null,
+    /**
+     * Speech energy 0..1, as a [State] rather than a plain Float on purpose.
+     * Passing the value would make every word boundary a new parameter and
+     * recompose the whole avatar ~14x/sec while speaking; passing the State
+     * and reading `.value` only inside the draw lambda invalidates draw
+     * alone — the same trick as [drawEpoch] below.
+     */
+    mouthEnergy: State<Float>? = null,
     modifier: Modifier = Modifier
 ) {
     val basePose = CatAvatarStateMachine.resolvePose(state)
@@ -974,7 +983,8 @@ fun AvatarRenderer(
         val mouthY = noseY + s * 0.055f
         drawMouth(
             effectivePose.mouth, cx, mouthY, s, stroke, talk, mouthWobble, eyeColor,
-            state.mouthEnergy
+            // Read inside the draw lambda only — see the param's doc.
+            mouthEnergy?.value ?: 0f
         )
 
         // ── LAYER 6: Tongue (licking animations) ────────────────────────────

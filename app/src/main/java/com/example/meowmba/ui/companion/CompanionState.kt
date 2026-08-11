@@ -102,8 +102,12 @@ data class CompanionState(
     val showAppDrawer: Boolean = false,
     /** Agent browser overlay (swipe left) is open. */
     val showBrowser: Boolean = false,
-    /** Speech energy 0..1 driven by TTS word boundaries; animates the mouth. */
-    val mouthEnergy: Float = 0f,
+    // NOTE: speech energy is deliberately NOT here. It changes ~14x/second
+    // while speaking, and every field of this class is carried by value into
+    // AvatarRenderer — so a copy() per word boundary recomposed the whole
+    // avatar (and re-ran resolvePose) for the entire length of every reply.
+    // It lives in CompanionViewModel.mouthEnergy as its own StateFlow, read
+    // only inside the Canvas draw lambda.
     /** Result of the last "Test connection" action on the Hardware page. */
     val connectionTestResult: String? = null,
     val connectionTestRunning: Boolean = false,
