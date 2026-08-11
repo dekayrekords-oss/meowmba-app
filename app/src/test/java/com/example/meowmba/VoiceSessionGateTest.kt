@@ -84,6 +84,16 @@ class VoiceSessionGateTest {
     }
 
     @Test
+    fun `ERROR_CLIENT is always surfaced, even during the settle window`() {
+        // Measured on device: with the recognizer stalled, a lone ERROR_CLIENT
+        // was the ONLY callback the service ever emitted. Suppressing it hid
+        // the single piece of evidence available.
+        val gate = VoiceSessionGate(settleMs = 400)
+        gate.onStart(0)
+        assertTrue(gate.acceptError(CLIENT, 10))
+    }
+
+    @Test
     fun `a stale result arriving before the new session is ready is dropped`() {
         val gate = VoiceSessionGate()
         gate.onStart(0)

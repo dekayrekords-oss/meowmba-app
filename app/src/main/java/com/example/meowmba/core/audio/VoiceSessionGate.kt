@@ -58,9 +58,14 @@ class VoiceSessionGate(
      * ERROR_RECOGNIZER_BUSY (8) is deliberately absent: it is never a cancel
      * artifact, it means the service genuinely refused, and the engine above
      * needs to see it to back off.
+     *
+     * ERROR_CLIENT (5) was here and was REMOVED on 2026-08-11. Measured on
+     * device: across 90 seconds of a stalled recognizer, a single ERROR_CLIENT
+     * was the ONLY callback the service ever produced — and suppressing it hid
+     * the one piece of evidence the system was offering. A spurious retry costs
+     * far less than a silent failure with no signal at all.
      */
     private val cancelArtifacts = setOf(
-        5,  // ERROR_CLIENT
         11, // ERROR_SERVER_DISCONNECTED
     )
 
