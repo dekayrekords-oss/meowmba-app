@@ -174,16 +174,28 @@ fun AvatarRenderer(
     // While an overlay covers the screen the face freezes: no custom clip.
     val customAnim = if (paused) null else state.activeAnimation
     val composed = if (paused) null else state.activeComposed
-    var animT by remember { mutableLongStateOf(0L) }
+
+    // Draw-only invalidation signal. Every per-frame producer below bumps this
+    // and writes its value into a plain holder; the Canvas reads both. Because
+    // the ONLY read of drawEpoch is inside the draw lambda, a bump schedules a
+    // redraw without re-running composition.
+    var drawEpoch by remember { mutableLongStateOf(0L) }
+    // Per-frame clip time lives in a HOLDER, not composition state. Writing it
+    // to a MutableState every vsync recomposed the entire avatar for the whole
+    // length of every clip — the jank was worst exactly while something was
+    // animating, which is the opposite of what you want. drawEpoch (already
+    // read only inside the Canvas) is what invalidates the draw pass.
+    val animTHolder = remember { longArrayOf(0L) }
     LaunchedEffect(customAnim) {
         if (customAnim != null) {
             var start = -1L
             while (true) {
                 withFrameMillis { now ->
                     if (start < 0L) start = now
-                    animT = now - start
+                    animTHolder[0] = now - start
+                    drawEpoch++
                 }
-                if (animT > customAnim.durationMs) break
+                if (animTHolder[0] > customAnim.durationMs) break
             }
         }
     }
@@ -191,14 +203,15 @@ fun AvatarRenderer(
     // Godot face / classic idle: ONE vsync-locked draw clock (not 9 infinite transitions).
     // CatMotionEngine is ONE-SHOT only for named expressions.
     val motionEngine = remember { CatMotionEngine() }
-    var shotPose by remember { mutableStateOf<MotionPose?>(null) }
+    // Same reasoning as animTHolder: the composed-expression pose is produced
+    // every vsync and consumed only inside the draw lambda.
+    val shotHolder = remember { arrayOfNulls<MotionPose>(1) }
     var faceRadiusPx by remember { mutableStateOf(200f) }
     val useGodotFace = state.avatarStyle == AvatarStyle.NEO
     // Single ambient clock (seconds). Advanced at ~60 fps and only while visible.
     // Reading this in the Canvas draw lambda invalidates draw only — not a
     // full-composition thrash of 9 rememberInfiniteTransition states @ vsync.
     var clockSec by remember { mutableFloatStateOf(0f) }
-    var drawEpoch by remember { mutableLongStateOf(0L) }
     // The clock survives pauses. It used to be a local of the effect below,
     // which is keyed on `paused` — so every time a panel opened or closed the
     // accumulator restarted at 0.0 and every ambient cycle (breath, sway,
@@ -233,7 +246,8 @@ fun AvatarRenderer(
     LaunchedEffect(composed, paused) {
         if (paused || composed == null) {
             motionEngine.stop()
-            shotPose = null
+            shotHolder[0] = null
+            drawEpoch++
             return@LaunchedEffect
         }
         motionEngine.play(composed)
@@ -249,21 +263,24 @@ fun AvatarRenderer(
                 val dt = if (last == 0L) 0.016f else ((now - last) / 1000f).coerceIn(0f, 1f / 30f)
                 last = now
                 frame = motionEngine.update(dt, faceRadiusPx.coerceIn(80f, 800f))
-                // Publish every vsync so one-shot keyframes move smoothly.
-                shotPose = frame
+                // Publish every vsync so one-shot keyframes move smoothly —
+                // into the holder, and invalidate DRAW only.
+                shotHolder[0] = frame
+                drawEpoch++
             }
             if (frame == null) break
         }
-        shotPose = null
+        shotHolder[0] = null
+        drawEpoch++
     }
 
-    val pose = when {
-        shotPose != null -> shotPose!!.applyTo(basePose, faceRadiusPx)
-        customAnim != null -> customAnim.let { clip ->
-            CustomAnimations.sample(clip, animT)?.let { with(CustomAnimations) { basePose.overlay(it) } }
-        } ?: basePose
-        else -> basePose
-    }
+    // NOTE: the live pose is assembled inside the draw lambda now (see
+    // `pose`/`effectivePose` there). The blend animators below read basePose
+    // directly, which is exactly equivalent: the composed pose only ever
+    // differs from basePose while a clip is playing, and in that case
+    // `playingClip` discards the animator outputs anyway. Feeding them
+    // basePose keeps their targets stable instead of retargeting them 60-120
+    // times a second to values nobody reads.
 
     // ── Expression blending: every pose field eases toward its target ──────
     // When a custom animation is playing, CustomAnimations.sample() already
@@ -283,22 +300,16 @@ fun AvatarRenderer(
     } else {
         spring<Float>(dampingRatio = 0.62f, stiffness = Spring.StiffnessMediumLow)
     }
-    val eyeOpenAnim by animateFloatAsState(pose.eyeOpen, blendSpec, label = "eyeOpen")
-    val pupilSizeAnim by animateFloatAsState(pose.pupilSize, blendSpec, label = "pupil")
-    val gazeUpAnim by animateFloatAsState(pose.pupilGazeUp, blendSpec, label = "gazeUp")
-    val headTiltAnim by animateFloatAsState(pose.headTiltDeg, blendSpec, label = "tilt")
-    val earPerkAnim by animateFloatAsState(pose.earPerk, blendSpec, label = "earPerk")
-    val earDroopAnim by animateFloatAsState(pose.earDroopDeg, blendSpec, label = "earDroop")
+    val eyeOpenAnim by animateFloatAsState(basePose.eyeOpen, blendSpec, label = "eyeOpen")
+    val pupilSizeAnim by animateFloatAsState(basePose.pupilSize, blendSpec, label = "pupil")
+    val gazeUpAnim by animateFloatAsState(basePose.pupilGazeUp, blendSpec, label = "gazeUp")
+    val headTiltAnim by animateFloatAsState(basePose.headTiltDeg, blendSpec, label = "tilt")
+    val earPerkAnim by animateFloatAsState(basePose.earPerk, blendSpec, label = "earPerk")
+    val earDroopAnim by animateFloatAsState(basePose.earDroopDeg, blendSpec, label = "earDroop")
     // Dim on its own short tween — a spring could overshoot alpha past 1.
     val dimSpec = if (playingClip) tween<Float>(16) else tween<Float>(250)
-    val faceAlphaAnim by animateFloatAsState(if (pose.dimmed) 0.55f else 1f, dimSpec, label = "dim")
-    val eyeOpen = if (playingClip) pose.eyeOpen else eyeOpenAnim
-    val pupilSize = if (playingClip) pose.pupilSize else pupilSizeAnim
-    val gazeUp = if (playingClip) pose.pupilGazeUp else gazeUpAnim
-    val headTilt = if (playingClip) pose.headTiltDeg else headTiltAnim
-    val earPerk = if (playingClip) pose.earPerk else earPerkAnim
-    val earDroop = if (playingClip) pose.earDroopDeg else earDroopAnim
-    val faceAlpha = if (playingClip) (if (pose.dimmed) 0.55f else 1f) else faceAlphaAnim
+    val faceAlphaAnim by animateFloatAsState(if (basePose.dimmed) 0.55f else 1f, dimSpec, label = "dim")
+
 
     // ── Ambient animation layers (timings from the registry) ───────────────
     val blink = remember { Animatable(1f) }
@@ -502,12 +513,6 @@ fun AvatarRenderer(
         }
     }
     val petted = lastPetAt != 0L
-    val effectivePose = if (petted) pose.copy(
-        happyEyes = true,
-        whiskerFlutter = true,
-        earDroopDeg = 12f,
-        mouth = if (pose.mouth == MouthMode.SPEAKING) MouthMode.SPEAKING else MouthMode.HAPPY
-    ) else pose
 
     Canvas(
         modifier = modifier
@@ -571,6 +576,36 @@ fun AvatarRenderer(
         // Subscribe draw pass to the single vsync-locked clock (not composition).
         val _epoch = drawEpoch
         val tSec = clockSec
+
+        // ── The live pose, assembled HERE rather than in composition ───────
+        // Everything below reads per-frame values (shotHolder, animTHolder)
+        // that change at vsync. Computing them in composition meant every
+        // frame of every clip re-ran the whole composable and restarted seven
+        // animateFloatAsState animations whose output was then discarded.
+        // Reading them inside onDraw keeps the cost to a draw pass.
+        val pose = when {
+            shotHolder[0] != null -> shotHolder[0]!!.applyTo(basePose, faceRadiusPx)
+            customAnim != null -> customAnim.let { clip ->
+                CustomAnimations.sample(clip, animTHolder[0])
+                    ?.let { with(CustomAnimations) { basePose.overlay(it) } }
+            } ?: basePose
+            else -> basePose
+        }
+        val effectivePose = if (petted) pose.copy(
+            happyEyes = true,
+            whiskerFlutter = true,
+            earDroopDeg = 12f,
+            mouth = if (pose.mouth == MouthMode.SPEAKING) MouthMode.SPEAKING else MouthMode.HAPPY,
+        ) else pose
+        // A clip's sampler already interpolates, so honour it directly; only
+        // the idle path wants the spring blend.
+        val eyeOpen = if (playingClip) pose.eyeOpen else eyeOpenAnim
+        val pupilSize = if (playingClip) pose.pupilSize else pupilSizeAnim
+        val gazeUp = if (playingClip) pose.pupilGazeUp else gazeUpAnim
+        val headTilt = if (playingClip) pose.headTiltDeg else headTiltAnim
+        val earPerk = if (playingClip) pose.earPerk else earPerkAnim
+        val earDroop = if (playingClip) pose.earDroopDeg else earDroopAnim
+        val faceAlpha = if (playingClip) (if (pose.dimmed) 0.55f else 1f) else faceAlphaAnim
         // Triangle / sine waves matching CatAnimationRegistry periods.
         fun triWave(periodSec: Float, from: Float, to: Float, phaseSec: Float = 0f): Float {
             if (periodSec <= 0f) return (from + to) * 0.5f
@@ -751,7 +786,7 @@ fun AvatarRenderer(
             //    moment expression matters most.
             // Now the channels the clip owns (eyes, ears, jaw shape) win, and
             // everything ambient keeps running underneath it.
-            val gPose = shotPose?.let { shot ->
+            val gPose = shotHolder[0]?.let { shot ->
                 shot.copy(
                     // A cat holding a pose still blinks.
                     eyeOpen = (shot.eyeOpen * blink.value).coerceIn(0.05f, 1.6f),
@@ -968,7 +1003,7 @@ fun AvatarRenderer(
         val sparkleIntensity = effectivePose.sparkle.coerceIn(0f, 1f)
         if (sparkleIntensity > 0.01f) {
             val sparkleColor = Color(0xFFFFF3BF).copy(alpha = sparkleIntensity * faceAlpha)
-            val seed = (animT / 120).toInt()  // changes every 120ms for twinkling
+            val seed = (animTHolder[0] / 120).toInt()  // changes every 120ms for twinkling
             val count = (sparkleIntensity * 8).toInt().coerceAtLeast(2)
             for (i in 0 until count) {
                 val hash = (seed * 31 + i * 7) and 0x7FFFFFFF
