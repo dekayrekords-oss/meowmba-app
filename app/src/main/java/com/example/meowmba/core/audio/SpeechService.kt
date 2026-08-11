@@ -142,22 +142,32 @@ class SpeechService(private val context: Context) : SpeechEngine {
         private fun attachListener(r: SpeechRecognizer) {
             r.setRecognitionListener(object : RecognitionListener {
                 override fun onReadyForSpeech(params: Bundle?) {
-                    if (!gate.acceptReady()) return
+                    // Logged BEFORE the gate: a callback dropped by the gate is
+                    // invisible otherwise, and "did the service ever call back
+                    // at all" is the question we cannot answer without this.
+                    Log.i(TAG, "<- onReadyForSpeech")
+                    if (!gate.acceptReady()) {
+                        Log.w(TAG, "   ready DROPPED by gate (session already closed)")
+                        return
+                    }
                     _isListening.value = true
                     Log.i(TAG, "session ready ($componentName)")
                 }
                 override fun onBeginningOfSpeech() {
+                    Log.i(TAG, "<- onBeginningOfSpeech")
                     if (!gate.acceptSpeechEdge()) return
                     Log.i(TAG, "speech started")
                 }
                 override fun onRmsChanged(rmsdB: Float) {}
                 override fun onBufferReceived(buffer: ByteArray?) {}
                 override fun onEndOfSpeech() {
+                    Log.i(TAG, "<- onEndOfSpeech")
                     if (!gate.acceptSpeechEdge()) return
                     _isListening.value = false
                     Log.i(TAG, "speech ended")
                 }
                 override fun onError(error: Int) {
+                    Log.i(TAG, "<- onError($error)")
                     // A pre-empted session must not corrupt the live one: AiAi
                     // delivers a result and then a late ERROR_SERVER_DISCONNECTED
                     // when the session is replaced mid-delivery. If that landed,
@@ -183,6 +193,7 @@ class SpeechService(private val context: Context) : SpeechEngine {
                     onError?.invoke(error)
                 }
                 override fun onResults(results: Bundle?) {
+                    Log.i(TAG, "<- onResults")
                     if (!gate.acceptResults()) return
                     releaseSessionSlot()
                     val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
@@ -192,6 +203,7 @@ class SpeechService(private val context: Context) : SpeechEngine {
                     }
                 }
                 override fun onPartialResults(partialResults: Bundle?) {
+                    Log.i(TAG, "<- onPartialResults")
                     if (!gate.acceptPartial()) return
                     val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     if (!matches.isNullOrEmpty()) {
@@ -279,8 +291,16 @@ class SpeechService(private val context: Context) : SpeechEngine {
                     RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS,
                     MINIMUM_SESSION_MS,
                 )
-                // Keep recognition on the device whenever possible (privacy-first)
-                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+                // Keep recognition on the device whenever possible (privacy-first).
+                //
+                // DIAGNOSTIC 2026-08-11: temporarily false. With this true, AiAi
+                // accepted onStartListening and then never called
+                // onReadyForSpeech — no ready, no result, no error, forever, at
+                // 5.5s per retry. That silence is the "mic and wake word do
+                // nothing" symptom. A missing on-device model is the leading
+                // explanation, since an unavailable offline model can stall
+                // instead of returning ERROR_LANGUAGE_UNAVAILABLE.
+                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, PREFER_OFFLINE)
             }
             r.startListening(intent)
 
@@ -366,6 +386,16 @@ class SpeechService(private val context: Context) : SpeechEngine {
          * gate is the authority, this is just when we ask it.
          */
         private const val READY_TIMEOUT_MS = 5_500L
+
+        /**
+         * Privacy-first: keep recognition on the device.
+         *
+         * Tested 2026-08-11 as a suspect for the never-becomes-ready stall and
+         * CLEARED — the stall reproduces identically with this false, so the
+         * offline model is not the cause. Left true, which is the intended
+         * behaviour; flipping it sends audio off the device.
+         */
+        private const val PREFER_OFFLINE = true
 
         /** Android System Intelligence — the real modern on-device recognizer. */
         private const val AIAI_PACKAGE = "com.google.android.as"
