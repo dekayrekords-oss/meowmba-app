@@ -31,3 +31,7 @@ __pycache__/
 
 # Kotlin daemon error logs
 .kotlin/
+
+# Local backup copies (never commit)
+*.bak
+app/src/main.bak-*/
