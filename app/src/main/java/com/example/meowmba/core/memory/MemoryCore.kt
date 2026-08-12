@@ -152,6 +152,7 @@ object MemoryCommandParser {
  */
 object PromptBuilder {
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    private val clockFormat = SimpleDateFormat("EEEE, MMMM d, yyyy h:mm a zzz", Locale.US)
 
     fun build(
         companionName: String,
@@ -162,6 +163,14 @@ object PromptBuilder {
     ): String = buildString {
         append("You are ").append(companionName)
         append(", a helpful AI companion with a cat avatar. Answer naturally and concisely.\n")
+        // The chat model has no clock — asked the time it answered from training
+        // data, confidently and wrong. Anchor it to the real instant so any
+        // time/date-adjacent question (times in a few hours, days of the week)
+        // is grounded rather than guessed. The deterministic ClockAnswers path
+        // already answers the bare time/date questions without a model call.
+        append("The current time and date right now, in the user's timezone, is ")
+        append(clockFormat.format(Date(System.currentTimeMillis()))).append(".\n")
+        append("If the user asks the time or date, answer from that line — never guess.\n")
         // Measured complaint: asked "how do I install X", the model replied with
         // another question or promised to look it up. Answer; do not deflect.
         // Unconditional so it also covers the tool-free direct-answer path.

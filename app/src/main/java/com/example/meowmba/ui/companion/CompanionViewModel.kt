@@ -22,6 +22,7 @@ import com.example.meowmba.core.agent.runtime.AgentTask
 import com.example.meowmba.core.agent.runtime.AgentRegistry
 import com.example.meowmba.core.agent.runtime.AgentRouter
 import com.example.meowmba.core.agent.runtime.AgentBrainRouter
+import com.example.meowmba.core.agent.runtime.ClockAnswers
 import com.example.meowmba.core.agent.runtime.AuditSink
 import com.example.meowmba.core.agent.runtime.HermesAgentBrain
 import com.example.meowmba.core.agent.runtime.HermesConfig
@@ -2860,6 +2861,22 @@ class CompanionViewModel(
             ) {
                 android.util.Log.i("Weather", "routed as a weather question: \"$text\"")
                 answerWeather()
+                return@launch
+            }
+
+            // Time and date are answered from the device clock, never from the model —
+            // the chat model hallucinated the time because it had no clock. Same reason
+            // as weather: an instant lookup with an obvious answer, no agent task.
+            val normalizedTurn = com.example.meowmba.core.audio.WakePhraseMatcher.normalize(text)
+            if (ClockAnswers.isClockQuestion(normalizedTurn)) {
+                android.util.Log.i("Clock", "routed as a clock question: \"$text\"")
+                speak(
+                    ClockAnswers.answer(
+                        normalizedTurn,
+                        System.currentTimeMillis(),
+                        java.util.TimeZone.getDefault()
+                    )
+                )
                 return@launch
             }
 
