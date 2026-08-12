@@ -188,6 +188,11 @@ class CompanionViewModel(
     private val _faceGaze = MutableStateFlow<Pair<Float, Float>?>(null)
     val faceGaze = _faceGaze.asStateFlow()
 
+    /** Full six-DOF face pose (translation + rotation + distance) for the avatar. */
+    private val _facePose = MutableStateFlow<com.example.meowmba.core.vision.FacePose6Dof?>(null)
+    val facePose: kotlinx.coroutines.flow.StateFlow<com.example.meowmba.core.vision.FacePose6Dof?> =
+        _facePose.asStateFlow()
+
     fun getVisionManager(): com.example.meowmba.core.vision.VisionManager? = visionManager
 
     /** Named GPS places ("remember this as my mailbox"). */
@@ -439,6 +444,18 @@ class CompanionViewModel(
                     _faceGaze.value = next
                     com.example.meowmba.core.robot.FaceMotorMap.panForFace(offX)
                         .forEach { (servo, angle) -> motorController.setServo(servo, angle) }
+                }
+                // Full 6-DOF pose rides the same track; StateFlow dedupes equal
+                // values so rotation-only changes still re-emit.
+                _facePose.value = track?.let {
+                    com.example.meowmba.core.vision.FacePose6Dof(
+                        offsetX = it.offsetX,
+                        offsetY = it.offsetY,
+                        yawDeg = it.yawDeg,
+                        pitchDeg = it.pitchDeg,
+                        rollDeg = it.rollDeg,
+                        scale = it.scale,
+                    )
                 }
             }
         }

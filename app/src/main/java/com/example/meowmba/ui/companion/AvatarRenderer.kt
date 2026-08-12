@@ -115,6 +115,10 @@ fun AvatarRenderer(
     paused: Boolean = false,
     faceGazeX: Float? = null,
     faceGazeY: Float? = null,
+    faceYawDeg: Float? = null,
+    facePitchDeg: Float? = null,
+    faceRollDeg: Float? = null,
+    faceScale: Float? = null,
     modifier: Modifier = Modifier
 ) {
     val basePose = CatAvatarStateMachine.resolvePose(state)
@@ -291,15 +295,28 @@ fun AvatarRenderer(
     // drift is a second motion source and made the head thrash.
     var heldFaceGaze by remember { mutableStateOf<Offset?>(null) }
     var recentlyTracking by remember { mutableStateOf(false) }
-    LaunchedEffect(faceGazeX, faceGazeY) {
+    // Held rotation + distance, in sync with the held gaze (same 550ms hold).
+    var heldYaw by remember { mutableStateOf(0f) }
+    var heldPitch by remember { mutableStateOf(0f) }
+    var heldRoll by remember { mutableStateOf(0f) }
+    var heldScale by remember { mutableStateOf(1f) }
+    LaunchedEffect(faceGazeX, faceGazeY, faceYawDeg, facePitchDeg, faceRollDeg, faceScale) {
         if (faceGazeX != null && faceGazeY != null) {
             heldFaceGaze = Offset(faceGazeX, faceGazeY)
+            heldYaw = faceYawDeg ?: heldYaw
+            heldPitch = facePitchDeg ?: heldPitch
+            heldRoll = faceRollDeg ?: heldRoll
+            heldScale = faceScale ?: heldScale
             recentlyTracking = true
         } else {
             delay(550)
             if (faceGazeX == null && faceGazeY == null) {
                 heldFaceGaze = null
                 recentlyTracking = false
+                heldYaw = 0f
+                heldPitch = 0f
+                heldRoll = 0f
+                heldScale = 1f
             }
         }
     }
@@ -371,6 +388,29 @@ fun AvatarRenderer(
         animationSpec = tween(durationMillis = 450, easing = FastOutSlowInEasing),
         label = "trackingWeight"
     )
+
+    // ── 6-DOF: yaw/pitch/roll/distance glide in like gaze does ──────────────
+    // Each face sample moves the spring target; the spring keeps the head from
+    // stepping per detector frame. Values are normalized (-1..1) and the
+    // tracking weight decides how hard the head follows.
+    val rotSpec = if (trackingNow) {
+        spring<Float>(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMedium,
+        )
+    } else {
+        tween(450)
+    }
+    val yawN by animateFloatAsState(
+        com.example.meowmba.core.vision.FacePose.normalizedYaw(heldYaw), rotSpec, label = "yawN"
+    )
+    val pitchN by animateFloatAsState(
+        com.example.meowmba.core.vision.FacePose.normalizedPitch(heldPitch), rotSpec, label = "pitchN"
+    )
+    val rollN by animateFloatAsState(
+        com.example.meowmba.core.vision.FacePose.normalizedRoll(heldRoll), rotSpec, label = "rollN"
+    )
+    val headScale by animateFloatAsState(heldScale, rotSpec, label = "headScale")
 
     // ── Petting: stroking the cat makes it purr ────────────────────────────
     var lastPetAt by remember { mutableLongStateOf(0L) }
@@ -493,15 +533,22 @@ fun AvatarRenderer(
         // movement itself prevents burn-in on always-on displays.
         val idleGazeX = saccadeX.value * (1f - trackingWeight)
         val idleGazeY = saccadeY.value * (1f - trackingWeight)
-        val cx = w / 2f + (gazeX + idleGazeX) * s * bodyGaze + leanShift
-        val cy = h * 0.47f + (gazeY + idleGazeY) * s * (0.02f + 0.04f * trackingWeight) - bounceY
+        val cx = w / 2f + (gazeX + idleGazeX) * s * bodyGaze + leanShift +
+            yawN * trackingWeight * s * 0.08f
+        val cy = h * 0.47f + (gazeY + idleGazeY) * s * (0.02f + 0.04f * trackingWeight) -
+            bounceY + pitchN * trackingWeight * s * 0.06f
 
-        val eyeDX = s * 0.26f
-        val eyeW = s * 0.19f
-        val baseEyeH = s * 0.24f
+        // 6-DOF: roll rotates the classic head through the same headTilt channel
+        // the eyes already use; distance scales the head geometry up/down.
+        val headRotate = headTilt + rollN * 14f * trackingWeight
+        val headSizeFactor = com.example.meowmba.core.vision.FacePose.headSizeFactor(headScale)
+
+        val eyeDX = s * 0.26f * headSizeFactor
+        val eyeW = s * 0.19f * headSizeFactor
+        val baseEyeH = s * 0.24f * headSizeFactor
         val eyeH = (baseEyeH * eyeOpen * blink.value * breathe).coerceAtLeast(s * 0.012f)
-        val eyeCy = cy - s * 0.06f
-        val stroke = s * 0.014f
+        val eyeCy = cy - s * 0.06f * headSizeFactor
+        val stroke = s * 0.014f * headSizeFactor
 
         // ── Godot Cat Assistant face (exact look + CatMotion) ───────────────
         if (useGodotFace) {
@@ -521,9 +568,14 @@ fun AvatarRenderer(
             // Whole-head follow scaled by the ramped tracking weight: entering
             // and leaving follow glides the head instead of snapping (the old
             // 0.42/18° hard toggles read as stepping).
-            val bodyPanX = gazeX * R * (0.06f + 0.26f * trackingWeight)
-            val bodyPanY = gazeY * R * (0.04f + 0.18f * trackingWeight)
-            val bodyTilt = (gazeX * 12f).coerceIn(-12f, 12f) * trackingWeight
+            // 6-DOF: yaw turns the head sideways (pan + slight lean), pitch nods
+            // it (vertical pan), roll actually rotates it, scale leans in/out.
+            val bodyPanX = gazeX * R * (0.06f + 0.26f * trackingWeight) +
+                yawN * trackingWeight * R * 0.22f
+            val bodyPanY = gazeY * R * (0.04f + 0.18f * trackingWeight) +
+                pitchN * trackingWeight * R * 0.16f
+            val bodyTilt = (gazeX * 12f + rollN * 16f).coerceIn(-20f, 20f) * trackingWeight
+            val godotHeadSize = com.example.meowmba.core.vision.FacePose.headSizeFactor(headScale)
             // Pupils track hard — body pan carries the head, iris must still
             // glance toward the user inside the sockets (0.50 looked static).
             val pupilGazeX = if (tracking) {
@@ -585,7 +637,7 @@ fun AvatarRenderer(
             rotate(gPose.headTiltDeg, pivot = center) {
                 drawGodotCatFace(
                     origin = center,
-                    R = R * (1f + gPose.scaleDelta).coerceIn(0.9f, 1.15f),
+                    R = R * godotHeadSize * (1f + gPose.scaleDelta).coerceIn(0.9f, 1.15f),
                     pose = gPose,
                     clock = GodotFaceClock(
                         t = godotClockT,
@@ -649,26 +701,26 @@ fun AvatarRenderer(
         val eyeColor = EYE_COLOR.copy(alpha = EYE_COLOR.alpha * faceAlpha)
 
         // ── LAYER 1: Ears (with mic-privacy marks) ─────────────────────────
-        drawEar(-1f, earTwitchL.value, cx, eyeCy, s, eyeDX, eyeW, baseEyeH,
+        drawEar(-1f, earTwitchL.value, cx, eyeCy, s * headSizeFactor, eyeDX, eyeW, baseEyeH,
             earPerk, earDroop, eyeColor, effectivePose.micOffMark)
-        drawEar(1f, earTwitchR.value, cx, eyeCy, s, eyeDX, eyeW, baseEyeH,
+        drawEar(1f, earTwitchR.value, cx, eyeCy, s * headSizeFactor, eyeDX, eyeW, baseEyeH,
             earPerk, earDroop, eyeColor, effectivePose.micOffMark)
 
         // ── LAYER 2: Eyes (happy arcs, or open eyes with tracking pupils) ──
         // The eyes are the only thing the style changes: same pose, same gaze,
         // same blink clock, so switching mid-animation is seamless.
         if (state.avatarStyle == AvatarStyle.NEO) {
-            drawEyeNeo(-1f, -headTilt, cx, eyeCy, s, eyeDX, eyeW, baseEyeH, eyeH,
+            drawEyeNeo(-1f, -headRotate, cx, eyeCy, s, eyeDX, eyeW, baseEyeH, eyeH,
                 blink.value, effectivePose, pupilSize, (gazeX + idleGazeX * 0.55f).coerceIn(-1f, 1f),
                 (gazeY + idleGazeY * 0.55f).coerceIn(-1f, 1f), gazeUp, eyeColor)
-            drawEyeNeo(1f, headTilt, cx, eyeCy, s, eyeDX, eyeW, baseEyeH, eyeH,
+            drawEyeNeo(1f, headRotate, cx, eyeCy, s, eyeDX, eyeW, baseEyeH, eyeH,
                 blink.value, effectivePose, pupilSize, (gazeX + idleGazeX * 0.55f).coerceIn(-1f, 1f),
                 (gazeY + idleGazeY * 0.55f).coerceIn(-1f, 1f), gazeUp, eyeColor)
         } else {
-            drawEye(-1f, -headTilt, cx, eyeCy, s, eyeDX, eyeW, baseEyeH, eyeH,
+            drawEye(-1f, -headRotate, cx, eyeCy, s, eyeDX, eyeW, baseEyeH, eyeH,
                 blink.value, effectivePose, pupilSize, (gazeX + idleGazeX * 0.55f).coerceIn(-1f, 1f),
                 (gazeY + idleGazeY * 0.55f).coerceIn(-1f, 1f), gazeUp, eyeColor)
-            drawEye(1f, headTilt, cx, eyeCy, s, eyeDX, eyeW, baseEyeH, eyeH,
+            drawEye(1f, headRotate, cx, eyeCy, s, eyeDX, eyeW, baseEyeH, eyeH,
                 blink.value, effectivePose, pupilSize, (gazeX + idleGazeX * 0.55f).coerceIn(-1f, 1f),
                 (gazeY + idleGazeY * 0.55f).coerceIn(-1f, 1f), gazeUp, eyeColor)
         }
@@ -687,9 +739,9 @@ fun AvatarRenderer(
         // ── LAYER 3b: Paw (visible when head tilts down, e.g. paw lick) ────
         // The paw fades in proportionally with head tilt — a 10° tilt shows
         // it at full alpha, below that it cross-fades from invisible.
-        val pawAlpha = ((headTilt / 10f).coerceIn(0f, 1f) * faceAlpha)
+        val pawAlpha = ((headRotate / 10f).coerceIn(0f, 1f) * faceAlpha)
         if (pawAlpha > 0.01f) {
-            val pawCx = cx + s * 0.18f * (if (headTilt > 0) 1f else -1f)
+            val pawCx = cx + s * 0.18f * (if (headRotate > 0) 1f else -1f)
             val pawCy = cy + s * 0.28f
             val pawS = s * 0.055f
             val pawColor = eyeColor.copy(alpha = pawAlpha)

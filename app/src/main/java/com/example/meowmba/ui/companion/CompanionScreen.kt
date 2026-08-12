@@ -790,6 +790,7 @@ private fun AvatarMotionHost(
 ) {
     val motionTilt by viewModel.motionTiltDeg.collectAsState()
     val faceGaze by viewModel.faceGaze.collectAsState()
+    val facePose by viewModel.facePose.collectAsState()
     Box(
         modifier = modifier.graphicsLayer {
             rotationZ = motionTilt.coerceIn(-4f, 4f)
@@ -806,6 +807,10 @@ private fun AvatarMotionHost(
             paused = paused,
             faceGazeX = faceGaze?.first,
             faceGazeY = faceGaze?.second,
+            faceYawDeg = facePose?.yawDeg,
+            facePitchDeg = facePose?.pitchDeg,
+            faceRollDeg = facePose?.rollDeg,
+            faceScale = facePose?.scale,
         )
     }
 }
