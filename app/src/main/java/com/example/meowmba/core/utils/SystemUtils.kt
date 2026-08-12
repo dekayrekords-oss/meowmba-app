@@ -25,16 +25,6 @@ object SystemUtils {
         }
     }
 
-    /** Check whether Google AI Core (Gemini Nano) is available on this device. */
-    fun hasGeminiNano(context: Context): Boolean {
-        return try {
-            context.packageManager.getPackageInfo("com.google.android.ai.core", 0)
-            true
-        } catch (_: PackageManager.NameNotFoundException) {
-            false
-        }
-    }
-
     /** Check whether the device has a hardware NPU / DSP for on-device AI. */
     fun hasNpu(): Boolean {
         val props = listOf(
@@ -54,7 +44,6 @@ object SystemUtils {
     data class HardwareCapabilities(
         val ramGb: Double,
         val cpuCores: Int,
-        val hasGeminiNano: Boolean,
         val hasNpu: Boolean,
         val androidApi: Int,
         val is64Bit: Boolean
@@ -67,7 +56,6 @@ object SystemUtils {
         return HardwareCapabilities(
             ramGb = getTotalRamGb(context),
             cpuCores = getCpuCores(),
-            hasGeminiNano = hasGeminiNano(context),
             hasNpu = hasNpu(),
             androidApi = Build.VERSION.SDK_INT,
             is64Bit = Build.SUPPORTED_64_BIT_ABIS.isNotEmpty()

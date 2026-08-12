@@ -14,8 +14,6 @@ import com.example.meowmba.core.download.DownloadService
 import com.example.meowmba.core.agent.ModelDownloader
 import com.example.meowmba.core.agent.ModelProvider
 import com.example.meowmba.core.agent.ModelResponse
-import com.example.meowmba.core.agent.ModelRouter
-import com.example.meowmba.core.agent.GeminiNanoProvider
 import com.example.meowmba.core.agent.RemoteModelProvider
 import com.example.meowmba.core.agent.runtime.AgentOrchestrator
 import com.example.meowmba.core.agent.runtime.AgentTask
@@ -131,7 +129,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.launch
 import android.util.Log
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -409,6 +406,22 @@ class CompanionViewModel(
     private var contentionStreak = 0
     private var alwaysOnRearmJob: Job? = null
     private var alwaysOnPartialJob: Job? = null
+
+    /**
+     * Last non-blank partial heard by the open mic, per session. AiAi on this
+     * device ends a session that HEARD speech with ERROR_NO_MATCH and no final
+     * result, so the partial is the only record of what was said — without it
+     * the always-on capture would drop every utterance ("voice chat never
+     * answers").
+     */
+    private var lastAlwaysOnPartial = ""
+
+    /**
+     * Silent-window re-arms performed by the watchdog since the last recognizer
+     * terminal. A terminal (result/error) resets it; see
+     * [MAX_WATCHDOG_SILENT_REARMS].
+     */
+    private var alwaysOnSilentRearms = 0
     private var wakeAckPending = false
     private var wakeAckListenJob: Job? = null
     /** True once the app has handed off to the background (set on pause, cleared on resume). */
@@ -1413,17 +1426,10 @@ class CompanionViewModel(
     }
 
     /**
-     * Which provider a fresh install starts on: Gemini Nano when AICore is present,
-     * otherwise the bundled local model.
-     *
-     * Only consulted when nothing is saved — an explicit choice in the picker always
-     * wins, so both options stay fully available. Falling back matters: defaulting to
-     * Nano unconditionally would strand every device without AICore on a provider that
-     * can never build.
+     * Which provider a fresh install starts on: the bundled local model is the
+     * safe default (nothing to download for the router's last resort). An
+     * explicit choice in the picker always wins.
      */
-    /** Resolves to the provider once any async warm-up (Gemini Nano) completes. */
-    private var providerReady: CompletableDeferred<ModelProvider?>? = null
-    private var providerWarmUp: Job? = null
 
     /**
      * What a fresh install talks to.
@@ -1582,11 +1588,6 @@ class CompanionViewModel(
         if (secureStorage == null) return
 
         val mainProvider: ModelProvider? = when (modelName) {
-            // Nano is built ASYNCHRONOUSLY below — never here. GeminiNanoProvider
-            // .create() calls prepareInferenceEngine(), which blocks for seconds, and
-            // updateProvider runs on the main thread during init. Doing it inline hung
-            // the app on its boot screen (ANR). Consumers await [providerReady].
-            MODEL_GEMINI_NANO -> null
             "On-device (Local)" -> {
                 val path = resolvedLocalModelPath()
                 if (!java.io.File(path).isFile || java.io.File(path).length() == 0L) {
@@ -1627,84 +1628,11 @@ class CompanionViewModel(
             else -> null
         }
 
-        // Wrap in the dual-model router when Nano can serve as the LIGHT lane. Skipped
-        // when Nano is already the main provider — routing Nano to Nano just builds a
-        // second engine and warms it up for nothing.
-        val nanoIsMain = modelName == MODEL_GEMINI_NANO
-        val nanoUsable = GeminiNanoProvider.isAvailable(secureStorage.context)
-        val canRouteThroughNano = !nanoIsMain && mainProvider != null && nanoUsable
-
-        // Whatever is usable immediately. For Nano this is null until the warm-up
-        // finishes; [providerReady] is what callers actually await.
         currentProvider = mainProvider
-        _uiState.value = _uiState.value.copy(
-            geminiNanoActive = false,
-            geminiNanoWarming = nanoIsMain && nanoUsable
-        )
-
-        providerWarmUp?.cancel()
-        providerWarmUp = null
-
-        if (!nanoIsMain && !canRouteThroughNano) {
-            providerReady = CompletableDeferred(mainProvider)
-            return
-        }
-
-        // AICore warm-up is slow and MUST stay off the main thread — doing it inline
-        // is what hung the app at the boot screen. Retry with backoff so a missing
-        // model download doesn't leave the user staring at "No model is ready".
-        val pending = CompletableDeferred<ModelProvider?>()
-        providerReady = pending
-        providerWarmUp = viewModelScope.launch {
-            var nano: ModelProvider? = null
-            var attempt = 0
-            val maxAttempts = 12  // ~5 minutes with increasing backoff
-            while (attempt < maxAttempts && nano == null) {
-                nano = withContext(Dispatchers.IO) {
-                    try {
-                        GeminiNanoProvider.create(secureStorage.context)
-                    } catch (e: Exception) {
-                        fuLog("Gemini Nano warm-up attempt ${attempt + 1} failed: ${e.message}")
-                        null
-                    }
-                }
-                if (nano != null) break
-                attempt++
-                if (attempt < maxAttempts) {
-                    // Exponential backoff: 10s, 20s, 40s, 80s... capped at 5 min
-                    val delayMs = minOf(10_000L * (1L shl attempt), 5 * 60 * 1000L)
-                    fuLog("Gemini Nano warm-up retrying in ${delayMs / 1000}s (attempt ${attempt + 1}/$maxAttempts)")
-                    delay(delayMs)
-                }
-            }
-            val resolved: ModelProvider? = when {
-                nano == null -> {
-                    // Warm-up exhausted: keep the user on Nano with an honest caption,
-                    // don't silently fall back to null which shows "No model is ready".
-                    _uiState.value = _uiState.value.copy(
-                        captionText = "Gemini Nano model still downloading — check AICore settings if stuck",
-                        geminiNanoWarming = false
-                    )
-                    mainProvider
-                }
-                nanoIsMain -> nano
-                else -> ModelRouter(lightProvider = nano, mainProvider = mainProvider!!)
-            }
-            currentProvider = resolved
-            _uiState.value = _uiState.value.copy(
-                geminiNanoActive = (nanoIsMain && nano != null),
-                geminiNanoWarming = false
-            )
-            pending.complete(resolved)
-        }
     }
 
-    /**
-     * The provider to generate with, waiting for an in-flight Nano warm-up rather than
-     * reporting "no model is ready" during the first few seconds after launch.
-     */
-    private suspend fun awaitProvider(): ModelProvider? =
-        currentProvider ?: providerReady?.await() ?: currentProvider
+    /** The provider to generate with. All providers build synchronously. */
+    private suspend fun awaitProvider(): ModelProvider? = currentProvider
 
     /**
      * The local model file the provider will actually load: the configured
@@ -1734,9 +1662,6 @@ class CompanionViewModel(
     private fun refreshLoadedModels() {
         val selected = _uiState.value.selectedModel
         val source = when {
-            // Nano runs on the device via AICore. Without this it fell through to
-            // CLOUD and the Hardware page claimed it was a cloud model.
-            selected == MODEL_GEMINI_NANO -> ModelSource.LOCAL
             selected.contains("(Local)") -> ModelSource.LOCAL
             // The old picker said "(Local Network)"; the standalone build's
             // remote brain is OpenRouter — still the NETWORK lane.
@@ -2610,17 +2535,55 @@ class CompanionViewModel(
         if (alwaysOnActive && alwaysOnSessionOpen) return
         alwaysOnActive = true
         armAlwaysOnCapture(engine)
-        if (alwaysOnPartialJob == null) {
-            alwaysOnPartialJob = viewModelScope.launch {
-                engine.partialResults.collect { partial ->
-                    if (alwaysOnActive && shouldAlwaysOnMic() && partial.isNotBlank() &&
-                        _uiState.value.interactionState == InteractionState.IDLE
-                    ) {
-                        _uiState.value = _uiState.value.copy(
-                            interactionState = InteractionState.LISTENING,
-                            captionText = partial,
-                        )
-                    }
+    }
+
+    /**
+     * Keeps the always-on partial mirror alive for as long as the always-on loop
+     * is running. Started from [armAlwaysOnCapture] (NOT [startAlwaysOnListening])
+     * because a stop/re-arm cycle cancels the job in [stopAlwaysOnListening] and
+     * the loop continues through [armAlwaysOnCapture] — a collector started only
+     * in [startAlwaysOnListening] would die on the first stop and the recovery
+     * path would then miss every later partial ("heard speech but no reply").
+     */
+    /**
+     * The always-on recognizer on AiAi never delivers a final result — sessions
+     * end with an empty result or NO_MATCH, so the only copy of what the user
+     * said lives in the last partial. When a quiet terminal arrives with a
+     * partial banked, treat it as the turn: feed it through and let the turn's
+     * reset re-arm the mic from a clean idle. Returns true when consumed.
+     *
+     * MUST be called before any re-arm, because [armAlwaysOnCapture] clears
+     * [lastAlwaysOnPartial] when it opens the next session.
+     */
+    private fun recoverAlwaysOnPartial(): Boolean {
+        if (!alwaysOnActive) return false
+        if (lastAlwaysOnPartial.isBlank()) return false
+        val utterance = lastAlwaysOnPartial
+        lastAlwaysOnPartial = ""
+        if (_uiState.value.interactionState == InteractionState.LISTENING) {
+            _uiState.value = _uiState.value.copy(interactionState = InteractionState.IDLE)
+        }
+        fuLog("always-on recovering partial \"$utterance\"")
+        processUserSpeech(utterance)
+        return true
+    }
+
+    private fun ensureAlwaysOnPartialCollector(engine: com.example.meowmba.core.audio.SpeechEngine) {
+        if (alwaysOnPartialJob != null) return
+        fuLog("always-on collector STARTED")
+        alwaysOnPartialJob = viewModelScope.launch {
+            engine.partialResults.collect { partial ->
+                if (partial.isNotBlank()) {
+                    lastAlwaysOnPartial = partial
+                    fuLog("always-on collector partial=\"$partial\"")
+                }
+                if (alwaysOnActive && shouldAlwaysOnMic() && partial.isNotBlank() &&
+                    _uiState.value.interactionState == InteractionState.IDLE
+                ) {
+                    _uiState.value = _uiState.value.copy(
+                        interactionState = InteractionState.LISTENING,
+                        captionText = partial,
+                    )
                 }
             }
         }
@@ -2641,6 +2604,7 @@ class CompanionViewModel(
     /** Opens the always-on mic once the turn is idle (never on top of a live turn). */
     private fun armAlwaysOnCapture(engine: com.example.meowmba.core.audio.SpeechEngine) {
         if (!alwaysOnActive) return
+        ensureAlwaysOnPartialCollector(engine)
         if (!shouldAlwaysOnMic()) {
             stopAlwaysOnListening()
             return
@@ -2669,6 +2633,7 @@ class CompanionViewModel(
         }
         lastAlwaysOnArmAtMs = now
         alwaysOnSessionOpen = true
+        lastAlwaysOnPartial = ""
         // The latch above is what stops us stacking sessions — but it is only
         // ever cleared by a recognizer callback, and a callback is not
         // guaranteed: if another consumer takes the single shared
@@ -2686,14 +2651,33 @@ class CompanionViewModel(
                     "$TAG_WAKE: always-on session produced no callback in " +
                         "${ALWAYS_ON_SESSION_TIMEOUT_MS}ms — releasing the latch",
                 )
-                // Release the latch ONLY. Re-arming from here would schedule a
-                // fresh watchdog that can time out and re-arm again, a loop
-                // with nothing to break it if the recognizer is permanently
-                // gone. The existing re-arm paths (resetState →
-                // updateVoiceListeningMode, and the recognizer error handler)
-                // already fire from a clean idle; all they needed was for this
-                // latch to stop lying about a session being open.
+                // Release the latch, then re-arm ONCE after tearing the
+                // recognizer down — with the stale connection gone a fresh arm
+                // lands clean (it can no longer be refused with BUSY forever).
+                // The re-arm budget is bounded: a recognizer that keeps going
+                // silent without ever delivering a terminal gets a couple of
+                // recovery tries, then the loop stops waiting on it (a terminal
+                // resets the budget; real sessions deliver one every ~16s).
                 alwaysOnSessionOpen = false
+                val engine = speechService
+                if (engine != null) {
+                    // Tear the recognizer down so the re-arm binds a fresh one.
+                    (speechService as? com.example.meowmba.core.audio.SpeechService)
+                        ?.rebindRecognizer()
+                    if (alwaysOnSilentRearms < MAX_WATCHDOG_SILENT_REARMS) {
+                        alwaysOnSilentRearms++
+                        alwaysOnRearmJob?.cancel()
+                        alwaysOnRearmJob = viewModelScope.launch {
+                            delay(2_000L)
+                            if (alwaysOnActive && shouldAlwaysOnMic() &&
+                                _uiState.value.interactionState == InteractionState.IDLE &&
+                                !alwaysOnSessionOpen
+                            ) {
+                                armAlwaysOnCapture(engine)
+                            }
+                        }
+                    }
+                }
             }
         }
         engine.startListening(
@@ -2702,11 +2686,56 @@ class CompanionViewModel(
                 alwaysOnSessionOpen = false
                 // The service answered, so whatever was blocking it is over.
                 contentionStreak = 0
-                if (alwaysOnActive && text.isNotBlank()) processUserSpeech(text)
+                alwaysOnSilentRearms = 0
+                if (alwaysOnActive && text.isNotBlank()) {
+                    processUserSpeech(text)
+                } else if (alwaysOnActive) {
+                    // Empty/quiet result — the recognizer ended the session on
+                    // silence. AiAi always ends the open mic this way, even when
+                    // it transcribed the user's words into partials (results are
+                    // never delivered on this device), so recover the turn from
+                    // the banked partial FIRST — a re-arm would erase it.
+                    if (recoverAlwaysOnPartial()) return@startListening
+                    // Truly nothing said: a stray partial may have flipped us to
+                    // LISTENING along the way; clear it or every future arm
+                    // refuses at the `interactionState != IDLE` guard and the
+                    // always-on loop dies silently. Then reopen the mic promptly.
+                    if (_uiState.value.interactionState == InteractionState.LISTENING) {
+                        _uiState.value = _uiState.value.copy(interactionState = InteractionState.IDLE)
+                    }
+                    if (shouldAlwaysOnMic()) {
+                        alwaysOnRearmJob?.cancel()
+                        alwaysOnRearmJob = viewModelScope.launch {
+                            delay(1_500L)
+                            if (alwaysOnActive && shouldAlwaysOnMic() &&
+                                _uiState.value.interactionState == InteractionState.IDLE &&
+                                !alwaysOnSessionOpen
+                            ) {
+                                armAlwaysOnCapture(engine)
+                            }
+                        }
+                    }
+                }
             },
             onError = { code ->
                 alwaysOnSessionWatchdog?.cancel()
                 alwaysOnSessionOpen = false
+                // A terminal from the recognizer proves it is alive: the
+                // watchdog's silent-recovery budget starts over.
+                alwaysOnSilentRearms = 0
+                // The open mic heard the user, but AiAi ended the session with
+                // NO_MATCH and no final result (measured on this device: every
+                // always-on session ends this way — results are never delivered).
+                // The words only exist in the partial; feed them through or the
+                // turn is lost and voice chat never answers.
+                val quiet = code == android.speech.SpeechRecognizer.ERROR_NO_MATCH ||
+                    code == android.speech.SpeechRecognizer.ERROR_SPEECH_TIMEOUT
+                val heardSpeech = lastAlwaysOnPartial.isNotBlank()
+                fuLog("always-on terminal code=$code quiet=$quiet heardSpeech=$heardSpeech lastPartial=\"$lastAlwaysOnPartial\"")
+                if (alwaysOnActive && quiet && heardSpeech && recoverAlwaysOnPartial()) {
+                    // The turn's reset re-arms the open mic from a clean idle.
+                    return@startListening
+                }
                 // Nobody spoke (quiet-open timeout / no match) is the normal
                 // idle state of always-on listening — put the face back to
                 // idle and reopen the mic. Real recognizer hiccups retry with
@@ -2717,10 +2746,6 @@ class CompanionViewModel(
                 if (alwaysOnActive && shouldAlwaysOnMic() &&
                     _uiState.value.interactionState == InteractionState.IDLE
                 ) {
-                    val quiet = code == android.speech.SpeechRecognizer.ERROR_NO_MATCH ||
-                        code == android.speech.SpeechRecognizer.ERROR_SPEECH_TIMEOUT
-                    // 8 = BUSY, 5 = CLIENT, 11 = SERVER_DISCONNECTED: hot-looping
-                    // these is what made always-on face mic look dead.
                     val contention = code == android.speech.SpeechRecognizer.ERROR_RECOGNIZER_BUSY ||
                         code == android.speech.SpeechRecognizer.ERROR_CLIENT ||
                         code == android.speech.SpeechRecognizer.ERROR_SERVER_DISCONNECTED
@@ -3179,13 +3204,7 @@ class CompanionViewModel(
 
             if (currentProvider == null) {
                 delay(1500)
-                // If Gemini Nano is warming up, give an honest status instead of
-                // the generic "no model" message.
-                if (_uiState.value.geminiNanoWarming) {
-                    speak("Gemini Nano is still warming up — AICore is downloading the model. This can take a minute on first run.")
-                } else {
-                    speak("No model is ready yet. Download one from the Hardware page, or configure a server in Settings.")
-                }
+                speak("No model is ready yet. Download one from the Hardware page, or configure a server in Settings.")
                 return@launch
             }
 
@@ -3756,6 +3775,9 @@ class CompanionViewModel(
         if (speechService == null || !s.isMicEnabled) return
         speechService.startListening(
             onResult = { text ->
+                // Quiet-open sessions end with an empty transcript; that is not
+                // speech and must not interrupt playback.
+                if (text.isBlank()) return@startListening
                 if (matcher.match(text) != null || !selfVoiceFilter.isOwnVoice(text)) {
                     interrupt()
                 }
@@ -4914,7 +4936,6 @@ class CompanionViewModel(
                         ?.let { append(", running $it") }
                     append(".")
                 }
-                if (s.geminiNanoActive) append(" Gemini Nano is handling the quick stuff.")
             }
 
             com.example.meowmba.core.agent.SelfStatusParser.Question.WHERE -> buildString {
@@ -5587,6 +5608,16 @@ SAFE if the scene looks like a normal road, car interior, sidewalk, or room, or 
          * exceeding it means the session was lost, not that the user is quiet.
          */
         private const val ALWAYS_ON_SESSION_TIMEOUT_MS = 20_000L
+
+        /**
+         * How many silent-window re-arms the watchdog may do before giving up.
+         * Each re-arm opens a fresh session and a fresh watchdog; unbounded,
+         * that is a self-perpetuating loop that keeps a unit-test virtual clock
+         * busy forever (and spins a dead recognizer on device). A recognizer
+         * terminal (result or error) resets the budget — a working recognizer
+         * re-arms freely, a silent one gets exactly this many recovery tries.
+         */
+        private const val MAX_WATCHDOG_SILENT_REARMS = 2
 
         /**
          * How often the harness reviews itself unprompted. Slow on purpose: a

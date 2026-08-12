@@ -78,10 +78,11 @@ fun ModelItem(name: String, isSelected: Boolean, onClick: () -> Unit) {
  * [CompanionViewModel.updateProvider] can actually build are listed here —
  * no stub entries that would silently produce a null provider.
  * ("Phi-3 Mini (Local)", "Anthropic (Cloud)", "Memba Custom (Remote)" were
- * removed: they were never wired up and trapped users in "no model is ready".)
+ * removed: they were never wired up and trapped users in "no model is ready".
+ * "Gemini Nano (On-device)" was removed on 2026-08-11: it needed AICore, which
+ * this device reports as unavailable, stranding every reply on a provider that
+ * could never generate.)
  */
-/** Label for the AICore-backed provider. Also the default when AICore is present. */
-const val MODEL_GEMINI_NANO = "Gemini Nano (On-device)"
 
 /**
  * Omniroute — the router, running inside the app.
@@ -99,27 +100,9 @@ val modelProviders = listOf(
     // First because it is the default: the router decides which model answers, so it is
     // the one entry that does not commit the phone to a particular engine.
     MODEL_OMNIROUTE,
-    MODEL_GEMINI_NANO,
     "On-device (Local)",
     "OpenRouter (Cloud)",
     "OpenAI (Cloud)",
 )
 
-/**
- * The picker entries that can actually build a provider on THIS device.
- *
- * Gemini Nano needs AICore, which not every device has. Offering it where it is
- * absent would recreate exactly the "No model is ready" trap that [modelProviders]
- * was pruned to avoid, so it is filtered out rather than shown and broken.
- */
-fun availableModelProviders(context: android.content.Context?): List<String> =
-    modelProviders.filter { label ->
-        if (label != MODEL_GEMINI_NANO) return@filter true
-        context?.let { ctx ->
-            try {
-                com.example.meowmba.core.agent.GeminiNanoProvider.isAvailable(ctx)
-            } catch (_: Throwable) {
-                false
-            }
-        } ?: false
-    }
+fun availableModelProviders(context: android.content.Context?): List<String> = modelProviders

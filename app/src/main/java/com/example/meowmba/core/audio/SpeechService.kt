@@ -28,22 +28,39 @@ import kotlinx.coroutines.flow.asStateFlow
  *    which is deaf (always ERROR_NO_MATCH) and holds exclusive media audio focus.
  *    Candidates are ordered by [recognitionCandidates] and that package is
  *    denylisted outright — see the comment there for the measurements.
- * 4. The mic button, the wake-word loop, and barge-in each overlap sessions
- *    on ONE SpeechRecognizer — and a dying session's late error lands in the
- *    NEW session's callbacks (observed on-device: "stopListening called with
- *    no preceding startListening"; mic tap instantly reset = "button does
- *    nothing"). The wake-word loop therefore gets its OWN recognizer via
- *    [createSessionEngine]; each engine owns exactly one session at a time.
- *    And each [SessionEngine.startListening] destroys the previous recognizer
- *    and binds a fresh instance, so back-to-back sessions never collide with
- *    the Google recognition service's lingering teardown ("capacity is full"
- *    refusals that made both the mic button and always-on listening dead).
+ * 4. Every consumer funnels through ONE process-wide [SessionEngine] (see
+ *    [sharedEngine]). AiAi serves a single session for the whole package, so
+ *    separate recognizer connections were not separate slots — they were busy
+ *    refusals that made the mic button, always-on listening and the wake word
+ *    die at once. Callback isolation between consumers (mic button, always-on,
+ *    wake standby, barge-in, the background WakeWordService) is handled by
+ *    [VoiceSessionGate] + newest-start-wins, and every [SessionEngine.startListening]
+ *    tears down the previous session first so back-to-back sessions never
+ *    collide with the recognition service's lingering teardown.
  */
-class SpeechService(private val context: Context) : SpeechEngine {
+class SpeechService(context: Context) : SpeechEngine {
 
     override val isAvailable: Boolean = SpeechRecognizer.isRecognitionAvailable(context)
 
-    private val interactive = SessionEngine()
+    /**
+     * ONE recognizer connection for the whole process.
+     *
+     * Every consumer — the interactive (mic button) engine, the always-on
+     * conversation loop, the wake-word standby loop, and the background
+     * WakeWordService — funnels through this single engine. AiAi serves ONE
+     * session for the whole package, so a second SpeechRecognizer connection
+     * is not a second slot: it is a busy refusal. When two connections raced
+     * each other, the platform answered with a steady ERROR_RECOGNIZER_BUSY
+     * (8) / ERROR_CLIENT (5) storm and every voice mode died at once — the
+     * "always-on mic and wake word are dead" bug. One connection, one session,
+     * and the app-level slot guard below is the only arbiter there can be.
+     *
+     * Callback isolation between consumers is handled by [VoiceSessionGate]
+     * (state-and-timing), which is why sharing is safe: the old reason for a
+     * dedicated wake-loop connection — late callbacks bleeding into a new
+     * session — is exactly what the gate exists to solve.
+     */
+    private val interactive = sharedEngine(context)
 
     override val isListening get() = interactive.isListening
     override val partialResults get() = interactive.partialResults
@@ -56,20 +73,38 @@ class SpeechService(private val context: Context) : SpeechEngine {
     override fun swapCallbacks(onResult: (String) -> Unit, onError: (Int) -> Unit) =
         interactive.swapCallbacks(onResult, onError)
 
-    override fun destroy() = interactive.destroy()
+    /**
+     * No-op. The engine is shared process-wide; destroying it here would tear
+     * the connection out from under every other consumer (including the
+     * background service). The engine rebuilds its recognizer on demand, so
+     * "destroying" a facade just means nobody is listening.
+     */
+    override fun destroy() = Unit
 
     /**
-     * A SEPARATE recognizer instance for the wake-word loop, so its
-     * restart-on-complete sessions never share callbacks with interactive
-     * (mic button) sessions. Caller owns the returned engine's lifecycle.
+     * The wake-word loop shares the process-wide engine. Historically this
+     * built a SECOND connection so a dying loop session's late error could not
+     * land in a mic-tap session — a concern [VoiceSessionGate] now handles, and
+     * the second connection was what made the two loops refuse each other.
+     * Returns the shared engine so callers' shapes stay unchanged.
      */
-    fun createSessionEngine(): SpeechEngine = SessionEngine()
+    fun createSessionEngine(): SpeechEngine = interactive
+
+    /**
+     * Tears down and rebuilds the recognizer connection. Used when a session
+     * has gone silently wrong (e.g. the always-on watchdog declared a session
+     * dead): the next startListening binds a fresh connection instead of
+     * re-opening a zombie one.
+     */
+    fun rebindRecognizer() = interactive.rebindRecognizer()
 
     // ----------------------------------------------------------------------
 
-    private inner class SessionEngine : SpeechEngine {
+    private class SessionEngine(private val ctx: Context) : SpeechEngine {
 
-        private var component: ComponentName? = recognitionService(context)
+        override val isAvailable: Boolean = SpeechRecognizer.isRecognitionAvailable(ctx)
+
+        private var component: ComponentName? = recognitionService(ctx)
         private var candidateIndex = 0
 
         private var recognizer: SpeechRecognizer? = null
@@ -82,6 +117,14 @@ class SpeechService(private val context: Context) : SpeechEngine {
          * life of the process).
          */
         private var consecutiveNeverReady = 0
+
+        /**
+         * Consecutive accepted contention refusals (BUSY / CLIENT /
+         * SERVER_DISCONNECTED). The connection may be holding a session the
+         * app no longer tracks (a zombie); a few in a row means it is time to
+         * tear the recognizer down so the next start binds a clean one.
+         */
+        private var consecutiveContention = 0
 
         /** When this engine last stopped/cancelled its recognizer (settle math). */
         private var lastInterruptAtMs = 0L
@@ -137,9 +180,9 @@ class SpeechService(private val context: Context) : SpeechEngine {
              if (!isAvailable) return null
              return runCatching {
                  if (component != null) {
-                     SpeechRecognizer.createSpeechRecognizer(context, component)
+                     SpeechRecognizer.createSpeechRecognizer(ctx, component)
                  } else {
-                     SpeechRecognizer.createSpeechRecognizer(context)
+                     SpeechRecognizer.createSpeechRecognizer(ctx)
                  }
              }.getOrNull()?.also {
                  liveRecognizers.incrementAndGet()
@@ -166,12 +209,18 @@ class SpeechService(private val context: Context) : SpeechEngine {
                     Log.i(TAG, "<- onReadyForSpeech")
                     if (!gate.acceptReady()) {
                         Log.w(TAG, "   ready DROPPED by gate (session already closed)")
+                        // A ready arriving after the gate closed means the service
+                        // opened a session this engine no longer tracks — a zombie
+                        // that will hold the shared slot until the connection dies.
+                        // Tear the connection down so the next start binds fresh.
+                        rebindRecognizer()
                         return
                     }
                     _isListening.value = true
                     Log.i(TAG, "session ready ($componentName)")
                     // A session that went live proves the connection is healthy.
                     consecutiveNeverReady = 0
+                    consecutiveContention = 0
                 }
                 override fun onBeginningOfSpeech() {
                     Log.i(TAG, "<- onBeginningOfSpeech")
@@ -203,6 +252,32 @@ class SpeechService(private val context: Context) : SpeechEngine {
                     releaseSessionSlot()
                     Log.w(TAG, "session error code=$error ($componentName)")
 
+                    // A burst of accepted refusals means the connection is likely
+                    // holding a session nobody tracks (a zombie), or the service
+                    // itself has wedged (measured on this device: AiAi refuses
+                    // every start with BUSY until IT is restarted — which the app
+                    // cannot do, so fail over). Rebuild first, then move on.
+                    if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY ||
+                        error == SpeechRecognizer.ERROR_CLIENT ||
+                        error == SpeechRecognizer.ERROR_SERVER_DISCONNECTED
+                    ) {
+                        consecutiveContention++
+                        if (consecutiveContention >= CONTENTION_FAILOVER_THRESHOLD) {
+                            if (advanceCandidate()) {
+                                Log.w(TAG, "contention x$consecutiveContention — failed over to $component")
+                            } else {
+                                Log.e(TAG, "every recognition service refused the session ($componentName)")
+                            }
+                            consecutiveContention = 0
+                            rebindRecognizer()
+                        } else if (consecutiveContention == CONTENTION_REBIND_THRESHOLD) {
+                            Log.w(TAG, "contention x$consecutiveContention — rebinding a fresh recognizer")
+                            rebindRecognizer()
+                        }
+                    } else {
+                        consecutiveContention = 0
+                    }
+
                     // No automatic service switching. Rotating on error walked off the
                     // correct recognizer (AiAi) after a few transient CLIENT errors,
                     // down through Home Assistant and Claude, to "no candidates left"
@@ -217,17 +292,22 @@ class SpeechService(private val context: Context) : SpeechEngine {
                     if (!gate.acceptResults()) return
                     releaseSessionSlot()
                     consecutiveNeverReady = 0
+                    consecutiveContention = 0
                     val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     Log.i(TAG, "session result: ${matches?.firstOrNull()?.take(60) ?: "(empty)"}")
-                    if (!matches.isNullOrEmpty()) {
-                        onResult?.invoke(matches[0])
-                    }
+                    // Deliver even an empty transcript: consumers use the blank to
+                    // learn the session ended on silence (quiet-open sessions end
+                    // this way constantly) and must re-arm. Without it the
+                    // always-on loop hears "session over" from nobody and its
+                    // state (latch, interaction state) sticks forever.
+                    onResult?.invoke(matches?.firstOrNull()?.takeIf { it.isNotEmpty() } ?: "")
                 }
                 override fun onPartialResults(partialResults: Bundle?) {
                     Log.i(TAG, "<- onPartialResults")
                     if (!gate.acceptPartial()) return
                     val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     if (!matches.isNullOrEmpty()) {
+                        Log.i(TAG, "   partial: \"${matches[0].take(80)}\"")
                         _partialResults.value = matches[0]
                     }
                 }
@@ -401,7 +481,7 @@ class SpeechService(private val context: Context) : SpeechEngine {
         }
 
         /** Destroys the current recognizer so the next start binds a fresh connection. */
-        private fun rebindRecognizer() {
+        internal fun rebindRecognizer() {
             if (recognizer != null) {
                 runCatching { recognizer?.destroy() }
                 liveRecognizers.decrementAndGet()
@@ -411,7 +491,7 @@ class SpeechService(private val context: Context) : SpeechEngine {
 
         /** Moves to the next recognition service; returns false when none are left. */
         private fun advanceCandidate(): Boolean {
-            val candidates = recognitionCandidates(context)
+            val candidates = recognitionCandidates(ctx)
             if (candidateIndex + 1 >= candidates.size) return false
             candidateIndex++
             component = candidates[candidateIndex]
@@ -452,6 +532,20 @@ class SpeechService(private val context: Context) : SpeechEngine {
     // ----------------------------------------------------------------------
 
     internal companion object {
+        /**
+         * The single recognizer connection shared by every SpeechService facade
+         * in the process. AiAi serves one session per package; a second
+         * connection only ever gets busy refusals. See the field docs on
+         * [SpeechService.interactive].
+         */
+        @Volatile
+        private var shared: SessionEngine? = null
+
+        private fun sharedEngine(context: Context): SessionEngine =
+            shared ?: synchronized(this) {
+                shared ?: SessionEngine(context.applicationContext).also { shared = it }
+            }
+
         /**
          * The engine currently holding the recognition service's single session
          * slot, across every SpeechService and SessionEngine in the process.
@@ -531,6 +625,25 @@ class SpeechService(private val context: Context) : SpeechEngine {
          * engine is clearly not going to recover, so move on.
          */
         private const val NEVER_READY_FAILOVER_THRESHOLD = 4
+
+        /**
+         * Accepted BUSY/CLIENT/SERVER_DISCONNECTED refusals before the
+         * recognizer connection is rebuilt. A few in a row means the connection
+         * is holding a session nobody tracks (a zombie) that would refuse every
+         * later start — the permanent "always-on mic and wake word are dead"
+         * wedge. Rebuild clears it.
+         */
+        private const val CONTENTION_REBIND_THRESHOLD = 3
+
+        /**
+         * Accepted BUSY/CLIENT/SERVER_DISCONNECTED refusals before failing over
+         * to the next recognition service. Once a service refuses this many
+         * times even after a fresh rebuild, it is wedged at the service level
+         * (measured on this device: AiAi refuses every start with BUSY until
+         * the Google app itself is restarted — which the app cannot do). The
+         * only recovery left is a different recognizer.
+         */
+        private const val CONTENTION_FAILOVER_THRESHOLD = 6
 
         /**
          * Packages whose RecognitionService must never be bound.

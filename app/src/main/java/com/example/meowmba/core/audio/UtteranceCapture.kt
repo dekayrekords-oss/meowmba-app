@@ -172,9 +172,23 @@ class UtteranceCapture(
             return
         }
         val quiet = now() - lastVoiceAt
+        if (segments.isEmpty()) {
+            // AiAi on this device ends a session that HEARD speech with
+            // ERROR_NO_MATCH and no final result — the partials are the only
+            // record of what was said, and without banking them the whole turn
+            // is silently discarded ("voice chat never answers"). Bank the last
+            // partial so the pause clock and turn flow see it like a result.
+            val partial = _live.value.trim()
+            if (partial.isNotEmpty()) {
+                segments += partial
+                lastVoiceAt = now()
+                _live.value = partial
+            }
+        }
+        val quietAfter = now() - lastVoiceAt
         when {
-            segments.isNotEmpty() && quiet >= silenceToFinishMs -> finish()
-            segments.isEmpty() && quiet >= initialSilenceMs -> fail(code)
+            segments.isNotEmpty() && quietAfter >= silenceToFinishMs -> finish()
+            segments.isEmpty() && quietAfter >= initialSilenceMs -> fail(code)
             else -> restart()
         }
     }

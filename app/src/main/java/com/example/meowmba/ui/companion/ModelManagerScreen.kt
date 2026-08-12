@@ -100,19 +100,10 @@ fun ModelManagerScreen(
                     fontSize = 12.sp,
                     modifier = Modifier.weight(1f)
                 )
-                TextButton(onClick = { showProviderPicker = true }) {
-                    Text("Change", color = Color(0xFF58A6FF), fontSize = 12.sp)
-                }
+            TextButton(onClick = { showProviderPicker = true }) {
+                Text("Change", color = Color(0xFF58A6FF), fontSize = 12.sp)
             }
-            if (state.geminiNanoActive) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "⚡ Light model: Gemini Nano (AICore) • Main: ${state.selectedModel}",
-                        color = Color(0xFF3FB950),
-                        fontSize = 11.sp
-                    )
-                }
-            }
+        }
 
             Spacer(modifier = Modifier.height(4.dp))
 
@@ -383,8 +374,6 @@ fun HardwareStatusCard(caps: HardwareCapabilities) {
 
             // AI accelerator row
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                val nanoLabel = if (caps.hasGeminiNano) "✅ Gemini Nano" else "— Gemini Nano"
-                Text(nanoLabel, color = if (caps.hasGeminiNano) Color(0xFF3FB950) else Color.Gray, fontSize = 11.sp)
                 val npuLabel = if (caps.hasNpu) "✅ NPU" else "— NPU"
                 Text(npuLabel, color = if (caps.hasNpu) Color(0xFF3FB950) else Color.Gray, fontSize = 11.sp)
             }

@@ -46,7 +46,7 @@ native image generation. Kotlin + Jetpack Compose, minSdk 31, NDK 27, arm64 only
   SpeakerVerifier). Wake variants: `KwsKeywords.kt` (authoritative; tokens must
   exist in the model vocab or they silently never fire).
 - Agent: `core/agent/` (OmniRoute routing, runtime/, tools/). Providers: Ollama,
-  OpenAI, BigPickle/OpenCode, on-device (LiteRt/MediaPipe/GeminiNano).
+  OpenAI, BigPickle/OpenCode, on-device (LiteRt/MediaPipe).
 - Desktop control: `core/bridge/` + daemon `bridge/meowmba-bridge.py`.
 - Memory: Room (`messages`, `memories`, `memories_fts`, `audit_log`) +
   `core/vault/` markdown notes (Obsidian-compatible, filesDir/vault).
@@ -407,6 +407,34 @@ Verified on device: settings opens with the robot section showing "Connect over 
 - BLUETOOTH_CONNECT added to the startup runtime-permission request (bondedDevices
   throws on Android 12+ without it).
 
+## One recognizer connection for the whole process (2026-08-11)
+
+The "always-on mic stops hearing / wake word dead after hours" wedge, root-caused:
+every listener (interactive, always-on, wake standby, WakeWordService follow-up) ran
+its OWN SessionEngine, i.e. its own process-wide... no — its own per-engine
+SpeechRecognizer bound to the SAME AiAi RecognitionService. Start/stop churn across
+all of them fought over one service connection: a session the app stopped was still
+open on the service side, so every later start was refused with BUSY — and each
+retry re-wedged the service we were waiting on. AiAi on this Fold 7 stays wedged
+even after the app dies; only restarting AiAi itself (or a failover) recovers voice.
+
+- **One SessionEngine, process-wide.** `SpeechService.kt` no longer creates an
+  engine per construction site; it holds a single process-level shared engine
+  (lazy, `applicationContext`) and all listeners — interactive, always-on, wake
+  standby, and the WakeWordService — attach their callbacks to it. `destroy()` is
+  now a no-op so the service's teardown can't kill in-app voice. Newest-start-wins
+  + settle already existed and now arbitrate ON one connection (no cross-connection
+  busy, no busy storm). Verified: `recognizer bound, live=1` for the whole process.
+- **Zombie/destroy escalation.** A burst of accepted refusals (BUSY/CLIENT/SERVER_
+  DISCONNECTED) is a zombie holding a session: after 3 strikes the connection is
+  rebuilt (`rebindRecognizer`), after 6 the engine FAILS OVER to the next
+  recognition service (AiAi → Google → system). Never-ready escalates as before
+  (rebind at 2, failover at 4). The always-on watchdog also force-rebinds the
+  shared recognizer when a session goes silent, so the next re-arm can't be BUSY.
+- Verified on device: killing AiAi mid-session self-heals (never-ready rebind +
+  recovered ready in ~17s). The 6-strike failover is code-reviewed but hard to
+  trigger on demand (AiAi keeps getting restarted by the system).
+
 ## Wake phrase fixes (2026-08-05)
 
 - False "Wake phrase stopped - the speech recognizer keeps failing": AIAI on the Fold 7
@@ -425,9 +453,9 @@ Verified on device: settings opens with the robot section showing "Connect over 
 
 <!-- AUTOBUILD:START -->
 (regenerated after each commit)
-- 2026-08-11 16:04:52 : fix(voice): settle handovers, escalate never-ready sessions to a failover
+- 2026-08-11 16:29:31 : chore: regenerate autobuild log
+- abee26d 2026-08-11 16:29 diag(nano): log why the model picker probe failed
+- dda3a88 2026-08-11 16:29 fix(vision): drive analyzer rotation from physical tilt, not display rotation
+- 495dd6f 2026-08-11 16:04 fix(voice): settle handovers, escalate never-ready sessions to a failover
 - bffe665 2026-08-11 14:51 feat(anim): 8 expressions that spend the engine's unused channels, + rot guards
-- d629f7b 2026-08-11 14:38 fix(voice): stop suppressing ERROR_CLIENT, it was the only signal we had
-- 536bfc1 2026-08-11 14:35 diag(voice): log every recognizer callback arrival before the gate decides
-- bb762aa 2026-08-11 14:13 fix(voice): capture-window extras were Long, so every session ended instantly
 <!-- AUTOBUILD:END -->

@@ -276,10 +276,6 @@ data class CompanionState(
     val faceGazeX: Float? = null,
     /** Face tracking: the face's vertical offset (-1..1), null when no face. */
     val faceGazeY: Float? = null,
-    /** Gemini Nano is active as the light model alongside the main model. */
-    val geminiNanoActive: Boolean = false,
-    /** Gemini Nano is warming up (downloading model / preparing inference). */
-    val geminiNanoWarming: Boolean = false,
     /** Generated media (image, video, audio) to show in a popup. */
     val generatedMedia: GeneratedMedia? = null,
     /** USB auto-bridge is monitoring for a tethered desktop connection. */

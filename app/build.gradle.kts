@@ -141,7 +141,6 @@ dependencies {
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
     implementation(libs.litert.lm.android)
-    implementation(libs.aicore.edge)
     implementation(libs.mlkit.image.labeling)
     implementation(libs.mlkit.text.recognition)
     implementation(libs.mlkit.face.detection)

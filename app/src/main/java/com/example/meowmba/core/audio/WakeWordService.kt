@@ -332,6 +332,21 @@ class WakeWordService : Service() {
         speechService.startListening(
             onResult = { captured ->
                 android.util.Log.i("WakeWordService", "follow-up captured: \"$captured\"")
+                if (captured.isBlank()) {
+                    // Quiet window ended empty; open one more before falling
+                    // back to the wake loop, same as a silence error.
+                    if (followUpRetries < FOLLOW_UP_QUIET_WINDOWS) {
+                        followUpRetries++
+                        scope.launch {
+                            delay(250)
+                            if (engineStarted && capturingCommand) startFollowUpListen()
+                        }
+                    } else {
+                        capturingCommand = false
+                        wakeEngine?.start()
+                    }
+                    return@startListening
+                }
                 followUpRetries = 0
                 capturingCommand = false
                 // A follow-up is mid-conversation with the screen on, so hand the
@@ -395,6 +410,10 @@ class WakeWordService : Service() {
             speechService.startListening(
                 onResult = { captured ->
                     capturingCommand = false
+                    if (captured.isBlank()) {
+                        wakeEngine?.start()
+                        return@startListening
+                    }
                     acknowledgeAndDeliver(captured)
                 },
                 onError = {
