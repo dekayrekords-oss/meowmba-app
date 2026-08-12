@@ -143,6 +143,43 @@ internal fun faceOffsetInScreenSpace(
 }
 
 /**
+ * Face box → display-space offset in -1..1.
+ *
+ * CameraX's `rotationDegrees` is the rotation ML Kit already applied. When it
+ * is 0 the box is still in the raw buffer, which follows the SENSOR — and on
+ * the Fold 7 cover in landscape that is the measured failure: targetRotation
+ * is ROTATION_90, rot stays 0, and left/right head motion lands on Y
+ * (`y≈-0.8`, roll ≈ -35°). [FaceFrameMap] turns that sensor frame into the
+ * display frame. When ML Kit did rotate (90/270), the box is already in the
+ * target space and remapping would swap the axes a second time.
+ */
+internal fun faceOffsetOnDisplay(
+    boxCenterX: Float,
+    boxCenterY: Float,
+    bufferW: Int,
+    bufferH: Int,
+    rotationDegrees: Int,
+    displayDeg: Int,
+    mirrored: Boolean,
+): Pair<Float, Float>? {
+    val (w, h) = rotatedFrameSize(bufferW, bufferH, rotationDegrees)
+    if (w <= 0 || h <= 0) return null
+    var fx = boxCenterX / w.toFloat()
+    var fy = boxCenterY / h.toFloat()
+    val rot = ((rotationDegrees % 360) + 360) % 360
+    val disp = ((displayDeg % 360) + 360) % 360
+    if (rot == 0 && disp != 0) {
+        val mapped = FaceFrameMap.toDisplay(fx, fy, disp)
+        fx = mapped.first
+        fy = mapped.second
+    }
+    var rawX = (fx * 2f - 1f).coerceIn(-1f, 1f)
+    val rawY = (fy * 2f - 1f).coerceIn(-1f, 1f)
+    if (mirrored) rawX = -rawX
+    return rawX to rawY
+}
+
+/**
  * CameraX frame capture and face tracking for the vision path (Phase 7a).
  *
  * Bound lazily on the first "look" and kept warm afterwards. Capture-only
@@ -435,6 +472,7 @@ class VisionManager(
                         "VMrot",
                         "rot=${proxy.imageInfo.rotationDegrees} " +
                             "target=${imageAnalysis?.targetRotation} " +
+                            "disp=${displayRotationDegrees()} " +
                             "buf=${proxy.width}x${proxy.height} upright=${dw}x$dh " +
                             "front=$_useFrontCamera faces=${faces.size}",
                     )
@@ -442,14 +480,15 @@ class VisionManager(
                 val face = faces.maxByOrNull { it.boundingBox.width() * it.boundingBox.height() }
                 val now = System.currentTimeMillis()
                 if (face != null) {
-                    val (w, h) = rotatedFrameSize(
-                        proxy.width, proxy.height, proxy.imageInfo.rotationDegrees,
-                    )
-                    val (rawX, rawY) = faceOffsetInScreenSpace(
+                    val rotDeg = proxy.imageInfo.rotationDegrees
+                    val (w, h) = rotatedFrameSize(proxy.width, proxy.height, rotDeg)
+                    val (rawX, rawY) = faceOffsetOnDisplay(
                         boxCenterX = face.boundingBox.exactCenterX(),
                         boxCenterY = face.boundingBox.exactCenterY(),
-                        frameW = w,
-                        frameH = h,
+                        bufferW = proxy.width,
+                        bufferH = proxy.height,
+                        rotationDegrees = rotDeg,
+                        displayDeg = displayRotationDegrees(),
                         mirrored = _useFrontCamera,
                     ) ?: return@addOnSuccessListener
                     // Medium EMA: follows clearly, still damps ML Kit box noise.
@@ -708,6 +747,29 @@ class VisionManager(
         val cover = minSide / maxSide < 0.65f
         android.util.Log.i("VM", "active display=${active.displayId} ${size.x}x${size.y} aspect=${minSide / maxSide} cover=$cover")
         return cover
+    }
+
+    /**
+     * Rotation of the display the user is looking at, in degrees.
+     * Used to remap sensor-space boxes when CameraX reports rotationDegrees=0
+     * in landscape (Fold cover: target=ROTATION_90, rot stays 0).
+     */
+    private fun displayRotationDegrees(): Int {
+        val rot = runCatching {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                context.display?.rotation
+            } else {
+                @Suppress("DEPRECATION")
+                (context.getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager)
+                    .defaultDisplay?.rotation
+            }
+        }.getOrNull() ?: return 0
+        return when (rot) {
+            android.view.Surface.ROTATION_90 -> 90
+            android.view.Surface.ROTATION_180 -> 180
+            android.view.Surface.ROTATION_270 -> 270
+            else -> 0
+        }
     }
 
     private fun unbind() {

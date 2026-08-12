@@ -1,6 +1,7 @@
 package com.example.meowmba
 
 import com.example.meowmba.core.vision.faceOffsetInScreenSpace
+import com.example.meowmba.core.vision.faceOffsetOnDisplay
 import com.example.meowmba.core.vision.rotatedFrameSize
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -93,6 +94,54 @@ class FaceTrackGeometryTest {
     fun `degenerate frame returns null instead of dividing by zero`() {
         assertNull(faceOffsetInScreenSpace(10f, 10f, 0, 640, mirrored = false))
         assertNull(faceOffsetInScreenSpace(10f, 10f, 480, 0, mirrored = false))
+    }
+
+    // ── landscape: CameraX reports rot=0 while the display is ROTATION_90 ──
+    // Measured on the Fold 7 cover (2520x1080, target=1, buf=320x240, faces=1):
+    // the detector saw the user, but published y≈-0.8 / roll≈-35 because the
+    // box was still in SENSOR space. Left/right on the landscape screen must
+    // move gaze X, not pin the head to the top of the frame.
+
+    @Test
+    fun `landscape rot-zero remaps sensor Y onto display X`() {
+        val bufW = 320
+        val bufH = 240
+        // Two faces at the same sensor-X, different sensor-Y (along the
+        // landscape screen's horizontal axis once remapped).
+        val (xTop, yTop) = faceOffsetOnDisplay(
+            boxCenterX = 160f, boxCenterY = 20f,
+            bufferW = bufW, bufferH = bufH,
+            rotationDegrees = 0, displayDeg = 90, mirrored = false,
+        )!!
+        val (xBot, yBot) = faceOffsetOnDisplay(
+            boxCenterX = 160f, boxCenterY = 220f,
+            bufferW = bufW, bufferH = bufH,
+            rotationDegrees = 0, displayDeg = 90, mirrored = false,
+        )!!
+        assertTrue(
+            "sensor-Y motion must become display-X, dx=${xBot - xTop}",
+            kotlin.math.abs(xBot - xTop) > 0.9f,
+        )
+        assertEquals("that motion must not leak onto display-Y", yTop, yBot, 0.08f)
+    }
+
+    @Test
+    fun `portrait with a real ML Kit rotation stays identity`() {
+        // rot=270, display=0 is the working portrait path: boxes are already
+        // in the rotated (screen) frame. Remapping them again would swap axes.
+        val (w, h) = rotatedFrameSize(320, 240, 270)
+        val (x1, y1) = faceOffsetOnDisplay(
+            boxCenterX = 60f, boxCenterY = h / 2f,
+            bufferW = 320, bufferH = 240,
+            rotationDegrees = 270, displayDeg = 0, mirrored = false,
+        )!!
+        val (x2, y2) = faceOffsetOnDisplay(
+            boxCenterX = w - 60f, boxCenterY = h / 2f,
+            bufferW = 320, bufferH = 240,
+            rotationDegrees = 270, displayDeg = 0, mirrored = false,
+        )!!
+        assertTrue("portrait X must still respond", x2 - x1 > 0.5f)
+        assertEquals("portrait Y must stay put", y1, y2, 1e-4f)
     }
 
     // ── smoothing: a stream to integrate, not a staircase ───────────────────
