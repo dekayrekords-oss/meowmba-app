@@ -3,7 +3,8 @@ package com.example.meowmba.core.routines
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import com.example.meowmba.MainActivity
 import com.example.meowmba.core.database.MeowmbaDatabase
@@ -17,7 +18,7 @@ class RoutineAlarmReceiver : BroadcastReceiver() {
         val id = intent.getLongExtra(RoutineScheduler.EXTRA_ROUTINE_ID, -1L)
         if (id < 0) return
         val pending = goAsync()
-        GlobalScope.launch {
+        CoroutineScope(Dispatchers.IO).launch {
             try {
                 val dao = MeowmbaDatabase.getDatabase(context).routineDao()
                 val routine = dao.getById(id)

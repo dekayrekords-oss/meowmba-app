@@ -822,17 +822,14 @@ class CompanionViewModel(
             )
 
             // USB auto-bridge: auto-pair when tethered via USB
-            val context = it.context
-            if (context != null) {
-                usbAutoBridge = UsbAutoBridgeManager(context, bridgeManager, viewModelScope).apply {
-                    onUsbStateChanged = { connected ->
-                        _uiState.value = _uiState.value.copy(usbConnected = connected)
-                    }
+            usbAutoBridge = UsbAutoBridgeManager(it.context, bridgeManager, viewModelScope).apply {
+                onUsbStateChanged = { connected ->
+                    _uiState.value = _uiState.value.copy(usbConnected = connected)
                 }
-                val usbEnabled = it.getBooleanPreference(KEY_USB_AUTO_BRIDGE, false)
-                _uiState.value = _uiState.value.copy(usbAutoBridgeEnabled = usbEnabled)
-                if (usbEnabled) usbAutoBridge?.start()
             }
+            val usbEnabled = it.getBooleanPreference(KEY_USB_AUTO_BRIDGE, false)
+            _uiState.value = _uiState.value.copy(usbAutoBridgeEnabled = usbEnabled)
+            if (usbEnabled) usbAutoBridge?.start()
         }
         // Research, email, calendar, and media tools
         toolRegistry.register(WebSearchTool())
@@ -3925,7 +3922,7 @@ class CompanionViewModel(
 
     private fun isStopCommand(text: String): Boolean {
         val normalized = WakePhraseMatcher.normalize(text)
-        return normalized in STOP_COMMANDS
+        return normalized in SpeechIntents.STOP_COMMANDS
     }
 
     // ── Mouth synchronization ───────────────────────────────────────────────
@@ -5612,44 +5609,19 @@ SAFE if the scene looks like a normal road, car interior, sidewalk, or room, or 
         private const val AGENT_PANEL_LINGER_MS = 6_000L
         private const val DEFAULT_RETENTION_DAYS = 90
 
-        /** Codes meaning "the recognition service hiccuped", not "broken setup". */
-        internal fun isTransientSpeechError(code: Int): Boolean = code in TRANSIENT_SPEECH_ERRORS
+        internal fun isTransientSpeechError(code: Int): Boolean =
+            VoicePolicy.isTransientSpeechError(code)
 
-        /** Codes meaning "heard nothing yet" (silence), not an error. */
-        internal fun isSilenceError(code: Int): Boolean =
-            code == SpeechRecognizer.ERROR_SPEECH_TIMEOUT ||
-                code == SpeechRecognizer.ERROR_NO_MATCH
+        internal fun isSilenceError(code: Int): Boolean = VoicePolicy.isSilenceError(code)
 
-        /**
-         * Errors that must NOT end an active follow-up. Silence (6/7) plus the two
-         * session-collision codes, ERROR_CLIENT (5) and ERROR_RECOGNIZER_BUSY (8):
-         * those mean another recognizer session (the barge-in watch or a wake re-arm)
-         * raced the capture, and they resolve by re-opening rather than resetting.
-         */
         internal fun isFollowUpKeepAliveError(code: Int): Boolean =
-            isSilenceError(code) ||
-                code == SpeechRecognizer.ERROR_CLIENT ||
-                code == SpeechRecognizer.ERROR_RECOGNIZER_BUSY
+            VoicePolicy.isFollowUpKeepAliveError(code)
 
         private const val MAX_TRANSIENT_LISTEN_RETRIES = 3
         private const val MAX_FOLLOW_UP_SILENCE_RETRIES = 10
-        private val TRANSIENT_SPEECH_ERRORS = setOf(
-            SpeechRecognizer.ERROR_NETWORK_TIMEOUT,
-            SpeechRecognizer.ERROR_NETWORK,
-            SpeechRecognizer.ERROR_SERVER,
-            SpeechRecognizer.ERROR_TOO_MANY_REQUESTS,
-            SpeechRecognizer.ERROR_SERVER_DISCONNECTED,
-        )
         private const val FOLLOW_UP_TIMEOUT_MS = 8000L
 
-        /**
-         * Phase E3 state machine: after the companion finishes speaking, do we
-         * stay hot in FOLLOW_UP mode? Conversation mode always does; barge-in
-         * does it whenever the wake word is armed. Mic off / muted never.
-         */
-        fun shouldEnterFollowUp(s: CompanionState): Boolean =
-            s.isMicEnabled && !s.isMuted &&
-                (s.conversationMode || (s.bargeInEnabled && s.wakeWordEnabled))
+        fun shouldEnterFollowUp(s: CompanionState): Boolean = VoicePolicy.shouldEnterFollowUp(s)
         private const val ERROR_DISPLAY_MS = 3500L
 
         private const val TAG_WAKE = "WakeStandby"
@@ -5687,156 +5659,24 @@ SAFE if the scene looks like a normal road, car interior, sidewalk, or room, or 
          */
         private const val HEARTBEAT_INTERVAL_MS = 15L * 60 * 1000
 
-        /**
-         * Retry gap after the recognizer refuses us, doubling per consecutive
-         * refusal: 2.5s, 5s, 10s, 20s, 40s, then a 60s ceiling.
-         *
-         * The ceiling matters as much as the growth. A wedged AiAi can stay
-         * wedged for minutes, and a retry that keeps arriving is part of why —
-         * but we must never stop retrying entirely, or the mic would need an
-         * app restart to come back. Internal so the curve is unit-testable.
-         */
-        internal fun contentionBackoffMs(streak: Int): Long {
-            val step = (streak - 1).coerceIn(0, 4)
-            return (2_500L shl step).coerceAtMost(60_000L)
-        }
+        internal fun contentionBackoffMs(streak: Int): Long =
+            VoicePolicy.contentionBackoffMs(streak)
 
         /** Long enough for a recognizer to finish tearing down, short enough to feel instant. */
         private const val WAKE_REARM_RETRY_MS = 900L
 
-        /** Verbs that turn "…browser" into a show-in-the-browser request. */
-        private val SHOW_BROWSER_VERBS = listOf("show", "open", "display", "put", "bring")
+        fun stripAddress(normalized: String): String = SpeechIntents.stripAddress(normalized)
 
-        /** "search for X", "search the web for X", "look up X", "google X", "search X". */
-        private val SEARCH_PREFIXES = listOf(
-            "search the web for ", "search web for ", "search online for ",
-            "search for ", "look up ", "google ", "search "
-        )
+        fun extractSearchQuery(normalized: String): String? =
+            SpeechIntents.extractSearchQuery(normalized)
 
-        /** Local-scope searches that stay with the agent (memory, notes, photos…). */
-        private val SEARCH_LOCAL_SCOPES = listOf(
-            "my memory", "my memories", "memory for", "memories for",
-            "my notes", "my photos", "my pictures", "my files", "my emails", "my calendar"
-        )
+        fun isMultiStepPhoneGoal(text: String): Boolean = SpeechIntents.isMultiStepPhoneGoal(text)
 
-        /** Drops a leading address — "hey meow, how do I…" still has to route. */
-        fun stripAddress(normalized: String): String {
-            var t = normalized.trim()
-            while (true) {
-                when {
-                    t.startsWith("hey meow ") -> t = t.removePrefix("hey meow ").trim()
-                    t.startsWith("hey memba ") -> t = t.removePrefix("hey memba ").trim()
-                    t.startsWith("hey ") -> t = t.removePrefix("hey ").trim()
-                    t.startsWith("meow ") -> t = t.removePrefix("meow ").trim()
-                    t.startsWith("memba ") -> t = t.removePrefix("memba ").trim()
-                    else -> return t
-                }
-            }
-        }
+        fun looksLikeDirectQuestion(normalized: String): Boolean =
+            SpeechIntents.looksLikeDirectQuestion(normalized)
 
-        /**
-         * Explicit web-search phrasing → the query to run in the browser panel.
-         * Null when the utterance is not a search request (or searches local data).
-         */
-        fun extractSearchQuery(normalized: String): String? {
-            val t = stripAddress(normalized.trim())
-            // Bare verbs with no object are not searches.
-            if (t in setOf("search", "search for", "look up", "google")) return null
-            if (SEARCH_LOCAL_SCOPES.any { t.contains(it) }) return null
-            val rest = SEARCH_PREFIXES.firstOrNull { t.startsWith(it) }
-                ?.let { t.removePrefix(it).trim() }
-                ?: return null
-            return rest.takeIf { it.isNotBlank() }
-        }
-
-        /**
-         * Detects utterances that need the multi-step phone-control loop rather
-         * than single-shot execution or general conversation. Catches patterns
-         * the on-device LLM router frequently misses.
-         */
-        private val PHONE_GOAL_VERBS = listOf("play ", "pause ", "skip ", "resume ")
-        private val PHONE_GOAL_APPS = listOf(
-            "spotify", "youtube", "instagram", "tiktok", "netflix", "hulu",
-            "twitter", "snapchat", "whatsapp", "telegram", "discord", "reddit",
-            "amazon", "uber", "lyft", "maps", "chrome", "firefox", "gmail",
-            "messages", "photos", "camera", "clock", "calculator", "calendar"
-        )
-        fun isMultiStepPhoneGoal(text: String): Boolean {
-            val t = text.lowercase().trim()
-            // "play X" / "play X on Y" — but not bare "play" or "play a game with me"
-            if (PHONE_GOAL_VERBS.any { t.startsWith(it) }) {
-                val rest = PHONE_GOAL_VERBS.first { t.startsWith(it) }.let { t.removePrefix(it) }
-                // Must have an object (not just the verb)
-                if (rest.isNotBlank() && rest.split(' ').size <= 8) return true
-            }
-            // "X on/in [app]" — e.g. "search sublime on spotify", "find john on instagram"
-            val onInMatch = Regex("\\b(?:on|in)\\s+(\\w+)\\s*$").find(t)
-            if (onInMatch != null) {
-                val app = onInMatch.groupValues[1].lowercase()
-                if (PHONE_GOAL_APPS.any { app.contains(it) }) return true
-            }
-            return false
-        }
-
-        private val QUESTION_STARTERS = listOf(
-            "how", "what", "why", "when", "where", "who", "which", "is", "are",
-            "can", "could", "do", "does", "did", "should", "will", "would"
-        )
-
-        /** "how do I install X" is a question; "open the browser" is a command. */
-        private val ACTION_STARTERS = listOf(
-            "open", "send", "show", "play", "set", "turn", "make", "create", "build",
-            "add", "put", "launch", "start", "call", "email", "remind", "schedule",
-            "write", "draw", "take", "search", "look", "google", "find", "bring", "display"
-        )
-
-        /** "can/could you open ..." is really a request, not a question. */
-        private val POLITE_ACTION = Regex(
-            "^(can|could|will|would|please) (you )?(please )?" +
-                "(open|send|show|play|set|turn|make|create|build|add|launch|start|call|" +
-                "email|remind|schedule|write|draw|take|search|look|google|find|bring|display)\\b"
-        )
-
-        /**
-         * Informational questions the brain should answer directly. Commands,
-         * requests, and searches keep their existing routing.
-         */
-        fun looksLikeDirectQuestion(normalized: String): Boolean {
-            val t = stripAddress(normalized.trim())
-            if (t.isEmpty()) return false
-            if (POLITE_ACTION.containsMatchIn(t)) return false
-            val first = t.substringBefore(' ')
-            val startsLikeQuestion = first in QUESTION_STARTERS
-            val hasHowTo = t.contains("how to ")
-            // "tell me how/what/why…" asks for information, not an action.
-            val tellMeQuestion = Regex("^tell me (how|what|why|when|where|who|which|if|about)\b")
-                .containsMatchIn(t)
-            val actionRequest = ACTION_STARTERS.any { t.startsWith("$it ") }
-            return (startsLikeQuestion || hasHowTo || tellMeQuestion || t.endsWith("?")) &&
-                !actionRequest
-        }
-
-        /** Creation verbs keep the request with the browser agent instead. */
-        private val SHOW_BROWSER_CREATION_VERBS = listOf(
-            "make", "build", "create", "generate", "draw", "write", "design", "code"
-        )
-
-        /** "in the browser", "on the side browser", "in browser"… */
-        private val SHOW_BROWSER_PLACE = Regex("\\b(in|on)( the)? (\\w+ )?browser")
-
-        /** "show it in the browser", "open that in the side browser", etc. */
-        fun looksLikeShowInBrowser(normalized: String): Boolean {
-            val t = stripAddress(normalized)
-            return SHOW_BROWSER_VERBS.any { t.contains(it) } &&
-                SHOW_BROWSER_CREATION_VERBS.none { t.contains(it) } &&
-                SHOW_BROWSER_PLACE.containsMatchIn(t)
-        }
-
-        /** Phrases that politely end conversation mode. */
-        private val STOP_COMMANDS = setOf(
-            "stop", "never mind", "nevermind", "that's all", "thats all",
-            "thank you", "thanks", "stop listening", "goodbye", "bye"
-        )
+        fun looksLikeShowInBrowser(normalized: String): Boolean =
+            SpeechIntents.looksLikeShowInBrowser(normalized)
     }
 }
 
