@@ -21,6 +21,16 @@ import kotlin.math.sqrt
 data class MotionState(
     val pitchDeg: Float = 0f,
     val rollDeg: Float = 0f,
+    /**
+     * Rotation about the screen normal: 0° = portrait upright, ±90° = landscape.
+     * Well-defined in every orientation except face-flat, so the avatar keeps
+     * tracking in a horizontal car dock where [rollDeg] saturates.
+     */
+    val screenLeanDeg: Float = 0f,
+    /** Continuous lateral G (car frame, + ≈ push toward the right side) — turns. */
+    val leanG: Float = 0f,
+    /** Continuous longitudinal G (car frame, + = accelerating, - = braking). */
+    val surgeG: Float = 0f,
     /** True for one emission per detected shake. */
     val shaking: Boolean = false,
 )
@@ -50,6 +60,12 @@ class MotionSense(context: Context) : RobotPoseSource {
     private var lastShakeAt = 0L
     private var smoothPitch = 0f
     private var smoothRoll = 0f
+    /** Low-passed gravity vector — the orientation reference for every channel. */
+    private val gravity = FloatArray(3)
+    /** Last valid screen-plane tilt; held while the phone is too flat to read one. */
+    private var screenLean = 0f
+    private var smoothLeanG = 0f
+    private var smoothSurgeG = 0f
 
     private val listener = object : SensorEventListener {
         override fun onSensorChanged(event: SensorEvent) {
@@ -74,9 +90,32 @@ class MotionSense(context: Context) : RobotPoseSource {
             val roll = Math.toDegrees(atan2(x.toDouble(), z.toDouble())).toFloat()
             smoothPitch += (pitch - smoothPitch) * LOW_PASS
             smoothRoll += (roll - smoothRoll) * LOW_PASS
+
+            // Gravity reference: slower low-pass than the display tilt, so
+            // sustained orientation wins over bumps and vibration.
+            for (i in 0..2) gravity[i] = gravity[i] * GRAVITY_KEEP + event.values[i] * (1f - GRAVITY_KEEP)
+            // Screen-plane tilt holds its last value when the phone goes flat.
+            MotionMath.screenLeanDeg(gravity[0], gravity[1])?.let { screenLean = it }
+
+            // Dynamic forces in the car frame: raw minus gravity, decomposed by
+            // the same car-plane math the driving detector uses. Turns push
+            // laterally, braking pushes longitudinally — both continuous, so the
+            // avatar can track the force instead of waiting for a threshold.
+            val linear = floatArrayOf(
+                x - gravity[0],
+                y - gravity[1],
+                z - gravity[2],
+            )
+            val car = com.example.meowmba.core.car.CarDynamics.decompose(linear, gravity)
+            smoothLeanG += (car.lateralG - smoothLeanG) * FORCE_LOW_PASS
+            smoothSurgeG += (car.longitudinalG - smoothSurgeG) * FORCE_LOW_PASS
+
             _motion.value = _motion.value.copy(
                 pitchDeg = smoothPitch.coerceIn(-MAX_TILT_DEG, MAX_TILT_DEG),
                 rollDeg = smoothRoll.coerceIn(-MAX_TILT_DEG, MAX_TILT_DEG),
+                screenLeanDeg = screenLean,
+                leanG = smoothLeanG,
+                surgeG = smoothSurgeG,
             )
         }
 
@@ -97,5 +136,9 @@ class MotionSense(context: Context) : RobotPoseSource {
         const val SHAKE_DEBOUNCE_MS = 1000L
         const val MAX_TILT_DEG = 8f
         private const val LOW_PASS = 0.12f
+        /** Gravity estimator: keep 90% of the old vector per sample (~1s settle). */
+        private const val GRAVITY_KEEP = 0.90f
+        /** Force channels: fast enough to feel a turn, slow enough to not buzz. */
+        private const val FORCE_LOW_PASS = 0.25f
     }
 }

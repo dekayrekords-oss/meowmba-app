@@ -119,6 +119,10 @@ fun AvatarRenderer(
     facePitchDeg: Float? = null,
     faceRollDeg: Float? = null,
     faceScale: Float? = null,
+    /** Lateral force on the phone, -1..1 (+ = pushed right). Turns lean the head. */
+    motionLean: Float = 0f,
+    /** Longitudinal force, -1..1 (+ = braking throw). Braking lurches the head. */
+    motionLurch: Float = 0f,
     modifier: Modifier = Modifier
 ) {
     val basePose = CatAvatarStateMachine.resolvePose(state)
@@ -412,6 +416,18 @@ fun AvatarRenderer(
     )
     val headScale by animateFloatAsState(heldScale, rotSpec, label = "headScale")
 
+    // ── Accelerometer forces: turn lean + brake lurch ──────────────────────
+    // Already low-passed in MotionSense and normalized in the ViewModel; a
+    // spring here just keeps per-sample steps from reading as jitter. These
+    // do NOT gate on face tracking — the phone moves whether or not it sees
+    // a face.
+    val forceSpec = spring<Float>(
+        dampingRatio = Spring.DampingRatioNoBouncy,
+        stiffness = Spring.StiffnessMedium,
+    )
+    val leanAnim by animateFloatAsState(motionLean, forceSpec, label = "motionLean")
+    val lurchAnim by animateFloatAsState(motionLurch, forceSpec, label = "motionLurch")
+
     // ── Petting: stroking the cat makes it purr ────────────────────────────
     var lastPetAt by remember { mutableLongStateOf(0L) }
     LaunchedEffect(lastPetAt) {
@@ -534,14 +550,16 @@ fun AvatarRenderer(
         val idleGazeX = saccadeX.value * (1f - trackingWeight)
         val idleGazeY = saccadeY.value * (1f - trackingWeight)
         val cx = w / 2f + (gazeX + idleGazeX) * s * bodyGaze + leanShift +
-            yawN * trackingWeight * s * 0.08f
+            yawN * trackingWeight * s * 0.08f + leanAnim * s * 0.09f
         val cy = h * 0.47f + (gazeY + idleGazeY) * s * (0.02f + 0.04f * trackingWeight) -
-            bounceY + pitchN * trackingWeight * s * 0.06f
+            bounceY + pitchN * trackingWeight * s * 0.06f + lurchAnim * s * 0.05f
 
         // 6-DOF: roll rotates the classic head through the same headTilt channel
         // the eyes already use; distance scales the head geometry up/down.
-        val headRotate = headTilt + rollN * 14f * trackingWeight
-        val headSizeFactor = com.example.meowmba.core.vision.FacePose.headSizeFactor(headScale)
+        // Accelerometer forces ride along: turns lean+roll, braking throws forward.
+        val headRotate = headTilt + rollN * 14f * trackingWeight + leanAnim * 12f
+        val headSizeFactor = com.example.meowmba.core.vision.FacePose.headSizeFactor(headScale) *
+            (1f + lurchAnim * 0.08f).coerceIn(0.92f, 1.08f)
 
         val eyeDX = s * 0.26f * headSizeFactor
         val eyeW = s * 0.19f * headSizeFactor
@@ -570,12 +588,16 @@ fun AvatarRenderer(
             // 0.42/18° hard toggles read as stepping).
             // 6-DOF: yaw turns the head sideways (pan + slight lean), pitch nods
             // it (vertical pan), roll actually rotates it, scale leans in/out.
+            // Accelerometer forces are independent of face tracking: a turn
+            // slides + rolls the head, braking throws it forward and closer.
             val bodyPanX = gazeX * R * (0.06f + 0.26f * trackingWeight) +
-                yawN * trackingWeight * R * 0.22f
+                yawN * trackingWeight * R * 0.22f + leanAnim * R * 0.30f
             val bodyPanY = gazeY * R * (0.04f + 0.18f * trackingWeight) +
-                pitchN * trackingWeight * R * 0.16f
-            val bodyTilt = (gazeX * 12f + rollN * 16f).coerceIn(-20f, 20f) * trackingWeight
-            val godotHeadSize = com.example.meowmba.core.vision.FacePose.headSizeFactor(headScale)
+                pitchN * trackingWeight * R * 0.16f + lurchAnim * R * 0.20f
+            val bodyTilt = ((gazeX * 12f + rollN * 16f).coerceIn(-20f, 20f) * trackingWeight +
+                leanAnim * 14f).coerceIn(-24f, 24f)
+            val godotHeadSize = com.example.meowmba.core.vision.FacePose.headSizeFactor(headScale) *
+                (1f + lurchAnim * 0.08f).coerceIn(0.92f, 1.08f)
             // Pupils track hard — body pan carries the head, iris must still
             // glance toward the user inside the sockets (0.50 looked static).
             val pupilGazeX = if (tracking) {
