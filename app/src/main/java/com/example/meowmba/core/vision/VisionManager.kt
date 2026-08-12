@@ -251,13 +251,20 @@ class VisionManager(
                     val w = if (is90) proxy.height else proxy.width
                     val h = if (is90) proxy.width else proxy.height
                     if (w <= 0 || h <= 0) return@addOnSuccessListener
-                    val cx = face.boundingBox.exactCenterX() / w.toFloat()
-                    val cy = face.boundingBox.exactCenterY() / h.toFloat()
-                    var rawX = (cx * 2f - 1f).coerceIn(-1f, 1f)
+                    val cxU = face.boundingBox.exactCenterX() / w.toFloat()
+                    val cyU = face.boundingBox.exactCenterY() / h.toFloat()
+                    // ML Kit reports the box in the camera's upright frame, which
+                    // follows the SENSOR — it does not change when the phone rotates
+                    // to landscape, but the display does. Remap into display space so
+                    // horizontal head motion stays horizontal on screen; identity in
+                    // portrait (measured on device: rot=90 in landscape, upright
+                    // frame stays 240x320 while the display is 320x240 — axes swap).
+                    val (sx, sy) = FaceFrameMap.toDisplay(cxU, cyU, displayRotationDegrees())
+                    var rawX = (sx * 2f - 1f).coerceIn(-1f, 1f)
                     // Front camera is mirrored — flip X so +X is the user's right
                     // on screen, matching how the avatar preview renders.
                     if (_useFrontCamera) rawX = -rawX
-                    val rawY = (cy * 2f - 1f).coerceIn(-1f, 1f)
+                    val rawY = (sy * 2f - 1f).coerceIn(-1f, 1f)
                     // Medium EMA: follows clearly, still damps ML Kit box noise.
                     // (0.10 + center-bias was so strong following looked dead.)
                     val a = if (hasSmooth) 0.32f else 0.65f
@@ -523,6 +530,18 @@ class VisionManager(
         val cover = minSide / maxSide < 0.65f
         android.util.Log.i("VM", "active display=${active.displayId} ${size.x}x${size.y} aspect=${minSide / maxSide} cover=$cover")
         return cover
+    }
+
+    /** Default display rotation in degrees (0/90/180/270), for face-frame remap. */
+    private fun displayRotationDegrees(): Int {
+        val dm = context.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager ?: return 0
+        // Surface.ROTATION_*: 0=0deg, 1=90deg, 2=180deg, 3=270deg.
+        return when (dm.getDisplay(Display.DEFAULT_DISPLAY)?.rotation) {
+            1 -> 90
+            2 -> 180
+            3 -> 270
+            else -> 0
+        }
     }
 
     private fun unbind() {
