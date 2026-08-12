@@ -352,6 +352,49 @@ class RobotManager {
     /** True when a real LOOI body is attached over BLE and ready for commands. */
     val hasLiveBody: Boolean get() = bleLink?.connected == true
 
+    private var lastFaceAtMs = 0L
+    private var lastFaceX = 0f
+    private var lastTurnAtMs = 0L
+    private var lastDrive = 0f
+    private var lastNeck = Float.NaN
+
+    /**
+     * Keep the person in the camera frame. Call on every face-track sample
+     * (including nulls) so the base keeps turning while they stay off-center.
+     */
+    fun keepPersonInFrame(offsetX: Float?, offsetY: Float?, scale: Float?, nowMs: Long = System.currentTimeMillis()) {
+        if (offsetX != null) {
+            lastFaceAtMs = nowMs
+            lastFaceX = offsetX
+        }
+        val cmd = KeepInFrame.step(offsetX, offsetY, scale, nowMs, lastFaceAtMs, lastFaceX)
+        val link = bleLink?.takeIf { it.connected }
+        if (link == null) {
+            FaceMotorMap.followFace(offsetX, offsetY)
+                .forEach { (id, angle) -> controller.setServo(id, angle) }
+            return
+        }
+        if (lastNeck.isNaN() || kotlin.math.abs(cmd.neckPitch - lastNeck) > 0.03f) {
+            lastNeck = cmd.neckPitch
+            link.setNeckPitch(cmd.neckPitch)
+        }
+        if (cmd.turning) {
+            if (nowMs - lastTurnAtMs >= 180L) {
+                lastTurnAtMs = nowMs
+                link.turnPulse(cmd.turnSpeed, cmd.turnTicks)
+            }
+        }
+        if (cmd.driveSpeed != lastDrive) {
+            lastDrive = cmd.driveSpeed
+            if (cmd.driveSpeed > 0f) link.driveSpeed(cmd.driveSpeed)
+            else link.driveSpeed(0f)
+        }
+        if (!cmd.turning && !cmd.driving && cmd.neckPitch == 0f && lastDrive != 0f) {
+            lastDrive = 0f
+            link.driveSpeed(0f)
+        }
+    }
+
     /**
      * Every motion the base can perform, as one closed vocabulary.
      *

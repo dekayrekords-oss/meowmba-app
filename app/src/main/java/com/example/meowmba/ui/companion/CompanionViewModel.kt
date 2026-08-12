@@ -513,16 +513,11 @@ class CompanionViewModel(
                 // case is skipped, which is free.
                 if (next != cur) {
                     _faceGaze.value = next
-                    // FaceTrack.offsetX is already screen-space horizontal for
-                    // every rotation and both lenses (VisionManager syncs the
-                    // analysis targetRotation), so the robot pan reads it
-                    // directly. The orientation branch that used to be here
-                    // swapped axes a second time on top of the renderer's own
-                    // swap — the two corrections cancelled at some angles and
-                    // doubled at others.
-                    com.example.meowmba.core.robot.FaceMotorMap.followFace(offX, offY)
-                        .forEach { (servo, angle) -> motorController.setServo(servo, angle) }
                 }
+                // Every sample, not only when the offset changes: a face that
+                // stays off-center must keep the base turning until they are
+                // framed again.
+                robotManager.keepPersonInFrame(offX, offY, track?.scale)
                 // Full 6-DOF pose rides the same track; StateFlow dedupes equal
                 // values so rotation-only changes still re-emit.
                 _facePose.value = track?.let {

@@ -99,6 +99,14 @@ class RobotManagerTest {
     }
 
     @Test
+    fun `keepPersonInFrame on a simulated body does not throw`() {
+        val m = RobotManager()
+        m.keepPersonInFrame(0.5f, -0.2f, 0.6f, nowMs = 1_000L)
+        m.keepPersonInFrame(null, null, null, nowMs = 2_000L)
+        m.active.setExpression("curious")
+    }
+
+    @Test
     fun `useSimulated always returns a working simulated controller`() {
         val m = RobotManager()
         m.useSimulated()
