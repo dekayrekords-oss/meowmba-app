@@ -520,7 +520,7 @@ class CompanionViewModel(
                     // swapped axes a second time on top of the renderer's own
                     // swap — the two corrections cancelled at some angles and
                     // doubled at others.
-                    com.example.meowmba.core.robot.FaceMotorMap.panForFace(offX ?: 0f)
+                    com.example.meowmba.core.robot.FaceMotorMap.followFace(offX, offY)
                         .forEach { (servo, angle) -> motorController.setServo(servo, angle) }
                 }
                 // Full 6-DOF pose rides the same track; StateFlow dedupes equal
@@ -1108,8 +1108,11 @@ class CompanionViewModel(
                                 }
                                 // Physical base: counter the in-plane rotation, the
                                 // axis the head-tilt servo actually moves on.
-                                com.example.meowmba.core.robot.FaceMotorMap.balanceTilt(st.screenLeanDeg)
-                                    .forEach { (servo, angle) -> motorController.setServo(servo, angle) }
+                                // Skip while a face is locked — followFace owns the neck.
+                                if (_faceGaze.value == null) {
+                                    com.example.meowmba.core.robot.FaceMotorMap.balanceTilt(st.screenLeanDeg)
+                                        .forEach { (servo, angle) -> motorController.setServo(servo, angle) }
+                                }
                             }
                         }
                         viewModelScope.launch {
@@ -4147,7 +4150,7 @@ class CompanionViewModel(
         visionManager?.setUseFrontCamera(useFront)
         // Pan the head back to center; the new camera is a fresh face-track session.
         if (!useFront) {
-            com.example.meowmba.core.robot.FaceMotorMap.panForFace(null)
+            com.example.meowmba.core.robot.FaceMotorMap.followFace(null, null)
                 .forEach { (servo, angle) -> motorController.setServo(servo, angle) }
         }
     }

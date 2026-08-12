@@ -96,6 +96,30 @@ class PhaseGTest {
     }
 
     @Test
+    fun `followFace looks at the subject on both axes and recenters`() {
+        val center = FaceMotorMap.followFace(0f, 0f)
+        assertEquals(90f, center[FaceMotorMap.SERVO_HEAD_PAN]!!, 0.01f)
+        assertEquals(90f, center[FaceMotorMap.SERVO_HEAD_TILT]!!, 0.01f)
+
+        val right = FaceMotorMap.followFace(0.8f, 0f)
+        assertTrue(right[FaceMotorMap.SERVO_HEAD_PAN]!! > 90f)
+        val left = FaceMotorMap.followFace(-0.8f, 0f)
+        assertTrue(left[FaceMotorMap.SERVO_HEAD_PAN]!! < 90f)
+
+        val down = FaceMotorMap.followFace(0f, 0.8f)
+        assertTrue(
+            "face lower in frame must nod down",
+            down[FaceMotorMap.SERVO_HEAD_TILT]!! > 90f,
+        )
+        val up = FaceMotorMap.followFace(0f, -0.8f)
+        assertTrue(up[FaceMotorMap.SERVO_HEAD_TILT]!! < 90f)
+
+        val gone = FaceMotorMap.followFace(null, null)
+        assertEquals(90f, gone[FaceMotorMap.SERVO_HEAD_PAN]!!, 0.01f)
+        assertEquals(90f, gone[FaceMotorMap.SERVO_HEAD_TILT]!!, 0.01f)
+    }
+
+    @Test
     fun `balance demo counter-rotates the head and clamps`() {
         val level = FaceMotorMap.balanceTilt(0f)[FaceMotorMap.SERVO_HEAD_TILT]!!
         assertEquals(90f, level)

@@ -288,16 +288,42 @@ class RobotManager {
      * short rotate pulse (fe00 frames), expression -> headlight (fed2).
      */
     private class BleMotorController(private val link: LooiBleLink) : MotorController {
+        private var lastNeck = Float.NaN
+        private var lastPanAtMs = 0L
+        private var lastPanSign = 0
+
         override fun setServo(id: Int, angleDeg: Float) {
             val clamped = angleDeg.coerceIn(0f, 180f)
             when (id) {
-                FaceMotorMap.SERVO_HEAD_TILT -> link.setNeckPitch((clamped - 90f) / 90f)
-                FaceMotorMap.SERVO_BODY -> {
-                    // Angle offset from center becomes a short, gentle rotate pulse.
-                    val delta = (clamped - 90f).toInt()
-                    if (delta != 0) link.turnPulse(kotlin.math.abs(delta).coerceIn(5, 40), 3)
+                FaceMotorMap.SERVO_HEAD_TILT -> {
+                    val pitch = (clamped - 90f) / 90f
+                    if (!lastNeck.isNaN() && kotlin.math.abs(pitch - lastNeck) < 0.03f) return
+                    lastNeck = pitch
+                    link.setNeckPitch(pitch)
                 }
-                else -> Unit // ears/tail/pan have no BLE actuator on the base
+                FaceMotorMap.SERVO_HEAD_PAN -> {
+                    // No pan servo on the BLE base — turn in place toward the face.
+                    val delta = clamped - 90f
+                    val now = System.currentTimeMillis()
+                    if (kotlin.math.abs(delta) < 8f) {
+                        if (lastPanSign != 0) {
+                            link.stopAll()
+                            lastPanSign = 0
+                        }
+                        return
+                    }
+                    if (now - lastPanAtMs < 220L) return
+                    lastPanAtMs = now
+                    val sign = if (delta > 0f) 1 else -1
+                    lastPanSign = sign
+                    val speed = (kotlin.math.abs(delta) * 1.4f).toInt().coerceIn(15, 50)
+                    link.turnPulse(sign * speed, 4)
+                }
+                FaceMotorMap.SERVO_BODY -> {
+                    val delta = (clamped - 90f).toInt()
+                    if (delta != 0) link.turnPulse(delta.coerceIn(-40, 40), 3)
+                }
+                else -> Unit // ears/tail have no BLE actuator
             }
         }
 

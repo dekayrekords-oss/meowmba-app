@@ -39,6 +39,22 @@ class RobotProtocolTest {
     }
 }
 
+class LooiBleProtocolTest {
+    @Test
+    fun `rotate frames keep left and right as opposite bytes`() {
+        val right = com.example.meowmba.core.robot.LooiBleProtocol.rotateFrame(40, 4)
+        val left = com.example.meowmba.core.robot.LooiBleProtocol.rotateFrame(-40, 4)
+        assertEquals(40, right.value)
+        assertEquals(-40, left.value)
+        val seq = com.example.meowmba.core.robot.LooiBleProtocol.SequenceCounter()
+        val rightBytes = com.example.meowmba.core.robot.LooiBleProtocol.encode(right, seq.next())
+        val leftBytes = com.example.meowmba.core.robot.LooiBleProtocol.encode(left, seq.next())
+        val valueIdx = com.example.meowmba.core.robot.LooiBleProtocol.Field.VALUE
+        assertEquals(40, rightBytes[valueIdx].toInt() and 0xFF)
+        assertEquals(216, leftBytes[valueIdx].toInt() and 0xFF) // -40 as uint8
+    }
+}
+
 class LooiMotorControllerTest {
     @Test
     fun `controller writes protocol frames to the transport`() {

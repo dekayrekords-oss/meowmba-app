@@ -113,7 +113,9 @@ object LooiBleProtocol {
      */
     fun rotateFrame(speedPercent: Int, ticks: Int) = Frame(
         opcode = 0x07, subOp = 0x00, maskA = 0xFF, maskB = 0x05,
-        value = speedPercent.coerceIn(0, 100),
+        // Signed: encode() writes value & 0xFF, so -40 becomes 0xD8. coerceIn(0, 100)
+        // used to flatten LEFT turns to speed 0 (turnPulse(-60) was a no-op).
+        value = speedPercent.coerceIn(-100, 100),
         param1 = 0x02, param2 = 0x0A,
         durationTicks = ticks.coerceIn(1, 255),
         param3 = 0x02, param4 = 0x14, end = 0x02

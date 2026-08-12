@@ -58,4 +58,24 @@ object FaceMotorMap {
         if (kotlin.math.abs(clamped) < 0.1f) return mapOf(SERVO_HEAD_PAN to CENTER)
         return mapOf(SERVO_HEAD_PAN to CENTER + clamped * 35f)
     }
+
+    /**
+     * Face tracking → neck + base. [offsetX]/[offsetY] are screen-space -1..1
+     * (negative X = subject left, positive Y = subject lower on the display).
+     *
+     * TILT looks up/down at the face (the LOOI BLE neck channel). PAN looks
+     * left/right: a real pan servo on TCP/serial, a short in-place turn on BLE.
+     * Null offsets recenter.
+     */
+    fun followFace(offsetX: Float?, offsetY: Float?): Map<Int, Float> {
+        val pan = panForFace(offsetX)
+        val tilt = if (offsetY == null) {
+            mapOf(SERVO_HEAD_TILT to CENTER)
+        } else {
+            val y = offsetY.coerceIn(-1f, 1f)
+            val angle = if (kotlin.math.abs(y) < 0.1f) CENTER else CENTER + y * 30f
+            mapOf(SERVO_HEAD_TILT to angle)
+        }
+        return pan + tilt
+    }
 }
