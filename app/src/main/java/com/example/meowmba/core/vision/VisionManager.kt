@@ -153,6 +153,31 @@ internal fun faceOffsetInScreenSpace(
  * display frame. When ML Kit did rotate (90/270), the box is already in the
  * target space and remapping would swap the axes a second time.
  */
+/**
+ * True only when the buffer is still in SENSOR space but the display is not.
+ *
+ * `cam=0` + `targetRotation == display` means CameraX already delivered a
+ * buffer that matches the window (Fold cover landscape: target=1, disp=90).
+ * Remapping that a second time swaps the axes — measured: X/Y sat at 0 after
+ * rest-centering and pitch jumped to 50° from a bogus euler remap.
+ */
+internal fun shouldRemapSensorToDisplay(
+    cameraRotationDegrees: Int,
+    displayDeg: Int,
+    targetRotation: Int,
+): Boolean {
+    val cam = ((cameraRotationDegrees % 360) + 360) % 360
+    val disp = ((displayDeg % 360) + 360) % 360
+    if (cam != 0 || disp == 0) return false
+    val targetDeg = when (targetRotation) {
+        android.view.Surface.ROTATION_90 -> 90
+        android.view.Surface.ROTATION_180 -> 180
+        android.view.Surface.ROTATION_270 -> 270
+        else -> 0
+    }
+    return targetDeg != disp
+}
+
 internal fun faceOffsetOnDisplay(
     boxCenterX: Float,
     boxCenterY: Float,
@@ -161,15 +186,14 @@ internal fun faceOffsetOnDisplay(
     rotationDegrees: Int,
     displayDeg: Int,
     mirrored: Boolean,
+    targetRotation: Int = android.view.Surface.ROTATION_0,
 ): Pair<Float, Float>? {
     val (w, h) = rotatedFrameSize(bufferW, bufferH, rotationDegrees)
     if (w <= 0 || h <= 0) return null
     var fx = boxCenterX / w.toFloat()
     var fy = boxCenterY / h.toFloat()
-    val rot = ((rotationDegrees % 360) + 360) % 360
-    val disp = ((displayDeg % 360) + 360) % 360
-    if (rot == 0 && disp != 0) {
-        val mapped = FaceFrameMap.toDisplay(fx, fy, disp)
+    if (shouldRemapSensorToDisplay(rotationDegrees, displayDeg, targetRotation)) {
+        val mapped = FaceFrameMap.toDisplay(fx, fy, displayDeg)
         fx = mapped.first
         fy = mapped.second
     }
@@ -209,11 +233,12 @@ internal fun remapEulerToDisplay(
     roll: Float,
     rotationDegrees: Int,
     displayDeg: Int,
+    targetRotation: Int = android.view.Surface.ROTATION_0,
 ): Triple<Float, Float, Float> {
-    val rot = ((rotationDegrees % 360) + 360) % 360
-    val disp = ((displayDeg % 360) + 360) % 360
-    if (rot != 0 || disp == 0) return Triple(yaw, pitch, roll)
-    return when (disp) {
+    if (!shouldRemapSensorToDisplay(rotationDegrees, displayDeg, targetRotation)) {
+        return Triple(yaw, pitch, roll)
+    }
+    return when (((displayDeg % 360) + 360) % 360) {
         90 -> Triple(pitch, -yaw, roll)
         270 -> Triple(-pitch, yaw, roll)
         180 -> Triple(-yaw, -pitch, roll)
@@ -264,13 +289,6 @@ class VisionManager(
     private var lastLogMs = 0L
     private var lastPublishAtMs = 0L
     private var analyzeSkip = 0
-    // Slow origin so a face that lives off-axis (cover punch-hole on the
-    // landscape short edge) still reads as "looking at us" instead of pinning
-    // the gaze at x≈-0.5. Fast head moves still come through; the rest pose
-    // only eats a static offset.
-    private var restX = 0f
-    private var restY = 0f
-    private var hasRest = false
 
     private val _faceTrack = MutableStateFlow<FaceTrack?>(null)
 
@@ -352,9 +370,6 @@ class VisionManager(
             faceDetector = null
             _faceTrack.value = null
             hasSmooth = false
-            hasRest = false
-            restX = 0f
-            restY = 0f
             // keep executor alive for re-enable; process teardown reclaims it
             smoothOffX = 0f
             smoothOffY = 0f
@@ -538,6 +553,7 @@ class VisionManager(
                 val now = System.currentTimeMillis()
                 if (face != null) {
                     val (w, _) = rotatedFrameSize(proxy.width, proxy.height, cameraRot)
+                    val targetRot = imageAnalysis?.targetRotation ?: android.view.Surface.ROTATION_0
                     val (rawX, rawY) = faceOffsetOnDisplay(
                         boxCenterX = face.boundingBox.exactCenterX(),
                         boxCenterY = face.boundingBox.exactCenterY(),
@@ -546,39 +562,35 @@ class VisionManager(
                         rotationDegrees = cameraRot,
                         displayDeg = displayDeg,
                         mirrored = _useFrontCamera,
+                        targetRotation = targetRot,
                     ) ?: return@addOnSuccessListener
-                    if (!hasRest) {
-                        restX = rawX
-                        restY = rawY
-                        hasRest = true
-                    } else {
-                        restX = smoothFaceOffset(restX, rawX, 0.05f)
-                        restY = smoothFaceOffset(restY, rawY, 0.05f)
-                    }
-                    val centeredX = (rawX - restX).coerceIn(-1f, 1f)
-                    val centeredY = (rawY - restY).coerceIn(-1f, 1f)
                     // Medium EMA: follows clearly, still damps ML Kit box noise.
-                    // (0.10 + center-bias was so strong following looked dead.)
-                    // No maxStep clamp — that turned fast motion into a staircase.
                     val a = faceSmoothingAlpha(hasSmooth)
-                    smoothOffX = smoothFaceOffset(smoothOffX, centeredX, a)
-                    smoothOffY = smoothFaceOffset(smoothOffY, centeredY, a)
-                    val rawYaw = face.headEulerAngleY
-                    val rawPitch = face.headEulerAngleX
-                    val rawRoll = face.headEulerAngleZ
+                    smoothOffX = smoothFaceOffset(smoothOffX, rawX, a)
+                    smoothOffY = smoothFaceOffset(smoothOffY, rawY, a)
                     val rawScale = FacePose.scaleFromFaceFraction(
                         face.boundingBox.width().toFloat(), w.toFloat()
                     )
-                    // Front camera is mirrored — flip yaw to match the offsetX
-                    // convention (+ = user's right on screen). Roll survives a
-                    // mirror (clockwise stays clockwise); pitch is unaffected.
-                    val yawMir = if (_useFrontCamera) -rawYaw else rawYaw
-                    val (yaw, pitch, roll) = remapEulerToDisplay(
-                        yawMir, rawPitch, rawRoll, cameraRot, displayDeg,
-                    )
-                    smoothYaw = smoothFaceOffset(smoothYaw, yaw, a)
-                    smoothPitch = smoothFaceOffset(smoothPitch, pitch, a)
-                    smoothRoll = smoothFaceOffset(smoothRoll, roll, a)
+                    // Landscape + cover punch-hole: ML Kit eulers are a side-on
+                    // view (pitch 40–60°) and yank the head off the user. Drive
+                    // follow from the remapped box only.
+                    val landscape = displayDeg == 90 || displayDeg == 270
+                    if (landscape) {
+                        smoothYaw = 0f
+                        smoothPitch = 0f
+                        smoothRoll = 0f
+                    } else {
+                        val rawYaw = face.headEulerAngleY
+                        val rawPitch = face.headEulerAngleX
+                        val rawRoll = face.headEulerAngleZ
+                        val yawMir = if (_useFrontCamera) -rawYaw else rawYaw
+                        val (yaw, pitch, roll) = remapEulerToDisplay(
+                            yawMir, rawPitch, rawRoll, cameraRot, displayDeg, targetRot,
+                        )
+                        smoothYaw = smoothFaceOffset(smoothYaw, yaw, a)
+                        smoothPitch = smoothFaceOffset(smoothPitch, pitch, a)
+                        smoothRoll = smoothFaceOffset(smoothRoll, roll, a)
+                    }
                     smoothScale = smoothFaceOffset(smoothScale, rawScale, a)
                     hasSmooth = true
                     lastFaceAtMs = now
@@ -625,9 +637,6 @@ class VisionManager(
                         // keep last published value
                     } else {
                         hasSmooth = false
-                        hasRest = false
-                        restX = 0f
-                        restY = 0f
                         smoothOffX = 0f
                         smoothOffY = 0f
                         smoothYaw = 0f
@@ -646,9 +655,6 @@ class VisionManager(
                 val now = System.currentTimeMillis()
                 if (!(hasSmooth && now - lastFaceAtMs < 700L)) {
                     hasSmooth = false
-                    hasRest = false
-                    restX = 0f
-                    restY = 0f
                     smoothOffX = 0f
                     smoothOffY = 0f
                     smoothYaw = 0f

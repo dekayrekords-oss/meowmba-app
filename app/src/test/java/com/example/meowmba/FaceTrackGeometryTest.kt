@@ -105,20 +105,42 @@ class FaceTrackGeometryTest {
     // move gaze X, not pin the head to the top of the frame.
 
     @Test
-    fun `landscape rot-zero remaps sensor Y onto display X`() {
+    fun `when CameraX already matched the display, do not swap axes again`() {
+        // Fold cover landscape: cam=0, target=ROTATION_90, disp=90.
+        // Buffer is already display-aligned. Remapping would send left/right
+        // onto Y and the head would not follow.
+        val rot90 = android.view.Surface.ROTATION_90
+        val (x1, y1) = faceOffsetOnDisplay(
+            boxCenterX = 40f, boxCenterY = 120f,
+            bufferW = 320, bufferH = 240,
+            rotationDegrees = 0, displayDeg = 90, mirrored = false,
+            targetRotation = rot90,
+        )!!
+        val (x2, y2) = faceOffsetOnDisplay(
+            boxCenterX = 280f, boxCenterY = 120f,
+            bufferW = 320, bufferH = 240,
+            rotationDegrees = 0, displayDeg = 90, mirrored = false,
+            targetRotation = rot90,
+        )!!
+        assertTrue("buffer-X must stay display-X, dx=${x2 - x1}", x2 - x1 > 0.9f)
+        assertEquals("must not leak onto Y", y1, y2, 1e-4f)
+    }
+
+    @Test
+    fun `rotation-lock still remaps sensor Y onto display X`() {
         val bufW = 320
         val bufH = 240
-        // Two faces at the same sensor-X, different sensor-Y (along the
-        // landscape screen's horizontal axis once remapped).
         val (xTop, yTop) = faceOffsetOnDisplay(
             boxCenterX = 160f, boxCenterY = 20f,
             bufferW = bufW, bufferH = bufH,
             rotationDegrees = 0, displayDeg = 90, mirrored = false,
+            targetRotation = android.view.Surface.ROTATION_0,
         )!!
         val (xBot, yBot) = faceOffsetOnDisplay(
             boxCenterX = 160f, boxCenterY = 220f,
             bufferW = bufW, bufferH = bufH,
             rotationDegrees = 0, displayDeg = 90, mirrored = false,
+            targetRotation = android.view.Surface.ROTATION_0,
         )!!
         assertTrue(
             "sensor-Y motion must become display-X, dx=${xBot - xTop}",
@@ -162,14 +184,22 @@ class FaceTrackGeometryTest {
     }
 
     @Test
-    fun `sensor yaw becomes display pitch after a 90 degree remap`() {
+    fun `sensor yaw becomes display pitch only when we actually remapped`() {
         val (yaw, pitch, roll) = remapEulerToDisplay(
             yaw = 20f, pitch = 5f, roll = 3f,
             rotationDegrees = 0, displayDeg = 90,
+            targetRotation = android.view.Surface.ROTATION_0,
         )
         assertEquals(5f, yaw, 1e-4f)
         assertEquals(-20f, pitch, 1e-4f)
         assertEquals(3f, roll, 1e-4f)
+        val identity = remapEulerToDisplay(
+            yaw = 20f, pitch = 5f, roll = 3f,
+            rotationDegrees = 0, displayDeg = 90,
+            targetRotation = android.view.Surface.ROTATION_90,
+        )
+        assertEquals(20f, identity.first, 1e-4f)
+        assertEquals(5f, identity.second, 1e-4f)
     }
 
     @Test
