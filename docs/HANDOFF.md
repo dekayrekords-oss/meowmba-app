@@ -453,9 +453,9 @@ even after the app dies; only restarting AiAi itself (or a failover) recovers vo
 
 <!-- AUTOBUILD:START -->
 (regenerated after each commit)
-- 2026-08-11 16:29:31 : chore: regenerate autobuild log
+- 2026-08-12 10:42:10 : merge: fold origin/main into reliability (one tree)
+- 8ff7a11 2026-08-12 10:35 fix(voice,models): share one recognizer; drop Gemini Nano
+- 2618eb4 2026-08-11 16:29 chore: regenerate autobuild log
 - abee26d 2026-08-11 16:29 diag(nano): log why the model picker probe failed
 - dda3a88 2026-08-11 16:29 fix(vision): drive analyzer rotation from physical tilt, not display rotation
-- 495dd6f 2026-08-11 16:04 fix(voice): settle handovers, escalate never-ready sessions to a failover
-- bffe665 2026-08-11 14:51 feat(anim): 8 expressions that spend the engine's unused channels, + rot guards
 <!-- AUTOBUILD:END -->
