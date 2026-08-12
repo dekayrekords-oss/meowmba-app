@@ -2,6 +2,8 @@ package com.example.meowmba
 
 import com.example.meowmba.core.vision.faceOffsetInScreenSpace
 import com.example.meowmba.core.vision.faceOffsetOnDisplay
+import com.example.meowmba.core.vision.mlKitRotationDegrees
+import com.example.meowmba.core.vision.remapEulerToDisplay
 import com.example.meowmba.core.vision.rotatedFrameSize
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -142,6 +144,38 @@ class FaceTrackGeometryTest {
         )!!
         assertTrue("portrait X must still respond", x2 - x1 > 0.5f)
         assertEquals("portrait Y must stay put", y1, y2, 1e-4f)
+    }
+
+    @Test
+    fun `CameraX rot-zero in landscape asks ML Kit to rotate to the display`() {
+        assertEquals(90, mlKitRotationDegrees(0, 90))
+        assertEquals(270, mlKitRotationDegrees(0, 270))
+        assertEquals(0, mlKitRotationDegrees(0, 0))
+        // A real CameraX rotation wins — do not double-rotate portrait.
+        assertEquals(270, mlKitRotationDegrees(270, 0))
+        assertEquals(90, mlKitRotationDegrees(90, 90))
+    }
+
+    @Test
+    fun `sensor yaw becomes display pitch after a 90 degree remap`() {
+        val (yaw, pitch, roll) = remapEulerToDisplay(
+            yaw = 20f, pitch = 5f, roll = 3f,
+            rotationDegrees = 0, displayDeg = 90,
+        )
+        assertEquals(5f, yaw, 1e-4f)
+        assertEquals(-20f, pitch, 1e-4f)
+        assertEquals(3f, roll, 1e-4f)
+    }
+
+    @Test
+    fun `euler remap is identity once ML Kit already rotated`() {
+        val (yaw, pitch, roll) = remapEulerToDisplay(
+            yaw = 20f, pitch = 5f, roll = 3f,
+            rotationDegrees = 90, displayDeg = 90,
+        )
+        assertEquals(20f, yaw, 1e-4f)
+        assertEquals(5f, pitch, 1e-4f)
+        assertEquals(3f, roll, 1e-4f)
     }
 
     // ── smoothing: a stream to integrate, not a staircase ───────────────────
