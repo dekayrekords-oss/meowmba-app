@@ -41,17 +41,18 @@ class RobotProtocolTest {
 
 class LooiBleProtocolTest {
     @Test
-    fun `rotate frames keep left and right as opposite bytes`() {
-        val right = com.example.meowmba.core.robot.LooiBleProtocol.rotateFrame(40, 4)
-        val left = com.example.meowmba.core.robot.LooiBleProtocol.rotateFrame(-40, 4)
-        assertEquals(40, right.value)
-        assertEquals(-40, left.value)
-        val seq = com.example.meowmba.core.robot.LooiBleProtocol.SequenceCounter()
-        val rightBytes = com.example.meowmba.core.robot.LooiBleProtocol.encode(right, seq.next())
-        val leftBytes = com.example.meowmba.core.robot.LooiBleProtocol.encode(left, seq.next())
-        val valueIdx = com.example.meowmba.core.robot.LooiBleProtocol.Field.VALUE
-        assertEquals(40, rightBytes[valueIdx].toInt() and 0xFF)
-        assertEquals(216, leftBytes[valueIdx].toInt() and 0xFF) // -40 as uint8
+    fun `captured left and right scripts invert the signed tread bytes`() {
+        val left = com.example.meowmba.core.robot.LooiBleProtocol.capturedTurn(1, left = true)
+        val right = com.example.meowmba.core.robot.LooiBleProtocol.capturedTurn(1, left = false)
+        assertEquals(20, left.size)
+        assertEquals(20, right.size)
+        assertEquals(1, left[0].toInt())
+        assertEquals(1, right[0].toInt())
+        // Signed motion bytes: left EB/EB/F5 (-21/-21/-11), right 15/15/0B (+21/+21/+11)
+        assertEquals(0xEB, left[9].toInt() and 0xFF)
+        assertEquals(0x15, right[9].toInt() and 0xFF)
+        assertEquals(0xF5, left[18].toInt() and 0xFF)
+        assertEquals(0x0B, right[18].toInt() and 0xFF)
     }
 }
 

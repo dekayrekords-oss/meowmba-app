@@ -113,11 +113,33 @@ object LooiBleProtocol {
      */
     fun rotateFrame(speedPercent: Int, ticks: Int) = Frame(
         opcode = 0x07, subOp = 0x00, maskA = 0xFF, maskB = 0x05,
-        // Signed: encode() writes value & 0xFF, so -40 becomes 0xD8. coerceIn(0, 100)
-        // used to flatten LEFT turns to speed 0 (turnPulse(-60) was a no-op).
-        value = speedPercent.coerceIn(-100, 100),
+        value = speedPercent.coerceIn(0, 100),
         param1 = 0x02, param2 = 0x0A,
         durationTicks = ticks.coerceIn(1, 255),
         param3 = 0x02, param4 = 0x14, end = 0x02
     )
+
+    /**
+     * Captured tread scripts from this exact LOOI (Memba live session).
+     * The 17-byte 0x07 rotateFrame only spins one way on this robot; these
+     * 20-byte writes are what actually turn left vs right. First byte is SEQ.
+     *
+     * Left is the reverse-engineered capture. Right inverts its signed motion
+     * bytes (0xEB/-21 → 0x15/+21, 0xF5/-11 → 0x0B/+11).
+     */
+    private val CAPTURED_TURN_LEFT_TAIL = byteArrayOf(
+        0x02, 0x64, 0x00, 0x02, 0x64, 0x1E, 0x03,
+        0x6A, 0xEB.toByte(), 0x02, 0x71, 0xEB.toByte(), 0x02,
+        0x73, 0x32, 0x03, 0x79, 0xF5.toByte(), 0x02,
+    )
+    private val CAPTURED_TURN_RIGHT_TAIL = byteArrayOf(
+        0x02, 0x64, 0x00, 0x02, 0x64, 0x1E, 0x03,
+        0x6A, 0x15, 0x02, 0x71, 0x15, 0x02,
+        0x73, 0x32, 0x03, 0x79, 0x0B, 0x02,
+    )
+
+    fun capturedTurn(seq: Int, left: Boolean): ByteArray {
+        val tail = if (left) CAPTURED_TURN_LEFT_TAIL else CAPTURED_TURN_RIGHT_TAIL
+        return byteArrayOf((seq and 0xFF).toByte()) + tail
+    }
 }

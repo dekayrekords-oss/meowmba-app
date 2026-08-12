@@ -367,9 +367,31 @@ class LooiBleLink(private val context: Context) {
         runCatching { g.writeCharacteristic(ch) }.getOrDefault(false)
     }
 
-    /** Turn the base via the verified rotation frame. ticks ~ 20ms each. */
-    fun turnPulse(speedPercent: Int, ticks: Int): Boolean =
-        writeFrame(LooiBleProtocol.rotateFrame(speedPercent, ticks))
+    /** Raw write to fe00 (captured turn scripts are 20 bytes, not 17). */
+    private fun writeRaw(bytes: ByteArray): Boolean = synchronized(writeLock) {
+        val g = gatt ?: return false
+        val ch = commandChar ?: return false
+        ch.value = bytes
+        val noResp = ch.properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE != 0
+        val write = ch.properties and BluetoothGattCharacteristic.PROPERTY_WRITE != 0
+        ch.writeType = when {
+            noResp -> BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
+            write -> BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+            else -> return false
+        }
+        runCatching { g.writeCharacteristic(ch) }.getOrDefault(false)
+    }
+
+    /**
+     * Turn the base. Sign selects the captured left/right tread script —
+     * the 17-byte 0x07 frame only turns one way on this robot (observed:
+     * left and forward, never right). [ticks] is unused for captured scripts;
+     * KeepInFrame rate-limits the pulse.
+     */
+    fun turnPulse(speedPercent: Int, ticks: Int): Boolean {
+        if (speedPercent == 0) return writeFrame(LooiBleProtocol.rotateFrame(0, 1))
+        return writeRaw(LooiBleProtocol.capturedTurn(seq.next(), left = speedPercent < 0))
+    }
 
     /** Proportional FORWARD drive on fed0 (the verified drive channel). */
     fun driveSpeed(speed0to1: Float): Boolean =
