@@ -383,14 +383,16 @@ class LooiBleLink(private val context: Context) {
     }
 
     /**
-     * Turn the base. Sign selects the captured left/right tread script —
-     * the 17-byte 0x07 frame only turns one way on this robot (observed:
-     * left and forward, never right). [ticks] is unused for captured scripts;
-     * KeepInFrame rate-limits the pulse.
+     * Turn the base. The 20-byte captured scripts were ignored on fe00 and
+     * the base stopped moving (neck still worked — different char).
+     * 17-byte 0x07 + speed>0 is the verified LEFT. RIGHT uses subOp 0x01.
      */
     fun turnPulse(speedPercent: Int, ticks: Int): Boolean {
-        if (speedPercent == 0) return writeFrame(LooiBleProtocol.rotateFrame(0, 1))
-        return writeRaw(LooiBleProtocol.capturedTurn(seq.next(), left = speedPercent < 0))
+        val mag = kotlin.math.abs(speedPercent)
+        if (mag == 0) return writeFrame(LooiBleProtocol.rotateFrame(0, 1, right = false))
+        val right = speedPercent > 0
+        android.util.Log.i("LooiBle", "turn ${if (right) "RIGHT" else "LEFT"} mag=$mag ticks=$ticks")
+        return writeFrame(LooiBleProtocol.rotateFrame(mag, ticks, right = right))
     }
 
     /** Proportional FORWARD drive on fed0 (the verified drive channel). */

@@ -111,8 +111,15 @@ object LooiBleProtocol {
      * the motors twitch (verified on the real robot). value = speed 0-100,
      * ticks ~ 20ms each.
      */
-    fun rotateFrame(speedPercent: Int, ticks: Int) = Frame(
-        opcode = 0x07, subOp = 0x00, maskA = 0xFF, maskB = 0x05,
+    /**
+     * 17-byte Script-Mode turn. On this robot [subOp] 0 + speed 1–100 is the
+     * verified LEFT spin. [right]=true sets subOp 0x01 (the unused sibling
+     * of the golden packet) so RIGHT is not another LEFT.
+     */
+    fun rotateFrame(speedPercent: Int, ticks: Int, right: Boolean = false) = Frame(
+        opcode = 0x07,
+        subOp = if (right) 0x01 else 0x00,
+        maskA = 0xFF, maskB = 0x05,
         value = speedPercent.coerceIn(0, 100),
         param1 = 0x02, param2 = 0x0A,
         durationTicks = ticks.coerceIn(1, 255),

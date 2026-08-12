@@ -12,7 +12,7 @@ object KeepInFrame {
     const val X_DEAD = 0.12f
     const val Y_DEAD = 0.10f
     const val APPROACH_SCALE = 0.78f
-    const val AIMED = 0.32f
+    const val AIMED = 0.45f
     const val SEARCH_AFTER_MS = 400L
     const val SEARCH_GIVE_UP_MS = 2_800L
 

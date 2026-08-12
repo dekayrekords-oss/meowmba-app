@@ -41,6 +41,16 @@ class RobotProtocolTest {
 
 class LooiBleProtocolTest {
     @Test
+    fun `right turn is a different 17-byte frame than left`() {
+        val left = com.example.meowmba.core.robot.LooiBleProtocol.rotateFrame(40, 8, right = false)
+        val right = com.example.meowmba.core.robot.LooiBleProtocol.rotateFrame(40, 8, right = true)
+        assertEquals(0x00, left.subOp)
+        assertEquals(0x01, right.subOp)
+        assertEquals(40, left.value)
+        assertEquals(40, right.value)
+    }
+
+    @Test
     fun `captured left and right scripts invert the signed tread bytes`() {
         val left = com.example.meowmba.core.robot.LooiBleProtocol.capturedTurn(1, left = true)
         val right = com.example.meowmba.core.robot.LooiBleProtocol.capturedTurn(1, left = false)
