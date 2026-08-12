@@ -180,16 +180,20 @@ internal fun faceOffsetOnDisplay(
 }
 
 /**
- * Rotation to hand ML Kit. CameraX on the Fold 7 cover reports
- * `imageInfo.rotationDegrees = 0` even when [displayDeg] is 90, so an
- * unrotated buffer reaches the FAST detector and the face is measured
- * sideways (roll ≈ -35°, yaw jumping ±40°). If CameraX already rotated,
- * trust it; otherwise use the display.
+ * Which Surface.ROTATION_* to give ImageAnalysis.
+ *
+ * Prefer the window's rotation — it is stable. The IMU is used only when the
+ * display is stuck in portrait (rotation-lock / home-launcher) while the
+ * phone is on its side. Measured on the Fold 7 cover: driving targetRotation
+ * from the IMU flipped 0↔1↔3 every frame and landscape detection died.
  */
-internal fun mlKitRotationDegrees(cameraRotationDegrees: Int, displayDeg: Int): Int {
-    val cam = ((cameraRotationDegrees % 360) + 360) % 360
-    if (cam != 0) return cam
-    return ((displayDeg % 360) + 360) % 360
+internal fun analyzerTargetRotation(displayRot: Int?, physicalRot: Int?): Int? {
+    if (displayRot == null) return physicalRot
+    val lockedPortrait = displayRot == android.view.Surface.ROTATION_0
+    if (lockedPortrait && physicalRot != null && physicalRot != android.view.Surface.ROTATION_0) {
+        return physicalRot
+    }
+    return displayRot
 }
 
 /**
@@ -393,37 +397,24 @@ class VisionManager(
         }
     }
 
-    /**
-     * Rotation to hand the analyzer: the device's PHYSICAL orientation, falling
-     * back to the display's.
-     *
-     * Faces are upright with respect to GRAVITY, not with respect to the
-     * window manager. Driving this from `display.rotation` fails whenever the
-     * two disagree, and on this app they disagree often: Meowmba can be the
-     * home launcher, it declares `configChanges` for orientation, and it can be
-     * docked or rotation-locked. Measured with the display forced to landscape
-     * while the phone lay flat, same scene seconds apart — portrait applied
-     * rot=270 and found a face; landscape applied rot=0, handed ML Kit an
-     * unrotated frame, and found none. A sideways face is invisible to the FAST
-     * detector, so tracking simply stopped.
-     *
-     * [physicalRotation] is maintained by an OrientationEventListener, which is
-     * the orientation the camera actually experiences.
-     */
+    private fun readWindowRotation(): Int? = runCatching {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            context.display?.rotation
+        } else {
+            @Suppress("DEPRECATION")
+            (context.getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager)
+                .defaultDisplay?.rotation
+        }
+    }.getOrNull()
+
     private fun currentDisplayRotation(): Int? =
-        physicalRotation ?: runCatching {
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-                context.display?.rotation
-            } else {
-                @Suppress("DEPRECATION")
-                (context.getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager)
-                    .defaultDisplay?.rotation
-            }
-        }.getOrNull()
+        analyzerTargetRotation(readWindowRotation(), physicalRotation)
 
     /** Latest physical orientation as a Surface.ROTATION_* value, or null. */
     @Volatile
     private var physicalRotation: Int? = null
+    private var pendingPhysical: Int? = null
+    private var pendingPhysicalCount = 0
 
     private var orientationListener: android.view.OrientationEventListener? = null
 
@@ -432,7 +423,23 @@ class VisionManager(
         orientationListener = object : android.view.OrientationEventListener(context) {
             override fun onOrientationChanged(degrees: Int) {
                 if (degrees == ORIENTATION_UNKNOWN) return
-                physicalRotation = surfaceRotationOf(degrees)
+                val next = surfaceRotationOf(degrees)
+                if (next == physicalRotation) {
+                    pendingPhysical = null
+                    pendingPhysicalCount = 0
+                    return
+                }
+                if (next == pendingPhysical) {
+                    pendingPhysicalCount++
+                    if (pendingPhysicalCount >= 4) {
+                        physicalRotation = next
+                        pendingPhysical = null
+                        pendingPhysicalCount = 0
+                    }
+                } else {
+                    pendingPhysical = next
+                    pendingPhysicalCount = 1
+                }
             }
         }.also { if (it.canDetectOrientation()) it.enable() }
     }
@@ -504,8 +511,9 @@ class VisionManager(
         syncAnalysisRotation()
         val displayDeg = displayRotationDegrees()
         val cameraRot = proxy.imageInfo.rotationDegrees
-        val mlRot = mlKitRotationDegrees(cameraRot, displayDeg)
-        val input = InputImage.fromMediaImage(mediaImage, mlRot)
+        // Trust CameraX. Forcing displayDeg when cam==0 over-rotated the
+        // landscape buffer (ml=90, roll=66°, faces=0 for seconds at a time).
+        val input = InputImage.fromMediaImage(mediaImage, cameraRot)
         detector.process(input)
             .addOnSuccessListener { faces ->
                 // Orientation diagnostic. "Tracks only in portrait" has two very
@@ -516,10 +524,10 @@ class VisionManager(
                 // the frame it produced, and the face count separates them in
                 // one test. Rate-limited to one line every two seconds.
                 if (System.currentTimeMillis() - lastLogMs >= 2000L) {
-                    val (dw, dh) = rotatedFrameSize(proxy.width, proxy.height, mlRot)
+                    val (dw, dh) = rotatedFrameSize(proxy.width, proxy.height, cameraRot)
                     android.util.Log.i(
                         "VMrot",
-                        "cam=${cameraRot} ml=${mlRot} " +
+                        "cam=${cameraRot} " +
                             "target=${imageAnalysis?.targetRotation} " +
                             "disp=${displayDeg} " +
                             "buf=${proxy.width}x${proxy.height} upright=${dw}x$dh " +
@@ -529,13 +537,13 @@ class VisionManager(
                 val face = faces.maxByOrNull { it.boundingBox.width() * it.boundingBox.height() }
                 val now = System.currentTimeMillis()
                 if (face != null) {
-                    val (w, _) = rotatedFrameSize(proxy.width, proxy.height, mlRot)
+                    val (w, _) = rotatedFrameSize(proxy.width, proxy.height, cameraRot)
                     val (rawX, rawY) = faceOffsetOnDisplay(
                         boxCenterX = face.boundingBox.exactCenterX(),
                         boxCenterY = face.boundingBox.exactCenterY(),
                         bufferW = proxy.width,
                         bufferH = proxy.height,
-                        rotationDegrees = mlRot,
+                        rotationDegrees = cameraRot,
                         displayDeg = displayDeg,
                         mirrored = _useFrontCamera,
                     ) ?: return@addOnSuccessListener
@@ -566,7 +574,7 @@ class VisionManager(
                     // mirror (clockwise stays clockwise); pitch is unaffected.
                     val yawMir = if (_useFrontCamera) -rawYaw else rawYaw
                     val (yaw, pitch, roll) = remapEulerToDisplay(
-                        yawMir, rawPitch, rawRoll, mlRot, displayDeg,
+                        yawMir, rawPitch, rawRoll, cameraRot, displayDeg,
                     )
                     smoothYaw = smoothFaceOffset(smoothYaw, yaw, a)
                     smoothPitch = smoothFaceOffset(smoothPitch, pitch, a)

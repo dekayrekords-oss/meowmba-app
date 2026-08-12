@@ -2,7 +2,7 @@ package com.example.meowmba
 
 import com.example.meowmba.core.vision.faceOffsetInScreenSpace
 import com.example.meowmba.core.vision.faceOffsetOnDisplay
-import com.example.meowmba.core.vision.mlKitRotationDegrees
+import com.example.meowmba.core.vision.analyzerTargetRotation
 import com.example.meowmba.core.vision.remapEulerToDisplay
 import com.example.meowmba.core.vision.rotatedFrameSize
 import org.junit.Assert.assertEquals
@@ -147,13 +147,18 @@ class FaceTrackGeometryTest {
     }
 
     @Test
-    fun `CameraX rot-zero in landscape asks ML Kit to rotate to the display`() {
-        assertEquals(90, mlKitRotationDegrees(0, 90))
-        assertEquals(270, mlKitRotationDegrees(0, 270))
-        assertEquals(0, mlKitRotationDegrees(0, 0))
-        // A real CameraX rotation wins — do not double-rotate portrait.
-        assertEquals(270, mlKitRotationDegrees(270, 0))
-        assertEquals(90, mlKitRotationDegrees(90, 90))
+    fun `analyzer follows the window, not a noisy IMU, when the display actually rotated`() {
+        val rot90 = android.view.Surface.ROTATION_90
+        val rot0 = android.view.Surface.ROTATION_0
+        val rot270 = android.view.Surface.ROTATION_270
+        assertEquals(rot90, analyzerTargetRotation(rot90, rot0))
+        assertEquals(rot90, analyzerTargetRotation(rot90, rot270))
+        assertEquals(rot90, analyzerTargetRotation(rot90, null))
+        // Rotation-lock: display stuck at 0, phone on its side — then use IMU.
+        assertEquals(rot90, analyzerTargetRotation(rot0, rot90))
+        assertEquals(rot0, analyzerTargetRotation(rot0, rot0))
+        assertEquals(rot0, analyzerTargetRotation(rot0, null))
+        assertEquals(rot270, analyzerTargetRotation(null, rot270))
     }
 
     @Test
