@@ -45,9 +45,9 @@ class LooiBleProtocolTest {
         val left = com.example.meowmba.core.robot.LooiBleProtocol.rotateFrame(40, 8, right = false)
         val right = com.example.meowmba.core.robot.LooiBleProtocol.rotateFrame(40, 8, right = true)
         assertEquals(0x00, left.subOp)
-        assertEquals(0x01, right.subOp)
+        assertEquals(0x00, right.subOp)
         assertEquals(40, left.value)
-        assertEquals(40, right.value)
+        assertEquals(216, right.value) // 256-40, two's complement
     }
 
     @Test

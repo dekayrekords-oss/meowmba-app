@@ -806,6 +806,7 @@ private fun AvatarMotionHost(
     // Handed to the avatar as a State and read only inside its draw lambda.
     val mouthEnergy = viewModel.mouthEnergy.collectAsState()
     val facePose by viewModel.facePose.collectAsState()
+    val chaseHard by viewModel.chaseHard.collectAsState()
     Box(
         modifier = modifier.graphicsLayer {
             // ViewModel already clamps to ±14°; don't squash it back to ±4 here.
@@ -830,6 +831,7 @@ private fun AvatarMotionHost(
             faceScale = facePose?.scale,
             motionLean = motionLean,
             motionLurch = motionLurch,
+            chaseHard = chaseHard,
         )
     }
 }

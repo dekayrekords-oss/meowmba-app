@@ -1,5 +1,6 @@
 package com.example.meowmba
 
+import com.example.meowmba.core.agent.runtime.AgentRegistry
 import com.example.meowmba.core.agent.runtime.AgentRouter
 import com.example.meowmba.core.robot.RobotManager
 import org.junit.Assert.assertEquals
@@ -32,6 +33,19 @@ class RobotVoiceControlTest {
             assertEquals("\"$spoken\"", "robot.move", intent!!.toolId)
             assertEquals("\"$spoken\"", expected, intent.args["action"])
         }
+    }
+
+    @Test
+    fun `turn the headlights off is a robot command with a real owner`() {
+        val intent = route("turn the headlights off")
+        assertNotNull(intent)
+        assertEquals("robot", intent!!.agentId)
+        assertEquals("robot.move", intent.toolId)
+        assertEquals("headlight_off", intent.args["action"])
+        val owner = AgentRegistry.byId("robot")
+        assertNotNull("submit used to say Unknown agent 'robot'", owner)
+        assertTrue("robot.move" in owner!!.allowedTools)
+        assertEquals(owner, AgentRegistry.ownerOf("robot.move"))
     }
 
     @Test

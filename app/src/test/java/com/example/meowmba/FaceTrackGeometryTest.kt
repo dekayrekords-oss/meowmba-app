@@ -150,6 +150,22 @@ class FaceTrackGeometryTest {
     }
 
     @Test
+    fun `front-lens pointInDisplay01 mirrors X the same way as face offsets`() {
+        val face = faceOffsetOnDisplay(
+            boxCenterX = 40f, boxCenterY = 120f,
+            bufferW = 320, bufferH = 240,
+            rotationDegrees = 0, displayDeg = 0, mirrored = true,
+        )!!
+        val pt = com.example.meowmba.core.vision.pointInDisplay01(
+            px = 40f, py = 120f,
+            bufferW = 320, bufferH = 240,
+            rotationDegrees = 0, displayDeg = 0, mirrored = true,
+        )!!
+        assertEquals(face.first, pt.first * 2f - 1f, 1e-4f)
+        assertEquals(face.second, pt.second * 2f - 1f, 1e-4f)
+    }
+
+    @Test
     fun `portrait with a real ML Kit rotation stays identity`() {
         // rot=270, display=0 is the working portrait path: boxes are already
         // in the rotated (screen) frame. Remapping them again would swap axes.

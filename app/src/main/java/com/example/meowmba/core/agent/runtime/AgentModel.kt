@@ -132,6 +132,11 @@ object AgentRegistry {
             id = "media", name = "Canvas",
             purpose = "Generates simple images from text descriptions.",
             allowedTools = setOf("media.generate_image", "media.generate_video", "media.generate_audio")
+        ),
+        AgentDefinition(
+            id = "robot", name = "Looi",
+            purpose = "Moves the physical LOOI base: drive, turn, neck, headlight.",
+            allowedTools = setOf("robot.move")
         )
     )
 

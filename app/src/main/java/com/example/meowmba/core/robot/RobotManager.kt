@@ -270,6 +270,7 @@ class RobotManager {
             val connectedTo = link.connectedAddress ?: address
             _status.value =
                 "LOOI body (BLE)" + if (connectedTo.isBlank()) "" else " @ $connectedTo"
+            applyHeadlight(lightMode == HeadlightPolicy.Mode.FORCE_ON, force = true)
             true
         } else {
             link.close()
@@ -285,12 +286,11 @@ class RobotManager {
     /**
      * Maps Meow's servo/expression vocabulary onto the Memba-verified LOOI
      * BLE channels: head-tilt servo -> neck pitch (fed1), body servo ->
-     * short rotate pulse (fe00 frames), expression -> headlight (fed2).
+     * short rotate pulse (fe00 frames). The headlight is NOT driven by
+     * expression — only the user or a dark camera (see [noteSceneLuma]).
      */
     private class BleMotorController(private val link: LooiBleLink) : MotorController {
         private var lastNeck = Float.NaN
-        private var lastPanAtMs = 0L
-        private var lastPanSign = 0
 
         override fun setServo(id: Int, angleDeg: Float) {
             val clamped = angleDeg.coerceIn(0f, 180f)
@@ -301,35 +301,17 @@ class RobotManager {
                     lastNeck = pitch
                     link.setNeckPitch(pitch)
                 }
-                FaceMotorMap.SERVO_HEAD_PAN -> {
-                    // No pan servo on the BLE base — turn in place toward the face.
-                    val delta = clamped - 90f
-                    val now = System.currentTimeMillis()
-                    if (kotlin.math.abs(delta) < 8f) {
-                        if (lastPanSign != 0) {
-                            link.stopAll()
-                            lastPanSign = 0
-                        }
-                        return
-                    }
-                    if (now - lastPanAtMs < 220L) return
-                    lastPanAtMs = now
-                    val sign = if (delta > 0f) 1 else -1
-                    lastPanSign = sign
-                    val speed = (kotlin.math.abs(delta) * 1.4f).toInt().coerceIn(15, 50)
-                    link.turnPulse(sign * speed, 4)
-                }
+                FaceMotorMap.SERVO_HEAD_PAN,
                 FaceMotorMap.SERVO_BODY -> {
-                    val delta = (clamped - 90f).toInt()
-                    if (delta != 0) link.turnPulse(delta.coerceIn(-40, 40), 3)
+                    // Mood/clip servos used to pulse the treads and fought
+                    // keep-in-frame (and only the left spin is strong).
                 }
                 else -> Unit // ears/tail have no BLE actuator
             }
         }
 
         override fun setExpression(face: String) {
-            // Sleepy dims the light; anything awake turns it on.
-            link.setHeadlight(face.lowercase() != "sleepy")
+            // Moods used to flip the headlight. That is a user/camera decision.
         }
     }
 
@@ -357,6 +339,10 @@ class RobotManager {
     private var lastTurnAtMs = 0L
     private var lastDrive = 0f
     private var lastNeck = Float.NaN
+    private val frameTracker = KeepInFrame.Tracker()
+    private var lightMode = HeadlightPolicy.Mode.AUTO
+    private var lightOn = false
+    private var lastLightAtMs = 0L
 
     /**
      * Keep the person in the camera frame. Call on every face-track sample
@@ -367,19 +353,22 @@ class RobotManager {
             lastFaceAtMs = nowMs
             lastFaceX = offsetX
         }
-        val cmd = KeepInFrame.step(offsetX, offsetY, scale, nowMs, lastFaceAtMs, lastFaceX)
+        val cmd = KeepInFrame.step(
+            offsetX, offsetY, scale, nowMs, lastFaceAtMs, lastFaceX, frameTracker,
+        )
         val link = bleLink?.takeIf { it.connected }
         if (link == null) {
             FaceMotorMap.followFace(offsetX, offsetY)
                 .forEach { (id, angle) -> controller.setServo(id, angle) }
             return
         }
-        if (lastNeck.isNaN() || kotlin.math.abs(cmd.neckPitch - lastNeck) > 0.03f) {
+        if (lastNeck.isNaN() || kotlin.math.abs(cmd.neckPitch - lastNeck) > 0.08f) {
             lastNeck = cmd.neckPitch
             link.setNeckPitch(cmd.neckPitch)
         }
         if (cmd.turning) {
-            if (nowMs - lastTurnAtMs >= 180L) {
+            // Pulses used to stack every 180ms on 140–320ms scripts → chatter.
+            if (nowMs - lastTurnAtMs >= 650L) {
                 lastTurnAtMs = nowMs
                 link.turnPulse(cmd.turnSpeed, cmd.turnTicks)
             }
@@ -393,6 +382,25 @@ class RobotManager {
             lastDrive = 0f
             link.driveSpeed(0f)
         }
+    }
+
+    /**
+     * Camera mean luma 0..255. Auto headlight only; a user on/off lock wins.
+     */
+    fun noteSceneLuma(meanLuma: Int, nowMs: Long = System.currentTimeMillis()) {
+        val want = HeadlightPolicy.shouldBeOn(meanLuma.coerceIn(0, 255), lightMode, lightOn)
+        if (want == lightOn) return
+        if (nowMs - lastLightAtMs < 1_400L) return
+        applyHeadlight(want)
+    }
+
+    private fun applyHeadlight(on: Boolean, force: Boolean = false) {
+        val link = bleLink?.takeIf { it.connected } ?: return
+        if (!force && on == lightOn) return
+        lightOn = on
+        lastLightAtMs = System.currentTimeMillis()
+        link.setHeadlight(on)
+        android.util.Log.i("LooiBle", "headlight ${if (on) "ON" else "OFF"} mode=$lightMode")
     }
 
     /**
@@ -429,8 +437,16 @@ class RobotManager {
         NOD(listOf("nod", "nod your head", "say yes"), faceOwnsPhrase = true),
         SHAKE_HEAD(listOf("shake your head", "shake head", "say no"), faceOwnsPhrase = true),
         WIGGLE(listOf("wiggle", "dance", "shimmy", "wiggle around"), faceOwnsPhrase = true),
-        HEADLIGHT_ON(listOf("headlight on", "lights on", "turn on the headlight", "turn on the lights", "light on")),
-        HEADLIGHT_OFF(listOf("headlight off", "lights off", "turn off the headlight", "turn off the lights", "light off")),
+        HEADLIGHT_ON(listOf(
+            "headlights on", "headlight on", "lights on",
+            "turn the headlights on", "turn on the headlights",
+            "turn on the headlight", "turn on the lights", "light on",
+        )),
+        HEADLIGHT_OFF(listOf(
+            "headlights off", "headlight off", "lights off",
+            "turn the headlights off", "turn off the headlights",
+            "turn off the headlight", "turn off the lights", "light off",
+        )),
         ;
 
         companion object {
@@ -503,8 +519,16 @@ class RobotManager {
                 }
                 link.stopAll(); "Wiggled."
             }
-            Motion.HEADLIGHT_ON -> { link.setHeadlight(true); "Headlight on." }
-            Motion.HEADLIGHT_OFF -> { link.setHeadlight(false); "Headlight off." }
+            Motion.HEADLIGHT_ON -> {
+                lightMode = HeadlightPolicy.Mode.FORCE_ON
+                applyHeadlight(true, force = true)
+                "Headlight on."
+            }
+            Motion.HEADLIGHT_OFF -> {
+                lightMode = HeadlightPolicy.Mode.FORCE_OFF
+                applyHeadlight(false, force = true)
+                "Headlight off."
+            }
         }
     }
 

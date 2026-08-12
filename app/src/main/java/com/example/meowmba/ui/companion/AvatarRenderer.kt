@@ -172,6 +172,7 @@ fun AvatarRenderer(
     faceYawDeg: Float? = null,
     facePitchDeg: Float? = null,
     faceRollDeg: Float? = null,
+    chaseHard: Boolean = false,
     faceScale: Float? = null,
     /** Lateral force on the phone, -1..1 (+ = pushed right). Turns lean the head. */
     motionLean: Float = 0f,
@@ -486,10 +487,15 @@ fun AvatarRenderer(
     // the next — short tweens restarting every publish looked like dropped frames.
     // StiffnessMedium (not MediumLow) so the head actually tracks the user's
     // motion instead of floating behind it with a visible chase delay.
-    val gazeSpec = if (trackingNow) {
+    val gazeSpec = if (trackingNow && chaseHard) {
         spring<Float>(
             dampingRatio = Spring.DampingRatioNoBouncy,
             stiffness = Spring.StiffnessMedium,
+        )
+    } else if (trackingNow) {
+        spring<Float>(
+            dampingRatio = 0.92f,
+            stiffness = Spring.StiffnessLow,
         )
     } else {
         tween(500)
@@ -503,7 +509,11 @@ fun AvatarRenderer(
     // delay is small (~150ms) but its absence is most of why procedural faces
     // read as mechanical. A softer spring on the head gives the lag plus a
     // little settle at the end of the turn for free.
-    val headFollowSpec = spring<Float>(dampingRatio = 0.70f, stiffness = Spring.StiffnessLow)
+    val headFollowSpec = if (trackingNow && chaseHard) {
+        spring<Float>(dampingRatio = 0.86f, stiffness = Spring.StiffnessMedium)
+    } else {
+        spring<Float>(dampingRatio = 0.92f, stiffness = Spring.StiffnessLow)
+    }
     val headFollowX by animateFloatAsState(screenGazeX, headFollowSpec, label = "headFollowX")
     val headFollowY by animateFloatAsState(screenGazeY, headFollowSpec, label = "headFollowY")
     // Ramped tracking weight. A face appearing/disappearing used to flip the
@@ -538,11 +548,13 @@ fun AvatarRenderer(
     // Each face sample moves the spring target; the spring keeps the head from
     // stepping per detector frame. Values are normalized (-1..1) and the
     // tracking weight decides how hard the head follows.
-    val rotSpec = if (trackingNow) {
+    val rotSpec = if (trackingNow && chaseHard) {
         spring<Float>(
             dampingRatio = Spring.DampingRatioNoBouncy,
             stiffness = Spring.StiffnessMedium,
         )
+    } else if (trackingNow) {
+        spring<Float>(dampingRatio = 0.92f, stiffness = Spring.StiffnessLow)
     } else {
         tween(450)
     }
@@ -730,25 +742,24 @@ fun AvatarRenderer(
         // non-finite value can ever reach the canvas transforms.
         val bounceY = effectivePose.bodyBounce.coerceIn(-1f, 1f) * s * 0.06f
         val leanShift = effectivePose.leanX.coerceIn(-1f, 1f) * s * 0.055f
-        // Classic path: larger body pan when face-tracking so the whole face follows.
-        // Pan scale ramps with trackingWeight so enter/leave follow glides.
-        val bodyGaze = 0.03f + 0.07f * trackingWeight
+        // Face lock must not slide the whole cat. Only a waved hand (chaseHard)
+        // is allowed to pull the body; otherwise the pupils glance and the
+        // head stays planted.
+        val bodyGaze = if (chaseHard) 0.03f + 0.07f * trackingWeight else 0f
         // Idle gaze wander only when not face-tracking. Driven by saccades
         // (fixate → hold → glance) instead of continuous sine drift; the
         // movement itself prevents burn-in on always-on displays.
         val idleGazeX = saccadeX.value * (1f - trackingWeight)
         val idleGazeY = saccadeY.value * (1f - trackingWeight)
         val cx = w / 2f + (gazeX + idleGazeX) * s * bodyGaze + leanShift + ambient.offX +
-            yawN * trackingWeight * s * 0.08f + leanAnim * s * 0.09f
-        val cy = h * 0.47f + (gazeY + idleGazeY) * s * (0.02f + 0.04f * trackingWeight) -
-            bounceY + ambient.offY + pitchN * trackingWeight * s * 0.06f + lurchAnim * s * 0.05f
+            leanAnim * s * 0.09f
+        val cy = h * 0.47f - bounceY + ambient.offY + lurchAnim * s * 0.05f
 
         // 6-DOF: roll rotates the classic head through the same headTilt channel
-        // the eyes already use; distance scales the head geometry up/down.
-        // Accelerometer forces ride along: turns lean+roll, braking throws forward.
+        // the eyes already use. Face-track distance must NOT scale the head —
+        // only the IMU lurch (brake / shove) may push it forward or back.
         val headRotate = headTilt + rollN * 14f * trackingWeight + leanAnim * 12f
-        val headSizeFactor = com.example.meowmba.core.vision.FacePose.headSizeFactor(headScale) *
-            (1f + lurchAnim * 0.08f).coerceIn(0.92f, 1.08f)
+        val headSizeFactor = (1f + lurchAnim * 0.08f).coerceIn(0.92f, 1.08f)
 
         val eyeDX = s * 0.26f * headSizeFactor
         val eyeW = s * 0.19f * headSizeFactor
@@ -769,27 +780,17 @@ fun AvatarRenderer(
             // they are identical in both face styles and survive clip playback.
             val idleBob = ambient.offY
             val idleSway = ambient.offX
-            // Face-track active → move the WHOLE head (pan + tilt), not just pupils.
-            // Pupils only glance a little; the body carries the follow.
             val tracking = faceGazeX != null || heldFaceGaze != null || recentlyTracking
-            // Whole-head follow scaled by the ramped tracking weight: entering
-            // and leaving follow glides the head instead of snapping (the old
-            // 0.42/18° hard toggles read as stepping).
-            // The head rides headFollow* (the lagged value), the pupils ride
-            // gaze* — that difference IS the eyes-lead-head read.
-            // 6-DOF and accelerometer forces stack on top of that lag.
-            val bodyPanX = headFollowX * R * (0.06f + 0.26f * trackingWeight) +
-                yawN * trackingWeight * R * 0.22f + leanAnim * R * 0.30f
-            // Arc: a head that pans dead flat across the screen looks like a
-            // slider. Lifting it slightly at the extremes puts the travel on a
-            // shallow curve, as if pivoting on a neck.
-            val bodyPanY = headFollowY * R * (0.04f + 0.18f * trackingWeight) -
-                arcRise(headFollowX) * R * trackingWeight +
-                pitchN * trackingWeight * R * 0.16f + lurchAnim * R * 0.20f
-            val bodyTilt = ((headFollowX * 12f + rollN * 16f).coerceIn(-20f, 20f) * trackingWeight +
-                leanAnim * 14f).coerceIn(-24f, 24f)
-            val godotHeadSize = com.example.meowmba.core.vision.FacePose.headSizeFactor(headScale) *
-                (1f + lurchAnim * 0.08f).coerceIn(0.92f, 1.08f)
+            // A locked face used to pan the WHOLE head by up to ~0.32 R — box
+            // jitter of 0.2 looked like the cat jumping around the screen.
+            // Face lock: plant the body, glance with the eyes.
+            // Hand chase: the body may follow, but at a smaller throw.
+            val bodyK = if (chaseHard) trackingWeight else 0f
+            val bodyPanX = headFollowX * R * (0.10f * bodyK) + leanAnim * R * 0.30f
+            val bodyPanY = lurchAnim * R * 0.20f
+            val bodyTilt = ((headFollowX * 8f).coerceIn(-12f, 12f) * bodyK +
+                leanAnim * 14f).coerceIn(-20f, 20f)
+            val godotHeadSize = (1f + lurchAnim * 0.08f).coerceIn(0.92f, 1.08f)
             // Pupils track hard — body pan carries the head, iris must still
             // glance toward the user inside the sockets (0.50 looked static).
             // Blend on trackingWeight instead of branching on a boolean.

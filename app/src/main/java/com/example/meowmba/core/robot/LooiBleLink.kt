@@ -383,16 +383,20 @@ class LooiBleLink(private val context: Context) {
     }
 
     /**
-     * Turn the base. The 20-byte captured scripts were ignored on fe00 and
-     * the base stopped moving (neck still worked — different char).
-     * 17-byte 0x07 + speed>0 is the verified LEFT. RIGHT uses subOp 0x01.
+     * Turn the base. 17-byte 0x07 + positive value is the verified LEFT.
+     * RIGHT uses two's-complement value on the same template (subOp 0x01
+     * still spun left on this robot).
      */
     fun turnPulse(speedPercent: Int, ticks: Int): Boolean {
         val mag = kotlin.math.abs(speedPercent)
         if (mag == 0) return writeFrame(LooiBleProtocol.rotateFrame(0, 1, right = false))
         val right = speedPercent > 0
-        android.util.Log.i("LooiBle", "turn ${if (right) "RIGHT" else "LEFT"} mag=$mag ticks=$ticks")
-        return writeFrame(LooiBleProtocol.rotateFrame(mag, ticks, right = right))
+        val frame = LooiBleProtocol.rotateFrame(mag, ticks, right = right)
+        android.util.Log.i(
+            "LooiBle",
+            "turn ${if (right) "RIGHT" else "LEFT"} mag=$mag value=${frame.value} ticks=$ticks",
+        )
+        return writeFrame(frame)
     }
 
     /** Proportional FORWARD drive on fed0 (the verified drive channel). */

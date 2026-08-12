@@ -191,6 +191,11 @@ class CompanionViewModel(
     private val _facePose = MutableStateFlow<com.example.meowmba.core.vision.FacePose6Dof?>(null)
     val facePose: kotlinx.coroutines.flow.StateFlow<com.example.meowmba.core.vision.FacePose6Dof?> =
         _facePose.asStateFlow()
+    private val _chaseHard = MutableStateFlow(false)
+    val chaseHard = _chaseHard.asStateFlow()
+    private var lastSocialCue: com.example.meowmba.core.vision.SocialCue =
+        com.example.meowmba.core.vision.SocialCue.NONE
+    private var lastSocialCueAtMs: Long = 0L
 
     fun getVisionManager(): com.example.meowmba.core.vision.VisionManager? = visionManager
 
@@ -514,10 +519,13 @@ class CompanionViewModel(
                 if (next != cur) {
                     _faceGaze.value = next
                 }
-                // Every sample, not only when the offset changes: a face that
-                // stays off-center must keep the base turning until they are
-                // framed again.
-                robotManager.keepPersonInFrame(offX, offY, track?.scale)
+                // Base follows a real face only. Pose wrists with faces=0 were
+                // steering it left in circles.
+                if (track?.hasFace == true) {
+                    robotManager.keepPersonInFrame(offX, offY, track.scale)
+                } else {
+                    robotManager.keepPersonInFrame(null, null, null)
+                }
                 // Full 6-DOF pose rides the same track; StateFlow dedupes equal
                 // values so rotation-only changes still re-emit.
                 _facePose.value = track?.let {
@@ -530,6 +538,14 @@ class CompanionViewModel(
                         scale = it.scale,
                     )
                 }
+                applySocialCue(track)
+                _chaseHard.value = track?.followSource ==
+                    com.example.meowmba.core.vision.FollowSource.HAND
+            }
+        }
+        viewModelScope.launch {
+            visionManager?.sceneLuma?.collect { luma ->
+                if (luma != null) robotManager.noteSceneLuma(luma)
             }
         }
         // Kick face tracking as soon as the VM is alive (permission may defer it).
@@ -4058,6 +4074,34 @@ class CompanionViewModel(
     }
 
     /**
+     * Face smile/wink or a hand sign → emotion + a short clip.
+     * Debounced in [SocialCues.shouldReact] so a held smile does not spam.
+     */
+    private fun applySocialCue(track: com.example.meowmba.core.vision.FaceTrack?) {
+        val cue = track?.cue ?: com.example.meowmba.core.vision.SocialCue.NONE
+        val now = System.currentTimeMillis()
+        if (!com.example.meowmba.core.vision.SocialCues.shouldReact(
+                cue, lastSocialCue, now, lastSocialCueAtMs,
+            )
+        ) {
+            if (cue != com.example.meowmba.core.vision.SocialCue.NONE) lastSocialCue = cue
+            return
+        }
+        lastSocialCue = cue
+        lastSocialCueAtMs = now
+        val (emotionName, clip) = com.example.meowmba.core.vision.SocialCues.reaction(cue)
+        val emotion = runCatching { CompanionEmotion.valueOf(emotionName) }.getOrNull()
+        if (emotion != null && emotion != CompanionEmotion.IDLE) {
+            _uiState.value = _uiState.value.copy(emotion = emotion)
+        }
+        val speaking = _uiState.value.interactionState == InteractionState.SPEAKING
+        if (!speaking && clip != null && faceModeActive(_uiState.value)) {
+            playAnimationNamed(clip, userRequested = false)
+        }
+        android.util.Log.i("MeowSocial", "cue=$cue emotion=$emotionName clip=$clip")
+    }
+
+    /**
      * Auto face tracking: front camera + ML Kit analysis, no PiP required.
      * Requests CAMERA if needed; re-tries from [onCameraPermissionResult].
      */
@@ -4116,7 +4160,16 @@ class CompanionViewModel(
                     track.offsetY > 0.30f -> " and a little low"
                     else -> ""
                 }
-                speak("Yes — I see you$side$vert!")
+                val extra = when (track.cue) {
+                    com.example.meowmba.core.vision.SocialCue.SMILE -> " And you're smiling."
+                    com.example.meowmba.core.vision.SocialCue.WAVE -> " And you're waving!"
+                    com.example.meowmba.core.vision.SocialCue.THUMBS_UP -> " Nice thumbs up."
+                    com.example.meowmba.core.vision.SocialCue.HAND_UP,
+                    com.example.meowmba.core.vision.SocialCue.PALM -> " I see your hand."
+                    com.example.meowmba.core.vision.SocialCue.POINT -> " Are you pointing at something?"
+                    else -> ""
+                }
+                speak("Yes — I see you$side$vert!$extra")
                 return@launch
             }
             // No face box yet: still try a frame describe so we aren't mute.

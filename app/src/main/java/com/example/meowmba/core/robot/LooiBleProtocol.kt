@@ -112,19 +112,26 @@ object LooiBleProtocol {
      * ticks ~ 20ms each.
      */
     /**
-     * 17-byte Script-Mode turn. On this robot [subOp] 0 + speed 1–100 is the
-     * verified LEFT spin. [right]=true sets subOp 0x01 (the unused sibling
-     * of the golden packet) so RIGHT is not another LEFT.
+     * 17-byte Script-Mode turn.
+     *
+     * Golden packet uses [value] = +speed (1–100) for the verified LEFT spin.
+     * subOp 0x01 was tried as RIGHT and still spun left on this robot.
+     * RIGHT therefore keeps the same mask/opcode and sends two's-complement
+     * speed (256-N) — the unused sibling of the signed magnitude byte.
      */
-    fun rotateFrame(speedPercent: Int, ticks: Int, right: Boolean = false) = Frame(
-        opcode = 0x07,
-        subOp = if (right) 0x01 else 0x00,
-        maskA = 0xFF, maskB = 0x05,
-        value = speedPercent.coerceIn(0, 100),
-        param1 = 0x02, param2 = 0x0A,
-        durationTicks = ticks.coerceIn(1, 255),
-        param3 = 0x02, param4 = 0x14, end = 0x02
-    )
+    fun rotateFrame(speedPercent: Int, ticks: Int, right: Boolean = false): Frame {
+        val mag = speedPercent.coerceIn(0, 100)
+        val value = if (right && mag > 0) (256 - mag) and 0xFF else mag
+        return Frame(
+            opcode = 0x07,
+            subOp = 0x00,
+            maskA = 0xFF, maskB = 0x05,
+            value = value,
+            param1 = 0x02, param2 = 0x0A,
+            durationTicks = ticks.coerceIn(1, 255),
+            param3 = 0x02, param4 = 0x14, end = 0x02
+        )
+    }
 
     /**
      * Captured tread scripts from this exact LOOI (Memba live session).
