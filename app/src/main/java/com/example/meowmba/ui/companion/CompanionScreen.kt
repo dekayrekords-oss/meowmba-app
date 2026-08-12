@@ -798,14 +798,18 @@ private fun AvatarMotionHost(
     modifier: Modifier = Modifier,
 ) {
     val motionTilt by viewModel.motionTiltDeg.collectAsState()
+    val motionLean by viewModel.motionLean.collectAsState()
+    val motionLurch by viewModel.motionLurch.collectAsState()
     val faceGaze by viewModel.faceGaze.collectAsState()
     // Deliberately NOT `by`: delegating would read the value here, in
     // composition, and every TTS word boundary would recompose this screen.
     // Handed to the avatar as a State and read only inside its draw lambda.
     val mouthEnergy = viewModel.mouthEnergy.collectAsState()
+    val facePose by viewModel.facePose.collectAsState()
     Box(
         modifier = modifier.graphicsLayer {
-            rotationZ = motionTilt.coerceIn(-4f, 4f)
+            // ViewModel already clamps to ±14°; don't squash it back to ±4 here.
+            rotationZ = motionTilt.coerceIn(-14f, 14f)
             clip = false
         }
     ) {
@@ -820,6 +824,12 @@ private fun AvatarMotionHost(
             faceGazeX = faceGaze?.first,
             faceGazeY = faceGaze?.second,
             mouthEnergy = mouthEnergy,
+            faceYawDeg = facePose?.yawDeg,
+            facePitchDeg = facePose?.pitchDeg,
+            faceRollDeg = facePose?.rollDeg,
+            faceScale = facePose?.scale,
+            motionLean = motionLean,
+            motionLurch = motionLurch,
         )
     }
 }

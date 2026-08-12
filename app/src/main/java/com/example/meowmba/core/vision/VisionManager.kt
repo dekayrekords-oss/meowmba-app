@@ -44,10 +44,22 @@ import kotlin.math.roundToInt
  * — avatar gaze, head pan, robot servos — works in screen terms. Publishing
  * sensor coordinates pushed a rotation correction into each consumer, and they
  * disagreed: see [rotatedFrameSize] for what that cost.
+ *
+ * Rotation (yaw/pitch/roll) and distance ([scale]) give the avatar six degrees
+ * of freedom to react with. [confidence] is the detector's probability that
+ * this is a real face.
  */
 data class FaceTrack(
     val offsetX: Float,
     val offsetY: Float,
+    /** Head turn left/right, degrees. + = toward the user's right (screen). */
+    val yawDeg: Float = 0f,
+    /** Head nod up/down, degrees. + = looking up. */
+    val pitchDeg: Float = 0f,
+    /** Head tilt, degrees. + = clockwise as the viewer sees it. */
+    val rollDeg: Float = 0f,
+    /** Distance proxy: 1.0 at baseline face size; >1 closer, <1 farther. */
+    val scale: Float = 1f,
     val confidence: Float,
 )
 
@@ -164,6 +176,10 @@ class VisionManager(
     // Smoothed gaze (EMA) + short hold so lost-face frames do not null the stream.
     private var smoothOffX = 0f
     private var smoothOffY = 0f
+    private var smoothYaw = 0f
+    private var smoothPitch = 0f
+    private var smoothRoll = 0f
+    private var smoothScale = 1f
     private var lastFaceAtMs = 0L
     private var hasSmooth = false
     private var lastLogMs = 0L
@@ -438,9 +454,24 @@ class VisionManager(
                     ) ?: return@addOnSuccessListener
                     // Medium EMA: follows clearly, still damps ML Kit box noise.
                     // (0.10 + center-bias was so strong following looked dead.)
+                    // No maxStep clamp — that turned fast motion into a staircase.
                     val a = faceSmoothingAlpha(hasSmooth)
                     smoothOffX = smoothFaceOffset(smoothOffX, rawX, a)
                     smoothOffY = smoothFaceOffset(smoothOffY, rawY, a)
+                    val rawYaw = face.headEulerAngleY
+                    val rawPitch = face.headEulerAngleX
+                    val rawRoll = face.headEulerAngleZ
+                    val rawScale = FacePose.scaleFromFaceFraction(
+                        face.boundingBox.width().toFloat(), w.toFloat()
+                    )
+                    // Front camera is mirrored — flip yaw to match the offsetX
+                    // convention (+ = user's right on screen). Roll survives a
+                    // mirror (clockwise stays clockwise); pitch is unaffected.
+                    val yaw = if (_useFrontCamera) -rawYaw else rawYaw
+                    smoothYaw = smoothFaceOffset(smoothYaw, yaw, a)
+                    smoothPitch = smoothFaceOffset(smoothPitch, rawPitch, a)
+                    smoothRoll = smoothFaceOffset(smoothRoll, rawRoll, a)
+                    smoothScale = smoothFaceOffset(smoothScale, rawScale, a)
                     hasSmooth = true
                     lastFaceAtMs = now
                     val pub = _faceTrack.value
@@ -461,11 +492,19 @@ class VisionManager(
                         _faceTrack.value = FaceTrack(
                             offsetX = smoothOffX.coerceIn(-1f, 1f),
                             offsetY = smoothOffY.coerceIn(-1f, 1f),
+                            yawDeg = smoothYaw.coerceIn(-30f, 30f),
+                            pitchDeg = smoothPitch.coerceIn(-30f, 30f),
+                            rollDeg = smoothRoll.coerceIn(-30f, 30f),
+                            scale = smoothScale,
                             confidence = 0.9f,
                         )
                         if (now - lastLogMs >= 2000L) {
                             lastLogMs = now
-                            android.util.Log.i("VM", "pub x=${smoothOffX} y=${smoothOffY}")
+                            android.util.Log.i(
+                                "VM", "pub x=${smoothOffX} y=${smoothOffY} " +
+                                    "yaw=${smoothYaw} pitch=${smoothPitch} " +
+                                    "roll=${smoothRoll} scale=${smoothScale}"
+                            )
                         }
                     } else if (now - lastLogMs >= 2000L) {
                         lastLogMs = now
@@ -480,6 +519,10 @@ class VisionManager(
                         hasSmooth = false
                         smoothOffX = 0f
                         smoothOffY = 0f
+                        smoothYaw = 0f
+                        smoothPitch = 0f
+                        smoothRoll = 0f
+                        smoothScale = 1f
                         _faceTrack.value = null
                         if (now - lastLogMs >= 2000L) {
                             lastLogMs = now
@@ -494,6 +537,10 @@ class VisionManager(
                     hasSmooth = false
                     smoothOffX = 0f
                     smoothOffY = 0f
+                    smoothYaw = 0f
+                    smoothPitch = 0f
+                    smoothRoll = 0f
+                    smoothScale = 1f
                     _faceTrack.value = null
                 }
             }

@@ -20,6 +20,7 @@ import com.example.meowmba.core.agent.runtime.AgentTask
 import com.example.meowmba.core.agent.runtime.AgentRegistry
 import com.example.meowmba.core.agent.runtime.AgentRouter
 import com.example.meowmba.core.agent.runtime.AgentBrainRouter
+import com.example.meowmba.core.agent.runtime.ClockAnswers
 import com.example.meowmba.core.agent.runtime.AuditSink
 import com.example.meowmba.core.agent.runtime.HermesAgentBrain
 import com.example.meowmba.core.agent.runtime.HermesConfig
@@ -185,6 +186,11 @@ class CompanionViewModel(
      */
     private val _faceGaze = MutableStateFlow<Pair<Float, Float>?>(null)
     val faceGaze = _faceGaze.asStateFlow()
+
+    /** Full six-DOF face pose (translation + rotation + distance) for the avatar. */
+    private val _facePose = MutableStateFlow<com.example.meowmba.core.vision.FacePose6Dof?>(null)
+    val facePose: kotlinx.coroutines.flow.StateFlow<com.example.meowmba.core.vision.FacePose6Dof?> =
+        _facePose.asStateFlow()
 
     fun getVisionManager(): com.example.meowmba.core.vision.VisionManager? = visionManager
 
@@ -445,6 +451,12 @@ class CompanionViewModel(
     // Declared BEFORE init: init launches collectors that write to this flow.
     private val _motionTilt = kotlinx.coroutines.flow.MutableStateFlow(0f)
 
+    /** Continuous lateral force (-1..1, + = pushed right) for the avatar lean. */
+    private val _motionLean = kotlinx.coroutines.flow.MutableStateFlow(0f)
+
+    /** Continuous braking/launch force (-1..1, + = braking throw) for the lurch. */
+    private val _motionLurch = kotlinx.coroutines.flow.MutableStateFlow(0f)
+
     /** Phase G1: LOOI-style mood state machine (pure, unit-tested). */
     /** Pinned apps: drawer favorites (up to 8); the first two also show on the face.
      * Declared before init: the pin-restore block in init reads it. */
@@ -510,6 +522,18 @@ class CompanionViewModel(
                     // doubled at others.
                     com.example.meowmba.core.robot.FaceMotorMap.panForFace(offX ?: 0f)
                         .forEach { (servo, angle) -> motorController.setServo(servo, angle) }
+                }
+                // Full 6-DOF pose rides the same track; StateFlow dedupes equal
+                // values so rotation-only changes still re-emit.
+                _facePose.value = track?.let {
+                    com.example.meowmba.core.vision.FacePose6Dof(
+                        offsetX = it.offsetX,
+                        offsetY = it.offsetY,
+                        yawDeg = it.yawDeg,
+                        pitchDeg = it.pitchDeg,
+                        rollDeg = it.rollDeg,
+                        scale = it.scale,
+                    )
                 }
             }
         }
@@ -1064,12 +1088,30 @@ class CompanionViewModel(
                         sense.start()
                         viewModelScope.launch {
                             sense.motion.collect { st ->
-                                val roll = st.rollDeg
-                                if (kotlin.math.abs(roll - _motionTilt.value) > 0.4f) {
-                                    _motionTilt.value = roll
+                                // Counter-rotate toward level from the screen-plane
+                                // tilt: well-defined in every orientation, so the
+                                // avatar keeps tracking in a horizontal car dock —
+                                // the old roll channel saturates at ±8° there and
+                                // the face looked dead. Partial gain + clamp keep
+                                // it a lean, not a full gravity-compass swing.
+                                val tilt = (-st.screenLeanDeg * 0.35f).coerceIn(-14f, 14f)
+                                if (kotlin.math.abs(tilt - _motionTilt.value) > 0.3f) {
+                                    _motionTilt.value = tilt
                                 }
-                                // G2 balance demo: head counter-rotates against tilt.
-                                com.example.meowmba.core.robot.FaceMotorMap.balanceTilt(st.rollDeg)
+                                // Continuous car forces, normalized so ~0.6G is a
+                                // full-strength reaction. lean: + = pushed right
+                                // (left turn). lurch: + = braking (forward throw).
+                                val lean = (st.leanG / 0.6f).coerceIn(-1f, 1f)
+                                if (kotlin.math.abs(lean - _motionLean.value) > 0.02f) {
+                                    _motionLean.value = lean
+                                }
+                                val lurch = (-st.surgeG / 0.6f).coerceIn(-1f, 1f)
+                                if (kotlin.math.abs(lurch - _motionLurch.value) > 0.02f) {
+                                    _motionLurch.value = lurch
+                                }
+                                // Physical base: counter the in-plane rotation, the
+                                // axis the head-tilt servo actually moves on.
+                                com.example.meowmba.core.robot.FaceMotorMap.balanceTilt(st.screenLeanDeg)
                                     .forEach { (servo, angle) -> motorController.setServo(servo, angle) }
                             }
                         }
@@ -1469,9 +1511,6 @@ class CompanionViewModel(
     /** Phone-control agent: autonomous multi-step phone operation via accessibility. */
     private var phoneAgentLoop: com.example.meowmba.core.agent.PhoneAgentLoop? = null
 
-
-
-
     /** One-shot flag: MainActivity watches this to launch the MediaProjection consent. */
     private val _screenWatchConsentRequested = kotlinx.coroutines.flow.MutableStateFlow(false)
     val screenWatchConsentRequested: kotlinx.coroutines.flow.StateFlow<Boolean> =
@@ -1490,6 +1529,12 @@ class CompanionViewModel(
      */
     private val _mouthEnergy = kotlinx.coroutines.flow.MutableStateFlow(0f)
     val mouthEnergy: kotlinx.coroutines.flow.StateFlow<Float> = _mouthEnergy.asStateFlow()
+
+    /** Live lateral force on the phone, normalized -1..1. Turns lean the avatar. */
+    val motionLean: kotlinx.coroutines.flow.StateFlow<Float> = _motionLean.asStateFlow()
+
+    /** Live longitudinal force, normalized -1..1 (+ = braking). Lurches the avatar. */
+    val motionLurch: kotlinx.coroutines.flow.StateFlow<Float> = _motionLurch.asStateFlow()
 
     private fun buildOmniRoute(): com.example.meowmba.core.agent.OmniRoute? {
         val storage = secureStorage ?: return null
@@ -3149,6 +3194,22 @@ class CompanionViewModel(
             ) {
                 android.util.Log.i("Weather", "routed as a weather question: \"$text\"")
                 answerWeather()
+                return@launch
+            }
+
+            // Time and date are answered from the device clock, never from the model —
+            // the chat model hallucinated the time because it had no clock. Same reason
+            // as weather: an instant lookup with an obvious answer, no agent task.
+            val normalizedTurn = com.example.meowmba.core.audio.WakePhraseMatcher.normalize(text)
+            if (ClockAnswers.isClockQuestion(normalizedTurn)) {
+                android.util.Log.i("Clock", "routed as a clock question: \"$text\"")
+                speak(
+                    ClockAnswers.answer(
+                        normalizedTurn,
+                        System.currentTimeMillis(),
+                        java.util.TimeZone.getDefault()
+                    )
+                )
                 return@launch
             }
 
