@@ -13,7 +13,7 @@ class GazeSettleTest {
     fun `a centered face looks straight ahead`() {
         val r = GazeSettle.apply(0.08f, -0.05f, settled = false, FollowSource.FACE)
         assertEquals(0f, r.x, 1e-4f)
-        assertEquals(0f, r.y, 1e-4f)
+        assertEquals(-0.05f, r.y, 1e-4f)
         assertTrue(r.settled)
     }
 
@@ -22,6 +22,16 @@ class GazeSettleTest {
         val r = GazeSettle.apply(0.05f, -0.50f, settled = false, FollowSource.FACE)
         assertTrue(r.settled)
         assertEquals(0f, r.x, 1e-4f)
+        // Zeroing Y here was "tracking is dead" in portrait and landscape:
+        // a face in the upper third never moved the head or the neck.
+        assertEquals(-0.50f, r.y, 1e-4f)
+    }
+
+    @Test
+    fun `landscape vertical motion is not erased just because X is near center`() {
+        val r = GazeSettle.apply(0.04f, 0.62f, settled = false, FollowSource.FACE)
+        assertTrue(r.settled)
+        assertEquals(0.62f, r.y, 1e-4f)
     }
 
     @Test

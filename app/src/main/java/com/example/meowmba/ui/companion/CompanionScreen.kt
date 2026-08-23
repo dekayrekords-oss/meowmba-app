@@ -14,8 +14,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -108,8 +115,9 @@ fun CompanionScreen(
         // 2. Controls layer — everything interactive respects the system bars
         //    (status bar, nav/gesture bar, display cutout) so it always fits.
         val pinnedApps by viewModel.pinnedPackages.collectAsState()
+        val drawerFolders by viewModel.drawerFolders.collectAsState()
 
-        Box(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
                 .safeDrawingPadding()
@@ -156,6 +164,57 @@ fun CompanionScreen(
                         .align(Alignment.BottomStart)
                         .padding(16.dp)
                 )
+            }
+
+            if (uiState.isNoting) {
+                Surface(
+                    color = Color(0xFF1F6FEB),
+                    shape = RoundedCornerShape(20.dp),
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 36.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp)
+                    ) {
+                        Text(
+                            text = "Taking notes",
+                            color = Color.White,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 16.sp,
+                        )
+                        IconButton(
+                            onClick = { viewModel.stopNoting() },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Close,
+                                contentDescription = "Stop taking notes",
+                                tint = Color.White,
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (uiState.policeAlert != null) {
+                Surface(
+                    color = Color(0xFFE3B341),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 36.dp, start = 20.dp, end = 20.dp)
+                        .clickable { viewModel.dismissPoliceAlert() }
+                ) {
+                    Text(
+                        text = uiState.policeAlert ?: "",
+                        color = Color(0xFF1A1400),
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 16.sp,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                    )
+                }
             }
 
             // Animated Captions — only while a turn is actually live: your
@@ -330,31 +389,75 @@ fun CompanionScreen(
                     tint = if (uiState.isPreviewVisible) Color(0xFF3FB950) else Color(0x55CFF9FF)
                 )
             }
-        }
 
-        // Live camera preview — a small PiP-style window near the bottom
+        // Live camera preview — draggable PiP so it can sit anywhere on screen.
+        val density = LocalDensity.current
+        val pipWpx = with(density) { 160.dp.toPx() }
+        val pipHpx = with(density) { 148.dp.toPx() }
+        val parentWpx = constraints.maxWidth.toFloat()
+        val parentHpx = constraints.maxHeight.toFloat()
+        val defaultPipX = ((parentWpx - pipWpx) / 2f).coerceAtLeast(0f)
+        val defaultPipY = (parentHpx - pipHpx - with(density) { 120.dp.toPx() })
+            .coerceAtLeast(0f)
+        val pipX = remember { mutableFloatStateOf(Float.NaN) }
+        val pipY = remember { mutableFloatStateOf(Float.NaN) }
+        if (pipX.floatValue.isNaN()) pipX.floatValue = defaultPipX
+        if (pipY.floatValue.isNaN()) pipY.floatValue = defaultPipY
         AnimatedVisibility(
             visible = uiState.isPreviewVisible,
-            enter = fadeIn() + slideInVertically { it },
-            exit = fadeOut() + slideOutVertically { it },
+            enter = fadeIn(),
+            exit = fadeOut(),
             modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 120.dp)
+                .align(Alignment.TopStart)
+                .offset { IntOffset(pipX.floatValue.roundToInt(), pipY.floatValue.roundToInt()) }
         ) {
-            Box {
+            Box(
+                modifier = Modifier.pointerInput(parentWpx, parentHpx) {
+                    detectDragGestures { change, drag ->
+                        change.consume()
+                        val next = PreviewWindow.clamp(
+                            x = pipX.floatValue + drag.x,
+                            y = pipY.floatValue + drag.y,
+                            winW = pipWpx,
+                            winH = pipHpx,
+                            parentW = parentWpx,
+                            parentH = parentHpx,
+                        )
+                        pipX.floatValue = next.first
+                        pipY.floatValue = next.second
+                    }
+                }
+            ) {
                 Surface(
                     shape = RoundedCornerShape(16.dp),
                     tonalElevation = 4.dp
                 ) {
-                    Viewfinder(
-                        visionManager = viewModel.getVisionManager(),
-                        modifier = Modifier.size(width = 160.dp, height = 120.dp)
-                    )
+                    Column {
+                        Box(
+                            modifier = Modifier
+                                .width(160.dp)
+                                .height(16.dp)
+                                .background(Color(0xAA0D1117)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .width(36.dp)
+                                    .height(4.dp)
+                                    .background(Color(0x66CFF9FF), RoundedCornerShape(2.dp)),
+                            )
+                        }
+                        Viewfinder(
+                            visionManager = viewModel.getVisionManager(),
+                            modifier = Modifier.size(width = 160.dp, height = 120.dp)
+                        )
+                    }
                 }
                 IconButton(
                     onClick = { viewModel.flipCamera() },
                     modifier = Modifier
                         .align(Alignment.TopEnd)
+                        .padding(top = 12.dp)
                         .size(28.dp)
                 ) {
                     Icon(
@@ -395,6 +498,33 @@ fun CompanionScreen(
             }
         }
 
+        if (!uiState.voicePackReady || !uiState.voicePackLabel.isNullOrBlank()) {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(16.dp)
+                    .fillMaxWidth(),
+                color = Color(0xE61B1F24),
+                shape = RoundedCornerShape(16.dp),
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(
+                        text = uiState.voicePackLabel ?: "Getting voice models…",
+                        color = Color.White,
+                        fontSize = 14.sp,
+                    )
+                    val p = uiState.voicePackProgress
+                    if (p != null) {
+                        Spacer(Modifier.height(8.dp))
+                        LinearProgressIndicator(
+                            progress = { p.coerceIn(0f, 1f) },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
+            }
+        }
+
         // 3. Overlays (Floating Menus)
         BackgroundTiles(
             visible = uiState.showTiles,
@@ -412,7 +542,9 @@ fun CompanionScreen(
                     "Weather" -> viewModel.toggleWeatherScreen()
                     "Background" -> viewModel.toggleBackgroundScreen()
                     "Avatar" -> viewModel.toggleAvatarScreen()
-                    "Agents", "Tools" -> viewModel.toggleAgentsScreen()
+                    "Agents" -> viewModel.toggleAgentsScreen()
+                    "Projects" -> viewModel.toggleProjectsScreen()
+                    "Tools" -> viewModel.toggleToolsScreen()
                     "Notes" -> viewModel.toggleVaultScreen()
                 }
             }
@@ -616,6 +748,8 @@ fun CompanionScreen(
                 onWatchModeChange = { viewModel.setWatchMode(it) },
                 commentaryEnabled = uiState.commentaryEnabled,
                 onCommentaryChange = { viewModel.setCommentaryMode(it) },
+                roadAlertsEnabled = uiState.roadAlertsEnabled,
+                onRoadAlertsChange = { viewModel.setRoadAlerts(it) },
                 onSaved = { viewModel.rebuildOmniRoute() },
                 onAgentBrainChange = { viewModel.setAgentBrainEnabled(it) },
                 onHermesUrlChange = { viewModel.setHermesAgentUrl(it) },
@@ -644,7 +778,16 @@ fun CompanionScreen(
                 onCustomDownload = { url, name -> viewModel.downloadCustomModel(url, name) },
                 onUseInstalledFile = { viewModel.useInstalledModelFile(it) },
                 onDeleteInstalledFile = { viewModel.deleteInstalledModelFile(it) },
+                onOpenVoiceModels = { viewModel.toggleVoiceModelScreen() },
                 onClose = { viewModel.toggleModelManager() }
+            )
+        }
+
+        if (uiState.showVoiceModelScreen) {
+            VoiceModelScreen(
+                state = uiState,
+                onSelectBackend = { viewModel.setAsrBackend(it) },
+                onClose = { viewModel.toggleVoiceModelScreen() }
             )
         }
 
@@ -680,6 +823,23 @@ fun CompanionScreen(
             )
         }
 
+        if (uiState.showProjectsScreen) {
+            ProjectsScreen(
+                state = uiState,
+                onOpen = { viewModel.openProject(it) },
+                onDelete = { viewModel.deleteProject(it) },
+                onClose = { viewModel.toggleProjectsScreen() }
+            )
+        }
+
+        if (uiState.showToolsScreen) {
+            ToolsScreen(
+                state = uiState,
+                onToggle = { id, on -> viewModel.setRoutineEnabled(id, on) },
+                onClose = { viewModel.toggleToolsScreen() }
+            )
+        }
+
         // Swipe up = app drawer (launcher); swipe right = chat; swipe left
         // = agent browser (full-screen when folded, split pane when unfolded).
         if (uiState.showAppDrawer) {
@@ -687,11 +847,32 @@ fun CompanionScreen(
                 onClose = { viewModel.toggleAppDrawer() },
                 pins = pinnedApps,
                 onTogglePin = { viewModel.togglePin(it) },
+                folders = drawerFolders,
+                onCreateFolder = { name, pkg -> viewModel.createDrawerFolder(name, pkg) },
+                onAddToFolder = { id, pkg -> viewModel.addAppToDrawerFolder(id, pkg) },
+                onRemoveFromFolder = { id, pkg -> viewModel.removeAppFromDrawerFolder(id, pkg) },
+                onRenameFolder = { id, name -> viewModel.renameDrawerFolder(id, name) },
+                onDeleteFolder = { viewModel.deleteDrawerFolder(it) },
+                onSubmitQuery = { raw, count, label ->
+                    viewModel.submitDrawerQuery(raw, count, label)
+                },
+                onSearchGoogle = { viewModel.searchDrawerQuery(it) },
+                answer = uiState.captionText,
+                thinking = uiState.interactionState == InteractionState.THINKING,
+                listening = uiState.interactionState == InteractionState.LISTENING,
+                listenPartial = uiState.captionText,
+                onMicClick = { viewModel.startDrawerVoiceSearch() },
+                voiceCommit = uiState.drawerVoiceCommit,
+                onVoiceConsumed = { viewModel.consumeDrawerVoice() },
             )
         }
 
         if (uiState.showBrowser && !splitBrowser) {
-            BrowserScreen()
+            BrowserScreen(
+                goal = uiState.browserGoal,
+                source = uiState.browserSource,
+                sourceKind = uiState.browserSourceKind,
+            )
         }
 
         if (uiState.showVaultScreen) {
@@ -710,6 +891,15 @@ fun CompanionScreen(
             onSend = { viewModel.onUserTextSubmitted(it) },
             onDeleteMessage = { viewModel.deleteMessage(it) },
             messages = uiState.chatMessages,
+            title = uiState.activeProjectName ?: "Conversation",
+            onLeaveProject = if (uiState.activeProjectId != null) {
+                { viewModel.leaveProject() }
+            } else null,
+            listening = uiState.interactionState == InteractionState.LISTENING,
+            listenPartial = uiState.captionText,
+            onMicClick = { viewModel.onChatMicClick() },
+            callActive = uiState.callMode,
+            onCallClick = { viewModel.toggleCallMode() },
             modifier = Modifier.align(Alignment.BottomCenter)
         )
 
@@ -783,9 +973,14 @@ fun CompanionScreen(
                     .fillMaxSize()
                     .padding(start = halfWidth)
             ) {
-                BrowserScreen()
+                BrowserScreen(
+                goal = uiState.browserGoal,
+                source = uiState.browserSource,
+                sourceKind = uiState.browserSourceKind,
+            )
             }
         }
+    }
     }
 }
 

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Meow Assistant feature graphic</title>
+  <style>
+    html, body { margin: 0; padding: 0; background: #0e1814; }
+    .art {
+      width: 1024px;
+      height: 500px;
+      box-sizing: border-box;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 48px 56px 48px 64px;
+      background:
+        radial-gradient(ellipse 55% 80% at 82% 50%, rgba(158, 243, 81, 0.16) 0%, transparent 58%),
+        radial-gradient(ellipse 40% 70% at 12% 80%, rgba(35, 57, 44, 0.9) 0%, transparent 50%),
+        linear-gradient(118deg, #0b1210 0%, #132018 46%, #1a2c22 100%);
+      font-family: "SF Pro Display", "Helvetica Neue", ui-sans-serif, system-ui, sans-serif;
+      color: #f2f4f3;
+      overflow: hidden;
+      position: relative;
+    }
+    .grid {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(158, 243, 81, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(158, 243, 81, 0.05) 1px, transparent 1px);
+      background-size: 48px 48px;
+      mask-image: radial-gradient(ellipse 70% 80% at 80% 50%, #000 0%, transparent 72%);
+      pointer-events: none;
+    }
+    .copy { position: relative; z-index: 1; max-width: 540px; }
+    .name {
+      font-size: 64px;
+      font-weight: 750;
+      letter-spacing: -0.04em;
+      line-height: 0.95;
+      margin: 0 0 18px;
+    }
+    .tag {
+      font-size: 26px;
+      font-weight: 500;
+      color: #b7c4bc;
+      margin: 0;
+      letter-spacing: -0.02em;
+      max-width: 22ch;
+    }
+    .pill {
+      display: inline-block;
+      margin-top: 28px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      background: rgba(158, 243, 81, 0.12);
+      color: #9ef351;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .mark {
+      position: relative;
+      z-index: 1;
+      width: 380px;
+      height: 380px;
+      flex: 0 0 380px;
+      filter: drop-shadow(0 0 36px rgba(158, 243, 81, 0.22));
+    }
+    .mark img {
+      width: 380px;
+      height: 380px;
+      display: block;
+      border-radius: 84px;
+    }
+  </style>
+</head>
+<body>
+  <div class="art">
+    <div class="grid" aria-hidden="true"></div>
+    <div class="copy">
+      <p class="name">Meow Assistant</p>
+      <p class="tag">A voice cat companion on your phone.</p>
+      <span class="pill">Talk · Remember · On-device</span>
+    </div>
+    <div class="mark">
+      <img src="icon-1024.png" alt="" width="380" height="380" />
+    </div>
+  </div>
+</body>
+</html>

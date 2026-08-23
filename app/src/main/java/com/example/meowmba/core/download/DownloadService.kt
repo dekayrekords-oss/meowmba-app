@@ -7,8 +7,10 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.example.meowmba.MainActivity
 import com.example.meowmba.R
@@ -31,8 +33,11 @@ class DownloadService : Service() {
         const val EXTRA_URL = "url"
         const val EXTRA_FILE_NAME = "file_name"
         const val EXTRA_FILE_ID = "file_id"
-        const val EXTRA_HF_TOKEN = "hf_token"
         const val EXTRA_MODELS_DIR = "models_dir"
+
+        /** Token stays in-process — never in the Intent extras dumpsys can read. */
+        @Volatile
+        var pendingHfToken: String? = null
 
         fun start(
             context: Context,
@@ -42,12 +47,12 @@ class DownloadService : Service() {
             hfToken: String?,
             modelsDir: File
         ) {
+            pendingHfToken = hfToken
             val intent = Intent(context, DownloadService::class.java).apply {
                 action = ACTION_DOWNLOAD
                 putExtra(EXTRA_URL, url)
                 putExtra(EXTRA_FILE_NAME, fileName)
                 putExtra(EXTRA_FILE_ID, fileId)
-                putExtra(EXTRA_HF_TOKEN, hfToken)
                 putExtra(EXTRA_MODELS_DIR, modelsDir.absolutePath)
             }
             ContextCompat.startForegroundService(context, intent)
@@ -71,11 +76,16 @@ class DownloadService : Service() {
         val url = intent.getStringExtra(EXTRA_URL) ?: run { stopSelf(); return START_NOT_STICKY }
         val fileName = intent.getStringExtra(EXTRA_FILE_NAME) ?: run { stopSelf(); return START_NOT_STICKY }
         val fileId = intent.getStringExtra(EXTRA_FILE_ID) ?: run { stopSelf(); return START_NOT_STICKY }
-        val hfToken = intent.getStringExtra(EXTRA_HF_TOKEN)
+        val hfToken = pendingHfToken.also { pendingHfToken = null }
         val modelsDir = intent.getStringExtra(EXTRA_MODELS_DIR)?.let { File(it) }
             ?: run { stopSelf(); return START_NOT_STICKY }
 
-        startForeground(NOTIFICATION_ID, buildNotification("Starting download…", 0f))
+        ServiceCompat.startForeground(
+            this,
+            NOTIFICATION_ID,
+            buildNotification("Starting download…", 0f),
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
+        )
 
         job = scope.launch {
             try {

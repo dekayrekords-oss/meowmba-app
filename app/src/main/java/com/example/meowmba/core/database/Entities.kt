@@ -29,7 +29,11 @@ data class MessageEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val role: MessageRole,
     val content: String,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    /** 0 = inbox. Non-zero = a project conversation. */
+    val conversationId: Long = 0L,
+    /** Who said this user line: enrolled name, or Left/Right. */
+    val speakerName: String? = null,
 )
 
 @Entity(tableName = "memories")
@@ -100,11 +104,29 @@ data class RoutineEntity(
     val timeOfDay: String? = null,
     /** Repeat interval in minutes; null for time-of-day routines. */
     val intervalMinutes: Int? = null,
-    /** "speak" | "morning_brief" | "memory_followup". */
+    /** "speak" | "morning_brief" | "memory_followup" | "play_music" | "launch_app". */
     val action: String = "speak",
     val message: String = "",
     val enabled: Boolean = true,
-    val lastRunAt: Long = 0L
+    val lastRunAt: Long = 0L,
+    /** "system" seeded templates vs "user" tools made by voice. */
+    val source: String = "system",
+    /** App or music query for play_music / launch_app. */
+    val launchTarget: String = "",
+)
+
+/**
+ * A saved work session (website / photo / code). Chat for the project
+ * lives in [MessageEntity] rows with the same [conversationId].
+ */
+@Entity(tableName = "projects")
+data class ProjectEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    val kind: String,
+    val createdAt: Long = System.currentTimeMillis(),
+    val lastOpenedAt: Long = createdAt,
+    val conversationId: Long,
 )
 
 @Entity(tableName = "audit_log")

@@ -41,11 +41,16 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.meowmba"
+        applicationId = "com.meow.meowmba"
         minSdk = 31
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1.0"
+
+        ndk {
+            abiFilters += "arm64-v8a"
+            debugSymbolLevel = "SYMBOL_TABLE"
+        }
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         externalNativeBuild {
@@ -75,6 +80,14 @@ android {
 
     buildTypes {
         release {
+            // Shrink + obfuscate for Play. JNI / Room / MediaPipe kept via
+            // src/main/keepRules/rules.keep.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "src/main/keepRules/rules.keep",
+            )
             optimization {
                 enable = false
             }
@@ -95,6 +108,34 @@ android {
         compose = true
         buildConfig = true
     }
+
+    // MediaPipe / LiteRT AARs ship every ABI. We only ship arm64 (the Fold).
+    // Without this the Play APK is ~390 MB and over the 200 MB cap.
+    packaging {
+        jniLibs {
+            // Uncompressed + 16 KB zip-aligned — Play rejects 4 KB-only ELF
+            // alignment on targetSdk 36 devices.
+            useLegacyPackaging = false
+            excludes += listOf(
+                "**/lib/x86/**",
+                "**/lib/x86_64/**",
+                "**/lib/armeabi-v7a/**",
+                "lib/x86/**",
+                "lib/x86_64/**",
+                "lib/armeabi-v7a/**",
+                // Optional GPU helper; CPU image-gen still works. ~10 MB, gets us
+                // under Play's 200 MB install cap.
+                "**/libimagegenerator_gpu.so",
+            )
+        }
+    }
+}
+
+androidComponents {
+    onVariants(selector().withBuildType("debug")) { variant ->
+        // Fold still has the old id. Release / Play stays com.meow.meowmba.
+        variant.applicationId.set("com.example.meowmba")
+    }
 }
 
 ksp {
@@ -111,6 +152,8 @@ tasks.withType<Test>().configureEach {
 dependencies {
     // SSH client (mwiede fork is the maintained jsch).
     implementation("com.github.mwiede:jsch:0.2.21")
+    // Unpack the sherpa KWS tar.bz2 on first launch (Play cannot ship it in the AAB).
+    implementation("org.apache.commons:commons-compress:1.27.1")
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)

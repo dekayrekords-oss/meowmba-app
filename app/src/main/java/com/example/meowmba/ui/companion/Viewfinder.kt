@@ -17,6 +17,9 @@ fun Viewfinder(
         factory = { ctx ->
             PreviewView(ctx).also { view ->
                 view.scaleType = PreviewView.ScaleType.FILL_CENTER
+                // Let Compose drag the PiP; the preview is view-only.
+                view.isClickable = false
+                view.isFocusable = false
                 mgr.setPreviewSurface(view.surfaceProvider)
             }
         },

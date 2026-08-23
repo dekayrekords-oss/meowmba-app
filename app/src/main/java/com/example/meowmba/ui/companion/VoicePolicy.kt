@@ -45,7 +45,61 @@ object VoicePolicy {
      */
     fun shouldEnterFollowUp(s: CompanionState): Boolean =
         s.isMicEnabled && !s.isMuted &&
-            (s.conversationMode || (s.bargeInEnabled && s.wakeWordEnabled))
+            (s.callMode || s.conversationMode || (s.bargeInEnabled && s.wakeWordEnabled))
+
+    /**
+     * Open the conversation mic: someone is in the camera, or the bare face
+     * is up and they didn't opt into wake-word gating.
+     */
+    fun shouldAlwaysOnMic(s: CompanionState): Boolean =
+        shouldAlwaysOnMic(s, recognizerHealthy = true)
+
+    /**
+     * Face-mode always-on stays on even when the *platform* recognizer is
+     * wedged: local Sherpa ASR takes that slot. [recognizerHealthy] is kept
+     * on the signature so callers still pass it; it no longer kills the open
+     * mic — that is what made "always-on mic" disappear.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    fun shouldAlwaysOnMic(s: CompanionState, recognizerHealthy: Boolean): Boolean {
+        if (!s.isMicEnabled) return false
+        // Mouth mute silences TTS, not the mic. Live notes stay listening
+        // while muted; unmute lets Meow answer and still transcribe.
+        if (s.isMuted && !s.isNoting) return false
+        if (s.callMode) return true
+        if (!faceModeActive(s)) return false
+        if (s.userInView) return true
+        return !s.requireWakeWordInFace
+    }
+
+    /**
+     * Cover-screen CAM OFF naps always-on to the wake spotter after a minute
+     * of quiet. Speech that is not "hey meow" still has to reopen just-talk,
+     * or the face stays deaf until an app restart.
+     */
+    fun shouldResumeAlwaysOnFromSpeech(s: CompanionState): Boolean =
+        shouldAlwaysOnMic(s)
+
+    /** Close enough that extra recognizer patience is worth it. */
+    fun userInFocus(hasFace: Boolean, scale: Float): Boolean =
+        hasFace && scale >= 0.85f
+
+    /** Consecutive BUSY/CLIENT/10/11 refusals before always-on yields to wake. */
+    const val ALWAYS_ON_WEDGE_STRIKES = 2
+
+    /**
+     * The recognition service refused us or never became ready. Retrying the
+     * same open-mic loop just re-wedges AiAi / Google and keeps AudioRecord
+     * away from the keyword spotter and the mic button.
+     */
+    fun isContentionError(code: Int): Boolean = when (code) {
+        SpeechRecognizer.ERROR_RECOGNIZER_BUSY,
+        SpeechRecognizer.ERROR_CLIENT,
+        SpeechRecognizer.ERROR_SERVER_DISCONNECTED,
+        SpeechRecognizer.ERROR_TOO_MANY_REQUESTS,
+        SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> true
+        else -> false
+    }
 
     /**
      * Retry gap after the recognizer refuses us, doubling per consecutive

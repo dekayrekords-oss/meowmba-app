@@ -69,12 +69,14 @@ class PhaseGTest {
     }
 
     @Test
-    fun `chatter picks from the time-aware pool`() {
+    fun `chatter remixed from seed is not a four-line loop`() {
         val e = MoodEngine()
         val morning = java.util.Calendar.getInstance().apply { set(java.util.Calendar.HOUR_OF_DAY, 8) }.timeInMillis
         val line = e.pickChatter(morning, 0)
         assertTrue(line.isNotBlank())
         assertNotEquals(line, e.pickChatter(morning, 1))
+        val unique = (0 until 40).map { e.pickChatter(morning, it * 17) }.toSet()
+        assertTrue("expected lots of unique lines, got ${unique.size}", unique.size >= 20)
     }
 
     // ── G2: motor mapping ─────────────────────────────────────────────────
@@ -113,6 +115,13 @@ class PhaseGTest {
         )
         val up = FaceMotorMap.followFace(0f, -0.8f)
         assertTrue(up[FaceMotorMap.SERVO_HEAD_TILT]!! < 90f)
+        // Selfie framing lives at y≈-0.5. High gain here made the neck bob
+        // with box jitter — a small nod is enough, a large one is chatter.
+        val selfie = FaceMotorMap.followFace(0f, -0.5f)[FaceMotorMap.SERVO_HEAD_TILT]!!
+        assertTrue("selfie must nod up, got $selfie", selfie < 80f)
+        assertTrue("selfie must not slam the neck, got $selfie", selfie >= 60f)
+        val near = FaceMotorMap.followFace(0f, -0.10f)[FaceMotorMap.SERVO_HEAD_TILT]!!
+        assertEquals("small Y jitter must not nod", 90f, near, 0.01f)
 
         val gone = FaceMotorMap.followFace(null, null)
         assertEquals(90f, gone[FaceMotorMap.SERVO_HEAD_PAN]!!, 0.01f)

@@ -18,6 +18,9 @@ object GazeSettle {
         // not "off center" — only X should break a lock.
         val ax = kotlin.math.abs(x)
         val now = if (settled) ax < OUT else ax < IN
-        return if (now) Result(0f, 0f, settled = true) else Result(x, y, settled = false)
+        // Only rest-center X. Zeroing Y hid every up/down look (selfie
+        // framing lives at y≈-0.5) and, when landscape mapping leaked onto
+        // Y, made tracking look dead in both orientations.
+        return if (now) Result(0f, y, settled = true) else Result(x, y, settled = false)
     }
 }

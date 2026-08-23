@@ -23,6 +23,50 @@ object WebViewBridge {
 
     val isAttached: Boolean get() = viewRef.get() != null
 
+    fun loadUrl(url: String) {
+        val view = viewRef.get() ?: return
+        view.post { view.loadUrl(normalizeUrl(url)) }
+    }
+
+    fun loadWorkshop() {
+        loadHtml(WORKSHOP_HTML)
+    }
+
+    /** Replace the document. Used for first-draft pages and local media. */
+    fun loadHtml(html: String) {
+        val view = viewRef.get() ?: return
+        view.post {
+            view.loadDataWithBaseURL(
+                "https://meow.local/workshop",
+                html,
+                "text/html",
+                "utf-8",
+                null,
+            )
+        }
+    }
+
+    fun normalizeUrl(raw: String): String {
+        val t = raw.trim()
+        val lower = t.lowercase()
+        if (lower.startsWith("javascript:") ||
+            lower.startsWith("file:") ||
+            lower.startsWith("content:") ||
+            lower.startsWith("intent:")
+        ) {
+            return "about:blank"
+        }
+        if (t.startsWith("http://") || t.startsWith("https://") || t.startsWith("data:")) {
+            return if (com.example.meowmba.core.security.CleartextPolicy.isSafeBrowseUrl(t)) {
+                t
+            } else {
+                t.replaceFirst(Regex("^http://", RegexOption.IGNORE_CASE), "https://")
+            }
+        }
+        if (t.startsWith("www.")) return "https://$t"
+        return "https://$t"
+    }
+
     /** Runs JS on the UI thread, returns the result string via callback. */
     @SuppressLint("SetJavaScriptEnabled")
     fun evaluate(script: String, onResult: (String) -> Unit) {
@@ -170,6 +214,31 @@ object WebViewBridge {
       var h = (document.documentElement && document.documentElement.outerHTML) || '';
       return h.length > 200000 ? h.slice(0, 200000) + '...[truncated]' : h;
     },
+    readable: function() {
+      var bits = [];
+      if (document.title) bits.push('# ' + document.title);
+      bits.push(location.href);
+      var nodes = document.querySelectorAll('h1,h2,h3,p,li,th,td');
+      for (var i = 0; i < nodes.length && bits.length < 220; i++) {
+        var x = (nodes[i].innerText || '').replace(/\s+/g, ' ').trim();
+        if (x) bits.push(x);
+      }
+      return bits.join('\n').slice(0, 20000);
+    },
+    scrape: function() {
+      var links = [];
+      var as = document.getElementsByTagName('a');
+      for (var i = 0; i < as.length && links.length < 40; i++) {
+        var t = (as[i].textContent || '').replace(/\s+/g, ' ').trim();
+        if (t) links.push(t.slice(0, 80) + ' -> ' + as[i].href);
+      }
+      return JSON.stringify({
+        title: document.title,
+        url: location.href,
+        text: this.readable(),
+        links: links
+      });
+    },
     title: function() { return document.title + ' | ' + location.href; },
     links: function() {
       var out = [];
@@ -183,4 +252,24 @@ object WebViewBridge {
   };
 })();
 """
+
+    const val WORKSHOP_HTML = """<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Agent browser</title>
+<style>
+  body{margin:0;background:#0d1117;color:#e6edf3;font-family:system-ui,sans-serif;padding:28px}
+  h1{font-size:22px;margin:0 0 10px}
+  p{color:#8b949e;line-height:1.45;max-width:34em}
+  code{color:#58a6ff}
+</style>
+</head>
+<body>
+<h1>Agent browser</h1>
+<p>Say <code>make a page about …</code> and I will build it here.</p>
+<p>Open a URL, then say <code>scrape this page</code> to pull the text and links.</p>
+</body>
+</html>"""
 }

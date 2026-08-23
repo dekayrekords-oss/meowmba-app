@@ -297,15 +297,12 @@ class RobotManager {
             when (id) {
                 FaceMotorMap.SERVO_HEAD_TILT -> {
                     val pitch = (clamped - 90f) / 90f
-                    if (!lastNeck.isNaN() && kotlin.math.abs(pitch - lastNeck) < 0.03f) return
+                    if (!lastNeck.isNaN() && kotlin.math.abs(pitch - lastNeck) < 0.04f) return
                     lastNeck = pitch
                     link.setNeckPitch(pitch)
                 }
                 FaceMotorMap.SERVO_HEAD_PAN,
-                FaceMotorMap.SERVO_BODY -> {
-                    // Mood/clip servos used to pulse the treads and fought
-                    // keep-in-frame (and only the left spin is strong).
-                }
+                FaceMotorMap.SERVO_BODY -> Unit
                 else -> Unit // ears/tail have no BLE actuator
             }
         }
@@ -336,9 +333,11 @@ class RobotManager {
 
     private var lastFaceAtMs = 0L
     private var lastFaceX = 0f
-    private var lastTurnAtMs = 0L
+    private var lastFaceY = 0f
+    private var lastFaceScale = 1f
     private var lastDrive = 0f
-    private var lastNeck = Float.NaN
+    private var lastTurnAtMs = 0L
+    private var wasTurning = false
     private val frameTracker = KeepInFrame.Tracker()
     private var lightMode = HeadlightPolicy.Mode.AUTO
     private var lightOn = false
@@ -349,39 +348,55 @@ class RobotManager {
      * (including nulls) so the base keeps turning while they stay off-center.
      */
     fun keepPersonInFrame(offsetX: Float?, offsetY: Float?, scale: Float?, nowMs: Long = System.currentTimeMillis()) {
-        if (offsetX != null) {
+        val live = offsetX != null && offsetY != null
+        if (live) {
             lastFaceAtMs = nowMs
             lastFaceX = offsetX
+            lastFaceY = offsetY
+            if (scale != null) lastFaceScale = scale
         }
         val cmd = KeepInFrame.step(
             offsetX, offsetY, scale, nowMs, lastFaceAtMs, lastFaceX, frameTracker,
         )
-        val link = bleLink?.takeIf { it.connected }
-        if (link == null) {
-            FaceMotorMap.followFace(offsetX, offsetY)
-                .forEach { (id, angle) -> controller.setServo(id, angle) }
+        val holdNeck = !live && lastFaceAtMs > 0L && nowMs - lastFaceAtMs < 400L
+        val oy = offsetY ?: lastFaceY.takeIf { holdNeck }
+        val pose = FaceMotorMap.followFace(if (live) offsetX else null, oy)
+        pose[FaceMotorMap.SERVO_HEAD_TILT]?.let { controller.setServo(FaceMotorMap.SERVO_HEAD_TILT, it) }
+        if (!live) {
+            if (wasTurning) haltBase()
+            wasTurning = false
             return
         }
-        if (lastNeck.isNaN() || kotlin.math.abs(cmd.neckPitch - lastNeck) > 0.08f) {
-            lastNeck = cmd.neckPitch
-            link.setNeckPitch(cmd.neckPitch)
+        // Face at the lip of the frame: brake. Chasing that offset is the spin.
+        if (kotlin.math.abs(offsetX) >= KeepInFrame.X_EDGE) {
+            if (wasTurning) haltBase()
+            wasTurning = false
+            return
         }
+        val link = bleLink?.takeIf { it.connected }
         if (cmd.turning) {
-            // Pulses used to stack every 180ms on 140–320ms scripts → chatter.
-            if (nowMs - lastTurnAtMs >= 650L) {
-                lastTurnAtMs = nowMs
-                link.turnPulse(cmd.turnSpeed, cmd.turnTicks)
+            if (link != null) {
+                if (nowMs - lastTurnAtMs >= 400L) {
+                    lastTurnAtMs = nowMs
+                    link.turnPulse(cmd.turnSpeed, cmd.turnTicks)
+                    wasTurning = true
+                }
+            } else {
+                pose[FaceMotorMap.SERVO_HEAD_PAN]?.let {
+                    controller.setServo(FaceMotorMap.SERVO_HEAD_PAN, it)
+                }
+                wasTurning = true
             }
+        } else {
+            wasTurning = false
         }
-        if (cmd.driveSpeed != lastDrive) {
-            lastDrive = cmd.driveSpeed
-            if (cmd.driveSpeed > 0f) link.driveSpeed(cmd.driveSpeed)
-            else link.driveSpeed(0f)
-        }
-        if (!cmd.turning && !cmd.driving && cmd.neckPitch == 0f && lastDrive != 0f) {
-            lastDrive = 0f
-            link.driveSpeed(0f)
-        }
+    }
+
+    /** Abort an in-flight turn script so a lost lock cannot coast into a spin. */
+    private fun haltBase() {
+        val link = bleLink?.takeIf { it.connected } ?: return
+        link.turnPulse(0, 1)
+        link.stopAll()
     }
 
     /**

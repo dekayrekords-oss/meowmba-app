@@ -5,6 +5,7 @@ import android.util.Log
 import com.k2fsa.sherpa.onnx.SileroVadModelConfig
 import com.k2fsa.sherpa.onnx.Vad
 import com.k2fsa.sherpa.onnx.VadModelConfig
+import java.io.File
 
 /**
  * Speech gate in front of the keyword spotter — the VAD stage of a VAD → KWS pipeline.
@@ -181,24 +182,28 @@ class VadGate private constructor(private val vad: Vad) {
          */
         private const val HANGOVER_FRAMES = 8
 
-        /** True when the VAD model is bundled at the assets root. */
-        fun isModelAvailable(context: Context): Boolean = try {
-            context.assets.open(MODEL).close()
-            true
-        } catch (e: Exception) {
-            false
+        /** True when the VAD model is on disk or still bundled as a debug asset. */
+        fun isModelAvailable(context: Context): Boolean {
+            if (VoiceModelStore(context).vadReady()) return true
+            return try {
+                context.assets.open(MODEL).close()
+                true
+            } catch (e: Exception) {
+                false
+            }
         }
 
         /** Null when the model is absent or fails to load; the caller then runs ungated. */
         fun create(context: Context, sampleRate: Int = 16_000): VadGate? {
             if (!isModelAvailable(context)) return null
             return try {
+                val onDisk = File(VoiceModelStore(context).root, MODEL)
                 VadGate(
                     Vad(
-                        assetManager = context.assets,
+                        assetManager = if (onDisk.isFile) null else context.assets,
                         config = VadModelConfig(
                             sileroVadModelConfig = SileroVadModelConfig(
-                                model = MODEL,
+                                model = if (onDisk.isFile) onDisk.absolutePath else MODEL,
                                 threshold = 0.5f,
                                 minSilenceDuration = 0.25f,
                                 minSpeechDuration = 0.10f,   // react fast; a wake word is short

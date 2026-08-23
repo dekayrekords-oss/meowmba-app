@@ -10,16 +10,18 @@ package com.example.meowmba.core.robot
  */
 object KeepInFrame {
 
-    const val X_START = 0.40f
-    const val X_HOLD = 0.18f
+    const val X_START = 0.20f
+    const val X_HOLD = 0.10f
     const val X_DEAD = X_HOLD
-    const val Y_DEAD = 0.28f
-    const val SIGN_LOCK_MS = 350L
+    /** Past this they are at the lip. Chasing that is the remaining spin. */
+    const val X_EDGE = 0.50f
+    const val Y_DEAD = 0.14f
+    const val SIGN_LOCK_MS = 280L
     const val APPROACH_SCALE = 0.78f
     const val AIMED = 0.45f
     const val SEARCH_AFTER_MS = 400L
     const val SEARCH_GIVE_UP_MS = 2_800L
-    const val BODY_ALPHA = 0.18f
+    const val BODY_ALPHA = 0.40f
 
     data class Command(
         val neckPitch: Float,
@@ -61,11 +63,13 @@ object KeepInFrame {
         tracker: Tracker = Tracker(),
     ): Command {
         if (offsetX == null || offsetY == null) {
-            // A one-frame miss used to wipe hysteresis and the next hit
-            // snapped into a turn. Hold the lock through a short blink.
+            // Lost lock: stand still. Replaying the last edge turn is how
+            // the base hunted a full circle after the face left the frame.
             if (tracker.hasBody && lastSeenMs > 0L && nowMs - lastSeenMs < 700L) {
                 tracker.turning = false
-                return Command(0f, 0, 0, 0f, searching = false)
+                val neck = if (kotlin.math.abs(tracker.bodyY) < Y_DEAD) 0f
+                    else (tracker.bodyY * 0.40f).coerceIn(-0.55f, 0.55f)
+                return Command(neck, 0, 0, 0f, searching = false)
             }
             tracker.reset()
             return Command(0f, 0, 0, 0f, searching = false)
@@ -84,10 +88,11 @@ object KeepInFrame {
     }
 
     internal fun command(x: Float, y: Float, nowMs: Long, tracker: Tracker): Command {
-        val neck = if (kotlin.math.abs(y) < Y_DEAD) 0f else (y * 0.35f).coerceIn(-0.45f, 0.45f)
+        val neck = if (kotlin.math.abs(y) < Y_DEAD) 0f else (y * 0.40f).coerceIn(-0.55f, 0.55f)
         val absX = kotlin.math.abs(x)
-        // Front camera faces the person. Screen-right is the robot's left.
-        val rawSign = if (x > 0f) -1 else if (x < 0f) 1 else 0
+        // Screen-right (x>0) → robot turns right. The opposite mapping
+        // chased the face out of frame.
+        val rawSign = if (x > 0f) 1 else if (x < 0f) -1 else 0
         val sign = when {
             rawSign == 0 -> tracker.sign
             tracker.sign == 0 -> rawSign
@@ -100,14 +105,15 @@ object KeepInFrame {
             tracker.sign = sign
             tracker.signAtMs = nowMs
         }
-        val shouldTurn = if (tracker.turning) absX > X_HOLD else absX > X_START
-        tracker.turning = shouldTurn && sign != 0
+        val inBand = absX < X_EDGE
+        val shouldTurn = inBand && sign != 0 &&
+            if (tracker.turning) absX > X_HOLD else absX > X_START
+        tracker.turning = shouldTurn
         val (turnSpeed, turnTicks) = if (!tracker.turning) {
             0 to 0
         } else {
-            val mag = (14 + absX * 22f).toInt().coerceIn(14, 32)
-            val ticks = (4 + (absX * 4f).toInt()).coerceIn(4, 8)
-            (sign * mag) to ticks
+            val mag = (10 + absX * 10f).toInt().coerceIn(10, 18)
+            (sign * mag) to 3
         }
         // Face-lock must not also scoot — scale flicker plus a turn is the
         // lurch. Approach stays off until it has its own deadband.

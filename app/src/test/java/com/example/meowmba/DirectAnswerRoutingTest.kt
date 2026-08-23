@@ -3,6 +3,7 @@ package com.example.meowmba
 import com.example.meowmba.ui.companion.CompanionViewModel
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -57,6 +58,33 @@ class DirectAnswerRoutingTest {
         assertTrue(CompanionViewModel.looksLikeDirectQuestion("tell me how to install ffmpeg"))
         assertEquals("cat facts", CompanionViewModel.extractSearchQuery("hey meow search for cat facts"))
         assertTrue(CompanionViewModel.looksLikeShowInBrowser("hey meow show it in the browser"))
+    }
+
+    @Test
+    fun `what do you see is vision not a chat guess`() {
+        assertFalse(CompanionViewModel.looksLikeDirectQuestion("what do you see"))
+        assertFalse(CompanionViewModel.looksLikeDirectQuestion("hey meow what do you see"))
+        assertNotNull(com.example.meowmba.core.vision.VisionRouter.parse("what do you see"))
+    }
+
+    @Test
+    fun `how fast is a speed question not a chat guess`() {
+        assertTrue(com.example.meowmba.ui.companion.SpeechIntents.isSpeedQuestion("how fast am i going"))
+        assertTrue(com.example.meowmba.ui.companion.SpeechIntents.isSpeedQuestion("how fast are we going"))
+        assertTrue(com.example.meowmba.ui.companion.SpeechIntents.isSpeedQuestion("what speed am i doing"))
+        assertFalse(com.example.meowmba.ui.companion.SpeechIntents.isSpeedQuestion("how do i install ollama"))
+        assertFalse(CompanionViewModel.looksLikeDirectQuestion("how fast am i going"))
+    }
+
+    @Test
+    fun `casual check-ins are answered not parked on the yellow mic`() {
+        // Measured: "Hey buddy what's up" stayed in THINKING 45s because
+        // stripAddress left "buddy what's up" and "what's" was not a starter.
+        assertTrue(CompanionViewModel.looksLikeDirectQuestion("hey buddy what's up"))
+        assertTrue(CompanionViewModel.looksLikeDirectQuestion("what's up"))
+        assertTrue(CompanionViewModel.looksLikeDirectQuestion("whats up"))
+        assertTrue(CompanionViewModel.looksLikeDirectQuestion("how are you"))
+        assertTrue(CompanionViewModel.looksLikeDirectQuestion("how's it going"))
     }
 
     @Test

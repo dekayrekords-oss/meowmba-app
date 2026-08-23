@@ -118,6 +118,62 @@ class RobotManagerTest {
     }
 
     @Test
+    fun `keepPersonInFrame drives the neck and yaws toward a moderately off-center face`() {
+        val m = RobotManager()
+        m.keepPersonInFrame(0.35f, -0.5f, 1f, nowMs = 1_000L)
+        val sim = m.active as SimulatedMotorController
+        assertTrue(
+            "tilt must leave center for a high face, got ${sim.history}",
+            sim.history.any { it.startsWith("servo0") && !it.endsWith("90.0") },
+        )
+        assertTrue(
+            "off-center X must write pan, got ${sim.history}",
+            sim.history.any { it.startsWith("servo1") && !it.endsWith("90.0") },
+        )
+    }
+
+    @Test
+    fun `keepPersonInFrame does not yaw when the face is at the edge`() {
+        val m = RobotManager()
+        m.keepPersonInFrame(0.70f, 0f, 1f, nowMs = 1_000L)
+        val sim = m.active as SimulatedMotorController
+        assertFalse(
+            "edge of frame must not yaw, got ${sim.history}",
+            sim.history.any { it.startsWith("servo1") },
+        )
+    }
+
+    @Test
+    fun `keepPersonInFrame holds pose through a blink instead of recentering`() {
+        val m = RobotManager()
+        m.keepPersonInFrame(0.4f, -0.5f, 1f, nowMs = 1_000L)
+        m.keepPersonInFrame(0.4f, -0.5f, 1f, nowMs = 1_500L)
+        val sim = m.active as SimulatedMotorController
+        val afterLock = sim.history.toList()
+        m.keepPersonInFrame(null, null, null, nowMs = 1_600L)
+        assertEquals(
+            "a 200ms miss must not recenter servos",
+            afterLock,
+            sim.history.toList(),
+        )
+    }
+
+    @Test
+    fun `keepPersonInFrame does not write pan after the face is gone`() {
+        val m = RobotManager()
+        m.keepPersonInFrame(0.5f, -0.2f, 1f, nowMs = 1_000L)
+        val sim = m.active as SimulatedMotorController
+        val pans = sim.history.count { it.startsWith("servo1") }
+        m.keepPersonInFrame(null, null, null, nowMs = 1_200L)
+        m.keepPersonInFrame(null, null, null, nowMs = 1_800L)
+        assertEquals(
+            "lost face must not add pan/turn commands",
+            pans,
+            sim.history.count { it.startsWith("servo1") },
+        )
+    }
+
+    @Test
     fun `useSimulated always returns a working simulated controller`() {
         val m = RobotManager()
         m.useSimulated()

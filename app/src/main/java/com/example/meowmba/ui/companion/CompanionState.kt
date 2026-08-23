@@ -40,6 +40,17 @@ data class RoutineUi(
     val name: String,
     val whenLabel: String,
     val enabled: Boolean,
+    val userMade: Boolean = false,
+    val detail: String = "",
+)
+
+data class ProjectUi(
+    val id: Long,
+    val name: String,
+    val kind: String,
+    val kindLabel: String,
+    val whenLabel: String,
+    val conversationId: Long,
 )
 
 data class CompanionState(
@@ -50,8 +61,24 @@ data class CompanionState(
     val captionText: String? = null,
     val isChatExpanded: Boolean = false,
     val isMuted: Boolean = false,
-    val isCameraEnabled: Boolean = true,
+    /** Live vault transcription session. Mouth mute is independent. */
+    val isNoting: Boolean = false,
+    /** Vault title, e.g. Notes/2026-08-19. */
+    val notingTitle: String? = null,
+    val isCameraEnabled: Boolean = false,
     val isMicEnabled: Boolean = true,
+    /** ML Kit currently sees a face (held briefly across one-frame misses). */
+    val userInView: Boolean = false,
+    /** Face is close enough that speech should get a longer listen window. */
+    val userInFocus: Boolean = false,
+    /** Enrolled or Left/Right label for the person Meow is looking at. */
+    val activeSpeaker: String? = null,
+    /** How many faces ML Kit sees right now. */
+    val facesInView: Int = 0,
+    /** Wake-word models are on disk (or not needed yet). */
+    val voicePackReady: Boolean = true,
+    val voicePackLabel: String? = null,
+    val voicePackProgress: Float? = null,
     val activeTask: String? = null,
     val errorMessage: String? = null,
     val showTiles: Boolean = false,
@@ -73,6 +100,8 @@ data class CompanionState(
     val requireWakeWordInFace: Boolean = false,
     /** "start listening" armed the phone-control agent; the next utterance is its goal. */
     val phoneControlAwaitingGoal: Boolean = false,
+    /** ChatGPT-style voice call from the Ask box — always-on until hung up. */
+    val callMode: Boolean = false,
     /** Stay in conversation after responding, for natural follow-ups. */
     val conversationMode: Boolean = false,
     /** Phase E3: keep listening 8 s after each exchange so you can cut in. */
@@ -81,7 +110,7 @@ data class CompanionState(
     val routines: List<RoutineUi> = emptyList(),
     /** Phase G1: current mood label (content, excited, sleepy, ...). */
     val moodLabel: String = "content",
-    val robotBodyEnabled: Boolean = true,
+    val robotBodyEnabled: Boolean = false,
     val robotHost: String = "192.168.1.200",
     val robotPort: String = "9100",
     val robotStatus: String = "simulated (no body)",
@@ -93,15 +122,25 @@ data class CompanionState(
     /** Phase G1: unprompted one-liners, max once per hour. */
     val idleChatterEnabled: Boolean = true,
     /** Keep the display awake while the companion face is on screen. */
-    val keepScreenOnInFaceMode: Boolean = true,
+    val keepScreenOnInFaceMode: Boolean = false,
     /** Low-rate screen awareness (MediaProjection) is on. */
     val watchModeEnabled: Boolean = false,
     /** Meow may speak short unsolicited comments about what it sees. */
     val commentaryEnabled: Boolean = false,
+    /** Waze / Maps police alerts on the face. */
+    val roadAlertsEnabled: Boolean = false,
+    val policeAlert: String? = null,
     /** App drawer overlay (swipe right) is open. */
     val showAppDrawer: Boolean = false,
+    /** Spoken search just finished; the drawer copies this into the bar once. */
+    val drawerVoiceCommit: String? = null,
     /** Agent browser overlay (swipe left) is open. */
     val showBrowser: Boolean = false,
+    /** Standing goal the agent browser is working on. */
+    val browserGoal: String? = null,
+    /** Live HTML/JS/scrape the agent last wrote. */
+    val browserSource: String = "",
+    val browserSourceKind: String = "html",
     // NOTE: speech energy is deliberately NOT here. It changes ~14x/second
     // while speaking, and every field of this class is carried by value into
     // AvatarRenderer — so a copy() per word boundary recomposed the whole
@@ -222,6 +261,21 @@ data class CompanionState(
     /** A tool call waiting for the user's explicit decision, if any. */
     val pendingApproval: ApprovalRequest? = null,
     val showAgentsScreen: Boolean = false,
+    val showProjectsScreen: Boolean = false,
+    val showToolsScreen: Boolean = false,
+
+    /** Hardware → Voice Recognition: which speech-to-text backend to use. */
+    val showVoiceModelScreen: Boolean = false,
+    val asrBackend: com.example.meowmba.core.audio.AsrBackend =
+        com.example.meowmba.core.audio.AsrBackend.DEFAULT,
+    /** Per-backend availability, with a reason when unavailable. */
+    val asrBackendStatuses: List<com.example.meowmba.core.audio.AsrBackendStatus> = emptyList(),
+    /** Model id used when the cloud backend is selected. */
+    val asrCloudModel: String = com.example.meowmba.core.audio.AsrBackend.DEFAULT_GEMINI_MODEL,
+    val projects: List<ProjectUi> = emptyList(),
+    val activeProjectId: Long? = null,
+    val activeProjectName: String? = null,
+    val activeConversationId: Long = 0L,
 
     /** Obsidian-style vault notes screen. */
     val showVaultScreen: Boolean = false,
@@ -266,6 +320,8 @@ data class CompanionState(
     val cameraPermissionRequested: Boolean = false,
     /** Locations: set when saving a named place needs location permission. */
     val locationPermissionRequested: Boolean = false,
+    /** Cleanup: set when scanning photos/files needs media permission. */
+    val mediaPermissionRequested: Boolean = false,
     /** Vision: thumbnail of the last captured frame (shown while describing). */
     val capturedFrame: android.graphics.Bitmap? = null,
     /** Vision: show live camera preview. */
@@ -372,7 +428,11 @@ fun faceModeActive(state: CompanionState): Boolean =
         !state.showWeatherScreen &&
         !state.showNavScreen &&
         !state.showAvatarScreen &&
-        !state.showVaultScreen
+        !state.showVaultScreen &&
+        !state.showProjectsScreen &&
+        !state.showToolsScreen &&
+        !state.showVoiceModelScreen &&
+        !state.showAppDrawer
 
 /**
  * Additive animation signal for the car: what the cat is reacting to right now.

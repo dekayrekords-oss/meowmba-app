@@ -77,8 +77,10 @@ fun PrivacyDashboard(
 
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = "Phase 1 processes data locally on your device. Cloud model providers " +
-                    "are clearly marked in Settings and only activate after you enter a key.",
+                text = "Voice, camera, chat, memories, and API keys stay on this phone unless " +
+                    "you turn on a cloud brain or a LAN server in Settings. Keys are encrypted " +
+                    "on device. Cloud backup of chat and keys is off. HTTP is only allowed on " +
+                    "your own network; everything else must be HTTPS.",
                 style = MaterialTheme.typography.bodySmall,
                 color = Color.Gray
             )

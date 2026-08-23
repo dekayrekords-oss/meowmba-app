@@ -71,6 +71,7 @@ class ClockAnswersTest {
         val bare = PromptBuilder.build("Meow", "hi", emptyList(), emptyList())
         assertTrue(bare.contains("The current time and date right now"))
         assertTrue(bare.contains("never guess"))
+        assertTrue(bare.contains("Never say you don't understand"))
     }
 
     @Test

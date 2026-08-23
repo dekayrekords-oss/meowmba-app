@@ -135,13 +135,24 @@ class VisionPipelineTest {
 
     @Test
     fun `network selection without a configured vision endpoint stays honest`() = runTest {
-        // Standalone app: no home server to fall back on — vision reports
+        // Standalone app: no home server and no OpenRouter key — vision reports
         // nothing rather than dialing a hardcoded LAN address.
         val vm = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
 
         vm.onModelSelected("OpenRouter (Cloud)")
 
         assertNull(vm.visionProviderFor())
+        assertNull(vm.browserVisionProvider())
+    }
+
+    @Test
+    fun `openrouter key uses a dedicated vision model for the browser`() = runTest {
+        `when`(mockSecureStorage.getApiKey("openrouter")).thenReturn("sk-or-test")
+        val vm = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
+        vm.onModelSelected("OpenRouter (Cloud)")
+        val provider = vm.browserVisionProvider()
+        assertTrue(provider is OpenAIVisionProvider)
+        assertEquals("OpenRouter vision", provider!!.name)
     }
 
     @Test

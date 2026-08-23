@@ -7,9 +7,10 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.os.Build
+import android.content.pm.ServiceInfo
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.example.meowmba.MainActivity
 import com.example.meowmba.R
@@ -217,10 +218,24 @@ class WakeWordService : Service() {
         return START_NOT_STICKY
     }
 
+    /**
+     * targetSdk 36 / Android 16: startForeground(id, notif) without a type
+     * throws, the catch used to return, and the platform then killed the
+     * whole process (ForegroundServiceDidNotStartInTimeException). Always
+     * pass the microphone type declared in the manifest.
+     */
+    private fun enterForeground(notification: Notification) {
+        ServiceCompat.startForeground(
+            this,
+            FG_ID,
+            notification,
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE,
+        )
+    }
+
     /** True once the service is genuinely foreground. Never throws. */
     private fun promoteToForeground(): Boolean = try {
-        startForeground(
-            FG_ID,
+        enterForeground(
             buildPersistentNotification("Listening for \"Hey ${companionName()}\"")
         )
         isForeground = true
@@ -314,14 +329,12 @@ class WakeWordService : Service() {
         android.util.Log.i("WakeWordService", "follow-up capture armed")
         // Reflect the conversation turn in the ongoing notification.
         runCatching {
-            startForeground(FG_ID, buildPersistentNotification("Listening for your reply…"))
+            enterForeground(buildPersistentNotification("Listening for your reply…"))
         }
         // The wake spotter and the recognizer must not fight over the mic.
-        wakeEngine?.stop()
-        // Give the companion's short acknowledgement TTS ("Playing sublime…") a
-        // beat to finish, otherwise the recognizer opens on top of it and can
-        // capture Meow's own voice as the user's reply.
+        // Join the capture loop so AudioRecord is released before STT binds.
         scope.launch {
+            wakeEngine?.stopAndAwait()
             delay(FOLLOW_UP_SETTLE_MS)
             if (capturingCommand) startFollowUpListen()
         }
@@ -426,13 +439,14 @@ class WakeWordService : Service() {
 
     private fun acknowledgeAndDeliver(command: String, launchNow: Boolean = false) {
         wakeEngine?.stop()
-        // Skip "One moment" when the phone-control loop is active — it handles its own TTS.
-        if (com.example.meowmba.core.agent.PhoneAgentLoop.activeGoal == null) {
-            tts.speak("One moment.")
-        }
         if (launchNow) {
             deliverToApp(command)
-        } else if (!tryRunInstantCommand(command)) {
+        } else if (tryRunInstantCommand(command)) {
+            // App already launching — do not say "One moment."
+        } else {
+            if (com.example.meowmba.core.agent.PhoneAgentLoop.activeGoal == null) {
+                tts.speak("One moment.")
+            }
             notifyCommand(command)
         }
         wakeEngine?.start()
@@ -455,11 +469,10 @@ class WakeWordService : Service() {
         // Open / launch an app. Only when a real installed app matches — a miss
         // falls through so "start listening" or "open up about your feelings"
         // never get eaten here.
-        val appName = APP_OPEN_PREFIXES.firstOrNull { text.startsWith(it) }
-            ?.let { text.removePrefix(it).trim() }
-            ?.takeIf { it.isNotBlank() && it.split(' ').size <= 5 }
-        if (appName != null) {
-            if (InstalledApps.find(this, appName) != null) {
+        val routed = com.example.meowmba.core.agent.runtime.AgentRouter.route(command)
+        if (routed?.toolId == "phone.launch_app") {
+            val appName = routed.args["name"].orEmpty()
+            if (appName.isNotBlank() && InstalledApps.find(this, appName) != null) {
                 runInstant { LaunchAppTool(applicationContext).execute(mapOf("name" to appName)) }
                 return true
             }

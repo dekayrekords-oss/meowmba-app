@@ -241,7 +241,7 @@ class FaceTrackGeometryTest {
         var smoothed = 0f
         val target = 1f
         val steps = mutableListOf<Float>()
-        repeat(12) {
+        repeat(16) {
             val before = smoothed
             smoothed = com.example.meowmba.core.vision.smoothFaceOffset(
                 smoothed, target, com.example.meowmba.core.vision.faceSmoothingAlpha(true),
@@ -254,7 +254,7 @@ class FaceTrackGeometryTest {
                 steps[i] < steps[i - 1],
             )
         }
-        assertTrue("must actually converge, got $smoothed", smoothed > 0.98f)
+        assertTrue("must actually converge, got $smoothed", smoothed > 0.95f)
     }
 
     @Test

@@ -453,9 +453,9 @@ even after the app dies; only restarting AiAi itself (or a failover) recovers vo
 
 <!-- AUTOBUILD:START -->
 (regenerated after each commit)
-- 2026-08-12 13:31:09 : fix(robot): restore 17-byte turns; encode right as subOp 1
+- 2026-08-12 16:16:44 : feat(vision,robot): social cues, settled face lock, cooler tracking
+- bb6e8ce 2026-08-12 13:30 fix(robot): restore 17-byte turns; encode right as subOp 1
 - 9b8cb97 2026-08-12 11:52 fix(robot): right turn uses the captured tread script, not 0x07
 - 52b9768 2026-08-12 11:47 feat(robot): LOOI keeps the person in frame
 - 0222125 2026-08-12 11:44 feat(robot): drive LOOI neck and base from face tracking
-- 23c2b6b 2026-08-12 11:31 fix(vision): landscape was detected but then zeroed and axis-swapped
 <!-- AUTOBUILD:END -->

@@ -18,6 +18,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.meowmba.core.agent.OpenRouterModel
+import com.example.meowmba.core.agent.OpenRouterModels
 import com.example.meowmba.core.bridge.DesktopBridgeManager
 import com.example.meowmba.core.security.SecureStorageManager
 import kotlinx.coroutines.launch
@@ -35,9 +37,10 @@ fun SettingsScreen(
     conversationMode: Boolean = false,
     bargeInEnabled: Boolean = true,
     routines: List<RoutineUi> = emptyList(),
-    keepScreenOnInFaceMode: Boolean = true,
+    keepScreenOnInFaceMode: Boolean = false,
     watchModeEnabled: Boolean = false,
     commentaryEnabled: Boolean = false,
+    roadAlertsEnabled: Boolean = false,
     agentBrainEnabled: Boolean = true,
     hermesAgentUrl: String = "",
     imageServerUrl: String = "",
@@ -83,6 +86,7 @@ fun SettingsScreen(
     onKeepScreenOnChange: (Boolean) -> Unit = {},
     onWatchModeChange: (Boolean) -> Unit = {},
     onCommentaryChange: (Boolean) -> Unit = {},
+    onRoadAlertsChange: (Boolean) -> Unit = {},
     onAgentBrainChange: (Boolean) -> Unit = {},
     onHermesUrlChange: (String) -> Unit = {},
     onDownloadImageModel: () -> Unit = {},
@@ -111,6 +115,21 @@ fun SettingsScreen(
     var hfToken by remember { mutableStateOf(secureStorage.getApiKey("huggingface") ?: "") }
     var openrouterKey by remember { mutableStateOf(secureStorage.getApiKey("openrouter") ?: "") }
     var openrouterModel by remember { mutableStateOf(secureStorage.getModelName("openrouter") ?: "nvidia/nemotron-3-super-120b-a12b:free") }
+    var openrouterVision by remember {
+        mutableStateOf(secureStorage.getModelName("openrouter_vision") ?: "google/gemini-2.5-flash")
+    }
+    var openRouterCatalog by remember { mutableStateOf<List<OpenRouterModel>>(emptyList()) }
+    var openRouterCatalogNote by remember { mutableStateOf("Loading models…") }
+    val settingsScope = rememberCoroutineScope()
+    LaunchedEffect(Unit) {
+        OpenRouterModels.fetch(openrouterKey.ifBlank { null }).fold(
+            onSuccess = { list ->
+                openRouterCatalog = list
+                openRouterCatalogNote = "${list.size} models from OpenRouter"
+            },
+            onFailure = { openRouterCatalogNote = "Couldn't load models: ${it.message?.take(80)}" },
+        )
+    }
     var localModelPath by remember { mutableStateOf(secureStorage.getEndpoint("local") ?: "/data/local/tmp/llm/gemma.bin") }
     var showAdvanced by remember { mutableStateOf(false) }
 
@@ -158,7 +177,8 @@ fun SettingsScreen(
             VoiceToggle(
                 label = "Always-on mic in face mode",
                 description = "Keeps the mic live while the companion face is up: just talk, " +
-                    "no wake phrase needed. Turn off to require the wake phrase in face mode.",
+                    "no wake phrase needed. When Meow sees you, the mic stays on either way " +
+                    "and listens a bit longer so mid-sentence pauses are not cut off.",
                 checked = !requireWakeWordInFace,
                 onCheckedChange = { onRequireWakeInFaceChange(!it) }
             )
@@ -172,8 +192,8 @@ fun SettingsScreen(
             )
             VoiceToggle(
                 label = "Keep screen on in face mode",
-                description = "Prevents the display from sleeping while the companion face " +
-                    "is showing, so Meow stays visible like a desk pet.",
+                description = "Prevents the display from sleeping while the face is up. " +
+                    "Uses a lot of battery — leave off unless this is a plugged-in desk pet.",
                 checked = keepScreenOnInFaceMode,
                 onCheckedChange = onKeepScreenOnChange
             )
@@ -189,6 +209,13 @@ fun SettingsScreen(
                 description = "While watching, Meow may speak a short helpful comment now and then (max once every 5 minutes).",
                 checked = commentaryEnabled,
                 onCheckedChange = onCommentaryChange
+            )
+            VoiceToggle(
+                label = "Road alerts",
+                description = "Uses GPS to pull nearby police, speed cameras, and hazards " +
+                    "from the live map. No Waze or Maps route needed. Asks for location.",
+                checked = roadAlertsEnabled,
+                onCheckedChange = onRoadAlertsChange
             )
 
             VoiceToggle(
@@ -702,6 +729,10 @@ fun SettingsScreen(
                 label = { Text("API Key") },
                 modifier = Modifier.fillMaxWidth()
             )
+            ApiKeyLink(
+                url = "https://platform.openai.com/api-keys",
+                label = "Get an OpenAI API key",
+            )
 
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -710,8 +741,12 @@ fun SettingsScreen(
             SettingsTextField(
                 value = opencodeKey,
                 onValueChange = { opencodeKey = it },
-                label = { Text("OpenCode Zen API key (free at opencode.ai/zen)") },
+                label = { Text("OpenCode Zen API key") },
                 modifier = Modifier.fillMaxWidth()
+            )
+            ApiKeyLink(
+                url = "https://opencode.ai/zen",
+                label = "Get a BigPickle / OpenCode Zen key",
             )
             Spacer(modifier = Modifier.height(8.dp))
             Box {
@@ -735,8 +770,12 @@ fun SettingsScreen(
             SettingsTextField(
                 value = hfToken,
                 onValueChange = { hfToken = it },
-                label = { Text("Token (for gated models like Gemma — free at huggingface.co/settings/tokens)") },
+                label = { Text("Token (for gated models like Gemma)") },
                 modifier = Modifier.fillMaxWidth()
+            )
+            ApiKeyLink(
+                url = "https://huggingface.co/settings/tokens",
+                label = "Get a Hugging Face token",
             )
             
             Spacer(modifier = Modifier.height(24.dp))
@@ -748,16 +787,52 @@ fun SettingsScreen(
             SettingsTextField(
                 value = openrouterKey,
                 onValueChange = { openrouterKey = it },
-                label = { Text("API key (free at openrouter.ai/keys)") },
+                label = { Text("API key") },
                 modifier = Modifier.fillMaxWidth()
+            )
+            ApiKeyLink(
+                url = "https://openrouter.ai/keys",
+                label = "Get an OpenRouter API key",
             )
             Spacer(modifier = Modifier.height(8.dp))
-            SettingsTextField(
-                value = openrouterModel,
-                onValueChange = { openrouterModel = it },
-                label = { Text("Model (any OpenRouter id, e.g. nvidia/nemotron-3-super-120b-a12b:free)") },
-                modifier = Modifier.fillMaxWidth()
+            OpenRouterModelPicker(
+                label = "Chat model",
+                selectedId = openrouterModel,
+                models = openRouterCatalog,
+                onSelect = { openrouterModel = it },
             )
+            Spacer(modifier = Modifier.height(8.dp))
+            OpenRouterModelPicker(
+                label = "Vision model",
+                selectedId = openrouterVision,
+                models = openRouterCatalog.filter { it.vision },
+                onSelect = { openrouterVision = it },
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    openRouterCatalogNote,
+                    color = Color.Gray,
+                    fontSize = 12.sp,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = {
+                    openRouterCatalogNote = "Loading models…"
+                    settingsScope.launch {
+                        OpenRouterModels.fetch(openrouterKey.ifBlank { null }).fold(
+                            onSuccess = { list ->
+                                openRouterCatalog = list
+                                openRouterCatalogNote = "${list.size} models from OpenRouter"
+                            },
+                            onFailure = {
+                                openRouterCatalogNote = "Couldn't load models: ${it.message?.take(80)}"
+                            },
+                        )
+                    }
+                }) { Text("Refresh") }
+            }
             
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -837,6 +912,7 @@ fun SettingsScreen(
                     secureStorage.saveApiKey("huggingface", hfToken)
                     secureStorage.saveApiKey("openrouter", openrouterKey)
                     secureStorage.saveModelName("openrouter", openrouterModel)
+                    secureStorage.saveModelName("openrouter_vision", openrouterVision)
                     secureStorage.saveEndpoint("local", localModelPath)
                     onSaved()
                     onClose()
@@ -1201,6 +1277,92 @@ fun VoiceToggle(
         Spacer(modifier = Modifier.width(16.dp))
         Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun OpenRouterModelPicker(
+    label: String,
+    selectedId: String,
+    models: List<OpenRouterModel>,
+    onSelect: (String) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
+    val selected = models.firstOrNull { it.id == selectedId }
+    val display = selected?.let { "${it.name}${if (it.free) " · free" else ""}" } ?: selectedId
+    val shown = remember(models, query) {
+        val q = query.trim()
+        val base = if (q.isEmpty()) models else models.filter {
+            it.id.contains(q, ignoreCase = true) || it.name.contains(q, ignoreCase = true)
+        }
+        base.take(80)
+    }
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+    ) {
+        TextField(
+            value = if (expanded) query else display,
+            onValueChange = { query = it; expanded = true },
+            label = { Text(label) },
+            placeholder = { Text("Type to search", color = Color.Gray) },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .menuAnchor(),
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = Color(0xFF1E1E1E),
+                unfocusedContainerColor = Color(0xFF1E1E1E),
+                focusedTextColor = Color.White,
+                unfocusedTextColor = Color.White,
+            ),
+        )
+        ExposedDropdownMenu(
+            expanded = expanded && shown.isNotEmpty(),
+            onDismissRequest = { expanded = false; query = "" },
+        ) {
+            shown.forEach { model ->
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(model.name, color = Color.White)
+                            Text(
+                                model.id + if (model.free) " · free" else "",
+                                color = Color.Gray,
+                                fontSize = 11.sp,
+                            )
+                        }
+                    },
+                    onClick = {
+                        onSelect(model.id)
+                        query = ""
+                        expanded = false
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ApiKeyLink(url: String, label: String) {
+    val context = LocalContext.current
+    Text(
+        text = label,
+        color = Color(0xFF58A6FF),
+        fontSize = 13.sp,
+        modifier = Modifier
+            .padding(top = 4.dp)
+            .clickable {
+                runCatching {
+                    context.startActivity(
+                        Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    )
+                }
+            },
+    )
 }
 
 @Composable

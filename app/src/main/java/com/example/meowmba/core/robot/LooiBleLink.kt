@@ -117,17 +117,17 @@ class LooiBleLink(private val context: Context) {
         setState(LinkState.SCANNING, "scanning for LOOI…")
         val started = runCatching { adapter?.bluetoothLeScanner?.startScan(scanCallback) }.isSuccess
         if (!started) {
-            Log.w(TAG, "BLE scan unavailable (permission/stack) — direct connect to $KNOWN_LOOI_MAC")
+            Log.w(TAG, "BLE scan unavailable — not pretending a LOOI is here")
             stopScanner()
-            connect(KNOWN_LOOI_MAC)
+            setState(LinkState.OFFLINE, "can't scan for a base")
             return
         }
         scope.launch {
             delay(SCAN_TIMEOUT_MS)
             if (state == LinkState.SCANNING) {
-                Log.w(TAG, "LOOI scan timed out — trying direct connect to $KNOWN_LOOI_MAC")
+                Log.w(TAG, "LOOI scan timed out — no base in range")
                 stopScanner()
-                connect(KNOWN_LOOI_MAC)
+                setState(LinkState.OFFLINE, "no LOOI in range")
             }
         }
     }
@@ -319,7 +319,7 @@ class LooiBleLink(private val context: Context) {
         } ?: return
         keepAliveJob = scope.launch {
             while (true) {
-                delay(3_000)
+                delay(12_000)
                 val g = gatt ?: break
                 if (!gattOpInFlight) runCatching { g.readCharacteristic(readable) }
             }

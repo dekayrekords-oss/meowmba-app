@@ -52,6 +52,34 @@ class BrowserAgentLoopTest {
     }
 
     @Test
+    fun `a markdown html fence is treated as inject`() {
+        val a = BrowserAgentLoop.parseAction(
+            "Here you go:\n```html\n<!doctype html><html><body><h1>Bakery</h1></body></html>\n```"
+        )
+        assertNotNull(a)
+        assertEquals("inject", a!!.type)
+        assertTrue(a.html!!.contains("Bakery"))
+    }
+
+    @Test
+    fun `a raw html document is treated as inject`() {
+        val a = BrowserAgentLoop.parseAction(
+            "<!doctype html><html><body><p>Hi</p></body></html>"
+        )
+        assertEquals("inject", a!!.type)
+        assertTrue(a.html!!.contains("<p>Hi</p>"))
+    }
+
+    @Test
+    fun `scaffold is a dark page named after the goal`() {
+        val html = BrowserAgentLoop.scaffoldHtml("create a website for the bakery")
+        assertTrue(html.contains("<!doctype html>"))
+        assertTrue(html.contains("#0d1117"))
+        assertTrue(html.contains("Bakery"))
+        assertEquals("Bakery", BrowserAgentLoop.topicFromGoal("make a web site for the bakery"))
+    }
+
+    @Test
     fun `malformed json returns null not crash`() {
         assertNull(BrowserAgentLoop.parseAction("""{"action":"click","selector":"""))
     }
@@ -75,5 +103,38 @@ class BrowserAgentLoopTest {
     fun `scroll parses pixels`() {
         val a = BrowserAgentLoop.parseAction("""{"action":"scroll","pixels":-600}""")
         assertEquals(-600, a!!.pixels)
+    }
+
+    @Test
+    fun `scrape action parses a save name`() {
+        val a = BrowserAgentLoop.parseAction("""{"action":"scrape","name":"news"}""")
+        assertEquals("scrape", a!!.type)
+        assertEquals("news", a.name)
+        val prompt = BrowserAgentLoop.planPrompt("scrape this page", "<p>hi</p>", 0)
+        assertTrue(prompt.contains("scrape"))
+    }
+
+    @Test
+    fun `planner uses the text brain when vision is missing`() {
+        val json = """{"action":"inject","html":"<h1>Hi</h1>"}"""
+        assertEquals(json, BrowserAgentLoop.pickPlanner(json, null))
+        assertEquals("vision", BrowserAgentLoop.pickPlanner(null, "vision"))
+        assertNull(BrowserAgentLoop.pickPlanner(null, null))
+        assertTrue(BrowserAgentLoop.isDirectScrape("scrape this page"))
+        assertTrue(BrowserAgentLoop.isDirectScrape("extract the text"))
+        assertTrue(!BrowserAgentLoop.isDirectScrape("make a page about cats"))
+    }
+
+    @Test
+    fun `build goals refuse done before a look`() {
+        assertTrue(BrowserAgentLoop.isBuildGoal("make a page about cats"))
+        assertTrue(BrowserAgentLoop.shouldRefuseDone(isBuild = true, looksTaken = 0))
+        assertTrue(!BrowserAgentLoop.shouldRefuseDone(isBuild = true, looksTaken = 1))
+        val look = BrowserAgentLoop.lookPrompt("make a page about cats", "<p>hi</p>", 1)
+        assertTrue(look.contains("SCREENSHOT"))
+        assertTrue(look.contains("white"))
+        val plan = BrowserAgentLoop.planPrompt("make a page about cats", "", 0)
+        assertTrue(plan.contains("dark canvas"))
+        assertTrue(plan.contains("never a white document"))
     }
 }

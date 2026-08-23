@@ -131,6 +131,17 @@ class MemoryCoreTest {
     }
 
     @Test
+    fun `known speaker name is a standing fact in the prompt`() {
+        val prompt = PromptBuilder.build(
+            "Meow", "what's my name?", emptyList(), emptyList(),
+            speakerName = "bob",
+        )
+        assertTrue(prompt.contains("Their name is Bob"))
+        val stranger = PromptBuilder.build("Meow", "hi", emptyList(), emptyList())
+        assertTrue(!stranger.contains("Their name is"))
+    }
+
+    @Test
     fun `the capabilities block forbids faking tool results`() {
         // Measured on device: with tool results in its history, the chat model
         // mimicked them — fabricating `Playing "head tilt" (30ms)` when no task ran.

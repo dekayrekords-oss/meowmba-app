@@ -490,30 +490,25 @@ fun AvatarRenderer(
     val gazeSpec = if (trackingNow && chaseHard) {
         spring<Float>(
             dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMedium,
+            stiffness = Spring.StiffnessHigh,
         )
     } else if (trackingNow) {
         spring<Float>(
-            dampingRatio = 0.92f,
-            stiffness = Spring.StiffnessLow,
+            dampingRatio = 0.86f,
+            stiffness = Spring.StiffnessMedium,
         )
     } else {
         tween(500)
     }
     val gazeX by animateFloatAsState(screenGazeX, gazeSpec, label = "gazeX")
     val gazeY by animateFloatAsState(screenGazeY, gazeSpec, label = "gazeY")
-    // ── Eyes lead, head follows ────────────────────────────────────────────
-    // The same value used to drive the pupils AND the head pan, so both
-    // arrived together and the whole face moved as one rigid plate. Living
-    // things point their eyes first and bring the skull around after — the
-    // delay is small (~150ms) but its absence is most of why procedural faces
-    // read as mechanical. A softer spring on the head gives the lag plus a
-    // little settle at the end of the turn for free.
-    val headFollowSpec = if (trackingNow && chaseHard) {
-        spring<Float>(dampingRatio = 0.86f, stiffness = Spring.StiffnessMedium)
-    } else {
-        spring<Float>(dampingRatio = 0.92f, stiffness = Spring.StiffnessLow)
-    }
+    // Skull follows the live box. GazeSettle used to snap X to 0 inside a
+    // 0.14 deadzone, which read as chop each time the face crossed it.
+    // EMA + this spring is the jitter filter.
+    val headFollowSpec = spring<Float>(
+        dampingRatio = 0.90f,
+        stiffness = if (chaseHard) Spring.StiffnessHigh else Spring.StiffnessMedium,
+    )
     val headFollowX by animateFloatAsState(screenGazeX, headFollowSpec, label = "headFollowX")
     val headFollowY by animateFloatAsState(screenGazeY, headFollowSpec, label = "headFollowY")
     // Ramped tracking weight. A face appearing/disappearing used to flip the
@@ -745,7 +740,7 @@ fun AvatarRenderer(
         // Face lock must not slide the whole cat. Only a waved hand (chaseHard)
         // is allowed to pull the body; otherwise the pupils glance and the
         // head stays planted.
-        val bodyGaze = if (chaseHard) 0.03f + 0.07f * trackingWeight else 0f
+        val bodyGaze = if (chaseHard) 0.06f + 0.12f * trackingWeight else 0f
         // Idle gaze wander only when not face-tracking. Driven by saccades
         // (fixate → hold → glance) instead of continuous sine drift; the
         // movement itself prevents burn-in on always-on displays.
@@ -783,13 +778,16 @@ fun AvatarRenderer(
             val tracking = faceGazeX != null || heldFaceGaze != null || recentlyTracking
             // A locked face used to pan the WHOLE head by up to ~0.32 R — box
             // jitter of 0.2 looked like the cat jumping around the screen.
-            // Face lock: plant the body, glance with the eyes.
-            // Hand chase: the body may follow, but at a smaller throw.
-            val bodyK = if (chaseHard) trackingWeight else 0f
-            val bodyPanX = headFollowX * R * (0.10f * bodyK) + leanAnim * R * 0.30f
-            val bodyPanY = lurchAnim * R * 0.20f
-            val bodyTilt = ((headFollowX * 8f).coerceIn(-12f, 12f) * bodyK +
-                leanAnim * 14f).coerceIn(-20f, 20f)
+            // Face lock used to plant the skull and only flick the pupils —
+            // looked like tracking was off. Head now follows the live box;
+            // a hand wave still throws farther (chaseHard).
+            val bodyK = trackingWeight
+            val throwX = if (chaseHard) 0.34f else 0.16f
+            val throwY = if (chaseHard) 0.10f else 0.02f
+            val bodyPanX = headFollowX * R * (throwX * bodyK) + leanAnim * R * 0.30f
+            val bodyPanY = headFollowY * R * (throwY * bodyK) + lurchAnim * R * 0.20f
+            val bodyTilt = ((headFollowX * (if (chaseHard) 14f else 8f)).coerceIn(-16f, 16f) * bodyK +
+                leanAnim * 14f).coerceIn(-22f, 22f)
             val godotHeadSize = (1f + lurchAnim * 0.08f).coerceIn(0.92f, 1.08f)
             // Pupils track hard — body pan carries the head, iris must still
             // glance toward the user inside the sockets (0.50 looked static).

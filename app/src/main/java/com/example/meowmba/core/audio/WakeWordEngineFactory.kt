@@ -2,6 +2,7 @@ package com.example.meowmba.core.audio
 
 import android.content.Context
 import kotlinx.coroutines.CoroutineScope
+import java.io.File
 
 /**
  * Chooses the wake-word implementation.
@@ -136,14 +137,22 @@ object WakeWordEngineFactory {
         return engine to verifier
     }
 
-    /** Reads tokens.txt from assets; null means the model is not bundled. */
-    private fun readVocab(context: Context): Set<String>? = try {
-        context.assets.open("${SherpaKwsEngine.DEFAULT_MODEL_DIR}/tokens.txt")
-            .bufferedReader()
-            .useLines { KwsKeywords.parseVocab(it) }
-            .takeIf { it.isNotEmpty() }
-    } catch (e: Exception) {
-        // No assets (or a test double with no AssetManager): fall back quietly.
-        null
+    /** Reads tokens.txt from the on-disk pack, then from debug assets. */
+    private fun readVocab(context: Context): Set<String>? {
+        val onDisk = File(VoiceModelStore(context).kwsDir, VoiceModelPack.TOKENS)
+        if (onDisk.isFile) {
+            return runCatching {
+                onDisk.bufferedReader().useLines { KwsKeywords.parseVocab(it) }
+                    .takeIf { it.isNotEmpty() }
+            }.getOrNull()
+        }
+        return try {
+            context.assets.open("${SherpaKwsEngine.DEFAULT_MODEL_DIR}/tokens.txt")
+                .bufferedReader()
+                .useLines { KwsKeywords.parseVocab(it) }
+                .takeIf { it.isNotEmpty() }
+        } catch (e: Exception) {
+            null
+        }
     }
 }

@@ -40,7 +40,9 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 class SpeechService(context: Context) : SpeechEngine {
 
-    override val isAvailable: Boolean = SpeechRecognizer.isRecognitionAvailable(context)
+    override val isAvailable: Boolean =
+        SpeechRecognizer.isOnDeviceRecognitionAvailable(context) ||
+            SpeechRecognizer.isRecognitionAvailable(context)
 
     /**
      * ONE recognizer connection for the whole process.
@@ -67,6 +69,13 @@ class SpeechService(context: Context) : SpeechEngine {
 
     override fun startListening(onResult: (String) -> Unit, onError: (Int) -> Unit) =
         interactive.startListening(onResult, onError)
+
+    override fun setFocusedListening(on: Boolean) {
+        interactive.setFocusedListening(on)
+    }
+
+    /** Last ~2s of recognizer PCM when the service delivers buffers. */
+    fun lastHeardPcm(): ShortArray = interactive.lastHeardPcm()
 
     override fun stopListening() = interactive.stopListening()
 
@@ -102,10 +111,27 @@ class SpeechService(context: Context) : SpeechEngine {
 
     private class SessionEngine(private val ctx: Context) : SpeechEngine {
 
-        override val isAvailable: Boolean = SpeechRecognizer.isRecognitionAvailable(ctx)
+        override val isAvailable: Boolean =
+            SpeechRecognizer.isOnDeviceRecognitionAvailable(ctx) ||
+                SpeechRecognizer.isRecognitionAvailable(ctx)
 
-        private var component: ComponentName? = recognitionService(ctx)
         private var candidateIndex = 0
+        private var component: ComponentName? = null
+        private var allowPlatformDefault = false
+        // Previous (working) path: bind AiAi / an explicit RecognitionService.
+        // createOnDeviceSpeechRecognizer + Google Voice Search first is what
+        // painted the Google listening UI over the whole face.
+        private var bindOnDevice = false
+
+        init {
+            val candidates = recognitionCandidates(ctx)
+            component = candidates.firstOrNull()
+            allowPlatformDefault = candidates.isNotEmpty() && component == null
+            Log.i(
+                TAG,
+                "engine init onDevice=$bindOnDevice component=${component?.flattenToShortString()}",
+            )
+        }
 
         private var recognizer: SpeechRecognizer? = null
 
@@ -160,9 +186,15 @@ class SpeechService(context: Context) : SpeechEngine {
          * until it refuses everyone.
          */
         fun yieldSession() {
+            // Settle time is only owed when a session the service was actively
+            // processing is being torn down. Defensive stops against an idle
+            // engine (they happen constantly — every stopAlwaysOnListening,
+            // mic-mode switch, wake re-arm) must NOT arm the 500ms settle, or
+            // the next real start inherits a dead half-second of deafness.
+            val hadLiveSession = _isListening.value
             runCatching { recognizer?.cancel() }
             startEpoch++
-            lastInterruptAtMs = System.currentTimeMillis()
+            if (hadLiveSession) lastInterruptAtMs = System.currentTimeMillis()
             // Silence this engine BEFORE the cancel artifact can arrive: the
             // gate is what makes "the loser gets no onError" true now that the
             // recognizer is no longer destroyed out from under its callbacks.
@@ -177,7 +209,28 @@ class SpeechService(context: Context) : SpeechEngine {
         }
 
          private fun buildRecognizer(): SpeechRecognizer? {
-             if (!isAvailable) return null
+             // Prefer the official on-device API. Binding Google TTS's
+             // RecognitionService (the Fold's voice_recognition_service) is
+             // ERROR_CLIENT / NO_MATCH; Google Voice Search is ERROR_TOO_MANY
+             // REQUESTS. createOnDeviceSpeechRecognizer is a different path.
+             if (bindOnDevice) {
+                 val onDevice = runCatching {
+                     SpeechRecognizer.createOnDeviceSpeechRecognizer(ctx)
+                 }.getOrNull()
+                 if (onDevice != null) {
+                     liveRecognizers.incrementAndGet()
+                     Log.i(TAG, "recognizer bound, live=$liveRecognizers component=on-device")
+                     attachListener(onDevice)
+                     return onDevice
+                 }
+                 Log.w(TAG, "on-device recognizer unavailable — falling through")
+                 bindOnDevice = false
+             }
+             // Never call createSpeechRecognizer(ctx) with no component when
+             // ranking produced an empty list — that binds Settings.Secure
+             // voice_recognition_service, which is Google TTS on this Fold
+             // and fails every session with ERROR_CLIENT.
+             if (component == null && !allowPlatformDefault) return null
              return runCatching {
                  if (component != null) {
                      SpeechRecognizer.createSpeechRecognizer(ctx, component)
@@ -186,7 +239,7 @@ class SpeechService(context: Context) : SpeechEngine {
                  }
              }.getOrNull()?.also {
                  liveRecognizers.incrementAndGet()
-                 Log.i(TAG, "recognizer bound, live=$liveRecognizers")
+                 Log.i(TAG, "recognizer bound, live=$liveRecognizers component=$componentName")
                  attachListener(it)
              }
          }
@@ -199,6 +252,37 @@ class SpeechService(context: Context) : SpeechEngine {
 
         private var onResult: ((String) -> Unit)? = null
         private var onError: ((Int) -> Unit)? = null
+
+        private val heardPcmLock = Any()
+        private val heardPcm = ShortArray(HEARD_PCM_SAMPLES)
+        private var heardPcmAt = 0
+        private var heardPcmFull = false
+
+        fun lastHeardPcm(): ShortArray = synchronized(heardPcmLock) {
+            if (!heardPcmFull && heardPcmAt == 0) return ShortArray(0)
+            if (!heardPcmFull) return heardPcm.copyOf(heardPcmAt)
+            if (heardPcmAt == 0) return heardPcm.copyOf()
+            return ShortArray(heardPcm.size) { i ->
+                heardPcm[(heardPcmAt + i) % heardPcm.size]
+            }
+        }
+
+        private fun noteHeardPcm(buffer: ByteArray?) {
+            if (buffer == null || buffer.size < 2) return
+            synchronized(heardPcmLock) {
+                var i = 0
+                while (i + 1 < buffer.size) {
+                    val sample = ((buffer[i + 1].toInt() shl 8) or (buffer[i].toInt() and 0xff)).toShort()
+                    heardPcm[heardPcmAt] = sample
+                    heardPcmAt++
+                    if (heardPcmAt >= heardPcm.size) {
+                        heardPcmAt = 0
+                        heardPcmFull = true
+                    }
+                    i += 2
+                }
+            }
+        }
 
         private fun attachListener(r: SpeechRecognizer) {
             r.setRecognitionListener(object : RecognitionListener {
@@ -228,7 +312,9 @@ class SpeechService(context: Context) : SpeechEngine {
                     Log.i(TAG, "speech started")
                 }
                 override fun onRmsChanged(rmsdB: Float) {}
-                override fun onBufferReceived(buffer: ByteArray?) {}
+                override fun onBufferReceived(buffer: ByteArray?) {
+                    noteHeardPcm(buffer)
+                }
                 override fun onEndOfSpeech() {
                     Log.i(TAG, "<- onEndOfSpeech")
                     if (!gate.acceptSpeechEdge()) return
@@ -259,7 +345,8 @@ class SpeechService(context: Context) : SpeechEngine {
                     // cannot do, so fail over). Rebuild first, then move on.
                     if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY ||
                         error == SpeechRecognizer.ERROR_CLIENT ||
-                        error == SpeechRecognizer.ERROR_SERVER_DISCONNECTED
+                        error == SpeechRecognizer.ERROR_SERVER_DISCONNECTED ||
+                        error == SpeechRecognizer.ERROR_TOO_MANY_REQUESTS
                     ) {
                         consecutiveContention++
                         if (consecutiveContention >= CONTENTION_FAILOVER_THRESHOLD) {
@@ -294,21 +381,30 @@ class SpeechService(context: Context) : SpeechEngine {
                     consecutiveNeverReady = 0
                     consecutiveContention = 0
                     val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                    Log.i(TAG, "session result: ${matches?.firstOrNull()?.take(60) ?: "(empty)"}")
+                    val scores = results?.getFloatArray(SpeechRecognizer.CONFIDENCE_SCORES)
+                    val official = SpokenText.bestTranscript(matches, scores)
+                    // AiAi on this device often ends a session that HEARD speech
+                    // with an empty result. The last partial is the only copy of
+                    // the words — promote it so the caller does not have to wait
+                    // for a hang watchdog to recover them.
+                    val text = SpokenText.preferFinal(official, _partialResults.value)
+                    Log.i(TAG, "session result: ${text.take(60).ifEmpty { "(empty)" }}")
                     // Deliver even an empty transcript: consumers use the blank to
                     // learn the session ended on silence (quiet-open sessions end
                     // this way constantly) and must re-arm. Without it the
                     // always-on loop hears "session over" from nobody and its
                     // state (latch, interaction state) sticks forever.
-                    onResult?.invoke(matches?.firstOrNull()?.takeIf { it.isNotEmpty() } ?: "")
+                    onResult?.invoke(text)
                 }
                 override fun onPartialResults(partialResults: Bundle?) {
                     Log.i(TAG, "<- onPartialResults")
                     if (!gate.acceptPartial()) return
                     val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     if (!matches.isNullOrEmpty()) {
-                        Log.i(TAG, "   partial: \"${matches[0].take(80)}\"")
-                        _partialResults.value = matches[0]
+                        val scores = partialResults?.getFloatArray(SpeechRecognizer.CONFIDENCE_SCORES)
+                        val best = SpokenText.bestTranscript(matches, scores).ifBlank { matches[0] }
+                        Log.i(TAG, "   partial: \"${best.take(80)}\"")
+                        _partialResults.value = best
                     }
                 }
                 override fun onEvent(eventType: Int, params: Bundle?) {}
@@ -316,7 +412,18 @@ class SpeechService(context: Context) : SpeechEngine {
         }
 
         private val componentName: String
-            get() = component?.flattenToShortString() ?: "platform default"
+            get() = when {
+                bindOnDevice -> "on-device"
+                component != null -> component!!.flattenToShortString()
+                else -> "platform default"
+            }
+
+        @Volatile
+        private var focusedListening = false
+
+        override fun setFocusedListening(on: Boolean) {
+            focusedListening = on
+        }
 
         override fun startListening(onResult: (String) -> Unit, onError: (Int) -> Unit) {
             // Only ONE engine may hold a session at a time, process-wide.
@@ -401,6 +508,11 @@ class SpeechService(context: Context) : SpeechEngine {
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
+                putExtra(
+                    RecognizerIntent.EXTRA_LANGUAGE,
+                    java.util.Locale.getDefault().toLanguageTag(),
+                )
 
                 // Capture window. Android's defaults end a session after a beat of
                 // quiet, which cuts people off mid-sentence and makes the companion
@@ -412,26 +524,22 @@ class SpeechService(context: Context) : SpeechEngine {
                 // and helps on the ones that do listen.
                 putExtra(
                     RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS,
-                    COMPLETE_SILENCE_MS,
+                    if (focusedListening) FOCUS_COMPLETE_SILENCE_MS else COMPLETE_SILENCE_MS,
                 )
                 putExtra(
                     RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS,
-                    POSSIBLY_COMPLETE_SILENCE_MS,
+                    if (focusedListening) FOCUS_POSSIBLY_COMPLETE_SILENCE_MS else POSSIBLY_COMPLETE_SILENCE_MS,
                 )
                 putExtra(
                     RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS,
-                    MINIMUM_SESSION_MS,
+                    if (focusedListening) FOCUS_MINIMUM_SESSION_MS else MINIMUM_SESSION_MS,
                 )
-                // Keep recognition on the device whenever possible (privacy-first).
-                //
-                // DIAGNOSTIC 2026-08-11: temporarily false. With this true, AiAi
-                // accepted onStartListening and then never called
-                // onReadyForSpeech — no ready, no result, no error, forever, at
-                // 5.5s per retry. That silence is the "mic and wake word do
-                // nothing" symptom. A missing on-device model is the leading
-                // explanation, since an unavailable offline model can stall
-                // instead of returning ERROR_LANGUAGE_UNAVAILABLE.
-                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, PREFER_OFFLINE)
+                // Keep recognition on the device when the engine can do it.
+                // Google Voice Search is a cloud backend — PREFER_OFFLINE there
+                // is a no-model stall, not privacy.
+                val preferOffline = PREFER_OFFLINE &&
+                    component?.packageName != GOOGLE_RECOGNITION_PACKAGE
+                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, preferOffline)
             }
             r.startListening(intent)
 
@@ -489,15 +597,12 @@ class SpeechService(context: Context) : SpeechEngine {
             }
         }
 
-        /** Moves to the next recognition service; returns false when none are left. */
-        private fun advanceCandidate(): Boolean {
-            val candidates = recognitionCandidates(ctx)
-            if (candidateIndex + 1 >= candidates.size) return false
-            candidateIndex++
-            component = candidates[candidateIndex]
-            rebindRecognizer()
-            return true
-        }
+        /**
+         * Recovery is Sherpa in the ViewModel, not another RecognitionService.
+         * Walking onto Google Voice Search is what painted the fullscreen
+         * listening UI over the face.
+         */
+        private fun advanceCandidate(): Boolean = false
 
         override fun swapCallbacks(onResult: (String) -> Unit, onError: (Int) -> Unit) {
             this.onResult = onResult
@@ -509,9 +614,14 @@ class SpeechService(context: Context) : SpeechEngine {
             // [startListening] is a cheap reopen on a known-good slot. Destroying
             // here would force a fresh connection (and a fresh slot) on the next
             // start, which is what overloads AiAi when sessions churn.
+            //
+            // Settle is armed ONLY when a live session actually existed — see
+            // [yieldSession]. Stopping an idle engine is a no-op on the service,
+            // so charging the settle window for it just taxes the next start.
+            val hadLiveSession = _isListening.value
             recognizer?.stopListening()
             startEpoch++
-            lastInterruptAtMs = System.currentTimeMillis()
+            if (hadLiveSession) lastInterruptAtMs = System.currentTimeMillis()
             _isListening.value = false
             releaseSessionSlot()
         }
@@ -561,6 +671,9 @@ class SpeechService(context: Context) : SpeechEngine {
 
         private const val TAG = "MeowmbaVoice"
 
+        /** Rolling capture for speaker ID — ~2s at 16 kHz mono 16-bit. */
+        private const val HEARD_PCM_SAMPLES = 16_000 * 2
+
         /**
          * Capture-window hints. ~2.5s of silence before a sentence is considered
          * finished, and sessions run at least 15s so a slow speaker is not cut off.
@@ -577,6 +690,9 @@ class SpeechService(context: Context) : SpeechEngine {
         private const val COMPLETE_SILENCE_MS = 2_500
         private const val POSSIBLY_COMPLETE_SILENCE_MS = 2_000
         private const val MINIMUM_SESSION_MS = 15_000
+        private const val FOCUS_COMPLETE_SILENCE_MS = 4_000
+        private const val FOCUS_POSSIBLY_COMPLETE_SILENCE_MS = 3_000
+        private const val FOCUS_MINIMUM_SESSION_MS = 20_000
 
         /**
          * How long a start may go without onReadyForSpeech before the engine is
@@ -673,45 +789,73 @@ class SpeechService(context: Context) : SpeechEngine {
          * whose preferred service turns out to be deaf can move to the next one
          * instead of looping forever on a wedged connection.
          *
-         * Order: Android System Intelligence, then the Google app, then whatever
-         * the system is configured to use, then anything else. The system
-         * setting is demoted rather than trusted first — it is exactly what
-         * pointed at the TTS service here.
+         * Order: Android System Intelligence (AiAi), then the Google app if it
+         * actually exposes a RecognitionService, then the system default if it
+         * is not denylisted. Never pin Google Voice Search first — binding
+         * GoogleRecognitionService (or launching ACTION_RECOGNIZE_SPEECH)
+         * paints the Google listening UI over the whole screen.
+         * Never append platform-default (`null`) when that default is Google TTS —
+         * createSpeechRecognizer(ctx) binds it and every session is ERROR_CLIENT.
          */
         fun recognitionCandidates(context: Context): List<ComponentName?> {
             val installed = runCatching {
                 context.packageManager.queryIntentServices(
-                    Intent(RecognitionService.SERVICE_INTERFACE), 0
+                    Intent(RecognitionService.SERVICE_INTERFACE),
+                    0,
                 )
             }.getOrDefault(emptyList())
                 .map { ComponentName(it.serviceInfo.packageName, it.serviceInfo.name) }
                 .filter { it.packageName !in DENYLISTED_PACKAGES }
 
-            val candidates = ArrayList<ComponentName?>()
-
-            // Prefer a general-purpose ASR provider.
-            installed.firstOrNull { it.packageName == AIAI_PACKAGE }?.let { candidates += it }
-            installed.firstOrNull { it.packageName == GOOGLE_RECOGNITION_PACKAGE }
-                ?.takeIf { it !in candidates }
-                ?.let { candidates += it }
-
-            // Then the system's own choice, if it is not the denylisted TTS one.
-            runCatching {
+            val systemDefault = runCatching {
                 Settings.Secure.getString(context.contentResolver, "voice_recognition_service")
             }.getOrNull()
                 ?.takeIf { it.isNotBlank() }
                 ?.let { ComponentName.unflattenFromString(it) }
+
+            val ranked = rankRecognitionCandidates(
+                installed = installed,
+                googleVoiceUsable = false,
+                systemDefault = systemDefault,
+            )
+            Log.i(
+                TAG,
+                "recognition candidates: ${ranked.joinToString { it?.flattenToShortString() ?: "platform-default" }} " +
+                    "(installed=${installed.joinToString { it.flattenToShortString() }}; " +
+                    "sysDefault=${systemDefault?.flattenToShortString()})",
+            )
+            return ranked
+        }
+
+        /**
+         * Pure ranking so the Fold case (TTS as system default) can be unit-tested.
+         * [googleVoiceUsable] is kept on the signature so old tests still compile;
+         * Voice Search is never added to the list (fullscreen overlay).
+         */
+        @Suppress("UNUSED_PARAMETER")
+        fun rankRecognitionCandidates(
+            installed: List<ComponentName>,
+            googleVoiceUsable: Boolean,
+            systemDefault: ComponentName?,
+        ): List<ComponentName?> {
+            val candidates = ArrayList<ComponentName?>()
+
+            installed.firstOrNull { it.packageName == AIAI_PACKAGE }
+                ?.let { candidates += it }
+            // Google Voice Search is never a candidate. Binding it draws the
+            // fullscreen Google listening UI over the face.
+
+            systemDefault
                 ?.takeIf { it.packageName !in DENYLISTED_PACKAGES }
+                ?.takeIf { it.packageName != GOOGLE_RECOGNITION_PACKAGE }
                 ?.takeIf { it !in candidates }
                 ?.let { candidates += it }
 
-            // Deliberately NOT falling through to arbitrary third-party assist
-            // services. Devices here expose Home Assistant's and Claude's
-            // RecognitionServices; both are assistant integrations, not general
-            // dictation back-ends, and both error immediately (5/9) when driven
-            // as one. The trailing null lets the platform pick instead of us
-            // binding something known-wrong.
-            candidates += null
+            if (candidates.isEmpty()) {
+                val defaultIsSafe = systemDefault == null ||
+                    systemDefault.packageName !in DENYLISTED_PACKAGES
+                if (defaultIsSafe) candidates += null
+            }
             return candidates
         }
 

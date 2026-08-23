@@ -90,9 +90,10 @@ class OllamaVisionProvider(
 class OpenAIVisionProvider(
     private val baseUrl: String,
     private val apiKey: String?,
-    private val model: String
+    private val model: String,
+    override val name: String = "OpenAI vision",
+    private val maxTokens: Int = 300,
 ) : VisionProvider {
-    override val name = "OpenAI vision"
 
     override suspend fun describe(jpegBytes: ByteArray, prompt: String): Result<String> {
         if (apiKey.isNullOrBlank()) {
@@ -101,7 +102,7 @@ class OpenAIVisionProvider(
         return try {
             val body = buildJsonObject {
                 put("model", model)
-                put("max_tokens", 300)
+                put("max_tokens", maxTokens)
                 put("messages", buildJsonArray {
                     add(buildJsonObject {
                         put("role", "user")
@@ -122,6 +123,8 @@ class OpenAIVisionProvider(
             }.toString()
             val response = visionClient.post("$baseUrl/v1/chat/completions") {
                 header(HttpHeaders.Authorization, "Bearer $apiKey")
+                header("HTTP-Referer", "https://meowmba.local")
+                header("X-Title", "MEOWMBA")
                 contentType(ContentType.Application.Json)
                 setBody(body)
             }

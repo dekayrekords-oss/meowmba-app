@@ -113,10 +113,16 @@ class UsbAutoBridgeManager(
     // ------------------------------------------------------------------
 
     private fun startScan() {
+        // A POWER_CONNECTED double-fire (or start() racing the sticky-battery
+        // check) used to overwrite [scanJob] while the previous scan still held
+        // UDP 8766: the replacement's bind then threw BindException straight
+        // out of an unhandled coroutine and killed the process. Always cancel
+        // the previous scan before starting a new one.
+        cancelScan()
         if (bridgeManager.isPaired()) {
             val current = bridgeManager.pairedBridge() ?: return
             // Already paired — check if it's reachable
-            scanJob = scope.launch {
+            scanJob = launchGuarded {
                 val ok = bridgeManager.ping().isSuccess
                 if (!ok) {
                     Log.w(TAG, "paired bridge ${current.host} unreachable via USB — re-pairing")
@@ -126,20 +132,46 @@ class UsbAutoBridgeManager(
             }
             return
         }
-        scanJob = scope.launch { scanSubnet() }
+        scanJob = launchGuarded { scanSubnet() }
     }
+
+    /**
+     * Launches on the manager scope with every failure logged. The default
+     * scope has no exception handler, so anything thrown out of a plain
+     * `launch` here crashed the whole process; nothing in this class throws
+     * past this point on purpose.
+     */
+    private fun launchGuarded(block: suspend () -> Unit): Job =
+        scope.launch {
+            try {
+                block()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "USB bridge task failed", e)
+            }
+        }
 
     private suspend fun scanSubnet() {
         // Phase 1: listen for UDP discovery broadcasts on the USB subnet.
         // The daemon broadcasts every 2 s, so 6 s covers ~3 rounds.
+        //
+        // Construction + bind live INSIDE error handling: the port is shared
+        // with BridgeDiscovery, and a concurrent holder turns bind() into a
+        // BindException that must end the scan quietly, not crash the scope.
         val found = mutableMapOf<String, DesktopBridgeProtocol.DiscoveredBridge>()
-        val socket = DatagramSocket(null).apply {
-            reuseAddress = true
-            bind(InetSocketAddress(BridgeDiscovery.DISCOVERY_PORT))
-            soTimeout = 2000
-        }
         val buf = ByteArray(4096)
         val deadline = System.currentTimeMillis() + 6000
+        val socket = try {
+            DatagramSocket(null).apply {
+                reuseAddress = true
+                bind(InetSocketAddress(BridgeDiscovery.DISCOVERY_PORT))
+                soTimeout = 2000
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "discovery bind failed (${e.message}); skipping USB scan")
+            return
+        }
         try {
             val ctx = kotlinx.coroutines.currentCoroutineContext()
             while (ctx.isActive && System.currentTimeMillis() < deadline) {
@@ -205,10 +237,13 @@ class UsbAutoBridgeManager(
 
         return when (result.first) {
             200 -> {
-                val desktopName = Json.parseToJsonElement(
-                    String(result.second, Charsets.UTF_8)
-                ).jsonObject["desktop_name"]?.jsonPrimitive?.content
-                    ?: discovered.name
+                // A malformed 200 body must not throw out of the scan — fall
+                // back to the advertised name and let pairing proceed.
+                val desktopName = runCatching {
+                    Json.parseToJsonElement(
+                        String(result.second, Charsets.UTF_8)
+                    ).jsonObject["desktop_name"]?.jsonPrimitive?.content
+                }.getOrNull() ?: discovered.name
                 // Save pairing
                 bridgeManager.savePairing(
                     discovered.host, discovered.port, desktopName,
@@ -253,12 +288,18 @@ class UsbAutoBridgeManager(
             doOutput = true
             setRequestProperty("Content-Type", "application/json")
         }
-        conn.outputStream.use { it.write(body) }
-        val code = conn.responseCode
-        val bytes = (if (code in 200..299) conn.inputStream else conn.errorStream)
-            ?.use { it.readBytes() } ?: ByteArray(0)
-        conn.disconnect()
-        return code to bytes
+        try {
+            conn.outputStream.use { it.write(body) }
+            val code = conn.responseCode
+            val bytes = (if (code in 200..299) conn.inputStream else conn.errorStream)
+                ?.use { it.readBytes() } ?: ByteArray(0)
+            return code to bytes
+        } finally {
+            // Disconnect on EVERY path — an unreachable desktop throws from
+            // write/responseCode, and skipping disconnect leaked the socket
+            // on exactly the retries that happen most.
+            conn.disconnect()
+        }
     }
 
     private fun cancelScan() {

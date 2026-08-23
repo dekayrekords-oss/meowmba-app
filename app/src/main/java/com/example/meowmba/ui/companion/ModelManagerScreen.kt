@@ -2,6 +2,7 @@ package com.example.meowmba.ui.companion
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -11,6 +12,7 @@ import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.*
@@ -40,6 +42,7 @@ fun ModelManagerScreen(
     onCustomDownload: (String, String) -> Unit = { _, _ -> },
     onUseInstalledFile: (String) -> Unit = {},
     onDeleteInstalledFile: (String) -> Unit = {},
+    onOpenVoiceModels: () -> Unit = {},
     onClose: () -> Unit
 ) {
     var showProviderPicker by remember { mutableStateOf(false) }
@@ -80,6 +83,17 @@ fun ModelManagerScreen(
         ) {
             // Hardware Status Card
             HardwareStatusCard(caps)
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Speech-to-text lives on its own page: it is a separate stack of
+            // models (wake word, endpointing, transcription) from the chat LLM,
+            // and mixing them into this list made both harder to read.
+            VoiceRecognitionEntryCard(
+                backendName = state.asrBackend.displayName,
+                isCloud = state.asrBackend.isCloud,
+                onClick = onOpenVoiceModels,
+            )
 
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -276,6 +290,51 @@ fun ModelManagerScreen(
 }
 
 enum class LoadStatus { ACTIVE, STANDBY, NOT_CONFIGURED }
+
+/** Row on the Hardware page that opens [VoiceModelScreen]. */
+@Composable
+private fun VoiceRecognitionEntryCard(
+    backendName: String,
+    isCloud: Boolean,
+    onClick: () -> Unit,
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF161B22)),
+        border = BorderStroke(1.dp, Color(0xFF30363D)),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                Icons.Default.Mic,
+                contentDescription = null,
+                tint = if (isCloud) Color(0xFFD29922) else Color(0xFF58A6FF),
+                modifier = Modifier.size(22.dp),
+            )
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    "Voice Recognition",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                )
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    "Speech-to-text: $backendName",
+                    color = Color.Gray,
+                    fontSize = 11.sp,
+                )
+            }
+            Text("›", color = Color(0xFF58A6FF), fontSize = 22.sp)
+        }
+    }
+}
 
 @Composable
 fun LoadedModelCard(

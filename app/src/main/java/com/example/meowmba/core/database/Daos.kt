@@ -11,6 +11,9 @@ interface MessageDao {
     @Query("SELECT * FROM messages ORDER BY timestamp DESC LIMIT :limit")
     suspend fun getRecentMessages(limit: Int): List<MessageEntity>
 
+    @Query("SELECT * FROM messages WHERE conversationId = :conversationId ORDER BY timestamp DESC LIMIT :limit")
+    suspend fun getRecentMessagesIn(conversationId: Long, limit: Int): List<MessageEntity>
+
     @Insert
     suspend fun insertMessage(message: MessageEntity): Long
 
@@ -105,4 +108,28 @@ interface RoutineDao {
 
     @Query("SELECT COUNT(*) FROM routines")
     suspend fun count(): Int
+}
+
+@Dao
+interface ProjectDao {
+    @Query("SELECT * FROM projects ORDER BY lastOpenedAt DESC")
+    fun getAll(): Flow<List<ProjectEntity>>
+
+    @Query("SELECT * FROM projects WHERE id = :id")
+    suspend fun getById(id: Long): ProjectEntity?
+
+    @Insert
+    suspend fun insert(project: ProjectEntity): Long
+
+    @Update
+    suspend fun update(project: ProjectEntity)
+
+    @Query("UPDATE projects SET lastOpenedAt = :at WHERE id = :id")
+    suspend fun touch(id: Long, at: Long)
+
+    @Query("DELETE FROM projects WHERE id = :id")
+    suspend fun deleteById(id: Long)
+
+    @Query("SELECT name FROM projects")
+    suspend fun names(): List<String>
 }

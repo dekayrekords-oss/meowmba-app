@@ -16,10 +16,12 @@ class WebBrowserTool(private val screenshotDir: File, private val pagesDir: File
     override val definition = ToolDefinition(
         id = "web.browser",
         displayName = "Drive the browser",
-        description = "Control the browser the user sees. Actions: open (url), " +
-            "title (what page is this), links (list clickable links), click (selector or tag=text), " +
-            "type (selector + text), scroll (pixels, +down/-up), screenshot (save page image). " +
-            "Use this to browse, fill forms, and visually edit documents with the user.",
+        description = "Control the swipe-left agent browser. Actions: open (url), " +
+            "workshop (blank build canvas), inject (html — build/rewrite the page), " +
+            "html (full source), scrape (readable text + links, saved), " +
+            "title, links, click (selector or tag=text), type (selector + text), " +
+            "scroll, screenshot, save (persist the page). " +
+            "Use this to build HTML or scrape a live page the user can see.",
         inputSchema = mapOf(
             "action" to "string", "url" to "string", "selector" to "string",
             "text" to "string", "pixels" to "int",
@@ -58,9 +60,18 @@ class WebBrowserTool(private val screenshotDir: File, private val pagesDir: File
             "inject" -> {
                 val html = args["html"].orEmpty()
                 if (html.isBlank()) return ToolResult.Failure("No html given.")
-                eval("window.__meow.inject(`${html.replace("\\", "\\\\").replace("`", "\\`").replace("\${", "\\\${")}`)")
+                val wrote = eval(
+                    "window.__meow.inject(`${html.replace("\\", "\\\\").replace("`", "\\`").replace("\${", "\\\${")}`)"
+                )
+                eval(WebViewBridge.DOM_HELPERS)
+                wrote
             }
             "html" -> eval("window.__meow ? window.__meow.pageHtml() : 'helpers missing'")
+            "workshop" -> {
+                WebViewBridge.loadWorkshop()
+                ToolResult.Success("Workshop canvas is open.")
+            }
+            "scrape" -> scrapePage(args["name"])
             "save" -> {
                 val dir = pagesDir ?: return ToolResult.Failure("No pages directory configured.")
                 val name = (args["name"]?.trim() ?: "page").replace(Regex("[^A-Za-z0-9_-]"), "_").take(40)
@@ -82,7 +93,9 @@ class WebBrowserTool(private val screenshotDir: File, private val pagesDir: File
                 if (!file.exists()) return ToolResult.Failure("No saved page named $name.html")
                 eval("window.location.href = 'file://${file.absolutePath}'; 'opening local page'")
             }
-            else -> ToolResult.Failure("Unknown action: $action (open/title/links/click/type/scroll/screenshot)")
+            else -> ToolResult.Failure(
+                "Unknown action: $action (open/workshop/inject/html/scrape/title/links/click/type/scroll/screenshot/save)"
+            )
         }
     }
 
@@ -93,6 +106,21 @@ class WebBrowserTool(private val screenshotDir: File, private val pagesDir: File
                 else cont.resume(ToolResult.Success(result.ifBlank { "done" }))
             }
         }
+
+    private suspend fun scrapePage(nameArg: String?): ToolResult {
+        val raw = eval("window.__meow ? window.__meow.scrape() : ''")
+        if (raw !is ToolResult.Success) return raw
+        val body = raw.output
+        if (body.isBlank() || body == "null") return ToolResult.Failure("Nothing to scrape.")
+        val dir = pagesDir ?: return ToolResult.Success(body.take(1500))
+        return runCatching {
+            dir.mkdirs()
+            val name = (nameArg?.trim() ?: "scrape").replace(Regex("[^A-Za-z0-9_-]"), "_").take(40)
+            val file = File(dir, "$name.md")
+            file.writeText(body)
+            ToolResult.Success("Scraped ${body.length} chars → ${file.name}\n${body.take(1200)}")
+        }.getOrElse { ToolResult.Failure("Scrape save failed: ${it.message}") }
+    }
 
     private suspend fun screenshot(): ToolResult =
         suspendCancellableCoroutine { cont ->

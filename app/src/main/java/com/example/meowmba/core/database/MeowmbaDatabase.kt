@@ -9,8 +9,8 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [MessageEntity::class, MemoryEntity::class, MemoryFtsEntity::class, MessageFtsEntity::class, AuditEntryEntity::class, RoutineEntity::class],
-    version = 6,
+    entities = [MessageEntity::class, MemoryEntity::class, MemoryFtsEntity::class, MessageFtsEntity::class, AuditEntryEntity::class, RoutineEntity::class, ProjectEntity::class],
+    version = 8,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -19,6 +19,7 @@ abstract class MeowmbaDatabase : RoomDatabase() {
     abstract fun memoryDao(): MemoryDao
     abstract fun auditDao(): AuditDao
     abstract fun routineDao(): RoutineDao
+    abstract fun projectDao(): ProjectDao
 
     companion object {
         /**
@@ -85,6 +86,29 @@ abstract class MeowmbaDatabase : RoomDatabase() {
             }
         }
 
+        /** Who is talking when two people share a chat. */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `messages` ADD COLUMN `speakerName` TEXT")
+            }
+        }
+
+        /** Project folders + per-project chat; user-made tools on the Tools page. */
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `messages` ADD COLUMN `conversationId` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `routines` ADD COLUMN `source` TEXT NOT NULL DEFAULT 'system'")
+                db.execSQL("ALTER TABLE `routines` ADD COLUMN `launchTarget` TEXT NOT NULL DEFAULT ''")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `projects` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`name` TEXT NOT NULL, `kind` TEXT NOT NULL, " +
+                        "`createdAt` INTEGER NOT NULL, `lastOpenedAt` INTEGER NOT NULL, " +
+                        "`conversationId` INTEGER NOT NULL)"
+                )
+            }
+        }
+
         @Volatile
         private var INSTANCE: MeowmbaDatabase? = null
 
@@ -96,7 +120,8 @@ abstract class MeowmbaDatabase : RoomDatabase() {
                     "meowmba_database"
                 )
                     .addMigrations(
-                        MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
+                        MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
+                        MIGRATION_7_8,
                     )
                     // No fallbackToDestructiveMigration. It was silently
                     // dropping every table for anyone upgrading from v2 or v3,

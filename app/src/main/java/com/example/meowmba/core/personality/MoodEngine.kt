@@ -28,6 +28,7 @@ class MoodEngine(
         private set
 
     private var lastChatterAt: Long = Long.MIN_VALUE / 2
+    private val recentLines = ArrayDeque<String>(12)
 
     fun onEvent(event: MoodEvent, now: Long): Mood {
         lastActivityAt = now
@@ -84,41 +85,21 @@ class MoodEngine(
         lastChatterAt = now
     }
 
-    /** Time-aware LOOI-style one-liners. Deterministic per (hour, mood, index). */
-    fun pickChatter(nowMs: Long, seed: Int): String {
-        val hour = java.util.Calendar.getInstance().apply { timeInMillis = nowMs }
-            .get(java.util.Calendar.HOUR_OF_DAY)
-        val pool = when {
-            hour in 5..11 -> listOf(
-                "Morning! I'm already awake. Well, mostly.",
-                "Whatever you're doing today — I'm rooting for you.",
-                "Fun fact: cats sleep up to 16 hours a day. I'm trying to set a record.",
-                "Did you stretch today? I stretch every time I wake up. Which is often."
-            )
-            hour in 12..17 -> listOf(
-                "Afternoon check-in: you're doing fine.",
-                "I saw something interesting earlier but I forgot what it was.",
-                "If you need a break, I'm excellent at being a distraction.",
-                "Random thought: keyboards would be better if they were warm."
-            )
-            hour in 18..22 -> listOf(
-                "Evenings are the best. Low light, good vibes.",
-                "I'd say you earned some rest today.",
-                "Did you know cats can rotate their ears 180 degrees? Show-off ears.",
-                "Whatever's on your mind, it can probably wait until tomorrow."
-            )
-            else -> listOf(
-                "It's late. I'll keep watch. Not that anything happens.",
-                "Shhh. The night is quiet and I respect that.",
-                "Even night owls need sleep eventually. Just saying.",
-                "I'm mostly nocturnal, so this is my prime time."
-            )
+    /** Time-aware one-liners. Same seed in the same hour is stable; different seeds remix. */
+    fun pickChatter(nowMs: Long, seed: Int): String = pickGenerated(nowMs, seed, preferFact = false)
+
+    /** User asked for a fact — bias the mixer toward trivia, still remix + de-dupe. */
+    fun pickFact(nowMs: Long, seed: Int): String = pickGenerated(nowMs, seed, preferFact = true)
+
+    private fun pickGenerated(nowMs: Long, seed: Int, preferFact: Boolean): String {
+        var line = IdleChatter.line(nowMs, seed, mood, preferFact)
+        var bump = 1
+        while (line in recentLines && bump < 8) {
+            line = IdleChatter.line(nowMs, seed + bump * 97, mood, preferFact)
+            bump++
         }
-        val moodTail = when (mood) {
-            Mood.SLEEPY -> " *yawn*"
-            Mood.EXCITED -> ""
-            else -> ""
-        }
-        return pool[Math.floorMod(seed, pool.size)] + moodTail
+        recentLines.addLast(line)
+        while (recentLines.size > 12) recentLines.removeFirst()
+        return line
     }
 }

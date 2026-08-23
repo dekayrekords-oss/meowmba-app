@@ -68,7 +68,20 @@ object AgentRegistry {
             purpose = "Main conversational agent. Routes goals to specialists and answers directly.",
             // avatar.animate is self-expression (the companion performing its own
             // invented clips), so it belongs to Meow rather than a specialist.
-            allowedTools = setOf("task.list", "avatar.animate", "avatar.describe_animation")
+            // vault.note.* are Meow's own spoken notes ("create a note called …",
+            // "list my notes") — the router sends them here, so the permission
+            // set has to include them or every vault command dies in the
+            // orchestrator's check with "Meow isn't allowed to use vault.note.*".
+            allowedTools = setOf(
+                "task.list",
+                "avatar.animate",
+                "avatar.describe_animation",
+                "vault.note.list",
+                "vault.note.read",
+                "vault.note.search",
+                "vault.note.write",
+                "vault.note.delete",
+            )
         ),
         AgentDefinition(
             id = "file", name = "Shelve",
@@ -96,6 +109,11 @@ object AgentRegistry {
             allowedTools = setOf("memory.search", "web.search")
         ),
         AgentDefinition(
+            id = "browser", name = "Weaver",
+            purpose = "Builds HTML and scrapes pages in the swipe-left agent browser.",
+            allowedTools = setOf("web.browser", "web.search")
+        ),
+        AgentDefinition(
             id = "email", name = "Post",
             purpose = "Drafts and sends email.",
             allowedTools = setOf("email.send", "email.draft")
@@ -117,7 +135,8 @@ object AgentRegistry {
                 "phone.launch_app", "phone.list_apps", "phone.open_url", "phone.open_settings",
                 "phone.play_music", "phone.set_alarm", "phone.set_timer", "phone.flashlight",
                 "phone.dnd", "phone.battery", "phone.set_volume", "phone.take_photo",
-                "phone.compose_sms", "phone.dial_call", "phone.media_control", "phone.set_brightness"
+                "phone.compose_sms", "phone.dial_call", "phone.media_control", "phone.set_brightness",
+                "phone.cleanup",
             )
         ),
         AgentDefinition(

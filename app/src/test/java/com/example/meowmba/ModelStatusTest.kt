@@ -106,6 +106,15 @@ class ModelStatusTest {
     }
 
     @Test
+    fun `preferred chat route honors BigPickle when that is the default brain`() = runTest {
+        `when`(mockSecureStorage.getPreference("default_brain")).thenReturn("bigpickle")
+        `when`(mockSecureStorage.getApiKey("opencode")).thenReturn("zen-key")
+        `when`(mockSecureStorage.getApiKey("openrouter")).thenReturn("or-key")
+        val vm = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
+        assertEquals("bigpickle", vm.preferredChatRouteId())
+    }
+
+    @Test
     fun `openrouter selection populates the network card`() = runTest {
         `when`(mockSecureStorage.getModelName("openrouter")).thenReturn("test-model:free")
         val vm = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)

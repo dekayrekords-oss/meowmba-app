@@ -49,22 +49,22 @@ object FaceMotorMap {
      * Face tracking → head pan. [offsetX] is the face's horizontal position
      * normalized to -1..1 (negative = subject left of frame). A small deadzone
      * (±0.1) keeps jitter from chattering the servo at center; the head pans
-     * ±35° to follow the face and recenters when the face leaves the frame
+     * ±45° to follow the face and recenters when the face leaves the frame
      * ([offsetX] is null there — callers pass a centered value or empty map).
      */
     fun panForFace(offsetX: Float?): Map<Int, Float> {
         if (offsetX == null) return mapOf(SERVO_HEAD_PAN to CENTER)
         val clamped = offsetX.coerceIn(-1f, 1f)
-        if (kotlin.math.abs(clamped) < 0.1f) return mapOf(SERVO_HEAD_PAN to CENTER)
-        return mapOf(SERVO_HEAD_PAN to CENTER + clamped * 35f)
+        if (kotlin.math.abs(clamped) < 0.06f) return mapOf(SERVO_HEAD_PAN to CENTER)
+        return mapOf(SERVO_HEAD_PAN to CENTER + clamped * 50f)
     }
 
     /**
      * Face tracking → neck + base. [offsetX]/[offsetY] are screen-space -1..1
      * (negative X = subject left, positive Y = subject lower on the display).
      *
-     * TILT looks up/down at the face (the LOOI BLE neck channel). PAN looks
-     * left/right: a real pan servo on TCP/serial, a short in-place turn on BLE.
+     * TILT looks up/down at the face (the LOOI BLE neck channel).
+     * PAN looks left/right (a real pan servo on TCP, a short base turn on BLE).
      * Null offsets recenter.
      */
     fun followFace(offsetX: Float?, offsetY: Float?): Map<Int, Float> {
@@ -73,8 +73,8 @@ object FaceMotorMap {
             mapOf(SERVO_HEAD_TILT to CENTER)
         } else {
             val y = offsetY.coerceIn(-1f, 1f)
-            val angle = if (kotlin.math.abs(y) < 0.1f) CENTER else CENTER + y * 30f
-            mapOf(SERVO_HEAD_TILT to angle)
+            val angle = if (kotlin.math.abs(y) < 0.12f) CENTER else CENTER + y * 50f
+            mapOf(SERVO_HEAD_TILT to angle.coerceIn(45f, 135f))
         }
         return pan + tilt
     }
