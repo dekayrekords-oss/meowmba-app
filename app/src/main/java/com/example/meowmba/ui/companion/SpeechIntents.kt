@@ -155,6 +155,13 @@ object SpeechIntents {
         // Device specialists: camera / speed. The chat brain has no sensors.
         if (isSpeedQuestion(t)) return false
         if (com.example.meowmba.core.vision.VisionRouter.parse(t) != null) return false
+        // Weather is a device lookup, not a chat guess. It is question-shaped,
+        // so without this it hit the direct-question lane and the chat brain —
+        // which has no live data — said it "cannot tell the weather" (measured
+        // on device 2026-08-23). Falling through lands it in the main turn
+        // pipeline, where AgentRouter.isWeatherQuestion answers from
+        // WeatherRepository.
+        if (com.example.meowmba.core.agent.runtime.AgentRouter.isWeatherQuestion(t)) return false
         val first = t.substringBefore(' ')
         val startsLikeQuestion = first in QUESTION_STARTERS
         val casualCheckIn = GREETINGS.any { t == it || t.endsWith(" $it") || t.contains(" $it") }

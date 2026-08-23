@@ -47,8 +47,25 @@ class DirectAnswerRoutingTest {
         assertTrue(CompanionViewModel.looksLikeDirectQuestion("how to install ffmpeg"))
         assertTrue(CompanionViewModel.looksLikeDirectQuestion("what is a capacitor"))
         assertTrue(CompanionViewModel.looksLikeDirectQuestion("why is the sky blue"))
-        assertTrue(CompanionViewModel.looksLikeDirectQuestion("is it going to rain"))
         assertTrue(CompanionViewModel.looksLikeDirectQuestion("tell me this: are you a cat?"))
+    }
+
+    @Test
+    fun `weather questions are lookups not chat guesses`() {
+        // Measured on device 2026-08-23: "what's the weather" is question-shaped,
+        // so it reached the chat brain, which said "I do not have access to
+        // real-time weather information". It must fall through to the
+        // WeatherRepository gate in the main turn pipeline instead.
+        com.example.meowmba.core.audio.WakePhraseMatcher.normalize("what's the weather").let {
+            assertTrue(com.example.meowmba.core.agent.runtime.AgentRouter.isWeatherQuestion(it))
+            assertFalse(CompanionViewModel.looksLikeDirectQuestion(it))
+        }
+        assertFalse(CompanionViewModel.looksLikeDirectQuestion(
+            "is it going to rain"))
+        assertFalse(CompanionViewModel.looksLikeDirectQuestion("do i need a coat today"))
+        assertFalse(CompanionViewModel.looksLikeDirectQuestion("whats the temperature outside"))
+        // Non-weather informational questions still reach the chat brain.
+        assertTrue(CompanionViewModel.looksLikeDirectQuestion("what is a capacitor"))
     }
 
     @Test
