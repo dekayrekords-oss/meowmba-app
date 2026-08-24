@@ -32,6 +32,7 @@ class BrowserAgentLoop(
     private val evalJs: suspend (String) -> String,
     private val pagesDir: File,
     private val announce: (String) -> Unit,
+    private val onSource: (kind: String, code: String) -> Unit = { _, _ -> },
     private val stepDelayMs: Long = 4_000L,
     private val monitorEveryMs: Long = 45_000L,
 ) {
@@ -74,44 +75,87 @@ class BrowserAgentLoop(
 
     private suspend fun runLoop() {
         var steps = 0
+        var looks = 0
+        var pendingLook = false
         while (scope.isActive && goal != null) {
-            delay(if (steps == 0) 1_500L else stepDelayMs)
+            delay(if (steps == 0) 250L else stepDelayMs)
             val g = goal ?: break
-            val shot = captureJpeg() ?: continue  // browser not ready yet
-            val dom = evalJs("window.__meow ? window.__meow.pageHtml() : ''")
-                .take(3000)
 
-            val verdict = vision()?.describe(shot, planPrompt(g, dom, steps))
-            if (verdict == null) {
-                announce("I can't reach my vision model — check my brain settings.")
+            // Scrape is a DOM read. It does not need a screenshot or a vision model.
+            if (isDirectScrape(g) && steps == 0) {
+                val href = evalJs("String(location.href)")
+                if (href.contains("meow.local") || href.contains("about:blank")) {
+                    announce("Open a URL first, then say scrape this page.")
+                    delay(monitorEveryMs)
+                    continue
+                }
+                val result = execute(AgentAction(type = "scrape", name = "scrape"))
+                lastReport = result
+                announce(result.take(240))
+                steps = 1
                 delay(monitorEveryMs)
                 continue
             }
-            val text = verdict.getOrElse {
-                announce("Vision failed: ${it.message?.take(120)}")
+
+            val isBuild = isBuildGoal(g)
+            // A build with nothing on screen yet must not wait on the model.
+            // Measured: "create a website" opened the pane and then sat on
+            // the workshop stub because the brain returned prose, not JSON.
+            if (isBuild && steps == 0) {
+                val draft = scaffoldHtml(g)
+                execute(AgentAction(type = "inject", html = draft))
+                publishSource(AgentAction(type = "inject", html = draft))
+                announce("First draft is up — I'll restyle it next.")
+                pendingLook = true
+                steps = 1
+                continue
+            }
+            val text = if (pendingLook && looks < MAX_LOOKS) {
+                looks++
+                pendingLook = false
+                lookAtPage(g, looks)
+            } else {
+                val dom = currentDom()
+                val fromBrain = brain(planPrompt(g, dom, steps))
+                pickPlanner(fromBrain, null)
+            }
+            if (text == null) {
+                announce("I can't reach a model to drive the page. Check Settings for OpenRouter.")
+                delay(monitorEveryMs)
+                continue
+            }
+            if (text.startsWith("ERROR:")) {
+                announce(text.removePrefix("ERROR:").trim().take(240))
                 delay(monitorEveryMs)
                 continue
             }
 
-            val action = parseAction(text) ?: run {
-                // Model answered in prose — relay it and keep monitoring.
+            var action = parseAction(text)
+            if (action == null) {
                 announce(text.take(240))
                 delay(monitorEveryMs)
                 continue
             }
+            if (shouldRefuseDone(isBuild, looks) && action.type == "done") {
+                announce("That's still a draft — restyling it.")
+                val retry = brain(planPrompt(g, currentDom(), steps))
+                action = parseAction(retry.orEmpty()) ?: action
+            }
+            publishSource(action)
 
             when (action.type) {
                 "done" -> {
                     lastReport = action.text ?: "Page matches the goal."
                     announce(lastReport!!)
                     steps = 0
-                    delay(monitorEveryMs)   // keep verifying at a slow cadence
+                    delay(monitorEveryMs)
                 }
                 "wait" -> delay(stepDelayMs)
                 "say" -> announce(action.text ?: "")
                 else -> {
                     val result = execute(action)
                     announce("${action.type}: ${result.take(120)}")
+                    if (action.type == "inject") pendingLook = true
                     steps++
                     if (steps >= MAX_STEPS) {
                         announce("That's $MAX_STEPS changes in a row — tell me to keep going if you want more.")
@@ -121,6 +165,33 @@ class BrowserAgentLoop(
                 }
             }
         }
+    }
+
+    private fun publishSource(action: AgentAction) {
+        when (action.type) {
+            "inject" -> action.html?.let { onSource("html", it) }
+            "js" -> action.code?.let { onSource("js", it) }
+            else -> Unit
+        }
+    }
+
+    private suspend fun currentDom(): String =
+        evalJs("window.__meow ? window.__meow.pageHtml() : ''").take(12_000)
+
+    /** Screenshot the live page and ask the vision model to restyle or approve. */
+    private suspend fun lookAtPage(goal: String, look: Int): String? {
+        announce("Looking at how the page landed…")
+        delay(900)
+        val shot = captureJpeg()
+        val v = vision()
+        val prompt = lookPrompt(goal, currentDom(), look)
+        if (shot != null && v != null) {
+            val seen = v.describe(shot, prompt)
+            val text = seen.getOrNull()
+            if (text != null) return text
+            announce("Vision hiccup: ${seen.exceptionOrNull()?.message?.take(80) ?: "empty"}")
+        }
+        return brain(prompt)
     }
 
     private suspend fun execute(a: AgentAction): String = when (a.type) {
@@ -134,9 +205,26 @@ class BrowserAgentLoop(
         }
         "scroll" -> evalJs("window.__meow.scroll(${a.pixels ?: 400})")
         "inject" -> a.html?.let {
-            evalJs("window.__meow.inject(${jsStringLiteral(it)})")
+            onSource("html", it)
+            com.example.meowmba.core.browser.WebViewBridge.loadHtml(it)
+            "injected ${it.length} chars"
         } ?: "no html"
-        "js" -> a.code?.let { evalJs(it) } ?: "no code"
+        "scrape" -> {
+            val raw = evalJs("window.__meow ? window.__meow.scrape() : ''")
+            if (raw.isBlank() || raw == "null") "nothing to scrape"
+            else runCatching {
+                pagesDir.mkdirs()
+                val name = (a.name ?: "scrape").replace(Regex("[^A-Za-z0-9_-]"), "_").take(40)
+                val file = File(pagesDir, "$name.md")
+                file.writeText(raw)
+                onSource("scrape", raw)
+                "scraped ${raw.length} chars → ${file.name}: ${raw.take(240)}"
+            }.getOrElse { "scrape failed: ${it.message}" }
+        }
+        "js" -> a.code?.let {
+            onSource("js", it)
+            evalJs(it)
+        } ?: "no code"
         "save" -> {
             val html = evalJs("window.__meow.pageHtml()")
             if (html.startsWith("ERROR") || html.isBlank()) "nothing to save"
@@ -152,6 +240,104 @@ class BrowserAgentLoop(
 
     companion object {
         const val MAX_STEPS = 12
+        const val MAX_LOOKS = 3
+
+        /** Text brain first — vision is optional and often not configured. */
+        fun pickPlanner(fromBrain: String?, fromVision: String?): String? {
+            if (!fromBrain.isNullOrBlank()) return fromBrain
+            if (!fromVision.isNullOrBlank()) return fromVision
+            return null
+        }
+
+        fun isBuildGoal(goal: String): Boolean {
+            val t = goal.lowercase()
+            return t.contains("page") || t.contains("website") || t.contains("web site") ||
+                t.contains("html") || t.contains("landing") || t.contains("site")
+        }
+
+        /** Topic words from a voice goal, for the instant first draft. */
+        fun topicFromGoal(goal: String): String {
+            val stripped = goal.lowercase()
+                .replace(Regex("\\b(hey|ok|okay|meow|please|can you|could you|would you|" +
+                    "make|build|design|write|draft|code|create|generate|me|us|a|an|the|" +
+                    "for|about|called|named|website|web site|webpage|web page|web app|" +
+                    "page|html|landing|homepage|home page|site)\\b"), " ")
+                .replace(Regex("[^a-z0-9 ]"), " ")
+                .replace(Regex("\\s+"), " ")
+                .trim()
+            return stripped.ifBlank { "new site" }
+                .split(' ')
+                .joinToString(" ") { w -> w.replaceFirstChar { it.uppercaseChar() } }
+                .take(48)
+        }
+
+        /** Self-contained dark landing page so a build is never a blank workshop. */
+        fun scaffoldHtml(goal: String): String {
+            val topic = topicFromGoal(goal)
+            val title = topic.replaceFirstChar { it.uppercaseChar() }
+            return """
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>$title</title>
+<style>
+  :root { color-scheme: dark; }
+  body{margin:0;background:#0d1117;color:#e6edf3;font-family:system-ui,sans-serif}
+  header{padding:48px 24px 32px;background:linear-gradient(160deg,#161b22,#0d1117 70%)}
+  h1{font-size:32px;margin:0 0 10px;letter-spacing:-.03em}
+  .lead{color:#8b949e;max-width:28em;line-height:1.5;font-size:16px}
+  main{padding:24px;display:grid;gap:14px}
+  section{background:#161b22;border:1px solid #30363d;border-radius:14px;padding:18px}
+  h2{margin:0 0 8px;font-size:16px;color:#58a6ff}
+  p{margin:0;color:#c9d1d9;line-height:1.45}
+</style>
+</head>
+<body>
+<header>
+  <h1>$title</h1>
+  <p class="lead">A first draft for “$topic”. I’ll restyle this in the next pass.</p>
+</header>
+<main>
+  <section><h2>About</h2><p>What $topic is, in one short paragraph you can edit.</p></section>
+  <section><h2>Highlights</h2><p>Three things that should stand out on a phone screen.</p></section>
+  <section><h2>Next</h2><p>Tell me what to change — colors, copy, layout, or a whole rewrite.</p></section>
+</main>
+</body>
+</html>
+            """.trimIndent()
+        }
+
+        /** HTML the model dumped as a fence or a raw document, not JSON. */
+        fun extractHtml(text: String): String? {
+            val fence = Regex("```(?:html)?\\s*([\\s\\S]*?)```", RegexOption.IGNORE_CASE)
+                .find(text)
+            val fenced = fence?.groupValues?.getOrNull(1)?.trim().orEmpty()
+            if (fenced.contains("<html", ignoreCase = true) ||
+                fenced.contains("<!doctype", ignoreCase = true) ||
+                fenced.contains("<body", ignoreCase = true)
+            ) {
+                return fenced
+            }
+            val lower = text.lowercase()
+            val start = listOf("<!doctype", "<html", "<body")
+                .map { lower.indexOf(it) }
+                .filter { it >= 0 }
+                .minOrNull() ?: return null
+            val end = lower.lastIndexOf("</html>")
+            return if (end > start) text.substring(start, end + 7) else text.substring(start)
+        }
+
+        fun shouldRefuseDone(isBuild: Boolean, looksTaken: Int): Boolean =
+            isBuild && looksTaken == 0
+
+        fun isDirectScrape(goal: String): Boolean {
+            val t = goal.lowercase()
+            return t.contains("scrape") || t.contains("extract the text") ||
+                t.contains("extract the links") || t.contains("pull the text") ||
+                t.contains("pull the links") || t.contains("grab the text")
+        }
 
         fun jsEscape(s: String): String =
             s.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n")
@@ -162,59 +348,83 @@ class BrowserAgentLoop(
                 .replace("\n", "\\n").replace("\r", "") + "'"
 
         fun planPrompt(goal: String, dom: String, stepsTaken: Int): String = """
-            You are meow driving a phone browser. The user's standing goal:
+            You are meow designing a page in a phone browser. Goal:
             """ + goal + """
 
-            Current page HTML (truncated):
-            """ + dom.ifBlank { "(empty page)" } + """
+            Current HTML (truncated):
+            """ + dom.ifBlank { "(empty workshop)" } + """
 
-            Steps taken so far: """ + stepsTaken + """. Look at the screenshot and
-            reply with exactly ONE JSON object on one line, no prose:
-            {"action":"inject","html":"<full page html>"}   to build/rewrite the page
-            {"action":"js","code":"<js to run>"}             for targeted edits
-            {"action":"click","selector":"<css or tag=text>"}
-            {"action":"type","selector":"<css>","text":"..."}
-            {"action":"scroll","pixels":400}
-            {"action":"open","url":"https://..."}
-            {"action":"save","name":"my_page"}               to persist the page
-            {"action":"done","summary":"<what is now true>"} if the page satisfies the goal
-            {"action":"wait"}                                if still loading
-            Build complete, styled pages in ONE inject when asked to make a page.
+            Steps so far: """ + stepsTaken + """.
+            Reply with exactly ONE JSON object, no prose:
+            {"action":"inject","html":"<full html document>"}
+            {"action":"done","summary":"..."}
+            {"action":"wait"}
+            First step must be inject. Never done until a designed page is on screen.
+            The HTML MUST be a complete document that looks good at phone width:
+            - dark canvas (#0d1117), never a white document
+            - real CSS: hero, type scale, spacing, accent #58a6ff, cards or sections
+            - viewport meta, system-ui, no unstyled body text
+            - a title, a short lead, and 2–3 sections — not a wall of paragraphs
+            Escape quotes inside html as \".
+        """.trimIndent()
+
+        fun lookPrompt(goal: String, dom: String, look: Int): String = """
+            You are looking at a SCREENSHOT of the page you just built. Goal:
+            """ + goal + """
+
+            Look number """ + look + """. HTML excerpt:
+            """ + dom.take(2000) + """
+
+            If this is plain text on white, default browser fonts, a wall of
+            paragraphs, or anything that looks like a draft document — FAIL.
+            Inject a complete restyled HTML document (dark canvas, hero, type,
+            color, cards). Do not tweak one CSS rule.
+            Only {"action":"done","summary":"..."} if it already looks like a
+            designed landing page you would ship.
+            Reply with ONE JSON object, no prose.
+            {"action":"inject","html":"<full html>"} or {"action":"done","summary":"..."}
         """.trimIndent()
 
         /** Extracts the first balanced {...} and maps it to an [AgentAction]. */
         fun parseAction(text: String): AgentAction? {
             val start = text.indexOf('{')
-            if (start < 0) return null
-            var depth = 0
-            var end = -1
-            var inStr = false
-            var esc = false
-            for (i in start until text.length) {
-                val c = text[i]
-                if (esc) { esc = false; continue }
-                if (c == '\\') { esc = true; continue }
-                if (c == '"') { inStr = !inStr; continue }
-                if (inStr) continue
-                if (c == '{') depth++
-                if (c == '}') { depth--; if (depth == 0) { end = i; break } }
+            if (start >= 0) {
+                var depth = 0
+                var end = -1
+                var inStr = false
+                var esc = false
+                for (i in start until text.length) {
+                    val c = text[i]
+                    if (esc) { esc = false; continue }
+                    if (c == '\\') { esc = true; continue }
+                    if (c == '"') { inStr = !inStr; continue }
+                    if (inStr) continue
+                    if (c == '{') depth++
+                    if (c == '}') { depth--; if (depth == 0) { end = i; break } }
+                }
+                if (end >= 0) {
+                    val parsed = runCatching {
+                        val obj = Json.parseToJsonElement(text.substring(start, end + 1)) as JsonObject
+                        val type = obj["action"]?.jsonPrimitive?.contentOrNull?.lowercase()
+                            ?: return@runCatching null
+                        AgentAction(
+                            type = type,
+                            html = obj["html"]?.jsonPrimitive?.contentOrNull,
+                            code = obj["code"]?.jsonPrimitive?.contentOrNull,
+                            selector = obj["selector"]?.jsonPrimitive?.contentOrNull,
+                            text = obj["text"]?.jsonPrimitive?.contentOrNull
+                                ?: obj["summary"]?.jsonPrimitive?.contentOrNull,
+                            url = obj["url"]?.jsonPrimitive?.contentOrNull,
+                            name = obj["name"]?.jsonPrimitive?.contentOrNull,
+                            pixels = obj["pixels"]?.jsonPrimitive?.intOrNull,
+                        )
+                    }.getOrNull()
+                    if (parsed != null) return parsed
+                }
             }
-            if (end < 0) return null
-            return runCatching {
-                val obj = Json.parseToJsonElement(text.substring(start, end + 1)) as JsonObject
-                val type = obj["action"]?.jsonPrimitive?.contentOrNull?.lowercase() ?: return null
-                AgentAction(
-                    type = type,
-                    html = obj["html"]?.jsonPrimitive?.contentOrNull,
-                    code = obj["code"]?.jsonPrimitive?.contentOrNull,
-                    selector = obj["selector"]?.jsonPrimitive?.contentOrNull,
-                    text = obj["text"]?.jsonPrimitive?.contentOrNull
-                        ?: obj["summary"]?.jsonPrimitive?.contentOrNull,
-                    url = obj["url"]?.jsonPrimitive?.contentOrNull,
-                    name = obj["name"]?.jsonPrimitive?.contentOrNull,
-                    pixels = obj["pixels"]?.jsonPrimitive?.intOrNull,
-                )
-            }.getOrNull()
+            // Models often dump a markdown HTML fence instead of the JSON
+            // contract. Treat that as inject so a page still lands.
+            return extractHtml(text)?.let { AgentAction(type = "inject", html = it) }
         }
     }
 }

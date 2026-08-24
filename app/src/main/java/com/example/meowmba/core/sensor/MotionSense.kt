@@ -124,7 +124,7 @@ class MotionSense(context: Context) : RobotPoseSource {
 
     fun start() {
         val accel = sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) ?: return
-        sensorManager.registerListener(listener, accel, SensorManager.SENSOR_DELAY_GAME)
+        sensorManager.registerListener(listener, accel, SensorManager.SENSOR_DELAY_UI)
     }
 
     fun stop() {

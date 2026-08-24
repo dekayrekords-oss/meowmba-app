@@ -4,6 +4,7 @@ import com.example.meowmba.core.agent.ModelProvider
 import com.example.meowmba.core.agent.ModelResponse
 import com.example.meowmba.core.agent.OmniRoute
 import com.example.meowmba.core.agent.OmniRoute.RouteTag
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.toList
@@ -108,6 +109,31 @@ class OmniRouteTest {
     }
 
     @Test
+    fun `a route that never emits a token is skipped`() = runTest {
+        // Measured: FAST local/OpenRouter sat silent, THINKING held 45s,
+        // the question stayed on the yellow mic, then the watchdog gave up.
+        val hung = object : ModelProvider {
+            override val name = "hung"
+            override suspend fun generate(prompt: String) = awaitCancellation()
+            override fun generateStreaming(prompt: String): Flow<ModelResponse> = flow {
+                awaitCancellation()
+            }
+        }
+        val local = FakeProvider("on-device")
+        val router = OmniRoute(
+            log = {},
+            firstTokenTimeoutMs = 50,
+            routes = listOf(
+                route("hung", hung, setOf(RouteTag.FAST, RouteTag.CHAT), priority = 1),
+                route("local", local, setOf(RouteTag.FAST, RouteTag.CHAT), priority = 90, offline = true),
+            ),
+        )
+        val emitted = router.generateStreaming("hey buddy what's up").toList()
+        assertEquals(ModelResponse.Complete("on-device: ok"), emitted.last())
+        assertEquals("local", router.lastRoute.value)
+    }
+
+    @Test
     fun `streaming falls through before any text, not after`() = runTest {
         val dead = FakeProvider("lan", failWith = "timeout")
         val local = FakeProvider("on-device")
@@ -160,6 +186,23 @@ class OmniRouteTest {
 
         router.hintUserText("refactor this kotlin function")
         assertEquals(RouteTag.CODING, router.classify(assembled))
+    }
+
+    @Test
+    fun `forceTag FAST pins the flash route even on a long prompt`() {
+        val fast = FakeProvider("flash")
+        val slow = FakeProvider("brain")
+        val router = OmniRoute(
+            log = {},
+            routes = listOf(
+                route("call", fast, setOf(RouteTag.FAST, RouteTag.CHAT), priority = 0),
+                route("chat", slow, setOf(RouteTag.CHAT, RouteTag.REASONING), priority = 10),
+            ),
+        )
+        val long = "tell me about ".repeat(40)
+        assertEquals(RouteTag.REASONING, router.classify(long))
+        val plan = router.plan(long, preferRouteId = "call", forceTag = RouteTag.FAST)
+        assertEquals("call", plan.first().id)
     }
 
     @Test

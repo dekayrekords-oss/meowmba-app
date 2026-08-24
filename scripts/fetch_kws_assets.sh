@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
-# Fetch the sherpa-onnx wake-word runtime: native libraries + keyword-spotting model.
+# Fetch the sherpa-onnx voice runtime: native libraries, keyword-spotting model,
+# VAD, speaker verification, and the always-on ASR model.
 #
-# These are gitignored (26MB of .so plus 5MB of model), so a fresh clone needs this once.
-# Without them the app still builds and runs — WakeWordEngineFactory falls back to the
-# old SpeechRecognizer loop — so this is not a build prerequisite, only a wake-word one.
+# These are gitignored (26MB of .so + 5MB KWS model + ~68MB ASR model), so a fresh
+# clone needs this once. Without them the app still builds and runs —
+# WakeWordEngineFactory falls back to the old SpeechRecognizer loop and
+# SherpaAsrEngine.isAvailable is false — so this is not a build prerequisite,
+# only a voice-quality one.
 #
 # Usage:  scripts/fetch_kws_assets.sh
 set -euo pipefail
@@ -13,7 +16,8 @@ MODEL="sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 JNI_DIR="$ROOT/app/src/main/jniLibs/arm64-v8a"
-ASSET_DIR="$ROOT/app/src/main/assets/$MODEL"
+# Debug-only: Play builds download these on first launch so the AAB stays under 200MB.
+ASSET_DIR="$ROOT/app/src/debug/assets/$MODEL"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
@@ -112,7 +116,7 @@ else
 fi
 
 echo "==> VAD + speaker models"
-ROOT_ASSETS="$ROOT/app/src/main/assets"
+ROOT_ASSETS="$ROOT/app/src/debug/assets"
 mkdir -p "$ROOT_ASSETS"
 # NOTE: sherpa requires these at the assets ROOT, not in a subdirectory.
 if [ -f "$ROOT_ASSETS/silero_vad.onnx" ]; then
@@ -130,6 +134,33 @@ else
   curl -fL --retry 10 --retry-all-errors --retry-delay 3 -o "$ROOT_ASSETS/speaker.onnx" \
     "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/wespeaker_en_voxceleb_CAM++.onnx"
   echo "    speaker.onnx installed ($(du -h "$ROOT_ASSETS/speaker.onnx" | cut -f1))"
+fi
+
+echo "==> always-on ASR model (streaming zipformer2, 2023-06-26 — better accuracy)"
+ASR_MODEL="sherpa-onnx-streaming-zipformer-en-2023-06-26"
+ASR_ASSET_DIR="$ROOT_ASSETS/$ASR_MODEL"
+if [ -f "$ASR_ASSET_DIR/tokens.txt" ] && [ -f "$ASR_ASSET_DIR/encoder-epoch-99-avg-1-chunk-16-left-128.int8.onnx" ]; then
+  echo "    already present, skipping"
+else
+  mkdir -p "$ASR_ASSET_DIR"
+  # ~296MB archive (it ships both int8 and fp32 variants); only the four
+  # int8 files below are needed. A prior manual attempt at this got
+  # interrupted mid-download and left a corrupt partial tar that
+  # VoiceModelStore's isComplete() check quietly treated as "missing", which
+  # permanently forced fallback to the weaker 20M pack — always stage under
+  # .part and verify with `tar -tjf` before trusting the archive.
+  curl -fL --retry 10 --retry-all-errors --retry-delay 3 \
+    -o "$WORK/asr.tar.bz2.part" \
+    "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/$ASR_MODEL.tar.bz2"
+  mv "$WORK/asr.tar.bz2.part" "$WORK/asr.tar.bz2"
+  tar -tjf "$WORK/asr.tar.bz2" > /dev/null  # fail loudly on a truncated archive
+  tar -xjf "$WORK/asr.tar.bz2" -C "$WORK"
+  src="$WORK/$ASR_MODEL"
+  cp "$src/encoder-epoch-99-avg-1-chunk-16-left-128.int8.onnx" "$ASR_ASSET_DIR/"
+  cp "$src/decoder-epoch-99-avg-1-chunk-16-left-128.int8.onnx" "$ASR_ASSET_DIR/"
+  cp "$src/joiner-epoch-99-avg-1-chunk-16-left-128.int8.onnx" "$ASR_ASSET_DIR/"
+  cp "$src/tokens.txt" "$ASR_ASSET_DIR/"
+  echo "    $(du -sh "$ASR_ASSET_DIR" | cut -f1) installed"
 fi
 
 echo

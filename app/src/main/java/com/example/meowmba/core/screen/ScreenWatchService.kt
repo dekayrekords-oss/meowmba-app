@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
 import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
@@ -18,6 +19,7 @@ import android.os.IBinder
 import android.os.Looper
 import android.util.DisplayMetrics
 import android.view.WindowManager
+import androidx.core.app.ServiceCompat
 
 /**
  * Watches the phone's own screen while "watch mode" is on.
@@ -54,7 +56,12 @@ class ScreenWatchService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
-        startForeground(NOTIF_ID, buildNotification())
+        ServiceCompat.startForeground(
+            this,
+            NOTIF_ID,
+            buildNotification(),
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION,
+        )
         val resultCode = intent?.getIntExtra(EXTRA_RESULT, 0) ?: 0
         val data = intent?.getParcelableExtra<Intent>(EXTRA_DATA)
         if (resultCode != RESULT_OK_CODE || data == null) {

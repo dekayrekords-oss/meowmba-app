@@ -134,11 +134,11 @@ class CompanionZoneTest {
     @Test
     fun `eye tap toggles camera privacy`() {
         val vm = CompanionViewModel()
-        assertTrue(vm.uiState.value.isCameraEnabled)
-        vm.onAvatarZoneClick(AvatarZone.EYE_LEFT)
         assertFalse(vm.uiState.value.isCameraEnabled)
-        vm.onAvatarZoneClick(AvatarZone.EYE_RIGHT)
+        vm.onAvatarZoneClick(AvatarZone.EYE_LEFT)
         assertTrue(vm.uiState.value.isCameraEnabled)
+        vm.onAvatarZoneClick(AvatarZone.EYE_RIGHT)
+        assertFalse(vm.uiState.value.isCameraEnabled)
     }
 
     @Test

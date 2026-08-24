@@ -22,12 +22,24 @@ class MemoryRepository(
     val allMessages: Flow<List<MessageEntity>> = messageDao.getAllMessages()
     val allMemories: Flow<List<MemoryEntity>> = memoryDao.getAllMemories()
 
-    suspend fun addMessage(role: MessageRole, content: String): Long {
-        return messageDao.insertMessage(MessageEntity(role = role, content = content))
+    suspend fun addMessage(
+        role: MessageRole,
+        content: String,
+        conversationId: Long = 0L,
+        speakerName: String? = null,
+    ): Long {
+        return messageDao.insertMessage(
+            MessageEntity(
+                role = role,
+                content = content,
+                conversationId = conversationId,
+                speakerName = speakerName,
+            )
+        )
     }
 
-    suspend fun getRecentMessages(limit: Int): List<MessageEntity> {
-        return messageDao.getRecentMessages(limit).sortedBy { it.timestamp }
+    suspend fun getRecentMessages(limit: Int, conversationId: Long = 0L): List<MessageEntity> {
+        return messageDao.getRecentMessagesIn(conversationId, limit).sortedBy { it.timestamp }
     }
 
     suspend fun addMemory(

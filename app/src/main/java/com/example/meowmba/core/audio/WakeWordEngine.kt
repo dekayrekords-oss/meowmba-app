@@ -20,6 +20,15 @@ interface WakeWordEngine {
 
     fun start()
     fun stop()
+
+    /**
+     * [stop] plus wait until the capture loop has released [android.media.AudioRecord].
+     * Default is just [stop]; [SherpaKwsEngine] joins the loop so SpeechRecognizer
+     * does not open on a still-held mic (ERROR_RECOGNIZER_BUSY).
+     */
+    suspend fun stopAndAwait(timeoutMs: Long = 800L) {
+        stop()
+    }
 }
 
 /**

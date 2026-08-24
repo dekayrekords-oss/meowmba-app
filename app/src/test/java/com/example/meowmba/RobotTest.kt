@@ -39,6 +39,33 @@ class RobotProtocolTest {
     }
 }
 
+class LooiBleProtocolTest {
+    @Test
+    fun `right turn is a different 17-byte frame than left`() {
+        val left = com.example.meowmba.core.robot.LooiBleProtocol.rotateFrame(40, 8, right = false)
+        val right = com.example.meowmba.core.robot.LooiBleProtocol.rotateFrame(40, 8, right = true)
+        assertEquals(0x00, left.subOp)
+        assertEquals(0x00, right.subOp)
+        assertEquals(40, left.value)
+        assertEquals(216, right.value) // 256-40, two's complement
+    }
+
+    @Test
+    fun `captured left and right scripts invert the signed tread bytes`() {
+        val left = com.example.meowmba.core.robot.LooiBleProtocol.capturedTurn(1, left = true)
+        val right = com.example.meowmba.core.robot.LooiBleProtocol.capturedTurn(1, left = false)
+        assertEquals(20, left.size)
+        assertEquals(20, right.size)
+        assertEquals(1, left[0].toInt())
+        assertEquals(1, right[0].toInt())
+        // Signed motion bytes: left EB/EB/F5 (-21/-21/-11), right 15/15/0B (+21/+21/+11)
+        assertEquals(0xEB, left[9].toInt() and 0xFF)
+        assertEquals(0x15, right[9].toInt() and 0xFF)
+        assertEquals(0xF5, left[18].toInt() and 0xFF)
+        assertEquals(0x0B, right[18].toInt() and 0xFF)
+    }
+}
+
 class LooiMotorControllerTest {
     @Test
     fun `controller writes protocol frames to the transport`() {
@@ -80,6 +107,70 @@ class RobotManagerTest {
         assertFalse(ok)
         assertTrue(m.active is SimulatedMotorController)
         assertTrue(m.status.value.contains("unreachable"))
+    }
+
+    @Test
+    fun `keepPersonInFrame on a simulated body does not throw`() {
+        val m = RobotManager()
+        m.keepPersonInFrame(0.5f, -0.2f, 0.6f, nowMs = 1_000L)
+        m.keepPersonInFrame(null, null, null, nowMs = 2_000L)
+        m.active.setExpression("curious")
+    }
+
+    @Test
+    fun `keepPersonInFrame drives the neck and yaws toward a moderately off-center face`() {
+        val m = RobotManager()
+        m.keepPersonInFrame(0.35f, -0.5f, 1f, nowMs = 1_000L)
+        val sim = m.active as SimulatedMotorController
+        assertTrue(
+            "tilt must leave center for a high face, got ${sim.history}",
+            sim.history.any { it.startsWith("servo0") && !it.endsWith("90.0") },
+        )
+        assertTrue(
+            "off-center X must write pan, got ${sim.history}",
+            sim.history.any { it.startsWith("servo1") && !it.endsWith("90.0") },
+        )
+    }
+
+    @Test
+    fun `keepPersonInFrame does not yaw when the face is at the edge`() {
+        val m = RobotManager()
+        m.keepPersonInFrame(0.70f, 0f, 1f, nowMs = 1_000L)
+        val sim = m.active as SimulatedMotorController
+        assertFalse(
+            "edge of frame must not yaw, got ${sim.history}",
+            sim.history.any { it.startsWith("servo1") },
+        )
+    }
+
+    @Test
+    fun `keepPersonInFrame holds pose through a blink instead of recentering`() {
+        val m = RobotManager()
+        m.keepPersonInFrame(0.4f, -0.5f, 1f, nowMs = 1_000L)
+        m.keepPersonInFrame(0.4f, -0.5f, 1f, nowMs = 1_500L)
+        val sim = m.active as SimulatedMotorController
+        val afterLock = sim.history.toList()
+        m.keepPersonInFrame(null, null, null, nowMs = 1_600L)
+        assertEquals(
+            "a 200ms miss must not recenter servos",
+            afterLock,
+            sim.history.toList(),
+        )
+    }
+
+    @Test
+    fun `keepPersonInFrame does not write pan after the face is gone`() {
+        val m = RobotManager()
+        m.keepPersonInFrame(0.5f, -0.2f, 1f, nowMs = 1_000L)
+        val sim = m.active as SimulatedMotorController
+        val pans = sim.history.count { it.startsWith("servo1") }
+        m.keepPersonInFrame(null, null, null, nowMs = 1_200L)
+        m.keepPersonInFrame(null, null, null, nowMs = 1_800L)
+        assertEquals(
+            "lost face must not add pan/turn commands",
+            pans,
+            sim.history.count { it.startsWith("servo1") },
+        )
     }
 
     @Test

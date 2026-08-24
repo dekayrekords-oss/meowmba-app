@@ -23,7 +23,20 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 object CurrentLocation {
 
-    data class Fix(val lat: Double, val lon: Double)
+    data class Fix(
+        val lat: Double,
+        val lon: Double,
+        /** [Location.getTime] when known; [System.currentTimeMillis] otherwise. */
+        val atMs: Long = System.currentTimeMillis(),
+        /** Metres per second when the platform reported it. */
+        val speedMps: Float? = null,
+    ) {
+        fun ageMs(nowMs: Long = System.currentTimeMillis()): Long = (nowMs - atMs).coerceAtLeast(0L)
+        fun isFresh(maxAgeMs: Long = FRESH_MS, nowMs: Long = System.currentTimeMillis()): Boolean =
+            ageMs(nowMs) <= maxAgeMs
+        val speedMph: Float?
+            get() = speedMps?.takeIf { it >= 0f }?.times(MPS_TO_MPH)
+    }
 
     fun hasPermission(context: Context): Boolean =
         ContextCompat.checkSelfPermission(
@@ -49,7 +62,14 @@ object CurrentLocation {
                     runCatching { lm.getLastKnownLocation(p) }.getOrNull()
                 }
                 .maxByOrNull { it.time }
-                ?.let { Fix(it.latitude, it.longitude) }
+                ?.let {
+                    Fix(
+                        it.latitude,
+                        it.longitude,
+                        it.time,
+                        speedMps = if (it.hasSpeed()) it.speed else null,
+                    )
+                }
             Log.i("CurrentLocation", "last(): providers=${providers.joinToString(",")} result=$result")
             result
         } catch (e: SecurityException) {
@@ -85,7 +105,14 @@ object CurrentLocation {
         val listener = object : LocationListener {
             override fun onLocationChanged(location: Location) {
                 lm.removeUpdates(this)
-                finish(Fix(location.latitude, location.longitude))
+                finish(
+                    Fix(
+                        location.latitude,
+                        location.longitude,
+                        location.time,
+                        speedMps = if (location.hasSpeed()) location.speed else null,
+                    )
+                )
             }
 
             @Deprecated("Deprecated in Android")
@@ -127,4 +154,9 @@ object CurrentLocation {
         }, timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
         timer.shutdown()
     }
+
+    /** Last-known is usable for road alerts / nearby search below this age. */
+    const val FRESH_MS = 90_000L
+
+    private const val MPS_TO_MPH = 2.2369363f
 }

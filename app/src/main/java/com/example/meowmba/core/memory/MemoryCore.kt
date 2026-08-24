@@ -1,5 +1,6 @@
 package com.example.meowmba.core.memory
 
+import com.example.meowmba.core.audio.EnrollPhraseParser
 import com.example.meowmba.core.audio.WakePhraseMatcher
 import com.example.meowmba.core.database.ImportanceLevel
 import com.example.meowmba.core.database.MemoryEntity
@@ -172,9 +173,24 @@ object PromptBuilder {
          * change — the text originates in tool output, which is untrusted.
          */
         learned: String? = null,
+        /** Who is speaking this turn, when two people share the mic. */
+        speakerName: String? = null,
+        /**
+         * Live device facts (battery, robot body). The model has invented
+         * "5% battery" and "I'm on a LOOI" with no tool call; this line is
+         * the only allowed source for those claims.
+         */
+        deviceFacts: String? = null,
+        /** Voice-call lane: keep answers short enough to speak immediately. */
+        voiceCall: Boolean = false,
     ): String = buildString {
         append("You are ").append(companionName)
         append(", a helpful AI companion with a cat avatar. Answer naturally and concisely.\n")
+        if (voiceCall) {
+            append("You are on a live voice call. Reply in one or two short spoken ")
+            append("sentences. No markdown, no lists, no preamble.\n")
+        }
+        deviceFacts?.takeIf { it.isNotBlank() }?.let { append(it).append('\n') }
         // The chat model has no clock — asked the time it answered from training
         // data, confidently and wrong. Anchor it to the real instant so any
         // time/date-adjacent question (times in a few hours, days of the week)
@@ -183,6 +199,10 @@ object PromptBuilder {
         append("The current time and date right now, in the user's timezone, is ")
         append(clockFormat.format(Date(System.currentTimeMillis()))).append(".\n")
         append("If the user asks the time or date, answer from that line — never guess.\n")
+        speakerName?.trim()?.takeIf { it.isNotEmpty() }?.let { who ->
+            append("You already know this person. Their name is ")
+                .append(EnrollPhraseParser.displayName(who)).append(".\n")
+        }
         // Measured complaint: asked "how do I install X", the model replied with
         // another question or promised to look it up. Answer; do not deflect.
         // Unconditional so it also covers the tool-free direct-answer path.
@@ -190,6 +210,10 @@ object PromptBuilder {
         append("knowledge in a few short spoken-style sentences. Never reply with ")
         append("another question, never ask for clarification or permission, and ")
         append("never say you will look it up, search, or check — just answer.\n")
+        append("The user's words come from speech-to-text and may be misspelled. ")
+        append("If it sounds like a greeting or \"what's up\" (including \"ulat's up\" ")
+        append("or \"ovites up\"), greet them back. Never say you don't understand ")
+        append("and never ask what they mean.\n")
 
         // Without this, the chat model has no idea the tool layer exists and
         // truthfully tells the user it is "text only" — even though the
@@ -236,13 +260,40 @@ object PromptBuilder {
         if (recentMessages.isNotEmpty()) {
             append("\nConversation so far:\n")
             recentMessages.forEach { message ->
-                val speaker = if (message.role == MessageRole.USER) "User" else companionName
+                val speaker = when {
+                    message.role != MessageRole.USER -> companionName
+                    !message.speakerName.isNullOrBlank() ->
+                        EnrollPhraseParser.displayName(message.speakerName)
+                    else -> "User"
+                }
                 append(speaker).append(": ").append(message.content).append('\n')
             }
         }
 
-        append("\nUser: ").append(userInput).append('\n')
+        val who = speakerName?.takeIf { it.isNotBlank() }?.let { EnrollPhraseParser.displayName(it) }
+            ?: "User"
+        append('\n').append(who).append(": ").append(userInput).append('\n')
         append(companionName).append(':')
+    }
+
+    /**
+     * Ground-truth block for battery and the robot body. The chat model has
+     * invented "I'm at 5%" and "I'm on a LOOI" with nothing connected.
+     */
+    fun deviceFacts(
+        batteryLine: String,
+        robotLive: Boolean,
+        robotStatus: String,
+    ): String = buildString {
+        append("FACTS about this phone right now — use these, never invent others:\n")
+        append("- ").append(batteryLine).append('\n')
+        if (robotLive) {
+            append("- A LOOI robot base IS connected (").append(robotStatus).append(").\n")
+        } else {
+            append("- No robot body is connected. Status: ").append(robotStatus).append(". ")
+            append("You are the on-phone cat face only. Never say you are sitting on, ")
+            append("plugged into, or connected to a LOOI or any robot base.\n")
+        }
     }
 }
 

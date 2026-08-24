@@ -50,6 +50,21 @@ class AppAndEmailRoutingTest {
     }
 
     @Test
+    fun `can you open and hey meow open still launch`() {
+        for (said in listOf(
+            "can you open spotify",
+            "please open gmail",
+            "hey meow open youtube",
+            "could you please open maps",
+        )) {
+            val intent = AgentRouter.route(said)!!
+            assertEquals(said, "phone.launch_app", intent.toolId)
+        }
+        assertEquals("spotify", AgentRouter.route("can you open spotify")!!.args["name"])
+        assertEquals("youtube", AgentRouter.route("hey meow open youtube")!!.args["name"])
+    }
+
+    @Test
     fun `a plain open still launches the app`() {
         val intent = AgentRouter.route("open gmail")!!
         assertEquals("phone.launch_app", intent.toolId)

@@ -135,8 +135,10 @@ class LaunchAppTool(private val context: Context) : Tool {
             ?: return@withContext ToolResult.Failure("${match.label} has no launcher screen to open.")
 
         return@withContext try {
-            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(launch)
+            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+            withContext(Dispatchers.Main.immediate) {
+                context.startActivity(launch)
+            }
             ToolResult.Success("Opened ${match.label}.")
         } catch (e: Exception) {
             ToolResult.Failure("Couldn't open ${match.label}: ${e.message}")
@@ -483,21 +485,7 @@ class BatteryStatusTool(private val context: Context) : Tool {
 
     override suspend fun execute(args: Map<String, String>): ToolResult = withContext(Dispatchers.IO) {
         try {
-            val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
-            val saver = pm?.isPowerSaveMode == true
-            val batteryIntent = context.registerReceiver(
-                null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)
-            )
-            val level = batteryIntent?.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1) ?: -1
-            val scale = batteryIntent?.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, 100) ?: 100
-            val status = batteryIntent?.getIntExtra(android.os.BatteryManager.EXTRA_STATUS, -1) ?: -1
-            val charging = status == android.os.BatteryManager.BATTERY_STATUS_CHARGING ||
-                status == android.os.BatteryManager.BATTERY_STATUS_FULL
-            val pct = if (level >= 0 && scale > 0) level * 100 / scale else -1
-            ToolResult.Success(buildString {
-                if (pct >= 0) append("Battery at $pct%${if (charging) ", charging" else ""}. ")
-                append("Battery saver is ${if (saver) "on" else "off"}.")
-            })
+            ToolResult.Success(BatteryReading.spoken(BatteryReading.read(context)))
         } catch (e: Exception) {
             ToolResult.Failure("Couldn't read battery status: ${e.message}")
         }
@@ -535,14 +523,14 @@ private fun lookupPhoneNumber(context: Context, raw: String): String {
     }
 }
 
-/** `phone.set_volume` — media volume as a percentage, or up/down/mute. */
+/** `phone.set_volume` — media volume as a percentage, or up/down/mute/unmute. */
 class SetVolumeTool(private val context: Context) : Tool {
     override val definition = ToolDefinition(
         id = "phone.set_volume",
         displayName = "Set media volume",
         description = "Set the media volume to a percentage, or nudge it. " +
-            "Args: level 0-100 for an exact value, or action = up|down|mute.",
-        inputSchema = mapOf("level" to "0-100", "action" to "up|down|mute"),
+            "Args: level 0-100 for an exact value, or action = up|down|mute|unmute.",
+        inputSchema = mapOf("level" to "0-100", "action" to "up|down|mute|unmute"),
         riskLevel = RiskLevel.SAFE
     )
 
@@ -568,6 +556,16 @@ class SetVolumeTool(private val context: Context) : Tool {
                 "mute" -> {
                     am.setStreamVolume(AudioManager.STREAM_MUSIC, 0, 0)
                     ToolResult.Success("Muted.")
+                }
+                "unmute" -> {
+                    // The mute path sets the index to 0 rather than using the
+                    // mute flag, so a plain ADJUST_UNMUTE can land back on
+                    // silence — raise one step when it does.
+                    am.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_UNMUTE, 0)
+                    if (am.getStreamVolume(AudioManager.STREAM_MUSIC) == 0) {
+                        am.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_RAISE, 0)
+                    }
+                    ToolResult.Success("Unmuted.")
                 }
                 else -> ToolResult.Failure("Tell me a level (0-100) or up, down, or mute.")
             }

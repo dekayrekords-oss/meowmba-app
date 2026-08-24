@@ -33,6 +33,12 @@ interface SpeechEngine {
     fun startListening(onResult: (String) -> Unit, onError: (Int) -> Unit)
 
     /**
+     * Face is in focus: use a longer silence window so mid-sentence pauses
+     * are not cut off. Default no-op for fakes.
+     */
+    fun setFocusedListening(on: Boolean) {}
+
+    /**
      * Swap callbacks on an already-running recognizer without stopping it.
      * Useful when barge-in / interruption transitions to follow-up — avoids
      * restarting the recognizer and losing audio on devices (Samsung) where

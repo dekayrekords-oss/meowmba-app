@@ -21,9 +21,17 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
 import com.google.mlkit.vision.common.InputImage
+import com.google.android.gms.tasks.Tasks
+import com.google.mlkit.vision.face.Face
 import com.google.mlkit.vision.face.FaceDetection
 import com.google.mlkit.vision.face.FaceDetector
 import com.google.mlkit.vision.face.FaceDetectorOptions
+import com.google.mlkit.vision.face.FaceLandmark
+import com.google.mlkit.vision.pose.Pose
+import com.google.mlkit.vision.pose.PoseDetection
+import com.google.mlkit.vision.pose.PoseDetector
+import com.google.mlkit.vision.pose.PoseLandmark
+import com.google.mlkit.vision.pose.defaults.PoseDetectorOptions
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,6 +40,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.collections.ArrayDeque
 import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 
@@ -61,6 +70,19 @@ data class FaceTrack(
     /** Distance proxy: 1.0 at baseline face size; >1 closer, <1 farther. */
     val scale: Float = 1f,
     val confidence: Float,
+    val cue: SocialCue = SocialCue.NONE,
+    val followSource: FollowSource = FollowSource.FACE,
+    /** True only when ML Kit saw a face. Pose wrists must not steer the base. */
+    val hasFace: Boolean = false,
+    /** ML Kit tracking id for this face; -1 if unknown. */
+    val trackingId: Int = -1,
+    /** How many faces the detector saw this frame. */
+    val faceCount: Int = 0,
+    /** Lip opening 0..1; used to pick the talker when two people are in frame. */
+    val mouthOpen: Float = 0f,
+    /** Face-box offset for keep-in-frame. Gaze [offsetX]/[offsetY] may be a hand. */
+    val frameX: Float = offsetX,
+    val frameY: Float = offsetY,
 )
 
 /**
@@ -114,7 +136,10 @@ internal fun surfaceRotationOf(degrees: Int): Int {
     }
 }
 
-internal fun faceSmoothingAlpha(hasHistory: Boolean): Float = if (hasHistory) 0.32f else 0.65f
+internal fun faceSmoothingAlpha(hasHistory: Boolean): Float = if (hasHistory) 0.35f else 0.62f
+
+/** Hand follow needs to catch the wave, not ease in a half-second late. */
+internal fun handSmoothingAlpha(hasHistory: Boolean): Float = if (hasHistory) 0.62f else 0.82f
 
 /**
  * One smoothing step: blend [raw] into [smoothed].
@@ -143,6 +168,131 @@ internal fun faceOffsetInScreenSpace(
 }
 
 /**
+ * Face box → display-space offset in -1..1.
+ *
+ * CameraX's `rotationDegrees` is the rotation ML Kit already applied. When it
+ * is 0 the box is still in the raw buffer, which follows the SENSOR — and on
+ * the Fold 7 cover in landscape that is the measured failure: targetRotation
+ * is ROTATION_90, rot stays 0, and left/right head motion lands on Y
+ * (`y≈-0.8`, roll ≈ -35°). [FaceFrameMap] turns that sensor frame into the
+ * display frame. When ML Kit did rotate (90/270), the box is already in the
+ * target space and remapping would swap the axes a second time.
+ */
+/**
+ * True only when the buffer is still in SENSOR space but the display is not.
+ *
+ * `cam=0` + `targetRotation == display` means CameraX already delivered a
+ * buffer that matches the window (Fold cover landscape: target=1, disp=90).
+ * Remapping that a second time swaps the axes — measured: X/Y sat at 0 after
+ * rest-centering and pitch jumped to 50° from a bogus euler remap.
+ */
+internal fun shouldRemapSensorToDisplay(
+    cameraRotationDegrees: Int,
+    displayDeg: Int,
+    targetRotation: Int,
+): Boolean {
+    val cam = ((cameraRotationDegrees % 360) + 360) % 360
+    val disp = ((displayDeg % 360) + 360) % 360
+    if (cam != 0 || disp == 0) return false
+    val targetDeg = when (targetRotation) {
+        android.view.Surface.ROTATION_90 -> 90
+        android.view.Surface.ROTATION_180 -> 180
+        android.view.Surface.ROTATION_270 -> 270
+        else -> 0
+    }
+    return targetDeg != disp
+}
+
+internal fun pointInDisplay01(
+    px: Float,
+    py: Float,
+    bufferW: Int,
+    bufferH: Int,
+    rotationDegrees: Int,
+    displayDeg: Int,
+    mirrored: Boolean,
+    targetRotation: Int = android.view.Surface.ROTATION_0,
+): Pair<Float, Float>? {
+    val (w, h) = rotatedFrameSize(bufferW, bufferH, rotationDegrees)
+    if (w <= 0 || h <= 0) return null
+    var fx = px / w.toFloat()
+    var fy = py / h.toFloat()
+    if (shouldRemapSensorToDisplay(rotationDegrees, displayDeg, targetRotation)) {
+        val mapped = FaceFrameMap.toDisplay(fx, fy, displayDeg)
+        fx = mapped.first
+        fy = mapped.second
+    }
+    if (mirrored) fx = 1f - fx
+    return fx to fy
+}
+
+internal fun faceOffsetOnDisplay(
+    boxCenterX: Float,
+    boxCenterY: Float,
+    bufferW: Int,
+    bufferH: Int,
+    rotationDegrees: Int,
+    displayDeg: Int,
+    mirrored: Boolean,
+    targetRotation: Int = android.view.Surface.ROTATION_0,
+): Pair<Float, Float>? {
+    val (fx, fy) = pointInDisplay01(
+        px = boxCenterX,
+        py = boxCenterY,
+        bufferW = bufferW,
+        bufferH = bufferH,
+        rotationDegrees = rotationDegrees,
+        displayDeg = displayDeg,
+        mirrored = mirrored,
+        targetRotation = targetRotation,
+    ) ?: return null
+    return (fx * 2f - 1f).coerceIn(-1f, 1f) to (fy * 2f - 1f).coerceIn(-1f, 1f)
+}
+
+/**
+ * Which Surface.ROTATION_* to give ImageAnalysis.
+ *
+ * Prefer the window's rotation — it is stable. The IMU is used only when the
+ * display is stuck in portrait (rotation-lock / home-launcher) while the
+ * phone is on its side. Measured on the Fold 7 cover: driving targetRotation
+ * from the IMU flipped 0↔1↔3 every frame and landscape detection died.
+ */
+internal fun analyzerTargetRotation(displayRot: Int?, physicalRot: Int?): Int? {
+    if (displayRot == null) return physicalRot
+    val lockedPortrait = displayRot == android.view.Surface.ROTATION_0
+    if (lockedPortrait && physicalRot != null && physicalRot != android.view.Surface.ROTATION_0) {
+        return physicalRot
+    }
+    return displayRot
+}
+
+/**
+ * Rotate ML Kit euler angles into display space when the box was remapped
+ * the same way. Identity when ML Kit already worked in the display frame.
+ *
+ * 90° CW (sensor-up → display-right): displayYaw = sensorPitch,
+ * displayPitch = -sensorYaw.
+ */
+internal fun remapEulerToDisplay(
+    yaw: Float,
+    pitch: Float,
+    roll: Float,
+    rotationDegrees: Int,
+    displayDeg: Int,
+    targetRotation: Int = android.view.Surface.ROTATION_0,
+): Triple<Float, Float, Float> {
+    if (!shouldRemapSensorToDisplay(rotationDegrees, displayDeg, targetRotation)) {
+        return Triple(yaw, pitch, roll)
+    }
+    return when (((displayDeg % 360) + 360) % 360) {
+        90 -> Triple(pitch, -yaw, roll)
+        270 -> Triple(-pitch, yaw, roll)
+        180 -> Triple(-yaw, -pitch, roll)
+        else -> Triple(yaw, pitch, roll)
+    }
+}
+
+/**
  * CameraX frame capture and face tracking for the vision path (Phase 7a).
  *
  * Bound lazily on the first "look" and kept warm afterwards. Capture-only
@@ -162,6 +312,18 @@ class VisionManager(
     private var preview: Preview? = null
     private var imageAnalysis: ImageAnalysis? = null
     private var faceDetector: FaceDetector? = null
+    private var poseDetector: PoseDetector? = null
+    private val recentWristX = ArrayDeque<Float>(8)
+    private var prevLuma: ByteArray? = null
+    private var lastMotionOff: Pair<Float, Float>? = null
+    private var lastMotionAtMs = 0L
+    private var motionHits = 0
+    private var lastFollow = FollowSource.FACE
+    private var gazeSettled = false
+    private var lastRealFaceAtMs = 0L
+    private var analyzeSkip = 0
+    private var pendingHandCue = SocialCue.NONE
+    private var pendingHandHits = 0
     private var boundSelector: CameraSelector? = null
     private var _useFrontCamera = false
     private var _faceTrackingEnabled = false
@@ -176,6 +338,9 @@ class VisionManager(
     // Smoothed gaze (EMA) + short hold so lost-face frames do not null the stream.
     private var smoothOffX = 0f
     private var smoothOffY = 0f
+    private var smoothFrameX = 0f
+    private var smoothFrameY = 0f
+    private var hasFrameSmooth = false
     private var smoothYaw = 0f
     private var smoothPitch = 0f
     private var smoothRoll = 0f
@@ -184,15 +349,31 @@ class VisionManager(
     private var hasSmooth = false
     private var lastLogMs = 0L
     private var lastPublishAtMs = 0L
-    private var analyzeSkip = 0
+    private var lastTalkerId: Int? = null
+    private var lastTalkerAtMs = 0L
+    @Volatile
+    private var speechLikely = false
+    private var lastSeenFaces: List<SeenFace> = emptyList()
 
     private val _faceTrack = MutableStateFlow<FaceTrack?>(null)
+    private val _sceneLuma = MutableStateFlow<Int?>(null)
 
     /** Latest face-track result; null when no face is in frame. */
     val faceTrack: StateFlow<FaceTrack?> = _faceTrack.asStateFlow()
 
+    /** Mean luma of the analysis frame, 0..255. For the auto headlight. */
+    val sceneLuma: StateFlow<Int?> = _sceneLuma.asStateFlow()
+
     val isFrontCamera: Boolean get() = _useFrontCamera
     val isFaceTrackingEnabled: Boolean get() = _faceTrackingEnabled
+
+    /** Faces from the last published frame (screen space). */
+    val lastFaces: List<SeenFace> get() = lastSeenFaces
+
+    /** Audio path says someone is speaking — prefer the open mouth. */
+    fun setSpeechLikely(on: Boolean) {
+        speechLikely = on
+    }
 
     fun setUseFrontCamera(useFront: Boolean) {
         // Face tracking pins the front camera — don't let a stray call fight it.
@@ -234,19 +415,27 @@ class VisionManager(
                     .build()
             }
             val options = FaceDetectorOptions.Builder()
-                .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
+                .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
                 .setContourMode(FaceDetectorOptions.CONTOUR_MODE_NONE)
                 .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_NONE)
+                .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_ALL)
+                .setMinFaceSize(0.08f)
+                .enableTracking()
                 .build()
             faceDetector = FaceDetection.getClient(options)
-            // Prefer ~QVGA analysis. setTargetResolution is ignored on modern
-            // CameraX (phone was binding 1088x1088 and thrashing the UI thread).
+            poseDetector = PoseDetection.getClient(
+                PoseDetectorOptions.Builder()
+                    .setDetectorMode(PoseDetectorOptions.STREAM_MODE)
+                    .build()
+            )
+            // QVGA is enough for a face box. 480x360 plus pose every frame
+            // cooked the Fold.
             val analysis = ImageAnalysis.Builder()
                 .setResolutionSelector(
                     ResolutionSelector.Builder()
                         .setResolutionStrategy(
                             ResolutionStrategy(
-                                Size(320, 240),
+                                Size(480, 360),
                                 ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER,
                             )
                         )
@@ -264,11 +453,27 @@ class VisionManager(
             imageAnalysis = null
             faceDetector?.close()
             faceDetector = null
+            poseDetector?.close()
+            poseDetector = null
+            recentWristX.clear()
+            prevLuma = null
+            lastMotionOff = null
+            lastMotionAtMs = 0L
+            motionHits = 0
+            lastFollow = FollowSource.FACE
+            gazeSettled = false
+            lastRealFaceAtMs = 0L
+            analyzeSkip = 0
+            pendingHandCue = SocialCue.NONE
+            pendingHandHits = 0
             _faceTrack.value = null
             hasSmooth = false
+            hasFrameSmooth = false
             // keep executor alive for re-enable; process teardown reclaims it
             smoothOffX = 0f
             smoothOffY = 0f
+            smoothFrameX = 0f
+            smoothFrameY = 0f
             unregisterDisplayListener()
         }
         unbind()
@@ -308,37 +513,24 @@ class VisionManager(
         }
     }
 
-    /**
-     * Rotation to hand the analyzer: the device's PHYSICAL orientation, falling
-     * back to the display's.
-     *
-     * Faces are upright with respect to GRAVITY, not with respect to the
-     * window manager. Driving this from `display.rotation` fails whenever the
-     * two disagree, and on this app they disagree often: Meowmba can be the
-     * home launcher, it declares `configChanges` for orientation, and it can be
-     * docked or rotation-locked. Measured with the display forced to landscape
-     * while the phone lay flat, same scene seconds apart — portrait applied
-     * rot=270 and found a face; landscape applied rot=0, handed ML Kit an
-     * unrotated frame, and found none. A sideways face is invisible to the FAST
-     * detector, so tracking simply stopped.
-     *
-     * [physicalRotation] is maintained by an OrientationEventListener, which is
-     * the orientation the camera actually experiences.
-     */
+    private fun readWindowRotation(): Int? = runCatching {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            context.display?.rotation
+        } else {
+            @Suppress("DEPRECATION")
+            (context.getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager)
+                .defaultDisplay?.rotation
+        }
+    }.getOrNull()
+
     private fun currentDisplayRotation(): Int? =
-        physicalRotation ?: runCatching {
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-                context.display?.rotation
-            } else {
-                @Suppress("DEPRECATION")
-                (context.getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager)
-                    .defaultDisplay?.rotation
-            }
-        }.getOrNull()
+        analyzerTargetRotation(readWindowRotation(), physicalRotation)
 
     /** Latest physical orientation as a Surface.ROTATION_* value, or null. */
     @Volatile
     private var physicalRotation: Int? = null
+    private var pendingPhysical: Int? = null
+    private var pendingPhysicalCount = 0
 
     private var orientationListener: android.view.OrientationEventListener? = null
 
@@ -347,7 +539,23 @@ class VisionManager(
         orientationListener = object : android.view.OrientationEventListener(context) {
             override fun onOrientationChanged(degrees: Int) {
                 if (degrees == ORIENTATION_UNKNOWN) return
-                physicalRotation = surfaceRotationOf(degrees)
+                val next = surfaceRotationOf(degrees)
+                if (next == physicalRotation) {
+                    pendingPhysical = null
+                    pendingPhysicalCount = 0
+                    return
+                }
+                if (next == pendingPhysical) {
+                    pendingPhysicalCount++
+                    if (pendingPhysicalCount >= 4) {
+                        physicalRotation = next
+                        pendingPhysical = null
+                        pendingPhysicalCount = 0
+                    }
+                } else {
+                    pendingPhysical = next
+                    pendingPhysicalCount = 1
+                }
             }
         }.also { if (it.canDetectOrientation()) it.enable() }
     }
@@ -399,155 +607,418 @@ class VisionManager(
             proxy.close()
             return
         }
-        // ~1/2 of frames — the follow target refreshes ~2x faster, so the head
-        // chases the user instead of the 5Hz-steppy lag the every-3rd skip caused.
+        // Face lock: 1 in 3. Hunting a hand: 1 in 2. Pose is the heat hog
+        // and we ignore it while a face is locked, so do not run it then.
         analyzeSkip++
-        if (analyzeSkip % 2 != 0) {
+        val faceLockHot = lastRealFaceAtMs != 0L &&
+            System.currentTimeMillis() - lastRealFaceAtMs < 900L
+        val skipN = 1
+        if (analyzeSkip % skipN != 0) {
             proxy.close()
             return
         }
-        // KEEP_ONLY_LATEST already drops backlog; a detector still busy on the
-        // previous frame means we skip this one rather than queue up faces.
         if (!frameInFlight.compareAndSet(false, true)) {
             proxy.close()
             return
         }
-        // Match the analysis rotation to the display BEFORE detecting, and do it
-        // whether or not a face is in frame — otherwise the correction only
-        // lands once someone is already being tracked, and the first frames of
-        // every new face arrive in the stale space.
         syncAnalysisRotation()
-        val input = InputImage.fromMediaImage(mediaImage, proxy.imageInfo.rotationDegrees)
-        detector.process(input)
-            .addOnSuccessListener { faces ->
-                // Orientation diagnostic. "Tracks only in portrait" has two very
-                // different causes that look identical from outside: the frame
-                // reaching ML Kit rotated wrongly (so an upright face arrives
-                // sideways and the FAST detector cannot see it), or simply
-                // nobody being in shot. Logging the rotation actually applied,
-                // the frame it produced, and the face count separates them in
-                // one test. Rate-limited to one line every two seconds.
-                if (System.currentTimeMillis() - lastLogMs >= 2000L) {
-                    val (dw, dh) = rotatedFrameSize(
-                        proxy.width, proxy.height, proxy.imageInfo.rotationDegrees,
-                    )
-                    android.util.Log.i(
-                        "VMrot",
-                        "rot=${proxy.imageInfo.rotationDegrees} " +
-                            "target=${imageAnalysis?.targetRotation} " +
-                            "buf=${proxy.width}x${proxy.height} upright=${dw}x$dh " +
-                            "front=$_useFrontCamera faces=${faces.size}",
-                    )
-                }
-                val face = faces.maxByOrNull { it.boundingBox.width() * it.boundingBox.height() }
-                val now = System.currentTimeMillis()
-                if (face != null) {
-                    val (w, h) = rotatedFrameSize(
-                        proxy.width, proxy.height, proxy.imageInfo.rotationDegrees,
-                    )
-                    val (rawX, rawY) = faceOffsetInScreenSpace(
-                        boxCenterX = face.boundingBox.exactCenterX(),
-                        boxCenterY = face.boundingBox.exactCenterY(),
-                        frameW = w,
-                        frameH = h,
-                        mirrored = _useFrontCamera,
-                    ) ?: return@addOnSuccessListener
-                    // Medium EMA: follows clearly, still damps ML Kit box noise.
-                    // (0.10 + center-bias was so strong following looked dead.)
-                    // No maxStep clamp — that turned fast motion into a staircase.
-                    val a = faceSmoothingAlpha(hasSmooth)
-                    smoothOffX = smoothFaceOffset(smoothOffX, rawX, a)
-                    smoothOffY = smoothFaceOffset(smoothOffY, rawY, a)
-                    val rawYaw = face.headEulerAngleY
-                    val rawPitch = face.headEulerAngleX
-                    val rawRoll = face.headEulerAngleZ
-                    val rawScale = FacePose.scaleFromFaceFraction(
-                        face.boundingBox.width().toFloat(), w.toFloat()
-                    )
-                    // Front camera is mirrored — flip yaw to match the offsetX
-                    // convention (+ = user's right on screen). Roll survives a
-                    // mirror (clockwise stays clockwise); pitch is unaffected.
-                    val yaw = if (_useFrontCamera) -rawYaw else rawYaw
-                    smoothYaw = smoothFaceOffset(smoothYaw, yaw, a)
-                    smoothPitch = smoothFaceOffset(smoothPitch, rawPitch, a)
-                    smoothRoll = smoothFaceOffset(smoothRoll, rawRoll, a)
-                    smoothScale = smoothFaceOffset(smoothScale, rawScale, a)
-                    hasSmooth = true
-                    lastFaceAtMs = now
-                    val pub = _faceTrack.value
-                    // Publish on a STEADY cadence, with no movement threshold.
-                    //
-                    // There used to be a dead-band here (and an identical one
-                    // again in the ViewModel, so a sample had to clear 0.012
-                    // twice). Between them, moving slowly published nothing at
-                    // all until the accumulated drift finally crossed the line
-                    // and the head jumped — the "erratic tracking" was the
-                    // renderer's spring being handed a staircase and faithfully
-                    // reproducing it. The spring wants an even sample stream to
-                    // integrate; 25Hz of that is trivial, and StateFlow already
-                    // conflates a value identical to the last one.
-                    val due = now - lastPublishAtMs >= 40L
-                    if (pub == null || due) {
-                        lastPublishAtMs = now
-                        _faceTrack.value = FaceTrack(
-                            offsetX = smoothOffX.coerceIn(-1f, 1f),
-                            offsetY = smoothOffY.coerceIn(-1f, 1f),
-                            yawDeg = smoothYaw.coerceIn(-30f, 30f),
-                            pitchDeg = smoothPitch.coerceIn(-30f, 30f),
-                            rollDeg = smoothRoll.coerceIn(-30f, 30f),
-                            scale = smoothScale,
-                            confidence = 0.9f,
-                        )
-                        if (now - lastLogMs >= 2000L) {
-                            lastLogMs = now
-                            android.util.Log.i(
-                                "VM", "pub x=${smoothOffX} y=${smoothOffY} " +
-                                    "yaw=${smoothYaw} pitch=${smoothPitch} " +
-                                    "roll=${smoothRoll} scale=${smoothScale}"
-                            )
-                        }
-                    } else if (now - lastLogMs >= 2000L) {
-                        lastLogMs = now
-                        android.util.Log.i("VM", "face nopub")
-                    }
+        val displayDeg = displayRotationDegrees()
+        val cameraRot = proxy.imageInfo.rotationDegrees
+        val input = InputImage.fromMediaImage(mediaImage, cameraRot)
+        val faceTask = detector.process(input)
+        val poseTask = if (analyzeSkip % (if (faceLockHot) 4 else 3) == 0) {
+            poseDetector?.process(input)
+        } else {
+            null
+        }
+        val done = if (poseTask != null) Tasks.whenAllComplete(faceTask, poseTask) else faceTask
+        done.addOnCompleteListener(analysisExecutor) {
+            try {
+                val faces = if (faceTask.isSuccessful) {
+                    faceTask.result ?: emptyList()
                 } else {
-                    // Hold last pose, then clear — do not drag to zero while "following"
-                    // (that fought the user and felt unresponsive).
-                    if (hasSmooth && now - lastFaceAtMs < 500L) {
-                        // keep last published value
-                    } else {
-                        hasSmooth = false
-                        smoothOffX = 0f
-                        smoothOffY = 0f
-                        smoothYaw = 0f
-                        smoothPitch = 0f
-                        smoothRoll = 0f
-                        smoothScale = 1f
-                        _faceTrack.value = null
-                        if (now - lastLogMs >= 2000L) {
-                            lastLogMs = now
-                            android.util.Log.i("VM", "noface clear")
-                        }
-                    }
+                    emptyList()
                 }
-            }
-            .addOnFailureListener {
-                val now = System.currentTimeMillis()
-                if (!(hasSmooth && now - lastFaceAtMs < 700L)) {
-                    hasSmooth = false
-                    smoothOffX = 0f
-                    smoothOffY = 0f
-                    smoothYaw = 0f
-                    smoothPitch = 0f
-                    smoothRoll = 0f
-                    smoothScale = 1f
-                    _faceTrack.value = null
-                }
-            }
-            .addOnCompleteListener {
+                val pose = if (poseTask?.isSuccessful == true) poseTask.result else null
+                publishDetections(proxy, faces, pose, cameraRot, displayDeg)
+            } finally {
                 frameInFlight.set(false)
                 proxy.close()
             }
+        }
+    }
+
+    private fun publishDetections(
+        proxy: ImageProxy,
+        faces: List<Face>,
+        pose: Pose?,
+        cameraRot: Int,
+        displayDeg: Int,
+    ) {
+        val now = System.currentTimeMillis()
+        val targetRot = imageAnalysis?.targetRotation ?: android.view.Surface.ROTATION_0
+        if (now - lastLogMs >= 2000L) {
+            val (dw, dh) = rotatedFrameSize(proxy.width, proxy.height, cameraRot)
+            android.util.Log.i(
+                "VMrot",
+                "cam=${cameraRot} " +
+                    "target=${imageAnalysis?.targetRotation} " +
+                    "disp=${displayDeg} " +
+                    "buf=${proxy.width}x${proxy.height} upright=${dw}x$dh " +
+                    "front=$_useFrontCamera faces=${faces.size} pose=${pose != null}",
+            )
+        }
+        val (uprightW, _) = rotatedFrameSize(proxy.width, proxy.height, cameraRot)
+        val seen = faces.mapNotNull { f ->
+            val off = faceOffsetOnDisplay(
+                boxCenterX = f.boundingBox.exactCenterX(),
+                boxCenterY = f.boundingBox.exactCenterY(),
+                bufferW = proxy.width,
+                bufferH = proxy.height,
+                rotationDegrees = cameraRot,
+                displayDeg = displayDeg,
+                mirrored = _useFrontCamera,
+                targetRotation = targetRot,
+            ) ?: return@mapNotNull null
+            SeenFace(
+                trackingId = f.trackingId ?: -1,
+                offsetX = off.first,
+                offsetY = off.second,
+                scale = FacePose.scaleFromFaceFraction(
+                    f.boundingBox.width().toFloat(),
+                    uprightW.toFloat(),
+                ),
+                mouthOpen = mouthOpenOf(f),
+                area = (f.boundingBox.width() * f.boundingBox.height()).toFloat(),
+            )
+        }.sortedByDescending { it.area }.take(3)
+        lastSeenFaces = seen
+        val pick = TalkerPicker.pick(
+            faces = seen,
+            speechLikely = speechLikely,
+            lastId = lastTalkerId,
+            nowMs = now,
+            lastAtMs = lastTalkerAtMs,
+        )
+        if (pick.face != null && pick.reason != TalkerPick.Reason.HOLD) {
+            lastTalkerId = pick.face.trackingId
+            if (pick.reason == TalkerPick.Reason.MOUTH) lastTalkerAtMs = now
+        }
+        val face = pick.face?.let { s ->
+            faces.firstOrNull { it.trackingId == s.trackingId }
+        } ?: faces.maxByOrNull { it.boundingBox.width() * it.boundingBox.height() }
+        if (face != null) lastRealFaceAtMs = now
+        // Drop hasFace immediately so the base halts. Holding hasFace=true
+        // with the last edge offset is what kept the robot spinning.
+        if (face == null) {
+            val last = _faceTrack.value
+            if (last != null && last.hasFace) {
+                _faceTrack.value = last.copy(hasFace = false)
+            }
+            if (hasSmooth && lastRealFaceAtMs != 0L && now - lastRealFaceAtMs < 180L) {
+                return
+            }
+        }
+        val yPlane = proxy.planes.firstOrNull()
+        val step = 4
+        val sampled = yPlane?.let {
+            MotionHand.sampleY(
+                it.buffer, proxy.width, proxy.height,
+                it.rowStride, it.pixelStride.coerceAtLeast(1), step,
+            )
+        }
+        val sw = proxy.width / step
+        val sh = proxy.height / step
+        val face01buf = face?.let {
+            (it.boundingBox.exactCenterX() / proxy.width.toFloat()) to
+                (it.boundingBox.exactCenterY() / proxy.height.toFloat())
+        }
+        val motion01 = sampled?.let {
+            MotionHand.followPoint(
+                prevLuma, it, sw, sh,
+                origin = face01buf ?: (0.5f to 0.5f),
+                exclude = face01buf,
+                excludeR = 0.32f,
+                minFrac = 0.055f,
+            )
+        }
+        if (sampled != null) {
+            prevLuma = sampled
+            _sceneLuma.value = MotionHand.meanLuma(sampled)
+        }
+        val motionOff = motion01?.let { p ->
+            pointInDisplay01(
+                p.first * proxy.width, p.second * proxy.height,
+                proxy.width, proxy.height, cameraRot, displayDeg, _useFrontCamera, targetRot,
+            )?.let { d ->
+                (d.first * 2f - 1f).coerceIn(-1f, 1f) to (d.second * 2f - 1f).coerceIn(-1f, 1f)
+            }
+        }
+        if (motionOff != null) {
+            lastMotionOff = motionOff
+            lastMotionAtMs = now
+            motionHits++
+        } else {
+            motionHits = 0
+        }
+        val heldMotion = lastMotionOff.takeIf { now - lastMotionAtMs < 200L }
+
+        val hands = pose?.let {
+            handsFromPose(
+                pose = it,
+                bufferW = proxy.width,
+                bufferH = proxy.height,
+                cameraRot = cameraRot,
+                displayDeg = displayDeg,
+                targetRot = targetRot,
+            )
+        }.orEmpty()
+        val raisedHands = hands.filter { SocialCues.handRaised(it) }
+        val hand = raisedHands.minByOrNull { it.wristY } ?: hands.minByOrNull { it.wristY }
+        if (hand != null) {
+            recentWristX.addLast(hand.wristX)
+            while (recentWristX.size > 8) recentWristX.removeFirst()
+        } else {
+            recentWristX.clear()
+        }
+        val handMoving = recentWristX.size >= 4 &&
+            ((recentWristX.maxOrNull() ?: 0f) - (recentWristX.minOrNull() ?: 0f)) > 0.08f
+        // Hand-of-god: a waved hand (pose wrist or luma outside the face)
+        // takes the gaze. Two motion hits so talking/blinks don't steal.
+        // With a face in frame, a static pose ghost must not yank the head —
+        // require a moving raised wrist or luma outside the face box.
+        val motionHand = motionHits >= 2
+        val raised = hand != null && SocialCues.handRaised(hand)
+        val follow = SocialCues.pickFollow(
+            handRaised = raised && (face == null || handMoving),
+            handMoving = raised && handMoving,
+            motionHand = motionHand,
+        )
+        val faceCue = if (face != null) {
+            SocialCues.faceCue(
+                smile = face.smilingProbability ?: -1f,
+                leftEyeOpen = face.leftEyeOpenProbability ?: -1f,
+                rightEyeOpen = face.rightEyeOpenProbability ?: -1f,
+            )
+        } else {
+            SocialCue.NONE
+        }
+        val rawHandCue = if (hand != null) {
+            SocialCues.handSign(hand, recentWristX.toList())
+        } else {
+            SocialCue.NONE
+        }
+        val handCue = confirmHandCue(rawHandCue)
+        val cue = SocialCues.pickCue(faceCue, handCue)
+
+        val faceOff = face?.let {
+            faceOffsetOnDisplay(
+                boxCenterX = it.boundingBox.exactCenterX(),
+                boxCenterY = it.boundingBox.exactCenterY(),
+                bufferW = proxy.width,
+                bufferH = proxy.height,
+                rotationDegrees = cameraRot,
+                displayDeg = displayDeg,
+                mirrored = _useFrontCamera,
+                targetRotation = targetRot,
+            )
+        }
+        val handOff = hand?.let { SocialCues.followOffset(it) }
+        val raw = when {
+            follow == FollowSource.HAND && motionOff != null -> motionOff
+            follow == FollowSource.HAND && heldMotion != null -> heldMotion
+            follow == FollowSource.HAND && handOff != null -> handOff
+            faceOff != null -> faceOff
+            else -> null
+        }
+
+        if (raw == null) {
+            // Hold last pose, then clear — do not drag to zero while "following"
+            // (that fought the user and felt unresponsive).
+            if (hasSmooth && now - lastFaceAtMs < 500L) return
+            hasSmooth = false
+            hasFrameSmooth = false
+            gazeSettled = false
+            smoothOffX = 0f
+            smoothOffY = 0f
+            smoothFrameX = 0f
+            smoothFrameY = 0f
+            smoothYaw = 0f
+            smoothPitch = 0f
+            smoothRoll = 0f
+            smoothScale = 1f
+            _faceTrack.value = null
+            if (now - lastLogMs >= 2000L) {
+                lastLogMs = now
+                android.util.Log.i("VM", "noface clear")
+            }
+            return
+        }
+
+        val (rawX, rawY) = raw
+        val a = when {
+            follow != lastFollow -> 0.78f
+            follow == FollowSource.HAND -> handSmoothingAlpha(hasSmooth)
+            else -> faceSmoothingAlpha(hasSmooth)
+        }
+        lastFollow = follow
+        smoothOffX = smoothFaceOffset(smoothOffX, rawX, a)
+        smoothOffY = smoothFaceOffset(smoothOffY, rawY, a)
+        if (faceOff != null) {
+            val fa = faceSmoothingAlpha(hasFrameSmooth)
+            smoothFrameX = if (hasFrameSmooth) {
+                smoothFaceOffset(smoothFrameX, faceOff.first, fa)
+            } else {
+                faceOff.first
+            }
+            smoothFrameY = if (hasFrameSmooth) {
+                smoothFaceOffset(smoothFrameY, faceOff.second, fa)
+            } else {
+                faceOff.second
+            }
+            hasFrameSmooth = true
+        }
+        gazeSettled = GazeSettle.apply(smoothOffX, smoothOffY, gazeSettled, follow).settled
+        // Publish the live box. GazeSettle is an avatar-fidget filter applied
+        // at the gaze sink — feeding 0,0 to motors made the neck never move.
+        val pubX = smoothOffX.coerceIn(-1f, 1f)
+        val pubY = smoothOffY.coerceIn(-1f, 1f)
+        val (w, _) = rotatedFrameSize(proxy.width, proxy.height, cameraRot)
+        val rawScale = if (face != null) {
+            FacePose.scaleFromFaceFraction(face.boundingBox.width().toFloat(), w.toFloat())
+        } else {
+            1f
+        }
+        // Box-only follow. ML Kit eulers fidget a locked face (and go
+        // sideways on the cover in landscape). The avatar already looks
+        // at the remapped box; extra 6DOF is the twitch.
+        smoothYaw = 0f
+        smoothPitch = 0f
+        smoothRoll = 0f
+        if (!gazeSettled) {
+            smoothScale = smoothFaceOffset(smoothScale, rawScale, a)
+        }
+        hasSmooth = true
+        lastFaceAtMs = now
+        val pub = _faceTrack.value
+        val due = now - lastPublishAtMs >= 20L
+        if (pub == null || due || pub.cue != cue || pub.followSource != follow) {
+            lastPublishAtMs = now
+            _faceTrack.value = FaceTrack(
+                offsetX = pubX,
+                offsetY = pubY,
+                yawDeg = 0f,
+                pitchDeg = 0f,
+                rollDeg = 0f,
+                scale = smoothScale,
+                confidence = if (face != null) 0.9f else 0.7f,
+                cue = cue,
+                followSource = follow,
+                hasFace = face != null,
+                trackingId = face?.trackingId ?: -1,
+                faceCount = faces.size,
+                mouthOpen = face?.let { mouthOpenOf(it) } ?: 0f,
+                frameX = if (hasFrameSmooth) smoothFrameX.coerceIn(-1f, 1f) else pubX,
+                frameY = if (hasFrameSmooth) smoothFrameY.coerceIn(-1f, 1f) else pubY,
+            )
+            if (now - lastLogMs >= 2000L) {
+                lastLogMs = now
+                android.util.Log.i(
+                    "VM",
+                    "pub x=$pubX y=$pubY " +
+                        "raw=${smoothOffX}/${smoothOffY} settled=$gazeSettled " +
+                        "scale=${smoothScale} cue=$cue follow=$follow " +
+                        "hands=${hands.size} motion=${motionOff != null} faces=${faces.size}",
+                )
+            }
+        } else if (now - lastLogMs >= 2000L) {
+            lastLogMs = now
+            android.util.Log.i("VM", "face nopub")
+        }
+    }
+
+    private fun mouthOpenOf(face: Face): Float {
+        val left = face.getLandmark(FaceLandmark.MOUTH_LEFT)?.position ?: return 0f
+        val right = face.getLandmark(FaceLandmark.MOUTH_RIGHT)?.position ?: return 0f
+        val bottom = face.getLandmark(FaceLandmark.MOUTH_BOTTOM)?.position ?: return 0f
+        return TalkerPicker.mouthOpenRatio(
+            mouthLeftY = left.y,
+            mouthRightY = right.y,
+            mouthBottomY = bottom.y,
+            faceHeight = face.boundingBox.height().toFloat(),
+        )
+    }
+
+    private fun handsFromPose(
+        pose: Pose,
+        bufferW: Int,
+        bufferH: Int,
+        cameraRot: Int,
+        displayDeg: Int,
+        targetRot: Int,
+    ): List<HandSample> {
+        val out = ArrayList<HandSample>(2)
+        for (left in listOf(true, false)) {
+            val wristLm = pose.getPoseLandmark(
+                if (left) PoseLandmark.LEFT_WRIST else PoseLandmark.RIGHT_WRIST,
+            )
+            val elbowLm = pose.getPoseLandmark(
+                if (left) PoseLandmark.LEFT_ELBOW else PoseLandmark.RIGHT_ELBOW,
+            )
+            if (wristLm == null || wristLm.inFrameLikelihood < 0.20f) continue
+            val wrist = pointInDisplay01(
+                wristLm.position.x, wristLm.position.y,
+                bufferW, bufferH, cameraRot, displayDeg, _useFrontCamera, targetRot,
+            ) ?: continue
+            val elbow = if (elbowLm != null && elbowLm.inFrameLikelihood >= 0.20f) {
+                pointInDisplay01(
+                    elbowLm.position.x, elbowLm.position.y,
+                    bufferW, bufferH, cameraRot, displayDeg, _useFrontCamera, targetRot,
+                )
+            } else {
+                null
+            } ?: (wrist.first to (wrist.second + 0.22f).coerceAtMost(1f))
+            fun tip(kind: Int): Pair<Float, Float>? {
+                val lm = pose.getPoseLandmark(kind) ?: return null
+                if (lm.inFrameLikelihood < 0.35f) return null
+                return pointInDisplay01(
+                    lm.position.x, lm.position.y,
+                    bufferW, bufferH, cameraRot, displayDeg, _useFrontCamera, targetRot,
+                )
+            }
+            val thumb = tip(if (left) PoseLandmark.LEFT_THUMB else PoseLandmark.RIGHT_THUMB)
+            val index = tip(if (left) PoseLandmark.LEFT_INDEX else PoseLandmark.RIGHT_INDEX)
+            val pinky = tip(if (left) PoseLandmark.LEFT_PINKY else PoseLandmark.RIGHT_PINKY)
+            out += HandSample(
+                wristX = wrist.first.coerceIn(0f, 1f),
+                wristY = wrist.second.coerceIn(0f, 1f),
+                elbowX = elbow.first.coerceIn(0f, 1f),
+                elbowY = elbow.second.coerceIn(0f, 1f),
+                thumbX = thumb?.first,
+                thumbY = thumb?.second,
+                indexX = index?.first,
+                indexY = index?.second,
+                pinkyX = pinky?.first,
+                pinkyY = pinky?.second,
+            )
+        }
+        return out
+    }
+
+    /** Hand signs flicker on a close-up pose — need two matching frames. */
+    private fun confirmHandCue(cue: SocialCue): SocialCue {
+        if (cue == SocialCue.NONE) {
+            pendingHandCue = SocialCue.NONE
+            pendingHandHits = 0
+            return SocialCue.NONE
+        }
+        if (cue == pendingHandCue) {
+            pendingHandHits++
+        } else {
+            pendingHandCue = cue
+            pendingHandHits = 1
+        }
+        return if (pendingHandHits >= 2) cue else SocialCue.NONE
     }
 
     /**
@@ -708,6 +1179,29 @@ class VisionManager(
         val cover = minSide / maxSide < 0.65f
         android.util.Log.i("VM", "active display=${active.displayId} ${size.x}x${size.y} aspect=${minSide / maxSide} cover=$cover")
         return cover
+    }
+
+    /**
+     * Rotation of the display the user is looking at, in degrees.
+     * Used to remap sensor-space boxes when CameraX reports rotationDegrees=0
+     * in landscape (Fold cover: target=ROTATION_90, rot stays 0).
+     */
+    private fun displayRotationDegrees(): Int {
+        val rot = runCatching {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                context.display?.rotation
+            } else {
+                @Suppress("DEPRECATION")
+                (context.getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager)
+                    .defaultDisplay?.rotation
+            }
+        }.getOrNull() ?: return 0
+        return when (rot) {
+            android.view.Surface.ROTATION_90 -> 90
+            android.view.Surface.ROTATION_180 -> 180
+            android.view.Surface.ROTATION_270 -> 270
+            else -> 0
+        }
     }
 
     private fun unbind() {

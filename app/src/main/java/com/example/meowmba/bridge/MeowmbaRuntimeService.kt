@@ -60,8 +60,9 @@ class MeowmbaRuntimeService : Service() {
         const val KEY_MEMORIES_JSON = "memories_json"
         const val KEY_SINCE = "since"
 
-        private val ALLOWED = setOf(
+        private val ALLOWED_SIBLINGS = setOf(
             "com.example.meowmba",
+            "com.meow.meowmba",
             "com.meow.metamemory",
             "com.meow.inventory",
         )
@@ -82,7 +83,7 @@ class MeowmbaRuntimeService : Service() {
     override fun onBind(intent: Intent?): IBinder? {
         val pkg = packageManager.getPackagesForUid(BinderCallingUid.get())?.firstOrNull()
             ?: return null
-        if (pkg !in ALLOWED) {
+        if (pkg != packageName && pkg !in ALLOWED_SIBLINGS) {
             Log.w(TAG, "Reject bind from $pkg")
             return null
         }

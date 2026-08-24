@@ -97,7 +97,10 @@ object AgentRouter {
         // Project session: start a project to save all sessions and files under
         extractAfter(raw, listOf("start a project called ", "start a new project called ",
             "start project ", "begin a project called ", "new project "))?.let { name ->
-            return AgentIntent("project", "memory.save", mapOf("content" to "Project started: $name", "tags" to "project"),
+            // The memory record belongs to Keeper (the only agent holding
+            // memory.save) — routing it at Builder made the orchestrator's
+            // permission check reject every "start a project" command.
+            return AgentIntent("memory", "memory.save", mapOf("content" to "Project started: $name", "tags" to "project"),
                 "start project: $name")
         }
 
@@ -205,7 +208,7 @@ object AgentRouter {
             return AgentIntent("phone_control", "ui.automate", mapOf("action" to "swipe", "direction" to "right"), "swipe right")
         }
         if (normalized in setOf("read the screen", "whats on screen", "what's on screen",
-                "what do you see", "what is on the screen")) {
+                "what is on the screen")) {
             return AgentIntent("phone_control", "ui.automate", mapOf("action" to "read_compact"), "read screen")
         }
         // "tap on X" / "tap X" / "click X" / "press X"
@@ -247,6 +250,14 @@ object AgentRouter {
         parseAlarm(raw)?.let { return it }
         parseTimer(raw)?.let { return it }
 
+        com.example.meowmba.core.cleanup.CleanupSpeech.parse(normalized)?.let { parsed ->
+            return AgentIntent(
+                "phone", "phone.cleanup",
+                mapOf("kind" to parsed.kind, "action" to parsed.action),
+                parsed.title,
+            )
+        }
+
         // "open X" reaching here means an app, not a workspace file.
         if (normalized in setOf("what apps do i have", "list my apps", "show my apps",
                 "list apps", "show apps", "what apps are installed")) {
@@ -266,7 +277,7 @@ object AgentRouter {
             "open the url ", "browse to "))?.let { url ->
             return AgentIntent("phone", "phone.open_url", mapOf("url" to url), "open $url")
         }
-        extractAfter(raw, listOf("open the app ", "open app ", "launch the app ",
+        extractAfter(stripLeadIn(raw), listOf("open the app ", "open app ", "launch the app ",
             "launch app ", "launch ", "start the app ", "open "))?.let { rest ->
             // Bounded: an app name is a name, not the rest of the sentence.
             val name = boundTarget(rest) ?: return@let
@@ -288,6 +299,11 @@ object AgentRouter {
                 val level = levelMatch?.groupValues?.get(1)?.toIntOrNull()
                 val action = when {
                     level != null -> "level"
+                    // "unmute" CONTAINS "mute" — it must be tested first, or
+                    // "unmute" resolved to action=mute and saying "unmute"
+                    // silenced the media.
+                    volumeText.contains("unmute") || volumeText.contains("un mute") ||
+                        volumeText.contains("un-mute") -> "unmute"
                     volumeText.contains("down") || volumeText.contains("lower") -> "down"
                     volumeText.contains("up") || volumeText.contains("raise") || volumeText.contains("louder") -> "up"
                     volumeText.contains("mute") || volumeText.contains("silent") -> "mute"
@@ -773,6 +789,26 @@ object AgentRouter {
             "phone", "phone.set_timer", mapOf("seconds" to total.toString()),
             "set timer for ${total}s",
         )
+    }
+
+    /**
+     * Drop "hey meow" / "can you please" so "can you open Spotify" is the
+     * same command as "open Spotify". Recursive so both can stack.
+     */
+    internal fun stripLeadIn(raw: String): String {
+        val t = raw.trim()
+        val lower = t.lowercase()
+        val prefixes = listOf(
+            "hey meow, ", "hey meow ", "hey memba, ", "hey memba ",
+            "ok meow ", "okay meow ",
+            "can you please ", "could you please ", "would you please ",
+            "can you ", "could you ", "would you ", "will you ",
+            "please ",
+        )
+        for (p in prefixes) {
+            if (lower.startsWith(p)) return stripLeadIn(t.substring(p.length))
+        }
+        return t
     }
 
     /** Case-insensitive prefix match; returns the RAW remainder (punctuation intact). */

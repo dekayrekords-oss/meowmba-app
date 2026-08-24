@@ -117,7 +117,48 @@ class UtteranceCaptureTest {
         assertNull("partial was recent, keep listening", final)
 
         clock.t = 9_000; engine.error(SpeechRecognizer.ERROR_NO_MATCH)
-        assertEquals("add a", final)
+        assertEquals("add a space heater", final)
+    }
+
+    @Test
+    fun `a hang after only partials still delivers what was said`() = runTest {
+        val engine = FakeEngine()
+        val clock = Clock()
+        var final: String? = null
+        var error: Int? = null
+        capture(engine, this, clock).start(
+            onFinal = { final = it },
+            onError = { error = it },
+        )
+
+        clock.t = 1_000
+        engine.partial("what's the weather")
+        testScheduler.runCurrent()
+        assertNull("must wait out the pause", final)
+
+        // Recognizer never calls back. After a real silence the watchdog
+        // has to deliver the partial — this is the hang the user reported.
+        clock.t = 3_600
+        testScheduler.advanceTimeBy(2_800)
+        assertEquals("what's the weather", final)
+        assertNull(error)
+    }
+
+    @Test
+    fun `watchdog timeout with no speech still errors`() = runTest {
+        val engine = FakeEngine()
+        val clock = Clock()
+        var final: String? = null
+        var error: Int? = null
+        capture(engine, this, clock).start(
+            onFinal = { final = it },
+            onError = { error = it },
+        )
+
+        clock.t = 8_200
+        testScheduler.advanceTimeBy(8_400)
+        assertNull(final)
+        assertEquals(SpeechRecognizer.ERROR_SPEECH_TIMEOUT, error)
     }
 
     @Test

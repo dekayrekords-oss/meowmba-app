@@ -33,7 +33,7 @@ data class MessageEntity(
     /** 0 = inbox. Non-zero = a project conversation. */
     val conversationId: Long = 0L,
     /** Who said this user line: enrolled name, or Left/Right. */
-    val speakerName: String? = null
+    val speakerName: String? = null,
 )
 
 @Entity(tableName = "memories")
@@ -112,12 +112,12 @@ data class RoutineEntity(
     /** "system" seeded templates vs "user" tools made by voice. */
     val source: String = "system",
     /** App or music query for play_music / launch_app. */
-    val launchTarget: String = ""
+    val launchTarget: String = "",
 )
 
 /**
  * A saved work session (website / photo / code). Chat for the project
- * lives in [MessageEntity] rows with the same conversationId.
+ * lives in [MessageEntity] rows with the same [conversationId].
  */
 @Entity(tableName = "projects")
 data class ProjectEntity(
@@ -126,7 +126,7 @@ data class ProjectEntity(
     val kind: String,
     val createdAt: Long = System.currentTimeMillis(),
     val lastOpenedAt: Long = createdAt,
-    val conversationId: Long
+    val conversationId: Long,
 )
 
 /**

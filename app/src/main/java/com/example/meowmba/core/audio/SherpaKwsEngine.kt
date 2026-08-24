@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Wake-word detection with a real on-device keyword spotter (sherpa-onnx), replacing the
@@ -105,6 +106,16 @@ class SherpaKwsEngine(
     var lastPreRoll: ShortArray = ShortArray(0)
         private set
 
+    /**
+     * Drops the buffered pre-roll. Callers that have already consumed it
+     * (transcribed into a command) must clear it — otherwise a spotter re-fire
+     * on trailing audio hands the SAME buffer to the wake handler again and
+     * the same command commits twice.
+     */
+    fun clearPreRoll() {
+        lastPreRoll = ShortArray(0)
+    }
+
     private var captureJob: Job? = null
     private var spotter: KeywordSpotter? = null
     private var dumpSeq = 0
@@ -118,9 +129,11 @@ class SherpaKwsEngine(
     }
 
     override fun start() {
-        if (running) {
-            // Silently returning here is indistinguishable from "the wake word stopped
-            // working", which is exactly how it was reported.
+        // [stop] clears [running] immediately but the previous captureLoop may
+        // still hold AudioRecord until the next 100ms read + finally. Starting
+        // a second loop on top of that is two engines, SpeechRecognizer BUSY,
+        // and "start() ignored" forever after. Treat a live job as still running.
+        if (running || captureJob?.isActive == true) {
             Log.i(TAG, "start() ignored: already running")
             return
         }
@@ -133,7 +146,15 @@ class SherpaKwsEngine(
         running = false
         _isRunning.value = false
         captureJob?.cancel()
-        captureJob = null
+        // Do not null [captureJob] here. [start] must still see the live job
+        // until [stopAndAwait] (or the loop's finally) finishes releasing the mic.
+    }
+
+    override suspend fun stopAndAwait(timeoutMs: Long) {
+        stop()
+        val job = captureJob ?: return
+        withTimeoutOrNull(timeoutMs) { job.join() }
+        if (!job.isActive) captureJob = null
     }
 
     /** Frees the native model. The engine cannot be restarted afterwards. */
@@ -371,6 +392,7 @@ class SherpaKwsEngine(
             // only exit every path takes.
             running = false
             _isRunning.value = false
+            captureJob = null
         }
 
         if (wakeAccepted) {
@@ -390,30 +412,30 @@ class SherpaKwsEngine(
         }
     }
 
-    private fun buildSpotter(): KeywordSpotter = KeywordSpotter(
-        assetManager = context.assets,
-        config = KeywordSpotterConfig(
-            featConfig = getFeatureConfig(sampleRate = SAMPLE_RATE, featureDim = 80),
-            modelConfig = OnlineModelConfig(
-                transducer = OnlineTransducerModelConfig(
-                    encoder = "$modelDir/$ENCODER",
-                    decoder = "$modelDir/$DECODER",
-                    joiner = "$modelDir/$JOINER",
+    private fun buildSpotter(): KeywordSpotter {
+        val store = VoiceModelStore(context)
+        val fromDisk = store.kwsReady()
+        val dir = if (fromDisk) store.kwsDir.absolutePath else modelDir
+        return KeywordSpotter(
+            assetManager = if (fromDisk) null else context.assets,
+            config = KeywordSpotterConfig(
+                featConfig = getFeatureConfig(sampleRate = SAMPLE_RATE, featureDim = 80),
+                modelConfig = OnlineModelConfig(
+                    transducer = OnlineTransducerModelConfig(
+                        encoder = "$dir/$ENCODER",
+                        decoder = "$dir/$DECODER",
+                        joiner = "$dir/$JOINER",
+                    ),
+                    tokens = "$dir/tokens.txt",
+                    modelType = "zipformer2",
+                    numThreads = 1,
                 ),
-                tokens = "$modelDir/tokens.txt",
-                modelType = "zipformer2",
-                numThreads = 1,
+                keywordsFile = "$dir/$KEYWORDS_FILE",
+                keywordsScore = KEYWORDS_SCORE,
+                keywordsThreshold = KEYWORDS_THRESHOLD,
             ),
-            // A real keywords file is REQUIRED. An empty string is not "no file" — the
-            // native loader tries to read it and aborts the process
-            // ("F sherpa-onnx: Read binary file: Load '' failed"). The bundled file holds
-            // the built-in phrases; a custom companion name is added per-stream via
-            // createStream(keywords), which layers on top of it.
-            keywordsFile = "$modelDir/$KEYWORDS_FILE",
-            keywordsScore = KEYWORDS_SCORE,
-            keywordsThreshold = KEYWORDS_THRESHOLD,
-        ),
-    )
+        )
+    }
 
     /** Steps down quietly, without telling the user anything is broken. */
     private fun yieldMic() {
@@ -451,8 +473,9 @@ class SherpaKwsEngine(
          * it and there is no fallback to fall back to. Observed exactly that when the
          * filenames did not match what was bundled.
          */
-        fun assetsPresent(context: Context, modelDir: String = DEFAULT_MODEL_DIR): Boolean =
-            listOf(ENCODER, DECODER, JOINER, TOKENS, KEYWORDS_FILE).all { name ->
+        fun assetsPresent(context: Context, modelDir: String = DEFAULT_MODEL_DIR): Boolean {
+            if (VoiceModelStore(context).kwsReady()) return true
+            return listOf(ENCODER, DECODER, JOINER, TOKENS, KEYWORDS_FILE).all { name ->
                 try {
                     context.assets.open("$modelDir/$name").close()
                     true
@@ -460,6 +483,7 @@ class SherpaKwsEngine(
                     false
                 }
             }
+        }
 
         private const val SAMPLE_RATE = 16_000
         private const val CHANNEL = AudioFormat.CHANNEL_IN_MONO

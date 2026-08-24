@@ -117,17 +117,17 @@ class LooiBleLink(private val context: Context) {
         setState(LinkState.SCANNING, "scanning for LOOI…")
         val started = runCatching { adapter?.bluetoothLeScanner?.startScan(scanCallback) }.isSuccess
         if (!started) {
-            Log.w(TAG, "BLE scan unavailable (permission/stack) — direct connect to $KNOWN_LOOI_MAC")
+            Log.w(TAG, "BLE scan unavailable — not pretending a LOOI is here")
             stopScanner()
-            connect(KNOWN_LOOI_MAC)
+            setState(LinkState.OFFLINE, "can't scan for a base")
             return
         }
         scope.launch {
             delay(SCAN_TIMEOUT_MS)
             if (state == LinkState.SCANNING) {
-                Log.w(TAG, "LOOI scan timed out — trying direct connect to $KNOWN_LOOI_MAC")
+                Log.w(TAG, "LOOI scan timed out — no base in range")
                 stopScanner()
-                connect(KNOWN_LOOI_MAC)
+                setState(LinkState.OFFLINE, "no LOOI in range")
             }
         }
     }
@@ -319,7 +319,7 @@ class LooiBleLink(private val context: Context) {
         } ?: return
         keepAliveJob = scope.launch {
             while (true) {
-                delay(3_000)
+                delay(12_000)
                 val g = gatt ?: break
                 if (!gattOpInFlight) runCatching { g.readCharacteristic(readable) }
             }
@@ -367,9 +367,37 @@ class LooiBleLink(private val context: Context) {
         runCatching { g.writeCharacteristic(ch) }.getOrDefault(false)
     }
 
-    /** Turn the base via the verified rotation frame. ticks ~ 20ms each. */
-    fun turnPulse(speedPercent: Int, ticks: Int): Boolean =
-        writeFrame(LooiBleProtocol.rotateFrame(speedPercent, ticks))
+    /** Raw write to fe00 (captured turn scripts are 20 bytes, not 17). */
+    private fun writeRaw(bytes: ByteArray): Boolean = synchronized(writeLock) {
+        val g = gatt ?: return false
+        val ch = commandChar ?: return false
+        ch.value = bytes
+        val noResp = ch.properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE != 0
+        val write = ch.properties and BluetoothGattCharacteristic.PROPERTY_WRITE != 0
+        ch.writeType = when {
+            noResp -> BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
+            write -> BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+            else -> return false
+        }
+        runCatching { g.writeCharacteristic(ch) }.getOrDefault(false)
+    }
+
+    /**
+     * Turn the base. 17-byte 0x07 + positive value is the verified LEFT.
+     * RIGHT uses two's-complement value on the same template (subOp 0x01
+     * still spun left on this robot).
+     */
+    fun turnPulse(speedPercent: Int, ticks: Int): Boolean {
+        val mag = kotlin.math.abs(speedPercent)
+        if (mag == 0) return writeFrame(LooiBleProtocol.rotateFrame(0, 1, right = false))
+        val right = speedPercent > 0
+        val frame = LooiBleProtocol.rotateFrame(mag, ticks, right = right)
+        android.util.Log.i(
+            "LooiBle",
+            "turn ${if (right) "RIGHT" else "LEFT"} mag=$mag value=${frame.value} ticks=$ticks",
+        )
+        return writeFrame(frame)
+    }
 
     /** Proportional FORWARD drive on fed0 (the verified drive channel). */
     fun driveSpeed(speed0to1: Float): Boolean =

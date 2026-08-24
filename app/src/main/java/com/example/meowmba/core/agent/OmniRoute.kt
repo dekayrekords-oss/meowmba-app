@@ -1,11 +1,16 @@
 package com.example.meowmba.core.agent
 
 import android.util.Log
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Omniroute, running inside the app.
@@ -41,6 +46,12 @@ class OmniRoute(
         // unmocked in JVM tests, and a throw here aborts the whole answer stream.
         runCatching { Log.i(TAG, message) }
     },
+    /**
+     * A route that accepts the request and then never emits is worse than a
+     * refused one: THINKING sits on the yellow mic until the 45s watchdog.
+     * Skip it and try the next.
+     */
+    private val firstTokenTimeoutMs: Long = DEFAULT_FIRST_TOKEN_MS,
 ) : ModelProvider {
 
     /** What a prompt needs, coarse enough to decide with no model in the loop. */
@@ -74,9 +85,21 @@ class OmniRoute(
     @Volatile
     private var userTextHint: String? = null
 
+    /** When set, the next [plan] uses this tag instead of classifying. */
+    @Volatile
+    private var forcedTag: RouteTag? = null
+
     /** Tell the router what the user actually asked, before generating. */
     fun hintUserText(text: String?) {
         userTextHint = text?.takeIf { it.isNotBlank() }
+    }
+
+    /**
+     * Pin the next routing decision to a tag (voice call → [RouteTag.FAST]).
+     * Consumed by the following [plan] so it cannot leak onto later turns.
+     */
+    fun hintTag(tag: RouteTag?) {
+        forcedTag = tag
     }
 
     private val _lastRoute = MutableStateFlow<String?>(null)
@@ -143,8 +166,12 @@ class OmniRoute(
      * short questions to the small on-device model and it answered with another
      * question.
      */
-    fun plan(prompt: String, preferRouteId: String? = null): List<Route> {
-        val tag = classify(prompt)
+    fun plan(prompt: String, preferRouteId: String? = null, forceTag: RouteTag? = null): List<Route> {
+        val tag = forceTag ?: run {
+            val hinted = forcedTag
+            forcedTag = null
+            hinted
+        } ?: classify(prompt)
         val tagged = routes.filter { tag in it.tags }.sortedBy { it.priority }
         val rest = routes.filterNot { it in tagged }
             // Offline last: it is the safety net, not the preference.
@@ -188,8 +215,12 @@ class OmniRoute(
         generateStreaming(prompt, preferRouteId = null)
 
     /** Streaming variant with a pinned first-choice route. See [plan]. */
-    fun generateStreaming(prompt: String, preferRouteId: String?): Flow<ModelResponse> = flow {
-        val plan = plan(prompt, preferRouteId)
+    fun generateStreaming(
+        prompt: String,
+        preferRouteId: String?,
+        forceTag: RouteTag? = null,
+    ): Flow<ModelResponse> = flow {
+        val plan = plan(prompt, preferRouteId, forceTag)
         if (plan.isEmpty()) {
             emit(ModelResponse.Error("No models are configured for Omniroute to route to."))
             return@flow
@@ -197,35 +228,57 @@ class OmniRoute(
         var lastError: String? = null
         for (route in plan) {
             var produced = false
+            log("trying ${route.id} (${route.label})")
             val failure = runCatching {
-                route.provider.generateStreaming(prompt).collect { response ->
-                    when (response) {
-                        is ModelResponse.Error ->
-                            if (produced) {
-                                emit(response)
-                            } else {
-                                lastError = "${route.label}: ${response.message}"
-                            }
-                        is ModelResponse.Partial -> {
-                            if (!produced) {
-                                produced = true
-                                win(route, prompt)
-                            }
-                            emit(response)
+                coroutineScope {
+                    val inbox = Channel<ModelResponse>(Channel.UNLIMITED)
+                    val pump = launch {
+                        try {
+                            route.provider.generateStreaming(prompt).collect { inbox.send(it) }
+                        } finally {
+                            inbox.close()
                         }
-                        is ModelResponse.Complete -> {
-                            if (!produced) {
-                                produced = true
-                                win(route, prompt)
+                    }
+                    try {
+                        suspend fun handle(response: ModelResponse, alreadyProduced: Boolean): Boolean {
+                            when (response) {
+                                is ModelResponse.Error -> {
+                                    if (alreadyProduced) emit(response) else {
+                                        lastError = "${route.label}: ${response.message}"
+                                    }
+                                    return alreadyProduced
+                                }
+                                is ModelResponse.Partial -> {
+                                    if (!alreadyProduced) win(route, prompt)
+                                    emit(response)
+                                    return true
+                                }
+                                is ModelResponse.Complete -> {
+                                    if (!alreadyProduced) win(route, prompt)
+                                    emit(response)
+                                    return true
+                                }
                             }
-                            emit(response)
                         }
+                        val first = withTimeoutOrNull(firstTokenTimeoutMs.coerceAtLeast(1L)) {
+                            inbox.receiveCatching().getOrNull()
+                        }
+                        if (first == null) {
+                            lastError = "${route.label}: no tokens in ${firstTokenTimeoutMs}ms"
+                            log(lastError!!)
+                            return@coroutineScope
+                        }
+                        if (!handle(first, alreadyProduced = false)) return@coroutineScope
+                        produced = true
+                        for (next in inbox) handle(next, alreadyProduced = true)
+                    } finally {
+                        pump.cancel()
                     }
                 }
             }.exceptionOrNull()
 
             if (produced) return@flow
-            if (failure != null) {
+            if (failure != null && failure !is CancellationException) {
                 lastError = "${route.label}: ${failure.message ?: failure.javaClass.simpleName}"
             }
         }
@@ -277,5 +330,8 @@ class OmniRoute(
 
         /** "what time is it", "turn the lights off" — no need to wake a big model. */
         const val SHORT_PROMPT_WORDS = 6
+
+        /** Skip a silent route before the THINKING watchdog gives up. */
+        const val DEFAULT_FIRST_TOKEN_MS = 20_000L
     }
 }

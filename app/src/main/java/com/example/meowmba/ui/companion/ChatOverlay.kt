@@ -9,7 +9,10 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.CallEnd
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -17,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 /**
  * Collapsible chat workspace for Phase 1.
@@ -30,6 +34,13 @@ fun ChatOverlay(
     onSend: (String) -> Unit = {},
     onDeleteMessage: (Long) -> Unit = {},
     messages: List<ChatUiMessage> = emptyList(),
+    title: String = "Conversation",
+    onLeaveProject: (() -> Unit)? = null,
+    listening: Boolean = false,
+    listenPartial: String? = null,
+    onMicClick: () -> Unit = {},
+    callActive: Boolean = false,
+    onCallClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
@@ -58,11 +69,18 @@ fun ChatOverlay(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(
-                    text = "Conversation",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = Color.White
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleLarge,
+                        color = Color.White
+                    )
+                    if (onLeaveProject != null) {
+                        TextButton(onClick = onLeaveProject, contentPadding = PaddingValues(0.dp)) {
+                            Text("Back to inbox", color = Color(0xFF58A6FF), fontSize = 12.sp)
+                        }
+                    }
+                }
                 IconButton(onClick = onClose) {
                     Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
                 }
@@ -89,7 +107,25 @@ fun ChatOverlay(
                 }
             }
             
-            // Input Bar
+            if (callActive) {
+                TextButton(
+                    onClick = onCallClick,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(
+                        Icons.Default.CallEnd,
+                        contentDescription = "Hang up",
+                        tint = Color(0xFFF85149),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        if (listening) "On a call — listening…" else "On a call with Meow · tap to hang up",
+                        color = Color(0xFF3FB950),
+                        fontSize = 13.sp,
+                    )
+                }
+            }
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -97,11 +133,22 @@ fun ChatOverlay(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 var text by remember { mutableStateOf("") }
+                LaunchedEffect(listening, listenPartial) {
+                    if (listening && !listenPartial.isNullOrBlank()) text = listenPartial
+                }
                 TextField(
                     value = text,
                     onValueChange = { text = it },
                     modifier = Modifier.weight(1f),
-                    placeholder = { Text("Ask Meow anything...") },
+                    placeholder = {
+                        Text(
+                            when {
+                                callActive -> "Talk — I'm listening"
+                                listening -> "Listening…"
+                                else -> "Ask Meow anything..."
+                            },
+                        )
+                    },
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = Color(0xFF1E1E1E),
                         unfocusedContainerColor = Color(0xFF1E1E1E),
@@ -110,7 +157,21 @@ fun ChatOverlay(
                     ),
                     shape = RoundedCornerShape(24.dp)
                 )
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                IconButton(onClick = onMicClick) {
+                    Icon(
+                        Icons.Default.Mic,
+                        contentDescription = if (listening) "Stop listening" else "Speak",
+                        tint = if (listening || callActive) Color(0xFF00E5FF) else Color.White.copy(alpha = 0.85f),
+                    )
+                }
+                IconButton(onClick = onCallClick) {
+                    Icon(
+                        if (callActive) Icons.Default.CallEnd else Icons.Default.Call,
+                        contentDescription = if (callActive) "Hang up" else "Start voice call",
+                        tint = if (callActive) Color(0xFFF85149) else Color(0xFF3FB950),
+                    )
+                }
                 IconButton(
                     onClick = {
                         val trimmed = text.trim()

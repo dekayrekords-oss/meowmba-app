@@ -20,12 +20,14 @@ class VaultRepository(val dir: File) {
 
     // ── Public API ──────────────────────────────────────────────────────────
 
-    /** All notes, sorted newest-first. */
+    /** All notes, sorted newest-first. Includes one level of subfolders (Notes/). */
     fun list(): List<VaultNote> =
-        dir.listFiles { f -> f.isFile && f.extension == "md" }
-            ?.mapNotNull { parse(it) }
-            ?.sortedByDescending { it.createdAt }
-            ?: emptyList()
+        dir.walkTopDown()
+            .maxDepth(2)
+            .filter { it.isFile && it.extension.equals("md", ignoreCase = true) }
+            .mapNotNull { parse(it) }
+            .sortedByDescending { it.createdAt }
+            .toList()
 
     /** A single note by title (case-insensitive). Null = not found. */
     fun get(title: String): VaultNote? {
@@ -136,7 +138,15 @@ class VaultRepository(val dir: File) {
 
     // ── Helpers ─────────────────────────────────────────────────────────────
 
-    private fun file(title: String) = File(dir, sanitize(title) + ".md")
+    private fun file(title: String): File {
+        val parts = title.split('/')
+            .map { sanitize(it) }
+            .filter { it.isNotBlank() }
+        val relative = parts.joinToString(File.separator) + ".md"
+        val f = File(dir, relative)
+        f.parentFile?.mkdirs()
+        return f
+    }
 
     private fun sanitize(title: String): String =
         title.trim().replace(Regex("[^A-Za-z0-9 _\\-]"), "_").replace(' ', '_').take(120)

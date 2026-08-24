@@ -23,12 +23,27 @@ class LiteRtProvider(
     override val name: String = "LiteRT (On-device)"
 
     private val engine: Engine by lazy {
-        val config = EngineConfig(
-            modelPath = modelPath,
-            backend = Backend.CPU(),
-            cacheDir = context.cacheDir.path,
-        )
-        Engine(config).also { it.initialize() }
+        // GPU first: on device, Gemma E2B streamed tokens far too slowly on
+        // CPU for voice (20s+ before TTS started), while the LiteRT runtime
+        // reports a working GPU accelerator. If the GPU delegate fails to
+        // initialize, fall back to CPU instead of killing the local route.
+        runCatching {
+            Engine(
+                EngineConfig(
+                    modelPath = modelPath,
+                    backend = Backend.GPU(),
+                    cacheDir = context.cacheDir.path,
+                )
+            ).also { it.initialize() }
+        }.getOrElse {
+            Engine(
+                EngineConfig(
+                    modelPath = modelPath,
+                    backend = Backend.CPU(),
+                    cacheDir = context.cacheDir.path,
+                )
+            ).also { it.initialize() }
+        }
     }
 
     /**
@@ -53,6 +68,13 @@ class LiteRtProvider(
      * Cancellation is still honoured: the flow stops emitting and rethrows, so
      * barge-in continues to interrupt the model.
      */
+    /** Pre-load the native engine so the first real question doesn't pay the
+     *  multi-second model load mid-conversation (measured on device: an 11.8s
+     *  dead gap between hearing the user and starting to think). */
+    fun warmUp() {
+        runCatching { engine }
+    }
+
     override fun generateStreaming(prompt: String): Flow<ModelResponse> = flow {
         if (!File(modelPath).exists()) {
             emit(ModelResponse.Error("Model file not found at $modelPath"))
@@ -92,8 +114,16 @@ class LiteRtProvider(
                 if (delta.isNotEmpty()) {
                     emit(ModelResponse.Partial(delta))
                 }
+                // litertlm 0.13.1 has no maxTokens, and uncapped Gemma rambles
+                // for half a minute of TTS. Voice answers stay conversational:
+                // stop generating after a few complete sentences.
+                if (SENTENCES.findAll(fullText).count() >= MAX_REPLY_SENTENCES) {
+                    throw ReplyCapException()
+                }
             }
             emit(ModelResponse.Complete(fullText))
+        } catch (_: ReplyCapException) {
+            emit(ModelResponse.Complete(trimToSentenceBoundary(fullText)))
         } catch (e: CancellationException) {
             throw e                     // cleaned up in finally; keep cancellation semantics
         } catch (e: Exception) {
@@ -105,6 +135,20 @@ class LiteRtProvider(
                 runCatching { conversation.close() }
             }
         }
+    }
+
+    private class ReplyCapException : RuntimeException()
+
+    private companion object {
+        /** Voice replies stay conversational; uncapped Gemma rambles. */
+        val MAX_REPLY_SENTENCES = 3
+        val SENTENCES = Regex("""(?<=[.!?])\s+""")
+    }
+
+    /** Cut a capped reply at the last complete sentence, dropping the tail. */
+    private fun trimToSentenceBoundary(text: String): String {
+        val parts = SENTENCES.split(text.trim()).filter { it.isNotBlank() }
+        return parts.take(MAX_REPLY_SENTENCES).joinToString(" ").ifBlank { text }
     }
 
     override suspend fun generate(prompt: String): ModelResponse {

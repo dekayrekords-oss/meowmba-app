@@ -453,9 +453,9 @@ even after the app dies; only restarting AiAi itself (or a failover) recovers vo
 
 <!-- AUTOBUILD:START -->
 (regenerated after each commit)
-- 2026-08-11 16:29:31 : chore: regenerate autobuild log
-- abee26d 2026-08-11 16:29 diag(nano): log why the model picker probe failed
-- dda3a88 2026-08-11 16:29 fix(vision): drive analyzer rotation from physical tilt, not display rotation
-- 495dd6f 2026-08-11 16:04 fix(voice): settle handovers, escalate never-ready sessions to a failover
-- bffe665 2026-08-11 14:51 feat(anim): 8 expressions that spend the engine's unused channels, + rot guards
+- 2026-08-23 15:24:39 : feat(app): ASR backends + on-disk voice packs, agent tools, Play Store prep (v1.1.0)
+- 162ab60 2026-08-12 16:14 feat(vision,robot): social cues, settled face lock, cooler tracking
+- bb6e8ce 2026-08-12 13:30 fix(robot): restore 17-byte turns; encode right as subOp 1
+- 9b8cb97 2026-08-12 11:52 fix(robot): right turn uses the captured tread script, not 0x07
+- 52b9768 2026-08-12 11:47 feat(robot): LOOI keeps the person in frame
 <!-- AUTOBUILD:END -->

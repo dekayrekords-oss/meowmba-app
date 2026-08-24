@@ -11,12 +11,8 @@ import com.example.meowmba.core.security.SecureStorageManager
  * computer arm the wake word and save brain API keys without touching the
  * Settings UI, which cannot be driven reliably via adb on this launcher.
  *
- *   adb shell am broadcast -n com.example.meowmba/.core.debug.DebugConfigReceiver \
- *     -a com.example.meowmba.debug.CONFIG --ez wake_word true
- *   adb shell am broadcast -n com.example.meowmba/.core.debug.DebugConfigReceiver \
- *     -a com.example.meowmba.debug.CONFIG --es openrouter_key sk-...
- *   adb shell am broadcast -n com.example.meowmba/.core.debug.DebugConfigReceiver \
- *     -a com.example.meowmba.debug.CONFIG --es opencode_key sk-...
+ *   adb shell am broadcast -n \$PKG/.core.debug.DebugConfigReceiver \
+ *     -a \$PKG.debug.CONFIG --ez wake_word true
  *
  * After arming the wake word, force-stop and relaunch the app so the ViewModel
  * reloads the pref and arms the WakeStandby service on first resume.
@@ -42,6 +38,9 @@ class DebugConfigReceiver : BroadcastReceiver() {
         }
         intent.getStringExtra("opencode_key")?.takeIf { it.isNotBlank() }?.let { key ->
             storage.saveApiKey("opencode", key)
+        }
+        intent.getStringExtra("default_brain")?.takeIf { it.isNotBlank() }?.let { brain ->
+            storage.savePreference("default_brain", brain)
         }
     }
 }

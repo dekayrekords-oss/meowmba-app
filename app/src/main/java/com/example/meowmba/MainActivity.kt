@@ -84,14 +84,17 @@ class MainActivity : ComponentActivity() {
         companionViewModel?.onLocationPermissionResult(isGranted)
     }
 
-    /** System voice dialog — last-resort STT when in-app SpeechRecognizer is BUSY. */
-    private val speechPromptLauncher = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
+    private val mediaPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { granted ->
+        val ok = granted.values.any { it }
+        companionViewModel?.onMediaPermissionResult(ok)
+    }
+
+    private val cleanupDeleteLauncher = registerForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
     ) { result ->
-        val spoken = result.data
-            ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-            ?.firstOrNull()
-        companionViewModel?.onSpeechPromptResult(spoken)
+        companionViewModel?.onCleanupDeleteFinished(result.resultCode == RESULT_OK)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -142,6 +145,7 @@ class MainActivity : ComponentActivity() {
                                 visionManager = visionManager,
                                 notificationHelper = notificationHelper,
                                 routineDao = database.routineDao(),
+                                projectDao = database.projectDao(),
                                 characterDao = database.characterDao()
                             ).also {
                                 companionViewModel = it
@@ -204,21 +208,25 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                androidx.compose.runtime.LaunchedEffect(Unit) {
-                    viewModel.speechPrompt.collect {
-                        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                            putExtra(
-                                RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
-                            )
-                            putExtra(
-                                RecognizerIntent.EXTRA_PROMPT,
-                                "Talk to ${viewModel.uiState.value.name}",
-                            )
-                        }
-                        runCatching { speechPromptLauncher.launch(intent) }
-                            .onFailure { viewModel.onSpeechPromptUnavailable() }
+                androidx.compose.runtime.LaunchedEffect(uiState.mediaPermissionRequested) {
+                    if (uiState.mediaPermissionRequested) {
+                        mediaPermissionLauncher.launch(
+                            com.example.meowmba.core.cleanup.PhoneCleanup.mediaPermissions(),
+                        )
                     }
+                }
+
+                val cleanupTick by com.example.meowmba.core.cleanup.CleanupGate.tick
+                    .collectAsState()
+                androidx.compose.runtime.LaunchedEffect(cleanupTick) {
+                    if (cleanupTick == 0) return@LaunchedEffect
+                    val uris = com.example.meowmba.core.cleanup.CleanupGate.take()
+                    if (uris.isEmpty()) return@LaunchedEffect
+                    val req = android.provider.MediaStore.createDeleteRequest(contentResolver, uris)
+                    cleanupDeleteLauncher.launch(
+                        androidx.activity.result.IntentSenderRequest.Builder(req.intentSender)
+                            .build(),
+                    )
                 }
 
                 // Handle system back button
@@ -230,6 +238,7 @@ class MainActivity : ComponentActivity() {
                         uiState.showStudioScreen ||
                         uiState.showAgentsScreen || uiState.showBackgroundScreen ||
                         uiState.showWeatherScreen || uiState.showNavScreen ||
+                        uiState.showProjectsScreen || uiState.showToolsScreen ||
                         uiState.showAppDrawer || uiState.showBrowser
                 ) {
                     when {
@@ -240,6 +249,8 @@ class MainActivity : ComponentActivity() {
                         uiState.showMemoryScreen -> viewModel.toggleMemoryScreen()
                         uiState.showStudioScreen -> viewModel.toggleStudioScreen()
                         uiState.showAgentsScreen -> viewModel.toggleAgentsScreen()
+                        uiState.showProjectsScreen -> viewModel.toggleProjectsScreen()
+                        uiState.showToolsScreen -> viewModel.toggleToolsScreen()
                         uiState.showBackgroundScreen -> viewModel.toggleBackgroundScreen()
                         uiState.showWeatherScreen -> viewModel.toggleWeatherScreen()
                         uiState.showNavScreen -> viewModel.toggleNavScreen()
@@ -267,8 +278,10 @@ class MainActivity : ComponentActivity() {
         WakeWordService.stop(this)
         companionViewModel?.reclaimWakeMicForForeground()
         companionViewModel?.refreshRobot()
-        // Re-arm face tracking every resume (permission may have just been granted).
-        companionViewModel?.ensureFaceTrackingOn()
+        // Only resume tracking if the user left the camera on. Forcing it
+        // here every unlock kept the front camera + ML Kit running and
+        // cooked the phone.
+        companionViewModel?.resumeFaceTrackingIfEnabled()
         consumeWakeCommand(intent)
     }
 

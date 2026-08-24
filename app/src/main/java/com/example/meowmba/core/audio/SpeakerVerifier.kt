@@ -2,6 +2,7 @@ package com.example.meowmba.core.audio
 
 import android.content.Context
 import android.util.Log
+import java.io.File
 import com.k2fsa.sherpa.onnx.SpeakerEmbeddingExtractor
 import com.k2fsa.sherpa.onnx.SpeakerEmbeddingExtractorConfig
 import com.k2fsa.sherpa.onnx.SpeakerEmbeddingManager
@@ -30,12 +31,15 @@ class SpeakerVerifier(
     /** True when a model is loaded and at least one profile is enrolled. */
     val isActive: Boolean get() = manager != null && !store.isEmpty()
 
-    /** True when the model file is bundled, regardless of enrolment. */
-    fun isModelAvailable(): Boolean = try {
-        context.assets.open(MODEL).close()
-        true
-    } catch (e: Exception) {
-        false
+    /** True when the model file is on disk or still bundled as a debug asset. */
+    fun isModelAvailable(): Boolean {
+        if (VoiceModelStore(context).speakerReady()) return true
+        return try {
+            context.assets.open(MODEL).close()
+            true
+        } catch (e: Exception) {
+            false
+        }
     }
 
     /**
@@ -106,11 +110,45 @@ class SpeakerVerifier(
      *
      * @param threshold cosine similarity floor; see [VoiceProfileStore.DEFAULT_THRESHOLD].
      */
+    /**
+     * Matching enrolled name, or null when nobody clears the bar / we cannot tell.
+     * Unlike [verify], this does not fail open — unknown is unknown.
+     */
+    fun identify(samples: FloatArray, threshold: Float = VoiceProfileStore.DEFAULT_THRESHOLD): String? {
+        val mgr = manager ?: return null
+        val embedding = embed(samples) ?: return null
+        return try {
+            mgr.search(embedding, threshold).trim().takeIf { it.isNotBlank() }
+        } catch (e: Exception) {
+            Log.w(TAG, "identify failed: ${e.message}")
+            null
+        }
+    }
+
+    fun identifyPcm(
+        pcm: ShortArray,
+        threshold: Float = VoiceProfileStore.DEFAULT_THRESHOLD,
+    ): String? {
+        if (pcm.isEmpty()) return null
+        return identify(FloatArray(pcm.size) { pcm[it] / 32_768.0f }, threshold)
+    }
+
+    /** Save a named print and reload so the next identify can match them. */
+    fun enroll(name: String, samples: FloatArray): Boolean {
+        val emb = embed(samples) ?: return false
+        store.addSample(name, emb)
+        return reload()
+    }
+
+    fun enrollPcm(name: String, pcm: ShortArray): Boolean {
+        if (pcm.isEmpty()) return false
+        return enroll(name, FloatArray(pcm.size) { pcm[it] / 32_768.0f })
+    }
+
     fun verify(samples: FloatArray, threshold: Float = VoiceProfileStore.DEFAULT_THRESHOLD): Boolean {
         val mgr = manager ?: return true          // not enrolled -> no gating
         val embedding = embed(samples) ?: return true   // cannot tell -> allow
         return try {
-            // search() returns the matching name, or empty when nobody clears the bar.
             val who = mgr.search(embedding, threshold)
             if (who.isBlank()) {
                 Log.i(TAG, "wake rejected: voice did not match an enrolled speaker")
@@ -153,12 +191,21 @@ class SpeakerVerifier(
     private fun buildExtractor(): SpeakerEmbeddingExtractor? {
         if (!isModelAvailable()) return null
         return try {
-            SpeakerEmbeddingExtractor(
-                assetManager = context.assets,
-                // NOTE: the model must live at the assets ROOT. sherpa's own docs say not
-                // to put it in a subdirectory.
-                config = SpeakerEmbeddingExtractorConfig(model = MODEL, numThreads = 1),
-            )
+            val onDisk = File(VoiceModelStore(context).root, MODEL)
+            if (onDisk.isFile) {
+                SpeakerEmbeddingExtractor(
+                    assetManager = null,
+                    config = SpeakerEmbeddingExtractorConfig(
+                        model = onDisk.absolutePath,
+                        numThreads = 1,
+                    ),
+                )
+            } else {
+                SpeakerEmbeddingExtractor(
+                    assetManager = context.assets,
+                    config = SpeakerEmbeddingExtractorConfig(model = MODEL, numThreads = 1),
+                )
+            }
         } catch (e: Exception) {
             Log.w(TAG, "speaker model failed to load: ${e.message}")
             null

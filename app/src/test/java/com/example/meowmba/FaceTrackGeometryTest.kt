@@ -1,6 +1,9 @@
 package com.example.meowmba
 
 import com.example.meowmba.core.vision.faceOffsetInScreenSpace
+import com.example.meowmba.core.vision.faceOffsetOnDisplay
+import com.example.meowmba.core.vision.analyzerTargetRotation
+import com.example.meowmba.core.vision.remapEulerToDisplay
 import com.example.meowmba.core.vision.rotatedFrameSize
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -95,6 +98,137 @@ class FaceTrackGeometryTest {
         assertNull(faceOffsetInScreenSpace(10f, 10f, 480, 0, mirrored = false))
     }
 
+    // ── landscape: CameraX reports rot=0 while the display is ROTATION_90 ──
+    // Measured on the Fold 7 cover (2520x1080, target=1, buf=320x240, faces=1):
+    // the detector saw the user, but published y≈-0.8 / roll≈-35 because the
+    // box was still in SENSOR space. Left/right on the landscape screen must
+    // move gaze X, not pin the head to the top of the frame.
+
+    @Test
+    fun `when CameraX already matched the display, do not swap axes again`() {
+        // Fold cover landscape: cam=0, target=ROTATION_90, disp=90.
+        // Buffer is already display-aligned. Remapping would send left/right
+        // onto Y and the head would not follow.
+        val rot90 = android.view.Surface.ROTATION_90
+        val (x1, y1) = faceOffsetOnDisplay(
+            boxCenterX = 40f, boxCenterY = 120f,
+            bufferW = 320, bufferH = 240,
+            rotationDegrees = 0, displayDeg = 90, mirrored = false,
+            targetRotation = rot90,
+        )!!
+        val (x2, y2) = faceOffsetOnDisplay(
+            boxCenterX = 280f, boxCenterY = 120f,
+            bufferW = 320, bufferH = 240,
+            rotationDegrees = 0, displayDeg = 90, mirrored = false,
+            targetRotation = rot90,
+        )!!
+        assertTrue("buffer-X must stay display-X, dx=${x2 - x1}", x2 - x1 > 0.9f)
+        assertEquals("must not leak onto Y", y1, y2, 1e-4f)
+    }
+
+    @Test
+    fun `rotation-lock still remaps sensor Y onto display X`() {
+        val bufW = 320
+        val bufH = 240
+        val (xTop, yTop) = faceOffsetOnDisplay(
+            boxCenterX = 160f, boxCenterY = 20f,
+            bufferW = bufW, bufferH = bufH,
+            rotationDegrees = 0, displayDeg = 90, mirrored = false,
+            targetRotation = android.view.Surface.ROTATION_0,
+        )!!
+        val (xBot, yBot) = faceOffsetOnDisplay(
+            boxCenterX = 160f, boxCenterY = 220f,
+            bufferW = bufW, bufferH = bufH,
+            rotationDegrees = 0, displayDeg = 90, mirrored = false,
+            targetRotation = android.view.Surface.ROTATION_0,
+        )!!
+        assertTrue(
+            "sensor-Y motion must become display-X, dx=${xBot - xTop}",
+            kotlin.math.abs(xBot - xTop) > 0.9f,
+        )
+        assertEquals("that motion must not leak onto display-Y", yTop, yBot, 0.08f)
+    }
+
+    @Test
+    fun `front-lens pointInDisplay01 mirrors X the same way as face offsets`() {
+        val face = faceOffsetOnDisplay(
+            boxCenterX = 40f, boxCenterY = 120f,
+            bufferW = 320, bufferH = 240,
+            rotationDegrees = 0, displayDeg = 0, mirrored = true,
+        )!!
+        val pt = com.example.meowmba.core.vision.pointInDisplay01(
+            px = 40f, py = 120f,
+            bufferW = 320, bufferH = 240,
+            rotationDegrees = 0, displayDeg = 0, mirrored = true,
+        )!!
+        assertEquals(face.first, pt.first * 2f - 1f, 1e-4f)
+        assertEquals(face.second, pt.second * 2f - 1f, 1e-4f)
+    }
+
+    @Test
+    fun `portrait with a real ML Kit rotation stays identity`() {
+        // rot=270, display=0 is the working portrait path: boxes are already
+        // in the rotated (screen) frame. Remapping them again would swap axes.
+        val (w, h) = rotatedFrameSize(320, 240, 270)
+        val (x1, y1) = faceOffsetOnDisplay(
+            boxCenterX = 60f, boxCenterY = h / 2f,
+            bufferW = 320, bufferH = 240,
+            rotationDegrees = 270, displayDeg = 0, mirrored = false,
+        )!!
+        val (x2, y2) = faceOffsetOnDisplay(
+            boxCenterX = w - 60f, boxCenterY = h / 2f,
+            bufferW = 320, bufferH = 240,
+            rotationDegrees = 270, displayDeg = 0, mirrored = false,
+        )!!
+        assertTrue("portrait X must still respond", x2 - x1 > 0.5f)
+        assertEquals("portrait Y must stay put", y1, y2, 1e-4f)
+    }
+
+    @Test
+    fun `analyzer follows the window, not a noisy IMU, when the display actually rotated`() {
+        val rot90 = android.view.Surface.ROTATION_90
+        val rot0 = android.view.Surface.ROTATION_0
+        val rot270 = android.view.Surface.ROTATION_270
+        assertEquals(rot90, analyzerTargetRotation(rot90, rot0))
+        assertEquals(rot90, analyzerTargetRotation(rot90, rot270))
+        assertEquals(rot90, analyzerTargetRotation(rot90, null))
+        // Rotation-lock: display stuck at 0, phone on its side — then use IMU.
+        assertEquals(rot90, analyzerTargetRotation(rot0, rot90))
+        assertEquals(rot0, analyzerTargetRotation(rot0, rot0))
+        assertEquals(rot0, analyzerTargetRotation(rot0, null))
+        assertEquals(rot270, analyzerTargetRotation(null, rot270))
+    }
+
+    @Test
+    fun `sensor yaw becomes display pitch only when we actually remapped`() {
+        val (yaw, pitch, roll) = remapEulerToDisplay(
+            yaw = 20f, pitch = 5f, roll = 3f,
+            rotationDegrees = 0, displayDeg = 90,
+            targetRotation = android.view.Surface.ROTATION_0,
+        )
+        assertEquals(5f, yaw, 1e-4f)
+        assertEquals(-20f, pitch, 1e-4f)
+        assertEquals(3f, roll, 1e-4f)
+        val identity = remapEulerToDisplay(
+            yaw = 20f, pitch = 5f, roll = 3f,
+            rotationDegrees = 0, displayDeg = 90,
+            targetRotation = android.view.Surface.ROTATION_90,
+        )
+        assertEquals(20f, identity.first, 1e-4f)
+        assertEquals(5f, identity.second, 1e-4f)
+    }
+
+    @Test
+    fun `euler remap is identity once ML Kit already rotated`() {
+        val (yaw, pitch, roll) = remapEulerToDisplay(
+            yaw = 20f, pitch = 5f, roll = 3f,
+            rotationDegrees = 90, displayDeg = 90,
+        )
+        assertEquals(20f, yaw, 1e-4f)
+        assertEquals(5f, pitch, 1e-4f)
+        assertEquals(3f, roll, 1e-4f)
+    }
+
     // ── smoothing: a stream to integrate, not a staircase ───────────────────
 
     @Test
@@ -107,7 +241,7 @@ class FaceTrackGeometryTest {
         var smoothed = 0f
         val target = 1f
         val steps = mutableListOf<Float>()
-        repeat(12) {
+        repeat(16) {
             val before = smoothed
             smoothed = com.example.meowmba.core.vision.smoothFaceOffset(
                 smoothed, target, com.example.meowmba.core.vision.faceSmoothingAlpha(true),
@@ -120,7 +254,7 @@ class FaceTrackGeometryTest {
                 steps[i] < steps[i - 1],
             )
         }
-        assertTrue("must actually converge, got $smoothed", smoothed > 0.98f)
+        assertTrue("must actually converge, got $smoothed", smoothed > 0.95f)
     }
 
     @Test

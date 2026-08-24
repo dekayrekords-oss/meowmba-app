@@ -3,6 +3,7 @@ package com.example.meowmba
 import com.example.meowmba.ui.companion.CompanionViewModel
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -46,8 +47,25 @@ class DirectAnswerRoutingTest {
         assertTrue(CompanionViewModel.looksLikeDirectQuestion("how to install ffmpeg"))
         assertTrue(CompanionViewModel.looksLikeDirectQuestion("what is a capacitor"))
         assertTrue(CompanionViewModel.looksLikeDirectQuestion("why is the sky blue"))
-        assertTrue(CompanionViewModel.looksLikeDirectQuestion("is it going to rain"))
         assertTrue(CompanionViewModel.looksLikeDirectQuestion("tell me this: are you a cat?"))
+    }
+
+    @Test
+    fun `weather questions are lookups not chat guesses`() {
+        // Measured on device 2026-08-23: "what's the weather" is question-shaped,
+        // so it reached the chat brain, which said "I do not have access to
+        // real-time weather information". It must fall through to the
+        // WeatherRepository gate in the main turn pipeline instead.
+        com.example.meowmba.core.audio.WakePhraseMatcher.normalize("what's the weather").let {
+            assertTrue(com.example.meowmba.core.agent.runtime.AgentRouter.isWeatherQuestion(it))
+            assertFalse(CompanionViewModel.looksLikeDirectQuestion(it))
+        }
+        assertFalse(CompanionViewModel.looksLikeDirectQuestion(
+            "is it going to rain"))
+        assertFalse(CompanionViewModel.looksLikeDirectQuestion("do i need a coat today"))
+        assertFalse(CompanionViewModel.looksLikeDirectQuestion("whats the temperature outside"))
+        // Non-weather informational questions still reach the chat brain.
+        assertTrue(CompanionViewModel.looksLikeDirectQuestion("what is a capacitor"))
     }
 
     @Test
@@ -57,6 +75,33 @@ class DirectAnswerRoutingTest {
         assertTrue(CompanionViewModel.looksLikeDirectQuestion("tell me how to install ffmpeg"))
         assertEquals("cat facts", CompanionViewModel.extractSearchQuery("hey meow search for cat facts"))
         assertTrue(CompanionViewModel.looksLikeShowInBrowser("hey meow show it in the browser"))
+    }
+
+    @Test
+    fun `what do you see is vision not a chat guess`() {
+        assertFalse(CompanionViewModel.looksLikeDirectQuestion("what do you see"))
+        assertFalse(CompanionViewModel.looksLikeDirectQuestion("hey meow what do you see"))
+        assertNotNull(com.example.meowmba.core.vision.VisionRouter.parse("what do you see"))
+    }
+
+    @Test
+    fun `how fast is a speed question not a chat guess`() {
+        assertTrue(com.example.meowmba.ui.companion.SpeechIntents.isSpeedQuestion("how fast am i going"))
+        assertTrue(com.example.meowmba.ui.companion.SpeechIntents.isSpeedQuestion("how fast are we going"))
+        assertTrue(com.example.meowmba.ui.companion.SpeechIntents.isSpeedQuestion("what speed am i doing"))
+        assertFalse(com.example.meowmba.ui.companion.SpeechIntents.isSpeedQuestion("how do i install ollama"))
+        assertFalse(CompanionViewModel.looksLikeDirectQuestion("how fast am i going"))
+    }
+
+    @Test
+    fun `casual check-ins are answered not parked on the yellow mic`() {
+        // Measured: "Hey buddy what's up" stayed in THINKING 45s because
+        // stripAddress left "buddy what's up" and "what's" was not a starter.
+        assertTrue(CompanionViewModel.looksLikeDirectQuestion("hey buddy what's up"))
+        assertTrue(CompanionViewModel.looksLikeDirectQuestion("what's up"))
+        assertTrue(CompanionViewModel.looksLikeDirectQuestion("whats up"))
+        assertTrue(CompanionViewModel.looksLikeDirectQuestion("how are you"))
+        assertTrue(CompanionViewModel.looksLikeDirectQuestion("how's it going"))
     }
 
     @Test

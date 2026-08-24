@@ -103,14 +103,16 @@ class UtteranceCapture(
                 val quiet = now() - lastVoiceAt
                 val elapsed = now() - startedAt
                 when {
-                    // Said something, then stopped for long enough: that is the turn.
-                    segments.isNotEmpty() && quiet >= silenceToFinishMs -> finish()
+                    // Said something (final or still sitting in a partial), then
+                    // stopped. Partials are the only record AiAi keeps on a hang
+                    // — if we wait for a segment here the words are discarded.
+                    hasSpeech() && quiet >= silenceToFinishMs -> finish()
                     // Never said anything at all.
-                    segments.isEmpty() && quiet >= initialSilenceMs ->
+                    !hasSpeech() && quiet >= initialSilenceMs ->
                         fail(SpeechRecognizer.ERROR_SPEECH_TIMEOUT)
                     elapsed >= maxUtteranceMs ->
-                        if (segments.isEmpty()) fail(SpeechRecognizer.ERROR_SPEECH_TIMEOUT)
-                        else finish()
+                        if (hasSpeech()) finish()
+                        else fail(SpeechRecognizer.ERROR_SPEECH_TIMEOUT)
                 }
             }
         }
@@ -164,6 +166,7 @@ class UtteranceCapture(
             // ERROR_SERVER_DISCONNECTED (the restart's destroy racing the service's
             // final callbacks), and failing there throws a complete utterance away.
             // Deliver what was heard — never discard real words for a transport hiccup.
+            bankLivePartial()
             if (segments.isNotEmpty()) {
                 finish()
                 return
@@ -171,20 +174,14 @@ class UtteranceCapture(
             fail(code)
             return
         }
-        val quiet = now() - lastVoiceAt
-        if (segments.isEmpty()) {
-            // AiAi on this device ends a session that HEARD speech with
-            // ERROR_NO_MATCH and no final result — the partials are the only
-            // record of what was said, and without banking them the whole turn
-            // is silently discarded ("voice chat never answers"). Bank the last
-            // partial so the pause clock and turn flow see it like a result.
-            val partial = _live.value.trim()
-            if (partial.isNotEmpty()) {
-                segments += partial
-                lastVoiceAt = now()
-                _live.value = partial
-            }
-        }
+        // AiAi on this device ends a session that HEARD speech with
+        // ERROR_NO_MATCH and no final result — the partials are the only
+        // record of what was said, and without banking them the whole turn
+        // is silently discarded ("voice chat never answers").
+        // Do not bump lastVoiceAt here: the partial already stamped the
+        // clock when it arrived. Resetting it on every quiet error would
+        // keep the turn open forever.
+        bankLivePartial()
         val quietAfter = now() - lastVoiceAt
         when {
             segments.isNotEmpty() && quietAfter >= silenceToFinishMs -> finish()
@@ -196,12 +193,35 @@ class UtteranceCapture(
     private fun restart() {
         if (finished) return
         if (++restarts > MAX_RESTARTS) {
-            if (segments.isEmpty()) fail(SpeechRecognizer.ERROR_SPEECH_TIMEOUT) else finish()
+            if (hasSpeech()) finish() else fail(SpeechRecognizer.ERROR_SPEECH_TIMEOUT)
             return
         }
         // Straight back in: every millisecond here is a millisecond of deafness, and words
         // spoken in the gap are gone for good.
         listen()
+    }
+
+    /** True once any words have been banked or are in the live partial. */
+    fun hasHeardSpeech(): Boolean = hasSpeech()
+
+    private fun hasSpeech(): Boolean =
+        segments.isNotEmpty() || _live.value.isNotBlank()
+
+    /**
+     * Promote the in-progress partial into [segments] so a hang or empty
+     * terminal still delivers what the user said. [_live] is already
+     * `segments + current partial`, so replacing the bank with it is the
+     * full utterance, not a duplicate.
+     */
+    private fun bankLivePartial(): Boolean {
+        val live = _live.value.trim()
+        if (live.isEmpty()) return segments.isNotEmpty()
+        val banked = segments.joinToString(" ").trim()
+        if (live == banked) return segments.isNotEmpty()
+        segments.clear()
+        segments += live
+        _live.value = live
+        return true
     }
 
     private fun finish() {
@@ -210,6 +230,7 @@ class UtteranceCapture(
         watchdog?.cancel()
         partialJob?.cancel()
         engine.stopListening()
+        bankLivePartial()
         val text = segments.joinToString(" ").trim()
         if (text.isEmpty()) {
             onError?.invoke(SpeechRecognizer.ERROR_NO_MATCH)

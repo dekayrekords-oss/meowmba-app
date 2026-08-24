@@ -31,7 +31,7 @@ class PhaseDTest {
     fun `DOM helpers expose the agent surface on window __meow`() {
         val js = WebViewBridge.DOM_HELPERS
         assertTrue(js.contains("window.__meow"))
-        listOf("find", "title", "links", "click", "type", "scroll").forEach {
+        listOf("find", "title", "links", "click", "type", "scroll", "inject", "readable", "scrape").forEach {
             assertTrue("missing helper: $it", js.contains("$it"))
         }
     }

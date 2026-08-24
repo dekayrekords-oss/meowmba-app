@@ -17,12 +17,10 @@
   practical for a "paste your LAN server's address" feature, so we fall back
   to base-config.
 
-  This does mean cleartext is technically permitted app-wide, not just to
-  private ranges — but nothing in this codebase issues an http:// request
-  except these two user-configured, user-typed endpoints; every other
-  network call in the app uses https:// by construction. So in practice this
-  only ever affects same-LAN traffic the user explicitly opted into by
-  typing an http:// URL into Settings.
+  CleartextPolicy.kt is the real gate: public http:// hosts are refused in
+  code (API keys / chat cannot go over the open internet in the clear).
+  XML still has to permit cleartext so typed LAN IPs (192.168.x.x:8642)
+  can connect — Android cannot express RFC1918 in a domain list.
 -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="true" />

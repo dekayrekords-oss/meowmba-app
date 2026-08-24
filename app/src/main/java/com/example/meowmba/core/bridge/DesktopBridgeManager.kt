@@ -413,12 +413,19 @@ class DesktopBridgeManager(
             setRequestProperty("Content-Type", "application/json")
             extraHeaders.forEach { (k, v) -> setRequestProperty(k, v) }
         }
-        conn.outputStream.use { it.write(body) }
-        val code = conn.responseCode
-        val bytes = (if (code in 200..299) conn.inputStream else conn.errorStream)
-            ?.use { it.readBytes() } ?: ByteArray(0)
-        conn.disconnect()
-        return code to bytes
+        try {
+            conn.outputStream.use { it.write(body) }
+            val code = conn.responseCode
+            val bytes = (if (code in 200..299) conn.inputStream else conn.errorStream)
+                ?.use { it.readBytes() } ?: ByteArray(0)
+            return code to bytes
+        } finally {
+            // Disconnect on EVERY path: unreachable desktops throw from
+            // write/responseCode, and the retry loops hit that constantly —
+            // leaking a socket per attempt on exactly the failures that
+            // repeat.
+            conn.disconnect()
+        }
     }
 
     companion object {
