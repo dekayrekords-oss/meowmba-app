@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.speech.RecognizerIntent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -83,6 +84,16 @@ class MainActivity : ComponentActivity() {
         companionViewModel?.onLocationPermissionResult(isGranted)
     }
 
+    /** System voice dialog — last-resort STT when in-app SpeechRecognizer is BUSY. */
+    private val speechPromptLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val spoken = result.data
+            ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+            ?.firstOrNull()
+        companionViewModel?.onSpeechPromptResult(spoken)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -130,7 +141,8 @@ class MainActivity : ComponentActivity() {
                                 },
                                 visionManager = visionManager,
                                 notificationHelper = notificationHelper,
-                                routineDao = database.routineDao()
+                                routineDao = database.routineDao(),
+                                characterDao = database.characterDao()
                             ).also {
                                 companionViewModel = it
                                 // onResume often runs before first composition assigns
@@ -192,12 +204,30 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
+                androidx.compose.runtime.LaunchedEffect(Unit) {
+                    viewModel.speechPrompt.collect {
+                        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                            putExtra(
+                                RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
+                            )
+                            putExtra(
+                                RecognizerIntent.EXTRA_PROMPT,
+                                "Talk to ${viewModel.uiState.value.name}",
+                            )
+                        }
+                        runCatching { speechPromptLauncher.launch(intent) }
+                            .onFailure { viewModel.onSpeechPromptUnavailable() }
+                    }
+                }
+
                 // Handle system back button
                 // Every full-screen overlay must be listed here, or back leaves the app
                 // from a page that clearly has somewhere to go back TO.
                 BackHandler(
                     enabled = uiState.showSettings || uiState.showModelManager || uiState.isChatExpanded ||
                         uiState.showTiles || uiState.showPrivacyDashboard || uiState.showMemoryScreen ||
+                        uiState.showStudioScreen ||
                         uiState.showAgentsScreen || uiState.showBackgroundScreen ||
                         uiState.showWeatherScreen || uiState.showNavScreen ||
                         uiState.showAppDrawer || uiState.showBrowser
@@ -208,6 +238,7 @@ class MainActivity : ComponentActivity() {
                         uiState.showModelManager -> viewModel.toggleModelManager()
                         uiState.showPrivacyDashboard -> viewModel.togglePrivacyDashboard()
                         uiState.showMemoryScreen -> viewModel.toggleMemoryScreen()
+                        uiState.showStudioScreen -> viewModel.toggleStudioScreen()
                         uiState.showAgentsScreen -> viewModel.toggleAgentsScreen()
                         uiState.showBackgroundScreen -> viewModel.toggleBackgroundScreen()
                         uiState.showWeatherScreen -> viewModel.toggleWeatherScreen()

@@ -31,6 +31,10 @@ import com.example.meowmba.core.agent.runtime.ToolCallPromptMode
 import com.example.meowmba.core.agent.tools.FindPlacesTool
 import com.example.meowmba.core.agent.tools.MemoryRecallTool
 import com.example.meowmba.core.agent.tools.WebBrowserTool
+import com.example.meowmba.core.agent.tools.SaveCharacterTool
+import com.example.meowmba.core.agent.tools.GetCharacterTool
+import com.example.meowmba.core.agent.tools.CreateComicTool
+import com.example.meowmba.core.agent.tools.WriteScriptTool
 import com.example.meowmba.core.agent.tools.DesktopControlTool
 import com.example.meowmba.core.agent.tools.SetAlarmTool
 import com.example.meowmba.core.agent.tools.SetTimerTool
@@ -94,8 +98,10 @@ import com.example.meowmba.core.bridge.DesktopBridgeManager
 import com.example.meowmba.core.bridge.UsbAutoBridgeManager
 import com.example.meowmba.core.audio.RecognizerWakeWordEngine
 import com.example.meowmba.core.audio.SelfVoiceFilter
+import com.example.meowmba.core.audio.SherpaKwsEngine
 import com.example.meowmba.core.audio.SpeechEngine
 import com.example.meowmba.core.audio.SpeechSynthesizer
+import com.example.meowmba.core.audio.VoicePolicy
 import com.example.meowmba.core.audio.WakePhraseMatcher
 import com.example.meowmba.core.audio.WakeWordEngine
 import com.example.meowmba.core.database.AuditDao
@@ -120,7 +126,10 @@ import com.example.meowmba.core.security.SecureStorageManager
 import java.io.File
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
@@ -173,7 +182,9 @@ class CompanionViewModel(
     /** MetaMemory ecosystem link. Injected in tests; see [metaMemory] for the default. */
     private val metaMemoryConnector: MetaMemoryConnector? = null,
     /** Phase E: scheduled routines. Null in unit tests. */
-    private val routineDao: com.example.meowmba.core.database.RoutineDao? = null
+    private val routineDao: com.example.meowmba.core.database.RoutineDao? = null,
+    /** Studio character bibles. Null in unit tests; tools degrade honestly. */
+    private val characterDao: com.example.meowmba.core.database.CharacterDao? = null
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(CompanionState())
     private var idleAnimationDirector: IdleAnimationDirector? = null
@@ -410,8 +421,21 @@ class CompanionViewModel(
 
     /** Consecutive recognizer refusals (BUSY/CLIENT/DISCONNECTED). */
     private var contentionStreak = 0
+    /**
+     * False after always-on / mic-tap contention wedges the platform recognizer.
+     * Face-mode open-mic then yields to the keyword spotter so the hardware is
+     * free; a later mic tap sets this true again to retry SpeechRecognizer.
+     */
+    private var recognizerHealthy = true
     private var alwaysOnRearmJob: Job? = null
     private var alwaysOnPartialJob: Job? = null
+
+    /**
+     * One-shot: MainActivity opens the system speech dialog when in-app
+     * SpeechRecognizer is BUSY / rate-limited on this device.
+     */
+    private val _speechPrompt = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val speechPrompt: SharedFlow<Unit> = _speechPrompt.asSharedFlow()
 
     /**
      * Last non-blank partial heard by the open mic, per session. AiAi on this
@@ -664,9 +688,10 @@ class CompanionViewModel(
                             .onFailure { android.util.Log.w("WakeMissDiag", "wake-miss save failed: ${it.message}") }
                     }
                 }
-                // Face always-on claims the mic on resume — don't start KWS only to
-                // tear it down (that race is ERROR_RECOGNIZER_BUSY / code 11 thrash).
-                if (_uiState.value.wakeWordEnabled && !shouldAlwaysOnMic()) startWakeStandby()
+                built.kws?.onSpeechDetected = { onBareSpeechDetected() }
+                // Always-on face mode now uses this same spotter (VAD → STT),
+                // so arm it even when the face is already up.
+                if (_uiState.value.wakeWordEnabled) startWakeStandby()
             }
         }
 
@@ -1322,6 +1347,15 @@ class CompanionViewModel(
                     }
                 )
             )
+            // Studio: comics/scripts always render to HTML whose path rides a
+            // MEDIA_FILE: line, so onTaskCompleted opens the browser overlay —
+            // "made it but didn't show me" is impossible by construction.
+            toolRegistry.register(WriteScriptTool(ws))
+            toolRegistry.register(CreateComicTool(ws, characterDao))
+        }
+        if (characterDao != null) {
+            toolRegistry.register(SaveCharacterTool(characterDao))
+            toolRegistry.register(GetCharacterTool(characterDao))
         }
         if (memoryRepository != null || workspaceRoot != null) {
             agentToolRegistry = toolRegistry
@@ -1358,28 +1392,35 @@ class CompanionViewModel(
                             // no-op: playCustomAnimation already set activeAnimation
                         } else {
                             // Check for generated media
-                            val mediaLine = result.lineSequence().firstOrNull { it.startsWith("MEDIA_FILE:") }
-                            if (mediaLine != null) {
-                                val path = mediaLine.removePrefix("MEDIA_FILE:")
-                                val file = File(path)
-                                val type = when {
-                                    path.endsWith(".png") || path.endsWith(".jpg") || path.endsWith(".jpeg") ->
-                                        GeneratedMedia.MediaType.IMAGE
-                                    path.endsWith(".gif") || path.endsWith(".mp4") ->
-                                        GeneratedMedia.MediaType.VIDEO
-                                    path.endsWith(".wav") || path.endsWith(".mp3") || path.endsWith(".m4a") ->
-                                        GeneratedMedia.MediaType.AUDIO
-                                    else -> GeneratedMedia.MediaType.IMAGE
-                                }
-                                val label = task.title.removePrefix("generate ").removePrefix("create ")
-                                    .replaceFirstChar { it.uppercase() }
-                                _uiState.value = _uiState.value.copy(
-                                    generatedMedia = GeneratedMedia(
-                                        filePath = file.absolutePath,
-                                        type = type,
-                                        label = label
-                                    )
-                                )
+                                val mediaLine = result.lineSequence().firstOrNull { it.startsWith("MEDIA_FILE:") }
+                                if (mediaLine != null) {
+                                    val path = mediaLine.removePrefix("MEDIA_FILE:")
+                                    val file = File(path)
+                                    // HTML artifacts (comics, scripts, ads) are shown by
+                                    // showFileInBrowser loading the real page in the
+                                    // WebView overlay; the GeneratedMedia card would just
+                                    // try to decode an .html file as a bitmap.
+                                    val isHtml = path.endsWith(".html") || path.endsWith(".htm")
+                                    val type = when {
+                                        path.endsWith(".png") || path.endsWith(".jpg") || path.endsWith(".jpeg") ->
+                                            GeneratedMedia.MediaType.IMAGE
+                                        path.endsWith(".gif") || path.endsWith(".mp4") ->
+                                            GeneratedMedia.MediaType.VIDEO
+                                        path.endsWith(".wav") || path.endsWith(".mp3") || path.endsWith(".m4a") ->
+                                            GeneratedMedia.MediaType.AUDIO
+                                        else -> GeneratedMedia.MediaType.IMAGE
+                                    }
+                                    val label = task.title.removePrefix("generate ").removePrefix("create ")
+                                        .replaceFirstChar { it.uppercase() }
+                                    if (!isHtml) {
+                                        _uiState.value = _uiState.value.copy(
+                                            generatedMedia = GeneratedMedia(
+                                                filePath = file.absolutePath,
+                                                type = type,
+                                                label = label
+                                            )
+                                        )
+                                    }
                                 // Persist it. Without this the media only ever lived in
                                 // transient UI state, so nothing generated showed up in
                                 // the Memory tab afterwards.
@@ -1387,11 +1428,11 @@ class CompanionViewModel(
                                     viewModelScope.launch {
                                         runCatching {
                                             memoryRepository?.addMemory(
-                                                content = "Created a ${type.name.lowercase()}: $label " +
+                                                content = "Created a ${if (isHtml) "page" else type.name.lowercase()}: $label " +
                                                     "(saved as ${file.name})",
                                                 type = MemoryType.EPISODIC,
                                                 importance = ImportanceLevel.MEDIUM,
-                                                tags = listOf("media", type.name.lowercase(), file.name)
+                                                tags = listOf("media", if (isHtml) "page" else type.name.lowercase(), file.name)
                                             )
                                         }
                                     }
@@ -2348,6 +2389,16 @@ class CompanionViewModel(
     }
 
     /**
+     * Stop KWS and wait until AudioRecord is actually released. SpeechRecognizer
+     * started against a still-held mic is ERROR_RECOGNIZER_BUSY — the dead mic button.
+     */
+    private suspend fun stopWakeLoopAndAwait() {
+        wakeWordEngine?.stopAndAwait(KWS_RELEASE_TIMEOUT_MS)
+        com.example.meowmba.core.audio.MicOwner
+            .release(com.example.meowmba.core.audio.MicOwner.IN_APP)
+    }
+
+    /**
      * Called when the app goes to the background. Releases the wake mic so
      * WakeWordService can take over.
      *
@@ -2461,67 +2512,69 @@ class CompanionViewModel(
     }
 
     private fun startWakeStandby() {
-        if (handedOffToBackground) {
-            // The background service owns the mic after a hand-off. Late
-            // recognizer callbacks from the torn-down turn still route
-            // through resetState() and used to re-arm the in-app spotter,
-            // which then refused the service the mic ("in-app wake loop
-            // owns the mic") and the follow-up never started.
-            wakeLog( "not re-arming: conversation handed to background service")
+        val s = _uiState.value
+        if (!VoicePolicy.shouldStartWakeSpotter(
+                isMicEnabled = s.isMicEnabled,
+                wakeWordEnabled = s.wakeWordEnabled,
+                handedOffToBackground = handedOffToBackground,
+                interactionIdle = s.interactionState == InteractionState.IDLE,
+                captureInFlight = utteranceCapture != null,
+            )
+        ) {
+            if (handedOffToBackground) {
+                wakeLog("not re-arming: conversation handed to background service")
+            } else if (s.interactionState != InteractionState.IDLE) {
+                wakeLog("not re-arming: interaction state is ${s.interactionState}")
+            } else if (utteranceCapture != null) {
+                wakeLog("not re-arming: a capture is still in flight")
+            } else if (!s.isMicEnabled) {
+                wakeLog("not re-arming: mic disabled by the user")
+            }
             return
         }
-        if (shouldAlwaysOnMic()) {
-            // The bare face owns the mic in always-on conversation mode; the
-            // wake phrase would be noise on top of it.
-            wakeLog( "not re-arming: face mode owns the mic")
+        (wakeWordEngine as? SherpaKwsEngine)?.handoffOnSpeech = shouldAlwaysOnMic()
+        if (wakeWordEngine?.isRunning?.value == true) {
+            wakeLog("already listening")
+            _uiState.value = _uiState.value.copy(captionText = wakeHint())
             return
         }
-        val state = _uiState.value.interactionState
-        if (state != InteractionState.IDLE) {
-            // "Wake word only works once" is what this looks like from outside, so say why.
-            wakeLog( "not re-arming: interaction state is $state")
-            return
-        }
-        if (utteranceCapture != null) {
-            // A capture/follow-up session is still live; re-arming the spotter here is
-            // what grabbed the mic and killed it. The capture's completion path re-arms.
-            wakeLog( "not re-arming: a capture is still in flight")
-            return
-        }
-        if (_uiState.value.isMicEnabled) {
-            // Exclusive with WakeWordService; whoever holds the mic wins.
-            if (com.example.meowmba.core.audio.MicOwner
-                    .acquire(com.example.meowmba.core.audio.MicOwner.IN_APP)
-            ) {
-                wakeWordEngine?.start()
-            } else {
-                android.util.Log.w(
-                    TAG_WAKE,
-                    "mic held by ${com.example.meowmba.core.audio.MicOwner.current}; retrying once"
-                )
-                // The command turn's recognizer can still be tearing down when we get here,
-                // so one bounded retry covers the handoff without spinning.
-                wakeRearmJob?.cancel()
-                wakeRearmJob = viewModelScope.launch {
-                    delay(WAKE_REARM_RETRY_MS)
-                    if (_uiState.value.interactionState == InteractionState.IDLE &&
-                        _uiState.value.isMicEnabled &&
-                        com.example.meowmba.core.audio.MicOwner
-                            .acquire(com.example.meowmba.core.audio.MicOwner.IN_APP)
-                    ) {
-                        wakeLog( "re-armed on retry")
-                        wakeWordEngine?.start()
-                    } else {
-                        android.util.Log.w(
-                            TAG_WAKE,
-                            "still not re-armed; mic held by " +
-                                "${com.example.meowmba.core.audio.MicOwner.current}"
-                        )
-                    }
+        // Exclusive with WakeWordService; whoever holds the mic wins.
+        if (com.example.meowmba.core.audio.MicOwner
+                .acquire(com.example.meowmba.core.audio.MicOwner.IN_APP)
+        ) {
+            wakeWordEngine?.start()
+        } else {
+            android.util.Log.w(
+                TAG_WAKE,
+                "mic held by ${com.example.meowmba.core.audio.MicOwner.current}; retrying once"
+            )
+            // The command turn's recognizer can still be tearing down when we get here,
+            // so one bounded retry covers the handoff without spinning.
+            wakeRearmJob?.cancel()
+            wakeRearmJob = viewModelScope.launch {
+                delay(WAKE_REARM_RETRY_MS)
+                val now = _uiState.value
+                if (VoicePolicy.shouldStartWakeSpotter(
+                        isMicEnabled = now.isMicEnabled,
+                        wakeWordEnabled = now.wakeWordEnabled,
+                        handedOffToBackground = handedOffToBackground,
+                        interactionIdle = now.interactionState == InteractionState.IDLE,
+                        captureInFlight = utteranceCapture != null,
+                    ) &&
+                    com.example.meowmba.core.audio.MicOwner
+                        .acquire(com.example.meowmba.core.audio.MicOwner.IN_APP)
+                ) {
+                    (wakeWordEngine as? SherpaKwsEngine)?.handoffOnSpeech = shouldAlwaysOnMic()
+                    wakeLog("re-armed on retry")
+                    wakeWordEngine?.start()
+                } else {
+                    android.util.Log.w(
+                        TAG_WAKE,
+                        "still not re-armed; mic held by " +
+                            "${com.example.meowmba.core.audio.MicOwner.current}"
+                    )
                 }
             }
-        } else {
-            wakeLog( "not re-arming: mic disabled by the user")
         }
         _uiState.value = _uiState.value.copy(captionText = wakeHint())
     }
@@ -2534,10 +2587,17 @@ class CompanionViewModel(
     private fun shouldAlwaysOnMic(): Boolean {
         val s = _uiState.value
         // Face mode owns an open mic by default so speech is a command without a
-        // hot word. Wake still runs when the face is covered (settings/drawer) or
-        // when requireWakeWordInFace opts back into hot-word gating.
-        return s.isMicEnabled && !s.isMuted && !handedOffToBackground && faceModeActive(s) &&
-            !s.requireWakeWordInFace
+        // hot word. Wake still runs when the face is covered (settings/drawer),
+        // when requireWakeWordInFace opts back into hot-word gating, or when
+        // the platform recognizer has wedged (AiAi BUSY / Google 10).
+        return VoicePolicy.shouldAlwaysOnMic(
+            isMicEnabled = s.isMicEnabled,
+            isMuted = s.isMuted,
+            handedOffToBackground = handedOffToBackground,
+            faceModeActive = faceModeActive(s),
+            requireWakeWordInFace = s.requireWakeWordInFace,
+            recognizerHealthy = recognizerHealthy,
+        )
     }
 
     /**
@@ -2547,19 +2607,32 @@ class CompanionViewModel(
      * turn) so the two can never disagree.
      */
     private fun updateVoiceListeningMode() {
-        if (shouldAlwaysOnMic()) {
-            // Face always-on owns the mic (74f6 behavior). Immediate start — a
-            // delayed arm left the face deaf after cold launch / resume.
-            stopWakeLoopAndRelease()
-            startAlwaysOnListening()
-        } else {
-            stopAlwaysOnListening()
-            if (_uiState.value.wakeWordEnabled && !handedOffToBackground &&
-                _uiState.value.interactionState == InteractionState.IDLE
-            ) {
-                startWakeStandby()
-            }
+        // Continuous SpeechRecognizer always-on wedges AiAi on this device
+        // (BUSY / never-ready) and then a stale KWS retry takes the hardware,
+        // which is the "face is up, mic is deaf" bug. Face-mode just-talk is
+        // now VAD on the keyword spotter handing one STT turn. The loop is
+        // kept as a last-resort recovery path but must not own the mic here.
+        stopAlwaysOnListening()
+        (wakeWordEngine as? SherpaKwsEngine)?.handoffOnSpeech = shouldAlwaysOnMic()
+        if (_uiState.value.wakeWordEnabled && !handedOffToBackground &&
+            _uiState.value.interactionState == InteractionState.IDLE
+        ) {
+            startWakeStandby()
         }
+    }
+
+    /** VAD rising edge in face mode: one command turn, no wake phrase. */
+    private fun onBareSpeechDetected() {
+        if (_uiState.value.interactionState != InteractionState.IDLE) {
+            startWakeStandby()
+            return
+        }
+        if (!shouldAlwaysOnMic()) {
+            startWakeStandby()
+            return
+        }
+        fuLog("bare speech — opening command listen")
+        startListening()
     }
 
     /**
@@ -2791,13 +2864,20 @@ class CompanionViewModel(
                 if (alwaysOnActive && shouldAlwaysOnMic() &&
                     _uiState.value.interactionState == InteractionState.IDLE
                 ) {
-                    val contention = code == android.speech.SpeechRecognizer.ERROR_RECOGNIZER_BUSY ||
-                        code == android.speech.SpeechRecognizer.ERROR_CLIENT ||
-                        code == android.speech.SpeechRecognizer.ERROR_SERVER_DISCONNECTED
+                    val contention = VoicePolicy.isContentionError(code)
                     // Quiet means the recognizer is healthy and simply heard
                     // nothing, so it clears the streak; contention means the
                     // service refused us and the streak grows.
                     if (contention) contentionStreak++ else contentionStreak = 0
+                    if (contention && contentionStreak >= VoicePolicy.ALWAYS_ON_WEDGE_STRIKES) {
+                        // AiAi/Google stay wedged if we keep retrying. Hand the
+                        // hardware to KWS so "hey meow" and the mic button can work.
+                        recognizerHealthy = false
+                        fuLog("always-on wedged code=$code — handing mic to wake word")
+                        stopAlwaysOnListening()
+                        startWakeStandby()
+                        return@startListening
+                    }
                     alwaysOnRearmJob?.cancel()
                     alwaysOnRearmJob = viewModelScope.launch {
                         // AiAi thrash-loops if we re-open too fast after 5/8/11,
@@ -2856,18 +2936,22 @@ class CompanionViewModel(
         transientListenRetries = 0
         followUpJob?.cancel()
         isFollowUpListen = false
+        // User asked for a spoken turn: give SpeechRecognizer another chance
+        // even if always-on had wedged it.
+        recognizerHealthy = true
         // A focused, push-to-talk turn takes priority over the always-on
         // listener: stop the open-mic capture and its partial mirror so only
         // this capture drives the caption for the duration of the turn.
         stopAlwaysOnListening()
-        stopWakeLoopAndRelease()
 
         val engine = speechService
         if (engine == null) {
+            stopWakeLoopAndRelease()
             startMockListening()
             return
         }
         if (!engine.isAvailable) {
+            stopWakeLoopAndRelease()
             _uiState.value = _uiState.value.copy(
                 captionText = "Speech recognition isn't available on this device — no recognizer service installed"
             )
@@ -2883,7 +2967,16 @@ class CompanionViewModel(
             emotion = CompanionEmotion.ALERT
         )
 
-        captureUtterance(engine) { result -> processUserSpeech(result) }
+        viewModelScope.launch {
+            if (wakeWordEngine is SherpaKwsEngine) {
+                stopWakeLoopAndAwait()
+                delay(KWS_HANDOFF_MS)
+            } else {
+                stopWakeLoopAndRelease()
+            }
+            if (_uiState.value.interactionState != InteractionState.LISTENING) return@launch
+            captureUtterance(engine) { result -> processUserSpeech(result) }
+        }
     }
 
     /**
@@ -2958,6 +3051,25 @@ class CompanionViewModel(
             }
             return
         }
+        // Mic tap: contention (BUSY / CLIENT / 10 / 11) means the in-app
+        // recognizer is wedged. Don't retry — that re-wedges AiAi. Open the
+        // system voice dialog so the button still does something.
+        if (!isFollowUpListen && VoicePolicy.isContentionError(code)) {
+            transientListenRetries = 0
+            recognizerHealthy = false
+            utteranceCapture?.cancel()
+            utteranceCapture = null
+            speechService?.stopListening()
+            _uiState.value = _uiState.value.copy(
+                interactionState = InteractionState.IDLE,
+                captionText = "Opening voice input…",
+                emotion = CompanionEmotion.IDLE
+            )
+            fuLog("mic tap contention code=$code — system speech dialog")
+            _speechPrompt.tryEmit(Unit)
+            updateVoiceListeningMode()
+            return
+        }
         // Error 11 (ERROR_SERVER_DISCONNECTED) and friends are transient hiccups
         // of the recognition service, not a broken mic. Instead of surfacing a
         // raw "error 11" caption and going deaf, re-open the session silently a
@@ -2980,6 +3092,29 @@ class CompanionViewModel(
         speechErrorCaption(code)?.let { msg ->
             _uiState.value = _uiState.value.copy(captionText = msg)
         }
+    }
+
+    /** System speech dialog returned a transcript (or cancel / missing activity). */
+    fun onSpeechPromptResult(text: String?) {
+        if (text.isNullOrBlank()) {
+            _uiState.value = _uiState.value.copy(
+                interactionState = InteractionState.IDLE,
+                captionText = wakeHint(),
+                emotion = CompanionEmotion.IDLE
+            )
+            updateVoiceListeningMode()
+            return
+        }
+        processUserSpeech(text)
+    }
+
+    fun onSpeechPromptUnavailable() {
+        _uiState.value = _uiState.value.copy(
+            interactionState = InteractionState.IDLE,
+            captionText = "Speech recognizer is busy — say \"Hey ${_uiState.value.name}\" or try the mic again",
+            emotion = CompanionEmotion.IDLE
+        )
+        updateVoiceListeningMode()
     }
 
     private fun speechErrorCaption(code: Int): String? = when (code) {
@@ -3164,7 +3299,7 @@ class CompanionViewModel(
                 )
                 // Order matters: the state must already read IDLE, because
                 // startWakeStandby refuses to re-arm from anything else.
-                startWakeStandby()
+                updateVoiceListeningMode()
             }
         }
 
@@ -3885,7 +4020,6 @@ class CompanionViewModel(
         // Free the continuous wake AudioRecord and any always-on session first —
         // otherwise SpeechRecognizer opens deaf and follow-up looks broken.
         stopAlwaysOnListening()
-        stopWakeLoopAndRelease()
         isFollowUpListen = true
         _uiState.value = _uiState.value.copy(
             interactionState = InteractionState.LISTENING,
@@ -3893,14 +4027,14 @@ class CompanionViewModel(
             emotion = CompanionEmotion.ALERT
         )
         followUpJob = viewModelScope.launch {
+            stopWakeLoopAndAwait()
             // The interruption watch may still hold a live session; hand the mic over
             // cleanly before starting a stitched capture on top of it.
             if (engine.isListening.value) {
                 engine.stopListening()
                 delay(120)
             } else {
-                // KWS AudioRecord teardown needs a beat before STT can bind.
-                delay(80)
+                delay(KWS_HANDOFF_MS)
             }
             // A follow-up is a spoken turn like any other: it has to survive a pause,
             // and a transient recognizer hiccup must not kill it silently.
@@ -5375,6 +5509,33 @@ class CompanionViewModel(
         }
     }
 
+    fun toggleStudioScreen() {
+        val opening = !_uiState.value.showStudioScreen
+        _uiState.value = _uiState.value.copy(showStudioScreen = opening)
+        if (opening) {
+            // Fresh reads each open so comics/scripts saved by tools since the
+            // last visit show up without an app restart.
+            _studioArtifacts.value = listStudioArtifacts()
+        }
+    }
+
+    /** Saved recurring-character sheets, observed live from Room. */
+    val studioCharacters: kotlinx.coroutines.flow.Flow<List<com.example.meowmba.core.database.CharacterEntity>> =
+        characterDao?.getAll() ?: kotlinx.coroutines.flow.flowOf(emptyList())
+
+    private val _studioArtifacts = MutableStateFlow<List<File>>(emptyList())
+    val studioArtifacts = _studioArtifacts.asStateFlow()
+
+    /** Comic/script/ad pages in the workspace, newest first (capped for scroll). */
+    private fun listStudioArtifacts(): List<File> =
+        workspaceRoot?.let { root ->
+            listOf("comics", "scripts", "ads", "posts").flatMap { dir ->
+                File(root, dir).listFiles()?.toList() ?: emptyList()
+            }.filter { it.isFile && it.extension.lowercase() == "html" }
+                .sortedByDescending { it.lastModified() }
+                .take(30)
+        } ?: emptyList()
+
     /**
      * Clears every full-screen panel so the face is visible.
      *
@@ -5391,6 +5552,7 @@ class CompanionViewModel(
         showModelManager = false,
         showPrivacyDashboard = false,
         showMemoryScreen = false,
+        showStudioScreen = false,
         showWeatherScreen = false,
         showBackgroundScreen = false,
         showNavScreen = false,
@@ -5703,6 +5865,12 @@ SAFE if the scene looks like a normal road, car interior, sidewalk, or room, or 
 
         /** Long enough for a recognizer to finish tearing down, short enough to feel instant. */
         private const val WAKE_REARM_RETRY_MS = 900L
+
+        /** Max wait for Sherpa's AudioRecord.release() after stop(). */
+        private const val KWS_RELEASE_TIMEOUT_MS = 800L
+
+        /** Extra beat after KWS join so the HAL has dropped the input. */
+        private const val KWS_HANDOFF_MS = 150L
 
         /** Verbs that turn "…browser" into a show-in-the-browser request. */
         private val SHOW_BROWSER_VERBS = listOf("show", "open", "display", "put", "bring")

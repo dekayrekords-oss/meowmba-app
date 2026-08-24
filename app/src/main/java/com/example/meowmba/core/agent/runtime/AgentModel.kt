@@ -132,6 +132,16 @@ object AgentRegistry {
             id = "media", name = "Canvas",
             purpose = "Generates simple images from text descriptions.",
             allowedTools = setOf("media.generate_image", "media.generate_video", "media.generate_audio")
+        ),
+        AgentDefinition(
+            id = "studio", name = "Ink",
+            purpose = "Creates comics, YouTube scripts, ads, and posts. Remembers recurring " +
+                "characters so comics and cartoon versions share the exact same designs, and " +
+                "every finished piece opens in the browser panel for review.",
+            allowedTools = setOf(
+                "studio.save_character", "studio.get_character",
+                "studio.create_comic", "studio.write_script"
+            )
         )
     )
 

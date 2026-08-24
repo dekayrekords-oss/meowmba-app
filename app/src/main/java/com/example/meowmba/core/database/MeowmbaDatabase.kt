@@ -9,8 +9,8 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [MessageEntity::class, MemoryEntity::class, MemoryFtsEntity::class, MessageFtsEntity::class, AuditEntryEntity::class, RoutineEntity::class],
-    version = 6,
+    entities = [MessageEntity::class, MemoryEntity::class, MemoryFtsEntity::class, MessageFtsEntity::class, AuditEntryEntity::class, RoutineEntity::class, ProjectEntity::class, CharacterEntity::class],
+    version = 9,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -19,6 +19,8 @@ abstract class MeowmbaDatabase : RoomDatabase() {
     abstract fun memoryDao(): MemoryDao
     abstract fun auditDao(): AuditDao
     abstract fun routineDao(): RoutineDao
+    abstract fun projectDao(): ProjectDao
+    abstract fun characterDao(): CharacterDao
 
     companion object {
         /**
@@ -85,6 +87,45 @@ abstract class MeowmbaDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Projects/conversations (the deployed app's v7) — ported verbatim from
+         * the AndroidStudioProjects/Meowmba checkout, which is what phones run.
+         * This checkout was behind the installed build and crashed with
+         * "migration from 8 to 7 required" until these were added.
+         */
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `messages` ADD COLUMN `conversationId` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `routines` ADD COLUMN `source` TEXT NOT NULL DEFAULT 'system'")
+                db.execSQL("ALTER TABLE `routines` ADD COLUMN `launchTarget` TEXT NOT NULL DEFAULT ''")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `projects` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`name` TEXT NOT NULL, `kind` TEXT NOT NULL, " +
+                        "`createdAt` INTEGER NOT NULL, `lastOpenedAt` INTEGER NOT NULL, " +
+                        "`conversationId` INTEGER NOT NULL)"
+                )
+            }
+        }
+
+        /** Speaker attribution on user messages (deployed v8). */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `messages` ADD COLUMN `speakerName` TEXT")
+            }
+        }
+
+        /** Studio character bibles. Additive — nothing to carry over. */
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `characters` (" +
+                        "`name` TEXT NOT NULL PRIMARY KEY, " +
+                        "`sheet` TEXT NOT NULL, `updatedAt` INTEGER NOT NULL)"
+                )
+            }
+        }
+
         @Volatile
         private var INSTANCE: MeowmbaDatabase? = null
 
@@ -96,7 +137,8 @@ abstract class MeowmbaDatabase : RoomDatabase() {
                     "meowmba_database"
                 )
                     .addMigrations(
-                        MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
+                        MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
+                        MIGRATION_7_8, MIGRATION_8_9,
                     )
                     // No fallbackToDestructiveMigration. It was silently
                     // dropping every table for anyone upgrading from v2 or v3,

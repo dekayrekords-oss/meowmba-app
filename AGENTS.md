@@ -188,7 +188,30 @@ every clamp) — a 60ms performance is indistinguishable from "nothing happened"
 - **Tests are pure-JVM where possible** — `android.net.Uri` etc. are not
   mocked; put string/URI logic in static/companion functions (see `mailtoUri`)
   and test those.
-- Room is at **v4**; bump + migrate, never `fallbackToDestructiveMigration`.
+- Room is at **v7** (v6→v7 added `characters`); bump + migrate, never
+  `fallbackToDestructiveMigration`.
+
+## Content studio — ON DEVICE (2026-08-24)
+
+Meow makes comics/scripts/ads inside the app and SHOWS them: every visual tool
+returns its artifact path on a `MEDIA_FILE:` line, and `onTaskCompleted` opens
+it straight in the browser WebView overlay. Claiming "I made X" without that
+line = faking a tool result — the exact complaint this feature fixes.
+
+- **Tools** (`core/agent/tools/StudioTools.kt`, agent "Ink" id `studio`):
+  `studio.save_character` / `studio.get_character` (locked design sheets),
+  `studio.create_comic` (`panels` = JSON array of {caption, dialogue,
+  description}; named characters' sheets are embedded in the page's CAST
+  footer so comic + cartoon versions stay identical), `studio.write_script`
+  (kind=script/ad/post → scripts|ads|posts dir).
+- **Character memory** is the Room `characters` table (name PK, upsert) —
+  deterministic by design; do NOT store sheets as ordinary memories (fuzzy
+  recall was the whole problem).
+- **Renderers** are pure JVM (`core/studio/ComicRenderer.kt`), tested in
+  `StudioTest.kt` with an in-memory CharacterDao fake.
+- **UI**: Studio tile → `StudioScreen` lists saved characters + everything in
+  workspace `comics|scripts|ads|posts`; tap reopens the artifact in the same
+  browser overlay used at creation time.
 
 ## House style for commits
 

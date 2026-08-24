@@ -408,6 +408,7 @@ fun CompanionScreen(
                     "Hardware" -> viewModel.toggleModelManager()
                     "Privacy" -> viewModel.togglePrivacyDashboard()
                     "Memory" -> viewModel.toggleMemoryScreen()
+                    "Studio" -> viewModel.toggleStudioScreen()
                     "NAV" -> viewModel.toggleNavScreen()
                     "Weather" -> viewModel.toggleWeatherScreen()
                     "Background" -> viewModel.toggleBackgroundScreen()
@@ -668,6 +669,13 @@ fun CompanionScreen(
                 onPausedChange = { viewModel.setMemoryPaused(it) },
                 onExport = { viewModel.exportMemoriesJson() },
                 onClose = { viewModel.toggleMemoryScreen() }
+            )
+        }
+
+        if (uiState.showStudioScreen) {
+            StudioScreen(
+                viewModel = viewModel,
+                onClose = { viewModel.toggleStudioScreen() }
             )
         }
 
