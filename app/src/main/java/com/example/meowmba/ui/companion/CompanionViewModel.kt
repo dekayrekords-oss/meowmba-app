@@ -3108,7 +3108,7 @@ class CompanionViewModel(
         sherpaAsrEngine?.takeIf { it.isAvailable }?.let { return it }
         val pick = voiceHealth.pick(
             platformAvailable = speechService?.isAvailable == true,
-            sherpaAvailable = false,
+            sherpaAvailable = sherpaAsrEngine?.isAvailable == true,
         )
         return when (pick) {
             com.example.meowmba.core.audio.VoiceHealth.Engine.PLATFORM -> speechService
@@ -3290,7 +3290,7 @@ class CompanionViewModel(
 
     private fun ensureAlwaysOnPartialCollector(engine: com.example.meowmba.core.audio.SpeechEngine) {
         if (alwaysOnPartialJob != null) return
-        fuLog("always-on collector STARTED")
+        fuLog("always-on collector STARTED on ${engine.javaClass.simpleName}")
         alwaysOnPartialJob = viewModelScope.launch {
             engine.partialResults.collect { partial ->
                 if (partial.isNotBlank()) {
@@ -3850,6 +3850,7 @@ class CompanionViewModel(
         onFinal: (String) -> Unit,
     ) {
         utteranceCapture?.cancel()
+        fuLog("captureUtterance start on ${engine.javaClass.simpleName} initial=\"${initialText.take(40)}\"")
         val capture = com.example.meowmba.core.audio.UtteranceCapture(
             engine = engine,
             scope = viewModelScope,
