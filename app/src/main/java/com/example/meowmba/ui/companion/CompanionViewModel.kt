@@ -542,6 +542,9 @@ class CompanionViewModel(
     /** Last live-notes vault title, for "continue notes" with no topic. */
     private var lastNotingTitle: String? = null
 
+    /** One recognizer-final callback must produce exactly one conversational turn. */
+    private val turnDeduplicator = com.example.meowmba.core.audio.TurnDeduplicator()
+
     // Declared BEFORE init: init launches collectors that write to this flow.
     private val _motionTilt = kotlinx.coroutines.flow.MutableStateFlow(0f)
 
@@ -3889,18 +3892,13 @@ class CompanionViewModel(
             fuLog("processUserSpeech dropped junk: \"$text\"")
             return
         }
-        lastUsableSpeechAtMs = System.currentTimeMillis()
-        // Same-turn dedupe: the partial-stability commit and the engine's own
-        // endpoint can deliver the SAME utterance within a second, and each
-        // delivery started its own brain stream (two answers to one sentence).
-        if (text == lastCommittedTurnText &&
-            System.currentTimeMillis() - lastCommittedTurnAtMs < 1_500L
-        ) {
+        // Transport-level idempotence (prog): overlapping callbacks and
+        // contraction-spelling variants of the same utterance admit once.
+        if (!turnDeduplicator.accept(text)) {
             fuLog("processUserSpeech dropped duplicate turn: \"$text\"")
             return
         }
-        lastCommittedTurnText = text
-        lastCommittedTurnAtMs = System.currentTimeMillis()
+        lastUsableSpeechAtMs = System.currentTimeMillis()
         // Own-voice echo through the fresh follow-up mic: the tail of her
         // reply (room reverb, buffered audio) lands as a "user" turn seconds
         // after she finishes — measured on device 2.7s after onSpeechFinished.
