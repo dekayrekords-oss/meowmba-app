@@ -61,6 +61,7 @@ import com.example.meowmba.core.agent.tools.FileWriteTool
 import com.example.meowmba.core.agent.tools.AvatarAnimateTool
 import com.example.meowmba.core.agent.tools.DescribeAnimationTool
 import com.example.meowmba.core.agent.tools.MemorySaveTool
+import com.example.meowmba.core.agent.tools.RememberingTool
 import com.example.meowmba.core.agent.tools.MemorySearchTool
 import com.example.meowmba.core.agent.tools.ProjectCreateTool
 import com.example.meowmba.core.agent.tools.TaskListTool
@@ -955,6 +956,11 @@ class CompanionViewModel(
         if (memoryRepository != null) {
             toolRegistry.register(MemorySaveTool(memoryRepository))
             toolRegistry.register(MemorySearchTool(memoryRepository))
+        }
+        val appCtx = secureStorage?.context
+        if (appCtx != null) {
+            toolRegistry.register(RememberingTool(appCtx, start = true))
+            toolRegistry.register(RememberingTool(appCtx, start = false))
         }
         if (workspaceRoot != null) {
             val workspace = Workspace(workspaceRoot)

@@ -69,6 +69,14 @@ object AgentRouter {
                 "what are you working on", "show agent tasks")) {
             return AgentIntent("main", "task.list", emptyMap(), "list agent tasks")
         }
+        if (normalized in setOf("start remembering", "start remembering everything",
+                "remember everything", "keep track of everything", "start memory capture")) {
+            return AgentIntent("memory", "memory.start_remembering", emptyMap(), "start remembering via MetaMemory")
+        }
+        if (normalized in setOf("stop remembering", "stop remembering everything",
+                "stop memory capture", "forget everything now")) {
+            return AgentIntent("memory", "memory.stop_remembering", emptyMap(), "stop remembering")
+        }
 
         // Prefix commands: match case-insensitively, but extract arguments
         // from the RAW text so filenames keep their punctuation ("notes.txt")

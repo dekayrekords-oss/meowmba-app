@@ -90,8 +90,8 @@ object AgentRegistry {
         ),
         AgentDefinition(
             id = "memory", name = "Keeper",
-            purpose = "Manages long-term memory: save and search.",
-            allowedTools = setOf("memory.save", "memory.search")
+            purpose = "Manages long-term memory: save, search, and continuous capture via MetaMemory.",
+            allowedTools = setOf("memory.save", "memory.search", "memory.start_remembering", "memory.stop_remembering")
         ),
         AgentDefinition(
             id = "project", name = "Builder",
