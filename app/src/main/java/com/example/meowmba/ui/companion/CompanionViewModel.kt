@@ -385,6 +385,9 @@ class CompanionViewModel(
     private var lastUserText: String? = null
     private var lastAssistantText: String? = null
 
+    /** One recognizer-final callback must produce exactly one conversational turn. */
+    private val turnDeduplicator = com.example.meowmba.core.audio.TurnDeduplicator()
+
     // Declared BEFORE init: init launches collectors that write to this flow.
     private val _motionTilt = kotlinx.coroutines.flow.MutableStateFlow(0f)
 
@@ -2734,6 +2737,10 @@ class CompanionViewModel(
     }
 
     private fun processUserSpeech(text: String) {
+        if (!turnDeduplicator.accept(text)) {
+            fuLog("processUserSpeech dropped duplicate: \"$text\"")
+            return
+        }
         fuLog("processUserSpeech: \"$text\"")
         // "Show it in the browser": pull the newest artifact into the panel.
         // Checked before the agent routing so it also works while the browser
