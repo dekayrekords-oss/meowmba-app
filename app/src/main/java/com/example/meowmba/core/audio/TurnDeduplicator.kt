@@ -33,6 +33,11 @@ class TurnDeduplicator(
     }
 
     companion object {
-        const val DUPLICATE_WINDOW_MS = 3_000L
+        // Wide enough to cover the double-delivery path measured on device:
+        // the always-on collector commits a recovered partial ~2s after the
+        // turn, and the stitched capture delivers the SAME final ~4.4s later.
+        // Exact normalized matches only — intentionally repeating a question
+        // 8s later still registers as a new turn.
+        const val DUPLICATE_WINDOW_MS = 8_000L
     }
 }
