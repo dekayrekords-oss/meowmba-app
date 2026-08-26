@@ -781,6 +781,12 @@ class CompanionViewModel(
 
         ttsManager?.onSpeechStarted = {
             _uiState.value = _uiState.value.copy(interactionState = InteractionState.SPEAKING)
+            // HALF-DUPLEX GUARD: the moment her voice starts, close the
+            // always-on mic. A session left open WILL hear the TTS through the
+            // speaker and deliver it back as a user turn (measured on device:
+            // self-answer loops and flushed/cut-off replies). Voice barge-in is
+            // disabled while she talks; the mic button still interrupts.
+            if (alwaysOnActive) stopAlwaysOnListening()
             // A speech start arriving AFTER the hand-off must not re-arm an
             // in-app listener; the background service owns the turn now.
             //
@@ -3521,12 +3527,13 @@ class CompanionViewModel(
                 alwaysOnSessionOpen = false
                 voiceHealth.noteSuccess()
                 alwaysOnSilentRearms = 0
-                if (alwaysOnOpenedWhileSpeaking && text.isNotBlank()) {
+                val recentTts = System.currentTimeMillis() - lastSpokeFinishedAtMs < ECHO_GUARD_MS
+                if ((alwaysOnOpenedWhileSpeaking || recentTts) && text.isNotBlank()) {
                     // This session was opened while (or right after) she spoke —
                     // the "speech" it heard is almost certainly her own TTS.
                     // Drop it instead of starting a self-conversation. A real
                     // barge-in re-arms fresh and is admitted on the next session.
-                    fuLog("dropped own-voice echo from session opened while speaking: \"$text\"")
+                    fuLog("dropped own-voice echo (openedWhileSpeaking=$alwaysOnOpenedWhileSpeaking recentTts=$recentTts): \"$text\"")
                     alwaysOnOpenedWhileSpeaking = false
                     if (_uiState.value.interactionState == InteractionState.LISTENING) {
                         _uiState.value = _uiState.value.copy(interactionState = InteractionState.IDLE)
