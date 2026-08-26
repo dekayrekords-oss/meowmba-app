@@ -36,8 +36,12 @@ import kotlinx.coroutines.launch
 class UtteranceCapture(
     private val engine: SpeechEngine,
     private val scope: CoroutineScope,
+    /** Text already finalized by the session that promoted idle listening into a turn. */
+    private val initialText: String = "",
     /** Quiet needed before the turn is considered over. */
     private val silenceToFinishMs: Long = SILENCE_TO_FINISH_MS,
+    /** Semantic override for the post-result hold; always bounded by [silenceToFinishMs]. */
+    private val endpointDelayFor: (String) -> Long = { silenceToFinishMs },
     /** Hard cap, so a stuck recognizer cannot listen forever. */
     private val maxUtteranceMs: Long = MAX_UTTERANCE_MS,
     /** How long to wait for the user to start at all before giving up. */
@@ -78,6 +82,7 @@ class UtteranceCapture(
         this.onFinal = onFinal
         this.onError = onError
         segments.clear()
+        initialText.trim().takeIf { it.isNotEmpty() }?.let { segments += it }
         _live.value = ""
         startedAt = now()
         lastVoiceAt = startedAt
@@ -153,7 +158,7 @@ class UtteranceCapture(
         }
         // A result is the recognizer's opinion that the turn ended. It is only a pause
         // until the quiet has actually lasted long enough, so keep the mic open.
-        if (now() - lastVoiceAt >= silenceToFinishMs) finish() else restart()
+        if (now() - lastVoiceAt >= requiredSilence()) finish() else restart()
     }
 
     private fun onSessionError(code: Int) {
@@ -184,7 +189,10 @@ class UtteranceCapture(
         bankLivePartial()
         val quietAfter = now() - lastVoiceAt
         when {
-            segments.isNotEmpty() && quietAfter >= silenceToFinishMs -> finish()
+            // Semantic endpointing (prog): short finished phrases ("to Wyatt")
+            // commit fast; unfinished speech ("send a message to") waits longer.
+            // Bounded by silenceToFinishMs so a hang still ends.
+            segments.isNotEmpty() && quietAfter >= requiredSilence() -> finish()
             segments.isEmpty() && quietAfter >= initialSilenceMs -> fail(code)
             else -> restart()
         }
@@ -203,6 +211,10 @@ class UtteranceCapture(
 
     /** True once any words have been banked or are in the live partial. */
     fun hasHeardSpeech(): Boolean = hasSpeech()
+
+    /** prog's semantic endpointing: how long the given text still gets to speak. */
+    private fun requiredSilence(): Long = endpointDelayFor(segments.joinToString(" "))
+        .coerceIn(250L, silenceToFinishMs)
 
     private fun hasSpeech(): Boolean =
         segments.isNotEmpty() || _live.value.isNotBlank()

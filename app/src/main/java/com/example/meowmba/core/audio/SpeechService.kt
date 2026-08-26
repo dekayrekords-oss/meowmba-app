@@ -3,6 +3,7 @@ package com.example.meowmba.core.audio
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.speech.RecognitionListener
@@ -513,6 +514,26 @@ class SpeechService(context: Context) : SpeechEngine {
                     RecognizerIntent.EXTRA_LANGUAGE,
                     java.util.Locale.getDefault().toLanguageTag(),
                 )
+
+                // From prog's voice-quality work: modern recognizers can use device
+                // context (contacts, installed apps, prior vocabulary) and punctuation.
+                // Unsupported services ignore these; they are hints, not commands.
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    putExtra(RecognizerIntent.EXTRA_ENABLE_BIASING_DEVICE_CONTEXT, true)
+                    putExtra(
+                        RecognizerIntent.EXTRA_ENABLE_FORMATTING,
+                        RecognizerIntent.FORMATTING_OPTIMIZE_LATENCY,
+                    )
+                    putExtra(RecognizerIntent.EXTRA_HIDE_PARTIAL_TRAILING_PUNCTUATION, true)
+                    putExtra(RecognizerIntent.EXTRA_MASK_OFFENSIVE_WORDS, false)
+                    putStringArrayListExtra(
+                        RecognizerIntent.EXTRA_BIASING_STRINGS,
+                        arrayListOf(
+                            "Memba", "Meowmba", "Meow", "Ollama", "ChatGPT", "Grok",
+                            "Spotify", "YouTube", "Gmail",
+                        ),
+                    )
+                }
 
                 // Capture window. Android's defaults end a session after a beat of
                 // quiet, which cuts people off mid-sentence and makes the companion

@@ -96,7 +96,7 @@ data class CompanionState(
     val loadedModels: LoadedModelsInfo = LoadedModelsInfo(),
     /** Always-on wake phrase ("Hey Meow" / "Hey Memba" / "Hey [name]") listening. */
     val wakeWordEnabled: Boolean = false,
-    /** Require the wake phrase even while the face is up; else face mode listens always-on. */
+    /** Require the wake phrase in the foreground; otherwise the open app listens always-on. */
     val requireWakeWordInFace: Boolean = false,
     /** "start listening" armed the phone-control agent; the next utterance is its goal. */
     val phoneControlAwaitingGoal: Boolean = false,
