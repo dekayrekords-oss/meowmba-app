@@ -3340,9 +3340,25 @@ class CompanionViewModel(
             return
         }
         if (alwaysOnSessionOpen && alwaysOnCaptureEngine === engine) return
-        if (_uiState.value.interactionState != InteractionState.IDLE || utteranceCapture != null) {
-            // A turn is live. No polling: resetState() runs updateVoiceListeningMode()
-            // when the turn ends, which re-arms us from a clean idle.
+        val ttsBusy = (ttsManager as? com.example.meowmba.core.audio.TextToSpeechManager)?.isSpeaking() == true
+        if (_uiState.value.interactionState != InteractionState.IDLE || utteranceCapture != null || ttsBusy) {
+            // A turn is live, or SHE IS STILL SPEAKING: streamed replies drain
+            // sentence by sentence and the queue outlives the SPEAKING state
+            // flickers between chunks. No polling for the turn case (resetState()
+            // re-arms us); for the TTS case schedule a retry so the mic only
+            // opens once her voice is truly done.
+            if (ttsBusy) {
+                alwaysOnRearmJob?.cancel()
+                alwaysOnRearmJob = viewModelScope.launch {
+                    delay(800L)
+                    if (alwaysOnActive && shouldAlwaysOnMic() &&
+                        _uiState.value.interactionState == InteractionState.IDLE &&
+                        !alwaysOnSessionOpen
+                    ) {
+                        armAlwaysOnCapture(engine, ignoreDebounce = true)
+                    }
+                }
+            }
             return
         }
         val now = System.currentTimeMillis()
@@ -3469,7 +3485,13 @@ class CompanionViewModel(
                     val after = preferredSpeechEngine()
                     if (after != null && after !== before) {
                         alwaysOnSilentRearms = 0
-                        if (alwaysOnActive && shouldAlwaysOnMic() &&
+                        // Kill the old engine's streams first — leaving the
+                        // previous partial collector running produced two
+                        // recognizers fighting (partials flapping every 100ms).
+                        // NOTE: stop clears alwaysOnActive; start re-sets it,
+                        // so only the policy gate decides here.
+                        stopAlwaysOnListening()
+                        if (shouldAlwaysOnMic() &&
                             _uiState.value.interactionState == InteractionState.IDLE
                         ) {
                             startAlwaysOnListening()
@@ -3485,7 +3507,8 @@ class CompanionViewModel(
                     ?.rebindRecognizer()
                 attachAsrEngine()
                 fuLog("always-on silent session — VoiceHealth switched engines")
-                if (alwaysOnActive && shouldAlwaysOnMic() &&
+                stopAlwaysOnListening()
+                if (shouldAlwaysOnMic() &&
                     _uiState.value.interactionState == InteractionState.IDLE
                 ) {
                     startAlwaysOnListening()

@@ -44,6 +44,14 @@ class TextToSpeechManager(context: Context) : SpeechSynthesizer {
     private var pendingUtterances = 0
 
     /**
+     * True while any utterance — or a queued tail of streamed sentences — is still
+     * being spoken. The always-on mic gates on this: opening a capture session in
+     * a gap between streamed sentences makes the recognizer hear HER OWN VOICE and
+     * feed it back as a user turn (measured on device as self-conversation loops).
+     */
+    fun isSpeaking(): Boolean = synchronized(this) { pendingUtterances > 0 }
+
+    /**
      * UtteranceProgressListener callbacks arrive on a TTS binder thread, but the
      * ViewModel uses them to start/stop a SpeechRecognizer, which Android only
      * allows on the application's main thread (off-thread calls log
