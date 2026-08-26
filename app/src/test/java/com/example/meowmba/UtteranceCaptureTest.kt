@@ -3,6 +3,7 @@ package com.example.meowmba
 import android.speech.SpeechRecognizer
 import com.example.meowmba.core.audio.SpeechEngine
 import com.example.meowmba.core.audio.UtteranceCapture
+import com.example.meowmba.core.audio.VoiceEndpointing
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -99,6 +100,35 @@ class UtteranceCaptureTest {
         // The next session closes only after the full pause has elapsed.
         clock.t = 4_000; engine.result("")
         assertEquals("what do I have", final)
+    }
+
+    @Test
+    fun `an idle session result is preserved while continuation is captured`() = runTest {
+        val engine = FakeEngine()
+        val clock = Clock()
+        var final: String? = null
+        val capture = UtteranceCapture(
+            engine = engine,
+            scope = this,
+            initialText = "send a message",
+            silenceToFinishMs = 2_500L,
+            endpointDelayFor = VoiceEndpointing::silenceAfter,
+            now = { clock() },
+        )
+        capture.start(onFinal = { final = it }, onError = {})
+
+        assertEquals("the continuation mic opens immediately", 1, engine.sessions)
+        clock.t = 700; engine.result("to Wyatt")
+        assertNull(final)
+        clock.t = 2_000; engine.error(SpeechRecognizer.ERROR_NO_MATCH)
+        assertEquals("send a message to Wyatt", final)
+    }
+
+    @Test
+    fun `semantic endpointing is fast for questions and patient for unfinished speech`() {
+        assertEquals(VoiceEndpointing.COMPLETE_TURN_MS, VoiceEndpointing.silenceAfter("what time is it"))
+        assertEquals(VoiceEndpointing.INCOMPLETE_TURN_MS, VoiceEndpointing.silenceAfter("send a message to"))
+        assertEquals(VoiceEndpointing.SHORT_TURN_MS, VoiceEndpointing.silenceAfter("play music"))
     }
 
     @Test

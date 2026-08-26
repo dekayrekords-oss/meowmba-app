@@ -156,9 +156,9 @@ fun SettingsScreen(
                 onCheckedChange = onWakeWordChange
             )
             VoiceToggle(
-                label = "Always-on mic in face mode",
-                description = "Keeps the mic live while the companion face is up: just talk, " +
-                    "no wake phrase needed. Turn off to require the wake phrase in face mode.",
+                label = "Always-on mic while app is open",
+                description = "Keeps the mic live while the app is in front: just talk, " +
+                    "no wake phrase needed. Turn off to require the wake phrase while the app is open.",
                 checked = !requireWakeWordInFace,
                 onCheckedChange = { onRequireWakeInFaceChange(!it) }
             )

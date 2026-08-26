@@ -36,8 +36,12 @@ import kotlinx.coroutines.launch
 class UtteranceCapture(
     private val engine: SpeechEngine,
     private val scope: CoroutineScope,
+    /** Text already finalized by the session that promoted idle listening into a turn. */
+    private val initialText: String = "",
     /** Quiet needed before the turn is considered over. */
     private val silenceToFinishMs: Long = SILENCE_TO_FINISH_MS,
+    /** Semantic override for the post-result hold; always bounded by [silenceToFinishMs]. */
+    private val endpointDelayFor: (String) -> Long = { silenceToFinishMs },
     /** Hard cap, so a stuck recognizer cannot listen forever. */
     private val maxUtteranceMs: Long = MAX_UTTERANCE_MS,
     /** How long to wait for the user to start at all before giving up. */
@@ -78,6 +82,7 @@ class UtteranceCapture(
         this.onFinal = onFinal
         this.onError = onError
         segments.clear()
+        initialText.trim().takeIf { it.isNotEmpty() }?.let { segments += it }
         _live.value = ""
         startedAt = now()
         lastVoiceAt = startedAt
@@ -104,7 +109,7 @@ class UtteranceCapture(
                 val elapsed = now() - startedAt
                 when {
                     // Said something, then stopped for long enough: that is the turn.
-                    segments.isNotEmpty() && quiet >= silenceToFinishMs -> finish()
+                    segments.isNotEmpty() && quiet >= requiredSilence() -> finish()
                     // Never said anything at all.
                     segments.isEmpty() && quiet >= initialSilenceMs ->
                         fail(SpeechRecognizer.ERROR_SPEECH_TIMEOUT)
@@ -151,7 +156,7 @@ class UtteranceCapture(
         }
         // A result is the recognizer's opinion that the turn ended. It is only a pause
         // until the quiet has actually lasted long enough, so keep the mic open.
-        if (now() - lastVoiceAt >= silenceToFinishMs) finish() else restart()
+        if (now() - lastVoiceAt >= requiredSilence()) finish() else restart()
     }
 
     private fun onSessionError(code: Int) {
@@ -173,7 +178,7 @@ class UtteranceCapture(
         }
         val quiet = now() - lastVoiceAt
         when {
-            segments.isNotEmpty() && quiet >= silenceToFinishMs -> finish()
+            segments.isNotEmpty() && quiet >= requiredSilence() -> finish()
             segments.isEmpty() && quiet >= initialSilenceMs -> fail(code)
             else -> restart()
         }
@@ -189,6 +194,9 @@ class UtteranceCapture(
         // spoken in the gap are gone for good.
         listen()
     }
+
+    private fun requiredSilence(): Long = endpointDelayFor(segments.joinToString(" "))
+        .coerceIn(250L, silenceToFinishMs)
 
     private fun finish() {
         if (finished) return

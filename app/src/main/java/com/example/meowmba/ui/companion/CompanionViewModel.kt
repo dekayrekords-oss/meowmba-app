@@ -624,10 +624,10 @@ class CompanionViewModel(
             }
         }
 
-        // Face mode owns the mic. The instant the bare face (or the screen)
-        // goes away, always-on conversation hands the mic back to the wake
-        // phrase; when it returns, the mic goes hot again. Reacting only to
-        // the face-mode *transition* keeps this free of the caption churn.
+        // Overlay transitions used to change mic ownership. Always-on now remains
+        // foreground-wide, but keeping this transition hook makes changes to the
+        // explicit require-wake setting and legacy screen state converge immediately
+        // without reacting to caption churn.
         // The initial emission is skipped on purpose: at construction the app
         // has not resumed yet, and arming the open mic then would also make
         // every JVM unit test drive a perpetual listener. The activity's
@@ -2380,30 +2380,27 @@ class CompanionViewModel(
         _uiState.value = _uiState.value.copy(captionText = wakeHint())
     }
 
-    /**
-     * True while the bare companion face is up and the screen is on — the
-     * always-on conversation window. The hot word is pointless here, so the
-     * mic just stays open and anything spoken is a command.
-     */
+    /** True while the foreground app owns the always-on conversation mic. */
     private fun shouldAlwaysOnMic(): Boolean {
         val s = _uiState.value
-        // Face mode owns an open mic by default so speech is a command without a
-        // hot word. Wake still runs when the face is covered (settings/drawer) or
-        // when requireWakeWordInFace opts back into hot-word gating.
-        return s.isMicEnabled && !s.isMuted && !handedOffToBackground && faceModeActive(s) &&
+        // The foreground app owns an open mic by default so speech remains available
+        // in chat, settings, the drawer, and the browser—not only on the bare face.
+        // Background capture still transfers to WakeWordService, and the explicit
+        // require-wake setting opts the foreground back into hot-word gating.
+        return s.isMicEnabled && !s.isMuted && !appInBackground && !handedOffToBackground &&
             !s.requireWakeWordInFace
     }
 
     /**
      * Chooses which listener owns the mic: always-on conversation while the
-     * face is up, wake-phrase standby otherwise. Called on every mode
-     * transition (face in/out, mic toggle, mute, foreground return, end of a
+     * app is foreground, wake-phrase standby otherwise. Called on every mode
+     * transition (mic toggle, mute, foreground return, end of a
      * turn) so the two can never disagree.
      */
     private fun updateVoiceListeningMode() {
         if (shouldAlwaysOnMic()) {
-            // Face always-on owns the mic (74f6 behavior). Immediate start — a
-            // delayed arm left the face deaf after cold launch / resume.
+            // Foreground always-on owns the mic. Immediate start—a delayed arm
+            // left the app deaf after cold launch / resume.
             stopWakeLoopAndRelease()
             startAlwaysOnListening()
         } else {
@@ -2417,16 +2414,15 @@ class CompanionViewModel(
     }
 
     /**
-     * Always-on conversation: the recognizer stays open in face mode, session by
-     * session. While it waits it mirrors live partials into the caption; when a
+     * Always-on conversation: the recognizer stays open while the app is
+     * foreground, session by session. While it waits it mirrors live partials into the caption; when a
      * turn is recognised it feeds [processUserSpeech] and re-arms once the reply
      * (and any follow-up) has finished. The wake phrase is off the whole time.
      *
-     * Sessions are deliberately plain `startListening` calls rather than a
-     * stitched [com.example.meowmba.core.audio.UtteranceCapture]: always-on has
-     * no "turn" to wait out — the platform ending a session on quiet is fine, the
-     * next session re-arms — and a capture watchdog that pings forever would
-     * never let a virtual test clock go idle.
+     * Idle waiting uses one plain recognizer session. Once that session produces
+     * text, the result is promoted into a stitched [UtteranceCapture]. This avoids
+     * running a watchdog forever while idle, but does not mistake the recognizer's
+     * aggressive acoustic endpoint for the end of a human turn.
      */
     private fun startAlwaysOnListening() {
         val engine = speechService ?: return
@@ -2437,8 +2433,10 @@ class CompanionViewModel(
         if (alwaysOnPartialJob == null) {
             alwaysOnPartialJob = viewModelScope.launch {
                 engine.partialResults.collect { partial ->
+                    val state = _uiState.value.interactionState
                     if (alwaysOnActive && shouldAlwaysOnMic() && partial.isNotBlank() &&
-                        _uiState.value.interactionState == InteractionState.IDLE
+                        utteranceCapture == null &&
+                        (state == InteractionState.IDLE || state == InteractionState.LISTENING)
                     ) {
                         _uiState.value = _uiState.value.copy(
                             interactionState = InteractionState.LISTENING,
@@ -2496,7 +2494,16 @@ class CompanionViewModel(
         engine.startListening(
             onResult = { text ->
                 alwaysOnSessionOpen = false
-                if (alwaysOnActive && text.isNotBlank()) processUserSpeech(text)
+                if (alwaysOnActive && text.isNotBlank()) {
+                    _uiState.value = _uiState.value.copy(
+                        interactionState = InteractionState.LISTENING,
+                        captionText = text,
+                        emotion = CompanionEmotion.ALERT,
+                    )
+                    captureUtterance(engine, initialText = text) { result ->
+                        processUserSpeech(result)
+                    }
+                }
             },
             onError = { code ->
                 alwaysOnSessionOpen = false
@@ -2612,6 +2619,7 @@ class CompanionViewModel(
      */
     private fun captureUtterance(
         engine: com.example.meowmba.core.audio.SpeechEngine,
+        initialText: String = "",
         onError: (Int) -> Unit = { code -> onListeningError(code) },
         onFinal: (String) -> Unit,
     ) {
@@ -2619,6 +2627,8 @@ class CompanionViewModel(
         val capture = com.example.meowmba.core.audio.UtteranceCapture(
             engine = engine,
             scope = viewModelScope,
+            initialText = initialText,
+            endpointDelayFor = com.example.meowmba.core.audio.VoiceEndpointing::silenceAfter,
             // "Stop" / "never mind" must land the moment it is heard.
             finishEarlyWhen = { text -> isStopCommand(text) },
         )
