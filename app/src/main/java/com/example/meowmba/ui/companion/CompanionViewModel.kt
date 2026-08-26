@@ -473,6 +473,8 @@ class CompanionViewModel(
      * test virtual clock busy), re-arming from session end/resetState.
      */
     private var alwaysOnSessionOpen = false
+    /** See the echo-guard comment in [armAlwaysOnCapture]. */
+    private var alwaysOnOpenedWhileSpeaking = false
 
     /** Clears [alwaysOnSessionOpen] if the recognizer never calls back. */
     private var alwaysOnSessionWatchdog: Job? = null
@@ -3368,6 +3370,15 @@ class CompanionViewModel(
         lastAlwaysOnArmAtMs = now
         alwaysOnSessionOpen = true
         alwaysOnCaptureEngine = engine
+        // Own-voice echo guard: a session that opens while she is speaking (or
+        // within a beat of finishing) will mostly hear HER TTS through the
+        // speaker. Measured on device: "Do you like cats" answered aloud came
+        // back as the next user turn ("Meow, yes, I like.") and started a
+        // self-conversation loop. Whatever this session hears is suspect.
+        alwaysOnOpenedWhileSpeaking =
+            _uiState.value.interactionState == InteractionState.SPEAKING ||
+                _uiState.value.interactionState == InteractionState.THINKING ||
+                System.currentTimeMillis() - lastSpokeFinishedAtMs < ECHO_GUARD_MS
         // The mic nap is armed HERE, not in [startAlwaysOnListeningAfterKws]:
         // only a genuinely open session should schedule the watch, otherwise a
         // live turn re-enqueues it forever (see the note there).
@@ -3487,6 +3498,31 @@ class CompanionViewModel(
                 alwaysOnSessionOpen = false
                 voiceHealth.noteSuccess()
                 alwaysOnSilentRearms = 0
+                if (alwaysOnOpenedWhileSpeaking && text.isNotBlank()) {
+                    // This session was opened while (or right after) she spoke —
+                    // the "speech" it heard is almost certainly her own TTS.
+                    // Drop it instead of starting a self-conversation. A real
+                    // barge-in re-arms fresh and is admitted on the next session.
+                    fuLog("dropped own-voice echo from session opened while speaking: \"$text\"")
+                    alwaysOnOpenedWhileSpeaking = false
+                    if (_uiState.value.interactionState == InteractionState.LISTENING) {
+                        _uiState.value = _uiState.value.copy(interactionState = InteractionState.IDLE)
+                    }
+                    if (shouldAlwaysOnMic()) {
+                        alwaysOnRearmJob?.cancel()
+                        alwaysOnRearmJob = viewModelScope.launch {
+                            delay(400L)
+                            if (alwaysOnActive && shouldAlwaysOnMic() &&
+                                _uiState.value.interactionState == InteractionState.IDLE &&
+                                !alwaysOnSessionOpen
+                            ) {
+                                armAlwaysOnCapture(engine)
+                            }
+                        }
+                    }
+                    return@startListening
+                }
+                alwaysOnOpenedWhileSpeaking = false
                 if (alwaysOnActive && text.isNotBlank()) {
                     // prog's turn-taking fix: a final result is not necessarily the
                     // whole turn — keep capturing through endpointing so pauses
@@ -7637,6 +7673,8 @@ SAFE if the scene looks like a normal road, car interior, sidewalk, or room, or 
         private const val ALWAYS_ON_SESSION_TIMEOUT_MS = 20_000L
         /** Quiet + nobody in frame + wake armed → drop always-on STT. */
         private const val MIC_NAP_MS = 60_000L
+        /** Sessions opening this soon after TTS finished are echo-suspect. */
+        private const val ECHO_GUARD_MS = 1_500L
 
         /** After the last growing partial, don't wait for AiAi's empty onResults. */
         private const val ALWAYS_ON_COMMIT_MS = 850L
