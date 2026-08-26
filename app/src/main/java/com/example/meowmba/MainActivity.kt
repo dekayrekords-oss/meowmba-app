@@ -146,7 +146,8 @@ class MainActivity : ComponentActivity() {
                                 notificationHelper = notificationHelper,
                                 routineDao = database.routineDao(),
                                 projectDao = database.projectDao(),
-                                characterDao = database.characterDao()
+                                characterDao = database.characterDao(),
+                                glassesController = com.example.meowmba.core.glasses.MetaGlassesController(this@MainActivity)
                             ).also {
                                 companionViewModel = it
                                 // onResume often runs before first composition assigns

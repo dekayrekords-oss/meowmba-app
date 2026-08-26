@@ -36,7 +36,27 @@ import java.io.File
 class SherpaAsrEngine(
     private val context: Context,
     private val scope: CoroutineScope,
+    /** Mic source. Meta glasses: BLUETOOTH_SCO via [bluetoothSco]. */
+    private val audioSource: Int = MediaRecorder.AudioSource.VOICE_RECOGNITION,
+    /**
+     * True = capture from a Bluetooth SCO headset (Ray-Ban Meta glasses show
+     * up as one). Starts the SCO link and prefers the BT device explicitly —
+     * without setCommunicationDevice the phone keeps using its own mic even
+     * with SCO on. Sherpa needs 16kHz; an 8kHz SCO link is upsampled 2x.
+     */
+    private val bluetoothSco: Boolean = false,
 ) : SpeechEngine {
+
+    /** True when a Bluetooth SCO audio device is connected right now. */
+    fun bluetoothHeadsetConnected(): Boolean {
+        val am = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
+            ?: return false
+        return am.getDevices(android.media.AudioManager.GET_DEVICES_OUTPUTS).any {
+            it.type == android.media.AudioDeviceInfo.TYPE_BLUETOOTH_SCO
+        }
+    }
+
+    private var scoStarted = false
 
     override val isAvailable: Boolean
         get() = VoiceModelStore(context).asrReady()
@@ -138,6 +158,26 @@ class SherpaAsrEngine(
         }
         recognizer = rec
 
+        if (bluetoothSco) {
+            // Route the glasses' mic before opening AudioRecord. minSdk 31 so
+            // setCommunicationDevice is always available (BLUETOOTH_CONNECT is
+            // declared in the manifest).
+            val am = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
+            val scoDevice = am?.getDevices(android.media.AudioManager.GET_DEVICES_OUTPUTS)
+                ?.firstOrNull { it.type == android.media.AudioDeviceInfo.TYPE_BLUETOOTH_SCO }
+            if (am != null && scoDevice != null) {
+                runCatching {
+                    am.startBluetoothSco()
+                    am.isBluetoothScoOn = true
+                    am.setCommunicationDevice(scoDevice)
+                    scoStarted = true
+                    Log.i(TAG, "Bluetooth SCO on '${scoDevice.productName}' for glasses mic")
+                }.onFailure { Log.w(TAG, "SCO start failed", it) }
+            } else {
+                Log.w(TAG, "bluetoothSco requested but no SCO device connected — using built-in path")
+            }
+        }
+
         val minBuf = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL, ENCODING)
         if (minBuf <= 0) {
             running = false
@@ -145,7 +185,7 @@ class SherpaAsrEngine(
         }
         val record = try {
             AudioRecord(
-                MediaRecorder.AudioSource.VOICE_RECOGNITION,
+                if (scoStarted) MediaRecorder.AudioSource.VOICE_COMMUNICATION else audioSource,
                 SAMPLE_RATE, CHANNEL, ENCODING,
                 maxOf(minBuf * 4, SAMPLE_RATE),
             )
@@ -153,8 +193,27 @@ class SherpaAsrEngine(
             Log.w(TAG, "AudioRecord construction failed", e)
             null
         }
-        if (record == null || record.state != AudioRecord.STATE_INITIALIZED) {
+        // 8kHz SCO links (older HFP) can't do 16k — retry at 8k and upsample.
+        var scoRate8k = false
+        val effectiveRecord = if (record != null && record.state == AudioRecord.STATE_INITIALIZED) {
+            record
+        } else {
             runCatching { record?.release() }
+            if (scoStarted) {
+                scoRate8k = true
+                try {
+                    AudioRecord(
+                        MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+                        8000, CHANNEL, ENCODING,
+                        maxOf(minBuf * 4, SAMPLE_RATE),
+                    ).takeIf { it.state == AudioRecord.STATE_INITIALIZED }
+                } catch (e: Exception) {
+                    Log.w(TAG, "8k SCO AudioRecord failed", e)
+                    null
+                }
+            } else null
+        }
+        if (effectiveRecord == null) {
             running = false
             _isListening.value = false
             return
@@ -163,7 +222,7 @@ class SherpaAsrEngine(
         var stream: OnlineStream? = null
         val uttered = ArrayList<Short>(SAMPLE_RATE * 8)
         try {
-            record.startRecording()
+            effectiveRecord.startRecording()
             val s = rec.createStream()
             if (s.ptr == 0L) {
                 Log.w(TAG, "createStream failed")
@@ -174,15 +233,27 @@ class SherpaAsrEngine(
             val pcm = ShortArray(CHUNK_SAMPLES)
 
             while (running && scope.isActive) {
-                val read = record.read(pcm, 0, pcm.size)
+                val read = effectiveRecord.read(pcm, 0, pcm.size)
                 if (read <= 0) continue
                 for (i in 0 until read) uttered.add(pcm[i])
                 if (uttered.size > SAMPLE_RATE * 20) {
                     uttered.subList(0, uttered.size - SAMPLE_RATE * 12).clear()
                 }
 
-                val frame = FloatArray(read)
-                for (i in 0 until read) frame[i] = pcm[i] / PCM16_FULL_SCALE
+                // Sherpa wants 16kHz. An 8kHz SCO link is linearly upsampled
+                // 2x — cheap and adequate for recognition.
+                val frame: FloatArray
+                if (scoRate8k) {
+                    frame = FloatArray(read * 2)
+                    for (i in 0 until read) {
+                        val v = pcm[i] / PCM16_FULL_SCALE
+                        frame[2 * i] = v
+                        frame[2 * i + 1] = v
+                    }
+                } else {
+                    frame = FloatArray(read)
+                    for (i in 0 until read) frame[i] = pcm[i] / PCM16_FULL_SCALE
+                }
                 s.acceptWaveform(frame, SAMPLE_RATE)
 
                 while (rec.isReady(s)) rec.decode(s)
@@ -215,8 +286,17 @@ class SherpaAsrEngine(
         } catch (e: Exception) {
             if (running) Log.w(TAG, "ASR capture loop failed", e)
         } finally {
-            runCatching { record.stop() }
-            runCatching { record.release() }
+            runCatching { effectiveRecord.stop() }
+            runCatching { effectiveRecord.release() }
+            if (scoStarted) {
+                scoStarted = false
+                val am = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
+                runCatching {
+                    am?.clearCommunicationDevice()
+                    am?.stopBluetoothSco()
+                    am?.isBluetoothScoOn = false
+                }
+            }
             runCatching { stream?.release() }
             running = false
             _isListening.value = false

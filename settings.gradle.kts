@@ -22,6 +22,19 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // Meta Wearables DAT (Ray-Ban glasses). Needs github_token (read:packages)
+        // in local.properties — builds without one simply skip the mwdat source set.
+        maven {
+            url = uri("https://maven.pkg.github.com/facebook/meta-wearables-dat-android")
+            credentials {
+                username = ""
+                password = java.util.Properties().apply {
+                    val f = File(rootDir, "local.properties")
+                    if (f.exists()) f.inputStream().use { load(it) }
+                }.getProperty("github_token") ?: System.getenv("GITHUB_TOKEN") ?: ""
+            }
+            content { includeGroup("com.meta.wearable") }
+        }
     }
 }
 

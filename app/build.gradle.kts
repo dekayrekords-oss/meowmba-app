@@ -27,6 +27,23 @@ if (keystorePropsFile.exists()) {
     keystoreProps.load(keystorePropsFile.inputStream())
 }
 
+// MWDAT (Meta glasses SDK) gating — same conditional-compile pattern as
+// meta-memory-app so a tokenless checkout still builds clean.
+val localProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+val githubToken = (localProps.getProperty("github_token") ?: System.getenv("GITHUB_TOKEN") ?: "").trim()
+val hasMwdat = githubToken.isNotBlank() &&
+    Regex("^(ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,255})$").matches(githubToken)
+println(
+    when {
+        hasMwdat -> "MWDAT (Meta glasses SDK): ENABLED"
+        githubToken.isBlank() -> "MWDAT: disabled — add github_token to local.properties"
+        else -> "MWDAT: disabled — github_token format not recognized"
+    }
+)
+
 android {
     namespace = "com.example.meowmba"
     compileSdk = 37
@@ -106,6 +123,17 @@ android {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
+    // Meta Wearables DAT (Ray-Ban glasses). Compiles the real SDK bridge only
+    // when local.properties carries a valid github_token; without one the
+    // feature degrades honestly ("no MWDAT SDK in this build") like MetaMemory.
+    sourceSets {
+        getByName("main") {
+            if (hasMwdat) {
+                // java.srcDir("src/mwdat/java")
+                // kotlin.srcDir("src/mwdat/java")
+            }
+        }
+    }
     buildFeatures {
         compose = true
         buildConfig = true
@@ -152,6 +180,15 @@ tasks.withType<Test>().configureEach {
 }
 
 dependencies {
+    if (hasMwdat) {
+        // MWDAT artifacts need a valid github_token; the token on file is
+        // currently expired (GitHub API: Bad credentials), so resolution 401s.
+        // Re-enable both this block and the source set above when a fresh
+        // token lands in local.properties.
+        // implementation("com.meta.wearable:mwdat-core:0.8.0")
+        // implementation("com.meta.wearable:mwdat-camera:0.8.0")
+        // implementation("com.meta.wearable:mwdat-mockdevice:0.8.0")
+    }
     // SSH client (mwiede fork is the maintained jsch).
     implementation("com.github.mwiede:jsch:0.2.21")
     // Unpack the sherpa KWS tar.bz2 on first launch (Play cannot ship it in the AAB).

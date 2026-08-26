@@ -32,6 +32,7 @@ import com.example.meowmba.core.agent.tools.FindPlacesTool
 import com.example.meowmba.core.agent.tools.SaveCharacterTool
 import com.example.meowmba.core.agent.tools.GetCharacterTool
 import com.example.meowmba.core.agent.tools.CreateComicTool
+import com.example.meowmba.core.agent.tools.GlassesTakePhotoTool
 import com.example.meowmba.core.agent.tools.WriteScriptTool
 import com.example.meowmba.core.agent.tools.MemoryRecallTool
 import com.example.meowmba.core.agent.tools.WebBrowserTool
@@ -194,6 +195,8 @@ class CompanionViewModel(
     private val projectDao: com.example.meowmba.core.database.ProjectDao? = null,
     /** Studio character bibles. Null in unit tests; tools degrade honestly. */
     private val characterDao: com.example.meowmba.core.database.CharacterDao? = null,
+    /** Meta Ray-Ban glasses (MWDAT frame bus + status). Null in unit tests. */
+    internal val glassesController: com.example.meowmba.core.glasses.MetaGlassesController? = null
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(CompanionState())
     private var idleAnimationDirector: IdleAnimationDirector? = null
@@ -797,6 +800,25 @@ class CompanionViewModel(
             if (!handedOffToBackground && !wakeAckPending) startInterruptionWatch()
         }
         ttsManager?.onSpeechFinished = { onSpeechFinished() }
+
+        // Glasses connect/disconnect: when the Meta-glasses backend is picked,
+        // a link change re-selects the engine immediately (glasses mic takes
+        // over on connect, native mic resumes on disconnect) and refreshes the
+        // Hardware page availability badges.
+        glassesController?.let { gc ->
+            viewModelScope.launch {
+                gc.isConnected.collect { connected ->
+                    fuLog("glasses link -> $connected")
+                    refreshAsrBackendState()
+                    if (asrBackend == com.example.meowmba.core.audio.AsrBackend.META_GLASSES_MIC &&
+                        _uiState.value.interactionState == InteractionState.IDLE
+                    ) {
+                        stopAlwaysOnListening()
+                        startAlwaysOnListening()
+                    }
+                }
+            }
+        }
 
         // Recovery watchdog: a wedged voice pipeline (always-on policy says
         // LISTEN, but nothing is actually listening) must self-heal. Measured
@@ -1525,6 +1547,7 @@ class CompanionViewModel(
             // "made it but didn't show me" is impossible by construction.
             toolRegistry.register(WriteScriptTool(ws))
             toolRegistry.register(CreateComicTool(ws, characterDao))
+            toolRegistry.register(GlassesTakePhotoTool(glassesController, ws))
         }
         if (characterDao != null) {
             toolRegistry.register(SaveCharacterTool(characterDao))
@@ -3101,6 +3124,14 @@ class CompanionViewModel(
                 geminiAsrEngine?.takeIf { it.isAvailable }?.let { return it }
             com.example.meowmba.core.audio.AsrBackend.LOCAL_SHERPA ->
                 sherpaAsrEngine?.takeIf { it.isAvailable }?.let { return it }
+            com.example.meowmba.core.audio.AsrBackend.META_GLASSES_MIC -> {
+                // Glasses takeover: while connected, the glasses' mic is THE
+                // mic. Not connected → fall through so a working native engine
+                // answers instead of a deaf badge (same fall-through rule as
+                // the other explicit picks).
+                if (glassesAsrEngine == null) attachGlassesAsrEngine()
+                glassesAsrEngine?.takeIf { glassesMicReady() }?.let { return it }
+            }
             com.example.meowmba.core.audio.AsrBackend.PLATFORM ->
                 speechService?.takeIf { it.isAvailable }?.let { return it }
             com.example.meowmba.core.audio.AsrBackend.AUTO -> Unit
@@ -3177,11 +3208,54 @@ class CompanionViewModel(
                 platformAvailable = speechService?.isAvailable == true,
                 localModelReady = localReady,
                 cloudKeyConfigured = !storage?.getApiKey("openrouter").isNullOrBlank(),
+                glassesConnected = glassesMicReady(),
             ),
             asrCloudModel = storage?.getModelName(
                 com.example.meowmba.core.audio.AsrBackend.OPENROUTER_ASR_PROVIDER,
             ) ?: com.example.meowmba.core.audio.AsrBackend.DEFAULT_GEMINI_MODEL,
         )
+    }
+
+    /** Glasses mic is usable right now: DAT-linked or an SCO device present. */
+    private fun glassesMicReady(): Boolean =
+        glassesController?.isConnected?.value == true ||
+            glassesAsrEngine?.bluetoothHeadsetConnected() == true
+
+    // ---- Meta glasses (Hardware page) ----
+
+    /** Connect / start the glasses session (camera + link). Idempotent. */
+    fun glassesConnect() {
+        glassesController?.ensureCaptureStream()
+            ?: run { _uiState.value = _uiState.value.copy(captionText = "No glasses controller in this build") }
+    }
+
+    fun glassesDisconnect() {
+        glassesController?.disconnect()
+    }
+
+    /** One-time Meta AI registration + glasses camera permission (needs the Activity). */
+    fun glassesSetup(activity: android.app.Activity) {
+        val gc = glassesController ?: return
+        viewModelScope.launch {
+            val registered = gc.ensureRegistered(activity)
+            if (registered) {
+                gc.ensureCameraPermission(activity)
+                glassesConnect()
+            }
+        }
+    }
+
+    /** Lazily-built sherpa engine capturing from the glasses' BT SCO mic. */
+    private var glassesAsrEngine: com.example.meowmba.core.audio.SherpaAsrEngine? = null
+
+    private fun attachGlassesAsrEngine() {
+        if (glassesAsrEngine != null) return
+        val ctx = secureStorage?.context ?: return
+        if (!com.example.meowmba.core.audio.VoiceModelStore(ctx).asrReady()) return
+        glassesAsrEngine = com.example.meowmba.core.audio.SherpaAsrEngine(
+            ctx, viewModelScope, bluetoothSco = true,
+        )
+        fuLog("glasses mic ASR attached")
     }
 
     fun toggleVoiceModelScreen() {

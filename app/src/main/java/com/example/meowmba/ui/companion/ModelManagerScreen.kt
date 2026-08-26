@@ -33,6 +33,7 @@ import com.example.meowmba.core.utils.SystemUtils.HardwareCapabilities
 @Composable
 fun ModelManagerScreen(
     state: CompanionState,
+    viewModel: CompanionViewModel? = null,
     onModelSelected: (String) -> Unit = {},
     onTestCloud: () -> Unit = {},
     onCheckLocal: () -> Unit = {},
@@ -94,6 +95,16 @@ fun ModelManagerScreen(
                 isCloud = state.asrBackend.isCloud,
                 onClick = onOpenVoiceModels,
             )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Meta Ray-Ban glasses: link, registration, camera stream, and the
+            // mic that can take over voice recognition (picked on the Voice
+            // Recognition page).
+            if (viewModel?.glassesController != null) {
+                MetaGlassesCard(viewModel)
+                Spacer(modifier = Modifier.height(24.dp))
+            }
 
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -694,6 +705,83 @@ fun CustomModelDownload(
                     Spacer(modifier = Modifier.width(6.dp))
                     Text("Download custom model", fontSize = 12.sp)
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Meta Ray-Ban glasses control card (Hardware page).
+ *
+ * Shows the live link state from the controller's flows, one-tap setup
+ * (Meta AI registration + camera permission), connect/disconnect, and the
+ * latest camera frame as proof the stream is real. Honest state only: no
+ * frame, no badge.
+ */
+@Composable
+private fun MetaGlassesCard(viewModel: CompanionViewModel) {
+    val gc = viewModel.glassesController ?: return
+    val connected by gc.isConnected.collectAsState()
+    val streaming by gc.isStreaming.collectAsState()
+    val status by gc.status.collectAsState()
+    val hasSdk = remember { gc.hasSdk() }
+    val activity = LocalContext.current as? android.app.Activity
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF161B22)),
+        border = BorderStroke(1.dp, Color(0xFF30363D)),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Meta Ray-Ban glasses",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    when {
+                        !hasSdk -> "NO SDK IN BUILD"
+                        streaming -> "STREAMING"
+                        connected -> "LINKED"
+                        else -> "OFF"
+                    },
+                    color = when {
+                        !hasSdk -> Color(0xFF6E7681)
+                        streaming || connected -> Color(0xFF3FB950)
+                        else -> Color(0xFF6E7681)
+                    },
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(status, color = Color.Gray, fontSize = 11.sp)
+            Spacer(Modifier.height(12.dp))
+            Row {
+                if (activity != null) {
+                    TextButton(onClick = { viewModel.glassesSetup(activity) }) {
+                        Text("Setup glasses", color = Color(0xFF58A6FF), fontSize = 12.sp)
+                    }
+                }
+                TextButton(onClick = { viewModel.glassesConnect() }) {
+                    Text("Connect", color = Color(0xFF58A6FF), fontSize = 12.sp)
+                }
+                TextButton(onClick = { viewModel.glassesDisconnect() }) {
+                    Text("Disconnect", color = Color(0xFF8B949E), fontSize = 12.sp)
+                }
+            }
+            if (!hasSdk) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "This build has no MWDAT SDK (github_token missing at build time). " +
+                        "The glasses mic still works over plain Bluetooth when selected on the Voice Recognition page.",
+                    color = Color(0xFFD29922),
+                    fontSize = 11.sp,
+                )
             }
         }
     }

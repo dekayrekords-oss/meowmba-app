@@ -770,6 +770,7 @@ fun CompanionScreen(
         if (uiState.showModelManager) {
             ModelManagerScreen(
                 state = uiState,
+                viewModel = viewModel,
                 onModelSelected = { viewModel.onModelSelected(it) },
                 onTestCloud = { viewModel.runCloudConnectionTest() },
                 onCheckLocal = { viewModel.runLocalModelCheck() },

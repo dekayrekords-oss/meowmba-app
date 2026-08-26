@@ -166,6 +166,11 @@ object AgentRegistry {
                 "studio.save_character", "studio.get_character",
                 "studio.create_comic", "studio.write_script"
             )
+        ),
+        AgentDefinition(
+            id = "glasses", name = "Shades",
+            purpose = "Operates the Meta Ray-Ban glasses: photos through their camera.",
+            allowedTools = setOf("glasses.take_photo")
         )
     )
 

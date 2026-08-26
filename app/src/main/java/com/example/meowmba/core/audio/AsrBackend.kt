@@ -57,6 +57,20 @@ enum class AsrBackend(
         displayName = "Gemini (cloud)",
         subtitle = "On-device preview, then Gemini transcribes — most accurate, sends audio",
         isCloud = true,
+    ),
+
+    /**
+     * Ray-Ban Meta glasses mic over Bluetooth SCO, transcribed on-device by
+     * sherpa. The glasses ARE a Bluetooth headset to Android (MWDAT 0.8.0 has
+     * no public mic API — verified against the AAR), so capture rides the
+     * standard SCO link; falls through to the phone mic path when no glasses
+     * are connected. Fully offline.
+     */
+    META_GLASSES_MIC(
+        id = "meta_glasses_mic",
+        displayName = "Meta glasses mic",
+        subtitle = "Hear through the Ray-Ban glasses when they're connected — on-device, offline",
+        isCloud = false,
     );
 
     companion object {
@@ -104,6 +118,7 @@ data class AsrBackendStatus(
             platformAvailable: Boolean,
             localModelReady: Boolean,
             cloudKeyConfigured: Boolean,
+            glassesConnected: Boolean = false,
         ): AsrBackendStatus = when (backend) {
             AsrBackend.AUTO ->
                 if (platformAvailable || localModelReady) {
@@ -138,14 +153,23 @@ data class AsrBackendStatus(
                     AsrBackendStatus(backend, false, "Needs the on-device model for endpointing")
                 else -> AsrBackendStatus(backend, true)
             }
+
+            AsrBackend.META_GLASSES_MIC -> when {
+                !localModelReady ->
+                    AsrBackendStatus(backend, false, "Needs the on-device model for transcription")
+                !glassesConnected ->
+                    AsrBackendStatus(backend, false, "No glasses connected — connect them on the Hardware page")
+                else -> AsrBackendStatus(backend, true)
+            }
         }
 
         fun evaluateAll(
             platformAvailable: Boolean,
             localModelReady: Boolean,
             cloudKeyConfigured: Boolean,
+            glassesConnected: Boolean = false,
         ): List<AsrBackendStatus> = AsrBackend.entries.map {
-            evaluate(it, platformAvailable, localModelReady, cloudKeyConfigured)
+            evaluate(it, platformAvailable, localModelReady, cloudKeyConfigured, glassesConnected)
         }
     }
 }
