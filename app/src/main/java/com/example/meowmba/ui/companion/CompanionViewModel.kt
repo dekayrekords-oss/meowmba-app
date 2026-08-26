@@ -780,8 +780,7 @@ class CompanionViewModel(
         ensureVoiceModelsThenAttachWake()
 
         ttsManager?.onSpeechStarted = {
-            _uiState.value = _uiState.value.copy(interactionState = InteractionState.SPEAKING)
-            // HALF-DUPLEX GUARD: the moment her voice starts, close the
+            _uiState.value = _uiState.value.copy(interactionState = InteractionState.SPEAKING)            // HALF-DUPLEX GUARD: the moment her voice starts, close the
             // always-on mic. A session left open WILL hear the TTS through the
             // speaker and deliver it back as a user turn (measured on device:
             // self-answer loops and flushed/cut-off replies). Voice barge-in is
@@ -798,6 +797,25 @@ class CompanionViewModel(
             if (!handedOffToBackground && !wakeAckPending) startInterruptionWatch()
         }
         ttsManager?.onSpeechFinished = { onSpeechFinished() }
+
+        // Recovery watchdog: a wedged voice pipeline (always-on policy says
+        // LISTEN, but nothing is actually listening) must self-heal. Measured
+        // on device: a follow-up error raced resetState, the re-arm chain gave
+        // up silently, and the app sat deaf with a frozen caption until the
+        // user restarted it.
+        viewModelScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(10_000)
+                val s = _uiState.value
+                if (!appInBackground && !handedOffToBackground && s.isMicEnabled && !s.isMuted &&
+                    s.interactionState == InteractionState.IDLE && shouldAlwaysOnMic() &&
+                    !alwaysOnActive && !alwaysOnSessionOpen && alwaysOnRearmJob == null
+                ) {
+                    fuLog("voice wedge detected — forcing always-on restart")
+                    startAlwaysOnListening()
+                }
+            }
+        }
         ttsManager?.onWordBoundary = { start, end ->
             selfVoiceFilter.onWordSpoken(start, end)
             bumpMouthEnergy()
@@ -3038,12 +3056,16 @@ class CompanionViewModel(
             // left the app deaf after cold launch / resume.
             stopWakeLoopAndRelease()
             startAlwaysOnListening()
+            fuLog("voice mode -> ALWAYS_ON (re-arm requested)")
         } else {
             stopAlwaysOnListening()
             if (_uiState.value.wakeWordEnabled && !handedOffToBackground &&
                 _uiState.value.interactionState == InteractionState.IDLE
             ) {
                 startWakeStandby()
+                fuLog("voice mode -> WAKE standby")
+            } else {
+                fuLog("voice mode -> mic OFF (alwaysOn=${shouldAlwaysOnMic()} wake=${_uiState.value.wakeWordEnabled} handedOff=$handedOffToBackground state=${_uiState.value.interactionState})")
             }
         }
     }
