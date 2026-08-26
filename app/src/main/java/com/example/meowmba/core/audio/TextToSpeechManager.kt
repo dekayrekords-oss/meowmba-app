@@ -48,8 +48,18 @@ class TextToSpeechManager(context: Context) : SpeechSynthesizer {
      * being spoken. The always-on mic gates on this: opening a capture session in
      * a gap between streamed sentences makes the recognizer hear HER OWN VOICE and
      * feed it back as a user turn (measured on device as self-conversation loops).
+     *
+     * Staleness escape: some engines silently drop an utterance without ever
+     * calling onDone/onError, which would leave [pendingUtterances] stuck above
+     * zero and gate the mic shut forever. After 20s with zero progress the
+     * queue is declared finished regardless.
      */
-    fun isSpeaking(): Boolean = synchronized(this) { pendingUtterances > 0 }
+    private var oldestPendingAtMs = 0L
+
+    fun isSpeaking(): Boolean = synchronized(this) {
+        if (pendingUtterances <= 0) return false
+        System.currentTimeMillis() - oldestPendingAtMs < 20_000L
+    }
 
     /**
      * UtteranceProgressListener callbacks arrive on a TTS binder thread, but the
@@ -73,8 +83,13 @@ class TextToSpeechManager(context: Context) : SpeechSynthesizer {
                 finishOne()
             }
 
-            @Deprecated("Deprecated in Java")
             override fun onError(utteranceId: String?) {
+                finishOne()
+            }
+
+            // API 30+: engines may report failures through this overload ONLY —
+            // missing it leaked pendingUtterances and gated the mic shut.
+            override fun onError(utteranceId: String?, status: Int) {
                 finishOne()
             }
 
@@ -110,6 +125,7 @@ class TextToSpeechManager(context: Context) : SpeechSynthesizer {
     private fun enqueue(text: String, flush: Boolean) {
         if (!isInitialized || text.isBlank()) return
         synchronized(this) {
+            if (pendingUtterances == 0) oldestPendingAtMs = System.currentTimeMillis()
             if (flush) pendingUtterances = 0
             pendingUtterances++
         }
