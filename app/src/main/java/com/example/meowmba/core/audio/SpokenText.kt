@@ -106,12 +106,58 @@ object SpokenText {
             .replace(Regex("\\s+"), " ")
             .trim()
         var t = compact
+
+        // --- Greetings / common phrases ---
         t = t.replace(
             Regex("""\b(ulat'?s|ulats|oot'?s|oots|ovites|ovite'?s|wot'?s|wats)\s+up\b"""),
             "what's up",
         )
         t = t.replace(Regex("""\bup body\b"""), "up buddy")
         t = t.replace(Regex("""\bbudd\b"""), "buddy")
+
+        // --- YouTube (the 2023 zipformer doesn't know this word) ---
+        t = t.replace(
+            Regex("""\byou\s*two\b"""),
+            "YouTube",
+        )
+        t = t.replace(
+            Regex("""\byou\s*tube\b"""),
+            "YouTube",
+        )
+        t = t.replace(
+            Regex("""\byo\s*tube\b"""),
+            "YouTube",
+        )
+        t = t.replace(
+            Regex("""\byou\s*to\b"""),
+            "YouTube",
+        )
+
+        // --- "meow" variants (not in the zipformer's vocabulary) ---
+        t = t.replace(
+            Regex("""\b(yo|yoh|yoa|yow|yom|yah|ya|ye|hee|hey|hi|oi|oh)\s*(meow|meo|meoo|miao|miau|mow|mo|mao|me ow|my ow|miow|miya|myo|me o|me oo|mem)\b"""),
+            "meow",
+        )
+        t = t.replace(
+            Regex("""\b(hey|hi|ok|okay|yo|oi)\s+meo\b"""),
+            "hey meow",
+        )
+        // Bare "meow" the model sometimes emits as fragmented syllables
+        t = t.replace(
+            Regex("""\bme\s*o\s*w\b"""),
+            "meow",
+        )
+        t = t.replace(
+            Regex("""\bmy\s*o\s*w\b"""),
+            "meow",
+        )
+
+        // --- "Hey Meowmba" / "Yo Meowmba" ---
+        t = t.replace(
+            Regex("""\b(yo|yoh|yah|ya|hee|hey|hi|oi|oh|ok|okay)\s*(me\s*m\s*ba|mem\s*ba|meo\s*mba|memba|meo\s*ba|mim\s*ba|mimba)\b"""),
+            "hey meowmba",
+        )
+
         if (t == compact) return sentence
         return sentenceCase(t)
     }
