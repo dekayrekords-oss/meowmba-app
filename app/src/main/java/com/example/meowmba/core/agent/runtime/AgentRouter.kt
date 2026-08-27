@@ -78,6 +78,15 @@ object AgentRouter {
             return AgentIntent("memory", "memory.stop_remembering", emptyMap(), "stop remembering")
         }
 
+        // SSH: "ssh into <host>" / "connect to <host>" → add_host
+        val sshPatterns = listOf("ssh into ", "connect to ", "add server ", "add host ")
+        extractAfter(raw, sshPatterns)?.let { host ->
+            val clean = host.trimEnd('.', '!', '?')
+            return AgentIntent("main", "ssh.add_host",
+                mapOf("name" to clean, "host" to clean),
+                "add SSH server $clean")
+        }
+
         // Prefix commands: match case-insensitively, but extract arguments
         // from the RAW text so filenames keep their punctuation ("notes.txt")
         // and projects keep their capitalization ("Website").

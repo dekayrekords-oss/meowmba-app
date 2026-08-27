@@ -50,6 +50,7 @@ import com.example.meowmba.core.agent.tools.MediaControlTool
 import com.example.meowmba.core.agent.tools.SetBrightnessTool
 import com.example.meowmba.core.agent.tools.UiAutomationTool
 import com.example.meowmba.core.agent.tools.SshTool
+import com.example.meowmba.core.agent.tools.SshAddHostTool
 import com.example.meowmba.core.agent.tools.WeatherTool
 import com.example.meowmba.core.agent.tools.ListSavedPlacesTool
 import com.example.meowmba.core.agent.tools.NavigateTool
@@ -1234,7 +1235,11 @@ class CompanionViewModel(
             // remembered in the encrypted registry; commands are allowlisted.
             secureStorage?.let { storage ->
                 sshHostRegistry = com.example.meowmba.core.ssh.SshHostRegistry(storage)
+                if (com.example.meowmba.BuildConfig.DEBUG) {
+                    sshHostRegistry!!.ensureDevHosts()
+                }
                 toolRegistry.register(SshTool(sshHostRegistry!!))
+                toolRegistry.register(SshAddHostTool(sshHostRegistry!!))
             }
 
             // Agent-driven browser: the companion can open, click, type and

@@ -81,6 +81,8 @@ object AgentRegistry {
                 "vault.note.search",
                 "vault.note.write",
                 "vault.note.delete",
+                "ssh.run",
+                "ssh.add_host",
             )
         ),
         AgentDefinition(

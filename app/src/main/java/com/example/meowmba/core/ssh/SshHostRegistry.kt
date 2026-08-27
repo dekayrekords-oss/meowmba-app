@@ -20,6 +20,20 @@ data class SshHost(
 class SshHostRegistry(private val storage: SecureStorageManager) {
     private val key = "ssh_hosts"
 
+    /** Seed dev-only servers (DEBUG builds only). Idempotent — skips if already saved. */
+    fun ensureDevHosts() {
+        val existing = list().map { it.name.lowercase() }
+        if ("meow-nb" !in existing) {
+            save(SshHost(
+                name = "meow-nb",
+                host = "meow-nb",
+                port = 22,
+                user = "claude",
+                password = "",
+            ))
+        }
+    }
+
     fun list(): List<SshHost> = runCatching {
         val raw = storage.getPreference(key) ?: return emptyList()
         val arr = JSONArray(raw)
