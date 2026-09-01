@@ -129,8 +129,8 @@ android {
     sourceSets {
         getByName("main") {
             if (hasMwdat) {
-                // java.srcDir("src/mwdat/java")
-                // kotlin.srcDir("src/mwdat/java")
+                java.srcDir("src/mwdat/java")
+                kotlin.srcDir("src/mwdat/java")
             }
         }
     }
@@ -181,13 +181,9 @@ tasks.withType<Test>().configureEach {
 
 dependencies {
     if (hasMwdat) {
-        // MWDAT artifacts need a valid github_token; the token on file is
-        // currently expired (GitHub API: Bad credentials), so resolution 401s.
-        // Re-enable both this block and the source set above when a fresh
-        // token lands in local.properties.
-        // implementation("com.meta.wearable:mwdat-core:0.8.0")
-        // implementation("com.meta.wearable:mwdat-camera:0.8.0")
-        // implementation("com.meta.wearable:mwdat-mockdevice:0.8.0")
+        implementation("com.meta.wearable:mwdat-core:0.8.0")
+        implementation("com.meta.wearable:mwdat-camera:0.8.0")
+        implementation("com.meta.wearable:mwdat-mockdevice:0.8.0")
     }
     // SSH client (mwiede fork is the maintained jsch).
     implementation("com.github.mwiede:jsch:0.2.21")

@@ -453,9 +453,9 @@ even after the app dies; only restarting AiAi itself (or a failover) recovers vo
 
 <!-- AUTOBUILD:START -->
 (regenerated after each commit)
-- 2026-08-23 15:24:39 : feat(app): ASR backends + on-disk voice packs, agent tools, Play Store prep (v1.1.0)
-- 162ab60 2026-08-12 16:14 feat(vision,robot): social cues, settled face lock, cooler tracking
-- bb6e8ce 2026-08-12 13:30 fix(robot): restore 17-byte turns; encode right as subOp 1
-- 9b8cb97 2026-08-12 11:52 fix(robot): right turn uses the captured tread script, not 0x07
-- 52b9768 2026-08-12 11:47 feat(robot): LOOI keeps the person in frame
+- 2026-08-26 23:35:52 : fix(voice): expand transcript correction map for common mishearings
+- f713fba 2026-08-26 17:27 feat(ssh): dev-only meow-nb seed + ssh.add_host voice command
+- b0a0ba2 2026-08-26 08:29 feat(bridge): add memory.start_remembering / memory.stop_remembering tools
+- b9e891e 2026-08-26 00:23 feat(glasses): Meta Ray-Ban integration — MWDAT frame bus, BT-SCO glasses mic, photo tool
+- 4335647 2026-08-25 20:29 fix(voice): widen turn-dedupe window 3s -> 8s for the double-delivery gap
 <!-- AUTOBUILD:END -->

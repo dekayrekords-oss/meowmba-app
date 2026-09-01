@@ -21,42 +21,21 @@ enum class AsrBackend(
     val isCloud: Boolean,
 ) {
     /**
-     * Health-driven: platform recognizer while it answers, local sherpa once
-     * it wedges. The behaviour that shipped before the picker existed.
+     * Whisper base.en on-device for the FINAL transcript, with the streaming
+     * zipformer still driving live partials + endpointing. Fully offline: no
+     * network, no API key, nothing leaves the phone.
+     *
+     * This exists because the streaming zipformer measurably mishears — the
+     * "recognition is terrible" reports were it, not a settings problem.
+     * Whisper is a batch model (no live partials of its own), hence the
+     * hybrid: zipformer for the live text, Whisper for what actually gets
+     * answered. Needs the Whisper model downloaded.
      */
-    AUTO(
-        id = "auto",
-        displayName = "Automatic",
-        subtitle = "Phone recognizer, falling back to on-device when it wedges",
+    WHISPER_LOCAL(
+        id = "whisper_local",
+        displayName = "Whisper (on-device)",
+        subtitle = "Local Whisper for the final text — most accurate offline, no key, no network",
         isCloud = false,
-    ),
-
-    /** Android's own recognizer (AiAi / Google). Accurate until it wedges BUSY. */
-    PLATFORM(
-        id = "platform",
-        displayName = "Phone recognizer",
-        subtitle = "Android / Google voice typing — accurate, but wedges under load",
-        isCloud = false,
-    ),
-
-    /** sherpa-onnx streaming zipformer. Fully offline, no network at all. */
-    LOCAL_SHERPA(
-        id = "local_sherpa",
-        displayName = "On-device (sherpa)",
-        subtitle = "Fully offline streaming zipformer — private, lower accuracy",
-        isCloud = false,
-    ),
-
-    /**
-     * Local sherpa for live partials + endpointing, then the finished
-     * utterance is transcribed by Gemini for the final text. Most accurate,
-     * needs network and an OpenRouter key.
-     */
-    GEMINI_CLOUD(
-        id = "gemini_cloud",
-        displayName = "Gemini (cloud)",
-        subtitle = "On-device preview, then Gemini transcribes — most accurate, sends audio",
-        isCloud = true,
     ),
 
     /**
@@ -88,7 +67,19 @@ enum class AsrBackend(
          */
         const val DEFAULT_GEMINI_MODEL = "google/gemini-3.6-flash"
 
-        val DEFAULT = AUTO
+        /**
+         * Whisper is the default.
+         *
+         * The streaming zipformer alone measurably mishears — that was the
+         * "recognition is terrible" report — and a health-driven AUTO pick
+         * spent most of its time wedged onto that weaker engine. Whisper is
+         * the accurate one, so it is what you get unless you deliberately
+         * choose the glasses mic.
+         *
+         * Note this also migrates anyone on a removed backend: [fromId] fails
+         * to match ids like "auto"/"platform" and falls through to here.
+         */
+        val DEFAULT = WHISPER_LOCAL
 
         fun fromId(id: String?): AsrBackend =
             entries.firstOrNull { it.id == id } ?: DEFAULT
@@ -119,38 +110,18 @@ data class AsrBackendStatus(
             localModelReady: Boolean,
             cloudKeyConfigured: Boolean,
             glassesConnected: Boolean = false,
+            whisperReady: Boolean = false,
         ): AsrBackendStatus = when (backend) {
-            AsrBackend.AUTO ->
-                if (platformAvailable || localModelReady) {
-                    AsrBackendStatus(backend, true)
-                } else {
-                    AsrBackendStatus(backend, false, "No recognizer available")
-                }
-
-            AsrBackend.PLATFORM ->
-                if (platformAvailable) {
-                    AsrBackendStatus(backend, true)
-                } else {
-                    AsrBackendStatus(backend, false, "No voice typing service on this device")
-                }
-
-            AsrBackend.LOCAL_SHERPA ->
-                if (localModelReady) {
-                    AsrBackendStatus(backend, true)
-                } else {
-                    AsrBackendStatus(backend, false, "Model not downloaded yet")
-                }
-
-            // Gemini rides on sherpa for endpointing, so it needs BOTH the
-            // local model and a key. Saying only "needs a key" would be a lie
-            // that sends the user to Settings for nothing.
-            AsrBackend.GEMINI_CLOUD -> when {
-                !cloudKeyConfigured && !localModelReady ->
-                    AsrBackendStatus(backend, false, "Needs the on-device model and an OpenRouter key")
-                !cloudKeyConfigured ->
-                    AsrBackendStatus(backend, false, "Add an OpenRouter API key in Settings")
+            // Whisper needs BOTH: the streaming pack for live partials +
+            // endpointing, and the Whisper weights for the final text.
+            // Reporting only one would send the user to Settings for nothing.
+            AsrBackend.WHISPER_LOCAL -> when {
+                !localModelReady && !whisperReady ->
+                    AsrBackendStatus(backend, false, "Needs the streaming ASR model and Whisper")
                 !localModelReady ->
-                    AsrBackendStatus(backend, false, "Needs the on-device model for endpointing")
+                    AsrBackendStatus(backend, false, "Needs the on-device streaming ASR model")
+                !whisperReady ->
+                    AsrBackendStatus(backend, false, "Needs the Whisper model — download it on this page")
                 else -> AsrBackendStatus(backend, true)
             }
 
@@ -168,8 +139,16 @@ data class AsrBackendStatus(
             localModelReady: Boolean,
             cloudKeyConfigured: Boolean,
             glassesConnected: Boolean = false,
+            whisperReady: Boolean = false,
         ): List<AsrBackendStatus> = AsrBackend.entries.map {
-            evaluate(it, platformAvailable, localModelReady, cloudKeyConfigured, glassesConnected)
+            evaluate(
+                it,
+                platformAvailable,
+                localModelReady,
+                cloudKeyConfigured,
+                glassesConnected,
+                whisperReady,
+            )
         }
     }
 }

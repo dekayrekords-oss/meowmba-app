@@ -1,0 +1,32 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/cat_assistant.gd" id="1_cat"]
+
+[sub_resource type="Environment" id="Environment_glow"]
+background_mode = 3
+tonemap_mode = 3
+tonemap_white = 2.0
+glow_enabled = true
+glow_normalized = true
+glow_intensity = 1.25
+glow_strength = 1.35
+glow_bloom = 0.14
+glow_blend_mode = 1
+glow_hdr_threshold = 0.60
+glow_hdr_scale = 2.0
+glow_levels/1 = 0.0
+glow_levels/2 = 0.1
+glow_levels/3 = 0.35
+glow_levels/4 = 0.8
+glow_levels/5 = 1.0
+glow_levels/6 = 1.0
+glow_levels/7 = 0.7
+adjustment_enabled = true
+adjustment_contrast = 1.06
+adjustment_saturation = 1.14
+
+[node name="Main" type="Node2D"]
+script = ExtResource("1_cat")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_glow")

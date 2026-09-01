@@ -38,6 +38,25 @@ class SpokenTextTest {
     }
 
     @Test
+    fun `cut-off discourse markers and garbled fragments are not usable turns`() {
+        // Single-word cut-offs the zipformer fires before a pause.
+        org.junit.Assert.assertFalse(SpokenText.isUsable("Thus"))
+        org.junit.Assert.assertFalse(SpokenText.isUsable("But"))
+        org.junit.Assert.assertFalse(SpokenText.isUsable("So"))
+        // Stutter / repeated-word fragments.
+        org.junit.Assert.assertFalse(SpokenText.isUsable("And And"))
+        org.junit.Assert.assertFalse(SpokenText.isUsable("But i I am And And"))
+        // Numeric / connector-only fragment with no content to answer.
+        org.junit.Assert.assertFalse(SpokenText.isUsable("One of the fifteen"))
+        // SHORT_OK words still pass — these are real one-word replies.
+        org.junit.Assert.assertTrue(SpokenText.isUsable("ok"))
+        org.junit.Assert.assertTrue(SpokenText.isUsable("no"))
+        // A real short question still passes.
+        org.junit.Assert.assertTrue(SpokenText.isUsable("what time"))
+        org.junit.Assert.assertTrue(SpokenText.isUsable("play jazz"))
+    }
+
+    @Test
     fun `unfinished tails are not treated as a finished turn`() {
         org.junit.Assert.assertFalse(SpokenText.looksFinished("set a"))
         org.junit.Assert.assertFalse(SpokenText.looksFinished("turn on the"))

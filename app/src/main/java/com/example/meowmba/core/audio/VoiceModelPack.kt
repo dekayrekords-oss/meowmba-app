@@ -92,6 +92,49 @@ object VoiceModelPack {
         ),
     )
 
+    /**
+     * Whisper base.en (int8) — the offline/batch transcriber.
+     *
+     * Why this exists: the streaming zipformer above trades accuracy for
+     * latency and measurably mishears (its own engine KDoc says so). Whisper
+     * is a batch model — no live partials — but it is far more accurate, and
+     * it runs entirely locally: no network, no API key.
+     *
+     * The native libsherpa-onnx-jni.so already ships Whisper + the full
+     * OfflineRecognizer JNI API (verified: offline-whisper-model.cc and
+     * Java_..._OfflineRecognizer_* symbols are present), so this is a model
+     * pack + Kotlin wrapper, not a new native dependency.
+     *
+     * Sizes are the int8 files: encoder ~29MB, decoder ~130MB. The fp32
+     * encoder (95MB) / decoder (196MB) are also in the tarball — do NOT load
+     * them; int8 is the supported mobile path.
+     */
+    const val WHISPER_DIR = "sherpa-onnx-whisper-base.en"
+    const val WHISPER_ENCODER = "base.en-encoder.int8.onnx"
+    const val WHISPER_DECODER = "base.en-decoder.int8.onnx"
+    const val WHISPER_TOKENS = "base.en-tokens.txt"
+
+    /**
+     * Size floors, same reason as [AsrPack.minBytes]: a truncated unpack
+     * still has length > 0 and then native-aborts onnxruntime with
+     * "Protobuf parsing failed", killing the process.
+     */
+    val WHISPER_MIN_BYTES: Map<String, Long> = mapOf(
+        WHISPER_ENCODER to 25_000_000L,  // official ~29MB
+        WHISPER_DECODER to 100_000_000L, // official ~130MB
+        WHISPER_TOKENS to 500_000L,      // official ~835KB
+    )
+
+    val whisperRequired = listOf(WHISPER_ENCODER, WHISPER_DECODER, WHISPER_TOKENS)
+
+    const val WHISPER_TAR_URL =
+        "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/$WHISPER_DIR.tar.bz2"
+
+    /** True only when every Whisper file meets its published size floor. */
+    fun whisperComplete(dir: File): Boolean = whisperRequired.all { name ->
+        File(dir, name).let { it.isFile && it.length() >= (WHISPER_MIN_BYTES[name] ?: 1L) }
+    }
+
     const val KWS_TAR_URL =
         "https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/$KWS_DIR.tar.bz2"
     const val VAD_URL =

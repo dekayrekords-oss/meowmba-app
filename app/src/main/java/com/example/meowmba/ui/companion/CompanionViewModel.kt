@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import android.speech.SpeechRecognizer
 import com.example.meowmba.core.agent.LiteRtProvider
+import com.example.meowmba.core.robot.perform
 import com.example.meowmba.core.agent.ImageModelCatalog
 import com.example.meowmba.core.agent.ImageModelOption
 import com.example.meowmba.core.agent.LocalModelOption
@@ -73,6 +74,7 @@ import com.example.meowmba.core.agent.tools.DesktopWriteFileTool
 import com.example.meowmba.core.agent.tools.DesktopRunBuildTool
 import com.example.meowmba.core.agent.tools.DesktopRunScriptTool
 import com.example.meowmba.core.agent.tools.WebSearchTool
+import com.example.meowmba.core.agent.tools.WebFetchTool
 import com.example.meowmba.core.agent.tools.registerVaultTools
 import com.example.meowmba.core.vault.NoteSessionIntent
 import com.example.meowmba.core.vault.NoteSessionParser
@@ -321,7 +323,6 @@ class CompanionViewModel(
      * built when the user picks [AsrBackend.GEMINI_CLOUD] on the Hardware →
      * Voice Recognition page — audio must never leave the device by default.
      */
-    private var geminiAsrEngine: com.example.meowmba.core.audio.GeminiAsrEngine? = null
 
     /**
      * Persisted voice-recognition backend choice.
@@ -577,6 +578,23 @@ class CompanionViewModel(
     private val motorController: com.example.meowmba.core.robot.MotorController
         get() = robotManager.active
 
+    private val confinement = com.example.meowmba.core.robot.ConfinementModel()
+
+    /**
+     * Plays the body half of every clip, on the same clock as the face.
+     *
+     * The window callbacks deliberately ignore their argument: the scheduler
+     * reports clip-relative milliseconds, while ConfinementModel measures
+     * evidence decay in wall time. Passing the clip offset through would make
+     * a ten-minute decay window expire after a ten-second clip.
+     */
+    private val bodyScheduler = com.example.meowmba.core.robot.BodyScheduler(
+        scope = viewModelScope,
+        output = robotManager.bodyOutput,
+        onMotionWindowStart = { confinement.onMotionWindowStart(System.currentTimeMillis()) },
+        onMotionWindowEnd = { confinement.onMotionWindowEnd(System.currentTimeMillis()) },
+    )
+
     // Declared BEFORE init: the init block wires the car assistant and its
     // collectors write to these fields.
     private var carDetector: DrivingDetector? = null
@@ -600,6 +618,40 @@ class CompanionViewModel(
         viewModelScope.launch {
             robotManager.status.collect { st ->
                 _uiState.value = _uiState.value.copy(robotStatus = st)
+                // Any status that is not a live body resets the confinement
+                // envelope. "LOOI BLE: ready (...)" is a transient mid-connect
+                // label — collapsing on it is harmless, evidence refresh at
+                // connect time is correct.
+                val live = st.contains("LOOI body") && !st.contains("simulated")
+                if (!live) {
+                    confinement.onLinkLost(System.currentTimeMillis())
+                }
+            }
+        }
+
+        // Raw fed9 sensor bytes: brake FIRST, interpret second. Subscribe once
+        // per fresh link (the SharedFlow reference changes when the link does).
+        viewModelScope.launch {
+            var linked: kotlinx.coroutines.flow.SharedFlow<ByteArray>? = null
+            robotManager.status.collect {
+                val frames = robotManager.sensorFrames
+                if (frames != null && frames !== linked) {
+                    linked = frames
+                    viewModelScope.launch {
+                        frames.collect { raw ->
+                            val event = com.example.meowmba.core.robot.LooiSensorParser.parse(raw)
+                            // An edge is not a thing to reason about while still
+                            // moving toward it. Unknown counts as an edge, because
+                            // an undecoded frame might be one.
+                            if (event is com.example.meowmba.core.robot.SensorEvent.Cliff ||
+                                event is com.example.meowmba.core.robot.SensorEvent.Unknown
+                            ) {
+                                bodyScheduler.stop()
+                            }
+                            confinement.onSensor(event, System.currentTimeMillis())
+                        }
+                    }
+                }
             }
         }
         viewModelScope.launch {
@@ -1001,6 +1053,7 @@ class CompanionViewModel(
         }
         // Research, email, calendar, and media tools
         toolRegistry.register(WebSearchTool())
+        toolRegistry.register(WebFetchTool())
         val appContext = secureStorage?.context
         // Phase G1: periodic mood tick + optional idle chatter (max 1/hour).
         // Runs on Dispatchers.Default: the real-time delay must NOT be driven by
@@ -1696,6 +1749,7 @@ class CompanionViewModel(
     }
 
     override fun onCleared() {
+        bodyScheduler.stop()
         contextDirector?.stop()
         motionSense?.stop()
         idleAnimationDirector?.stop()
@@ -2561,8 +2615,8 @@ class CompanionViewModel(
     }
 
     private fun applyMood() {
-        val (servos, expression) = com.example.meowmba.core.robot.FaceMotorMap.mapMood(moodEngine.mood)
-        servos.forEach { (servo, angle) -> motorController.setServo(servo, angle) }
+        val (verbs, expression) = com.example.meowmba.core.robot.FaceMotorMap.mapMood(moodEngine.mood)
+        verbs.forEach { robotManager.bodyOutput.perform(it) }
         motorController.setExpression(expression)
         (ttsManager as? com.example.meowmba.core.audio.TextToSpeechManager)?.let { tts ->
             tts.setPitch(moodEngine.ttsPitch())
@@ -2925,6 +2979,9 @@ class CompanionViewModel(
         // AFTER the background follow-up service opens its mic, and the
         // service would capture Meow's own voice as the user's reply.
         ttsManager?.stop()
+        // Stop the body when the app leaves the foreground: a scheduler
+        // outliving the foreground would leave the base driving unwatched.
+        bodyScheduler.stop()
         followUpJob?.cancel()
         isFollowUpListen = false
         utteranceCapture?.cancel()
@@ -3131,9 +3188,10 @@ class CompanionViewModel(
         // downloading): a deaf mic would be a worse answer than a working one
         // from another engine, and the page badges why the pick is unavailable.
         when (asrBackend) {
-            com.example.meowmba.core.audio.AsrBackend.GEMINI_CLOUD ->
-                geminiAsrEngine?.takeIf { it.isAvailable }?.let { return it }
-            com.example.meowmba.core.audio.AsrBackend.LOCAL_SHERPA ->
+            // Whisper is a batch refiner, not a capture engine: it rides the
+            // streaming zipformer for mic + partials + endpointing and
+            // replaces the final text. So the engine here is sherpa.
+            com.example.meowmba.core.audio.AsrBackend.WHISPER_LOCAL ->
                 sherpaAsrEngine?.takeIf { it.isAvailable }?.let { return it }
             com.example.meowmba.core.audio.AsrBackend.META_GLASSES_MIC -> {
                 // Glasses takeover: while connected, the glasses' mic is THE
@@ -3143,20 +3201,13 @@ class CompanionViewModel(
                 if (glassesAsrEngine == null) attachGlassesAsrEngine()
                 glassesAsrEngine?.takeIf { glassesMicReady() }?.let { return it }
             }
-            com.example.meowmba.core.audio.AsrBackend.PLATFORM ->
-                speechService?.takeIf { it.isAvailable }?.let { return it }
-            com.example.meowmba.core.audio.AsrBackend.AUTO -> Unit
         }
-        sherpaAsrEngine?.takeIf { it.isAvailable }?.let { return it }
-        val pick = voiceHealth.pick(
-            platformAvailable = speechService?.isAvailable == true,
-            sherpaAvailable = sherpaAsrEngine?.isAvailable == true,
-        )
-        return when (pick) {
-            com.example.meowmba.core.audio.VoiceHealth.Engine.PLATFORM -> speechService
-            com.example.meowmba.core.audio.VoiceHealth.Engine.SHERPA -> sherpaAsrEngine
-            null -> null
-        }
+        // Fall through: the picked backend is not usable right now (model still
+        // downloading, glasses not connected), so answer with sherpa rather
+        // than going deaf. No health-driven platform hand-off any more — the
+        // platform recognizer and the AUTO/health switch were removed with
+        // those backends.
+        return sherpaAsrEngine?.takeIf { it.isAvailable }
     }
 
     /**
@@ -3176,43 +3227,49 @@ class CompanionViewModel(
         )
         fuLog("voice recognition backend -> ${backend.id}")
         attachAsrEngine()
-        attachGeminiEngine()
+        attachWhisperRefiner()
         stopAlwaysOnListening()
         refreshAsrBackendState()
         if (shouldAlwaysOnMic()) startAlwaysOnListening()
     }
 
+    /** Local Whisper refiner, built once the Whisper weights are on disk. */
+    private var whisperEngine: com.example.meowmba.core.audio.WhisperAsrEngine? = null
+
     /**
-     * Builds (or tears down) the cloud engine to match the current pick.
-     * Idempotent — safe to call from every path that might change the key,
-     * the model files, or the selection.
+     * Wire Whisper as the final-transcript refiner — ONLY for the
+     * [com.example.meowmba.core.audio.AsrBackend.WHISPER_LOCAL] pick.
+     *
+     * Live partials and endpointing stay on the streaming zipformer (Whisper
+     * cannot stream); Whisper replaces the text that actually gets answered.
+     * Every other backend keeps the text it produced: silently rewriting
+     * another engine's output would be a surprise, and slower for no consent.
      */
-    private fun attachGeminiEngine() {
-        val storage = secureStorage
-        if (asrBackend != com.example.meowmba.core.audio.AsrBackend.GEMINI_CLOUD || storage == null) {
-            geminiAsrEngine = null
+    private fun attachWhisperRefiner() {
+        val ctx = secureStorage?.context ?: return
+        val engine = sherpaAsrEngine ?: return
+        if (asrBackend != com.example.meowmba.core.audio.AsrBackend.WHISPER_LOCAL) {
+            engine.whisperRefiner = null
             return
         }
-        val local = sherpaAsrEngine ?: return
-        if (geminiAsrEngine != null) return
-        geminiAsrEngine = com.example.meowmba.core.audio.GeminiAsrEngine(
-            local = local,
-            scope = viewModelScope,
-            apiKey = { storage.getApiKey("openrouter") },
-            model = {
-                storage.getModelName(
-                    com.example.meowmba.core.audio.AsrBackend.OPENROUTER_ASR_PROVIDER,
-                ) ?: com.example.meowmba.core.audio.AsrBackend.DEFAULT_GEMINI_MODEL
-            },
-        )
-        fuLog("cloud ASR (Gemini) attached")
+        if (!com.example.meowmba.core.audio.VoiceModelStore(ctx).whisperReady()) {
+            fuLog("whisper selected but weights not downloaded — refining disabled")
+            engine.whisperRefiner = null
+            return
+        }
+        val w = whisperEngine
+            ?: com.example.meowmba.core.audio.WhisperAsrEngine(ctx).also { whisperEngine = it }
+        engine.whisperRefiner = w
+        fuLog("whisper refiner attached")
     }
 
     /** Recomputes the picker's availability badges from live device facts. */
     private fun refreshAsrBackendState() {
         val storage = secureStorage
-        val localReady = storage?.context
-            ?.let { com.example.meowmba.core.audio.VoiceModelStore(it).asrReady() } == true
+        val store = storage?.context
+            ?.let { com.example.meowmba.core.audio.VoiceModelStore(it) }
+        val localReady = store?.asrReady() == true
+        val whisperReady = store?.whisperReady() == true
         _uiState.value = _uiState.value.copy(
             asrBackend = asrBackend,
             asrBackendStatuses = com.example.meowmba.core.audio.AsrBackendStatus.evaluateAll(
@@ -3220,6 +3277,7 @@ class CompanionViewModel(
                 localModelReady = localReady,
                 cloudKeyConfigured = !storage?.getApiKey("openrouter").isNullOrBlank(),
                 glassesConnected = glassesMicReady(),
+                whisperReady = whisperReady,
             ),
             asrCloudModel = storage?.getModelName(
                 com.example.meowmba.core.audio.AsrBackend.OPENROUTER_ASR_PROVIDER,
@@ -6367,15 +6425,22 @@ class CompanionViewModel(
             // The local engine exists but the cloud wrapper may not — e.g. the
             // model finished downloading after the user had already picked
             // Gemini. Cheap and idempotent, so always reconcile.
-            attachGeminiEngine()
             return
         }
         if (!com.example.meowmba.core.audio.VoiceModelStore(ctx).asrReady()) return
         sherpaAsrEngine = SherpaAsrEngine(ctx, viewModelScope)
-        attachGeminiEngine()
+        attachWhisperRefiner()
         fuLog("on-device always-on ASR attached")
+        // This attach is async relative to the always-on arm that raced it
+        // (measured on device 18:57:17: the attach finished AFTER the collector
+        // had already opened on the fresh engine, then tore the session down
+        // and re-loaded the whole sherpa pack — a collector-restart + double
+        // model load in under a second). If a session is already live on this
+        // engine, leave it alone; startAlwaysOnListeningAfterKws already
+        // handles the not-open case.
         if (shouldAlwaysOnMic() &&
-            _uiState.value.interactionState == InteractionState.IDLE
+            _uiState.value.interactionState == InteractionState.IDLE &&
+            !(alwaysOnActive && alwaysOnSessionOpen && alwaysOnCaptureEngine == sherpaAsrEngine)
         ) {
             stopAlwaysOnListening()
             startAlwaysOnListening()
@@ -6685,6 +6750,10 @@ class CompanionViewModel(
             activeAnimation = null,
         )
         _uiState.value = if (userRequested) next.withPanelsClosed() else next
+        // The body feels the same emotion, on the same clock as the face.
+        bodyScheduler.play(
+            com.example.meowmba.core.robot.EmotionMap.cues(expr, confinement.profile)
+        )
         customAnimJob = viewModelScope.launch {
             delay((expr.durationSeconds * 1000f).toLong() + 350L)
             _uiState.value = _uiState.value.copy(activeComposed = null)
@@ -7515,6 +7584,10 @@ class CompanionViewModel(
             activeComposed = null,
         )
         _uiState.value = if (userRequested) next.withPanelsClosed() else next
+        // Body starts from the same instant the face is set, so they cannot drift.
+        bodyScheduler.play(
+            com.example.meowmba.core.robot.BodyMotionMap.cues(spec, confinement.profile)
+        )
         if (userRequested) {
             val html = "<!doctype html><html><body style='margin:0;background:#0d1117;color:#e6edf3;font-family:system-ui;padding:24px'>" +
                 "<h1 style='margin:0 0 8px'>${spec.name}</h1>" +

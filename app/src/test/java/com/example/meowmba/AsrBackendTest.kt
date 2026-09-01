@@ -33,52 +33,68 @@ class AsrBackendTest {
     }
 
     @Test
-    fun `only the gemini backend is marked as leaving the device`() {
-        val cloud = AsrBackend.entries.filter { it.isCloud }
-        assertEquals(listOf(AsrBackend.GEMINI_CLOUD), cloud)
+    fun `no backend sends audio off the device`() {
+        // The cloud backend was removed. Whatever is left stays on the phone,
+        // and the UI must never have a cloud badge to show.
+        assertEquals(emptyList<AsrBackend>(), AsrBackend.entries.filter { it.isCloud })
+    }
+
+    @Test
+    fun `whisper is the default pick`() {
+        assertEquals(AsrBackend.WHISPER_LOCAL, AsrBackend.DEFAULT)
+        // A stored id from a removed backend must migrate to Whisper, not
+        // leave the user stranded on a backend that no longer exists.
+        assertEquals(AsrBackend.WHISPER_LOCAL, AsrBackend.fromId("auto"))
+        assertEquals(AsrBackend.WHISPER_LOCAL, AsrBackend.fromId("platform"))
+        assertEquals(AsrBackend.WHISPER_LOCAL, AsrBackend.fromId("local_sherpa"))
+        assertEquals(AsrBackend.WHISPER_LOCAL, AsrBackend.fromId("gemini_cloud"))
     }
 
     // ── availability matrix ─────────────────────────────────────────────
 
     @Test
-    fun `gemini needs both a key and the local model`() {
-        fun status(key: Boolean, local: Boolean) = AsrBackendStatus.evaluate(
-            AsrBackend.GEMINI_CLOUD,
-            platformAvailable = true,
-            localModelReady = local,
-            cloudKeyConfigured = key,
-        )
-
-        assertTrue(status(key = true, local = true).available)
-        // Cloud transcription rides on the local engine's endpointing, so a
-        // key alone is not enough — and the reason must say so.
-        assertFalse(status(key = true, local = false).available)
-        assertTrue(status(key = true, local = false).reason.contains("endpointing"))
-        assertFalse(status(key = false, local = true).available)
-        assertTrue(status(key = false, local = true).reason.contains("OpenRouter"))
-        assertFalse(status(key = false, local = false).available)
-    }
-
-    @Test
-    fun `local backend only needs its model, not a key`() {
-        val s = AsrBackendStatus.evaluate(
-            AsrBackend.LOCAL_SHERPA,
+    fun `whisper needs both model sets and explains which is missing`() {
+        fun status(local: Boolean, whisper: Boolean) = AsrBackendStatus.evaluate(
+            AsrBackend.WHISPER_LOCAL,
             platformAvailable = false,
-            localModelReady = true,
+            localModelReady = local,
             cloudKeyConfigured = false,
+            whisperReady = whisper,
         )
-        assertTrue(s.available)
+
+        assertTrue(status(local = true, whisper = true).available)
+
+        // Whisper rides the streaming zipformer for capture + endpointing, so
+        // it genuinely needs both. Naming the wrong one sends the user to
+        // Settings for nothing — pin each reason separately.
+        val noWhisper = status(local = true, whisper = false)
+        assertFalse(noWhisper.available)
+        assertTrue(noWhisper.reason.contains("Whisper"))
+
+        val noLocal = status(local = false, whisper = true)
+        assertFalse(noLocal.available)
+        assertTrue(noLocal.reason.contains("streaming"))
+
+        val neither = status(local = false, whisper = false)
+        assertFalse(neither.available)
+        assertTrue(neither.reason.isNotBlank())
     }
 
     @Test
-    fun `auto is available when either engine is`() {
-        fun auto(platform: Boolean, local: Boolean) = AsrBackendStatus.evaluate(
-            AsrBackend.AUTO, platform, local, cloudKeyConfigured = false,
-        ).available
+    fun `glasses mic needs the model and a connected pair`() {
+        fun status(local: Boolean, connected: Boolean) = AsrBackendStatus.evaluate(
+            AsrBackend.META_GLASSES_MIC,
+            platformAvailable = false,
+            localModelReady = local,
+            cloudKeyConfigured = false,
+            whisperReady = true,
+            glassesConnected = connected,
+        )
 
-        assertTrue(auto(platform = true, local = false))
-        assertTrue(auto(platform = false, local = true))
-        assertFalse(auto(platform = false, local = false))
+        assertTrue(status(local = true, connected = true).available)
+        assertFalse(status(local = false, connected = true).available)
+        assertFalse(status(local = true, connected = false).available)
+        assertTrue(status(local = true, connected = false).reason.contains("glasses", ignoreCase = true))
     }
 
     @Test

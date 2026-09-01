@@ -20,6 +20,15 @@ class RobotManager {
     private var transport: RobotTransport? = null
     private var bleLink: LooiBleLink? = null
 
+    private var body: BodyOutput = SimulatedBodyOutput()
+
+    /** The base's own verb vocabulary. Simulated until a BLE link comes up. */
+    val bodyOutput: BodyOutput get() = body
+
+    /** Raw fed9 frames when a BLE link exists; null otherwise. */
+    val sensorFrames: kotlinx.coroutines.flow.SharedFlow<ByteArray>?
+        get() = bleLink?.sensorFrames
+
     /** The controller the companion should drive right now. Never null. */
     val active: MotorController get() = controller
 
@@ -30,6 +39,7 @@ class RobotManager {
         bleLink?.close()
         bleLink = null
         controller = SimulatedMotorController()
+        body = SimulatedBodyOutput()
         _status.value = "simulated (no body)"
     }
 
@@ -260,7 +270,8 @@ class RobotManager {
             transport = null
             bleLink?.close()
             bleLink = link
-            controller = BleMotorController(link)
+            body = LooiBleBodyOutput(link)
+            controller = SimulatedMotorController()
             // Report the address we are ACTUALLY attached to, not the one that
             // was requested. Those differ whenever the requested MAC fails and
             // the auto/known-MAC fallback succeeds — which is exactly what
@@ -278,37 +289,9 @@ class RobotManager {
             transport = null
             bleLink = null
             controller = SimulatedMotorController()
+            body = SimulatedBodyOutput()
             _status.value = "LOOI BLE unreachable - simulated"
             false
-        }
-    }
-
-    /**
-     * Maps Meow's servo/expression vocabulary onto the Memba-verified LOOI
-     * BLE channels: head-tilt servo -> neck pitch (fed1), body servo ->
-     * short rotate pulse (fe00 frames). The headlight is NOT driven by
-     * expression — only the user or a dark camera (see [noteSceneLuma]).
-     */
-    private class BleMotorController(private val link: LooiBleLink) : MotorController {
-        private var lastNeck = Float.NaN
-
-        override fun setServo(id: Int, angleDeg: Float) {
-            val clamped = angleDeg.coerceIn(0f, 180f)
-            when (id) {
-                FaceMotorMap.SERVO_HEAD_TILT -> {
-                    val pitch = (clamped - 90f) / 90f
-                    if (!lastNeck.isNaN() && kotlin.math.abs(pitch - lastNeck) < 0.04f) return
-                    lastNeck = pitch
-                    link.setNeckPitch(pitch)
-                }
-                FaceMotorMap.SERVO_HEAD_PAN,
-                FaceMotorMap.SERVO_BODY -> Unit
-                else -> Unit // ears/tail have no BLE actuator
-            }
-        }
-
-        override fun setExpression(face: String) {
-            // Moods used to flip the headlight. That is a user/camera decision.
         }
     }
 
@@ -361,7 +344,17 @@ class RobotManager {
         val holdNeck = !live && lastFaceAtMs > 0L && nowMs - lastFaceAtMs < 400L
         val oy = offsetY ?: lastFaceY.takeIf { holdNeck }
         val pose = FaceMotorMap.followFace(if (live) offsetX else null, oy)
-        pose[FaceMotorMap.SERVO_HEAD_TILT]?.let { controller.setServo(FaceMotorMap.SERVO_HEAD_TILT, it) }
+        pose[FaceMotorMap.SERVO_HEAD_TILT]?.let {
+            // BLE neck speaks pitch, not servo angle. The clip-driven body owns
+            // the neck on a live BLE link — the legacy servo path only serves
+            // the TCP/serial transport now.
+            val link = bleLink?.takeIf { c -> c.connected }
+            if (link != null) {
+                body.perform(BodyVerb.Neck((it - 90f) / 90f))
+            } else {
+                controller.setServo(FaceMotorMap.SERVO_HEAD_TILT, it)
+            }
+        }
         if (!live) {
             if (wasTurning) haltBase()
             wasTurning = false
@@ -552,5 +545,6 @@ class RobotManager {
         transport = null
         bleLink?.close()
         bleLink = null
+        body = SimulatedBodyOutput()
     }
 }

@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Studio</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin:0; font-family:-apple-system,'Segoe UI',sans-serif; background:#14101c; color:#f2ecff; padding:40px; }
+  h1 { margin:0 0 6px; font-size:34px; }
+  .sub { color:#b9a8e8; margin-bottom:32px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:20px; max-width:1000px; }
+  .card { display:block; background:#1e1730; border:1px solid #3a2d5c; border-radius:14px; padding:18px; text-decoration:none; color:inherit; transition:border-color .15s; }
+  .card:hover { border-color:#8f6fe8; }
+  .card h2 { margin:0 0 6px; font-size:18px; }
+  .card p { margin:0; color:#b9a8e8; font-size:14px; }
+  .tag { display:inline-block; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:#8f6fe8; margin-bottom:10px; }
+</style>
+</head>
+<body>
+<h1>🐾 Meowmba Studio</h1>
+<div class="sub">Everything made here gets shown here. No exceptions.</div>
+<div class="grid">
+  <a class="card" href="comics/demo-comic/index.html">
+    <span class="tag">comic · demo</span>
+    <h2>Meowmba #1 — Demo Comic</h2>
+    <p>Three panels proving the make → show → proofread loop works.</p>
+  </a>
+  <div class="card">
+    <span class="tag">characters</span>
+    <h2>Character bibles</h2>
+    <p>studio/characters/ — locked appearance sheets so comics and cartoons match.</p>
+  </div>
+  <div class="card">
+    <span class="tag">videos</span>
+    <h2>Scripts &amp; ads</h2>
+    <p>studio/videos/ — YouTube scripts (hook/script/CTA) and ad variants.</p>
+  </div>
+</div>
+</body>
+</html>

@@ -9,6 +9,7 @@ import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
 import com.google.ai.edge.litertlm.SamplerConfig
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -93,7 +94,18 @@ class LiteRtProvider(
         )
 
         val conversation = try {
-            engine.createConversation(config)
+            // Engine init + createConversation are multi-second native calls
+            // (measured on device: 11.8s cold), and under a racing background
+            // warmUp() the `by lazy` gate can hold the main thread for 6s+
+            // ("Long monitor contention ... SynchronizedLazyImpl") and freeze the
+            // whole app. Creating the conversation OFF the collecting dispatcher
+            // keeps that block off the UI thread. This block never calls emit, so
+            // hopping dispatchers here does not violate the Flow emission-context
+            // invariant (which the app's MeowFU guard surfaces and would otherwise
+            // abort the whole answer).
+            withContext(Dispatchers.Default) {
+                engine.createConversation(config)
+            }
         } catch (e: Exception) {
             emit(ModelResponse.Error(e.message ?: "LiteRT could not start a conversation"))
             return@flow
@@ -151,7 +163,13 @@ class LiteRtProvider(
         return parts.take(MAX_REPLY_SENTENCES).joinToString(" ").ifBlank { text }
     }
 
-    override suspend fun generate(prompt: String): ModelResponse {
+    override suspend fun generate(prompt: String): ModelResponse =
+        // Suspends the whole (value-returning, non-flow) call off the main thread.
+        // Engine init can block for seconds (see generateStreaming); unlike a flow,
+        // a suspend value call has no emission-context invariant to violate.
+        withContext(Dispatchers.Default) { generateOffMain(prompt) }
+
+    private suspend fun generateOffMain(prompt: String): ModelResponse {
         val config = ConversationConfig(
             systemInstruction = Contents.of(
                 "You are a helpful assistant called Meowmba. Be concise."

@@ -184,8 +184,8 @@ object PromptBuilder {
         /** Voice-call lane: keep answers short enough to speak immediately. */
         voiceCall: Boolean = false,
     ): String = buildString {
-        append("You are ").append(companionName)
-        append(", a helpful AI companion with a cat avatar. Answer naturally and concisely.\n")
+        // No cat roleplay, no forced "meow": plain ChatGPT-style assistant.
+        append("You are a helpful AI assistant. Answer naturally and concisely.\n")
         if (voiceCall) {
             append("You are on a live voice call. Reply in one or two short spoken ")
             append("sentences. No markdown, no lists, no preamble.\n")
@@ -291,7 +291,7 @@ object PromptBuilder {
             append("- A LOOI robot base IS connected (").append(robotStatus).append(").\n")
         } else {
             append("- No robot body is connected. Status: ").append(robotStatus).append(". ")
-            append("You are the on-phone cat face only. Never say you are sitting on, ")
+            append("You are not on any robot. Never say you are sitting on, ")
             append("plugged into, or connected to a LOOI or any robot base.\n")
         }
     }

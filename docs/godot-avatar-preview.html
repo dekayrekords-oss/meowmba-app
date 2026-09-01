@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MEOWMBA Godot avatar preview</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #07090f;
+      color: #cff9ff;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      padding: 1rem;
+    }
+    h1 { font-size: 1rem; font-weight: 600; margin: 0; letter-spacing: 0.04em; }
+    p { margin: 0; color: #7a9aa8; font-size: 0.85rem; max-width: 28rem; text-align: center; line-height: 1.4; }
+    canvas {
+      width: min(92vw, 420px);
+      height: min(92vw, 420px);
+      background: radial-gradient(circle at 50% 48%, #0e1522 0%, #07090f 70%);
+      border-radius: 1rem;
+      border: 1px solid #1e2a3a;
+      box-shadow: 0 0 60px rgba(88, 166, 255, 0.12);
+      touch-action: none;
+    }
+    .bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      justify-content: center;
+    }
+    button {
+      appearance: none;
+      border: 1px solid #2a3d52;
+      background: #121a26;
+      color: #cff9ff;
+      padding: 0.5rem 0.9rem;
+      border-radius: 999px;
+      font: inherit;
+      cursor: pointer;
+    }
+    button:hover { border-color: #58a6ff; }
+    button.primary { background: #1a3a5c; border-color: #58a6ff; }
+    code { color: #9fd4ff; font-size: 0.8em; }
+  </style>
+</head>
+<body>
+  <h1>Godot avatar prototype (HTML port)</h1>
+  <p>
+    Faithful port of Claude’s <code>avatar.gd</code> — idle ambient + auto paw-lick every 4s.
+    Source branch: <code>worktree-godot-avatar-prototype</code>
+  </p>
+  <canvas id="c" width="840" height="840" aria-label="MEOWMBA cat avatar animation"></canvas>
+  <div class="bar">
+    <button type="button" class="primary" id="paw">Play paw lick now</button>
+    <button type="button" id="idle">Idle only (pause paw auto)</button>
+  </div>
+  <p id="status">Running…</p>
+
+<script>
+(() => {
+  const canvas = document.getElementById("c");
+  const ctx = canvas.getContext("2d");
+  const status = document.getElementById("status");
+
+  const EYE = [0xcf / 255, 0xf9 / 255, 0xff / 255, 1];
+  const PUPIL = [0x06 / 255, 0x23 / 255, 0x2b / 255, 1];
+  const NOSE = [0xff / 255, 0xa6 / 255, 0xc9 / 255, 1];
+  const WHISKER = [0xcf / 255, 0xf9 / 255, 0xff / 255, 0x66 / 255];
+  const HALO = [0x58 / 255, 0xa6 / 255, 0xff / 255, 1];
+  const TONGUE = [1, 0x6b / 255, 0x8a / 255, 1];
+  const PUPIL_SIZE = 0.28;
+
+  const state = {
+    eye_open: 1,
+    head_tilt_deg: 0,
+    ear_perk: 1,
+    ear_droop_deg: 0,
+    whisker_flutter: false,
+    tongue_out: 0,
+    blink_value: 1,
+    ear_twitch_l_deg: 0,
+    ear_twitch_r_deg: 0,
+    breathe: 1,
+    drift_x: -0.3,
+    drift_y: -0.25,
+    whisker_sway: -1,
+    mouth_wobble: 0.88,
+    talk_val: 0.15,
+    paw_lick_playing: false,
+    auto_paw: true,
+  };
+
+  const PAW_LICK = [
+    { at: 0, head_tilt: 0, eye_open: 1, whisker: false, tongue: 0 },
+    { at: 350, head_tilt: 8, eye_open: 0.55, whisker: false, tongue: 0 },
+    { at: 550, head_tilt: 10, eye_open: 0.4, whisker: true, tongue: 0.9 },
+    { at: 750, head_tilt: 10, eye_open: 0.4, whisker: true, tongue: 0.3 },
+    { at: 950, head_tilt: 10, eye_open: 0.4, whisker: true, tongue: 0.9 },
+    { at: 1150, head_tilt: 10, eye_open: 0.4, whisker: true, tongue: 0.3 },
+    { at: 1400, head_tilt: 4, eye_open: 0.75, whisker: false, tongue: 0 },
+    { at: 1800, head_tilt: 0, eye_open: 1, whisker: false, tongue: 0 },
+  ];
+
+  function rgba(c, a = c[3]) {
+    return `rgba(${(c[0] * 255) | 0},${(c[1] * 255) | 0},${(c[2] * 255) | 0},${a})`;
+  }
+  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function smoothstep(u) { return u * u * (3 - 2 * u); }
+  function deg(d) { return (d * Math.PI) / 180; }
+
+  // Simple tween engine
+  const tweens = [];
+  function tweenProp(obj, prop, target, durationSec, ease = "linear") {
+    return new Promise((resolve) => {
+      tweens.push({
+        obj, prop, from: obj[prop], to: target,
+        t0: performance.now(), dur: durationSec * 1000, ease, resolve,
+      });
+    });
+  }
+  function tickTweens(now) {
+    for (let i = tweens.length - 1; i >= 0; i--) {
+      const tw = tweens[i];
+      const u = clamp((now - tw.t0) / tw.dur, 0, 1);
+      const e = tw.ease === "sine" ? (1 - Math.cos(u * Math.PI)) / 2 : u;
+      tw.obj[tw.prop] = lerp(tw.from, tw.to, e);
+      if (u >= 1) {
+        tw.obj[tw.prop] = tw.to;
+        tweens.splice(i, 1);
+        tw.resolve();
+      }
+    }
+  }
+
+  function sleep(ms) {
+    return new Promise((r) => setTimeout(r, ms));
+  }
+
+  // Looping sine/linear drivers for continuous layers
+  const loops = [];
+  function startLoop(prop, a, b, halfSec, ease = "linear") {
+    loops.push({ prop, a, b, period: halfSec * 2000, t0: performance.now(), ease });
+  }
+  function tickLoops(now) {
+    for (const L of loops) {
+      const phase = ((now - L.t0) % L.period) / L.period; // 0..1 full cycle a->b->a
+      let u = phase < 0.5 ? phase * 2 : (1 - phase) * 2;
+      if (L.ease === "sine") u = (1 - Math.cos(u * Math.PI)) / 2;
+      state[L.prop] = lerp(L.a, L.b, u);
+    }
+  }
+
+  async function blinkLoop() {
+    while (true) {
+      await sleep(2200 + Math.random() * 3000);
+      await tweenProp(state, "blink_value", 0.06, 0.09);
+      await tweenProp(state, "blink_value", 1.0, 0.11);
+      if (Math.random() < 0.25) {
+        await tweenProp(state, "blink_value", 0.06, 0.08);
+        await tweenProp(state, "blink_value", 1.0, 0.1);
+      }
+    }
+  }
+
+  async function earTwitchLoop() {
+    while (true) {
+      await sleep(3000 + Math.random() * 5000);
+      const prop = Math.random() < 0.5 ? "ear_twitch_l_deg" : "ear_twitch_r_deg";
+      await tweenProp(state, prop, 9, 0.07);
+      await tweenProp(state, prop, 0, 0.12);
+      if (Math.random() < 1 / 3) {
+        await tweenProp(state, prop, 6, 0.06);
+        await tweenProp(state, prop, 0, 0.11);
+      }
+    }
+  }
+
+  function samplePaw(t) {
+    const frames = PAW_LICK;
+    if (t <= frames[0].at) return frames[0];
+    if (t >= frames[frames.length - 1].at) return frames[frames.length - 1];
+    for (let i = 0; i < frames.length - 1; i++) {
+      const f0 = frames[i], f1 = frames[i + 1];
+      if (t >= f0.at && t <= f1.at) {
+        const u = (t - f0.at) / (f1.at - f0.at);
+        const e = smoothstep(u);
+        return {
+          head_tilt: lerp(f0.head_tilt, f1.head_tilt, e),
+          eye_open: lerp(f0.eye_open, f1.eye_open, e),
+          tongue: lerp(f0.tongue, f1.tongue, e),
+          whisker: f0.whisker,
+        };
+      }
+    }
+    return frames[frames.length - 1];
+  }
+
+  async function playPawLick() {
+    if (state.paw_lick_playing) return;
+    state.paw_lick_playing = true;
+    status.textContent = "Paw lick…";
+    const duration = PAW_LICK[PAW_LICK.length - 1].at;
+    const start = performance.now();
+    while (true) {
+      const elapsed = performance.now() - start;
+      if (elapsed > duration) break;
+      const s = samplePaw(elapsed);
+      state.head_tilt_deg = s.head_tilt;
+      state.eye_open = s.eye_open;
+      state.tongue_out = s.tongue;
+      state.whisker_flutter = s.whisker;
+      await new Promise((r) => requestAnimationFrame(r));
+    }
+    state.head_tilt_deg = 0;
+    state.eye_open = 1;
+    state.tongue_out = 0;
+    state.whisker_flutter = false;
+    state.paw_lick_playing = false;
+    status.textContent = state.auto_paw ? "Idle (auto paw-lick every 4s)" : "Idle only";
+  }
+
+  async function pawDemoLoop() {
+    while (true) {
+      await sleep(4000);
+      if (state.auto_paw) await playPawLick();
+    }
+  }
+
+  // Drawing helpers
+  function rotateAround(p, pivot, ang) {
+    const cos = Math.cos(ang), sin = Math.sin(ang);
+    const dx = p.x - pivot.x, dy = p.y - pivot.y;
+    return { x: pivot.x + dx * cos - dy * sin, y: pivot.y + dx * sin + dy * cos };
+  }
+
+  function drawEar(side, twitch, cx, eye_cy, s, eye_dx, eye_w, base_eye_h) {
+    const base_y = eye_cy - base_eye_h * 0.75;
+    const inner_x = cx + side * (eye_dx - eye_w * 0.45);
+    const outer_x = cx + side * (eye_dx + eye_w * 0.75);
+    const tip_x = cx + side * (eye_dx + eye_w * 0.35);
+    const tip_y = base_y - s * 0.2 * state.ear_perk;
+    const stroke = s * 0.014;
+    const pivot = { x: (inner_x + outer_x) / 2, y: base_y };
+    const rot = deg(side * (state.ear_droop_deg + twitch));
+    const p1 = rotateAround({ x: inner_x, y: base_y }, pivot, rot);
+    const p2 = rotateAround({ x: tip_x, y: tip_y }, pivot, rot);
+    const p3 = rotateAround({ x: outer_x, y: base_y + s * 0.02 }, pivot, rot);
+    ctx.strokeStyle = rgba(EYE);
+    ctx.lineWidth = stroke;
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    ctx.moveTo(p1.x, p1.y);
+    ctx.lineTo(p2.x, p2.y);
+    ctx.lineTo(p3.x, p3.y);
+    ctx.stroke();
+    const i1 = rotateAround({ x: inner_x + side * eye_w * 0.18, y: base_y - s * 0.008 }, pivot, rot);
+    const i2 = rotateAround({ x: tip_x, y: tip_y + s * 0.045 }, pivot, rot);
+    const i3 = rotateAround({ x: outer_x - side * eye_w * 0.18, y: base_y + s * 0.008 }, pivot, rot);
+    ctx.fillStyle = rgba(NOSE, 0.35);
+    ctx.beginPath();
+    ctx.moveTo(i1.x, i1.y);
+    ctx.lineTo(i2.x, i2.y);
+    ctx.lineTo(i3.x, i3.y);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function drawEye(side, tilt, cx, eye_cy, eye_dx, eye_w, eye_h) {
+    const ecx = cx + side * eye_dx;
+    const pivot = { x: ecx, y: eye_cy };
+    const rot = deg(tilt);
+    const plate_w = eye_w * 1.24, plate_h = eye_h + eye_w * 0.24;
+    const plate = [
+      { x: ecx - plate_w / 2, y: eye_cy - plate_h / 2 },
+      { x: ecx + plate_w / 2, y: eye_cy - plate_h / 2 },
+      { x: ecx + plate_w / 2, y: eye_cy + plate_h / 2 },
+      { x: ecx - plate_w / 2, y: eye_cy + plate_h / 2 },
+    ].map((c) => rotateAround(c, pivot, rot));
+    ctx.fillStyle = rgba(EYE, 0.18);
+    ctx.beginPath();
+    plate.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+    ctx.closePath();
+    ctx.fill();
+
+    const eye = [
+      { x: ecx - eye_w / 2, y: eye_cy - eye_h / 2 },
+      { x: ecx + eye_w / 2, y: eye_cy - eye_h / 2 },
+      { x: ecx + eye_w / 2, y: eye_cy + eye_h / 2 },
+      { x: ecx - eye_w / 2, y: eye_cy + eye_h / 2 },
+    ].map((c) => rotateAround(c, pivot, rot));
+    ctx.fillStyle = rgba(EYE);
+    ctx.beginPath();
+    eye.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+    ctx.closePath();
+    ctx.fill();
+
+    if (state.blink_value > 0.3) {
+      const pw = eye_w * PUPIL_SIZE;
+      const ph = eye_h * 0.82;
+      const px = ecx + state.drift_x * eye_w * 0.22;
+      const py = eye_cy + state.drift_y * eye_h * 0.14;
+      const pupil = [
+        { x: px - pw / 2, y: py - ph / 2 },
+        { x: px + pw / 2, y: py - ph / 2 },
+        { x: px + pw / 2, y: py + ph / 2 },
+        { x: px - pw / 2, y: py + ph / 2 },
+      ].map((c) => rotateAround(c, pivot, rot));
+      ctx.fillStyle = rgba(PUPIL);
+      ctx.beginPath();
+      pupil.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
+  function drawMouth(cx, mouth_y, s, stroke) {
+    const arc_w = s * 0.062 * clamp(2 - state.mouth_wobble, 0.9, 1.1);
+    const arc_h = s * 0.038 * state.mouth_wobble;
+    ctx.strokeStyle = rgba(EYE);
+    ctx.lineWidth = stroke;
+    for (const left of [cx - arc_w, cx]) {
+      ctx.beginPath();
+      ctx.ellipse(left + arc_w / 2, mouth_y + arc_h / 2, arc_w / 2, arc_h / 2, 0, 0, Math.PI);
+      ctx.stroke();
+    }
+  }
+
+  function draw() {
+    const w = canvas.width, h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+    const s = Math.min(w, h);
+    const cx = w / 2 + state.drift_x * s * 0.034;
+    const cy = h * 0.47 + state.drift_y * s * 0.02;
+    const eye_dx = s * 0.26;
+    const eye_w = s * 0.19;
+    const base_eye_h = s * 0.24;
+    const eye_h = Math.max(base_eye_h * state.eye_open * state.blink_value * state.breathe, s * 0.012);
+    const eye_cy = cy - s * 0.06;
+    const stroke = s * 0.014;
+
+    ctx.fillStyle = rgba(HALO, 0.11);
+    ctx.beginPath();
+    ctx.arc(cx, cy, s * 0.85, 0, Math.PI * 2);
+    ctx.fill();
+
+    drawEar(-1, state.ear_twitch_l_deg, cx, eye_cy, s, eye_dx, eye_w, base_eye_h);
+    drawEar(1, state.ear_twitch_r_deg, cx, eye_cy, s, eye_dx, eye_w, base_eye_h);
+    drawEye(-1, -state.head_tilt_deg, cx, eye_cy, eye_dx, eye_w, eye_h);
+    drawEye(1, state.head_tilt_deg, cx, eye_cy, eye_dx, eye_w, eye_h);
+
+    const nose_y = cy + s * 0.115;
+    const nose_s = s * 0.032;
+    ctx.fillStyle = rgba(NOSE);
+    ctx.beginPath();
+    ctx.moveTo(cx - nose_s, nose_y - nose_s * 0.7);
+    ctx.lineTo(cx + nose_s, nose_y - nose_s * 0.7);
+    ctx.lineTo(cx, nose_y + nose_s * 0.9);
+    ctx.closePath();
+    ctx.fill();
+
+    const paw_alpha = clamp(state.head_tilt_deg / 10, 0, 1);
+    if (paw_alpha > 0.01) {
+      const paw_cx = cx + s * 0.18 * (state.head_tilt_deg > 0 ? 1 : -1);
+      const paw_cy = cy + s * 0.28;
+      const paw_s = s * 0.055;
+      ctx.fillStyle = rgba(EYE, paw_alpha);
+      ctx.beginPath();
+      ctx.ellipse(paw_cx, paw_cy, paw_s * 0.7, paw_s * 0.45, 0, 0, Math.PI * 2);
+      ctx.fill();
+      for (let i = -1; i <= 1; i++) {
+        ctx.beginPath();
+        ctx.arc(paw_cx + i * paw_s * 0.5, paw_cy - paw_s * 0.7, paw_s * 0.28, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    const energetic = state.whisker_flutter;
+    const sway_amp = s * (energetic ? 0.016 : 0.009);
+    const sway = energetic ? state.talk_val * 2 - 1 : state.whisker_sway;
+    ctx.strokeStyle = rgba(WHISKER);
+    ctx.lineWidth = s * 0.006;
+    for (const side of [-1, 1]) {
+      for (let i = -1; i <= 1; i++) {
+        const y0 = nose_y + i * s * 0.028;
+        const phase = sway * (1 - 0.3 * (i + 1));
+        ctx.beginPath();
+        ctx.moveTo(cx + side * s * 0.1, y0);
+        ctx.lineTo(
+          cx + side * (s * 0.4 + phase * s * 0.004),
+          y0 + i * s * 0.035 + phase * sway_amp * side
+        );
+        ctx.stroke();
+      }
+    }
+
+    const mouth_y = nose_y + s * 0.055;
+    drawMouth(cx, mouth_y, s, stroke);
+
+    if (state.tongue_out > 0.01) {
+      const tongue_len = s * 0.09 * state.tongue_out;
+      const tongue_w = s * 0.028 * state.tongue_out;
+      const tongue_top = mouth_y + s * 0.01;
+      ctx.fillStyle = rgba(TONGUE, state.tongue_out);
+      ctx.beginPath();
+      ctx.moveTo(cx - tongue_w, tongue_top);
+      ctx.quadraticCurveTo(cx - tongue_w * 1.2, tongue_top + tongue_len * 0.6, cx, tongue_top + tongue_len);
+      ctx.quadraticCurveTo(cx + tongue_w * 1.2, tongue_top + tongue_len * 0.6, cx + tongue_w, tongue_top);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
+  function frame(now) {
+    tickTweens(now);
+    tickLoops(now);
+    draw();
+    requestAnimationFrame(frame);
+  }
+
+  startLoop("breathe", 0.98, 1.02, 2.6, "sine");
+  startLoop("drift_x", -0.3, 0.3, 4.8, "linear");
+  startLoop("drift_y", -0.25, 0.25, 3.4, "linear");
+  startLoop("whisker_sway", -1, 1, 1.5, "linear");
+  startLoop("mouth_wobble", 0.88, 1.12, 1.9, "sine");
+  startLoop("talk_val", 0.15, 1.0, 0.16, "linear");
+
+  blinkLoop();
+  earTwitchLoop();
+  pawDemoLoop();
+  requestAnimationFrame(frame);
+  status.textContent = "Idle (auto paw-lick every 4s)";
+
+  document.getElementById("paw").onclick = () => playPawLick();
+  document.getElementById("idle").onclick = () => {
+    state.auto_paw = !state.auto_paw;
+    document.getElementById("idle").textContent = state.auto_paw
+      ? "Idle only (pause paw auto)"
+      : "Resume auto paw-lick";
+    status.textContent = state.auto_paw ? "Idle (auto paw-lick every 4s)" : "Idle only";
+  };
+})();
+</script>
+</body>
+</html>

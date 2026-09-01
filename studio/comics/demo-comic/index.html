@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Meowmba #1 — Demo Comic</title>
+<style>
+  body { margin:0; background:#14101c; color:#f2ecff; font-family:-apple-system,'Segoe UI',sans-serif; display:flex; flex-direction:column; align-items:center; padding:32px 16px 60px; }
+  h1 { font-size:28px; margin:0 0 4px; }
+  .sub { color:#b9a8e8; margin-bottom:24px; }
+  .strip { display:flex; flex-direction:column; gap:18px; width:min(680px,94vw); }
+  .panel { position:relative; background:#fff8ea; border:4px solid #2b2140; border-radius:12px; aspect-ratio:16/9; overflow:hidden; box-shadow:0 8px 24px rgba(0,0,0,.45); }
+  .num { position:absolute; top:10px; left:10px; background:#2b2140; color:#ffd76e; font-weight:700; font-size:13px; padding:3px 9px; border-radius:999px; z-index:3; }
+  .bubble { position:absolute; background:#fff; color:#222; border:3px solid #222; border-radius:18px; padding:10px 14px; font-size:15px; font-weight:600; max-width:46%; line-height:1.25; z-index:2; }
+  .bubble:after { content:""; position:absolute; bottom:-14px; left:26px; border:7px solid transparent; border-top-color:#222; }
+
+  /* the cat — colors from characters/meowmba-cat.md */
+  .cat { position:absolute; bottom:-6%; right:6%; width:44%; height:88%; z-index:1; }
+  .tail { position:absolute; left:-22%; bottom:24%; width:34%; height:14%; background:#f59e2d; border-radius:50%/60% 90% 90% 50%; transform:rotate(-38deg); }
+  .tail:before { content:""; position:absolute; right:-4%; top:-30%; width:36%; height:160%; background:#f59e2d; border-radius:50%; }
+  .body { position:absolute; left:18%; bottom:0; width:64%; height:58%; background:#f59e2d; border-radius:46% 46% 40% 40%/70% 70% 26% 26%; }
+  .head { position:absolute; left:0; bottom:44%; width:100%; aspect-ratio:1/1; }
+  .ear { position:absolute; top:-4%; width:26%; height:26%; background:#f59e2d; clip-path:polygon(50% 0,100% 100%,0 100%); }
+  .ear.l { left:8%; transform:rotate(-14deg); } .ear.r { right:8%; transform:rotate(14deg); }
+  .face { position:absolute; inset:8% 6% 0; background:#f59e2d; border-radius:50% 50% 48% 48%; }
+  .eye { position:absolute; top:34%; width:15%; height:20%; background:#222; border-radius:50%; }
+  .eye.l { left:26%; } .eye.r { right:26%; }
+  .eye:after { content:""; position:absolute; top:14%; left:16%; width:42%; height:42%; background:#fff; border-radius:50%; }
+  .nose { position:absolute; top:58%; left:47.5%; width:5%; height:5%; background:#e0566b; border-radius:45%; }
+  .mouth { position:absolute; top:63%; left:41%; width:18%; height:8%; border-bottom:3px solid #222; border-radius:0 0 50% 50%; }
+  .stripe { position:absolute; background:#d97f14; border-radius:40%; }
+  .s1{ top:6%; left:38%; width:24%; height:7%; } .s2{ top:16%; left:62%; width:20%; height:6%; } .s3{ top:16%; left:16%; width:20%; height:6%; }
+  .ground { position:absolute; bottom:0; left:0; right:0; height:14%; background:#cfe8c9; }
+  .night .ground { background:#3b4a6b; }
+  .caption { position:absolute; bottom:8px; right:10px; background:#fffbe8; border:2px solid #222; color:#222; font-size:12px; padding:4px 8px; border-radius:8px; max-width:52%; z-index:2; }
+  .p1 .bubble { top:12px; left:14px; }
+  .p2 .bubble { top:14px; right:14px; text-align:right; }
+  .moon { position:absolute; top:8%; left:8%; width:11%; aspect-ratio:1; background:#ffe9a8; border-radius:50%; box-shadow:0 0 30px #ffe9a8aa; }
+  .star { position:absolute; background:#fff; border-radius:50%; }
+  .st1{top:18%;left:30%;width:5px;height:5px} .st2{top:10%;left:55%;width:4px;height:4px} .st3{top:26%;left:72%;width:5px;height:5px} .st4{top:14%;left:86%;width:3px;height:3px}
+  footer { margin-top:26px; color:#b9a8e8; font-size:14px; }
+</style>
+</head>
+<body>
+<h1>Meowmba #1 — "The Idea"</h1>
+<div class="sub">demo comic · character sheet: characters/meowmba-cat.md · orange tabby #F59E2D, stripes #D97F14, nose #E0566B</div>
+
+<div class="strip">
+
+  <div class="panel p1">
+    <span class="num">1</span>
+    <div class="bubble">I have an idea so good…</div>
+    <div class="cat"><div class="tail"></div><div class="body"></div><div class="head"><div class="ear l"></div><div class="ear r"></div><div class="face"><div class="stripe s1"></div><div class="stripe s2"></div><div class="stripe s3"></div><div class="eye l"></div><div class="eye r"></div><div class="nose"></div><div class="mouth"></div></div></div></div>
+    <div class="ground"></div>
+    <div class="caption">…the humans will never believe a cat made it.</div>
+  </div>
+
+  <div class="panel p2 night" style="background:#1b2340;">
+    <span class="num">2</span>
+    <div class="bubble">So I'll build it myself.</div>
+    <div class="moon"></div><i class="star st1"></i><i class="star st2"></i><i class="star st3"></i><i class="star st4"></i>
+    <div class="cat" style="filter:brightness(.82);"><div class="tail"></div><div class="body"></div><div class="head"><div class="ear l"></div><div class="ear r"></div><div class="face"><div class="stripe s1"></div><div class="stripe s2"></div><div class="stripe s3"></div><div class="eye l"></div><div class="eye r"></div><div class="nose"></div><div class="mouth"></div></div></div></div>
+    <div class="ground"></div>
+  </div>
+
+  <div class="panel p3" style="background:#eaf4ff;">
+    <span class="num">3</span>
+    <div class="bubble" style="left:14px;top:12px;">MEOWMBA!</div>
+    <div class="caption" style="font-weight:800;">The app store was not ready. 🚀</div>
+    <div class="cat" style="transform:scaleX(-1) rotate(6deg); right:auto; left:6%; filter:saturate(1.1);"><div class="tail"></div><div class="body"></div><div class="head"><div class="ear l"></div><div class="ear r"></div><div class="face"><div class="stripe s1"></div><div class="stripe s2"></div><div class="stripe s3"></div><div class="eye l"></div><div class="eye r"></div><div class="nose"></div><div class="mouth"></div></div></div></div>
+    <div class="ground" style="background:#ffd76e;"></div>
+  </div>
+
+</div>
+<footer>Panel 3 = proof the loop works. If this is on your screen, the agent showed its work.</footer>
+</body>
+</html>

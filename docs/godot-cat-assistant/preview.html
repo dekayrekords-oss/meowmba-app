@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cat Assistant — Godot prototype preview</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; background: #000;
+      color: #cfe9d8; font-family: ui-sans-serif, system-ui, sans-serif;
+      display: flex; flex-direction: column; align-items: center;
+      padding: 0.75rem 1rem 1.5rem; gap: 0.6rem;
+    }
+    h1 { font-size: 0.95rem; font-weight: 600; margin: 0; letter-spacing: 0.04em; }
+    p { margin: 0; color: #6a8a78; font-size: 0.8rem; max-width: 36rem; text-align: center; line-height: 1.4; }
+    canvas {
+      width: min(92vw, 520px); height: min(92vw, 520px);
+      background: #000; border-radius: 0.75rem;
+      box-shadow: 0 0 80px rgba(48, 255, 132, 0.12);
+      cursor: crosshair;
+    }
+    .row { display: flex; flex-wrap: wrap; gap: 0.4rem; justify-content: center; max-width: 40rem; }
+    button, select {
+      appearance: none; border: 1px solid #1e3a2a; background: #0a1510;
+      color: #b8e6c8; padding: 0.4rem 0.7rem; border-radius: 999px;
+      font: inherit; font-size: 0.8rem; cursor: pointer;
+    }
+    button:hover, select:hover { border-color: #30ff84; }
+    button.primary { background: #0f2a1a; border-color: #30ff84; }
+    button.active { background: #1a4030; border-color: #30ff84; color: #fff; }
+    #status { color: #7ab894; font-size: 0.78rem; min-height: 1.2em; }
+    code { color: #7dffb0; }
+  </style>
+</head>
+<body>
+  <h1>Cat Assistant (Godot 4.7) — browser port</h1>
+  <p>
+    From <code>meowmba-build2/docs/godot-prototype</code> —
+    floating features on black, almond slit eyes, moods + sample actions.
+    Move the mouse to drive gaze.
+  </p>
+  <canvas id="c" width="900" height="900"></canvas>
+  <div class="row" id="moods"></div>
+  <div class="row" id="actions"></div>
+  <div id="status">Mood: Idle</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById("c");
+  const ctx = canvas.getContext("2d");
+  const status = document.getElementById("status");
+
+  // ── geometry helpers (from cat_draw.gd) ─────────────────────────────────
+  function ellipse(c, rx, ry, segs = 40, a0 = 0, a1 = Math.PI * 2) {
+    const pts = [];
+    for (let i = 0; i <= segs; i++) {
+      const t = i / segs;
+      const a = a0 + (a1 - a0) * t;
+      pts.push({ x: c.x + Math.cos(a) * rx, y: c.y + Math.sin(a) * ry });
+    }
+    return pts;
+  }
+  function almond(c, halfW, upH, loH, upPow = 0.92, loPow = 0.55, peakShift = 0, segs = 48, rot = 0, nUp = 6, nLow = 1.9) {
+    const raw = [];
+    nUp = Math.max(1.05, nUp); nLow = Math.max(1.05, nLow);
+    for (let i = 0; i <= segs; i++) {
+      const x = -halfW + (2 * halfW * i) / segs;
+      const u = Math.max(0, Math.min(1, 1 - Math.pow(Math.abs(x / halfW), nUp)));
+      const skew = 1 + peakShift * (x / halfW);
+      raw.push({ x, y: -upH * Math.pow(u, upPow) * skew });
+    }
+    for (let i = segs - 1; i > 0; i--) {
+      const x = -halfW + (2 * halfW * i) / segs;
+      const u = Math.max(0, Math.min(1, 1 - Math.pow(Math.abs(x / halfW), nLow)));
+      raw.push({ x, y: loH * Math.pow(u, loPow) });
+    }
+    const cos = Math.cos(rot), sin = Math.sin(rot);
+    return raw.map((p) => ({
+      x: c.x + p.x * cos - p.y * sin,
+      y: c.y + p.x * sin + p.y * cos,
+    }));
+  }
+  function roundedTri(c, hw, h, round = 0.34, segs = 26) {
+    const pts = [];
+    for (let i = 0; i <= segs; i++) {
+      const t = i / segs;
+      const w = hw * ((1 - t) * (1 - round) + Math.sqrt(Math.max(0, 1 - t * t)) * round);
+      pts.push({ x: c.x - w, y: c.y - h * t });
+    }
+    for (let i = segs; i >= 0; i--) {
+      const t = i / segs;
+      const w = hw * ((1 - t) * (1 - round) + Math.sqrt(Math.max(0, 1 - t * t)) * round);
+      pts.push({ x: c.x + w, y: c.y - h * t });
+    }
+    return pts;
+  }
+  function place(poly, origin, rot) {
+    const cos = Math.cos(rot), sin = Math.sin(rot);
+    return poly.map((p) => ({
+      x: origin.x + p.x * cos - p.y * sin,
+      y: origin.y + p.x * sin + p.y * cos,
+    }));
+  }
+  function fillPoly(pts, color) {
+    if (pts.length < 3) return;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.closePath();
+    ctx.fill();
+  }
+  function strokePoly(pts, color, w) {
+    if (pts.length < 2) return;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = w;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.closePath();
+    ctx.stroke();
+  }
+  function softGlow(p, r, rgb, a) {
+    const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
+    g.addColorStop(0, `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${a})`);
+    g.addColorStop(1, `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0)`);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function deg(d) { return (d * Math.PI) / 180; }
+  function smooth01(x) { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); }
+
+  // ── palette (HDR-ish greens / pinks on black) ──────────────────────────
+  const eyeC = [48, 255, 132];
+  const earC = [255, 132, 153];
+  const noseC = [255, 122, 143];
+  const mouthC = [242, 178, 209];
+  const whiskC = [184, 230, 255];
+  const R = 130; // head_radius
+
+  // ── moods (from _pose_for) ─────────────────────────────────────────────
+  const MOODS = {
+    idle:      { open:1, pupil:0.45, ear:0, splay:12, mouth:0.30, bob:1, tilt:0, ew:1, eh:1, etilt:0, lower:0.12, etop:2, eround:0.44, eslant:5, eup:1.55 },
+    listening: { open:1.06, pupil:0.66, ear:28, splay:2, mouth:0.16, bob:0.8, tilt:4, ew:0.98, eh:1.22, etilt:-3, lower:0.04, etop:2.4, eround:0.46, eslant:7, eup:1.45 },
+    thinking:  { open:1, pupil:0.26, ear:-15, splay:26, mouth:-0.14, bob:0.9, tilt:13, ew:1.08, eh:0.60, etilt:16, lower:0.20, etop:5, eround:0.62, eslant:15, eup:1.05 },
+    happy:     { open:1, pupil:0.78, ear:24, splay:16, mouth:1.0, bob:1.6, tilt:0, ew:1.14, eh:0.50, etilt:-2, lower:0.74, etop:1.9, eround:0.42, eslant:3, eup:1.60 },
+    curious:   { open:1, pupil:0.92, ear:32, splay:5, mouth:0.10, bob:1.1, tilt:21, ew:0.94, eh:1.32, etilt:-11, lower:0, etop:1.9, eround:0.42, eslant:2, eup:1.62 },
+    sleepy:    { open:1, pupil:0.18, ear:-30, splay:30, mouth:0.20, bob:0.55, tilt:-9, ew:1.04, eh:0.24, etilt:7, lower:0.32, etop:3.2, eround:0.58, eslant:9, eup:1.20 },
+    upset:     { open:1, pupil:0.05, ear:-34, splay:30, mouth:-0.55, bob:1.15, tilt:0, ew:1.10, eh:0.82, etilt:14, lower:0.22, etop:9, eround:0.84, eslant:28, eup:0.72 },
+  };
+
+  // springs toward mood
+  const pose = { ...MOODS.idle };
+  const vel = {};
+  let moodName = "idle";
+  let t = 0;
+  let bob = 0, sway = 0, tilt = 0;
+  let gaze = { x: 0, y: 0 };
+  let mouse = { x: 0.5, y: 0.5 };
+  let blink = 1, blinking = false, blinkE = 0, nextBlink = 3, blinkTimer = 0;
+  let earTwitch = [0, 0], earTimer = [0, 0], earNext = [2, 3.1];
+  let asym = [0.03, -0.025];
+  let act = null; // { name, t, dur, apply }
+
+  function spring(key, cur, target, dt, stiff = 185, bounce = 0.42) {
+    const damp = 2 * Math.sqrt(stiff) * bounce;
+    let v = vel[key] || 0;
+    v += (target - cur) * stiff * dt - v * damp * dt;
+    vel[key] = v;
+    return cur + v * dt;
+  }
+
+  function applyMood(dt) {
+    const p = MOODS[moodName];
+    for (const k of Object.keys(p)) {
+      pose[k] = spring(k, pose[k], p[k], dt);
+    }
+  }
+
+  // ── sample actions (simplified timelines) ──────────────────────────────
+  function startAction(name) {
+    const table = {
+      "slow blink": { dur: 2.4, fn: (u) => {
+        if (u < 0.35) blink = lerp(1, 0.05, smooth01(u / 0.35));
+        else if (u < 0.55) blink = 0.05;
+        else blink = lerp(0.05, 1, smooth01((u - 0.55) / 0.45));
+      }},
+      "yawn": { dur: 2.6, fn: (u) => {
+        const jaw = Math.sin(Math.min(1, u * 1.2) * Math.PI);
+        pose.eh = lerp(pose.eh, 0.35, jaw * 0.5);
+        pose.mouth = lerp(0.3, -0.2, jaw);
+        pose.ear = lerp(0, -12, jaw);
+        act.jaw = jaw * 0.85;
+      }},
+      "startle": { dur: 1.5, fn: (u) => {
+        const k = Math.exp(-u * 4);
+        pose.eh = lerp(1, 1.4, k);
+        pose.pupil = lerp(0.45, 0.15, k);
+        pose.ear = lerp(0, 30, k);
+        pose.splay = lerp(12, 4, k);
+        act.offsetY = -18 * k * Math.sin(u * Math.PI * 6);
+      }},
+      "purr": { dur: 3.2, fn: (u) => {
+        pose.mouth = 0.7 + 0.15 * Math.sin(u * Math.PI * 12);
+        pose.lower = 0.45;
+        pose.eh = 0.55;
+        pose.ear = 18;
+        act.offsetY = Math.sin(u * Math.PI * 20) * 1.5;
+      }},
+      "wink": { dur: 1.0, fn: (u) => {
+        const k = u < 0.4 ? u / 0.4 : u < 0.55 ? 1 : 1 - (u - 0.55) / 0.45;
+        act.wink = k; // right eye
+      }},
+      "excited": { dur: 1.8, fn: (u) => {
+        pose.eh = 1.25;
+        pose.pupil = 0.85;
+        pose.ear = 28;
+        pose.mouth = 0.8;
+        pose.bob = 2.0;
+        act.offsetY = Math.sin(u * Math.PI * 8) * 8;
+      }},
+      "blep": { dur: 2.6, fn: (u) => {
+        const k = u < 0.2 ? u / 0.2 : u > 0.85 ? (1 - u) / 0.15 : 1;
+        act.tongue = k;
+        pose.eh = 0.7;
+        pose.lower = 0.25;
+      }},
+      "hiss": { dur: 1.6, fn: (u) => {
+        const k = Math.sin(Math.min(1, u * 1.5) * Math.PI);
+        pose.pupil = 0.04;
+        pose.etilt = 14;
+        pose.eslant = 22;
+        pose.ear = -30;
+        pose.mouth = -0.4;
+        act.jaw = 0.35 * k;
+        act.curl = k;
+      }},
+    };
+    const a = table[name];
+    if (!a) return;
+    act = { name, t: 0, dur: a.dur, fn: a.fn, jaw: 0, tongue: 0, wink: 0, curl: 0, offsetY: 0 };
+    status.textContent = `Action: ${name}`;
+  }
+
+  // ── draw ───────────────────────────────────────────────────────────────
+  function draw() {
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+    const cx = W / 2 + sway;
+    const cy = H * 0.48 + bob + (act?.offsetY || 0);
+    const headTilt = deg(pose.tilt) * 0.35 + tilt;
+
+    // motes
+    for (let i = 0; i < 18; i++) {
+      const depth = 0.3 + (i % 5) * 0.12;
+      const mx = cx + Math.sin(t * 0.3 + i) * R * 2.2 * depth;
+      const my = ((i * 73 + t * (20 + i % 7) * R * 0.15) % (H + 100)) - 50;
+      const tw = 0.4 + 0.6 * Math.sin(t * 1.5 + i);
+      softGlow({ x: mx, y: my }, 6 * depth, whiskC, 0.08 * tw * depth);
+    }
+
+    softGlow({ x: cx, y: cy + R * 0.05 }, R * 3.0, eyeC, 0.05);
+    softGlow({ x: cx, y: cy + R * 0.05 }, R * 1.7, eyeC, 0.035);
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(headTilt);
+
+    // ears
+    for (const side of [-1, 1]) {
+      const idx = side < 0 ? 0 : 1;
+      const base = { x: side * R * 0.58, y: -R * 0.72 };
+      const twitch = earTwitch[idx];
+      const wobble = Math.sin((1 - twitch) * Math.PI * 5) * twitch * 7;
+      const idle = Math.sin(t * 1.15 + asym[idx] * 2.6 + idx * 2.4) * 2.4;
+      const rot = deg(side * (pose.splay - pose.ear * 0.5) + wobble + idle);
+      const hw = R * 0.30, hh = R * 0.62;
+      const pOut = place(roundedTri({ x: 0, y: 0 }, hw, hh, 0.3, 28), base, rot);
+      const pIn = place(roundedTri({ x: 0, y: -hh * 0.09 }, hw * 0.6, hh * 0.66, 0.34, 22), base, rot);
+      softGlow({ x: base.x, y: base.y - hh * 0.35 }, hh * 1.1, earC, 0.12);
+      fillPoly(pOut, `rgba(${earC[0]*0.12|0},${earC[1]*0.06|0},${earC[2]*0.07|0},0.88)`);
+      fillPoly(pIn, `rgba(${earC[0]},${earC[1]},${earC[2]},0.28)`);
+      strokePoly(pOut, `rgba(${earC[0]},${earC[1]},${earC[2]},0.95)`, 3.2);
+    }
+
+    // eyes
+    for (const side of [-1, 1]) {
+      const idx = side < 0 ? 0 : 1;
+      const eye = { x: side * R * 0.50, y: -R * 0.08 };
+      let openness = clamp(blink * pose.open, 0, 1.3);
+      if (act?.wink) {
+        const shut = side > 0; // right eye wink
+        if (shut) openness *= 1 - act.wink;
+      }
+      const breath = 1 + 0.03 * Math.sin(t * 1.7 + asym[idx] * 3);
+      const hw = R * 0.40 * pose.ew * breath * lerp(0.72, 1, clamp(openness, 0, 1));
+      let upBase = R * 0.23 * pose.eup;
+      let loBase = R * 0.37;
+      const closing = 1 - clamp(openness, 0, 1);
+      const mid = (upBase + loBase) * 0.5;
+      upBase = lerp(upBase, mid, closing);
+      loBase = lerp(loBase, mid, closing);
+      const up = upBase * pose.eh * Math.max(0.075, openness) * (1 - pose.lower * 0.18);
+      const lo = loBase * pose.eh * Math.max(0.075, openness) * (1 - pose.lower * 0.85);
+      const slantK = lerp(0.3, 1, clamp(openness, 0, 1));
+      const rot = deg(-side * (pose.eslant * slantK + pose.etilt) + asym[idx] * 1.5);
+      const ap = almond(eye, hw, up, lo, 0.92, pose.eround, side * 0.06, 52, rot, pose.etop, 1.9);
+
+      softGlow(eye, hw * 3.0, eyeC, 0.14);
+      fillPoly(ap, "rgb(8,18,14)");
+
+      if (openness > 0.06) {
+        // clip iris by drawing to offscreen... simplified: draw iris then stroke aperture on top
+        const iris = {
+          x: eye.x + gaze.x * hw * 0.30,
+          y: eye.y + gaze.y * (up + lo) * 0.18,
+        };
+        const ir = Math.min(hw * 0.66, (up + lo) * 0.60);
+        const fx = lerp(1, 0.7, Math.abs(gaze.x));
+        const fy = lerp(1, 0.86, Math.abs(gaze.y));
+
+        ctx.save();
+        // clip to almond
+        ctx.beginPath();
+        ctx.moveTo(ap[0].x, ap[0].y);
+        for (let i = 1; i < ap.length; i++) ctx.lineTo(ap[i].x, ap[i].y);
+        ctx.closePath();
+        ctx.clip();
+
+        // iris rings
+        for (const [s, a] of [[1, 0.25], [0.86, 0.4], [0.66, 0.55], [0.44, 0.72]]) {
+          ctx.fillStyle = `rgba(${eyeC[0]},${eyeC[1]},${eyeC[2]},${a})`;
+          ctx.beginPath();
+          ctx.ellipse(iris.x, iris.y, ir * s * fx, ir * s * fy, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        // fibers
+        ctx.strokeStyle = `rgba(${eyeC[0]},${eyeC[1]},${eyeC[2]},0.15)`;
+        ctx.lineWidth = 1.4;
+        for (let i = 0; i < 20; i++) {
+          const a = (i / 20) * Math.PI * 2 + 0.11;
+          ctx.beginPath();
+          ctx.moveTo(iris.x + Math.cos(a) * ir * 0.32 * fx, iris.y + Math.sin(a) * ir * 0.32 * fy);
+          ctx.lineTo(iris.x + Math.cos(a) * ir * 0.95 * fx, iris.y + Math.sin(a) * ir * 0.95 * fy);
+          ctx.stroke();
+        }
+        // slit pupil
+        const pw = ir * lerp(0.1, 0.56, clamp(pose.pupil, 0, 1));
+        const pTop = eye.y - up * 1.1;
+        const pBot = eye.y + lo * 1.1;
+        const slit = [];
+        const steps = 22;
+        for (let i = 0; i <= steps; i++) {
+          const tt = i / steps;
+          const w = pw * Math.pow(1 - Math.pow(Math.abs(tt * 2 - 1), 1.7), 0.48);
+          slit.push({ x: iris.x + w * fx, y: lerp(pTop, pBot, tt) });
+        }
+        for (let i = steps - 1; i > 0; i--) {
+          const tt = i / steps;
+          const w = pw * Math.pow(1 - Math.pow(Math.abs(tt * 2 - 1), 1.7), 0.48);
+          slit.push({ x: iris.x - w * fx, y: lerp(pTop, pBot, tt) });
+        }
+        fillPoly(slit, "#000");
+        // lid shadow
+        ctx.fillStyle = "rgba(0,0,0,0.38)";
+        ctx.beginPath();
+        ctx.ellipse(eye.x, eye.y - up * 1.02, hw * 1.35, up * 0.92, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // catchlight
+        const cl = { x: iris.x + side * ir * 0.26, y: iris.y - ir * 0.34 };
+        softGlow(cl, ir * 0.7, [255, 255, 255], 0.25);
+        ctx.fillStyle = "rgba(255,255,255,0.9)";
+        ctx.beginPath();
+        ctx.ellipse(cl.x, cl.y, ir * 0.18, ir * 0.12, -0.4, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+      }
+      strokePoly(ap, `rgba(${eyeC[0]},${eyeC[1]},${eyeC[2]},0.85)`, 2.6);
+    }
+
+    // nose
+    const nc = { x: 0, y: R * 0.42 };
+    const nw = R * 0.115, nh = R * 0.125;
+    const nOut = place(roundedTri({ x: 0, y: 0 }, nw, nh, 0.44, 24), nc, Math.PI);
+    softGlow(nc, nw * 3.5, noseC, 0.12);
+    fillPoly(nOut, `rgba(${noseC[0]},${noseC[1]},${noseC[2]},0.75)`);
+    strokePoly(nOut, `rgba(${noseC[0]},${noseC[1]},${noseC[2]},1)`, 2);
+
+    // mouth
+    const lift = R * 0.105 * clamp(pose.mouth, -1, 1);
+    const apex = { x: 0, y: R * 0.52 };
+    const jaw = act?.jaw || 0;
+    ctx.strokeStyle = `rgba(${mouthC[0]},${mouthC[1]},${mouthC[2]},0.9)`;
+    ctx.lineWidth = 2.4;
+    ctx.lineCap = "round";
+    for (const s of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(apex.x, apex.y);
+      ctx.quadraticCurveTo(s * R * 0.08, apex.y + R * 0.08, s * R * 0.16, apex.y + R * 0.05 - lift);
+      ctx.stroke();
+    }
+    if (jaw > 0.02) {
+      const drop = R * (0.03 + 0.28 * jaw);
+      ctx.fillStyle = "rgba(30,3,12,0.95)";
+      ctx.beginPath();
+      ctx.moveTo(-R * 0.14, apex.y + R * 0.04);
+      ctx.quadraticCurveTo(0, apex.y + drop + R * 0.08, R * 0.14, apex.y + R * 0.04);
+      ctx.closePath();
+      ctx.fill();
+      if ((act?.tongue || 0) > 0.05 || jaw > 0.3) {
+        const th = R * (0.04 + 0.05 * Math.max(jaw, act?.tongue || 0));
+        ctx.fillStyle = "rgba(255,110,138,0.75)";
+        ctx.beginPath();
+        ctx.ellipse(0, apex.y + drop * 0.55, R * 0.07, th, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    if ((act?.curl || 0) > 0.05) {
+      const fl = R * 0.1 * act.curl;
+      for (const s of [-1, 1]) {
+        ctx.fillStyle = "rgba(255,250,245,0.95)";
+        ctx.beginPath();
+        ctx.moveTo(s * R * 0.07, apex.y + R * 0.06);
+        ctx.lineTo(s * R * 0.1, apex.y + R * 0.06);
+        ctx.lineTo(s * R * 0.08, apex.y + R * 0.06 + fl);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+
+    // whiskers
+    ctx.strokeStyle = `rgba(${whiskC[0]},${whiskC[1]},${whiskC[2]},0.45)`;
+    ctx.lineWidth = 1.6;
+    for (const s of [-1, 1]) {
+      for (let i = -1; i <= 1; i++) {
+        const y0 = R * 0.48 + i * R * 0.04;
+        const phase = Math.sin(t * 2 + i) * 0.08;
+        ctx.beginPath();
+        ctx.moveTo(s * R * 0.12, y0);
+        ctx.quadraticCurveTo(s * R * 0.28, y0 + phase * R + i * 4, s * R * 0.48, y0 + i * R * 0.05 + phase * R);
+        ctx.stroke();
+      }
+    }
+
+    ctx.restore();
+  }
+
+  // ── update ─────────────────────────────────────────────────────────────
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    t += dt;
+
+    applyMood(dt);
+
+    // float
+    bob = Math.sin(t * 1.1 * pose.bob) * 10 + Math.sin(t * 2.3) * 3;
+    sway = Math.sin(t * 0.7) * 6;
+    tilt = deg(Math.sin(t * 0.9) * 2 + pose.tilt * 0.15);
+
+    // gaze toward mouse (normalized -1..1)
+    const tx = (mouse.x - 0.5) * 2;
+    const ty = (mouse.y - 0.5) * 2;
+    gaze.x = lerp(gaze.x, clamp(tx, -1, 1), 1 - Math.exp(-dt * 8));
+    gaze.y = lerp(gaze.y, clamp(ty, -1, 1), 1 - Math.exp(-dt * 8));
+
+    // blink
+    if (!act || act.name !== "slow blink") {
+      blinkTimer += dt;
+      if (!blinking && blinkTimer > nextBlink) {
+        blinking = true; blinkE = 0; blinkTimer = 0;
+        nextBlink = 2.2 + Math.random() * 3.5;
+      }
+      if (blinking) {
+        blinkE += dt;
+        if (blinkE < 0.075) blink = 1 - blinkE / 0.075;
+        else if (blinkE < 0.18) blink = smooth01((blinkE - 0.075) / 0.105);
+        else { blinking = false; blink = 1; }
+      }
+    }
+
+    // ear twitch
+    for (let i = 0; i < 2; i++) {
+      earTimer[i] += dt;
+      if (earTimer[i] > earNext[i]) {
+        earTwitch[i] = 1;
+        earTimer[i] = 0;
+        earNext[i] = 2 + Math.random() * 4;
+      }
+      earTwitch[i] = Math.max(0, earTwitch[i] - dt * 3.5);
+    }
+
+    // action
+    if (act) {
+      act.t += dt;
+      const u = clamp(act.t / act.dur, 0, 1);
+      act.fn(u);
+      if (u >= 1) {
+        act = null;
+        status.textContent = `Mood: ${moodName}`;
+      }
+    }
+
+    draw();
+    requestAnimationFrame(frame);
+  }
+
+  canvas.addEventListener("pointermove", (e) => {
+    const r = canvas.getBoundingClientRect();
+    mouse.x = (e.clientX - r.left) / r.width;
+    mouse.y = (e.clientY - r.top) / r.height;
+  });
+
+  // UI
+  const moodRow = document.getElementById("moods");
+  Object.keys(MOODS).forEach((m) => {
+    const b = document.createElement("button");
+    b.textContent = m;
+    if (m === "idle") b.classList.add("active");
+    b.onclick = () => {
+      moodName = m;
+      moodRow.querySelectorAll("button").forEach((x) => x.classList.remove("active"));
+      b.classList.add("active");
+      status.textContent = `Mood: ${m}`;
+    };
+    moodRow.appendChild(b);
+  });
+  const actRow = document.getElementById("actions");
+  ["slow blink", "purr", "startle", "yawn", "wink", "excited", "blep", "hiss"].forEach((name) => {
+    const b = document.createElement("button");
+    b.className = "primary";
+    b.textContent = name;
+    b.onclick = () => startAction(name);
+    actRow.appendChild(b);
+  });
+
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

@@ -23,7 +23,31 @@ object SpokenText {
         if (words.size == 1) {
             val w = words[0]
             if (w.length <= 2 && w !in SHORT_OK) return false
+            // Single-word cut-offs: "Thus", "But", "So" — the zipformer catches
+            // the connector right before the user pauses, then fires a final.
+            // They are never a complete turn (measured on device firing the
+            // same greeting repeatedly). SHORT_OK words stay legal ("ok", "no").
+            if (w in CUTOFF_MARKERS) return false
         }
+        // Stutter repetition marks a tail of room noise / echo, not a real
+        // utterance: "and and", "but i i am and and". A short run (<=4 words)
+        // with one immediate repeat, or a longer run with two or more, is cut-off
+        // garbage — natural "no no no" stays one word outside this rule.
+        if (words.size <= 4) {
+            for (i in 1 until words.size) {
+                if (words[i] == words[i - 1]) return false
+            }
+        } else if (words.size <= 8) {
+            var repeats = 0
+            for (i in 1 until words.size) {
+                if (words[i] == words[i - 1]) repeats++
+            }
+            if (repeats >= 2) return false
+        }
+        // A short string of ONLY connectors/pronouns/quantifiers with no content
+        // word carries nothing to answer: "one of the fifteen", "not then i'm
+        // just planning". Requires at least one word outside NON_CONTENT.
+        if (words.size <= 4 && words.all { it in NON_CONTENT }) return false
         return true
     }
 
@@ -202,5 +226,36 @@ object SpokenText {
         "ally", "ially", "ious", "uous", "izing", "ising", "ated", "ator",
         "ical", "icle", "ency", "ance", "ence", "ough", "ight", "ound",
         "yeah", "yep", "mmm", "uhhuh", "uhuh", "mmhm",
+    )
+
+    /**
+     * Discourse markers the zipformer catches as a lone word right before the
+     * user pauses for a second — "Thus…", "But…", "So…". Alone they are never a
+     * complete ask; they used to each trigger a reply (a run of identical
+     * greetings on device), so a single one is not a usable turn.
+     */
+    private val CUTOFF_MARKERS = setOf(
+        "thus", "but", "so", "then", "well", "now", "anyway", "anyhow",
+        "because", "however", "therefore", "consequently", "meanwhile",
+        "besides", "yeah", "hmm", "okay",
+    )
+
+    /**
+     * Connectors / pronouns / helpers / small numbers that carry no subject or
+     * predicate of their own. A short utterance made entirely of these is a
+     * garbled fragment, not a question ("one of the fifteen", "but i i am and
+     * and") — answerable nothing.
+     */
+    private val NON_CONTENT = FILLERS + setOf(
+        "but", "or", "so", "then", "just", "now", "because", "thus", "however",
+        "therefore", "anyway", "well", "i", "i'm", "im", "ive", "ill", "id",
+        "you", "you're", "youre", "we", "we're", "were", "we've", "weve",
+        "they", "they're", "theyre", "it", "it's", "its", "he", "she",
+        "that", "this", "these", "those", "there", "my", "your", "our",
+        "their", "am", "is", "are", "was", "been", "be", "not", "another",
+        "one", "two", "three", "four", "five", "six", "seven", "eight",
+        "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen",
+        "sixteen", "twenty", "thirty", "forty", "fifty", "sixty", "seventy",
+        "eighty", "ninety", "hundred", "planning", "making",
     )
 }

@@ -28,6 +28,7 @@ class VoiceModelStore(private val context: Context) {
     val root: File = File(context.filesDir, "voice_models")
     val kwsDir: File = File(root, VoiceModelPack.KWS_DIR)
     val asrDir: File = File(root, VoiceModelPack.ASR_DIR)
+    val whisperDir: File = File(root, VoiceModelPack.WHISPER_DIR)
 
     fun kwsReady(): Boolean = VoiceModelPack.kwsRequired.all { name ->
         File(kwsDir, name).let { it.isFile && it.length() > 0L }
@@ -40,6 +41,9 @@ class VoiceModelStore(private val context: Context) {
         File(root, VoiceModelPack.VAD).let { it.isFile && it.length() > 0L }
 
     fun asrReady(): Boolean = resolvedAsr() != null
+
+    /** Local Whisper (offline batch transcriber). See [VoiceModelPack.WHISPER_DIR]. */
+    fun whisperReady(): Boolean = VoiceModelPack.whisperComplete(whisperDir)
 
     /**
      * Prefer the 2023-06-26 pack only when every file meets the published

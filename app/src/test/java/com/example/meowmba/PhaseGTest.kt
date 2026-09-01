@@ -82,22 +82,6 @@ class PhaseGTest {
     // ── G2: motor mapping ─────────────────────────────────────────────────
 
     @Test
-    fun `every built-in animation maps to servo commands`() {
-        listOf("ear wiggle", "happy bop", "slow blink", "paw lick").forEach {
-            assertTrue("no servos for $it", FaceMotorMap.mapAnimation(it).isNotEmpty())
-        }
-    }
-
-    @Test
-    fun `every mood has a resting pose and expression`() {
-        Mood.values().forEach { mood ->
-            val (servos, expression) = FaceMotorMap.mapMood(mood)
-            assertTrue(servos.isNotEmpty())
-            assertTrue(expression.isNotBlank())
-        }
-    }
-
-    @Test
     fun `followFace looks at the subject on both axes and recenters`() {
         val center = FaceMotorMap.followFace(0f, 0f)
         assertEquals(90f, center[FaceMotorMap.SERVO_HEAD_PAN]!!, 0.01f)

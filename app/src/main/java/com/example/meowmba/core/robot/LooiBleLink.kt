@@ -14,6 +14,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import java.util.UUID
 import java.util.concurrent.CountDownLatch
@@ -56,6 +59,10 @@ class LooiBleLink(private val context: Context) {
         private set
     /** Fired on notable transitions so RobotManager can mirror it to the UI. */
     var onStateChange: ((LinkState, String) -> Unit)? = null
+
+    private val _sensorFrames = MutableSharedFlow<ByteArray>()
+    /** Raw bytes from the fed9 sensor characteristic. Feed to LooiSensorParser. */
+    val sensorFrames: SharedFlow<ByteArray> = _sensorFrames.asSharedFlow()
 
     private var commandChar: BluetoothGattCharacteristic? = null
     private var headlightChar: BluetoothGattCharacteristic? = null
@@ -286,6 +293,18 @@ class LooiBleLink(private val context: Context) {
         override fun onCharacteristicRead(g: BluetoothGatt, ch: BluetoothGattCharacteristic, status: Int) {
             if (this@LooiBleLink.gatt !== g) return
             if (drainingInit) advanceGattOps(g)
+        }
+
+        @Suppress("DEPRECATION")
+        override fun onCharacteristicChanged(
+            g: BluetoothGatt,
+            ch: BluetoothGattCharacteristic,
+            value: ByteArray,
+        ) {
+            if (this@LooiBleLink.gatt !== g) return
+            if (ch.uuid == LooiBleProtocol.CHAR_SENSORS) {
+                runCatching { _sensorFrames.tryEmit(value.copyOf()) }
+            }
         }
     }
 

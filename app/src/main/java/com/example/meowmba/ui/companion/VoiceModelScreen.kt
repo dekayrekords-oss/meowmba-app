@@ -180,8 +180,6 @@ private fun VoiceBackendCard(
                 imageVector = when {
                     !enabled && status.backend.isCloud -> Icons.Default.CloudOff
                     status.backend.isCloud -> Icons.Default.Cloud
-                    status.backend == AsrBackend.PLATFORM -> Icons.Default.PhoneAndroid
-                    status.backend == AsrBackend.AUTO -> Icons.Default.Bolt
                     else -> Icons.Default.Mic
                 },
                 contentDescription = null,
@@ -206,15 +204,6 @@ private fun VoiceBackendCard(
                     color = if (enabled) Color.Gray else Color(0xFF545D68),
                     fontSize = 11.sp,
                 )
-                if (status.backend == AsrBackend.GEMINI_CLOUD && enabled) {
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        cloudModel,
-                        color = Color(0xFF8B949E),
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 10.sp,
-                    )
-                }
                 if (!enabled && status.reason.isNotBlank()) {
                     Spacer(Modifier.height(5.dp))
                     Text(

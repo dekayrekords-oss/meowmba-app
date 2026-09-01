@@ -80,6 +80,19 @@ class SherpaAsrEngine(
     var lastHeardPcm: ShortArray = ShortArray(0)
         private set
 
+    /**
+     * Optional local-Whisper refiner. When set, a finished utterance is also
+     * transcribed by Whisper and the FINAL text is replaced with Whisper's —
+     * the zipformer still drives the live partials and endpointing.
+     *
+     * This is the whole point of the Whisper backend: the streaming zipformer
+     * is fast but measurably mishears, and Whisper is a batch model that
+     * cannot stream. Hybrid = live feedback stays instant, the answered text
+     * is the accurate one. Null (the default) keeps today's behaviour exactly.
+     */
+    @Volatile
+    var whisperRefiner: WhisperAsrEngine? = null
+
     override fun startListening(onResult: (String) -> Unit, onError: (Int) -> Unit) {
         this.onResult = onResult
         this.onError = onError
@@ -265,17 +278,41 @@ class SherpaAsrEngine(
                 if (rec.isEndpoint(s)) {
                     rec.reset(s)
                     if (text.isNotBlank()) {
-                        lastHeardPcm = uttered.toShortArray()
+                        val pcm = uttered.toShortArray()
+                        lastHeardPcm = pcm
                         uttered.clear()
                         Log.i(TAG, "always-on ASR: \"$text\"")
                         val deliver = onResult
-                        // Launch, don't withContext: processUserSpeech cancels
-                        // in-flight Ktor jobs, and those cancel handlers can
-                        // throw (OkHttp Unbalanced enter/exit). That must not
-                        // tear down this capture loop or crash the main thread
-                        // as a CompletionHandlerException.
-                        scope.launch(Dispatchers.Main.immediate) {
-                            runCatching { deliver?.invoke(text) }
+                        val refiner = whisperRefiner
+                        if (refiner != null) {
+                            // Refine off the capture thread, then deliver on
+                            // main. Launch, don't withContext: processUserSpeech
+                            // cancels in-flight Ktor jobs, and those cancel
+                            // handlers can throw (OkHttp Unbalanced
+                            // enter/exit). That must not tear down this capture
+                            // loop or crash the main thread as a
+                            // CompletionHandlerException.
+                            scope.launch(Dispatchers.Default) {
+                                val refined = runCatching { refiner.transcribe(pcm) }
+                                    .onFailure { Log.w(TAG, "whisper refine failed", it) }
+                                    .getOrNull()
+                                    ?.takeIf { SpokenText.isUsable(it) }
+                                if (refined != null && refined != text) {
+                                    Log.i(TAG, "whisper refined: \"$text\" -> \"$refined\"")
+                                }
+                                withContext(Dispatchers.Main.immediate) {
+                                    runCatching { deliver?.invoke(refined ?: text) }
+                                }
+                            }
+                        } else {
+                            // Launch, don't withContext: processUserSpeech cancels
+                            // in-flight Ktor jobs, and those cancel handlers can
+                            // throw (OkHttp Unbalanced enter/exit). That must not
+                            // tear down this capture loop or crash the main thread
+                            // as a CompletionHandlerException.
+                            scope.launch(Dispatchers.Main.immediate) {
+                                runCatching { deliver?.invoke(text) }
+                            }
                         }
                     } else {
                         uttered.clear()

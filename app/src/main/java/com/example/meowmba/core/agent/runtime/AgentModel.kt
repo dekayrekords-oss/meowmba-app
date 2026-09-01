@@ -108,12 +108,12 @@ object AgentRegistry {
         AgentDefinition(
             id = "research", name = "Scout",
             purpose = "Searches the web and memory for information.",
-            allowedTools = setOf("memory.search", "web.search")
+            allowedTools = setOf("memory.search", "web.search", "web.fetch")
         ),
         AgentDefinition(
             id = "browser", name = "Weaver",
             purpose = "Builds HTML and scrapes pages in the swipe-left agent browser.",
-            allowedTools = setOf("web.browser", "web.search")
+            allowedTools = setOf("web.browser", "web.search", "web.fetch")
         ),
         AgentDefinition(
             id = "email", name = "Post",

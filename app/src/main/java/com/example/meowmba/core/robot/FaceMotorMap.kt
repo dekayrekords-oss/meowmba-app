@@ -3,9 +3,14 @@ package com.example.meowmba.core.robot
 import com.example.meowmba.core.personality.Mood
 
 /**
- * Maps every avatar behavior (built-in animations, mood, IMU tilt) to servo
- * commands for a physical LOOI-style body. Channel layout is provisional —
- * swap freely when real hardware arrives; the mapping is pure and tested.
+ * Maps mood, IMU tilt and face tracking to a physical body.
+ *
+ * Mood now speaks [BodyVerb] — the LOOI base's own vocabulary. It used to emit
+ * servo angles for ears, a tail and a pan axis the hardware does not have, of
+ * which four channels were silently dropped in translation.
+ *
+ * [balanceTilt], [panForFace] and [followFace] still speak servo angles: they
+ * drive the legacy servo path and are unrelated to the clip-driven body.
  */
 object FaceMotorMap {
     const val SERVO_HEAD_TILT = 0
@@ -17,23 +22,14 @@ object FaceMotorMap {
 
     private const val CENTER = 90f
 
-    /** Built-in avatar animation → servo frame. */
-    fun mapAnimation(name: String): Map<Int, Float> = when (name) {
-        "ear wiggle" -> mapOf(SERVO_EAR_LEFT to 70f, SERVO_EAR_RIGHT to 110f)
-        "happy bop" -> mapOf(SERVO_BODY to 100f, SERVO_TAIL to 120f)
-        "slow blink" -> mapOf(SERVO_HEAD_TILT to 85f)
-        "paw lick" -> mapOf(SERVO_HEAD_TILT to 75f, SERVO_TAIL to 80f)
-        else -> mapOf(SERVO_HEAD_PAN to CENTER)
-    }
-
-    /** Mood → resting servo pose + expression name. */
-    fun mapMood(mood: Mood): Pair<Map<Int, Float>, String> = when (mood) {
-        Mood.EXCITED -> mapOf(SERVO_BODY to 100f, SERVO_TAIL to 120f, SERVO_EAR_LEFT to 100f, SERVO_EAR_RIGHT to 100f) to "happy"
-        Mood.SLEEPY -> mapOf(SERVO_HEAD_TILT to 75f, SERVO_BODY to 80f) to "sleepy"
-        Mood.STARTLED -> mapOf(SERVO_EAR_LEFT to 60f, SERVO_EAR_RIGHT to 60f, SERVO_HEAD_TILT to 100f) to "alert"
-        Mood.PROUD -> mapOf(SERVO_HEAD_TILT to 100f, SERVO_TAIL to 110f) to "proud"
-        Mood.CURIOUS -> mapOf(SERVO_HEAD_PAN to 100f, SERVO_EAR_LEFT to 105f) to "curious"
-        Mood.CONTENT -> mapOf(SERVO_HEAD_TILT to CENTER, SERVO_BODY to CENTER) to "content"
+    /** Mood → resting body pose + expression name. Never a drive. */
+    fun mapMood(mood: Mood): Pair<List<BodyVerb>, String> = when (mood) {
+        Mood.EXCITED -> listOf(BodyVerb.Neck(-0.4f), BodyVerb.Light(true)) to "happy"
+        Mood.SLEEPY -> listOf(BodyVerb.Neck(0.6f), BodyVerb.Light(false)) to "sleepy"
+        Mood.STARTLED -> listOf(BodyVerb.Neck(-0.7f), BodyVerb.Light(true)) to "alert"
+        Mood.PROUD -> listOf(BodyVerb.Neck(-0.5f), BodyVerb.Light(true)) to "proud"
+        Mood.CURIOUS -> listOf(BodyVerb.Neck(-0.2f), BodyVerb.Light(true)) to "curious"
+        Mood.CONTENT -> listOf(BodyVerb.Neck(0f), BodyVerb.Light(true)) to "content"
     }
 
     /**
@@ -49,14 +45,14 @@ object FaceMotorMap {
      * Face tracking → head pan. [offsetX] is the face's horizontal position
      * normalized to -1..1 (negative = subject left of frame). A small deadzone
      * (±0.1) keeps jitter from chattering the servo at center; the head pans
-     * ±45° to follow the face and recenters when the face leaves the frame
+     * ±35° to follow the face and recenters when the face leaves the frame
      * ([offsetX] is null there — callers pass a centered value or empty map).
      */
     fun panForFace(offsetX: Float?): Map<Int, Float> {
         if (offsetX == null) return mapOf(SERVO_HEAD_PAN to CENTER)
         val clamped = offsetX.coerceIn(-1f, 1f)
-        if (kotlin.math.abs(clamped) < 0.06f) return mapOf(SERVO_HEAD_PAN to CENTER)
-        return mapOf(SERVO_HEAD_PAN to CENTER + clamped * 50f)
+        if (kotlin.math.abs(clamped) < 0.1f) return mapOf(SERVO_HEAD_PAN to CENTER)
+        return mapOf(SERVO_HEAD_PAN to CENTER + clamped * 35f)
     }
 
     /**
