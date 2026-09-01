@@ -108,12 +108,21 @@ object AgentRegistry {
         AgentDefinition(
             id = "research", name = "Scout",
             purpose = "Searches the web and memory for information.",
-            allowedTools = setOf("memory.search", "web.search", "web.fetch")
+            allowedTools = setOf(
+                "memory.search", "web.search", "web.fetch",
+                "browser.navigate", "browser.read", "browser.links", "browser.html",
+                "browser.click", "browser.type", "browser.scroll",
+            )
         ),
         AgentDefinition(
             id = "browser", name = "Weaver",
-            purpose = "Builds HTML and scrapes pages in the swipe-left agent browser.",
-            allowedTools = setOf("web.browser", "web.search", "web.fetch")
+            purpose = "Drives a real browser — an offscreen WebView exposed as MCP tools. " +
+                "Can navigate, read pages, follow links, click, type, and scroll.",
+            allowedTools = setOf(
+                "browser.navigate", "browser.read", "browser.links", "browser.html",
+                "browser.click", "browser.type", "browser.scroll",
+                "web.search", "web.fetch",
+            )
         ),
         AgentDefinition(
             id = "email", name = "Post",

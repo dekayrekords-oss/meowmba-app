@@ -1055,6 +1055,18 @@ class CompanionViewModel(
         toolRegistry.register(WebSearchTool())
         toolRegistry.register(WebFetchTool())
         val appContext = secureStorage?.context
+        // Local browser, exposed to the agent as MCP tools. The swipe-left
+        // panel is gone; this is the engine that replaced it — a WebView the
+        // user never sees, fronted by browser.navigate/read/click/type/...
+        // so the model can still drive a real page.
+        appContext?.let { ctx ->
+            offscreenBrowser = com.example.meowmba.core.browser.OffscreenBrowser(ctx)
+            mcpBrowser = com.example.meowmba.core.mcp.McpBrowserServer(offscreenBrowser!!)
+            com.example.meowmba.core.mcp.McpToolBridge(mcpBrowser!!)
+                .tools()
+                .forEach { toolRegistry.register(it) }
+            fuLog("MCP browser tools registered")
+        }
         // Phase G1: periodic mood tick + optional idle chatter (max 1/hour).
         // Runs on Dispatchers.Default: the real-time delay must NOT be driven by
         // unit-test virtual clocks (an infinite delay loop under advanceUntilIdle
@@ -1764,6 +1776,9 @@ class CompanionViewModel(
         alwaysOnSessionWatchdog?.cancel()
         stopWakeLoopAndRelease()
         (currentProvider as? LiteRtProvider)?.close()
+        // The offscreen WebView holds a renderer process — not releasing it
+        // leaks a native browser process for the life of the app.
+        offscreenBrowser?.detach()
         // Leaving the inventory service bound would keep that app's process alive for as
         // long as this one lives, for nobody's benefit.
         inventoryClient?.unbind()
@@ -2471,20 +2486,25 @@ class CompanionViewModel(
         }
     }
 
-    /** Run a web search live in the browser panel. */
+    /** Run a web search in a real browser (Chrome) rather than the app panel. */
     fun showSearchInBrowser(query: String) {
-        if (!_uiState.value.showBrowser) toggleBrowser()
+        val ctx = secureStorage?.context
         val url = "https://www.google.com/search?q=" +
             java.net.URLEncoder.encode(query, "UTF-8")
-        viewModelScope.launch {
-            // Give the WebView a beat to attach before we drive it.
-            delay(700)
-            com.example.meowmba.core.browser.WebViewBridge.evaluate(
-                "window.location.href = '$url'; 'searching'"
-            ) {}
-            _uiState.value = _uiState.value.copy(captionText = "Searching for \"$query\" in the browser.")
+        if (ctx != null) {
+            val intent = android.content.Intent(
+                android.content.Intent.ACTION_VIEW,
+                android.net.Uri.parse(url),
+            ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (startInChrome(ctx, intent)) {
+                _uiState.value = _uiState.value.copy(
+                    captionText = "Searching for \"$query\" in Chrome.",
+                )
+                speak("Searching for that in the browser now.")
+                return
+            }
         }
-        speak("Searching for that in the browser now.")
+        speak("I couldn't open a browser for that.")
     }
 
     /** "search X in/on <app>": launch the app's search screen via deep link. */
@@ -2545,27 +2565,83 @@ class CompanionViewModel(
             .maxByOrNull { it.lastModified() }
     }
 
-    /** Render one artifact in the browser panel (opens the panel if needed). */
+    /**
+     * Show one generated artifact by handing it to a real browser (Chrome).
+     *
+     * This replaced the in-app WebView panel. The panel swallowed ALL speech
+     * while it was open (every utterance became a browser goal), which is why
+     * "act like a dog" stopped performing, and it covered the face so anything
+     * that did play was invisible. Artifacts now open in the browser the user
+     * actually wants to look at.
+     *
+     * filesDir is app-private, so the file goes out through the FileProvider
+     * declared in the manifest with a one-off read grant.
+     */
     fun showFileInBrowser(file: java.io.File) {
-        if (!_uiState.value.showBrowser) toggleBrowser()
-        viewModelScope.launch {
-            // Reading the file and base64-encoding it (generated media can be
-            // tens of MB) is disk + CPU work that used to run on Main and
-            // froze the face for seconds on every artifact reveal.
-            val html = withContext(Dispatchers.IO) { mediaPageHtml(file) }
+        val ctx = secureStorage?.context ?: run {
             _uiState.value = _uiState.value.copy(
-                browserGoal = "Showing ${file.name}",
-                browserSource = html.take(8_000),
-                browserSourceKind = when (file.extension.lowercase()) {
-                    "html", "htm" -> "html"
-                    "kt", "js", "py", "json", "css" -> "code"
-                    else -> "media"
-                },
+                captionText = "I can't open ${file.name} — no browser context in this build.",
             )
-            waitForBrowserAttached()
-            com.example.meowmba.core.browser.WebViewBridge.loadHtml(html)
-            _uiState.value = _uiState.value.copy(captionText = "Showing ${file.name} in the browser.")
+            return
         }
+        val mime = mimeFor(file)
+        val uri = runCatching {
+            androidx.core.content.FileProvider.getUriForFile(
+                ctx, "${ctx.packageName}.fileprovider", file,
+            )
+        }.getOrElse {
+            _uiState.value = _uiState.value.copy(
+                captionText = "I couldn't share ${file.name} with the browser.",
+            )
+            return
+        }
+        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
+            .setDataAndType(uri, mime)
+            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        if (!startInChrome(ctx, intent)) {
+            _uiState.value = _uiState.value.copy(
+                captionText = "No browser installed to show ${file.name}.",
+            )
+            return
+        }
+        _uiState.value = _uiState.value.copy(
+            captionText = "Opened ${file.name} in Chrome.",
+        )
+    }
+
+    /** Best-effort Chrome; any ACTION_VIEW handler is an acceptable fallback. */
+    private fun startInChrome(ctx: android.content.Context, intent: android.content.Intent): Boolean {
+        val chrome = listOf(
+            "com.android.chrome",
+            "com.chrome.beta",
+            "com.chrome.dev",
+            "com.google.android.apps.chrome",
+        ).firstOrNull { pkg ->
+            runCatching { ctx.packageManager.getPackageInfo(pkg, 0) }.isSuccess
+        }
+        if (chrome != null) {
+            val targeted = android.content.Intent(intent).setPackage(chrome)
+            if (runCatching { ctx.startActivity(targeted) }.isSuccess) return true
+        }
+        // No Chrome (or it refused the URI): fall back to whatever can view it.
+        val chooser = android.content.Intent.createChooser(intent, "Open with")
+            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        return runCatching { ctx.startActivity(chooser) }.isSuccess
+    }
+
+    private fun mimeFor(file: java.io.File): String = when (file.extension.lowercase()) {
+        "html", "htm" -> "text/html"
+        "png" -> "image/png"
+        "jpg", "jpeg" -> "image/jpeg"
+        "gif" -> "image/gif"
+        "mp4" -> "video/mp4"
+        "wav" -> "audio/wav"
+        "mp3" -> "audio/mpeg"
+        "kt", "json", "css" -> "text/plain"
+        "js" -> "text/javascript"
+        "py" -> "text/x-python"
+        else -> "text/plain"
     }
 
     internal fun mediaPageHtml(file: java.io.File): String {
@@ -3235,6 +3311,14 @@ class CompanionViewModel(
 
     /** Local Whisper refiner, built once the Whisper weights are on disk. */
     private var whisperEngine: com.example.meowmba.core.audio.WhisperAsrEngine? = null
+
+    /**
+     * The agent's browser: a WebView that is never shown, exposed as MCP tools.
+     * Kept here so it can be torn down with the ViewModel rather than leaking a
+     * WebView (and its renderer process) for the life of the app.
+     */
+    private var offscreenBrowser: com.example.meowmba.core.browser.OffscreenBrowser? = null
+    private var mcpBrowser: com.example.meowmba.core.mcp.McpBrowserServer? = null
 
     /**
      * Wire Whisper as the final-transcript refiner — ONLY for the
@@ -4321,14 +4405,11 @@ class CompanionViewModel(
             respondDirectly(text)
             return
         }
-        // While the browser is open, speech goes straight to the browser
-        // agent as the standing goal ("make me a page about...", "move the
-        // header down"...). The loop sees touch edits via its screenshots.
-        if (_uiState.value.showBrowser && text.isNotBlank()) {
-            _uiState.value = _uiState.value.copy(browserGoal = text)
-            browserAgent?.setGoal(text)
-            return
-        }
+        // This branch used to send EVERY utterance to the browser agent while
+        // the in-app panel was open ("make me a page about..."). That panel is
+        // gone — pages now open in a real browser — so there is no standing
+        // browser goal left to feed, and speech falls through to the normal
+        // agent routing (which is what made "act like a dog" stop performing).
         // G1: user speech = curiosity; praise gets a proud wag.
         val lower = text.lowercase()
         val praise = listOf("good ", "nice ", "great ", "thank", "well done", "love you", "awesome")

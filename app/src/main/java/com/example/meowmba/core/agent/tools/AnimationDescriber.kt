@@ -339,6 +339,83 @@ object AnimationDescriber {
                 AnimFrame(atMs = 1200, headTiltDeg = 0f, eyeOpen = 1.0f),
             ),
         ),
+
+        // Acting like a dog: the cat does the dog things — an eager head tilt,
+        // then open-mouthed panting with the tongue out while the tail sweeps.
+        // The pant is a jaw/tongue PULSE, not one long open mouth: a held-open
+        // mouth reads as a yawn, and it is the pulse that says "dog".
+        "dog" to Pattern(
+            weight = 1.35f,
+            durationMs = 3800,
+            frames = listOf(
+                AnimFrame(atMs = 0, eyeOpen = 1.0f, pupilSize = 0.28f, headTiltDeg = 0f,
+                    earPerk = 1.0f, tongueOut = 0f, tailWag = 0f, bodyBounce = 0f,
+                    mouth = MouthMode.IDLE),
+                // The "did you say walk?" — big tilt + ears shoot forward, eyes pop.
+                AnimFrame(atMs = 300, eyeOpen = 1.45f, pupilSize = 0.65f, headTiltDeg = 18f,
+                    earPerk = 1.55f, tongueOut = 0.2f, tailWag = 0.45f, bodyBounce = 0.25f,
+                    sparkle = 0.5f),
+                // Pant cycle: tongue FULLY out on the exhale, tail hard over.
+                AnimFrame(atMs = 650, headTiltDeg = 18f, tongueOut = 1.0f,
+                    mouth = MouthMode.SPEAKING, tailWag = 1.0f, bodyBounce = 0.38f,
+                    earPerk = 1.5f, eyeOpen = 1.35f, whiskerFlutter = true),
+                AnimFrame(atMs = 900, headTiltDeg = 16f, tongueOut = 0.2f,
+                    mouth = MouthMode.HAPPY, tailWag = 0.15f, bodyBounce = 0.1f,
+                    whiskerFlutter = true),
+                AnimFrame(atMs = 1150, headTiltDeg = 16f, tongueOut = 1.0f,
+                    mouth = MouthMode.SPEAKING, tailWag = -1.0f, bodyBounce = 0.38f,
+                    whiskerFlutter = true),
+                AnimFrame(atMs = 1400, headTiltDeg = 16f, tongueOut = 0.2f,
+                    mouth = MouthMode.HAPPY, tailWag = -0.15f, bodyBounce = 0.1f,
+                    whiskerFlutter = true),
+                AnimFrame(atMs = 1650, headTiltDeg = 14f, tongueOut = 1.0f,
+                    mouth = MouthMode.SPEAKING, tailWag = 1.0f, bodyBounce = 0.38f,
+                    whiskerFlutter = true),
+                AnimFrame(atMs = 1900, headTiltDeg = 12f, tongueOut = 0.2f,
+                    mouth = MouthMode.HAPPY, tailWag = -0.9f, bodyBounce = 0.1f,
+                    whiskerFlutter = true),
+                AnimFrame(atMs = 2150, headTiltDeg = 10f, tongueOut = 1.0f,
+                    mouth = MouthMode.SPEAKING, tailWag = 0.9f, bodyBounce = 0.35f,
+                    whiskerFlutter = true),
+                AnimFrame(atMs = 2400, headTiltDeg = 8f, tongueOut = 0.25f,
+                    mouth = MouthMode.HAPPY, tailWag = 0.2f, bodyBounce = 0.12f),
+                AnimFrame(atMs = 2800, headTiltDeg = 4f, tongueOut = 0.15f,
+                    tailWag = 0.1f, bodyBounce = 0f, whiskerFlutter = false),
+                AnimFrame(atMs = 3200, eyeOpen = 1.1f, pupilSize = 0.35f, headTiltDeg = 1f,
+                    earPerk = 1.1f, tongueOut = 0f, tailWag = 0f, bodyBounce = 0f),
+                AnimFrame(atMs = 3800, eyeOpen = 1.0f, pupilSize = 0.28f, headTiltDeg = 0f,
+                    earPerk = 1.0f, tongueOut = 0f, tailWag = 0f, bodyBounce = 0f,
+                    sparkle = 0f, mouth = MouthMode.IDLE),
+            ),
+        ),
+
+        // Silly face: deliberately mismatched — one big googly eye, head flopped
+        // the other way, tongue lolling. The asymmetry is the joke, so the two
+        // sides are driven to OPPOSITE extremes rather than together.
+        "silly" to Pattern(
+            weight = 1.1f,
+            durationMs = 2200,
+            frames = listOf(
+                AnimFrame(atMs = 0, eyeOpen = 1.0f, pupilSize = 0.28f, pupilGazeUp = 0f,
+                    headTiltDeg = 0f, earPerk = 1.0f, tongueOut = 0f),
+                AnimFrame(atMs = 300, eyeOpen = 1.55f, pupilSize = 0.7f, pupilGazeUp = 0.6f,
+                    headTiltDeg = -12f, earPerk = 1.5f, mouth = MouthMode.HAPPY),
+                AnimFrame(atMs = 700, eyeOpen = 0.5f, pupilSize = 0.35f, pupilGazeUp = 0f,
+                    headTiltDeg = 16f, earPerk = 0.75f, tongueOut = 0.9f,
+                    mouth = MouthMode.SPEAKING, bodyBounce = 0.25f, whiskerFlutter = true),
+                AnimFrame(atMs = 1100, eyeOpen = 1.5f, pupilSize = 0.8f, headTiltDeg = -8f,
+                    earPerk = 1.45f, tongueOut = 0.2f, bodyBounce = -0.1f, sparkle = 0.4f),
+                AnimFrame(atMs = 1500, eyeOpen = 0.6f, pupilSize = 0.3f, pupilGazeUp = 0.4f,
+                    headTiltDeg = 10f, earPerk = 0.8f, tongueOut = 0.85f,
+                    mouth = MouthMode.SPEAKING, bodyBounce = 0.2f, whiskerFlutter = true),
+                AnimFrame(atMs = 1900, eyeOpen = 1.2f, pupilSize = 0.4f, pupilGazeUp = 0f,
+                    headTiltDeg = 0f, earPerk = 1.1f, tongueOut = 0.1f, bodyBounce = 0f,
+                    sparkle = 0f),
+                AnimFrame(atMs = 2200, eyeOpen = 1.0f, pupilSize = 0.28f, headTiltDeg = 0f,
+                    earPerk = 1.0f, tongueOut = 0f, bodyBounce = 0f,
+                    whiskerFlutter = false, mouth = MouthMode.IDLE),
+            ),
+        ),
     )
 
     private val synonyms = mapOf(
@@ -347,8 +424,25 @@ object AnimationDescriber {
         "drowsy" to "sleepy",
         "frightened" to "scared",
         "pissed" to "angry",
+        // "be mad" was routed to the describer without "mad" ever being a
+        // keyword or a synonym, so the single most natural way to ask for an
+        // angry cat answered "I don't know how to animate that".
+        "mad" to "angry",
+        "madcat" to "angry",
+        "grumpy" to "angry",
+        "hissy" to "angry",
         "grin" to "happy",
         "playful" to "excited",
+        // Dog: the cat playing at being a dog.
+        "puppy" to "dog",
+        "pant" to "dog",
+        "panting" to "dog",
+        "woof" to "dog",
+        // Silly: goofy / derpy faces.
+        "goofy" to "silly",
+        "derp" to "silly",
+        "derpy" to "silly",
+        "dopey" to "silly",
     )
 
     /**

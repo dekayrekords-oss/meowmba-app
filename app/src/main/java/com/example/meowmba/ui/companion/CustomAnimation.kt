@@ -710,6 +710,86 @@ object CustomAnimations {
         tailWag = frame.tailWag ?: tailWag,
         sparkle = frame.sparkle ?: sparkle,
     )
+
+    /**
+     * Cross-fade a sampled frame over an already-eased pose.
+     *
+     * The renderer used to hard-switch every field with
+     * `if (playingClip) clipValue else easedValue`. That honours the keyframes
+     * during playback (correct) but steps the entire face at both boundaries —
+     * the visible "sudden movement / twitch" at the start and end of every
+     * clip, worst when a clip ends away from neutral (tongue out mid-lick).
+     *
+     * [weight] is the fade: 0 = fully the eased idle pose, 1 = fully the clip.
+     * Fields the frame does NOT name are left exactly at their eased value, so
+     * a clip that only wiggles the ears cannot yank the eyes.
+     *
+     * Discrete fields (booleans, mouth) cannot be interpolated, so they flip at
+     * the halfway point of the fade — once, mid-transition, instead of at the
+     * boundary where the jump is largest.
+     */
+    fun AvatarPose.blendFrame(frame: AnimFrame?, weight: Float): AvatarPose {
+        if (frame == null || weight <= 0f) return this
+        val w = weight.coerceIn(0f, 1f)
+        fun num(base: Float, over: Float?): Float =
+            over?.let { base + (it - base) * w } ?: base
+        val discrete = w >= 0.5f
+        return copy(
+            eyeOpen = num(eyeOpen, frame.eyeOpen),
+            pupilSize = num(pupilSize, frame.pupilSize),
+            pupilGazeUp = num(pupilGazeUp, frame.pupilGazeUp),
+            headTiltDeg = num(headTiltDeg, frame.headTiltDeg),
+            earPerk = num(earPerk, frame.earPerk),
+            earDroopDeg = num(earDroopDeg, frame.earDroopDeg),
+            tongueOut = num(tongueOut, frame.tongueOut),
+            bodyBounce = num(bodyBounce, frame.bodyBounce),
+            tailWag = num(tailWag, frame.tailWag),
+            sparkle = num(sparkle, frame.sparkle),
+            happyEyes = if (discrete) frame.happyEyes ?: happyEyes else happyEyes,
+            whiskerFlutter = if (discrete) frame.whiskerFlutter ?: whiskerFlutter else whiskerFlutter,
+            mouth = if (discrete) frame.mouth ?: mouth else mouth,
+            glowColorHex = if (discrete) frame.glowColorHex ?: glowColorHex else glowColorHex,
+        )
+    }
+
+    /**
+     * Cross-fade toward a whole target pose — the composed-expression path,
+     * where [CatMotion] produces a full pose rather than sparse overrides.
+     */
+    fun AvatarPose.blendToward(target: AvatarPose, weight: Float): AvatarPose {
+        if (weight <= 0f) return this
+        val w = weight.coerceIn(0f, 1f)
+        fun num(base: Float, over: Float): Float = base + (over - base) * w
+        return copy(
+            eyeOpen = num(eyeOpen, target.eyeOpen),
+            pupilSize = num(pupilSize, target.pupilSize),
+            pupilGazeUp = num(pupilGazeUp, target.pupilGazeUp),
+            headTiltDeg = num(headTiltDeg, target.headTiltDeg),
+            earPerk = num(earPerk, target.earPerk),
+            earDroopDeg = num(earDroopDeg, target.earDroopDeg),
+            tongueOut = num(tongueOut, target.tongueOut),
+            bodyBounce = num(bodyBounce, target.bodyBounce),
+            tailWag = num(tailWag, target.tailWag),
+            sparkle = num(sparkle, target.sparkle),
+            leanX = num(leanX, target.leanX),
+            happyEyes = if (w >= 0.5f) target.happyEyes else happyEyes,
+            whiskerFlutter = if (w >= 0.5f) target.whiskerFlutter else whiskerFlutter,
+            mouth = if (w >= 0.5f) target.mouth else mouth,
+        )
+    }
+
+    /**
+     * Exponential approach to a target, framerate-independent.
+     *
+     * A fixed per-frame factor (`w += (target - w) * 0.2`) moves twice as fast
+     * at 120 Hz as at 60 Hz, so the fade length changed with the display — and
+     * the Fold's adaptive refresh made that visible. Time-based instead.
+     */
+    fun approach(current: Float, target: Float, dtSec: Float, tauSec: Float): Float {
+        if (tauSec <= 0f) return target
+        val k = 1f - kotlin.math.exp(-dtSec / tauSec)
+        return current + (target - current) * k
+    }
 }
 
 /**

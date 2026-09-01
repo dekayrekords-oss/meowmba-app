@@ -453,9 +453,9 @@ even after the app dies; only restarting AiAi itself (or a failover) recovers vo
 
 <!-- AUTOBUILD:START -->
 (regenerated after each commit)
-- 2026-08-26 23:35:52 : fix(voice): expand transcript correction map for common mishearings
+- 2026-08-31 21:07:01 : feat(voice): local Whisper transcription, plus multi-engine web search port
+- 8031412 2026-08-26 23:32 fix(voice): expand transcript correction map for common mishearings
 - f713fba 2026-08-26 17:27 feat(ssh): dev-only meow-nb seed + ssh.add_host voice command
 - b0a0ba2 2026-08-26 08:29 feat(bridge): add memory.start_remembering / memory.stop_remembering tools
 - b9e891e 2026-08-26 00:23 feat(glasses): Meta Ray-Ban integration — MWDAT frame bus, BT-SCO glasses mic, photo tool
-- 4335647 2026-08-25 20:29 fix(voice): widen turn-dedupe window 3s -> 8s for the double-delivery gap
 <!-- AUTOBUILD:END -->

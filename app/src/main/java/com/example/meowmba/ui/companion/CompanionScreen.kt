@@ -876,14 +876,9 @@ fun CompanionScreen(
             )
         }
 
-        if (uiState.showBrowser && !splitBrowser) {
-            BrowserScreen(
-                goal = uiState.browserGoal,
-                source = uiState.browserSource,
-                sourceKind = uiState.browserSourceKind,
-            )
-        }
-
+        // The in-app WebView browser panel is GONE (replaced by handing pages
+        // to a real browser, see showFileInBrowser). It swallowed every
+        // utterance while open and covered the face.
         if (uiState.showVaultScreen) {
             val vault = viewModel.vaultRepository
             if (vault != null) {
@@ -975,20 +970,8 @@ fun CompanionScreen(
         }
         }
 
-        // Unfolded split: the agent-driven browser owns the right half.
-        if (splitBrowser) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(start = halfWidth)
-            ) {
-                BrowserScreen(
-                goal = uiState.browserGoal,
-                source = uiState.browserSource,
-                sourceKind = uiState.browserSourceKind,
-            )
-            }
-        }
+        // Unfolded split: the browser used to own the right half. That half is
+        // free again now that pages go to a real browser instead.
     }
     }
 }

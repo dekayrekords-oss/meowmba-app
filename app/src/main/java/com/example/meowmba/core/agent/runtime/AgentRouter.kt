@@ -56,9 +56,62 @@ object AgentRouter {
     /** Longer than this is a sentence, not the name of an app. */
     private const val MAX_APP_NAME_WORDS = 3
 
+    /**
+     * Leading carriers people put in front of the companion's name.
+     * [WakePhraseMatcher] covers these too, but it is built with a companion
+     * name known only to the ViewModel — the router is static and only ever
+     * sees the default "Meow", so "hey Meowmba, act like a dog" matched nothing
+     * here and fell through to the model (which opened the browser).
+     */
+    private val WAKE_CARRIERS = "(?:hey|hi|hello|ok|okay|yo|oi|dude|aye)"
+
+    /** Every name the companion answers to, longest first. */
+    private val WAKE_NAMES = "(?:meowmba|memba|meow|meo)"
+
+    /**
+     * Drops a leading address: an optional carrier plus the name
+     * ("hey Meowmba, …", "Meow, …"), or a bare carrier ("yo, …").
+     *
+     * The name is optional in the second alternative but NOT the first, so a
+     * command that merely starts with a carrier still loses the carrier while
+     * an ordinary sentence is left alone.
+     */
+    private fun stripAddress(text: String): String {
+        val withName = Regex(
+            "^$WAKE_CARRIERS\\s+$WAKE_NAMES\\b[\\s,]*",
+            RegexOption.IGNORE_CASE,
+        )
+        var out = withName.replace(text, "")
+        if (out == text) {
+            out = Regex("^$WAKE_NAMES\\b[\\s,]*", RegexOption.IGNORE_CASE).replace(out, "")
+        }
+        if (out == text) {
+            out = Regex("^$WAKE_CARRIERS\\b[\\s,]*", RegexOption.IGNORE_CASE).replace(out, "")
+        }
+        return out
+    }
+
     fun route(text: String): AgentIntent? {
         val raw = text.trim()
         val normalized = WakePhraseMatcher.normalize(raw)
+
+        // The companion is usually addressed by name first ("Meow, act like a
+        // dog"), and [WakePhraseMatcher.normalize] does NOT strip the wake
+        // phrase — so every exact-phrase route silently missed the moment the
+        // user said the wake word. The intent then fell through to the model,
+        // which picked a completely unrelated tool: measured on device, "meow
+        // act like a dog" opened the browser instead of performing.
+        //
+        // [command] is the utterance with a leading wake phrase removed. Routes
+        // that are pure "say this phrase to do this" use [says] so they match
+        // either form.
+        val command = WakePhraseMatcher.normalize(stripAddress(raw))
+
+        /** True when the user said [phrases], with or without a wake word. */
+        fun says(vararg phrases: String): Boolean {
+            val set = phrases.toSet()
+            return normalized in set || command in set
+        }
 
         // Exact-phrase commands (normalized for tolerance)
         if (normalized in setOf("list files", "list the files", "show files", "show me the files",
@@ -413,108 +466,123 @@ object AgentRouter {
         // swallow these, and the user got a workspace file instead of a performance.
         // Frames stay with the tool (built-in/store lookup by name) — the router
         // only has to say WHICH clip.
-        if (normalized in setOf("do a trick", "show me a trick", "do an animation",
+        if (says("do a trick", "show me a trick", "do an animation",
                 "show me an animation", "perform a trick", "do something cute",
                 "animate yourself", "wiggle your ears")) {
             return AgentIntent("main", "avatar.animate", mapOf("name" to "ear wiggle"), "ear wiggle")
         }
-        if (normalized in setOf("dance", "do a dance", "show me a dance", "dance for me")) {
+        if (says("dance", "do a dance", "show me a dance", "dance for me")) {
             return AgentIntent("main", "avatar.animate", mapOf("name" to "happy bop"), "happy bop")
         }
-        if (normalized in setOf("slow blink", "do a slow blink", "blink at me", "give me a slow blink")) {
+        if (says("slow blink", "do a slow blink", "blink at me", "give me a slow blink")) {
             return AgentIntent("main", "avatar.animate", mapOf("name" to "slow blink"), "slow blink")
         }
-        if (normalized in setOf("lick your paw", "lick your paws", "paw lick", "do a paw lick")) {
+        if (says("lick your paw", "lick your paws", "paw lick", "do a paw lick")) {
             return AgentIntent("main", "avatar.animate", mapOf("name" to "paw lick"), "paw lick")
         }
-        if (normalized in setOf("flatten your ears", "flatten ears", "ear flatten", "put your ears back")) {
+        if (says("flatten your ears", "flatten ears", "ear flatten", "put your ears back")) {
             return AgentIntent("main", "avatar.animate", mapOf("name" to "ear flatten"), "ear flatten")
         }
-        if (normalized in setOf("nose twitch", "twitch your nose", "sniff", "sniff around")) {
+        if (says("nose twitch", "twitch your nose", "sniff", "sniff around")) {
             return AgentIntent("main", "avatar.animate", mapOf("name" to "nose twitch"), "nose twitch")
         }
-        if (normalized in setOf("chirp", "do a chirp", "make a chirping sound", "chirp at me")) {
+        if (says("chirp", "do a chirp", "make a chirping sound", "chirp at me")) {
             return AgentIntent("main", "avatar.animate", mapOf("name" to "chirp"), "chirp")
         }
-        if (normalized in setOf("yawn", "do a yawn", "yawn for me", "show me a yawn")) {
+        if (says("yawn", "do a yawn", "yawn for me", "show me a yawn")) {
             return AgentIntent("main", "avatar.animate", mapOf("name" to "yawn"), "yawn")
         }
-        if (normalized in setOf("hunting focus", "hunting mode", "focus", "lock on", "stare")) {
+        if (says("hunting focus", "hunting mode", "focus", "lock on", "stare")) {
             return AgentIntent("main", "avatar.animate", mapOf("name" to "hunting focus"), "hunting focus")
         }
-        if (normalized in setOf("zoomies", "do zoomies", "go crazy", "run around")) {
+        if (says("zoomies", "do zoomies", "go crazy", "run around")) {
             return AgentIntent("main", "avatar.animate", mapOf("name" to "zoomies"), "zoomies")
         }
-        if (normalized in setOf("stretch", "do a stretch", "stretch out")) {
+        if (says("stretch", "do a stretch", "stretch out")) {
             return AgentIntent("main", "avatar.animate", mapOf("name" to "stretch"), "stretch")
         }
-        if (normalized in setOf("headshake", "shake your head", "head shake", "no")) {
+        if (says("headshake", "shake your head", "head shake", "no")) {
             return AgentIntent("main", "avatar.animate", mapOf("name" to "headshake"), "headshake")
         }
-        if (normalized in setOf("trill", "do a trill", "make a trill", "purr trill")) {
+        if (says("trill", "do a trill", "make a trill", "purr trill")) {
             return AgentIntent("main", "avatar.animate", mapOf("name" to "trill"), "trill")
         }
         // Describe-animation routes. These cover moods, emotions, and behaviors
         // that don't have a dedicated built-in clip. The describer maps keywords
         // to pre-baked keyframes — no model call needed.
-        if (normalized in setOf("be happy", "look happy", "smile", "cheer up",
+        if (says("be happy", "look happy", "smile", "cheer up",
                 "look excited", "get excited", "be excited")) {
             return AgentIntent("main", "avatar.describe_animation",
                 mapOf("description" to normalized), normalized)
         }
-        if (normalized in setOf("look sad", "be sad", "feel sad", "cheerless")) {
+        if (says("look sad", "be sad", "feel sad", "cheerless")) {
             return AgentIntent("main", "avatar.describe_animation",
                 mapOf("description" to normalized), normalized)
         }
-        if (normalized in setOf("get angry", "look angry", "be mad", "be angry",
+        if (says("get angry", "look angry", "be mad", "be angry",
                 "look pissed")) {
             return AgentIntent("main", "avatar.describe_animation",
                 mapOf("description" to normalized), normalized)
         }
-        if (normalized in setOf("look scared", "be scared", "get scared",
+        // "Act like a dog" is a performance, not a mood, so it gets its own
+        // route rather than being left to the model — same reason every trick
+        // here is deterministic: it must land on the face, every time.
+        if (says("act like a dog", "be a dog", "pretend to be a dog",
+                "act like a puppy", "be a puppy", "pant like a dog", "do a dog",
+                "be a good boy", "good boy")) {
+            return AgentIntent("main", "avatar.describe_animation",
+                mapOf("description" to "dog"), "dog")
+        }
+        if (says("make a silly face", "silly face", "be silly",
+                "look silly", "goofy face", "make a goofy face", "do a derp",
+                "be goofy")) {
+            return AgentIntent("main", "avatar.describe_animation",
+                mapOf("description" to "silly"), "silly")
+        }
+        if (says("look scared", "be scared", "get scared",
                 "look frightened", "you're scared")) {
             return AgentIntent("main", "avatar.describe_animation",
                 mapOf("description" to normalized), normalized)
         }
-        if (normalized in setOf("look curious", "be curious", "wonder",
+        if (says("look curious", "be curious", "wonder",
                 "what's that", "hmm")) {
             return AgentIntent("main", "avatar.describe_animation",
                 mapOf("description" to normalized), normalized)
         }
-        if (normalized in setOf("look sleepy", "be sleepy", "get sleepy",
+        if (says("look sleepy", "be sleepy", "get sleepy",
                 "take a nap", "feel drowsy")) {
             return AgentIntent("main", "avatar.describe_animation",
                 mapOf("description" to normalized), normalized)
         }
-        if (normalized in setOf("purr", "purr for me", "do a purr")) {
+        if (says("purr", "purr for me", "do a purr")) {
             return AgentIntent("main", "avatar.describe_animation",
                 mapOf("description" to normalized), normalized)
         }
-        if (normalized in setOf("sneeze", "do a sneeze", "achoo")) {
+        if (says("sneeze", "do a sneeze", "achoo")) {
             return AgentIntent("main", "avatar.describe_animation",
                 mapOf("description" to normalized), normalized)
         }
-        if (normalized in setOf("jump", "do a jump", "hop", "do a hop")) {
+        if (says("jump", "do a jump", "hop", "do a hop")) {
             return AgentIntent("main", "avatar.describe_animation",
                 mapOf("description" to normalized), normalized)
         }
-        if (normalized in setOf("laugh", "do a laugh", "haha", "that's funny")) {
+        if (says("laugh", "do a laugh", "haha", "that's funny")) {
             return AgentIntent("main", "avatar.describe_animation",
                 mapOf("description" to normalized), normalized)
         }
-        if (normalized in setOf("cry", "do a cry", "boohoo", "weep")) {
+        if (says("cry", "do a cry", "boohoo", "weep")) {
             return AgentIntent("main", "avatar.describe_animation",
                 mapOf("description" to normalized), normalized)
         }
-        if (normalized in setOf("wave", "wave at me", "say hi")) {
+        if (says("wave", "wave at me", "say hi")) {
             return AgentIntent("main", "avatar.describe_animation",
                 mapOf("description" to normalized), normalized)
         }
-        if (normalized in setOf("nod", "nod your head", "yes yes")) {
+        if (says("nod", "nod your head", "yes yes")) {
             return AgentIntent("main", "avatar.describe_animation",
                 mapOf("description" to normalized), normalized)
         }
-        if (normalized in setOf("glow", "sparkle", "glow for me")) {
+        if (says("glow", "sparkle", "glow for me")) {
             return AgentIntent("main", "avatar.describe_animation",
                 mapOf("description" to normalized), normalized)
         }
@@ -541,11 +609,23 @@ object AgentRouter {
             }
         }
 
+        // Browser MCP — the offscreen browser the AI drives (also opens Chrome so you see it).
+        // "navigate to yahu" (Whisper heard "yahoo" as "yahu") should still show something:
+        // OffscreenBrowser turns a single word into a Google search.
+        extractAfter(raw, listOf("navigate to ", "go to "))?.let { target ->
+            val url = target.trim().takeIf { it.isNotBlank() } ?: return@let
+            return AgentIntent("browser", "browser.navigate", mapOf("url" to url), "browse to $url")
+        }
+
         // Media / image generation
         extractAfter(raw, listOf("generate an image of ", "generate an image of a ",
-            "create an image of ", "make an image of ", "draw ", "paint ",
+            "create an image of ", "make an image of ",
+            "generate a picture of ", "generate a picture of a ",
+            "create a picture of ", "make a picture of ", "draw a picture of ",
+            "draw ", "paint ",
             "generate an image called ", "create an image called ",
-            "generate image ", "create image "))?.let { prompt ->
+            "generate image ", "create image ",
+            "make a picture ", "create a picture "))?.let { prompt ->
             return AgentIntent("media", "media.generate_image", mapOf("prompt" to prompt),
                 "generate image: $prompt")
         }

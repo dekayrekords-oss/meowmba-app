@@ -27,6 +27,132 @@ class DescribeAnimationTest {
         assertTrue(spec.frames.isNotEmpty())
     }
 
+    // ── Performances the user asked for by name ──────────────────────────
+
+    @Test
+    fun `acting like a dog resolves and actually pants`() {
+        val spec = AnimationDescriber.describe("dog")!!
+        assertEquals("dog", spec.name)
+        // The pant is a pulse, not one held-open mouth (a held mouth reads as a
+        // yawn). Assert the tongue goes out AND comes back, more than once.
+        val tongue = spec.frames.map { it.tongueOut }.filterNotNull()
+        assertTrue("dog should show a tongue", tongue.any { it > 0.6f })
+        assertTrue("dog should pulse, not hold", tongue.count { it > 0.6f } >= 2)
+        assertTrue("dog should retract the tongue", tongue.any { it < 0.3f })
+        // A wagging tail, sweeping both directions.
+        val wag = spec.frames.map { it.tailWag }.filterNotNull()
+        assertTrue("tail should sweep right", wag.any { it > 0.5f })
+        assertTrue("tail should sweep left", wag.any { it < -0.5f })
+        // Starts and ends neutral so the cross-fade has somewhere to land.
+        assertEquals(0f, spec.frames.first().tongueOut ?: -1f, 0.001f)
+        assertEquals(0f, spec.frames.last().tongueOut ?: -1f, 0.001f)
+    }
+
+    @Test
+    fun `puppy and pant are synonyms for dog`() {
+        assertEquals("dog", AnimationDescriber.describe("puppy")!!.name)
+        assertEquals("dog", AnimationDescriber.describe("pant")!!.name)
+        assertEquals("dog", AnimationDescriber.describe("panting")!!.name)
+    }
+
+    @Test
+    fun `silly face resolves and is asymmetric`() {
+        val spec = AnimationDescriber.describe("silly")!!
+        assertEquals("silly", spec.name)
+        // The joke is the mismatch: head must go both ways, not just one.
+        val tilts = spec.frames.map { it.headTiltDeg }.filterNotNull()
+        assertTrue(tilts.any { it < -6f })
+        assertTrue(tilts.any { it > 6f })
+        assertTrue(spec.frames.mapNotNull { it.tongueOut }.any { it > 0.6f })
+    }
+
+    @Test
+    fun `goofy and derp are synonyms for silly`() {
+        assertEquals("silly", AnimationDescriber.describe("goofy")!!.name)
+        assertEquals("silly", AnimationDescriber.describe("derp")!!.name)
+    }
+
+    @Test
+    fun `mad resolves to the angry pattern`() {
+        // "be mad" was routed to the describer for ages without "mad" being a
+        // keyword or synonym — the most natural way to ask for an angry cat
+        // answered "I don't know how to animate that".
+        assertEquals("angry", AnimationDescriber.describe("mad")!!.name)
+        assertEquals("angry", AnimationDescriber.describe("grumpy")!!.name)
+    }
+
+    // ── Phrase → animation routing ───────────────────────────────────────
+    //
+    // These exist because every animation route was exact-match against a
+    // normalized string that does NOT strip the wake phrase. Saying the
+    // companion's name — the normal way to speak to it — made every route miss,
+    // the intent fell through to the language model, and the model picked a
+    // completely different tool. Measured on device: "meow act like a dog"
+    // opened the browser instead of performing.
+
+    private fun toolFor(phrase: String) =
+        com.example.meowmba.core.agent.runtime.AgentRouter.route(phrase)?.toolId
+
+    @Test
+    fun `animation phrases route with or without a wake word`() {
+        val cases = listOf(
+            "act like a dog" to "avatar.describe_animation",
+            "be a dog" to "avatar.describe_animation",
+            "make a silly face" to "avatar.describe_animation",
+            "be mad" to "avatar.describe_animation",
+            "lick your paw" to "avatar.animate",
+            "do a trick" to "avatar.animate",
+        )
+        for ((phrase, expected) in cases) {
+            assertEquals("bare \"$phrase\"", expected, toolFor(phrase))
+            // Every address form people actually use.
+            assertEquals("addressed \"$phrase\"", expected, toolFor("meow $phrase"))
+            assertEquals("hey meow \"$phrase\"", expected, toolFor("hey meow $phrase"))
+            assertEquals("hey meowmba \"$phrase\"", expected, toolFor("hey meowmba $phrase"))
+            assertEquals("ok meow \"$phrase\"", expected, toolFor("ok meow $phrase"))
+        }
+    }
+
+    @Test
+    fun `a bare carrier still reaches the animation`() {
+        assertEquals("avatar.describe_animation", toolFor("yo be a dog"))
+        assertEquals("avatar.describe_animation", toolFor("okay be a dog"))
+    }
+
+    @Test
+    fun `wake-tolerant routing does not swallow real web searches`() {
+        // The guard being tested is that loosening the animation matcher did
+        // not turn ordinary sentences into performances. A real search still
+        // routes to search, and an addressed one must at least not be stolen
+        // by the animation routes.
+        assertEquals("web.search", toolFor("look up dogs"))
+        for (phrase in listOf("hey meow look up dogs", "meow look up dogs")) {
+            val tool = toolFor(phrase)
+            assertTrue(
+                "\"$phrase\" must not be captured as an animation (was $tool)",
+                tool == null || !tool.startsWith("avatar."),
+            )
+        }
+    }
+
+    @Test
+    fun `addressing the companion alone is not an animation`() {
+        // A bare wake word has no command behind it.
+        assertNull(toolFor("meow"))
+        assertNull(toolFor("hey meow"))
+    }
+
+    @Test
+    fun `every new clip starts and ends at neutral`() {
+        // The renderer cross-fades clips in and out, but a clip that does not
+        // return to neutral still leaves the face somewhere odd.
+        for (word in listOf("dog", "silly")) {
+            val frames = AnimationDescriber.describe(word)!!.frames
+            assertEquals("$word should start neutral", 0f, frames.first().headTiltDeg ?: 0f, 0.001f)
+            assertEquals("$word should end neutral", 0f, frames.last().headTiltDeg ?: 0f, 0.001f)
+        }
+    }
+
     @Test
     fun `synonym resolves to canonical keyword`() {
         val spec = AnimationDescriber.describe("drowsy")!!

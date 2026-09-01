@@ -194,6 +194,20 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
+
+        <!-- Hand generated artifacts (comics, scripts, pages) to a real browser.
+             filesDir is app-private, so Chrome cannot read it directly — the
+             FileProvider grants it a temporary, one-off read URI instead of
+             copying files somewhere world-readable. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 
 </manifest>

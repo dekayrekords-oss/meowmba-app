@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Paths the FileProvider will hand to an external browser (Chrome).
+
+  Only the workspace/generated-artifact directories are shared. Deliberately
+  NOT the whole filesDir: that would expose voice models, saved animations and
+  the on-device LLM weights to any app that receives a URI.
+-->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <files-path name="comics" path="comics/" />
+    <files-path name="scripts" path="scripts/" />
+    <files-path name="ads" path="ads/" />
+    <files-path name="posts" path="posts/" />
+    <files-path name="media" path="media/" />
+    <files-path name="workspace" path="workspace/" />
+    <external-files-path name="external" path="." />
+    <cache-path name="cache" path="." />
+</paths>
