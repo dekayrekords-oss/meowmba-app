@@ -28,6 +28,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Background wake-phrase listener (Phase 2.5).
@@ -144,6 +145,9 @@ class WakeWordService : Service() {
     private var engineStarted = false
     private var followUpPending = false
     private var followUpRetries = 0
+    /** Engine init job, so onDestroy can cancel a start that is still in flight. */
+    private var engineInitJob: kotlinx.coroutines.Job? = null
+    @Volatile private var micHeld = false
 
     override fun onCreate() {
         super.onCreate()
@@ -173,7 +177,31 @@ class WakeWordService : Service() {
             stopSelf()
             return
         }
-        startEngine()
+        startEngineAsync()
+    }
+
+    /**
+     * The engine is built OFF the main thread.
+     *
+     * It used to be built inline in onCreate, which runs on the app's main
+     * thread — and this is the HOME app, so that thread is the launcher the
+     * user is looking at. Building it means TextToSpeech, a SpeechService and
+     * the keyword spotter (a ~5MB model load plus native init), all of which
+     * were running inside onPause's synchronous service start. Pressing Back
+     * froze the whole phone for that long.
+     *
+     * Only [promoteToForeground] has to stay synchronous: the platform arms a
+     * startForeground() deadline as soon as startForegroundService() is called,
+     * and missing it kills the process.
+     */
+    private fun startEngineAsync() {
+        engineInitJob = scope.launch(kotlinx.coroutines.Dispatchers.Default) {
+            val ok = runCatching { startEngine() }.getOrDefault(false)
+            android.util.Log.i("WakeWordService", "engine init finished ok=$ok")
+            // A follow-up hand-off can be requested before the engine exists;
+            // arm it now that init has landed (or failed).
+            withContext(kotlinx.coroutines.Dispatchers.Main) { maybeStartFollowUpCapture() }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -208,7 +236,8 @@ class WakeWordService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
-        if (!engineStarted) startEngine()
+        // The engine builds asynchronously (see startEngineAsync); a follow-up
+        // requested before it exists is armed when the init lands.
         maybeStartFollowUpCapture()
         // NOT sticky. This is a user-toggled listener whose preference is persisted, so
         // it comes back on the next launch anyway. Sticky restarts resurrected it into a
@@ -251,7 +280,8 @@ class WakeWordService : Service() {
         false
     }
 
-    private fun startEngine() {
+    /** Builds the wake engine. Call off the main thread. Returns true if it started. */
+    private fun startEngine(): Boolean {
         // Exclusive with the in-app wake loop. Without this both drove sessions at once
         // and the platform answered with a steady stream of ERROR_RECOGNIZER_BUSY.
         if (!MicOwner.acquire(MicOwner.SERVICE)) {
@@ -260,8 +290,9 @@ class WakeWordService : Service() {
                 "in-app wake loop owns the mic; not starting a second one"
             )
             stopSelf()
-            return
+            return false
         }
+        micHeld = true
         speechService = SpeechService(this)
         tts = TextToSpeechManager(this)
         // Same factory the in-app loop uses, so background listening gets the keyword
@@ -276,8 +307,9 @@ class WakeWordService : Service() {
         if (built == null) {
             android.util.Log.w("WakeWordService", "no wake engine could be built; stopping")
             MicOwner.release(MicOwner.SERVICE)
+            micHeld = false
             stopSelf()
-            return
+            return false
         }
         wakeEngine = built.engine.apply { onWake = { command -> handleWake(command) } }
         built.kws?.onFatalError = { reason ->
@@ -289,11 +321,17 @@ class WakeWordService : Service() {
         wakeEngine?.start()
         engineStarted = true
         android.util.Log.i("WakeWordService", "engine started; mic owned by service")
+        return true
     }
 
     override fun onDestroy() {
         serviceForeground = false
-        MicOwner.release(MicOwner.SERVICE)
+        engineInitJob?.cancel()
+        engineInitJob = null
+        if (micHeld) {
+            MicOwner.release(MicOwner.SERVICE)
+            micHeld = false
+        }
         wakeEngine?.stop()
         // These are lateinit and are only assigned by startEngine(), which is
         // skipped when the service stops early. Touching them unguarded would
