@@ -42,5 +42,10 @@ class DebugConfigReceiver : BroadcastReceiver() {
         intent.getStringExtra("default_brain")?.takeIf { it.isNotBlank() }?.let { brain ->
             storage.savePreference("default_brain", brain)
         }
+        // Which left/right encoding the LOOI base obeys (legacy/inverted/captured).
+        // Toggle the robot body off and on in Settings to apply it to a live link.
+        intent.getStringExtra("looi_turn")?.takeIf { it.isNotBlank() }?.let { mode ->
+            storage.savePreference("looi_turn_encoding", mode.trim().lowercase())
+        }
     }
 }

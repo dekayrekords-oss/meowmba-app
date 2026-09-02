@@ -272,6 +272,18 @@ class MainActivity : ComponentActivity() {
 
     // ── Background wake-word handoff (Phase 2.5) ────────────────────────────
 
+    /**
+     * Any touch parks the robot body for a moment. Following you tilts the
+     * phone — which is the screen you are trying to touch — so a hand on the
+     * glass outranks keeping you centred.
+     */
+    override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
+        if (ev.action == android.view.MotionEvent.ACTION_DOWN) {
+            companionViewModel?.noteScreenTouch()
+        }
+        return super.dispatchTouchEvent(ev)
+    }
+
     override fun onResume() {
         super.onResume()
         // If a background hand-off was scheduled by a transient pause, it is now

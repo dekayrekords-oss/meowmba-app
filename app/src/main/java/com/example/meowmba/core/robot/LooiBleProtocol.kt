@@ -156,4 +156,29 @@ object LooiBleProtocol {
         val tail = if (left) CAPTURED_TURN_LEFT_TAIL else CAPTURED_TURN_RIGHT_TAIL
         return byteArrayOf((seq and 0xFF).toByte()) + tail
     }
+
+    /**
+     * Which left/right encoding this base actually obeys.
+     *
+     * The two encodings disagree in the field notes (see the KDoc above), and
+     * on the user's base RIGHT moved while LEFT did nothing — so direction is
+     * a runtime setting, not a constant. [LEGACY] is what shipped last and is
+     * the default: never silently change how a working motion is encoded.
+     */
+    enum class TurnEncoding(val id: String) {
+        /** 17-byte 0x07: positive value = LEFT, two's complement = RIGHT. */
+        LEGACY("legacy"),
+
+        /** Same template, directions swapped. */
+        INVERTED("inverted"),
+
+        /** The captured 20-byte tread scripts (fixed speed, no scaling). */
+        CAPTURED("captured"),
+        ;
+
+        companion object {
+            fun fromName(name: String?): TurnEncoding =
+                entries.firstOrNull { it.id == name?.trim()?.lowercase() } ?: LEGACY
+        }
+    }
 }

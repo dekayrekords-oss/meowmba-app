@@ -82,6 +82,8 @@ class LooiBleBodyOutput(
     private val link: LooiBleLink?,
     private val connected: () -> Boolean,
     private val writePitch: (Float) -> Unit,
+    /** Injectable clock: the JVM tests drive the damping by hand. */
+    private val nowMs: () -> Long = System::currentTimeMillis,
 ) : BodyOutput {
 
     constructor(link: LooiBleLink) : this(link, { link.connected }, { link.setNeckPitch(it) })
@@ -93,17 +95,45 @@ class LooiBleBodyOutput(
      * the base is servoed non-stop, an IRQ/latency drain that starved voice).
      */
     private var lastNeckPitch = Float.NaN
+    private var neckTarget = Float.NaN
+    private var neckTargetSinceMs = 0L
+    private var lastNeckWriteAtMs = 0L
 
     override fun neck(pitch: Float) {
         if (!connected()) return
         val clamped = pitch.coerceIn(-1f, 1f)
-        if (!lastNeckPitch.isNaN() && kotlin.math.abs(clamped - lastNeckPitch) < NECK_DEADBAND) return
+        val now = nowMs()
+        // A deadband alone does not break the nod loop: tilting the phone moves
+        // the camera, which moves the measured offset, which tilts it back. So
+        // a pose has to hold long enough to be real ([NECK_SUSTAIN_MS], which
+        // kills single-frame jitter) and writes have to leave the servo time to
+        // settle ([NECK_SPACING_MS]). Measured on device: without both, the base
+        // nodded continuously and the screen was hard to touch.
+        if (clamped != neckTarget) {
+            neckTarget = clamped
+            neckTargetSinceMs = now
+        }
+        // The first pose after connect or a reset has no history to distrust,
+        // so it applies immediately; every later change has to hold still.
+        val firstPose = lastNeckPitch.isNaN()
+        if (!firstPose && now - neckTargetSinceMs < NECK_SUSTAIN_MS) return
+        if (!firstPose && now - lastNeckWriteAtMs < NECK_SPACING_MS) return
+        if (!lastNeckPitch.isNaN() &&
+            kotlin.math.abs(clamped - lastNeckPitch) < NECK_DEADBAND
+        ) return
+        lastNeckWriteAtMs = now
         lastNeckPitch = clamped
         writePitch(clamped)
     }
 
     override fun turn(speedPercent: Int, ticks: Int, sign: Int) {
-        if (connected()) link?.turnPulse(speedPercent, ticks)
+        if (!connected()) return
+        // [sign] is the direction the face (or the animation) asked for: -1
+        // left, +1 right. Handing the bare magnitude to turnPulse sent every
+        // clip-driven turn the same way — the same "left does nothing" bug the
+        // follow loop already avoids by passing a signed speed.
+        val mag = kotlin.math.abs(speedPercent)
+        link?.turnPulse(if (sign < 0) -mag else mag, ticks)
     }
 
     override fun drive(speed: Float) {
@@ -120,5 +150,11 @@ class LooiBleBodyOutput(
 
     private companion object {
         const val NECK_DEADBAND = 0.04f
+
+        /** A neck pose must hold this long before it is written. */
+        const val NECK_SUSTAIN_MS = 120L
+
+        /** Minimum settle time between two neck writes (an authored nod survives). */
+        const val NECK_SPACING_MS = 250L
     }
 }

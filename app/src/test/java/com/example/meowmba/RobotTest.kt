@@ -133,12 +133,12 @@ class RobotManagerTest {
     }
 
     @Test
-    fun `keepPersonInFrame does not yaw when the face is at the edge`() {
+    fun `keepPersonInFrame turns back toward a face at the edge`() {
         val m = RobotManager()
         m.keepPersonInFrame(0.70f, 0f, 1f, nowMs = 1_000L)
         val sim = m.active as SimulatedMotorController
-        assertFalse(
-            "edge of frame must not yaw, got ${sim.history}",
+        assertTrue(
+            "half out of frame is when turning matters most, got ${sim.history}",
             sim.history.any { it.startsWith("servo1") },
         )
     }
@@ -159,16 +159,36 @@ class RobotManagerTest {
     }
 
     @Test
-    fun `keepPersonInFrame does not write pan after the face is gone`() {
+    fun `a lost face is searched for, and the search is bounded`() {
         val m = RobotManager()
         m.keepPersonInFrame(0.5f, -0.2f, 1f, nowMs = 1_000L)
         val sim = m.active as SimulatedMotorController
-        val pans = sim.history.count { it.startsWith("servo1") }
+        val pansAfterLock = sim.history.count { it.startsWith("servo1") }
+        // A 200ms blink is still a lock: nothing new is commanded.
         m.keepPersonInFrame(null, null, null, nowMs = 1_200L)
-        m.keepPersonInFrame(null, null, null, nowMs = 1_800L)
         assertEquals(
-            "lost face must not add pan/turn commands",
-            pans,
+            "a blink must not start a sweep",
+            pansAfterLock,
+            sim.history.count { it.startsWith("servo1") },
+        )
+        // Past the hold they are really gone: sweep to find them again.
+        m.keepPersonInFrame(null, null, null, nowMs = 1_800L)
+        assertTrue(
+            "a lost face must be searched for, got ${sim.history}",
+            sim.history.count { it.startsWith("servo1") } > pansAfterLock,
+        )
+        // ...but the sweep has a budget: it must stop instead of hunting forever.
+        var now = 2_000L
+        while (now < 60_000L) {
+            m.keepPersonInFrame(null, null, null, nowMs = now)
+            now += 100L
+        }
+        val atRest = sim.history.count { it.startsWith("servo1") }
+        m.keepPersonInFrame(null, null, null, nowMs = 62_000L)
+        m.keepPersonInFrame(null, null, null, nowMs = 64_000L)
+        assertEquals(
+            "the sweep must end, got ${sim.history}",
+            atRest,
             sim.history.count { it.startsWith("servo1") },
         )
     }

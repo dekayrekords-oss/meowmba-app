@@ -70,14 +70,28 @@ class BodyOutputTest {
         exploding.perform(BodyVerb.Brake)
     }
 
+    /**
+     * The neck rules, driven by a hand-rolled clock: a pose must HOLD before it
+     * is believed, and two writes must be [NECK_SPACING_MS] apart. Without both,
+     * tilting the phone moves the camera, which moves the measured pose, which
+     * tilts it back — the nod loop this replaced.
+     */
     @Test
     fun `ble neck coalesces moves under the deadband so a steady face stays quiet`() {
         val writes = mutableListOf<Float>()
-        val out = LooiBleBodyOutput(null, { true }, { writes += it })
+        var now = 1_000L
+        val out = LooiBleBodyOutput(null, { true }, { writes += it }, { now })
 
-        out.neck(0.1f)            // first write always passes
+        out.neck(0.1f)            // first pose: no history to distrust -> writes
         out.neck(0.12f)           // +0.02 < deadband -> skipped
-        out.neck(0.15f)           // +0.05 >= deadband -> writes
+        out.neck(0.15f)           // new target, not yet held -> skipped
+        now += 200L
+        out.neck(0.15f)           // held, but only 200ms since the last write
+        now += 100L
+        out.neck(0.15f)           // 300ms since the write -> goes through
+        now += 300L
+        out.neck(0.11f)           // new target -> must hold first
+        now += 200L
         out.neck(0.11f)           // -0.04 == deadband -> writes (not strictly less)
         out.neck(0.105f)          // -0.005 -> skipped
 
@@ -85,10 +99,36 @@ class BodyOutputTest {
     }
 
     @Test
+    fun `ble neck ignores a pose that does not hold so the nod loop cannot feed itself`() {
+        val writes = mutableListOf<Float>()
+        var now = 1_000L
+        val out = LooiBleBodyOutput(null, { true }, { writes += it }, { now })
+
+        out.neck(0.5f)            // first pose -> writes
+        // A target that flits by for one camera frame is never a pose.
+        now += 16L
+        out.neck(-0.5f)
+        now += 16L
+        out.neck(0.5f)
+        assertEquals(listOf(0.5f), writes)
+
+        // Hold it and it goes through.
+        now += 400L
+        out.neck(-0.5f)           // new target -> must hold first
+        now += 200L
+        out.neck(-0.5f)
+        assertEquals(listOf(0.5f, -0.5f), writes)
+    }
+
+    @Test
     fun `ble neck clamps pitch before writing`() {
         val writes = mutableListOf<Float>()
-        val out = LooiBleBodyOutput(null, { true }, { writes += it })
+        var now = 1_000L
+        val out = LooiBleBodyOutput(null, { true }, { writes += it }, { now })
         out.neck(5f)
+        now += 400L
+        out.neck(-5f)
+        now += 200L
         out.neck(-5f)
         assertEquals(listOf(1f, -1f), writes)
     }
@@ -97,11 +137,13 @@ class BodyOutputTest {
     fun `ble neck disconnected writes nothing and reconnection unblocks the next write`() {
         var linkUp = false
         val writes = mutableListOf<Float>()
-        val out = LooiBleBodyOutput(null, { linkUp }, { writes += it })
+        var now = 1_000L
+        val out = LooiBleBodyOutput(null, { linkUp }, { writes += it }, { now })
 
         out.neck(0.3f)            // link down: no write, and lastNeckPitch stays stale
         linkUp = true
         out.neck(0.3f)            // first live write must not be swallowed by the stale value
+        now += 400L
         out.neck(0.31f)           // then coalescing applies again
 
         assertEquals(listOf(0.3f), writes)

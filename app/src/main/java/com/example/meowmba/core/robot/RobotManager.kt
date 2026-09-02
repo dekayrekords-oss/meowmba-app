@@ -13,6 +13,10 @@ import kotlinx.coroutines.flow.asStateFlow
  * and say so in [status] rather than pretending.
  */
 class RobotManager {
+
+    /** Minimum gap between two follow-turn pulses. */
+    private val turnPeriodMs: Long get() = TURN_PERIOD_MS
+
     private val _status = MutableStateFlow("simulated (no body)")
     val status: StateFlow<String> = _status.asStateFlow()
 
@@ -281,6 +285,7 @@ class RobotManager {
             val connectedTo = link.connectedAddress ?: address
             _status.value =
                 "LOOI body (BLE)" + if (connectedTo.isBlank()) "" else " @ $connectedTo"
+            link.turnEncoding = turnEncoding
             applyHeadlight(lightMode == HeadlightPolicy.Mode.FORCE_ON, force = true)
             true
         } else {
@@ -344,33 +349,39 @@ class RobotManager {
         val holdNeck = !live && lastFaceAtMs > 0L && nowMs - lastFaceAtMs < 400L
         val oy = offsetY ?: lastFaceY.takeIf { holdNeck }
         val pose = FaceMotorMap.followFace(if (live) offsetX else null, oy)
-        pose[FaceMotorMap.SERVO_HEAD_TILT]?.let {
-            // BLE neck speaks pitch, not servo angle. The clip-driven body owns
-            // the neck on a live BLE link — the legacy servo path only serves
-            // the TCP/serial transport now.
+        if (isFollowingPaused(nowMs)) {
+            // Hand on the glass: stand still and say nothing on the wire.
+            if (wasTurning) {
+                android.util.Log.i("LooiBle", "follow paused (screen in use) — holding still")
+                haltBase()
+            }
+            wasTurning = false
+            return
+        }
+        // KeepInFrame owns the neck target (its own dead-band + gain); the
+        // damping that stops the nodding loop lives in [applyNeck]. The BLE
+        // neck speaks pitch, not servo angle, and on a live link the
+        // clip-driven body owns it — the legacy servo path is TCP/serial only.
+        applyNeck(cmd.neckPitch, nowMs) { pitch ->
             val link = bleLink?.takeIf { c -> c.connected }
             if (link != null) {
-                body.perform(BodyVerb.Neck((it - 90f) / 90f))
+                body.perform(BodyVerb.Neck(pitch))
             } else {
-                controller.setServo(FaceMotorMap.SERVO_HEAD_TILT, it)
+                controller.setServo(FaceMotorMap.SERVO_HEAD_TILT, 90f + pitch * 90f)
             }
-        }
-        if (!live) {
-            if (wasTurning) haltBase()
-            wasTurning = false
-            return
-        }
-        // Face at the lip of the frame: brake. Chasing that offset is the spin.
-        if (kotlin.math.abs(offsetX) >= KeepInFrame.X_EDGE) {
-            if (wasTurning) haltBase()
-            wasTurning = false
-            return
         }
         val link = bleLink?.takeIf { it.connected }
         if (cmd.turning) {
             if (link != null) {
-                if (nowMs - lastTurnAtMs >= 400L) {
+                // One pulse per period: the frames carry their own duration,
+                // and stacking them inside 400ms is what made the base lurch.
+                if (nowMs - lastTurnAtMs >= turnPeriodMs) {
                     lastTurnAtMs = nowMs
+                    android.util.Log.i(
+                        "LooiBle",
+                        "follow turn speed=${cmd.turnSpeed} ticks=${cmd.turnTicks} " +
+                            "searching=${cmd.searching} x=${if (live) offsetX else lastFaceX}",
+                    )
                     link.turnPulse(cmd.turnSpeed, cmd.turnTicks)
                     wasTurning = true
                 }
@@ -380,9 +391,92 @@ class RobotManager {
                 }
                 wasTurning = true
             }
-        } else {
+        } else if (wasTurning) {
+            // Not turning any more (re-centered, resting between sweeps, or the
+            // search budget ran out): brake so nothing coasts.
+            haltBase()
             wasTurning = false
         }
+    }
+
+    /**
+     * Which left/right encoding the base responds to.
+     *
+     * Two encodings exist for this robot and the docs disagree about which one
+     * is live: the 17-byte 0x07 template (positive value = LEFT, two's
+     * complement = RIGHT) and the captured 20-byte tread scripts. On the user's
+     * base, RIGHT moved and LEFT did nothing, so the mapping is a runtime
+     * choice rather than a guess baked in — flip it from adb and watch the
+     * robot instead of shipping a rebuild per hypothesis.
+     */
+    fun setTurnEncoding(encoding: LooiBleProtocol.TurnEncoding) {
+        turnEncoding = encoding
+        bleLink?.turnEncoding = encoding
+        android.util.Log.i("LooiBle", "turn encoding = $encoding")
+    }
+
+    /** Resolve an encoding name (from prefs) to the enum; unknown = [default]. */
+    fun turnEncodingFrom(name: String?): LooiBleProtocol.TurnEncoding =
+        LooiBleProtocol.TurnEncoding.fromName(name)
+
+    @Volatile private var turnEncoding = LooiBleProtocol.TurnEncoding.LEGACY
+
+    // ── Neck (up/down) ───────────────────────────────────────────────────
+    //
+    // The neck is the one servo whose motion MOVES THE SCREEN: tilting the
+    // phone changes what the camera sees, which changes offsetY, which tilts
+    // it back — a feedback loop that nods forever and makes the display hard
+    // to touch. So the neck is the slowest, laziest channel on the body: the
+    // target must hold still before it is believed, moves are rate-limited,
+    // and the travel is capped well inside the mechanical range.
+    private var neckTarget = 0f
+    private var neckTargetSinceMs = 0L
+    private var lastNeckPitch = Float.NaN
+    private var lastNeckMoveAtMs = 0L
+
+    @Volatile private var followPausedUntilMs = 0L
+
+    /**
+     * Hold the body still for [ms] — a hand on the screen outranks following.
+     * Called on every touch; the follow loop resumes on its own afterwards.
+     */
+    fun pauseFollow(ms: Long = TOUCH_PAUSE_MS, nowMs: Long = System.currentTimeMillis()) {
+        followPausedUntilMs = maxOf(followPausedUntilMs, nowMs + ms)
+    }
+
+    /** True while the base is deliberately holding still after a touch. */
+    fun isFollowingPaused(nowMs: Long = System.currentTimeMillis()): Boolean =
+        nowMs < followPausedUntilMs
+
+    private fun applyNeck(target: Float, nowMs: Long, apply: (pitch: Float) -> Unit) {
+        val want = target.coerceIn(-NECK_RANGE, NECK_RANGE)
+        if (want != neckTarget) {
+            neckTarget = want
+            neckTargetSinceMs = nowMs
+        }
+        // The first pose after a reset has no history to distrust, so it applies
+        // straight away; every later change has to hold still first. Without
+        // that exemption a fresh lock waited a full sustain window before the
+        // head ever moved.
+        val firstPose = lastNeckPitch.isNaN()
+        if (!firstPose && nowMs - neckTargetSinceMs < NECK_SUSTAIN_MS) return
+        if (kotlin.math.abs(want - lastNeckPitch) < NECK_STEP) return
+        if (!firstPose && nowMs - lastNeckMoveAtMs < NECK_PERIOD_MS) return
+        lastNeckMoveAtMs = nowMs
+        lastNeckPitch = want
+        apply(want)
+    }
+
+    /** Stop everything the follow loop started and forget the lock. */
+    fun haltMotion() {
+        frameTracker.reset()
+        wasTurning = false
+        lastFaceAtMs = 0L
+        neckTarget = 0f
+        neckTargetSinceMs = 0L
+        lastNeckMoveAtMs = 0L
+        lastNeckPitch = Float.NaN
+        haltBase()
     }
 
     /** Abort an in-flight turn script so a lost lock cannot coast into a spin. */
@@ -503,15 +597,20 @@ class RobotManager {
             Motion.RIGHT -> { link.turnPulse((60 * k).toInt(), 10); Thread.sleep(600); link.stopAll(); "Turned right." }
             Motion.SPIN -> { link.turnPulse((80 * k).toInt(), 42); Thread.sleep(2600); link.stopAll(); "Spun around." }
             Motion.STOP -> { link.stopAll(); "Stopped." }
-            Motion.LOOK_UP -> { link.setNeckPitch(1f); "Looked up." }
-            Motion.LOOK_DOWN -> { link.setNeckPitch(0f); "Looked down." }
-            Motion.LOOK_CENTER -> { link.setNeckPitch(0.5f); "Head centered." }
+            // Neck pitch is -1 = up, 0 = center, +1 = down (LooiBleLink). These
+            // three had it inverted — "look up" tilted the head down.
+            Motion.LOOK_UP -> { link.setNeckPitch(-1f); "Looked up." }
+            Motion.LOOK_DOWN -> { link.setNeckPitch(1f); "Looked down." }
+            Motion.LOOK_CENTER -> { link.setNeckPitch(0f); "Head centered." }
             Motion.NOD -> {
+                // Straddle center now that the sign convention is known:
+                // -1 up / 0 center / +1 down. Both steps used to be positive
+                // (both "down"), so a yes was a downward twitch.
                 repeat(2) {
-                    link.setNeckPitch(0.15f); Thread.sleep(320)
-                    link.setNeckPitch(0.75f); Thread.sleep(320)
+                    link.setNeckPitch(-0.15f); Thread.sleep(320)
+                    link.setNeckPitch(0.35f); Thread.sleep(320)
                 }
-                link.setNeckPitch(0.5f); "Nodded."
+                link.setNeckPitch(0f); "Nodded."
             }
             Motion.SHAKE_HEAD -> {
                 repeat(2) {
@@ -546,5 +645,28 @@ class RobotManager {
         bleLink?.close()
         bleLink = null
         body = SimulatedBodyOutput()
+    }
+
+    companion object {
+        /** Minimum gap between two follow-turn pulses. */
+        const val TURN_PERIOD_MS = 400L
+
+        /** How long a screen touch parks the body. */
+        const val TOUCH_PAUSE_MS = 2_500L
+
+        /** A neck target must hold this long before it is believed. */
+        const val NECK_SUSTAIN_MS = 900L
+
+        /** Minimum gap between neck moves. */
+        const val NECK_PERIOD_MS = 1_400L
+
+        /** Ignore neck changes smaller than this (pitch, -1..1). */
+        const val NECK_STEP = 0.10f
+
+        /**
+         * Neck travel cap. The servo goes to ±1; the screen the user is trying
+         * to touch only tolerates a fraction of that.
+         */
+        const val NECK_RANGE = 0.35f
     }
 }

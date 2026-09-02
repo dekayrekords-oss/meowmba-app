@@ -164,6 +164,10 @@ class LooiBleLink(private val context: Context) {
     @Synchronized
     private fun connect(address: String) {
         if (gatt != null) return
+        // Logged, not just surfaced in the status line: a base that is asleep
+        // looks identical to one that is unpaired, and the only way to tell
+        // them apart is whether the direct connect ever reaches GATT.
+        Log.i(TAG, "LOOI direct connect -> $address")
         setState(LinkState.CONNECTING, "connecting to $address")
         gatt = adapter?.getRemoteDevice(address)?.connectGatt(context, false, gattCallback)
     }
@@ -401,6 +405,10 @@ class LooiBleLink(private val context: Context) {
         runCatching { g.writeCharacteristic(ch) }.getOrDefault(false)
     }
 
+    /** Which left/right encoding this base obeys. See [LooiBleProtocol.TurnEncoding]. */
+    @Volatile
+    var turnEncoding: LooiBleProtocol.TurnEncoding = LooiBleProtocol.TurnEncoding.LEGACY
+
     /**
      * Turn the base. 17-byte 0x07 + positive value is the verified LEFT.
      * RIGHT uses two's-complement value on the same template (subOp 0x01
@@ -410,12 +418,18 @@ class LooiBleLink(private val context: Context) {
         val mag = kotlin.math.abs(speedPercent)
         if (mag == 0) return writeFrame(LooiBleProtocol.rotateFrame(0, 1, right = false))
         val right = speedPercent > 0
-        val frame = LooiBleProtocol.rotateFrame(mag, ticks, right = right)
         android.util.Log.i(
             "LooiBle",
-            "turn ${if (right) "RIGHT" else "LEFT"} mag=$mag value=${frame.value} ticks=$ticks",
+            "turn ${if (right) "RIGHT" else "LEFT"} mag=$mag ticks=$ticks enc=$turnEncoding",
         )
-        return writeFrame(frame)
+        return when (turnEncoding) {
+            LooiBleProtocol.TurnEncoding.CAPTURED ->
+                writeRaw(LooiBleProtocol.capturedTurn(seq.next(), left = !right))
+            LooiBleProtocol.TurnEncoding.INVERTED ->
+                writeFrame(LooiBleProtocol.rotateFrame(mag, ticks, right = !right))
+            LooiBleProtocol.TurnEncoding.LEGACY ->
+                writeFrame(LooiBleProtocol.rotateFrame(mag, ticks, right = right))
+        }
     }
 
     /** Proportional FORWARD drive on fed0 (the verified drive channel). */

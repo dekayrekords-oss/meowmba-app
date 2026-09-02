@@ -89,23 +89,51 @@ class KeepInFrameTest {
     }
 
     @Test
-    fun `lost face holds still instead of search-spinning`() {
+    fun `a lost face sweeps the way they left, then rests`() {
         val t = KeepInFrame.Tracker()
         assertTrue(KeepInFrame.step(0.40f, 0f, 1f, 1_000, 1_000, 0.40f, t).turning)
-        val hold = KeepInFrame.step(null, null, null, nowMs = 1_200, lastSeenMs = 1_000, lastX = 0.40f, tracker = t)
-        assertFalse(hold.searching)
-        assertFalse(hold.turning)
-        val later = KeepInFrame.step(null, null, null, nowMs = 1_700, lastSeenMs = 1_000, lastX = 0.40f, tracker = t)
-        assertFalse(later.searching)
-        assertFalse(later.turning)
+        // A 200ms blink is still a lock, not a loss.
+        val blink = KeepInFrame.step(null, null, null, nowMs = 1_200, lastSeenMs = 1_000, lastX = 0.40f, tracker = t)
+        assertFalse(blink.searching)
+        assertFalse(blink.turning)
+        // Past the hold they left to the right, so sweep right.
+        val sweep = KeepInFrame.step(null, null, null, nowMs = 1_700, lastSeenMs = 1_000, lastX = 0.40f, tracker = t)
+        assertTrue("a lost face must be searched for, got $sweep", sweep.searching)
+        assertTrue(sweep.turnSpeed > 0)
+        // One burst is bounded: SEARCH_GIVE_UP_MS after it started the base
+        // rests instead of hunting (started 1_700, so 4_600 is past it).
+        val rested = KeepInFrame.step(null, null, null, nowMs = 4_600, lastSeenMs = 1_000, lastX = 0.40f, tracker = t)
+        assertFalse("search must rest between bursts", rested.turning)
+        // ...and sweeps back the other way once the SEARCH_PAUSE_MS rest is over.
+        val back = KeepInFrame.step(null, null, null, nowMs = 6_600, lastSeenMs = 1_000, lastX = 0.40f, tracker = t)
+        assertTrue("the second sweep goes back the other way, got $back", back.turnSpeed < 0)
     }
 
     @Test
-    fun `a face leaving the frame does not chase into a spin`() {
+    fun `searching eventually stops instead of hunting forever`() {
+        val t = KeepInFrame.Tracker()
+        assertTrue(KeepInFrame.step(0.40f, 0f, 1f, 1_000, 1_000, 0.40f, t).turning)
+        var now = 1_500L
+        var bursts = 0
+        while (now < 60_000L) {
+            val c = KeepInFrame.step(null, null, null, nowMs = now, lastSeenMs = 1_000, lastX = 0.40f, tracker = t)
+            if (c.turning) bursts++
+            now += 100L
+        }
+        // 3 bursts x 2.8s of sweeping, sampled every 100ms, and nothing after.
+        assertTrue("expected a bounded number of search bursts, got $bursts", bursts in 70..95)
+        val done = KeepInFrame.step(null, null, null, nowMs = 60_000, lastSeenMs = 1_000, lastX = 0.40f, tracker = t)
+        assertFalse("after the burst budget the base stands still", done.turning)
+        assertFalse("and the lock is dropped so a new face starts clean", t.hasBody)
+    }
+
+    @Test
+    fun `a face at the lip of the frame is turned back in, not braked`() {
         val t = KeepInFrame.Tracker()
         assertTrue(KeepInFrame.command(0.40f, 0f, 1_000L, t).turning)
         val edge = KeepInFrame.command(0.55f, 0f, 1_200L, t)
-        assertFalse("edge of frame is leaving, not a chase, got turn=${edge.turnSpeed}", edge.turning)
-        assertFalse(edge.searching)
+        assertTrue("half out of frame is exactly when to turn, got ${edge.turnSpeed}", edge.turning)
+        assertTrue("the edge turn is capped, got ${edge.turnSpeed}", kotlin.math.abs(edge.turnSpeed) <= KeepInFrame.EDGE_SPEED)
+        assertFalse(edge.driving)
     }
 }
