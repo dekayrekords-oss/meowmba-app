@@ -122,9 +122,10 @@ fun CompanionScreen(
                 .fillMaxSize()
                 .safeDrawingPadding()
         ) {
+            val faceContext = LocalContext.current
+
             // Two pinned apps on the face (first two favorites).
             if (pinnedApps.isNotEmpty()) {
-                val faceContext = LocalContext.current
                 Row(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
@@ -145,6 +146,17 @@ fun CompanionScreen(
                     }
                 }
             }
+
+            // Right-edge app tab: four more pinned apps in a strip down the
+            // right side. Swipe left to pull it out, swipe left again to put
+            // it back; the "+" opens the drawer where long-press pins an app.
+            AppRailTab(
+                apps = pinnedApps.drop(2).take(RAIL_APP_LIMIT),
+                onLaunch = { launchApp(faceContext, it) },
+                onAdd = { viewModel.toggleAppDrawer() },
+                onUnpin = { viewModel.togglePin(it) },
+                modifier = Modifier.align(Alignment.CenterEnd),
+            )
 
             // Privacy status line (bottom-start): explicit, text-based backup
             // for the face-level privacy marks.
