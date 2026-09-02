@@ -563,7 +563,8 @@ class CompanionViewModel(
     private val _motionLurch = kotlinx.coroutines.flow.MutableStateFlow(0f)
 
     /** Phase G1: LOOI-style mood state machine (pure, unit-tested). */
-    /** Pinned apps: drawer favorites (up to 8); the first two also show on the face.
+    /** Pinned apps: drawer favorites (up to 8); the first two show on the face
+     * and the next four in the right-edge app tab (RAIL_APP_LIMIT).
      * Declared before init: the pin-restore block in init reads it. */
     private val _pinnedPackages = MutableStateFlow<List<String>>(emptyList())
     val pinnedPackages: kotlinx.coroutines.flow.StateFlow<List<String>> = _pinnedPackages.asStateFlow()
@@ -626,6 +627,7 @@ class CompanionViewModel(
                 if (!live) {
                     confinement.onLinkLost(System.currentTimeMillis())
                 }
+                onBodyLinkChanged(robotManager.hasLiveBody)
             }
         }
 
@@ -670,6 +672,14 @@ class CompanionViewModel(
             }
         }
         refreshRobot()
+        // Give the ~2 GB on-device model back when it stops being used. Checked
+        // once a minute; a fresh question reloads it.
+        viewModelScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(60_000L)
+                runCatching { releaseIdleLocalBrain() }
+            }
+        }
         // Face tracking → avatar gaze + Looi head pan. Auto-on at launch (front
         // camera); null track just idles the gaze when nobody is in frame.
         viewModelScope.launch {
@@ -1932,14 +1942,11 @@ class CompanionViewModel(
                 } else {
                     MediaPipeProvider(storage.context, path)
                 }
-                // Load the weights NOW, in the background — not when the user
-                // is standing there waiting for the first answer.
-                (local as? com.example.meowmba.core.agent.LiteRtProvider)?.let { lite ->
-                    viewModelScope.launch(ioDispatcher) {
-                        lite.warmUp()
-                        android.util.Log.i("CompanionViewModel", "local brain warmed: $path")
-                    }
-                }
+                localBrain = local
+                // Lazy-load: the ~2.6GB LiteRT weights load on the first
+                // generate call (engine()), not at route build. Warming them
+                // eagerly here left the phone slow and the launcher janky for
+                // the whole idle window after any route rebuild.
                 routes += com.example.meowmba.core.agent.OmniRoute.Route(
                     id = "local",
                     label = "On-device",
@@ -2019,12 +2026,11 @@ class CompanionViewModel(
                     null
                 } else if (path.endsWith(".litertlm")) {
                     LiteRtProvider(secureStorage.context, path).also { lite ->
-                        // Warm in the background so the first question doesn't
-                        // pay the model load.
-                        viewModelScope.launch(ioDispatcher) {
-                            lite.warmUp()
-                            android.util.Log.i("CompanionViewModel", "local brain warmed: $path")
-                        }
+                        localBrain = lite
+                        // Lazy-load: weights load on the first generate call,
+                        // not at route build. Eager warm-up of the 2.6GB model
+                        // on every route build kept the phone slow after each
+                        // conversation.
                     }
                 } else {
                     MediaPipeProvider(secureStorage.context, path)
@@ -2720,6 +2726,94 @@ class CompanionViewModel(
         )
     }
 
+    /** True while a real base is attached, so the link change is edge-triggered. */
+    private var bodyAttached = false
+    /** Camera state we changed for the body, so detaching can put it back. */
+    private var autoCameraForBody = false
+    private var cameraOnBeforeBody = false
+
+    /**
+     * A base that cannot see you cannot follow you, so attaching one is what
+     * turns face tracking on — the camera is deliberately NOT on by default
+     * (front camera + ML Kit is the battery hog), but it is the whole point of
+     * the body. Detaching puts the camera back exactly as it was found, and
+     * only if we were the ones who switched it on.
+     */
+    private fun onBodyLinkChanged(live: Boolean) {
+        if (live == bodyAttached) return
+        bodyAttached = live
+        if (!live) {
+            robotManager.haltMotion()
+            if (!autoCameraForBody) return
+            autoCameraForBody = false
+            if (!cameraOnBeforeBody) {
+                _uiState.value = _uiState.value.copy(
+                    isCameraEnabled = false,
+                    isPreviewVisible = false,
+                )
+                secureStorage?.saveBooleanPreference(KEY_CAMERA_ENABLED, false)
+            }
+            visionManager?.setFollowOnly(false)
+            visionManager?.setFaceTrackingEnabled(false)
+            return
+        }
+        cameraOnBeforeBody = _uiState.value.isCameraEnabled
+        if (!cameraOnBeforeBody) {
+            // Following needs the camera. Announce it rather than flipping a
+            // privacy switch in silence.
+            speak("Body attached — turning my camera on so I can follow you.")
+        }
+        robotManager.setTurnEncoding(
+            robotManager.turnEncodingFrom(secureStorage?.getPreference("looi_turn_encoding")),
+        )
+        autoCameraForBody = true
+        ensureFaceTrackingOn(followOnly = true)
+    }
+
+    /**
+     * The user touched the screen: park the body. Turning and tilting move the
+     * display, so following them has to yield while they are using it.
+     */
+    fun noteScreenTouch() {
+        robotManager.pauseFollow()
+    }
+
+    /** The on-device brain, kept so it can be released when it goes idle. */
+    private var localBrain: com.example.meowmba.core.agent.ModelProvider? = null
+
+    /**
+     * The on-device model is ~2 GB resident. Holding it forever put this phone
+     * into swap and made everything — including the launcher, which is this
+     * app — feel slow. Release it once nobody has asked it anything for a
+     * while, sooner if the system is already short on memory; the next question
+     * simply reloads it.
+     */
+    private fun releaseIdleLocalBrain(force: Boolean = false) {
+        val lite = localBrain as? com.example.meowmba.core.agent.LiteRtProvider ?: return
+        if (!lite.isLoaded) return
+        val idle = lite.idleMs()
+        val am = secureStorage?.context
+            ?.getSystemService(android.content.Context.ACTIVITY_SERVICE)
+            as? android.app.ActivityManager
+        val lowMemory = am?.let {
+            val info = android.app.ActivityManager.MemoryInfo()
+            it.getMemoryInfo(info)
+            info.lowMemory || info.availMem < 1_000L * 1024L * 1024L
+        } ?: false
+        if (force || idle >= LOCAL_BRAIN_IDLE_RELEASE_MS ||
+            (lowMemory && idle >= LOCAL_BRAIN_LOW_MEM_IDLE_MS)
+        ) {
+            if (lite.release()) {
+                val reason = if (idle == Long.MAX_VALUE) "never used since launch"
+                    else "idle ${idle / 1000L}s"
+                android.util.Log.i(
+                    "CompanionViewModel",
+                    "released the on-device brain ($reason, lowMemory=$lowMemory)",
+                )
+            }
+        }
+    }
+
     /** (Re)resolve the active robot body from preferences. Non-blocking. */
     fun refreshRobot() {
         // Concurrency guard: screen on/off and settings toggles can call this
@@ -3019,6 +3113,9 @@ class CompanionViewModel(
         appInBackground = true
         stopAlwaysOnListening()
         stopWakeLoopAndRelease()
+        // Same reasoning as the hand-off: nobody is talking to the local model
+        // in the background, so do not make the phone choose between it and us.
+        releaseIdleLocalBrain(force = true)
     }
 
     /** True while meow is still listening for a spoken turn (conversation follow-up). */
@@ -3065,6 +3162,11 @@ class CompanionViewModel(
         speechService?.stopListening()
         stopAlwaysOnListening()
         stopWakeLoopAndRelease()
+        // Nothing reads the on-device model while the background service owns
+        // the mic, and the service is starting its own engines right now.
+        // Holding ~2GB through that hand-off is what got the HOME app killed by
+        // lmkd on Back (measured: memory watermark breached, then SIG 9).
+        releaseIdleLocalBrain(force = true)
         resetState()
         // resetState() left the state IDLE and therefore re-armed the in-app wake
         // loop, which re-grabbed the mic. That blocked the foreground service we are
@@ -5803,12 +5905,23 @@ class CompanionViewModel(
     /**
      * Auto face tracking: front camera + ML Kit analysis, no PiP required.
      * Requests CAMERA if needed; re-tries from [onCameraPermissionResult].
+     *
+     * [followOnly] is the cheap mode used when a robot body is attached and the
+     * only consumer is "keep them in frame" — see [VisionManager.setFollowOnly].
+     * Anything the user actually wants to be *seen* for runs at full quality.
      */
-    fun ensureFaceTrackingOn() {
+    fun ensureFaceTrackingOn(followOnly: Boolean = false) {
+        visionManager?.setFollowOnly(followOnly)
         if (!_uiState.value.isCameraEnabled) {
             // Privacy mark was off — re-enable camera for seeing the user.
             _uiState.value = _uiState.value.copy(isCameraEnabled = true)
-            secureStorage?.saveBooleanPreference(KEY_CAMERA_ENABLED, true)
+            // Body-following is a session state, not a preference: persisting
+            // it means a crash or a kill while the base is attached leaves the
+            // front camera + ML Kit auto-starting at full rate on every later
+            // launch, with no base attached to justify it.
+            if (!followOnly) {
+                secureStorage?.saveBooleanPreference(KEY_CAMERA_ENABLED, true)
+            }
         }
         val vm = visionManager ?: return
         if (!vm.hasPermission()) {
@@ -7972,6 +8085,12 @@ SAFE if the scene looks like a normal road, car interior, sidewalk, or room, or 
         private const val ALWAYS_ON_COMMIT_MS = 850L
         /** Keep "user in view" a beat after a one-frame face miss. */
         private const val FACE_MIC_HOLD_MS = 900L
+
+        /** Release the resident on-device model after this long with no local turn. */
+        private const val LOCAL_BRAIN_IDLE_RELEASE_MS = 10 * 60 * 1000L
+
+        /** ...or this long when the system is already short on memory. */
+        private const val LOCAL_BRAIN_LOW_MEM_IDLE_MS = 2 * 60 * 1000L
 
         /**
          * How many silent-window re-arms the watchdog may do before giving up.

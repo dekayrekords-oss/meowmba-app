@@ -1,5 +1,6 @@
 package com.example.meowmba.core.agent
 
+import android.app.ActivityManager
 import android.content.Context
 import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Content
@@ -23,12 +24,38 @@ class LiteRtProvider(
 
     override val name: String = "LiteRT (On-device)"
 
-    private val engine: Engine by lazy {
+    // The shared engine registry and the single lock that guards it live in the
+    // companion object below. A *per-instance* lock would let two provider
+    // instances (route rebuilds create a fresh one each time) race on the
+    // process-wide map and leak a resident 2.6GB model — so every map access
+    // must serialize on one companion-level lock.
+    @Volatile private var lastUsedAtMs = 0L
+
+    /**
+     * The resident model is the single biggest thing this app owns: the
+     * Gemma E2B bundle is 2.6 GB on disk and lands as ~2 GB of resident GPU +
+     * native memory, which is enough to put the whole phone into swap (measured:
+     * PSS 2.28 GB, kswapd0 pinned, load ~12, 65% janky frames in the launcher).
+     * So the engine is held, but only while it is being used — [release] hands
+     * that memory back and the next question pays the load again.
+     */
+    private fun engine(): Engine {
+        engines[modelPath]?.let { return it }
+        // Single companion lock: re-check after acquiring it (another instance
+        // may have built this model while we waited) and build at most once.
+        return synchronized(engineLock) {
+            engines[modelPath]?.let { return it }
+            buildEngine().also { engines[modelPath] = it }
+        }
+    }
+
+    private fun buildEngine(): Engine {
         // GPU first: on device, Gemma E2B streamed tokens far too slowly on
         // CPU for voice (20s+ before TTS started), while the LiteRT runtime
         // reports a working GPU accelerator. If the GPU delegate fails to
         // initialize, fall back to CPU instead of killing the local route.
-        runCatching {
+        android.util.Log.i("LiteRt", "loading on-device brain: $modelPath")
+        return runCatching {
             Engine(
                 EngineConfig(
                     modelPath = modelPath,
@@ -45,6 +72,36 @@ class LiteRtProvider(
                 )
             ).also { it.initialize() }
         }
+    }
+
+    /** True when the weights for this model are resident right now. */
+    val isLoaded: Boolean get() = engines.containsKey(modelPath)
+
+    /** Milliseconds since the last generation, or Long.MAX_VALUE if unused. */
+    fun idleMs(nowMs: Long = System.currentTimeMillis()): Long =
+        if (lastUsedAtMs == 0L) Long.MAX_VALUE else nowMs - lastUsedAtMs
+
+    /**
+     * Free the resident engine. Returns true if something was actually
+     * released. Safe to call when nothing is loaded.
+     */
+    fun release(): Boolean {
+        val e = synchronized(engineLock) { engines.remove(modelPath) } ?: return false
+        android.util.Log.i("LiteRt", "released on-device brain (freed the resident model)")
+        return runCatching { e.close(); true }.getOrDefault(false)
+    }
+
+    /**
+     * Would warming up be safe right now? Loading a multi-GB model onto a phone
+     * that is already short on memory trades a fast first answer for a slow
+     * everything, so when the system is tight we stay cold and load on demand.
+     */
+    fun memoryAllowsWarmUp(minFreeMb: Long = 1_500L): Boolean {
+        val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+            ?: return true
+        val info = ActivityManager.MemoryInfo()
+        am.getMemoryInfo(info)
+        return !info.lowMemory && info.availMem >= minFreeMb * 1024L * 1024L
     }
 
     /**
@@ -73,7 +130,14 @@ class LiteRtProvider(
      *  multi-second model load mid-conversation (measured on device: an 11.8s
      *  dead gap between hearing the user and starting to think). */
     fun warmUp() {
-        runCatching { engine }
+        if (!memoryAllowsWarmUp()) {
+            android.util.Log.i(
+                "LiteRt",
+                "skipping warm-up: not enough free memory — the model loads on demand",
+            )
+            return
+        }
+        runCatching { engine() }
     }
 
     override fun generateStreaming(prompt: String): Flow<ModelResponse> = flow {
@@ -94,6 +158,8 @@ class LiteRtProvider(
         )
 
         val conversation = try {
+            lastUsedAtMs = System.currentTimeMillis()
+            noteUsed(modelPath, lastUsedAtMs)
             // Engine init + createConversation are multi-second native calls
             // (measured on device: 11.8s cold), and under a racing background
             // warmUp() the `by lazy` gate can hold the main thread for 6s+
@@ -104,7 +170,7 @@ class LiteRtProvider(
             // invariant (which the app's MeowFU guard surfaces and would otherwise
             // abort the whole answer).
             withContext(Dispatchers.Default) {
-                engine.createConversation(config)
+                engine().createConversation(config)
             }
         } catch (e: Exception) {
             emit(ModelResponse.Error(e.message ?: "LiteRT could not start a conversation"))
@@ -152,6 +218,44 @@ class LiteRtProvider(
     private class ReplyCapException : RuntimeException()
 
     private companion object {
+        /** Guards all access to [engines] so build/release are atomic across instances. */
+        val engineLock = Any()
+
+        /** modelPath -> resident engine. Never grows beyond the models on disk. */
+        val engines = java.util.concurrent.ConcurrentHashMap<String, Engine>()
+        val lastUsedAt = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+        /**
+         * Free every resident model. Returns how many were released.
+         *
+         * Used when the app goes to the background: nothing reads the on-device
+         * brain there, and keeping it is what got this app (the HOME app) killed
+         * by lmkd.
+         */
+        fun releaseAll(): Int {
+            val paths = synchronized(engineLock) { engines.keys.toList() }
+            var n = 0
+            paths.forEach { path ->
+                val e = synchronized(engineLock) { engines.remove(path) } ?: return@forEach
+                runCatching { e.close() }
+                n++
+            }
+            if (n > 0) {
+                android.util.Log.i("LiteRt", "released $n resident model(s)")
+            }
+            return n
+        }
+
+        /** Milliseconds since any local model was last asked a question. */
+        fun idleMs(nowMs: Long = System.currentTimeMillis()): Long {
+            val last = lastUsedAt.values.maxOrNull() ?: return Long.MAX_VALUE
+            return nowMs - last
+        }
+
+        internal fun noteUsed(modelPath: String, nowMs: Long) {
+            lastUsedAt[modelPath] = nowMs
+        }
+
         /** Voice replies stay conversational; uncapped Gemma rambles. */
         val MAX_REPLY_SENTENCES = 3
         val SENTENCES = Regex("""(?<=[.!?])\s+""")
@@ -176,7 +280,9 @@ class LiteRtProvider(
             ),
         )
         val conversation = try {
-            engine.createConversation(config)
+            lastUsedAtMs = System.currentTimeMillis()
+            noteUsed(modelPath, lastUsedAtMs)
+            engine().createConversation(config)
         } catch (e: Exception) {
             return ModelResponse.Error(e.message ?: "LiteRT could not start a conversation")
         }
@@ -204,6 +310,6 @@ class LiteRtProvider(
     fun isModelAvailable(): Boolean = File(modelPath).exists()
 
     fun close() {
-        runCatching { engine.close() }
+        release()
     }
 }
