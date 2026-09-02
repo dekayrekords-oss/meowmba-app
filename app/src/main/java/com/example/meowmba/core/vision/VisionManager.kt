@@ -304,6 +304,8 @@ internal fun remapEulerToDisplay(
  * back as Result.failure with a human-readable reason — the companion
  * says what happened instead of pretending.
  */
+private const val FOLLOW_SKIP_N = 4
+
 class VisionManager(
     private val context: Context,
     private val lifecycleOwner: LifecycleOwner
@@ -389,6 +391,48 @@ class VisionManager(
             PackageManager.PERMISSION_GRANTED
 
     /**
+     * Body-follow mode. The base only needs to know WHERE the face box is, a
+     * few times a second — it does not need accurate classification, pose, or
+     * every frame. Continuous full-rate ACCURATE face + pose is this app's
+     * biggest heat hog (measured: it is what "cooked the Fold"), so following
+     * drops to 1-in-[FOLLOW_SKIP_N] frames, skips pose entirely, and uses the
+     * FAST detector. Asking to be seen ("can you see me", eye tap) switches
+     * the full pipeline back on.
+     */
+    @Volatile
+    var followOnly = false
+        private set
+
+    private fun detectorOptions(follow: Boolean): FaceDetectorOptions =
+        if (follow) {
+            FaceDetectorOptions.Builder()
+                .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
+                .setContourMode(FaceDetectorOptions.CONTOUR_MODE_NONE)
+                .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_NONE)
+                .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_ALL)
+                .setMinFaceSize(0.10f)
+                .enableTracking()
+                .build()
+        } else {
+            FaceDetectorOptions.Builder()
+                .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
+                .setContourMode(FaceDetectorOptions.CONTOUR_MODE_NONE)
+                .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_NONE)
+                .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_ALL)
+                .setMinFaceSize(0.08f)
+                .enableTracking()
+                .build()
+        }
+
+    /** Turn body-follow mode on/off. Safe to call while tracking is live. */
+    fun setFollowOnly(on: Boolean) {
+        if (followOnly == on) return
+        followOnly = on
+        faceDetector = FaceDetection.getClient(detectorOptions(on))
+        android.util.Log.i("MeowVision", "followOnly=$on (1 in ${if (on) FOLLOW_SKIP_N else 1} frames, pose=${!on})")
+    }
+
+    /**
      * Start or stop continuous face tracking. When enabled the front camera is
      * used and each frame's largest face is published to [faceTrack].
      * @return true if tracking is actually running (permission + bound), false if
@@ -414,15 +458,7 @@ class VisionManager(
                     .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
                     .build()
             }
-            val options = FaceDetectorOptions.Builder()
-                .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
-                .setContourMode(FaceDetectorOptions.CONTOUR_MODE_NONE)
-                .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_NONE)
-                .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_ALL)
-                .setMinFaceSize(0.08f)
-                .enableTracking()
-                .build()
-            faceDetector = FaceDetection.getClient(options)
+            faceDetector = FaceDetection.getClient(detectorOptions(followOnly))
             poseDetector = PoseDetection.getClient(
                 PoseDetectorOptions.Builder()
                     .setDetectorMode(PoseDetectorOptions.STREAM_MODE)
@@ -612,7 +648,7 @@ class VisionManager(
         analyzeSkip++
         val faceLockHot = lastRealFaceAtMs != 0L &&
             System.currentTimeMillis() - lastRealFaceAtMs < 900L
-        val skipN = 1
+        val skipN = if (followOnly) FOLLOW_SKIP_N else 1
         if (analyzeSkip % skipN != 0) {
             proxy.close()
             return
@@ -626,7 +662,11 @@ class VisionManager(
         val cameraRot = proxy.imageInfo.rotationDegrees
         val input = InputImage.fromMediaImage(mediaImage, cameraRot)
         val faceTask = detector.process(input)
-        val poseTask = if (analyzeSkip % (if (faceLockHot) 4 else 3) == 0) {
+        // Following a body needs no skeleton: pose is the single most
+        // expensive thing in this pipeline and follow mode never reads it.
+        val poseTask = if (followOnly) {
+            null
+        } else if (analyzeSkip % (if (faceLockHot) 4 else 3) == 0) {
             poseDetector?.process(input)
         } else {
             null
