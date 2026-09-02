@@ -34,6 +34,14 @@ val localProps = Properties().apply {
     if (f.exists()) f.inputStream().use { load(it) }
 }
 val githubToken = (localProps.getProperty("github_token") ?: System.getenv("GITHUB_TOKEN") ?: "").trim()
+
+// Debug signing: `adb install -r` only replaces the on-device build if the
+// signature matches, and the phone's build was signed with meow's debug key —
+// any other debug key makes every install fail with UPDATE_INCOMPATIBLE and
+// the only way out is an uninstall that wipes Room. Point debugKeystore at
+// that key in local.properties (gitignored); without it the default
+// per-machine debug keystore is used, as before.
+val debugKeystorePath = (localProps.getProperty("debugKeystore") ?: "").trim()
 val hasMwdat = githubToken.isNotBlank() &&
     Regex("^(ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,255})$").matches(githubToken)
 println(
@@ -63,8 +71,8 @@ android {
         applicationId = "com.example.meowmba"
         minSdk = 31
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.3.0"
+        versionCode = 5
+        versionName = "1.3.1"
 
         ndk {
             abiFilters += "arm64-v8a"
@@ -93,6 +101,14 @@ android {
                 storePassword = keystoreProps.getProperty("storePassword")
                 keyAlias = keystoreProps.getProperty("keyAlias")
                 keyPassword = keystoreProps.getProperty("keyPassword")
+            }
+        }
+        if (debugKeystorePath.isNotBlank() && file(debugKeystorePath).exists()) {
+            getByName("debug") {
+                storeFile = file(debugKeystorePath)
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
             }
         }
     }

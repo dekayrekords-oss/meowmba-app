@@ -17,11 +17,36 @@ Remotes:
 - `prog` — same server, prog account: `prog@192.168.1.69:/home/prog/git/meowmba-app.git`
 - `origin` — the notebook, `meow-nb:/home/claude/git/meowmba-app.git`
 
-**Sync state (2026-07-31):** `lan` and `prog` are current. `origin` (meow-nb)
-is unreachable — Tailscale IP dead, nothing on the LAN accepts the meow key —
-and is 6+ commits behind. When the notebook returns: `git push origin main`.
+**Sync state (2026-09-01):** `lan` is the CANONICAL repo — it is the one that
+gets the real work, and its `main` is what the phone runs. `prog`'s bare repo
+was 54 commits behind (stuck at `867f275`, Aug 25) because everything landed on
+`lan` after that; both are now at `9b6006e` (v1.3.0), and `prog-main` was
+fast-forwarded to the same commit.
+
+**Fetch both before you build anything.** Building from `prog-main` while
+`lan/main` had moved on shipped a build that silently reverted a week of work —
+including last night's voice fixes (local Whisper) — onto the phone:
+
+```bash
+git fetch --all && git log --oneline -1 lan/main
+```
+
+**A fresh worktree CANNOT hear.** The voice runtime is gitignored
+(`.gitignore`: `/app/src/main/jniLibs/`, `sherpa-onnx-kws-*`, `silero_vad.onnx`,
+`speaker.onnx`), so a new worktree builds an app whose mic fails instantly with
+`UnsatisfiedLinkError: libsherpa-onnx-jni.so not found` and
+`onListeningError code=5`. Run this once per worktree, before the first build:
+
+```bash
+scripts/fetch_kws_assets.sh     # ~100MB: sherpa .so files, KWS model, VAD, ASR
+```
+
+Bump `versionCode` past whatever is on the phone (`adb shell dumpsys package
+com.example.meowmba | grep versionCode`) so an install is always an upgrade, and
+sign debug builds with meow's debug keystore (`debugKeystore=` in the gitignored
+`local.properties`) or `adb install -r` fails with UPDATE_INCOMPATIBLE.
 The repo sets `core.sshCommand` to `id_ed25519_meow` + `IdentitiesOnly`;
-all three remotes use that key. prog's password exists but its account
+all remotes use that key. prog's password exists but its account
 lockouts bite after a few failed password logins — always use the key.
 
 ## Build & test
