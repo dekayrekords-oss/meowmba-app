@@ -137,8 +137,7 @@ fun AvatarScreen(
                 style = MaterialTheme.typography.titleMedium,
             )
             Text(
-                text = "Both styles share every animation — the eyes are the only " +
-                    "thing that changes. Tap one to watch it play.",
+                text = "All styles share every animation — only the face changes. Tap one to watch it play.",
                 color = Color.Gray,
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -220,7 +219,7 @@ private fun AnimationRow(name: String, onClick: () -> Unit) {
 }
 
 /**
- * A thumbnail of one eye in each style, so the two can be told apart without
+ * A thumbnail of the face in each style, so they can be told apart without
  * closing the card. The Neo half reuses the real renderer; the classic half is a
  * capsule drawn here rather than reaching into [AvatarRenderer]'s private eye —
  * at this size it is a swatch, not a rehearsal of the face.
@@ -235,6 +234,36 @@ private fun EyePreview(style: AvatarStyle, modifier: Modifier = Modifier) {
         val eyeH = size.height * 0.62f
 
         when (style) {
+            AvatarStyle.SIGNAL -> {
+                // Jarvis Orb swatch: bright nucleus + scattered parameter dots.
+                val cyan = Color(0xFF5CE1FF)
+                val r = size.minDimension * 0.42f
+                val c = Offset(cx, cy)
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(cyan.copy(alpha = 0.22f), Color.Transparent),
+                        center = c,
+                        radius = r * 1.2f,
+                    ),
+                    radius = r * 1.2f,
+                    center = c,
+                )
+                drawCircle(cyan.copy(alpha = 0.30f), r, c,
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(r * 0.05f))
+                // Deterministic mini-scatter (fixed seed math, not Random —
+                // previews must not shimmer on every recomposition).
+                for (i in 0 until 26) {
+                    val fi = i.toFloat()
+                    val px = cx + kotlin.math.cos(fi * 2.39996f) * r * (0.25f + (i % 5) * 0.14f)
+                    val py = cy + kotlin.math.sin(fi * 2.39996f) * r * (0.25f + ((i * 3) % 5) * 0.14f)
+                    drawCircle(
+                        (if (i % 6 == 0) Color(0xFFA78BFA) else cyan).copy(alpha = 0.85f),
+                        r * (0.035f + (i % 3) * 0.018f),
+                        Offset(px, py),
+                    )
+                }
+                drawCircle(Color.White, r * 0.10f, c)
+            }
             AvatarStyle.NEO -> drawEyeNeo(
                 side = 1f,
                 tiltDeg = 0f,

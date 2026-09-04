@@ -221,11 +221,17 @@ fun AvatarRenderer(
     // Godot face / classic idle: ONE vsync-locked draw clock (not 9 infinite transitions).
     // CatMotionEngine is ONE-SHOT only for named expressions.
     val motionEngine = remember { CatMotionEngine() }
+    // Jarvis particle orb sim + text measurer for its param labels. Both are
+    // draw-pass only: the sim holds slot order + flyers across frames, the
+    // measurer lays out a handful of monospace labels per frame.
+    val particleSim = remember { ParticleOrbSim() }
+    val textMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
     // Same reasoning as animTHolder: the composed-expression pose is produced
     // every vsync and consumed only inside the draw lambda.
     val shotHolder = remember { arrayOfNulls<MotionPose>(1) }
     var faceRadiusPx by remember { mutableStateOf(200f) }
     val useGodotFace = state.avatarStyle == AvatarStyle.NEO
+    val useSignalOrb = state.avatarStyle == AvatarStyle.SIGNAL
     // Single ambient clock (seconds). Advanced at ~60 fps and only while visible.
     // Reading this in the Canvas draw lambda invalidates draw only — not a
     // full-composition thrash of 9 rememberInfiniteTransition states @ vsync.
@@ -605,13 +611,34 @@ fun AvatarRenderer(
                 contentDescription =
                     "Memba cat avatar, currently ${state.interactionState.name.lowercase()}"
             }
-            .pointerInput(Unit) {
+            .pointerInput(state.avatarStyle) {
                 detectTapGestures(
                     onTap = { offset ->
                         touchGaze = normalizeGaze(offset, size.width, size.height)
-                        onZoneClick(zoneAt(offset, size.width, size.height))
+                        // Aura Home has no ears/eyes: cat-face zones would map
+                        // taps to invisible features. Its own zones keep every
+                        // tap predictable (core = mute, rings = menu).
+                        val zone = if (state.avatarStyle == AvatarStyle.SIGNAL) {
+                            val w = size.width.toFloat()
+                            val h = size.height.toFloat()
+                            AuraHomeContent.auraZoneAt(
+                                tap = offset,
+                                center = Offset(w / 2f, fitGodotFaceCenterY(w, h)),
+                                ringRadius = fitGodotFaceRadius(w, h) * 0.80f,
+                            )
+                        } else {
+                            zoneAt(offset, size.width, size.height)
+                        }
+                        onZoneClick(zone)
                     },
                     onLongPress = { offset ->
+                        // Long-press on the dome opens settings (mirrors the
+                        // cat's forehead shortcut); elsewhere keeps petting.
+                        if (state.avatarStyle == AvatarStyle.SIGNAL) {
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onZoneClick(AuraHomeContent.auraLongPressZone())
+                            return@detectTapGestures
+                        }
                         val zone = zoneAt(offset, size.width, size.height)
                         if (zone == AvatarZone.FOREHEAD) {
                             onZoneClick(AvatarZone.FOREHEAD)
@@ -771,8 +798,40 @@ fun AvatarRenderer(
         val eyeCy = cy - s * 0.06f * headSizeFactor
         val stroke = s * 0.014f * headSizeFactor
 
+        // ── Jarvis particle orb (Meow OS avatar) ───────────────────────────
+        // Ported from jarvis_mode.js on the MEOW server: every dot a model
+        // parameter on a Fibonacci sphere. Voice level swells the sphere and
+        // THINKING ejects particles toward the reply, driven by the same
+        // pose/clock inputs as every other style — so switching faces
+        // mid-animation stays seamless. (The Aura Home card in
+        // AuraHomeAvatar.kt is parked — the face runs full-screen.)
+        if (useSignalOrb) {
+            val R = ambR
+            val faceCy = fitGodotFaceCenterY(w, h)
+            val center = Offset(
+                w / 2f + ambient.offX + leanAnim * R * 0.22f,
+                faceCy + ambient.offY + lurchAnim * R * 0.12f,
+            )
+            val orbSpeaking = effectivePose.mouth == MouthMode.SPEAKING
+            particleSim.draw(
+                scope = this,
+                measurer = textMeasurer,
+                center = center,
+                domeRadius = R * 0.80f,
+                thinking = state.interactionState == InteractionState.THINKING,
+                level = mouthEnergy?.value ?: if (
+                    orbSpeaking ||
+                    state.interactionState == InteractionState.LISTENING
+                ) talk else 0f,
+                clockSec = tSec,
+                ringColor = Color(effectivePose.glowColorHex),
+                alpha = faceAlpha * if (effectivePose.dimmed) 0.55f else 1f,
+                offline = state.interactionState == InteractionState.OFFLINE,
+            )
+            // The classic cat layers below must not paint over the orb.
+            return@Canvas
         // ── Godot Cat Assistant face (exact look + CatMotion) ───────────────
-        if (useGodotFace) {
+        } else if (useGodotFace) {
             // Transparent canvas — system wallpaper / desk shows through.
             // Fit full head (ears + chin) inside the canvas with room for
             // status bar / cutout and the mic controls — landscape used to

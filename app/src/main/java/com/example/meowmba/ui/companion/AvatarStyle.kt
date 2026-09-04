@@ -1,11 +1,18 @@
 package com.example.meowmba.ui.companion
 
 /**
- * Which face the companion wears. The two styles share every animation, pose
+ * Which face the companion wears. The cat styles share every animation, pose
  * and gaze input — only the eye rendering differs — so switching is instant and
- * nothing else in the app has to know which one is active.
+ * nothing else in the app has to know which one is active. The Jarvis Orb
+ * keeps the same pose inputs but renders the Meow OS particle sphere instead.
  */
 enum class AvatarStyle(val key: String, val label: String, val description: String) {
+    SIGNAL(
+        key = "signal",
+        label = "Jarvis Orb",
+        description = "The Meow OS avatar: every dot a model parameter, thinking ejects them.",
+    ),
+
     /** The realistic cat eye: almond aperture, iris fibres, slit pupil. */
     NEO(
         key = "neo",
