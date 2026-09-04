@@ -50,6 +50,19 @@ enum class AsrBackend(
         displayName = "Meta glasses mic",
         subtitle = "Hear through the Ray-Ban glasses when they're connected — on-device, offline",
         isCloud = false,
+    ),
+
+    /**
+     * Sends the finished utterance to a cloud Gemini model via OpenRouter for
+     * the FINAL transcript (the streaming zipformer keeps live partials +
+     * endpointing, sherpa still holds the mic). The most accurate recognizer,
+     * at the cost of a round trip and an OpenRouter key.
+     */
+    GEMINI_CLOUD(
+        id = "gemini_cloud",
+        displayName = "Gemini (cloud)",
+        subtitle = "OpenRouter Gemini transcribes the final text — most accurate, needs a key + network",
+        isCloud = true,
     );
 
     companion object {
@@ -130,6 +143,16 @@ data class AsrBackendStatus(
                     AsrBackendStatus(backend, false, "Needs the on-device model for transcription")
                 !glassesConnected ->
                     AsrBackendStatus(backend, false, "No glasses connected — connect them on the Hardware page")
+                else -> AsrBackendStatus(backend, true)
+            }
+
+            // Gemini rides sherpa for capture + endpointing AND needs a cloud
+            // key; missing either makes the pick a no-op, so report it upfront.
+            AsrBackend.GEMINI_CLOUD -> when {
+                !localModelReady ->
+                    AsrBackendStatus(backend, false, "Needs the on-device model for capture")
+                !cloudKeyConfigured ->
+                    AsrBackendStatus(backend, false, "Needs an OpenRouter key — add it in Settings → OpenRouter")
                 else -> AsrBackendStatus(backend, true)
             }
         }

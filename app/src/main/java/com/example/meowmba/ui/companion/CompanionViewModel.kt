@@ -331,7 +331,7 @@ class CompanionViewModel(
      * built when the user picks [AsrBackend.GEMINI_CLOUD] on the Hardware →
      * Voice Recognition page — audio must never leave the device by default.
      */
-
+    private var geminiAsrEngine: com.example.meowmba.core.audio.GeminiAsrEngine? = null
     /**
      * Persisted voice-recognition backend choice.
      *
@@ -3439,6 +3439,24 @@ class CompanionViewModel(
                 // the other explicit picks).
                 if (glassesAsrEngine == null) attachGlassesAsrEngine()
                 glassesAsrEngine?.takeIf { glassesMicReady() }?.let { return it }
+            }
+            com.example.meowmba.core.audio.AsrBackend.GEMINI_CLOUD -> {
+                val base = sherpaAsrEngine
+                if (base != null && base.isAvailable) {
+                    val wrapper = geminiAsrEngine
+                        ?: com.example.meowmba.core.audio.GeminiAsrEngine(
+                            local = base,
+                            scope = viewModelScope,
+                            // Read fresh per request so Settings edits land without a restart.
+                            apiKey = { secureStorage?.getApiKey("openrouter") },
+                            model = {
+                                secureStorage?.getModelName(
+                                    com.example.meowmba.core.audio.AsrBackend.OPENROUTER_ASR_PROVIDER,
+                                ) ?: com.example.meowmba.core.audio.AsrBackend.DEFAULT_GEMINI_MODEL
+                            },
+                        ).also { geminiAsrEngine = it }
+                    if (wrapper.isAvailable) return wrapper
+                }
             }
         }
         // Fall through: the picked backend is not usable right now (model still

@@ -33,10 +33,12 @@ class AsrBackendTest {
     }
 
     @Test
-    fun `no backend sends audio off the device`() {
-        // The cloud backend was removed. Whatever is left stays on the phone,
-        // and the UI must never have a cloud badge to show.
-        assertEquals(emptyList<AsrBackend>(), AsrBackend.entries.filter { it.isCloud })
+    fun `exactly one cloud backend exists and round-trips`() {
+        // Audio leaving the device is a privacy-boundary fact: keep it to a
+        // single, deliberately-chosen backend and make the UI badge it.
+        val cloud = AsrBackend.entries.filter { it.isCloud }
+        assertEquals(listOf(AsrBackend.GEMINI_CLOUD), cloud)
+        assertEquals(AsrBackend.GEMINI_CLOUD, AsrBackend.fromId(AsrBackend.GEMINI_CLOUD.id))
     }
 
     @Test
@@ -47,7 +49,6 @@ class AsrBackendTest {
         assertEquals(AsrBackend.WHISPER_LOCAL, AsrBackend.fromId("auto"))
         assertEquals(AsrBackend.WHISPER_LOCAL, AsrBackend.fromId("platform"))
         assertEquals(AsrBackend.WHISPER_LOCAL, AsrBackend.fromId("local_sherpa"))
-        assertEquals(AsrBackend.WHISPER_LOCAL, AsrBackend.fromId("gemini_cloud"))
     }
 
     // ── availability matrix ─────────────────────────────────────────────
@@ -95,6 +96,23 @@ class AsrBackendTest {
         assertFalse(status(local = false, connected = true).available)
         assertFalse(status(local = true, connected = false).available)
         assertTrue(status(local = true, connected = false).reason.contains("glasses", ignoreCase = true))
+    }
+
+    @Test
+    fun `gemini cloud needs both the local model and a key`() {
+        fun status(local: Boolean, key: Boolean) = AsrBackendStatus.evaluate(
+            AsrBackend.GEMINI_CLOUD,
+            platformAvailable = false,
+            localModelReady = local,
+            cloudKeyConfigured = key,
+            whisperReady = false,
+        )
+
+        assertTrue(status(local = true, key = true).available)
+        assertFalse(status(local = false, key = true).available)
+        assertFalse(status(local = true, key = false).available)
+        assertTrue(status(local = true, key = false).reason.contains("key", ignoreCase = true))
+        assertTrue(status(local = false, key = true).reason.contains("capture", ignoreCase = true))
     }
 
     @Test
