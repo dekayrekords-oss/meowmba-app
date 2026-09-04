@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -48,6 +49,7 @@ fun PluginsConnectorsScreen(
     onCreatePlugin: (String, String, String) -> Unit,
     onToggleConnector: (String, Boolean) -> Unit,
     onRemoveConnector: (String) -> Unit,
+    onSetMcpServer: (Boolean) -> Unit,
 ) {
     var tab by remember { mutableStateOf(ConnectorTab.APPS) }
     Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF0D1117)) {
@@ -85,7 +87,9 @@ fun PluginsConnectorsScreen(
             Spacer(Modifier.height(12.dp))
             when (tab) {
                 ConnectorTab.APPS -> AppsTab(state, onConnectApp, onToggleConnector, onRemoveConnector)
-                ConnectorTab.MCP -> McpTab(state, onTestMcp, onAddMcp, onToggleConnector, onRemoveConnector)
+                ConnectorTab.MCP -> McpTab(
+                    state, onTestMcp, onAddMcp, onToggleConnector, onRemoveConnector, onSetMcpServer,
+                )
                 ConnectorTab.PLUGINS -> PluginsTab(state, onCreatePlugin, onToggleConnector, onRemoveConnector)
             }
         }
@@ -206,6 +210,7 @@ private fun McpTab(
     onAddMcp: (String, String, String) -> Unit,
     onToggleConnector: (String, Boolean) -> Unit,
     onRemoveConnector: (String) -> Unit,
+    onSetMcpServer: (Boolean) -> Unit,
 ) {
     var name by remember { mutableStateOf("") }
     var endpoint by remember { mutableStateOf("") }
@@ -218,6 +223,59 @@ private fun McpTab(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp),
     ) {
+        // Host your own endpoint for Android Studio: the app is itself an MCP
+        // server over the LAN once started. Read-only tools, no key needed.
+        Surface(
+            color = if (state.mcpServerRunning) Color(0xFF0E1F16) else Color(0xFF161B22),
+            shape = RoundedCornerShape(14.dp),
+        ) {
+            Column(Modifier.padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Host an MCP endpoint", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text(
+                            "Expose this phone as a read-only MCP server so Android Studio can " +
+                                "connect to it over the LAN.",
+                            color = Color.Gray,
+                            fontSize = 12.sp,
+                        )
+                    }
+                    Switch(checked = state.mcpServerRunning, onCheckedChange = onSetMcpServer)
+                }
+                if (state.mcpServerRunning) {
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        "Listening — past this into Android Studio (Settings → Tools → MCP: " +
+                            "add a streamable-HTTP server URL):",
+                        color = Color.Gray,
+                        fontSize = 12.sp,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Surface(color = Color(0xFF0D1117), shape = RoundedCornerShape(8.dp)) {
+                        Row(
+                            Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                "http://${state.mcpServerAddress}:${state.mcpServerPort}/mcp",
+                                color = Color(0xFF7EE787),
+                                fontSize = 13.sp,
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    }
+                    Text(
+                        "Only read-only tools are exposed (device info, battery, ASR status, " +
+                            "recent memories and audit entries) — nothing destructive.",
+                        color = Color.Gray,
+                        fontSize = 11.sp,
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
         Text(
             "Connect an external Model Context Protocol server — for example the Android Studio MCP server on your network. Enter its address, test it, then save.",
             color = Color.Gray,

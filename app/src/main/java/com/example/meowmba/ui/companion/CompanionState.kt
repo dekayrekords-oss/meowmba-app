@@ -348,7 +348,13 @@ data class CompanionState(
     /** True while app discovery / MCP handshake is in flight. */
     val connectorBusy: Boolean = false,
     /** Last MCP endpoint test outcome: (success, message). */
-    val connectorTestResult: Pair<Boolean, String>? = null
+    val connectorTestResult: Pair<Boolean, String>? = null,
+    /** Hosted read-only MCP endpoint is currently listening on the LAN. */
+    val mcpServerRunning: Boolean = false,
+    /** LAN port the hosted MCP endpoint is bound to (0 when not running). */
+    val mcpServerPort: Int = 0,
+    /** Phone LAN address shown so Android Studio can paste it as the httpUrl. */
+    val mcpServerAddress: String = "",
 )
 
 /**

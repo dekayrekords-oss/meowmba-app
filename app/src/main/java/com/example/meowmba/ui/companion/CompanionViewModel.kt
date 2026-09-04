@@ -247,6 +247,80 @@ class CompanionViewModel(
     }
 
     /**
+     * Hosted read-only MCP endpoint for Android Studio. Serves safe queries
+     * over the LAN only when the user starts it from the Plugins & MCP screen —
+     * it never binds on its own.
+     */
+    private val mcpHttpServer: com.example.meowmba.core.mcp.McpHttpServer? by lazy {
+        val ctx = secureStorage?.context ?: return@lazy null
+        val phoneServer = com.example.meowmba.core.mcp.PhoneMcpServer(
+            appName = "Meowmba",
+            appVersion = com.example.meowmba.BuildConfig.VERSION_NAME,
+            deviceModel = android.os.Build.MODEL,
+            androidVersion = android.os.Build.VERSION.RELEASE,
+            sdkInt = android.os.Build.VERSION.SDK_INT.toString(),
+            batteryPercent = {
+                ctx.let { c ->
+                    com.example.meowmba.core.agent.tools.BatteryReading.read(c).percent ?: 0
+                }
+            },
+            board = android.os.Build.BOARD,
+            language = java.util.Locale.getDefault().language,
+            asrBackend = { asrBackend.displayName },
+            asrUsable = {
+                sherpaAsrEngine?.isAvailable == true ||
+                    geminiAsrEngine?.isAvailable == true ||
+                    glassesAsrEngine?.isAvailable == true
+            },
+            registeredTools = { agentToolRegistry?.definitions()?.map { it.id } ?: emptyList() },
+            memoryRecall = {
+                memoryRepository?.getRecentMemories(20)?.map { it.content } ?: emptyList()
+            },
+            auditRecent = {
+                auditDao?.getRecent()?.first()
+                    ?.map { "${it.action}: ${it.detail}" }
+                    ?: emptyList()
+            },
+        )
+        com.example.meowmba.core.mcp.McpHttpServer(phoneServer, viewModelScope)
+    }
+
+    /** The phone's current Wi-Fi/LAN IPv4, for the hosted MCP endpoint URL. */
+    private fun lanIpAddress(): String? = runCatching {
+        java.net.NetworkInterface.getNetworkInterfaces()?.toList()?.forEach { nif ->
+            if (nif.isLoopback || !nif.isUp) return@forEach
+            nif.inetAddresses.toList().forEach { addr ->
+                if (addr is java.net.Inet4Address && !addr.isLoopbackAddress) {
+                    return addr.hostAddress
+                }
+            }
+        }
+        null
+    }.getOrNull()
+
+    /** Start/stop the hosted read-only MCP endpoint and mirror its state. */
+    fun setMcpServerEnabled(enabled: Boolean) {
+        val server = mcpHttpServer ?: return
+        if (enabled) {
+            if (_uiState.value.mcpServerRunning) return
+            val ok = server.start()
+            val ip = lanIpAddress() ?: ""
+            _uiState.value = _uiState.value.copy(
+                mcpServerRunning = ok,
+                mcpServerPort = if (ok) server.port else 0,
+                mcpServerAddress = ip,
+            )
+        } else {
+            server.stop()
+            _uiState.value = _uiState.value.copy(
+                mcpServerRunning = false,
+                mcpServerPort = 0,
+                mcpServerAddress = "",
+            )
+        }
+    }
+
+    /**
      * Weather source. Open-Meteo needs no API key and no account, so "what's the weather"
      * works out of the box with nothing for the user to configure.
      */

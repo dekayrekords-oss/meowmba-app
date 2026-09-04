@@ -871,6 +871,7 @@ fun CompanionScreen(
                 onCreatePlugin = { name, desc, icon -> viewModel.createUserPlugin(name, desc, icon) },
                 onToggleConnector = { id, enabled -> viewModel.setConnectorEnabled(id, enabled) },
                 onRemoveConnector = { viewModel.removeConnector(it) },
+                onSetMcpServer = { enabled -> viewModel.setMcpServerEnabled(enabled) },
             )
         }
 
