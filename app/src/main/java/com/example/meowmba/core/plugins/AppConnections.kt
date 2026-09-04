@@ -154,5 +154,85 @@ object AppGallery {
             "Searches and visits the web for you.",
             Integration.BUILT_IN,
         ),
+
+        // More messaging — all installed, driven by the built-in app opener
+        Entry(
+            "whatsapp", "Messaging", "W", "WhatsApp",
+            "Reads and sends WhatsApp messages hands-free.",
+            Integration.BUILT_IN,
+            connectorId = "com.whatsapp",
+        ),
+        Entry(
+            "telegram", "Messaging", "✈", "Telegram",
+            "Reads and sends Telegram messages hands-free.",
+            Integration.BUILT_IN,
+            connectorId = "org.telegram.messenger",
+        ),
+        Entry(
+            "discord", "Messaging", "D", "Discord",
+            "Monitors channels and sends quick replies.",
+            Integration.BUILT_IN,
+            connectorId = "com.discord",
+        ),
+        Entry(
+            "reddit", "Community", "R", "Reddit",
+            "Surfaces top discussions and posts on command.",
+            Integration.BUILT_IN,
+            connectorId = "com.reddit.frontpage",
+        ),
+        Entry(
+            "linkedin", "Community", "in", "LinkedIn",
+            "Drafts messages and pulls up profiles and updates.",
+            Integration.API_KEY,
+            keyLink = "https://www.linkedin.com/mypreferences/d/settings/manage-your-account",
+            storageKey = "connector_linkedin",
+        ),
+
+        // Smart home — the companion's natural control-center territory
+        Entry(
+            "home_assistant", "Smart Home", "⌂", "Home Assistant",
+            "Controls lights, scenes and automations across your whole home.",
+            Integration.BUILT_IN,
+            connectorId = "io.homeassistant.companion.android",
+        ),
+        Entry(
+            "govee", "Smart Home", "G", "Govee",
+            "Toggles lights, colours and effects.",
+            Integration.BUILT_IN,
+            connectorId = "com.govee.home",
+        ),
+        Entry(
+            "tuya", "Smart Home", "T", "Tuya",
+            "Controls Tuya-powered plugs, bulbs and switches.",
+            Integration.BUILT_IN,
+            connectorId = "com.tuya.smart",
+        ),
+        Entry(
+            "ecobee", "Smart Home", "E", "Ecobee",
+            "Checks and adjusts thermostat comfort settings.",
+            Integration.API_KEY,
+            keyLink = "https://www.ecobee.com/consumerportal/index.html",
+            storageKey = "connector_ecobee",
+        ),
+
+        // Streaming & media
+        Entry(
+            "netflix", "Streaming", "N", "Netflix",
+            "Picks and plays shows and movies on your TV.",
+            Integration.BUILT_IN,
+            connectorId = "com.netflix.mediaclient",
+        ),
+        Entry(
+            "youtube", "Streaming", "▶", "YouTube",
+            "Finds and plays videos for whatever you're curious about.",
+            Integration.BUILT_IN,
+            connectorId = "com.google.android.youtube",
+        ),
+        Entry(
+            "plex", "Streaming", "P", "Plex",
+            "Queues up content from your own media library.",
+            Integration.BUILT_IN,
+            connectorId = "com.plexapp.android",
+        ),
     )
 }

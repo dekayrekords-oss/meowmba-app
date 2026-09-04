@@ -25,6 +25,7 @@ class AppGalleryTest {
         assertTrue("should cover Calendar", categories.contains("Calendar"))
         assertTrue("should cover Messaging", categories.contains("Messaging"))
         assertTrue("should cover Developer/Media", categories.containsAll(setOf("Media", "Developer")))
+        assertTrue("should cover Smart Home/Streaming", categories.containsAll(setOf("Smart Home", "Streaming")))
     }
 
     @Test
@@ -64,5 +65,21 @@ class AppGalleryTest {
             AppGallery.all.first { it.id == "slack" }.keyLink,
         )
         assertEquals("Gmail", AppGallery.all.first { it.id == "gmail" }.name)
+    }
+
+    @Test
+    fun `every built-in that names a package has a real android package id`() {
+        // WhatsApp/Telegram/Discord and the smart-home set were added from the
+        // user's actual installed apps — their package names must resolve.
+        val byId = AppGallery.all.associateBy { it.id }
+        assertEquals("com.whatsapp", byId["whatsapp"]!!.connectorId)
+        assertEquals("org.telegram.messenger", byId["telegram"]!!.connectorId)
+        assertEquals("com.discord", byId["discord"]!!.connectorId)
+        assertEquals(
+            "io.homeassistant.companion.android",
+            byId["home_assistant"]!!.connectorId,
+        )
+        assertEquals("com.govee.home", byId["govee"]!!.connectorId)
+        assertEquals("com.tuya.smart", byId["tuya"]!!.connectorId)
     }
 }
