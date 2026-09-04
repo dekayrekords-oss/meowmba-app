@@ -89,6 +89,10 @@ class ConnectorManager(
             val c = _connectors[i]
             val hasSecret = when (c.backend) {
                 ConnectorBackend.MCP_HTTP -> !(secretProvider(c.id).isNullOrBlank())
+                ConnectorBackend.SERVICE -> {
+                    val svc = ServiceIntegrations.byId(c.id.removePrefix("svc-"))
+                    if (svc == null) true else !(secretProvider(svc.storageKey).isNullOrBlank())
+                }
                 else -> true
             }
             if (c.configured != hasSecret) _connectors[i] = c.copy(configured = hasSecret)
@@ -245,8 +249,16 @@ class ConnectorManager(
                     risk = RiskLevel.SAFE,
                     confirm = ConfirmationPolicy.NONE,
                 ) { args ->
-                    ToolResult.Success("Plugin '${c.name}' ran with: ${args["input"].orEmpty()}")
+                    val input = args["input"].orEmpty()
+                    ToolResult.Success(SkillRunner(appContext).run(c.name, input))
                 })
+            }
+            ConnectorBackend.SERVICE -> {
+                val svc = ServiceIntegrations.byId(c.id.removePrefix("svc-")) ?: return
+                ServiceIntegrations.byId(svc.id)?.let { service ->
+                    service.toolFactory { secretProvider(service.storageKey) }
+                        .forEach { registry.register(it) }
+                }
             }
         }
     }

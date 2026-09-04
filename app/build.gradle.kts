@@ -71,8 +71,8 @@ android {
         applicationId = "com.example.meowmba"
         minSdk = 31
         targetSdk = 36
-        versionCode = 10
-        versionName = "1.3.6"
+        versionCode = 11
+        versionName = "1.3.7"
 
         ndk {
             abiFilters += "arm64-v8a"

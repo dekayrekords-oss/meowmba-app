@@ -6624,6 +6624,33 @@ class CompanionViewModel(
     fun saveServiceKey(service: String, key: String) {
         secureStorage?.saveApiKey(service, key)
         _uiState.value = _uiState.value.copy(captionText = "${service} key saved.")
+        viewModelScope.launch {
+            val mgr = connectorManager ?: return@launch
+            // If the saved key belongs to a live integration (Spotify/GitHub),
+            // create its connector and register its real tools now.
+            val svc = com.example.meowmba.core.plugins.ServiceIntegrations.all
+                .firstOrNull { it.storageKey == service }
+            if (svc != null && mgr.byId("svc-" + svc.id) == null) {
+                mgr.upsert(
+                    com.example.meowmba.core.plugins.Connector(
+                        id = "svc-" + svc.id,
+                        name = svc.name,
+                        description = "Live ${svc.name} integration via API token.",
+                        kind = com.example.meowmba.core.plugins.ConnectorKind.APP,
+                        backend = com.example.meowmba.core.plugins.ConnectorBackend.SERVICE,
+                        iconToken = when (svc.id) {
+                            "spotify" -> "♪"
+                            "github" -> "⌥"
+                            else -> "🔌"
+                        },
+                        configured = true,
+                        enabled = true,
+                    )
+                )
+                refreshConnectorUi()
+                mgr.registerToolsInto(agentToolRegistry ?: return@launch)
+            }
+        }
     }
 
     /** Open an external URL (e.g. "get your API key") in a real browser. */

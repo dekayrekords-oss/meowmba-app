@@ -125,6 +125,13 @@ object AppGallery {
             connectorId = "com.spotify.music",
         ),
         Entry(
+            "spotify", "Media", "S", "Spotify",
+            "Searches Spotify live and reports real results — powered by your token.",
+            Integration.API_KEY,
+            keyLink = "https://developer.spotify.com",
+            storageKey = "connector_spotify",
+        ),
+        Entry(
             "weather", "Info", "☀", "Weather",
             "Reports the forecast where you are.",
             Integration.BUILT_IN,
@@ -134,6 +141,13 @@ object AppGallery {
             "desktop", "Developer", "⌘", "Desktop & SSH",
             "Drives your PC over the bridge — run builds and scripts remotely.",
             Integration.BUILT_IN,
+        ),
+        Entry(
+            "github", "Developer", "⌥", "GitHub",
+            "Lists repos and reads projects live from your GitHub token.",
+            Integration.API_KEY,
+            keyLink = "https://github.com/settings/tokens",
+            storageKey = "connector_github",
         ),
         Entry(
             "browser", "Media", "◉", "Browser",

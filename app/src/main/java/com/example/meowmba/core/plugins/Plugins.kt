@@ -41,6 +41,9 @@ enum class ConnectorBackend {
 
     /** A statically-embedded plugin provided by the build for a known app. */
     EMBEDDED_PLUGIN,
+
+    /** A live service integration driven by a user-supplied API token (e.g. Spotify). */
+    SERVICE,
 }
 
 /** Immutable, serializable descriptor of one connector/plugin. */
