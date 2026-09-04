@@ -557,7 +557,7 @@ fun CompanionScreen(
                     "Avatar" -> viewModel.toggleAvatarScreen()
                     "Agents" -> viewModel.toggleAgentsScreen()
                     "Projects" -> viewModel.toggleProjectsScreen()
-                    "Tools" -> viewModel.toggleToolsScreen()
+                    "Tools" -> viewModel.toggleConnectorsScreen()
                     "Notes" -> viewModel.toggleVaultScreen()
                 }
             }
@@ -858,6 +858,19 @@ fun CompanionScreen(
                 state = uiState,
                 onToggle = { id, on -> viewModel.setRoutineEnabled(id, on) },
                 onClose = { viewModel.toggleToolsScreen() }
+            )
+        }
+
+        if (uiState.showConnectorsScreen) {
+            PluginsConnectorsScreen(
+                state = uiState,
+                onClose = { viewModel.toggleConnectorsScreen() },
+                onConnectApp = { pkg, label -> viewModel.connectDiscoveredApp(pkg, label) },
+                onTestMcp = { endpoint -> viewModel.testMcpEndpoint(endpoint) },
+                onAddMcp = { name, endpoint, key -> viewModel.addMcpConnector(name, endpoint, key) },
+                onCreatePlugin = { name, desc, icon -> viewModel.createUserPlugin(name, desc, icon) },
+                onToggleConnector = { id, enabled -> viewModel.setConnectorEnabled(id, enabled) },
+                onRemoveConnector = { viewModel.removeConnector(it) },
             )
         }
 

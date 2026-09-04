@@ -18,6 +18,7 @@ import com.example.meowmba.core.agent.ModelResponse
 import com.example.meowmba.core.agent.RemoteModelProvider
 import com.example.meowmba.core.agent.runtime.AgentOrchestrator
 import com.example.meowmba.core.agent.runtime.AgentTask
+import com.example.meowmba.core.plugins.ConnectorManager
 import com.example.meowmba.core.agent.runtime.AgentRegistry
 import com.example.meowmba.core.agent.runtime.AgentRouter
 import com.example.meowmba.core.agent.runtime.AgentBrainRouter
@@ -237,6 +238,13 @@ class CompanionViewModel(
 
     /** Tools available for agent routing; null when no workspace/repo exists. */
     private var agentToolRegistry: ToolRegistry? = null
+
+    /** Plugins & MCP connectors the user has added (apps / MCP servers / user plugins). */
+    val connectorManager: ConnectorManager? by lazy {
+        val ctx = secureStorage?.context
+        if (ctx == null) null
+        else ConnectorManager(ctx, secretProvider = { id -> secureStorage?.getApiKey(id) })
+    }
 
     /**
      * Weather source. Open-Meteo needs no API key and no account, so "what's the weather"
@@ -1659,6 +1667,15 @@ class CompanionViewModel(
         }
         if (memoryRepository != null || workspaceRoot != null) {
             agentToolRegistry = toolRegistry
+            connectorManager?.let { mgr ->
+                mgr.load()
+                // Enabled local/embedded connectors register immediately; MCP
+                // connectors need a network handshake, so register async. The
+                // manager filters by the connector's enabled flag.
+                viewModelScope.launch {
+                    mgr.registerToolsInto(toolRegistry)
+                }
+            }
             val orchestrator = AgentOrchestrator(viewModelScope, toolRegistry, agentAuditSink)
             toolRegistry.register(TaskListTool {
                 orchestrator.tasks.value.take(10).map { "[${it.status}] ${it.title} (${it.agentId})" }
@@ -6407,6 +6424,100 @@ class CompanionViewModel(
         _uiState.value = _uiState.value.copy(showToolsScreen = !_uiState.value.showToolsScreen)
     }
 
+    // ── Plugins & MCP connectors ────────────────────────────────────────────
+
+    fun toggleConnectorsScreen() {
+        val show = !_uiState.value.showConnectorsScreen
+        _uiState.value = _uiState.value.copy(showConnectorsScreen = show)
+        if (show) refreshConnectorUi()
+    }
+
+    /** Push the current connector list (and lazy app discovery) into state. */
+    fun refreshConnectorUi() {
+        val mgr = connectorManager ?: return
+        mgr.refreshConfigured()
+        _uiState.value = _uiState.value.copy(connectors = mgr.connectors)
+        if (_uiState.value.discoverableApps.isEmpty()) {
+            viewModelScope.launch {
+                _uiState.value = _uiState.value.copy(discoverableApps = mgr.discoverApps())
+            }
+        }
+    }
+
+    /** Connect a discovered app so the agent can drive it. */
+    fun connectDiscoveredApp(packageName: String, label: String) {
+        val mgr = connectorManager ?: return
+        val app = ConnectorManager.DiscoveredApp(packageName, label)
+        mgr.upsert(mgr.connectorForApp(app).copy(configured = true, enabled = true))
+        refreshConnectorUi()
+    }
+
+    /** Test an external MCP server endpoint; result lands in state for the UI. */
+    fun testMcpEndpoint(endpoint: String) {
+        val mgr = connectorManager ?: return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(connectorBusy = true, connectorTestResult = null)
+            val outcome = mgr.testMcpServer(endpoint).fold(
+                onSuccess = { tools ->
+                    true to "${tools.size} tool(s) ready: ${tools.take(6).joinToString(", ") { it.name }}"
+                },
+                onFailure = { e ->
+                    false to (e.message ?: "Could not reach that server.")
+                },
+            )
+            _uiState.value = _uiState.value.copy(connectorBusy = false, connectorTestResult = outcome)
+        }
+    }
+
+    /** Persist an MCP connector (and its API key) then register its tools. */
+    fun addMcpConnector(name: String, endpoint: String, apiKey: String): Result<Unit> {
+        val mgr = connectorManager ?: return Result.failure(IllegalStateException("Not available."))
+        if (endpoint.isBlank()) return Result.failure(IllegalArgumentException("Enter the server address."))
+        if (name.isBlank()) return Result.failure(IllegalArgumentException("Give the connector a name."))
+        if (apiKey.isNotBlank()) secureStorage?.saveApiKey("connector_mcp_$endpoint", apiKey)
+        val id = "mcp-" + java.util.UUID.randomUUID().toString().take(8)
+        mgr.upsert(
+            com.example.meowmba.core.plugins.Connector(
+                id = id,
+                name = name.trim(),
+                description = "External MCP server at $endpoint.",
+                kind = com.example.meowmba.core.plugins.ConnectorKind.MCP_SERVER,
+                backend = com.example.meowmba.core.plugins.ConnectorBackend.MCP_HTTP,
+                endpoint = endpoint,
+                iconToken = "🔌",
+                configured = true,
+                enabled = true,
+            )
+        )
+        refreshConnectorUi()
+        viewModelScope.launch { mgr.registerToolsInto(agentToolRegistry ?: return@launch) }
+        return Result.success(Unit)
+    }
+
+    /** Create a user plugin/skill. Icons are mandatory — a blank icon is rejected. */
+    fun createUserPlugin(name: String, description: String, iconToken: String): Result<Unit> {
+        val mgr = connectorManager ?: return Result.failure(IllegalStateException("Not available."))
+        return mgr.createUserPlugin(name, description, iconToken).map { created ->
+            refreshConnectorUi()
+            viewModelScope.launch { mgr.registerToolsInto(agentToolRegistry ?: return@launch) }
+        }
+    }
+
+    /** Enable/disable a connector (re-registers its tools). */
+    fun setConnectorEnabled(id: String, enabled: Boolean) {
+        val mgr = connectorManager ?: return
+        if (mgr.setEnabled(id, enabled)) {
+            refreshConnectorUi()
+            viewModelScope.launch { mgr.registerToolsInto(agentToolRegistry ?: return@launch) }
+        }
+    }
+
+    fun removeConnector(id: String) {
+        val mgr = connectorManager ?: return
+        mgr.remove(id)
+        refreshConnectorUi()
+    }
+
     fun openProject(id: Long) {
         viewModelScope.launch {
             val dao = projectDao ?: return@launch
@@ -7797,6 +7908,7 @@ class CompanionViewModel(
         showAgentsScreen = false,
         showProjectsScreen = false,
         showToolsScreen = false,
+        showConnectorsScreen = false,
         showVaultScreen = false,
         showBrowser = false,
         showAvatarScreen = false,

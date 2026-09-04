@@ -338,7 +338,17 @@ data class CompanionState(
     /** USB auto-bridge is monitoring for a tethered desktop connection. */
     val usbAutoBridgeEnabled: Boolean = false,
     /** True when the phone is plugged into USB (data connection). */
-    val usbConnected: Boolean = false
+    val usbConnected: Boolean = false,
+    /** Plugins & MCP connectors menu visibility. */
+    val showConnectorsScreen: Boolean = false,
+    /** Current plugins & connectors the user has added (apps / MCP / user). */
+    val connectors: List<com.example.meowmba.core.plugins.Connector> = emptyList(),
+    /** Installed apps discovered for potential plugin connections, with icons. */
+    val discoverableApps: List<com.example.meowmba.core.plugins.ConnectorManager.DiscoveredApp> = emptyList(),
+    /** True while app discovery / MCP handshake is in flight. */
+    val connectorBusy: Boolean = false,
+    /** Last MCP endpoint test outcome: (success, message). */
+    val connectorTestResult: Pair<Boolean, String>? = null
 )
 
 /**
