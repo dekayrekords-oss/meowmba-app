@@ -13,6 +13,11 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -169,6 +174,14 @@ class MainActivity : ComponentActivity() {
 
                 val uiState by viewModel.uiState.collectAsState()
 
+                // First-launch onboarding gate: computed once from persisted prefs.
+                var needsOnboarding by remember {
+                    mutableStateOf(com.example.meowmba.core.setup.SetupWiring.needsOnboarding(this@MainActivity))
+                }
+                // On-demand wizard opened from the Settings "Connect your AI" button.
+                val showOnboarding by viewModel.showOnboarding.collectAsState()
+                val wizardVisible = needsOnboarding || showOnboarding
+
                 // Watch mode: launch the system MediaProjection consent when requested.
                 val watchConsent by viewModel.screenWatchConsentRequested.collectAsState()
                 androidx.compose.runtime.LaunchedEffect(watchConsent) {
@@ -234,7 +247,7 @@ class MainActivity : ComponentActivity() {
                 // Every full-screen overlay must be listed here, or back leaves the app
                 // from a page that clearly has somewhere to go back TO.
                 BackHandler(
-                    enabled = uiState.showSettings || uiState.showModelManager || uiState.isChatExpanded ||
+                    enabled = wizardVisible || uiState.showSettings || uiState.showModelManager || uiState.isChatExpanded ||
                         uiState.showTiles || uiState.showPrivacyDashboard || uiState.showMemoryScreen ||
                         uiState.showStudioScreen ||
                         uiState.showAgentsScreen || uiState.showBackgroundScreen ||
@@ -243,6 +256,13 @@ class MainActivity : ComponentActivity() {
                         uiState.showAppDrawer || uiState.showBrowser
                 ) {
                     when {
+                        wizardVisible -> {
+                            if (needsOnboarding) {
+                                com.example.meowmba.core.setup.SetupWiring.markOnboardingDone(this@MainActivity)
+                                needsOnboarding = false
+                            }
+                            if (showOnboarding) viewModel.toggleSetupWizard()
+                        }
                         uiState.showAppDrawer || uiState.showBrowser -> viewModel.closeOverlays()
                         uiState.showSettings -> viewModel.toggleSettings()
                         uiState.showModelManager -> viewModel.toggleModelManager()
@@ -260,10 +280,25 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                CompanionScreen(
-                    viewModel = viewModel,
-                    secureStorage = secureStorage
-                )
+                androidx.compose.foundation.layout.Box(
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    CompanionScreen(
+                        viewModel = viewModel,
+                        secureStorage = secureStorage
+                    )
+                    // Onboarding wizard: full-screen overlay above everything.
+                    if (wizardVisible) {
+                        com.example.meowmba.ui.onboarding.SetupWizardRoute(
+                            onFinished = {
+                                com.example.meowmba.core.setup.SetupWiring.markOnboardingDone(this@MainActivity)
+                                needsOnboarding = false
+                                if (showOnboarding) viewModel.toggleSetupWizard()
+                            },
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                }
             }
         }
 

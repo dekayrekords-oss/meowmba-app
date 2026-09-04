@@ -208,6 +208,11 @@ class CompanionViewModel(
     val uiState = _uiState.asStateFlow()
     private var cachedMessages: List<com.example.meowmba.core.database.MessageEntity> = emptyList()
 
+    /** Onboarding wizard visibility — off [uiState] so toggling it doesn't
+     *  recompose the entire companion; mirrors the pattern used by [faceGaze]. */
+    private val _showOnboarding = MutableStateFlow(false)
+    val showOnboarding = _showOnboarding.asStateFlow()
+
     /**
      * High-frequency face-track offsets. Kept OFF [uiState] so each sample does
      * not recompose weather/tiles/chat/settings — that was the choppiness.
@@ -941,6 +946,37 @@ class CompanionViewModel(
 
         matcher = WakePhraseMatcher(_uiState.value.name)
         ensureVoiceModelsThenAttachWake()
+
+        // Wire the SetupWiring local-model hook so the onboarding wizard can
+        // trigger real downloads. Safe: runCatching guards every branch.
+        com.example.meowmba.core.setup.SetupWiring.localModelDownloader = { ctx, kind ->
+            when (kind) {
+                com.example.meowmba.core.setup.SetupWiring.LocalModelKind.BRAIN -> {
+                    // Trigger download of the first recommended catalog model.
+                    val option = com.example.meowmba.core.agent.ModelCatalog.options
+                        .firstOrNull { it.recommended }
+                    if (option != null) {
+                        downloadModel(option)
+                    }
+                    // else TODO: wire a specific local LLM download if no catalog model is recommended
+                }
+                com.example.meowmba.core.setup.SetupWiring.LocalModelKind.ASR -> {
+                    viewModelScope.launch {
+                        runCatching {
+                            com.example.meowmba.core.audio.VoiceModelStore(ctx).ensureAsr()
+                        }
+                    }
+                }
+                com.example.meowmba.core.setup.SetupWiring.LocalModelKind.TTS -> {
+                    // VoiceModelStore.ensure() handles KWS + TTS (speaker/VAD) models.
+                    viewModelScope.launch {
+                        runCatching {
+                            com.example.meowmba.core.audio.VoiceModelStore(ctx).ensure()
+                        }
+                    }
+                }
+            }
+        }
 
         ttsManager?.onSpeechStarted = {
             _uiState.value = _uiState.value.copy(interactionState = InteractionState.SPEAKING)            // HALF-DUPLEX GUARD: the moment her voice starts, close the
@@ -6175,6 +6211,10 @@ class CompanionViewModel(
 
     fun toggleSettings() {
         _uiState.value = _uiState.value.copy(showSettings = !_uiState.value.showSettings)
+    }
+
+    fun toggleSetupWizard() {
+        _showOnboarding.value = !_showOnboarding.value
     }
 
     fun toggleModelManager() {

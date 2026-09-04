@@ -8,7 +8,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -730,7 +732,12 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             // OpenAI Configuration
-            Text("OpenAI Cloud", style = MaterialTheme.typography.titleMedium, color = Color.White)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("OpenAI Cloud", style = MaterialTheme.typography.titleMedium, color = Color.White)
+                Spacer(modifier = Modifier.width(8.dp))
+                KeyStatusBadge(openaiKey.isNotBlank(), "OpenAI")
+            }
+            BeginnerHelp("Lets Meow talk to GPT. Create an account at platform.openai.com and paste your API key here.")
             ApiKeyField(
                 value = openaiKey,
                 onValueChange = { openaiKey = it },
@@ -738,6 +745,7 @@ fun SettingsScreen(
                 show = showKey,
                 onToggleShow = { showKey = !showKey },
             )
+            CopyKeyButton(openaiKey, "Copy OpenAI key")
             ApiKeyLink(
                 url = "https://platform.openai.com/api-keys",
                 label = "Get an OpenAI API key",
@@ -760,7 +768,12 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             // BigPickle (OpenCode Zen) — free fallback brain, can be made the default.
-            Text("BigPickle (OpenCode Zen)", style = MaterialTheme.typography.titleMedium, color = Color.White)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("BigPickle (OpenCode Zen)", style = MaterialTheme.typography.titleMedium, color = Color.White)
+                Spacer(modifier = Modifier.width(8.dp))
+                KeyStatusBadge(opencodeKey.isNotBlank(), "BigPickle")
+            }
+            BeginnerHelp("A free fallback brain from OpenCode Zen. Sign up at opencode.ai to get a key — no payment needed to start.")
             ApiKeyField(
                 value = opencodeKey,
                 onValueChange = { opencodeKey = it },
@@ -768,6 +781,7 @@ fun SettingsScreen(
                 show = showKey,
                 onToggleShow = { showKey = !showKey },
             )
+            CopyKeyButton(opencodeKey, "Copy BigPickle key")
             ApiKeyLink(
                 url = "https://opencode.ai/zen",
                 label = "Get a BigPickle / OpenCode Zen key",
@@ -796,7 +810,12 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             // Hugging Face token (gated model downloads like Gemma)
-            Text("Hugging Face", style = MaterialTheme.typography.titleMedium, color = Color.White)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Hugging Face", style = MaterialTheme.typography.titleMedium, color = Color.White)
+                Spacer(modifier = Modifier.width(8.dp))
+                KeyStatusBadge(hfToken.isNotBlank(), "Hugging Face")
+            }
+            BeginnerHelp("Only needed if you want to download gated voice/AI models from Hugging Face (e.g. Gemma). Most users can skip this.")
             ApiKeyField(
                 value = hfToken,
                 onValueChange = { hfToken = it },
@@ -804,6 +823,7 @@ fun SettingsScreen(
                 show = showKey,
                 onToggleShow = { showKey = !showKey },
             )
+            CopyKeyButton(hfToken, "Copy HF token")
             ApiKeyLink(
                 url = "https://huggingface.co/settings/tokens",
                 label = "Get a Hugging Face token",
@@ -814,7 +834,12 @@ fun SettingsScreen(
             // OpenRouter — the standalone cloud brain. No home server needed:
             // one key from openrouter.ai and meow works anywhere. Free default
             // model; any OpenRouter model id works in the field below.
-            Text("OpenRouter (openrouter.ai)", style = MaterialTheme.typography.titleMedium, color = Color.White)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("OpenRouter (openrouter.ai)", style = MaterialTheme.typography.titleMedium, color = Color.White)
+                Spacer(modifier = Modifier.width(8.dp))
+                KeyStatusBadge(openrouterKey.isNotBlank(), "OpenRouter")
+            }
+            BeginnerHelp("The easiest way to give Meow a cloud brain — no server needed. Sign up at openrouter.ai and grab a free key; many models are free.")
             ApiKeyField(
                 value = openrouterKey,
                 onValueChange = { openrouterKey = it },
@@ -822,6 +847,7 @@ fun SettingsScreen(
                 show = showKey,
                 onToggleShow = { showKey = !showKey },
             )
+            CopyKeyButton(openrouterKey, "Copy OpenRouter key")
             ApiKeyLink(
                 url = "https://openrouter.ai/keys",
                 label = "Get an OpenRouter API key",
@@ -1386,6 +1412,64 @@ private fun OpenRouterModelPicker(
             }
         }
     }
+}
+
+@Composable
+private fun KeyStatusBadge(configured: Boolean, providerName: String) {
+    Surface(
+        color = if (configured) Color(0xFF4CAF50).copy(alpha = 0.15f) else Color.Gray.copy(alpha = 0.15f),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+    ) {
+        Text(
+            text = if (configured) "\u2713 Connected" else "Not set",
+            color = if (configured) Color(0xFF4CAF50) else Color.Gray,
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+        )
+    }
+}
+
+@Composable
+private fun CopyKeyButton(key: String, label: String = "Copy") {
+    val clipboard = LocalClipboardManager.current
+    var justCopied by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(justCopied) {
+        if (justCopied) {
+            kotlinx.coroutines.delay(1500)
+            justCopied = false
+        }
+    }
+    OutlinedButton(
+        onClick = {
+            if (key.isNotBlank()) {
+                clipboard.setText(AnnotatedString(key))
+                justCopied = true
+            }
+        },
+    ) {
+        Text(if (justCopied) "Copied!" else label, fontSize = 12.sp)
+    }
+}
+
+@Composable
+private fun BeginnerHelp(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = Color.Gray,
+        modifier = Modifier.padding(top = 2.dp),
+    )
+}
+
+@Composable
+private fun PlainStep(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = Color(0xFF9E9E9E),
+        modifier = Modifier.padding(vertical = 2.dp),
+    )
 }
 
 @Composable

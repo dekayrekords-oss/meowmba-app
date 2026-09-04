@@ -58,6 +58,7 @@ fun CompanionScreen(
     secureStorage: SecureStorageManager? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val showOnboarding by viewModel.showOnboarding.collectAsState()
 
     // Foldable split: on the unfolded inner display (wide, >=600dp) the
     // agent browser lives in the right half while the companion keeps the
@@ -779,6 +780,32 @@ fun CompanionScreen(
             )
         }
 
+        // "Connect your AI" quick-access button — floats at the bottom while
+        // the Settings panel is open so the user can re-open the wizard at any time.
+        if (uiState.showSettings) {
+            androidx.compose.foundation.layout.Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .imePadding()
+                    .padding(bottom = 16.dp)
+            ) {
+                Surface(
+                    onClick = { viewModel.toggleSetupWizard() },
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color(0xFF1F6FEB),
+                    modifier = Modifier.padding(horizontal = 24.dp)
+                ) {
+                    Text(
+                        text = "Connect your AI",
+                        color = Color.White,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp,
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
+                    )
+                }
+            }
+        }
+
         if (uiState.showModelManager) {
             ModelManagerScreen(
                 state = uiState,
@@ -992,6 +1019,19 @@ fun CompanionScreen(
                     }
                 }
             }
+        }
+
+        // Setup wizard: full-screen overlay for first-launch or re-open from Settings.
+        // Drawn AFTER everything else so it covers the entire companion surface.
+        val ctx = LocalContext.current
+        if (showOnboarding) {
+            com.example.meowmba.ui.onboarding.SetupWizardRoute(
+                onFinished = {
+                    com.example.meowmba.core.setup.SetupWiring.markOnboardingDone(ctx)
+                    viewModel.toggleSetupWizard()
+                },
+                modifier = Modifier.fillMaxSize(),
+            )
         }
         }
 
