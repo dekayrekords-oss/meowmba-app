@@ -191,9 +191,10 @@ object AppGallery {
         // Smart home — the companion's natural control-center territory
         Entry(
             "home_assistant", "Smart Home", "⌂", "Home Assistant",
-            "Controls lights, scenes and automations across your whole home.",
-            Integration.BUILT_IN,
-            connectorId = "io.homeassistant.companion.android",
+            "Controls lights, scenes and automations live across your whole home via your HA server.",
+            Integration.API_KEY,
+            keyLink = "https://www.home-assistant.io/docs/authentication/#your-account-profile",
+            storageKey = "connector_home_assistant",
         ),
         Entry(
             "govee", "Smart Home", "G", "Govee",
@@ -206,6 +207,24 @@ object AppGallery {
             "Controls Tuya-powered plugs, bulbs and switches.",
             Integration.BUILT_IN,
             connectorId = "com.tuya.smart",
+        ),
+        Entry(
+            "kasa", "Smart Home", "K", "TP-Link Kasa",
+            "Controls Kasa plugs, switches and bulbs.",
+            Integration.BUILT_IN,
+            connectorId = "com.tplink.kasa_android",
+        ),
+        Entry(
+            "alexa", "Smart Home", "A", "Amazon Alexa",
+            "Controls Alexa-enabled devices around the home.",
+            Integration.BUILT_IN,
+            connectorId = "com.amazon.dee.app",
+        ),
+        Entry(
+            "switchmate", "Smart Home", "S", "Switchmate",
+            "Operates Switchmate light switches and sensors.",
+            Integration.BUILT_IN,
+            connectorId = "com.switchmatehome.clicsmart",
         ),
         Entry(
             "ecobee", "Smart Home", "E", "Ecobee",
@@ -233,6 +252,54 @@ object AppGallery {
             "Queues up content from your own media library.",
             Integration.BUILT_IN,
             connectorId = "com.plexapp.android",
+        ),
+
+        // Finance — app openers only; transactions are always confirmed by you
+        Entry(
+            "venmo", "Finance", "$", "Venmo",
+            "Opens Venmo so you can send and request payments — always confirmed by you.",
+            Integration.BUILT_IN,
+            connectorId = "com.venmo",
+        ),
+        Entry(
+            "cash_app", "Finance", "$", "Cash App",
+            "Opens Cash App for payments and transfers — always confirmed by you.",
+            Integration.BUILT_IN,
+            connectorId = "com.squareup.cash",
+        ),
+
+        // Developer toolbox
+        Entry(
+            "termux", "Developer", ">_", "Termux",
+            "Runs command-line sessions and scripts here on the phone.",
+            Integration.BUILT_IN,
+            connectorId = "com.termux",
+        ),
+        Entry(
+            "ssh", "Developer", "SSH", "SSH Client",
+            "Connects to remote servers over SSH from this device.",
+            Integration.BUILT_IN,
+            connectorId = "com.server.auditor.ssh.client",
+        ),
+
+        // Meow's own siblings — already linked over the runtime bridge
+        Entry(
+            "meta_memory", "Companion", "M", "MetaMemory",
+            "Links to MetaMemory glasses captures over the in-app bridge.",
+            Integration.BUILT_IN,
+            connectorId = "com.meow.metamemory",
+        ),
+        Entry(
+            "inventory", "Companion", "I", "Meow Inventory",
+            "Tracks your inventory through the sibling app.",
+            Integration.BUILT_IN,
+            connectorId = "com.meow.inventory",
+        ),
+        Entry(
+            "meow_chat", "Companion", "C", "Meow Chat",
+            "Connects to the Meow Chat sibling app.",
+            Integration.BUILT_IN,
+            connectorId = "com.meow.chat",
         ),
     )
 }

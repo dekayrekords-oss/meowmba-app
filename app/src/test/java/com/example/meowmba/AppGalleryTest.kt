@@ -75,11 +75,21 @@ class AppGalleryTest {
         assertEquals("com.whatsapp", byId["whatsapp"]!!.connectorId)
         assertEquals("org.telegram.messenger", byId["telegram"]!!.connectorId)
         assertEquals("com.discord", byId["discord"]!!.connectorId)
-        assertEquals(
-            "io.homeassistant.companion.android",
-            byId["home_assistant"]!!.connectorId,
-        )
         assertEquals("com.govee.home", byId["govee"]!!.connectorId)
         assertEquals("com.tuya.smart", byId["tuya"]!!.connectorId)
+        assertEquals("com.amazon.dee.app", byId["alexa"]!!.connectorId)
+        assertEquals("com.termux", byId["termux"]!!.connectorId)
+        assertEquals("com.server.auditor.ssh.client", byId["ssh"]!!.connectorId)
+        assertEquals("com.meow.metamemory", byId["meta_memory"]!!.connectorId)
+        assertEquals("com.meow.inventory", byId["inventory"]!!.connectorId)
+        assertEquals("com.meow.chat", byId["meow_chat"]!!.connectorId)
+    }
+
+    @Test
+    fun `home assistant is a live key-gated integration`() {
+        val ha = AppGallery.all.first { it.id == "home_assistant" }
+        assertEquals(AppGallery.Integration.API_KEY, ha.integration)
+        assertEquals("connector_home_assistant", ha.storageKey)
+        assertNotNull("HA must point to where the token comes from", ha.keyLink)
     }
 }

@@ -47,6 +47,13 @@ object ServiceIntegrations {
             storageKey = "connector_github",
             toolFactory = { token -> githubTools(token) },
         ),
+        Service(
+            id = "home_assistant",
+            name = "Home Assistant",
+            keyLink = "https://www.home-assistant.io/docs/authentication/#your-account-profile",
+            storageKey = "connector_home_assistant",
+            toolFactory = { secret -> homeAssistantTools(secret) },
+        ),
     )
 
     fun byId(id: String): Service? = all.firstOrNull { it.id == id }
@@ -134,6 +141,99 @@ object ServiceIntegrations {
         },
     )
 
+    // ── Home Assistant ─────────────────────────────────────────────────────
+
+    /**
+     * Home Assistant is a local server, so its secret carries BOTH the base URL
+     * and the long-lived token, one per line:
+     *
+     *     http://192.168.1.10:8123
+     *     eyJhbGciOi...long-lived-token...
+     *
+     * Kept honest: we only drive the plain REST API (states + calling a
+     * service). No fake capability.
+     */
+    private fun homeAssistantTools(secret: () -> String?): List<Tool> {
+        fun parse(): Pair<String, String> {
+            val raw = secret() ?: return "" to ""
+            val lines = raw.split("\n").map { it.trim() }.filter { it.isNotBlank() }
+            if (lines.size < 2) return "" to ""
+            return lines[0].trimEnd('/') to lines.drop(1).joinToString("")
+        }
+        return listOf(
+            object : Tool {
+                override val definition = ToolDefinition(
+                    id = "home.states",
+                    displayName = "Home Assistant states",
+                    description = "List the current state summary of your Home Assistant devices, optionally for one domain (light, switch, climate, media_player, sensor).",
+                    inputSchema = mapOf("domain" to "string"),
+                    riskLevel = RiskLevel.SAFE,
+                    environments = setOf(ToolEnvironment.CLOUD),
+                    confirmationPolicy = ConfirmationPolicy.NONE,
+                )
+
+                override suspend fun execute(args: Map<String, String>): ToolResult {
+                    val (base, tok) = parse()
+                    if (base.isBlank() || tok.isBlank()) return ToolResult.Failure(
+                        "Home Assistant isn't connected. In Connections, tap Home Assistant and paste your URL on line 1 and long-lived token on line 2."
+                    )
+                    val domain = args["domain"]?.takeIf { it.isNotBlank() }?.trim()
+                    return runCatching {
+                        val states = getJsonArray("$base/api/states", "Bearer $tok")
+                        val filtered = (0 until states.length())
+                            .map { states.getJSONObject(it) }
+                            .filter { o -> domain == null || o.optString("entity_id").startsWith("$domain.") }
+                            .take(40)
+                        if (filtered.isEmpty()) ToolResult.Success("No ${domain ?: ""} states found.")
+                        else ToolResult.Success(
+                            filtered.joinToString("\n") { o ->
+                                val name = o.optJSONObject("attributes")?.optString("friendly_name").orEmpty()
+                                    .ifBlank { o.optString("entity_id") }
+                                "• $name = ${o.opt("state")}"
+                            }
+                        )
+                    }.getOrElse { ToolResult.Failure("Home Assistant states failed: ${it.message}") }
+                }
+            },
+            object : Tool {
+                override val definition = ToolDefinition(
+                    id = "home.call_service",
+                    displayName = "Home Assistant service",
+                    description = "Call a Home Assistant service, e.g. turn_on with domain=light, service=turn_on, entity=light.living_room.",
+                    inputSchema = mapOf(
+                        "domain" to "string",
+                        "service" to "string",
+                        "entity" to "string",
+                    ),
+                    riskLevel = RiskLevel.MODERATE,
+                    environments = setOf(ToolEnvironment.CLOUD),
+                    confirmationPolicy = ConfirmationPolicy.ALWAYS,
+                )
+
+                override suspend fun execute(args: Map<String, String>): ToolResult {
+                    val (base, tok) = parse()
+                    val domain = args["domain"]?.takeIf { it.isNotBlank() }
+                        ?: return ToolResult.Failure("Which domain, e.g. light?")
+                    val service = args["service"]?.takeIf { it.isNotBlank() }
+                        ?: return ToolResult.Failure("Which service, e.g. turn_on?")
+                    val entity = args["entity"]?.takeIf { it.isNotBlank() }
+                        ?: return ToolResult.Failure("Which entity, e.g. light.living_room?")
+                    if (base.isBlank() || tok.isBlank()) return ToolResult.Failure(
+                        "Home Assistant isn't connected. In Connections, tap Home Assistant and paste your URL and token."
+                    )
+                    return runCatching {
+                        postJson(
+                            "$base/api/services/$domain/$service",
+                            "Bearer $tok",
+                            JSONObject().put("entity_id", entity),
+                        )
+                        ToolResult.Success("Called $domain.$service on $entity.")
+                    }.getOrElse { ToolResult.Failure("Home Assistant call failed: ${it.message}") }
+                }
+            },
+        )
+    }
+
     // ── transport ──────────────────────────────────────────────────────────
 
     private fun getJson(url: String, bearer: String): JSONObject =
@@ -141,6 +241,27 @@ object ServiceIntegrations {
 
     private fun getJsonArray(url: String, bearer: String): JSONArray =
         JSONArray(getBody(url, bearer))
+
+    private fun postJson(url: String, bearer: String, body: JSONObject): String {
+        val conn = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            doOutput = true
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("Accept", "application/json")
+            setRequestProperty("User-Agent", "Meowmba/1.0")
+            connectTimeout = 15_000
+            readTimeout = 15_000
+            if (bearer.isNotBlank()) setRequestProperty("Authorization", bearer)
+            outputStream.use { it.write(body.toString().toByteArray()) }
+        }
+        val code = conn.responseCode
+        val resp = (if (code in 200..299) conn.inputStream else conn.errorStream)
+            ?.bufferedReader()?.use { it.readText() }
+            ?: ""
+        conn.disconnect()
+        if (code !in 200..299) throw IllegalStateException("HTTP $code: ${resp.take(200)}")
+        return resp
+    }
 
     private fun getBody(url: String, bearer: String): String {
         val conn = (URL(url).openConnection() as HttpURLConnection).apply {

@@ -43,12 +43,22 @@ class SkillRunnerTest {
 
     @Test
     fun `live service integrations are wired`() {
-        assertTrue("should have Spotify + GitHub", ServiceIntegrations.all.size >= 2)
+        assertTrue("should have Spotify + GitHub + Home Assistant", ServiceIntegrations.all.size >= 3)
         ServiceIntegrations.all.forEach { svc ->
             assertTrue("storageKey blank: ${svc.name}", svc.storageKey.isNotBlank())
             assertTrue("keyLink invalid: ${svc.name}", svc.keyLink.startsWith("https://"))
             val tools = svc.toolFactory { "test-token" }
             assertTrue("${svc.name} must produce a real tool", tools.isNotEmpty())
         }
+    }
+
+    @Test
+    fun `home assistant exposes states and service tools`() {
+        val ha = ServiceIntegrations.byId("home_assistant")
+        assertEquals("home_assistant", ha?.id)
+        val tools = ha!!.toolFactory { "http://192.168.1.10:8123\ntoken123" }
+        val ids = tools.map { it.definition.id }
+        assertTrue("should have states", ids.contains("home.states"))
+        assertTrue("should have service caller", ids.contains("home.call_service"))
     }
 }
