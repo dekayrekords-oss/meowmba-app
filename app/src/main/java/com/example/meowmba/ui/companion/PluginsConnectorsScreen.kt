@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -22,34 +23,41 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.meowmba.core.plugins.AppGallery
 import com.example.meowmba.core.plugins.Connector
 import com.example.meowmba.core.plugins.ConnectorKind
 
 /**
- * Plugins & MCP Connectors menu (replaces the old "Tools" tile as the home for
- * things the AI can drive). Three surfaces:
+ * Plugins & Connections menu (replaces the old "Tools" tile as the home for
+ * things the AI can work with).
  *
- *  1. Installed apps — discovered from the launcher, shown as grid tiles with
- *     their REAL icons. Tapping an app connects it so the agent can open/drive it.
- *  2. MCP servers — add an external server (e.g. Android Studio on the LAN),
- *     test it, and store its API key/endpoint.
- *  3. User plugins & skills — create with a name, description, and a MANDATORY
+ * Two surfaces, modeled on the Loona Deskmate app-connections list:
+ *
+ *  1. My Apps — a curated gallery of services the companion can attach to
+ *     (Gmail, Calendar, Slack, Zoom, Drive, built-ins like Music/Weather).
+ *     Each tile shows the service's category, name and what the AI does with
+ *     it. Tapping a tile opens a detail sheet with the connection options:
+ *     a place to paste an API key, a direct link to where to get that key,
+ *     and an enable switch — so keys & services live in the app's own sheet,
+ *     not a confusing generic form.
+ *
+ *  2. Plugins & Skills — user-authored plugins/skills with a MANDATORY
  *     distinct icon (blank icons are rejected before anything is saved).
  *
- * Every row/tile shows a Connected status and an easy off/on switch. Keys and
- * endpoints are entered inline so nothing is buried in a settings page.
+ * The raw "MCP server endpoint" form is gone from the main tabs: that concept
+ * was confusing and its function (an API key + address) now lives per-app in
+ * the detail sheet.
  */
 @Composable
 fun PluginsConnectorsScreen(
     state: CompanionState,
     onClose: () -> Unit,
+    onSaveServiceKey: (String, String) -> Unit,
+    onOpenUrl: (String) -> Unit,
     onConnectApp: (String, String) -> Unit,
-    onTestMcp: (String) -> Unit,
-    onAddMcp: (String, String, String) -> Unit,
     onCreatePlugin: (String, String, String) -> Unit,
     onToggleConnector: (String, Boolean) -> Unit,
     onRemoveConnector: (String) -> Unit,
-    onSetMcpServer: (Boolean) -> Unit,
 ) {
     var tab by remember { mutableStateOf(ConnectorTab.APPS) }
     Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF0D1117)) {
@@ -65,7 +73,7 @@ fun PluginsConnectorsScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    "Plugins & MCP",
+                    "Connections",
                     style = MaterialTheme.typography.headlineMedium,
                     color = Color.White,
                     modifier = Modifier.weight(1f)
@@ -81,14 +89,17 @@ fun PluginsConnectorsScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 TabChip("My Apps", tab == ConnectorTab.APPS) { tab = ConnectorTab.APPS }
-                TabChip("MCP Servers", tab == ConnectorTab.MCP) { tab = ConnectorTab.MCP }
                 TabChip("Plugins & Skills", tab == ConnectorTab.PLUGINS) { tab = ConnectorTab.PLUGINS }
             }
             Spacer(Modifier.height(12.dp))
             when (tab) {
-                ConnectorTab.APPS -> AppsTab(state, onConnectApp, onToggleConnector, onRemoveConnector)
-                ConnectorTab.MCP -> McpTab(
-                    state, onTestMcp, onAddMcp, onToggleConnector, onRemoveConnector, onSetMcpServer,
+                ConnectorTab.APPS -> AppsTab(
+                    state,
+                    onSaveServiceKey,
+                    onOpenUrl,
+                    onConnectApp,
+                    onToggleConnector,
+                    onRemoveConnector,
                 )
                 ConnectorTab.PLUGINS -> PluginsTab(state, onCreatePlugin, onToggleConnector, onRemoveConnector)
             }
@@ -96,7 +107,7 @@ fun PluginsConnectorsScreen(
     }
 }
 
-private enum class ConnectorTab { APPS, MCP, PLUGINS }
+private enum class ConnectorTab { APPS, PLUGINS }
 
 @Composable
 private fun TabChip(label: String, selected: Boolean, onClick: () -> Unit) {
@@ -112,16 +123,19 @@ private fun TabChip(label: String, selected: Boolean, onClick: () -> Unit) {
     )
 }
 
-// ── Apps ────────────────────────────────────────────────────────────────────
+// ── My Apps (curated gallery) ───────────────────────────────────────────────
 
 @Composable
 private fun AppsTab(
     state: CompanionState,
+    onSaveServiceKey: (String, String) -> Unit,
+    onOpenUrl: (String) -> Unit,
     onConnectApp: (String, String) -> Unit,
     onToggleConnector: (String, Boolean) -> Unit,
     onRemoveConnector: (String) -> Unit,
 ) {
-    val appConnectors = state.connectors.filter { it.kind == ConnectorKind.APP }
+    var selected by remember { mutableStateOf<AppGallery.Entry?>(null) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -129,53 +143,86 @@ private fun AppsTab(
             .padding(horizontal = 16.dp),
     ) {
         Text(
-            "Apps the AI can drive through a plugin. Tap an app to connect it — the agent can then open and use it.",
+            "Work with the apps you already use. Tap a service to connect or manage it.",
             color = Color.Gray,
             fontSize = 13.sp,
         )
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(14.dp))
 
-        if (state.connectorBusy && state.discoverableApps.isEmpty()) {
-            Text("Finding your apps…", color = Color(0xFF8B949E), fontSize = 14.sp)
-            Spacer(Modifier.height(12.dp))
-        }
-
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(3),
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(max = 560.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            items(state.discoverableApps) { app ->
-                val existing = appConnectors.firstOrNull { it.packageName == app.packageName }
-                val connected = existing?.configured == true
-                AppTile(
-                    label = app.label,
-                    packageName = app.packageName,
-                    connected = connected,
-                    onClick = { if (!connected) onConnectApp(app.packageName, app.label) },
-                )
+        // Group the catalog by category, Loona-style.
+        AppGallery.all.groupBy { it.category }.forEach { (category, entries) ->
+            Text(
+                category.uppercase(),
+                color = Color.White.copy(alpha = 0.6f),
+                fontSize = 12.sp,
+                letterSpacing = 1.sp,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(3),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 172.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                items(entries) { entry ->
+                    GalleryTile(
+                        entry = entry,
+                        connected = isConnected(state, entry),
+                        onClick = { selected = entry },
+                    )
+                }
             }
+            Spacer(Modifier.height(18.dp))
         }
+    }
 
-        Spacer(Modifier.height(20.dp))
-        Text("Connected apps", color = Color.White.copy(alpha = 0.7f), fontSize = 14.sp)
-        Spacer(Modifier.height(8.dp))
-        if (appConnectors.isEmpty()) {
-            Text("No apps connected yet.", color = Color(0xFF8B949E), fontSize = 14.sp)
+    selected?.let { entry ->
+        AppDetailSheet(
+            state = state,
+            entry = entry,
+            onDismiss = { selected = null },
+            onSaveServiceKey = onSaveServiceKey,
+            onOpenUrl = onOpenUrl,
+            onConnectApp = onConnectApp,
+            onToggleConnector = onToggleConnector,
+        )
+    }
+}
+
+private fun isConnected(state: CompanionState, entry: AppGallery.Entry): Boolean {
+    val cid = entry.connectorId ?: return false
+    return state.connectors.any { it.packageName == cid && it.configured }
+}
+
+/** Always-true for built-ins; the sheet decides per-integration. */
+private fun connectedFor(entry: AppGallery.Entry, state: CompanionState): Connector? {
+    val cid = entry.connectorId ?: return null
+    return state.connectors.firstOrNull { it.packageName == cid }
+}
+
+@Composable
+private fun Badge(badge: String, size: Int, bg: Color, fg: Color) {
+    Box(
+        modifier = Modifier
+            .size(size.dp)
+            .clip(CircleShape)
+            .background(bg),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (badge.length == 1 && badge[0] == '♪') {
+            Text(badge, color = fg, fontSize = 22.sp)
+        } else if (badge.length == 1) {
+            Text(badge, color = fg, fontSize = 22.sp, fontWeight = FontWeight.Bold)
         } else {
-            appConnectors.forEach { c ->
-                ConnectorRow(c, onToggleConnector, onRemoveConnector)
-                Spacer(Modifier.height(8.dp))
-            }
+            Text(badge, color = fg, fontSize = 13.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
 
 @Composable
-private fun AppTile(label: String, packageName: String, connected: Boolean, onClick: () -> Unit) {
+private fun GalleryTile(entry: AppGallery.Entry, connected: Boolean, onClick: () -> Unit) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
@@ -184,182 +231,263 @@ private fun AppTile(label: String, packageName: String, connected: Boolean, onCl
             .padding(horizontal = 8.dp, vertical = 12.dp)
             .clickable(onClick = onClick),
     ) {
-        DrawerIcon(packageName = packageName, size = 44.dp, label = label)
+        Badge(
+            badge = entry.badge,
+            size = 44,
+            bg = if (connected) Color(0xFF2E5A3A) else Color(0xFF2B3A55),
+            fg = Color.White,
+        )
         Spacer(Modifier.height(6.dp))
         Text(
-            label,
+            entry.name,
             color = Color.White,
             fontSize = 11.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
         Text(
-            if (connected) "● Connected" else "Tap to connect",
-            color = if (connected) Color(0xFF4ADE80) else Color(0xFF8B949E),
+            when {
+                connected -> "● Connected"
+                entry.integration == AppGallery.Integration.BUILT_IN -> "Active"
+                entry.integration == AppGallery.Integration.API_KEY -> "Add key"
+                else -> "Soon"
+            },
+            color = when {
+                connected || entry.integration == AppGallery.Integration.BUILT_IN -> Color(0xFF4ADE80)
+                entry.integration == AppGallery.Integration.API_KEY -> Color(0xFFFFD75E)
+                else -> Color(0xFF8B949E)
+            },
             fontSize = 9.sp,
         )
     }
 }
 
-// ── MCP servers ─────────────────────────────────────────────────────────────
+// ── Per-app detail sheet ────────────────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AppDetailSheet(
+    state: CompanionState,
+    entry: AppGallery.Entry,
+    onDismiss: () -> Unit,
+    onSaveServiceKey: (String, String) -> Unit,
+    onOpenUrl: (String) -> Unit,
+    onConnectApp: (String, String) -> Unit,
+    onToggleConnector: (String, Boolean) -> Unit,
+) {
+    var showKey by remember { mutableStateOf(false) }
+    var key by remember { mutableStateOf("") }
+    var savedMsg by remember { mutableStateOf<String?>(null) }
+    val connector = connectedFor(entry, state)
+    val installed = entry.connectorId != null // package-backed connector
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = Color(0xFF161B22),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 32.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Badge(entry.badge, 52, Color(0xFF2B3A55), Color.White)
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(entry.category, color = Color.Gray, fontSize = 12.sp)
+                    Text(entry.name, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            Text(entry.capability, color = Color(0xFFB8C0CC), fontSize = 13.sp, lineHeight = 18.sp)
+
+            Spacer(Modifier.height(16.dp))
+
+            when (entry.integration) {
+                AppGallery.Integration.BUILT_IN -> BuiltInSection(
+                    entry = entry,
+                    connector = connector,
+                    state = state,
+                    onConnectApp = onConnectApp,
+                    onToggleConnector = onToggleConnector,
+                )
+
+                AppGallery.Integration.API_KEY -> ApiKeySection(
+                    entry = entry,
+                    key = key,
+                    onKeyChange = { key = it },
+                    showKey = showKey,
+                    onToggleShow = { showKey = !showKey },
+                    savedMsg = savedMsg,
+                    onSave = {
+                        val trimmed = key.trim()
+                        if (trimmed.isEmpty()) {
+                            savedMsg = "Paste the key from ${entry.name} first."
+                            return@ApiKeySection
+                        }
+                        onSaveServiceKey(entry.storageKey ?: entry.id, trimmed)
+                        key = ""
+                        showKey = false
+                        savedMsg = "Key saved — ${entry.name} is connected."
+                    },
+                    onGetKey = { onOpenUrl(entry.keyLink ?: "") },
+                )
+
+                AppGallery.Integration.COMING_SOON -> ComingSoonSection(entry)
+            }
+        }
+    }
+}
 
 @Composable
-private fun McpTab(
+private fun BuiltInSection(
+    entry: AppGallery.Entry,
+    connector: Connector?,
     state: CompanionState,
-    onTestMcp: (String) -> Unit,
-    onAddMcp: (String, String, String) -> Unit,
+    onConnectApp: (String, String) -> Unit,
     onToggleConnector: (String, Boolean) -> Unit,
-    onRemoveConnector: (String) -> Unit,
-    onSetMcpServer: (Boolean) -> Unit,
 ) {
-    var name by remember { mutableStateOf("") }
-    var endpoint by remember { mutableStateOf("") }
-    var apiKey by remember { mutableStateOf("") }
-    var saveError by remember { mutableStateOf<String?>(null) }
+    Surface(color = Color(0xFF1F2933), shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Active — no setup needed.",
+                    color = Color(0xFF4ADE80),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f),
+                )
+                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF4ADE80))
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Meow can already do this with the tools built into the app.",
+                color = Color.Gray,
+                fontSize = 12.sp,
+            )
+        }
+    }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp),
-    ) {
-        // Host your own endpoint for Android Studio: the app is itself an MCP
-        // server over the LAN once started. Read-only tools, no key needed.
-        Surface(
-            color = if (state.mcpServerRunning) Color(0xFF0E1F16) else Color(0xFF161B22),
-            shape = RoundedCornerShape(14.dp),
-        ) {
-            Column(Modifier.padding(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+    if (entry.connectorId != null) {
+        Spacer(Modifier.height(14.dp))
+        if (connector == null) {
+            Button(
+                onClick = { onConnectApp(entry.connectorId!!, entry.name) },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD75E)),
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Enable this app", color = Color(0xFF1A1400)) }
+        } else {
+            Surface(color = Color(0xFF1F2933), shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Column(Modifier.weight(1f)) {
-                        Text("Host an MCP endpoint", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text(entry.name, color = Color.White, fontSize = 15.sp)
                         Text(
-                            "Expose this phone as a read-only MCP server so Android Studio can " +
-                                "connect to it over the LAN.",
+                            if (connector.enabled) "Allows Meow to open and use this app" else "Paused",
                             color = Color.Gray,
                             fontSize = 12.sp,
                         )
                     }
-                    Switch(checked = state.mcpServerRunning, onCheckedChange = onSetMcpServer)
-                }
-                if (state.mcpServerRunning) {
-                    Spacer(Modifier.height(10.dp))
-                    Text(
-                        "Listening — past this into Android Studio (Settings → Tools → MCP: " +
-                            "add a streamable-HTTP server URL):",
-                        color = Color.Gray,
-                        fontSize = 12.sp,
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Surface(color = Color(0xFF0D1117), shape = RoundedCornerShape(8.dp)) {
-                        Row(
-                            Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                "http://${state.mcpServerAddress}:${state.mcpServerPort}/mcp",
-                                color = Color(0xFF7EE787),
-                                fontSize = 13.sp,
-                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                                modifier = Modifier.weight(1f),
-                            )
-                        }
-                    }
-                    Text(
-                        "Only read-only tools are exposed (device info, battery, ASR status, " +
-                            "recent memories and audit entries) — nothing destructive.",
-                        color = Color.Gray,
-                        fontSize = 11.sp,
-                    )
+                    Switch(checked = connector.enabled, onCheckedChange = { onToggleConnector(connector.id, it) })
                 }
             }
         }
+    }
+}
 
-        Spacer(Modifier.height(16.dp))
-        Text(
-            "Connect an external Model Context Protocol server — for example the Android Studio MCP server on your network. Enter its address, test it, then save.",
-            color = Color.Gray,
-            fontSize = 13.sp,
-        )
-        Spacer(Modifier.height(12.dp))
+@Composable
+private fun ApiKeySection(
+    entry: AppGallery.Entry,
+    key: String,
+    onKeyChange: (String) -> Unit,
+    showKey: Boolean,
+    onToggleShow: () -> Unit,
+    savedMsg: String?,
+    onSave: () -> Unit,
+    onGetKey: () -> Unit,
+) {
+    Text(
+        "Connect ${entry.name} by adding an access token or API key. The key is stored securely on this phone and only used to talk to ${entry.name}.",
+        color = Color.Gray,
+        fontSize = 12.sp,
+    )
+    Spacer(Modifier.height(12.dp))
 
-        Surface(color = Color(0xFF161B22), shape = RoundedCornerShape(14.dp)) {
-            Column(Modifier.padding(16.dp)) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Connector name (e.g. Android Studio)", color = Color.Gray) },
-                    singleLine = true,
-                    colors = fieldColors(),
-                    modifier = Modifier.fillMaxWidth(),
+    TextField(
+        value = if (showKey) key else key.replace(Regex("."), "•"),
+        onValueChange = onKeyChange,
+        label = { Text("${entry.name} API key", color = Color.Gray) },
+        singleLine = true,
+        trailingIcon = {
+            IconButton(onClick = onToggleShow) {
+                Icon(
+                    imageVector = if (showKey) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                    contentDescription = if (showKey) "Hide key" else "Show key",
+                    tint = Color.Gray,
                 )
-                Spacer(Modifier.height(10.dp))
-                OutlinedTextField(
-                    value = endpoint,
-                    onValueChange = { endpoint = it },
-                    label = { Text("Endpoint URL", color = Color.Gray) },
-                    placeholder = { Text("http://192.168.1.10:24601/mcp", color = Color.Gray) },
-                    singleLine = true,
-                    colors = fieldColors(),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Spacer(Modifier.height(10.dp))
-                OutlinedTextField(
-                    value = apiKey,
-                    onValueChange = { apiKey = it },
-                    label = { Text("API key / token (optional)", color = Color.Gray) },
-                    singleLine = true,
-                    colors = fieldColors(),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                state.connectorTestResult?.let { (ok, msg) ->
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        msg,
-                        color = if (ok) Color(0xFF4ADE80) else Color(0xFFFF6B6B),
-                        fontSize = 13.sp,
-                    )
-                }
-                saveError?.let {
-                    Spacer(Modifier.height(8.dp))
-                    Text(it, color = Color(0xFFFF6B6B), fontSize = 13.sp)
-                }
-                Spacer(Modifier.height(12.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Button(
-                        onClick = { if (endpoint.isNotBlank()) onTestMcp(endpoint.trim()) },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2B3A55)),
-                        enabled = !state.connectorBusy,
-                    ) {
-                        if (state.connectorBusy) Text("Testing…", color = Color.White)
-                        else Text("Test", color = Color.White)
-                    }
-                    Button(
-                        onClick = {
-                            val e = endpoint.trim()
-                            if (e.isBlank()) { saveError = "Enter the endpoint URL first."; return@Button }
-                            if (name.isBlank()) { saveError = "Give the connector a name."; return@Button }
-                            saveError = null
-                            onAddMcp(name.trim(), e, apiKey.trim())
-                            name = ""; endpoint = ""; apiKey = ""
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD75E)),
-                    ) { Text("Save & Connect", color = Color(0xFF1A1400)) }
-                }
             }
-        }
+        },
+        modifier = Modifier.fillMaxWidth(),
+        colors = TextFieldDefaults.colors(
+            focusedContainerColor = Color(0xFF0D1117),
+            unfocusedContainerColor = Color(0xFF0D1117),
+            focusedTextColor = Color.White,
+            unfocusedTextColor = Color.White,
+            cursorColor = Color.White,
+        ),
+    )
 
-        Spacer(Modifier.height(20.dp))
-        Text("MCP servers", color = Color.White.copy(alpha = 0.7f), fontSize = 14.sp)
+    if (entry.keyLink != null) {
+        Spacer(Modifier.height(10.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Don't have a key?", color = Color.Gray, fontSize = 12.sp)
+            Text(
+                " Get one here",
+                color = Color(0xFF7EE787),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable(onClick = onGetKey)
+                    .padding(horizontal = 6.dp, vertical = 4.dp),
+            )
+        }
+    }
+
+    savedMsg?.let {
         Spacer(Modifier.height(8.dp))
-        val mcps = state.connectors.filter { it.kind == ConnectorKind.MCP_SERVER }
-        if (mcps.isEmpty()) {
-            Text("No MCP servers connected yet.", color = Color(0xFF8B949E), fontSize = 14.sp)
-        } else {
-            mcps.forEach { c ->
-                ConnectorRow(c, onToggleConnector, onRemoveConnector)
-                Spacer(Modifier.height(8.dp))
-            }
+        Text(it, color = if (it.startsWith("Key saved")) Color(0xFF4ADE80) else Color(0xFFFF6B6B), fontSize = 13.sp)
+    }
+
+    Spacer(Modifier.height(14.dp))
+    Button(
+        onClick = onSave,
+        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD75E)),
+        modifier = Modifier.fillMaxWidth(),
+        enabled = key.isNotBlank(),
+    ) { Text("Save key", color = Color(0xFF1A1400)) }
+}
+
+@Composable
+private fun ComingSoonSection(entry: AppGallery.Entry) {
+    Surface(color = Color(0xFF1F2933), shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Text(
+                "Coming soon",
+                color = Color(0xFFFFD75E),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "A driver for ${entry.name} isn't wired up yet, but we'll add it when it arrives.",
+                color = Color.Gray,
+                fontSize = 12.sp,
+            )
         }
     }
 }
@@ -488,7 +616,7 @@ private fun ConnectorRow(
             Column(modifier = Modifier.weight(1f)) {
                 Text(c.name, color = Color.White, fontSize = 15.sp)
                 Text(
-                    if (c.configured) c.description else c.description,
+                    c.description,
                     color = Color(0xFF8B949E),
                     fontSize = 11.sp,
                     maxLines = 2,

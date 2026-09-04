@@ -6620,6 +6620,23 @@ class CompanionViewModel(
         refreshConnectorUi()
     }
 
+    /** Persist a service's API key/token (used by the per-app connection sheet). */
+    fun saveServiceKey(service: String, key: String) {
+        secureStorage?.saveApiKey(service, key)
+        _uiState.value = _uiState.value.copy(captionText = "${service} key saved.")
+    }
+
+    /** Open an external URL (e.g. "get your API key") in a real browser. */
+    fun openExternalUrl(url: String) {
+        if (url.isBlank()) return
+        val ctx = secureStorage?.context ?: return
+        val intent = android.content.Intent(
+            android.content.Intent.ACTION_VIEW,
+            android.net.Uri.parse(url),
+        ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        runCatching { startInChrome(ctx, intent) }
+    }
+
     fun openProject(id: Long) {
         viewModelScope.launch {
             val dao = projectDao ?: return@launch

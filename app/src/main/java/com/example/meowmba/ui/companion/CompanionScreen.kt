@@ -865,13 +865,12 @@ fun CompanionScreen(
             PluginsConnectorsScreen(
                 state = uiState,
                 onClose = { viewModel.toggleConnectorsScreen() },
+                onSaveServiceKey = { svc, key -> viewModel.saveServiceKey(svc, key) },
+                onOpenUrl = { url -> viewModel.openExternalUrl(url) },
                 onConnectApp = { pkg, label -> viewModel.connectDiscoveredApp(pkg, label) },
-                onTestMcp = { endpoint -> viewModel.testMcpEndpoint(endpoint) },
-                onAddMcp = { name, endpoint, key -> viewModel.addMcpConnector(name, endpoint, key) },
                 onCreatePlugin = { name, desc, icon -> viewModel.createUserPlugin(name, desc, icon) },
                 onToggleConnector = { id, enabled -> viewModel.setConnectorEnabled(id, enabled) },
                 onRemoveConnector = { viewModel.removeConnector(it) },
-                onSetMcpServer = { enabled -> viewModel.setMcpServerEnabled(enabled) },
             )
         }
 
