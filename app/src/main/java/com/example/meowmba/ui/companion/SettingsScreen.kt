@@ -5,6 +5,9 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
 import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -132,6 +135,11 @@ fun SettingsScreen(
     }
     var localModelPath by remember { mutableStateOf(secureStorage.getEndpoint("local") ?: "/data/local/tmp/llm/gemma.bin") }
     var showAdvanced by remember { mutableStateOf(false) }
+    var openaiModel by remember { mutableStateOf(secureStorage.getModelName("openai") ?: "gpt-4o-mini") }
+    var showKey by remember { mutableStateOf(false) }
+    var openaiEndpoint by remember { mutableStateOf(secureStorage.getEndpoint("openai") ?: "") }
+    var opencodeEndpoint by remember { mutableStateOf(secureStorage.getEndpoint("opencode") ?: "") }
+    var openrouterEndpoint by remember { mutableStateOf(secureStorage.getEndpoint("openrouter") ?: "") }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -723,30 +731,52 @@ fun SettingsScreen(
 
             // OpenAI Configuration
             Text("OpenAI Cloud", style = MaterialTheme.typography.titleMedium, color = Color.White)
-            SettingsTextField(
+            ApiKeyField(
                 value = openaiKey,
                 onValueChange = { openaiKey = it },
-                label = { Text("API Key") },
-                modifier = Modifier.fillMaxWidth()
+                label = "API Key",
+                show = showKey,
+                onToggleShow = { showKey = !showKey },
             )
             ApiKeyLink(
                 url = "https://platform.openai.com/api-keys",
                 label = "Get an OpenAI API key",
+            )
+            ProviderEndpointField(
+                value = openaiEndpoint,
+                onValueChange = { openaiEndpoint = it },
+                label = "OpenAI base URL (optional)",
+                helper = "Leave blank for https://api.openai.com. Lets you point at a " +
+                    "self-hosted OpenAI-compatible proxy or gateway.",
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            SettingsTextField(
+                value = openaiModel,
+                onValueChange = { openaiModel = it },
+                label = { Text("Chat model (e.g. gpt-4o-mini)") },
+                modifier = Modifier.fillMaxWidth()
             )
 
             Spacer(modifier = Modifier.height(24.dp))
 
             // BigPickle (OpenCode Zen) — free fallback brain, can be made the default.
             Text("BigPickle (OpenCode Zen)", style = MaterialTheme.typography.titleMedium, color = Color.White)
-            SettingsTextField(
+            ApiKeyField(
                 value = opencodeKey,
                 onValueChange = { opencodeKey = it },
-                label = { Text("OpenCode Zen API key") },
-                modifier = Modifier.fillMaxWidth()
+                label = "OpenCode Zen API key",
+                show = showKey,
+                onToggleShow = { showKey = !showKey },
             )
             ApiKeyLink(
                 url = "https://opencode.ai/zen",
                 label = "Get a BigPickle / OpenCode Zen key",
+            )
+            ProviderEndpointField(
+                value = opencodeEndpoint,
+                onValueChange = { opencodeEndpoint = it },
+                label = "OpenCode Zen base URL (optional)",
+                helper = "Leave blank for https://opencode.ai/zen/v1.",
             )
             Spacer(modifier = Modifier.height(8.dp))
             Box {
@@ -767,11 +797,12 @@ fun SettingsScreen(
 
             // Hugging Face token (gated model downloads like Gemma)
             Text("Hugging Face", style = MaterialTheme.typography.titleMedium, color = Color.White)
-            SettingsTextField(
+            ApiKeyField(
                 value = hfToken,
                 onValueChange = { hfToken = it },
-                label = { Text("Token (for gated models like Gemma)") },
-                modifier = Modifier.fillMaxWidth()
+                label = "Token (for gated models like Gemma)",
+                show = showKey,
+                onToggleShow = { showKey = !showKey },
             )
             ApiKeyLink(
                 url = "https://huggingface.co/settings/tokens",
@@ -784,11 +815,12 @@ fun SettingsScreen(
             // one key from openrouter.ai and meow works anywhere. Free default
             // model; any OpenRouter model id works in the field below.
             Text("OpenRouter (openrouter.ai)", style = MaterialTheme.typography.titleMedium, color = Color.White)
-            SettingsTextField(
+            ApiKeyField(
                 value = openrouterKey,
                 onValueChange = { openrouterKey = it },
-                label = { Text("API key") },
-                modifier = Modifier.fillMaxWidth()
+                label = "API key",
+                show = showKey,
+                onToggleShow = { showKey = !showKey },
             )
             ApiKeyLink(
                 url = "https://openrouter.ai/keys",
@@ -807,6 +839,13 @@ fun SettingsScreen(
                 selectedId = openrouterVision,
                 models = openRouterCatalog.filter { it.vision },
                 onSelect = { openrouterVision = it },
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            ProviderEndpointField(
+                value = openrouterEndpoint,
+                onValueChange = { openrouterEndpoint = it },
+                label = "OpenRouter base URL (optional)",
+                helper = "Leave blank for https://openrouter.ai/api. No /v1 suffix — it is appended automatically.",
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -913,6 +952,10 @@ fun SettingsScreen(
                     secureStorage.saveApiKey("openrouter", openrouterKey)
                     secureStorage.saveModelName("openrouter", openrouterModel)
                     secureStorage.saveModelName("openrouter_vision", openrouterVision)
+                    secureStorage.saveModelName("openai", openaiModel)
+                    secureStorage.saveEndpoint("openai", openaiEndpoint)
+                    secureStorage.saveEndpoint("opencode", opencodeEndpoint)
+                    secureStorage.saveEndpoint("openrouter", openrouterEndpoint)
                     secureStorage.saveEndpoint("local", localModelPath)
                     onSaved()
                     onClose()
@@ -1383,6 +1426,65 @@ fun SettingsTextField(
             focusedTextColor = Color.White,
             unfocusedTextColor = Color.White
         )
+    )
+}
+
+/**
+ * API-key text field that hides the secret behind dots until the user taps the
+ * eye toggle. Full dot-masking while hidden (not just a password transform) so
+ * the key is never glanceable on a shared screen.
+ */
+@Composable
+private fun ApiKeyField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    show: Boolean,
+    onToggleShow: () -> Unit,
+) {
+    TextField(
+        value = if (show) value else value.replace(Regex("."), "•"),
+        onValueChange = onValueChange,
+        label = { Text(label) },
+        singleLine = true,
+        trailingIcon = {
+            IconButton(onClick = onToggleShow) {
+                Icon(
+                    imageVector = if (show) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                    contentDescription = if (show) "Hide key" else "Show key",
+                    tint = Color.Gray,
+                )
+            }
+        },
+        modifier = Modifier.fillMaxWidth(),
+        colors = TextFieldDefaults.colors(
+            focusedContainerColor = Color(0xFF1E1E1E),
+            unfocusedContainerColor = Color(0xFF1E1E1E),
+            focusedTextColor = Color.White,
+            unfocusedTextColor = Color.White,
+            cursorColor = Color.White,
+        ),
+    )
+}
+
+/** Secondary endpoint/base-URL field with a gray helper line underneath. */
+@Composable
+private fun ProviderEndpointField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    helper: String,
+) {
+    SettingsTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label) },
+        modifier = Modifier.fillMaxWidth()
+    )
+    Text(
+        text = helper,
+        style = MaterialTheme.typography.bodySmall,
+        color = Color.Gray
     )
 }
 

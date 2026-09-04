@@ -1899,6 +1899,16 @@ class CompanionViewModel(
     /** Live longitudinal force, normalized -1..1 (+ = braking). Lurches the avatar. */
     val motionLurch: kotlinx.coroutines.flow.StateFlow<Float> = _motionLurch.asStateFlow()
 
+    /**
+     * Base URL for a cloud provider — the Settings value when the user set one,
+     * otherwise the built-in default. Blank Settings endpoint = use default.
+     */
+    private fun resolveEndpoint(
+        storage: com.example.meowmba.core.security.SecureStorageManager,
+        provider: String,
+        defaultUrl: String,
+    ): String = storage.getEndpoint(provider)?.trim().takeIf { !it.isNullOrBlank() } ?: defaultUrl
+
     private fun buildOmniRoute(): com.example.meowmba.core.agent.OmniRoute? {
         val storage = secureStorage ?: return null
         val routes = mutableListOf<com.example.meowmba.core.agent.OmniRoute.Route>()
@@ -1914,7 +1924,7 @@ class CompanionViewModel(
                 id = "openrouter",
                 label = "OpenRouter · $openRouterModel",
                 provider = RemoteModelProvider(
-                    "OpenRouter", OPENROUTER_ENDPOINT, openRouterKey, openRouterModel,
+                    "OpenRouter", resolveEndpoint(storage, "openrouter", OPENROUTER_ENDPOINT), openRouterKey, openRouterModel,
                 ),
                 tags = setOf(com.example.meowmba.core.agent.OmniRoute.RouteTag.CHAT, com.example.meowmba.core.agent.OmniRoute.RouteTag.CODING, com.example.meowmba.core.agent.OmniRoute.RouteTag.REASONING),
                 priority = 10,
@@ -1938,7 +1948,7 @@ class CompanionViewModel(
                 id = "bigpickle",
                 label = "BigPickle (OpenCode Zen)",
                 provider = RemoteModelProvider(
-                    "BigPickle", "https://opencode.ai/zen/v1", key, "big-pickle",
+                    "BigPickle", resolveEndpoint(storage, "opencode", "https://opencode.ai/zen/v1"), key, "big-pickle",
                 ),
                 tags = setOf(com.example.meowmba.core.agent.OmniRoute.RouteTag.CHAT, com.example.meowmba.core.agent.OmniRoute.RouteTag.CODING, com.example.meowmba.core.agent.OmniRoute.RouteTag.REASONING),
                 priority = 25,
@@ -1949,7 +1959,7 @@ class CompanionViewModel(
                 id = "openai",
                 label = "OpenAI · ${storage.getModelName("openai") ?: "gpt-4o-mini"}",
                 provider = RemoteModelProvider(
-                    "OpenAI", "https://api.openai.com", key,
+                    "OpenAI", resolveEndpoint(storage, "openai", "https://api.openai.com"), key,
                     storage.getModelName("openai") ?: "gpt-4o-mini",
                 ),
                 tags = setOf(
@@ -2074,7 +2084,7 @@ class CompanionViewModel(
             "OpenRouter (Cloud)" -> {
                 RemoteModelProvider(
                     "OpenRouter",
-                    OPENROUTER_ENDPOINT,
+                    resolveEndpoint(secureStorage, "openrouter", OPENROUTER_ENDPOINT),
                     secureStorage.getApiKey("openrouter"),
                     secureStorage.getModelName("openrouter") ?: OPENROUTER_DEFAULT_MODEL
                 )
@@ -2083,7 +2093,7 @@ class CompanionViewModel(
             "OpenAI (Cloud)" -> {
                 RemoteModelProvider(
                     "OpenAI",
-                    "https://api.openai.com",
+                    resolveEndpoint(secureStorage, "openai", "https://api.openai.com"),
                     secureStorage.getApiKey("openai"),
                     secureStorage.getModelName("openai") ?: "gpt-4o-mini"
                 )
