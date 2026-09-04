@@ -239,6 +239,7 @@ fun AvatarRenderer(
     LaunchedEffect(paused) {
         if (paused) return@LaunchedEffect
         var lastNs = 0L
+        var lastDrawNs = 0L
         // Advance by real elapsed time on EVERY vsync, at whatever rate the
         // panel runs. The previous version quantised to a fixed 1/60 s step,
         // which capped the face at 60 fps on a 120 Hz display — every pose was
@@ -256,8 +257,15 @@ fun AvatarRenderer(
                 val dt = ((now - lastNs) / 1_000_000_000.0).coerceIn(0.0, 0.05)
                 lastNs = now
                 clockBase[0] += dt
-                clockSec = clockBase[0].toFloat()
-                drawEpoch++
+                // Ambient redraws at 30fps, not display rate: breathing/blink/
+                // sway are sub-Hz motion, and a full vector-face rebuild at
+                // 120Hz was the idle hot-phone baseline. Phase stays exact
+                // because clockBase still accumulates every vsync above.
+                if (now - lastDrawNs >= 33_333_333L) {
+                    lastDrawNs = now
+                    clockSec = clockBase[0].toFloat()
+                    drawEpoch++
+                }
             }
         }
     }

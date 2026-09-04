@@ -576,6 +576,17 @@ class CompanionViewModel(
     /** Phase G2: motor API. [RobotManager] swaps simulated <-> a live LOOI body. */
     private val robotManager = com.example.meowmba.core.robot.RobotManager()
     private val robotConnectGuard = java.util.concurrent.atomic.AtomicBoolean(false)
+    /**
+     * BLE backoff: with no base nearby every resume retried a 20-40s radio
+     * hunt. Failures now back off exponentially (10s doubling to 10min) so an
+     * absent robot stops heating the phone.
+     */
+    private var lastBleAttemptMs = 0L
+    private var bleFailStreak = 0
+    /** Debounced memory search: one FTS query per pause in typing, not per key. */
+    private var searchJob: Job? = null
+    /** Last face-gaze publish: caps 50Hz track output to ~15Hz UI updates. */
+    private var lastFaceGazeEmitMs = 0L
     private val motorController: com.example.meowmba.core.robot.MotorController
         get() = robotManager.active
 
@@ -715,8 +726,11 @@ class CompanionViewModel(
                 // SECOND dead-band on top meant a sample had to clear 0.012
                 // twice to reach the face, so slow movement was discarded
                 // entirely and then arrived as a jump. Only the identical-value
-                // case is skipped, which is free.
-                if (next != cur) {
+                // case is skipped, which is free. Time-throttled to ~15Hz so
+                // the avatar recomposes 15x/s instead of 50x/s while tracking
+                // (same path a slow drift takes, just fewer frames of it).
+                if (next != cur && nowFace - lastFaceGazeEmitMs >= 66L) {
+                    lastFaceGazeEmitMs = nowFace
                     _faceGaze.value = next
                 }
                 val now = System.currentTimeMillis()
@@ -891,9 +905,13 @@ class CompanionViewModel(
         // user restarted it.
         viewModelScope.launch {
             while (true) {
-                kotlinx.coroutines.delay(10_000)
+                // 30s, skipped in background: the old 10s tick woke the CPU
+                // forever even with the screen off, and the background service
+                // owns the mic there anyway so a restart would be futile.
+                kotlinx.coroutines.delay(30_000)
+                if (appInBackground || handedOffToBackground) continue
                 val s = _uiState.value
-                if (!appInBackground && !handedOffToBackground && s.isMicEnabled && !s.isMuted &&
+                if (s.isMicEnabled && !s.isMuted &&
                     s.interactionState == InteractionState.IDLE && shouldAlwaysOnMic() &&
                     !alwaysOnActive && !alwaysOnSessionOpen && alwaysOnRearmJob == null
                 ) {
@@ -2825,10 +2843,21 @@ class CompanionViewModel(
         val host = secureStorage?.getPreference("robot_host") ?: "192.168.1.200"
         val port = (secureStorage?.getPreference("robot_port")?.toIntOrNull()) ?: 9100
         val btAddress = secureStorage?.getPreference("robot_bt_address") ?: ""
+        // Exponential backoff across failures: without it every onResume
+        // burned a 20-40s BLE hunt + radio even when the base was nowhere near.
+        if (enabled && useBt && robotManager.hasLiveBody.not()) {
+            val backoffMs = (10_000L shl bleFailStreak.coerceAtMost(4)).coerceAtMost(10 * 60_000L)
+            if (System.currentTimeMillis() - lastBleAttemptMs < backoffMs) {
+                robotConnectGuard.set(false)
+                return
+            }
+        }
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
-                if (!enabled) robotManager.useSimulated()
-                else if (useBt) {
+                if (!enabled) {
+                    robotManager.useSimulated()
+                    bleFailStreak = 0
+                } else if (useBt) {
                     // Drop any stale "LOOI body (BLE)" from last launch before
                     // we hunt — otherwise Settings and the model keep saying
                     // we are on a base that is not here.
@@ -2836,8 +2865,13 @@ class CompanionViewModel(
                     val ctx = secureStorage?.context
                     if (ctx == null) robotManager.useSimulated()
                     else {
+                        lastBleAttemptMs = System.currentTimeMillis()
                         val bleOk = runCatching { robotManager.connectLooiBle(ctx, btAddress) }.getOrDefault(false)
-                        if (!bleOk && btAddress.isNotBlank()) robotManager.connectBluetooth(btAddress)
+                        if (bleOk) bleFailStreak = 0
+                        else {
+                            bleFailStreak++
+                            if (btAddress.isNotBlank()) robotManager.connectBluetooth(btAddress)
+                        }
                     }
                 }
                 else robotManager.connectLooi(host, port)
@@ -5189,14 +5223,18 @@ class CompanionViewModel(
     }
 
     /** Embedding recall over the recent memory pool, honoring the pause flag. */
-    private suspend fun recallMemories(text: String): List<RecallResult> {
-        val repo = memoryRepository ?: return emptyList()
-        if (_uiState.value.memoryPaused) return emptyList()
-        val candidates = repo.getRecentMemories(200) ?: return emptyList()
-        if (candidates.isEmpty()) return emptyList()
-        val queryEmbedding = embedder.getEmbedding(text)
-        return RecallEngine.rank(queryEmbedding, text, candidates)
-    }
+    private suspend fun recallMemories(text: String): List<RecallResult> =
+        // 200 cosine-rank + embedding on the turn path: ran on Main and hitched
+        // every reply while the DB grew. CPU work on Default, DB on IO.
+        withContext(kotlinx.coroutines.Dispatchers.Default) {
+            val repo = memoryRepository ?: return@withContext emptyList()
+            if (_uiState.value.memoryPaused) return@withContext emptyList()
+            val candidates = withContext(ioDispatcher) { repo.getRecentMemories(200) }
+                ?: return@withContext emptyList()
+            if (candidates.isEmpty()) return@withContext emptyList()
+            val queryEmbedding = embedder.getEmbedding(text)
+            RecallEngine.rank(queryEmbedding, text, candidates)
+        }
 
     /**
      * Speaks one chunk of a streamed reply. [first] starts a new utterance (flushing
@@ -7285,11 +7323,16 @@ class CompanionViewModel(
         val repo = weatherRepository ?: return
         ambientWeatherJob = viewModelScope.launch {
             while (true) {
-                when (val r = repo.fetch(surface = false)) {
-                    is com.example.meowmba.core.weather.WeatherRepository.Result.Ok ->
-                        _uiState.value = _uiState.value.copy(ambientWeather = r.weather)
-                    is com.example.meowmba.core.weather.WeatherRepository.Result.Failed ->
-                        android.util.Log.i("Weather", "ambient refresh failed: ${r.reason}")
+                // No network while backgrounded: the sky isn't visible and the
+                // 15-min tick kept the radio/CPU warm overnight for nothing.
+                // The next foreground fetch refreshes it.
+                if (!appInBackground) {
+                    when (val r = repo.fetch(surface = false)) {
+                        is com.example.meowmba.core.weather.WeatherRepository.Result.Ok ->
+                            _uiState.value = _uiState.value.copy(ambientWeather = r.weather)
+                        is com.example.meowmba.core.weather.WeatherRepository.Result.Failed ->
+                            android.util.Log.i("Weather", "ambient refresh failed: ${r.reason}")
+                    }
                 }
                 kotlinx.coroutines.delay(AMBIENT_WEATHER_INTERVAL_MS)
             }
@@ -7831,7 +7874,11 @@ class CompanionViewModel(
         val ctx = secureStorage?.context?.applicationContext ?: return
         roadFeedJob = viewModelScope.launch(ioDispatcher) {
             com.example.meowmba.core.alerts.RoadFeedPoller.run(ctx) {
-                _uiState.value.roadAlertsEnabled
+                // GPS + 2x network every 45s only while useful: foreground, or
+                // background while actually driving. Background + parked used to
+                // poll forever once the toggle was left on.
+                _uiState.value.roadAlertsEnabled &&
+                    (!appInBackground || _uiState.value.driving)
             }
         }
     }
@@ -7870,14 +7917,25 @@ class CompanionViewModel(
 
     /** Full-text search on the Memory screen. Blank query clears search mode. */
     fun searchMemories(query: String) {
+        searchJob?.cancel()
         if (query.isBlank()) {
             _uiState.value = _uiState.value.copy(memorySearchResults = null)
             return
         }
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(
-                memorySearchResults = memoryRepository?.searchMemories(query) ?: emptyList()
-            )
+        // Debounced + cancellable + off-main: the old version fired an FTS
+        // query per keystroke on the main dispatcher, so fast typing queued
+        // overlapping scans and a slow earlier query overwrote a newer one.
+        searchJob = viewModelScope.launch {
+            delay(300)
+            val q = query.trim()
+            if (q.isBlank()) {
+                _uiState.value = _uiState.value.copy(memorySearchResults = null)
+                return@launch
+            }
+            val results = withContext(ioDispatcher) {
+                memoryRepository?.searchMemories(q) ?: emptyList()
+            }
+            _uiState.value = _uiState.value.copy(memorySearchResults = results)
         }
     }
 

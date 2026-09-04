@@ -35,7 +35,7 @@ import java.util.concurrent.TimeUnit
  *  3. connectGatt(autoConnect=false) -> discoverServices -> map the six known
  *     characteristics -> run a serial init queue that subscribes to every
  *     notify/indicate characteristic (CCCD write) and reads every readable one.
- *  4. Keep-alive: poll a READ on the sensor characteristic every 3s (reads can
+ *  4. Keep-alive: poll a READ on the sensor characteristic every 30s (reads can
  *     never move a motor).
  *
  * Motion channels (hardware-verified in the Memba 2 work):
@@ -122,7 +122,17 @@ class LooiBleLink(private val context: Context) {
     @SuppressLint("MissingPermission")
     private fun startScan() {
         setState(LinkState.SCANNING, "scanning for LOOI…")
-        val started = runCatching { adapter?.bluetoothLeScanner?.startScan(scanCallback) }.isSuccess
+        // Filtered LOW_POWER scan: the old unfiltered default (LOW_LATENCY)
+        // held the radio at full duty for 12s per attempt, and refreshRobot()
+        // retried on every resume — a hot-phone contributor with no base near.
+        val filter = android.bluetooth.le.ScanFilter.Builder()
+            .setDeviceName("LOOI").build()
+        val settings = android.bluetooth.le.ScanSettings.Builder()
+            .setScanMode(android.bluetooth.le.ScanSettings.SCAN_MODE_LOW_POWER)
+            .build()
+        val started = runCatching {
+            adapter?.bluetoothLeScanner?.startScan(listOf(filter), settings, scanCallback)
+        }.isSuccess
         if (!started) {
             Log.w(TAG, "BLE scan unavailable — not pretending a LOOI is here")
             stopScanner()
@@ -157,6 +167,10 @@ class LooiBleLink(private val context: Context) {
 
         override fun onScanFailed(errorCode: Int) {
             Log.e(TAG, "BLE scan failed: error code $errorCode")
+            // A failed scan never times out on its own: stop it and release
+            // the latch so callers back off instead of burning the full 20s.
+            stopScanner()
+            setState(LinkState.OFFLINE, "scan failed $errorCode")
         }
     }
 
@@ -332,7 +346,7 @@ class LooiBleLink(private val context: Context) {
         drainGattOps(g)
     }
 
-    /** Poll a READ every 3s so the link stays warm; reads never move motors. */
+    /** Poll a READ every 30s so the link stays warm; reads never move motors. */
     @SuppressLint("MissingPermission")
     @Suppress("DEPRECATION")
     private fun startKeepAlive() {
@@ -342,7 +356,10 @@ class LooiBleLink(private val context: Context) {
         } ?: return
         keepAliveJob = scope.launch {
             while (true) {
-                delay(12_000)
+                // 12s woke the BLE stack ~5x/min for the life of the link.
+                // 30s is plenty to notice a dead base, and closing the link
+                // (close()/disconnect) still cancels this immediately.
+                delay(30_000)
                 val g = gatt ?: break
                 if (!gattOpInFlight) runCatching { g.readCharacteristic(readable) }
             }

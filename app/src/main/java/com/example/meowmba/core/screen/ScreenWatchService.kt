@@ -16,7 +16,6 @@ import android.media.ImageReader
 import android.media.projection.MediaProjection
 import android.os.Handler
 import android.os.IBinder
-import android.os.Looper
 import android.util.DisplayMetrics
 import android.view.WindowManager
 import androidx.core.app.ServiceCompat
@@ -34,12 +33,22 @@ class ScreenWatchService : Service() {
     private var projection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
     private var imageReader: ImageReader? = null
-    private val handler = Handler(Looper.getMainLooper())
+    // Capture off the main thread: Bitmap allocs + buffer copies every 8s used
+    // to run on the UI looper and hitch scrolling exactly when watch mode was on.
+    private var captureThread: android.os.HandlerThread? = null
+    private var handler: Handler? = null
+
+    override fun onCreate() {
+        super.onCreate()
+        val t = android.os.HandlerThread("screen-watch").also { it.start() }
+        captureThread = t
+        handler = Handler(t.looper)
+    }
 
     private val captureLoop = object : Runnable {
         override fun run() {
             captureFrame()
-            handler.postDelayed(this, INTERVAL_MS)
+            handler?.postDelayed(this, INTERVAL_MS)
         }
     }
 
@@ -78,7 +87,7 @@ class ScreenWatchService : Service() {
             p.registerCallback(projectionCallback, handler)
             projection = p
             startVirtualDisplay()
-            handler.post(captureLoop)
+            handler?.post(captureLoop)
         }
         return START_NOT_STICKY
     }
@@ -88,11 +97,19 @@ class ScreenWatchService : Service() {
         val metrics = DisplayMetrics()
         @Suppress("DEPRECATION")
         wm.defaultDisplay.getRealMetrics(metrics)
+        // Create the virtual display at capture size, not full pixels: the old
+        // code composited e.g. 2208x1840 RGBA (~16MB/frame) then downscaled to
+        // 512px on the main thread every 8s. Capturing at 512px wide skips the
+        // full-res alloc/copy/scale and the main-thread Bitmap churn entirely.
         val w = metrics.widthPixels
         val h = metrics.heightPixels
-        imageReader = ImageReader.newInstance(w, h, PixelFormat.RGBA_8888, 2)
+        val scale = (MAX_EDGE.toFloat() / w).coerceAtMost(1f)
+        val sw = (w * scale).toInt().coerceAtLeast(1)
+        val sh = (h * scale).toInt().coerceAtLeast(1)
+        val sdpi = (metrics.densityDpi * scale).toInt().coerceAtLeast(1)
+        imageReader = ImageReader.newInstance(sw, sh, PixelFormat.RGBA_8888, 2)
         virtualDisplay = projection?.createVirtualDisplay(
-            "meowmba-screen-watch", w, h, metrics.densityDpi,
+            "meowmba-screen-watch", sw, sh, sdpi,
             DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
             imageReader!!.surface, null, null,
         )
@@ -148,11 +165,14 @@ class ScreenWatchService : Service() {
     }
 
     override fun onDestroy() {
-        handler.removeCallbacks(captureLoop)
+        handler?.removeCallbacks(captureLoop)
         virtualDisplay?.release()
         imageReader?.close()
         projection?.unregisterCallback(projectionCallback)
         projection?.stop()
+        captureThread?.quitSafely()
+        captureThread = null
+        handler = null
         super.onDestroy()
     }
 

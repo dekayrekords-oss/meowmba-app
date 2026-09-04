@@ -39,6 +39,11 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+/** Compiled once: the old code rebuilt these per markdown line per recomposition. */
+private val VAULT_BULLET = Regex("^[\\-\\*] .+")
+private val VAULT_HR = Regex("^---+$")
+private val VAULT_INLINE = Regex("\\*\\*(.+?)\\*\\*|\\*(.+?)\\*|`(.+?)`|\\[\\[(.+?)\\]\\]")
+
 private val DATE_FMT = SimpleDateFormat("MMM d, yyyy", Locale.US)
 private val VAULT_BG = Color(0xFF0D1117)
 private val PANEL_BG = Color(0xFF161B22)
@@ -438,14 +443,14 @@ private fun MarkdownBody(text: String, onWikiLink: (String) -> Unit = {}) {
                 }
             }
             // Bullet list
-            line.matches(Regex("^[\\-\\*] .+")) -> {
+            line.matches(VAULT_BULLET) -> {
                 Row(modifier = Modifier.padding(start = 8.dp, top = 2.dp)) {
                     Text("•  ", color = ACCENT, fontSize = 14.sp)
                     InlineText(line.substring(2), onWikiLink = onWikiLink)
                 }
             }
             // Horizontal rule
-            line.matches(Regex("^---+$")) -> {
+            line.matches(VAULT_HR) -> {
                 HorizontalDivider(color = BORDER, modifier = Modifier.padding(vertical = 8.dp))
             }
             // Blank line → paragraph gap
@@ -461,7 +466,7 @@ private fun MarkdownBody(text: String, onWikiLink: (String) -> Unit = {}) {
 private fun InlineText(raw: String, onWikiLink: (String) -> Unit) {
     val annotated = buildAnnotatedString {
         var pos = 0
-        val pattern = Regex("\\*\\*(.+?)\\*\\*|\\*(.+?)\\*|`(.+?)`|\\[\\[(.+?)\\]\\]")
+        val pattern = VAULT_INLINE
         pattern.findAll(raw).forEach { match ->
             if (pos < match.range.first) append(raw.substring(pos, match.range.first))
             when {

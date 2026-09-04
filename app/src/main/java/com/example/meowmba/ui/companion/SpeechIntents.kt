@@ -70,6 +70,10 @@ object SpeechIntents {
     /** "in the browser", "on the side browser", "in browser"… */
     private val SHOW_BROWSER_PLACE = Regex("\\b(in|on)( the)? (\\w+ )?browser")
 
+    /** Compiled once: per-utterance Regex() allocs showed up in turn-path profiles. */
+    private val ON_IN_APP = Regex("\\b(?:on|in)\\s+(\\w+)\\s*$")
+    private val TELL_ME_QUESTION = Regex("^tell me (how|what|why|when|where|who|which|if|about)\\b")
+
     /** Phrases that politely end conversation mode. */
     val STOP_COMMANDS = setOf(
         "stop", "never mind", "nevermind", "that's all", "thats all",
@@ -120,7 +124,7 @@ object SpeechIntents {
             if (rest.isNotBlank() && rest.split(' ').size <= 8) return true
         }
         // "X on/in [app]" — e.g. "search sublime on spotify", "find john on instagram"
-        val onInMatch = Regex("\\b(?:on|in)\\s+(\\w+)\\s*$").find(t)
+        val onInMatch = ON_IN_APP.find(t)
         if (onInMatch != null) {
             val app = onInMatch.groupValues[1].lowercase()
             if (PHONE_GOAL_APPS.any { app.contains(it) }) return true
@@ -167,8 +171,7 @@ object SpeechIntents {
         val casualCheckIn = GREETINGS.any { t == it || t.endsWith(" $it") || t.contains(" $it") }
         val hasHowTo = t.contains("how to ")
         // "tell me how/what/why…" asks for information, not an action.
-        val tellMeQuestion = Regex("^tell me (how|what|why|when|where|who|which|if|about)\\b")
-            .containsMatchIn(t)
+        val tellMeQuestion = TELL_ME_QUESTION.containsMatchIn(t)
         val actionRequest = ACTION_STARTERS.any { t.startsWith("$it ") }
         // "tell me how…" / trailing "?" are questions even though "tell" is
         // also an action verb.

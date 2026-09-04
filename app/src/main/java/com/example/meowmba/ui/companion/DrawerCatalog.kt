@@ -43,8 +43,11 @@ data class DrawerFolder(
 /** Sort, type filter, and folder JSON for the app drawer. Pure — no Android. */
 object DrawerCatalog {
 
+    /** Compiled once: matchesSearch runs per app per keystroke in the drawer. */
+    private val WHITESPACE = Regex("\\s+")
+
     fun matchesSearch(app: DrawerApp, query: String): Boolean {
-        val words = query.lowercase().trim().split(Regex("\\s+")).filter { it.isNotBlank() }
+        val words = query.lowercase().trim().split(WHITESPACE).filter { it.isNotBlank() }
         if (words.isEmpty()) return true
         val tokens = app.searchText.split(" ")
         return words.all { w ->

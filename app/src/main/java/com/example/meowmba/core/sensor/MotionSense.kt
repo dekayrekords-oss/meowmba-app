@@ -124,7 +124,10 @@ class MotionSense(context: Context) : RobotPoseSource {
 
     fun start() {
         val accel = sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) ?: return
-        sensorManager.registerListener(listener, accel, SensorManager.SENSOR_DELAY_UI)
+        // NORMAL (~5Hz) is plenty for an 8-degree avatar lean: UI rate fired
+        // 15-60x/s forever — even in the background — and fanned out to avatar
+        // recomposition + servo writes per sample.
+        sensorManager.registerListener(listener, accel, SensorManager.SENSOR_DELAY_NORMAL)
     }
 
     fun stop() {

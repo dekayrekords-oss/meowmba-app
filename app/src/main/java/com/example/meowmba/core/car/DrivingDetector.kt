@@ -205,14 +205,17 @@ class DrivingDetector(
 
     private fun registerSensors() {
         val sm = sensorManager ?: return
-        // Raw accelerometer is always registered: its low-passed value becomes
-        // the gravity reference used to orient the car-plane decomposition.
-        sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)?.let {
-            sm.registerListener(sensorListener, it, SensorManager.SENSOR_DELAY_GAME)
-        }
+        // SENSOR_DELAY_NORMAL (~5Hz) is plenty for 12mph/5mph gates and the
+        // crash check: GAME (~50Hz) kept two IMU streams + GPS hot and was a
+        // measured hot-phone contributor. Prefer the gravity-compensated
+        // linear sensor alone when present; fall back to raw accelerometer.
         sm.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)?.let {
             linearSensorAvailable = true
-            sm.registerListener(sensorListener, it, SensorManager.SENSOR_DELAY_GAME)
+            sm.registerListener(sensorListener, it, SensorManager.SENSOR_DELAY_NORMAL)
+            return
+        }
+        sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)?.let {
+            sm.registerListener(sensorListener, it, SensorManager.SENSOR_DELAY_NORMAL)
         }
     }
 
@@ -226,8 +229,10 @@ class DrivingDetector(
             return
         }
         try {
+            // 5s / 10m: median speed over a 12s window cannot resolve faster
+            // anyway, and 0L/0f woke the main looper on every GPS fix.
             @Suppress("MissingPermission")
-            lm.requestLocationUpdates(provider, 0L, 0f, locationListener, Looper.getMainLooper())
+            lm.requestLocationUpdates(provider, 5_000L, 10f, locationListener, Looper.getMainLooper())
         } catch (_: SecurityException) {
             // Permission missing — location is an empty cue, other signals carry on.
         } catch (_: IllegalArgumentException) {
@@ -238,7 +243,9 @@ class DrivingDetector(
     private suspend fun evaluateLoop() {
         while (true) {
             evaluate()
-            delay(params.evaluateMs)
+            // Parked phones don't need a 2s tick: back off to 10s until driving
+            // starts, so car mode left on doesn't hold the CPU/GPS hot forever.
+            delay(if (_driving.value.isDriving) params.evaluateMs else 10_000L)
         }
     }
 
