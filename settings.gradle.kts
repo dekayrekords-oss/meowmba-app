@@ -27,7 +27,7 @@ dependencyResolutionManagement {
         maven {
             url = uri("https://maven.pkg.github.com/facebook/meta-wearables-dat-android")
             credentials {
-                username = ""
+                username = System.getenv("GITHUB_ACTOR") ?: "oauth2"
                 password = java.util.Properties().apply {
                     val f = File(rootDir, "local.properties")
                     if (f.exists()) f.inputStream().use { load(it) }
