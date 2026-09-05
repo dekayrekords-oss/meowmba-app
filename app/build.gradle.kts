@@ -71,8 +71,12 @@ android {
         applicationId = "com.example.meowmba"
         minSdk = 31
         targetSdk = 36
-        versionCode = 19
-        versionName = "1.3.15"
+        // Bumped from 20 for the appearance upgrade: the phone is already on
+        // versionCode 20 (1.3.16), so an install at 20 would not register as an
+        // upgrade and preserving app data would be a coin flip. 21 > 20 makes it
+        // a genuine in-place upgrade that keeps the Room database and models.
+        versionCode = 23
+        versionName = "1.3.19"
 
         ndk {
             abiFilters += "arm64-v8a"
@@ -193,6 +197,36 @@ ksp {
 // whole test task. IdleBehaviorTest re-enables it explicitly.
 tasks.withType<Test>().configureEach {
     systemProperty("meowmba.idleAnimations", "false")
+
+    // The full suite died with OutOfMemoryError twice under the old defaults
+    // (512m worker heap, no JVM recycling). Raising the heap alone did NOT fix
+    // it — it still died at 3g — because Robolectric retains an SDK classloader
+    // per test class, so the heap climbs monotonically across the run and never
+    // gives anything back. The fix is to recycle the worker JVM after every test
+    // class: slower, but each JVM then only ever holds one class's worth of
+    // Robolectric state.
+    //
+    // One worker at a time, holding a large heap. Two concurrent workers made
+    // the OOM worse, not better: the host was already swapping (5.4 of 6.1 GB
+    // swap in use) while this ran, so total footprint matters more than
+    // throughput. The daemon is trimmed to 4g in gradle.properties to leave the
+    // worker room.
+    maxHeapSize = "6g"
+    maxParallelForks = 1
+
+    // forkEvery = 1 (recycling the worker JVM after every test class) did stop
+    // the OutOfMemoryError, but it made the suite unusably slow: zero results
+    // written in 20 minutes, because each of the ~118 Robolectric cold starts
+    // re-instruments the whole SDK on a host that was already swapping.
+    //
+    // Recycling is therefore OFF by default. Re-enable it (forkEvery = 1) only if
+    // the suite OOMs again on a machine that actually has free RAM — it trades a
+    // lot of wall-clock for a bounded heap.
+    // forkEvery = 1
+
+    // Deliberately NO -XX:+HeapDumpOnOutOfMemoryError here: on the first OOM it
+    // wrote a 5.0 GB dump into app/build/ and nearly filled the disk, and the
+    // dump told us nothing that forkEvery does not already address.
 }
 
 dependencies {

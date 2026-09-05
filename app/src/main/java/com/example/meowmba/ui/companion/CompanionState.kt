@@ -88,6 +88,9 @@ data class CompanionState(
     val showAvatarScreen: Boolean = false,
     /** Which eye style the face is drawn in. Persisted across launches. */
     val avatarStyle: AvatarStyle = AvatarStyle.DEFAULT,
+    val appTheme: AppTheme = AppTheme.COMPANION,
+    val appearanceMode: AppearanceMode = AppearanceMode.DARK,
+    val avatarFeatureColor: Long = 0xFFE8D5B9L,
     /** Godot face eye color (opaque ARGB). Default mint green. */
     val avatarEyeColor: Long = AvatarColors.DEFAULT_EYE,
     /** Soft halo glow behind the Godot face (opaque ARGB). */
@@ -264,6 +267,8 @@ data class CompanionState(
     val showAgentsScreen: Boolean = false,
     val showProjectsScreen: Boolean = false,
     val showToolsScreen: Boolean = false,
+    /** Full-screen LOOI body panel opened from the Robot tile. */
+    val showRobotScreen: Boolean = false,
 
     /** Hardware → Voice Recognition: which speech-to-text backend to use. */
     val showVoiceModelScreen: Boolean = false,
@@ -315,6 +320,9 @@ data class CompanionState(
     val modelDownloads: Map<String, ModelDownloader.DownloadProgress> = emptyMap(),
     /** Every model bundle actually present in the app-private models dir. */
     val installedModels: List<InstalledModelFile> = emptyList(),
+    /** Compatible bundles found in the public Downloads collection. */
+    val discoveredModelFiles: List<DiscoveredModelFile> = emptyList(),
+    val modelScanRunning: Boolean = false,
     /** Keep listening for the wake phrase in the background (foreground service). */
     val backgroundListeningEnabled: Boolean = false,
     /** Vision: set when a look request needs the CAMERA runtime permission. */
@@ -403,6 +411,12 @@ data class InstalledModelFile(
     val catalogDisplayName: String? = null
 )
 
+data class DiscoveredModelFile(
+    val uri: String,
+    val fileName: String,
+    val sizeBytes: Long,
+)
+
 /**
  * Functional states of the companion's interaction cycle.
  */
@@ -449,6 +463,7 @@ fun faceModeActive(state: CompanionState): Boolean =
         !state.showVaultScreen &&
         !state.showProjectsScreen &&
         !state.showToolsScreen &&
+        !state.showRobotScreen &&
         !state.showVoiceModelScreen &&
         !state.showAppDrawer
 

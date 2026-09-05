@@ -40,6 +40,7 @@ class IdleBehaviorTest {
         assertFalse(faceModeActive(CompanionState(showVaultScreen = true)))
         assertFalse(faceModeActive(CompanionState(showProjectsScreen = true)))
         assertFalse(faceModeActive(CompanionState(showToolsScreen = true)))
+        assertFalse(faceModeActive(CompanionState(showRobotScreen = true)))
         assertFalse(faceModeActive(CompanionState(showAppDrawer = true)))
     }
 

@@ -59,6 +59,10 @@ fun CompanionScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val showOnboarding by viewModel.showOnboarding.collectAsState()
+    // Pinned apps + drawer folders are used by both the base surfaces and the
+    // shared overlay layer, so they live at the screen root.
+    val pinnedApps by viewModel.pinnedPackages.collectAsState()
+    val drawerFolders by viewModel.drawerFolders.collectAsState()
 
     // Foldable split: on the unfolded inner display (wide, >=600dp) the
     // agent browser lives in the right half while the companion keeps the
@@ -70,7 +74,7 @@ fun CompanionScreen(
     // Meow freezes while a surface covers the face — chat sheet, app menu,
     // or the full-screen (folded) browser. In split view the avatar stays
     // alive beside the browser.
-    val animationsPaused = uiState.showAppDrawer || uiState.isChatExpanded ||
+    val animationsPaused = uiState.showAvatarScreen || uiState.showAppDrawer || uiState.isChatExpanded ||
         (uiState.showBrowser && !splitBrowser)
 
     val isNeo = uiState.avatarStyle == AvatarStyle.NEO
@@ -80,6 +84,7 @@ fun CompanionScreen(
     // black instead of fully transparent so the window still receives touches
     // (true 0-alpha lets taps fall through on some OEMs — cards looked "dead").
     val voidColor = when {
+        uiState.appTheme == AppTheme.PROFESSIONAL -> MaterialTheme.colorScheme.background
         isNeo && !hasUserBg -> Color(0x03000000)
         else -> Color(0xFF0D1117)
     }
@@ -93,6 +98,12 @@ fun CompanionScreen(
                 .fillMaxSize()
                 .then(if (splitBrowser) Modifier.padding(end = halfWidth) else Modifier)
         ) {
+        if (uiState.appTheme == AppTheme.PROFESSIONAL) {
+            ProfessionalWorkspace(uiState, viewModel) {
+                AvatarMotionHost(viewModel, uiState, animationsPaused || uiState.showAvatarScreen,
+                    Modifier.fillMaxSize(), interactive = false)
+            }
+        } else {
         // 0. User-chosen background always draws when set. Live weather sky too.
         // Only the empty NEO desk stays see-through.
         if (!isNeo || hasUserBg) {
@@ -115,8 +126,6 @@ fun CompanionScreen(
 
         // 2. Controls layer — everything interactive respects the system bars
         //    (status bar, nav/gesture bar, display cutout) so it always fits.
-        val pinnedApps by viewModel.pinnedPackages.collectAsState()
-        val drawerFolders by viewModel.drawerFolders.collectAsState()
 
         BoxWithConstraints(
             modifier = Modifier
@@ -273,80 +282,6 @@ fun CompanionScreen(
             // the prompt; it is just no longer narrated on screen. The Memory screen remains
             // the place to see what is stored.
 
-
-            // Generated media popup (image/video/audio created by Canvas agent)
-            AnimatedVisibility(
-                visible = uiState.generatedMedia != null,
-                enter = fadeIn() + scaleIn(),
-                exit = fadeOut() + scaleOut(),
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .padding(32.dp)
-            ) {
-                uiState.generatedMedia?.let { media ->
-                    Surface(
-                        color = Color(0xFF161B22),
-                        shape = RoundedCornerShape(16.dp),
-                        tonalElevation = 8.dp
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.End
-                            ) {
-                                IconButton(onClick = { viewModel.dismissGeneratedMedia() }) {
-                                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.Gray)
-                                }
-                            }
-                            when (media.type) {
-                                GeneratedMedia.MediaType.IMAGE -> {
-                                    var bitmap by remember(media.filePath) {
-                                        mutableStateOf<android.graphics.Bitmap?>(null)
-                                    }
-                                    LaunchedEffect(media.filePath) {
-                                        bitmap = try {
-                                            android.graphics.BitmapFactory.decodeFile(media.filePath)
-                                        } catch (_: Exception) { null }
-                                    }
-                                    bitmap?.let { bmp ->
-                                        androidx.compose.foundation.Image(
-                                            bitmap = bmp.asImageBitmap(),
-                                            contentDescription = media.label,
-                                            modifier = Modifier
-                                                .size(240.dp)
-                                                .padding(bottom = 8.dp)
-                                        )
-                                    }
-                                }
-                                GeneratedMedia.MediaType.VIDEO -> {
-                                    Icon(
-                                        Icons.Default.PlayArrow,
-                                        contentDescription = null,
-                                        tint = Color(0xFF58A6FF),
-                                        modifier = Modifier.size(48.dp)
-                                    )
-                                }
-                                GeneratedMedia.MediaType.AUDIO -> {
-                                    Icon(
-                                        Icons.Default.PlayArrow,
-                                        contentDescription = null,
-                                        tint = Color(0xFF3FB950),
-                                        modifier = Modifier.size(48.dp)
-                                    )
-                                }
-                            }
-                            Text(media.label, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                            Text(
-                                media.filePath.substringAfterLast("/"),
-                                color = Color.Gray, fontSize = 11.sp
-                            )
-                        }
-                    }
-                }
-            }
 
             // Command Center (Mic)
             // Landscape puts it on the left edge, vertically centered: the wide
@@ -511,6 +446,82 @@ fun CompanionScreen(
             }
         }
 
+        }
+
+            // Generated media popup (image/video/audio created by Canvas agent)
+            AnimatedVisibility(
+                visible = uiState.generatedMedia != null,
+                enter = fadeIn() + scaleIn(),
+                exit = fadeOut() + scaleOut(),
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(32.dp)
+            ) {
+                uiState.generatedMedia?.let { media ->
+                    Surface(
+                        color = Color(0xFF161B22),
+                        shape = RoundedCornerShape(16.dp),
+                        tonalElevation = 8.dp
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End
+                            ) {
+                                IconButton(onClick = { viewModel.dismissGeneratedMedia() }) {
+                                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.Gray)
+                                }
+                            }
+                            when (media.type) {
+                                GeneratedMedia.MediaType.IMAGE -> {
+                                    var bitmap by remember(media.filePath) {
+                                        mutableStateOf<android.graphics.Bitmap?>(null)
+                                    }
+                                    LaunchedEffect(media.filePath) {
+                                        bitmap = try {
+                                            android.graphics.BitmapFactory.decodeFile(media.filePath)
+                                        } catch (_: Exception) { null }
+                                    }
+                                    bitmap?.let { bmp ->
+                                        androidx.compose.foundation.Image(
+                                            bitmap = bmp.asImageBitmap(),
+                                            contentDescription = media.label,
+                                            modifier = Modifier
+                                                .size(240.dp)
+                                                .padding(bottom = 8.dp)
+                                        )
+                                    }
+                                }
+                                GeneratedMedia.MediaType.VIDEO -> {
+                                    Icon(
+                                        Icons.Default.PlayArrow,
+                                        contentDescription = null,
+                                        tint = Color(0xFF58A6FF),
+                                        modifier = Modifier.size(48.dp)
+                                    )
+                                }
+                                GeneratedMedia.MediaType.AUDIO -> {
+                                    Icon(
+                                        Icons.Default.PlayArrow,
+                                        contentDescription = null,
+                                        tint = Color(0xFF3FB950),
+                                        modifier = Modifier.size(48.dp)
+                                    )
+                                }
+                            }
+                            Text(media.label, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            Text(
+                                media.filePath.substringAfterLast("/"),
+                                color = Color.Gray, fontSize = 11.sp
+                            )
+                        }
+                    }
+                }
+            }
+
         if (!uiState.voicePackReady || !uiState.voicePackLabel.isNullOrBlank()) {
             Surface(
                 modifier = Modifier
@@ -537,6 +548,7 @@ fun CompanionScreen(
                 }
             }
         }
+        }
 
         // 3. Overlays (Floating Menus)
         BackgroundTiles(
@@ -560,6 +572,7 @@ fun CompanionScreen(
                     "Projects" -> viewModel.toggleProjectsScreen()
                     "Tools" -> viewModel.toggleConnectorsScreen()
                     "Notes" -> viewModel.toggleVaultScreen()
+                    "Robot" -> viewModel.toggleRobotScreen()
                 }
             }
         )
@@ -689,6 +702,15 @@ fun CompanionScreen(
                 glowColor = uiState.avatarGlowColor,
                 onSelectEyeColor = { viewModel.setAvatarEyeColor(it) },
                 onSelectGlowColor = { viewModel.setAvatarGlowColor(it) },
+                featureColor = uiState.avatarFeatureColor,
+                onSelectFeatureColor = viewModel::setAvatarFeatureColor,
+                appTheme = uiState.appTheme,
+                onSelectTheme = viewModel::setAppTheme,
+                appearanceMode = uiState.appearanceMode,
+                onSelectAppearance = viewModel::setAppearanceMode,
+                preview = {
+                    AvatarMotionHost(viewModel, uiState, false, Modifier.fillMaxSize(), interactive = false)
+                },
                 animations = viewModel.avatarAnimationNames(),
                 onPlayAnimation = { viewModel.playAnimationNamed(it) },
                 onClose = { viewModel.toggleAvatarScreen() },
@@ -753,6 +775,7 @@ fun CompanionScreen(
 
                 onBargeInChange = { viewModel.setBargeIn(it) },
                 onOpenAccessibility = { viewModel.openAccessibilitySettings() },
+                onOpenSetup = { viewModel.toggleSetupWizard() },
                 idleChatterEnabled = uiState.idleChatterEnabled,
                 onIdleChatterChange = { viewModel.setIdleChatter(it) },
 
@@ -778,32 +801,6 @@ fun CompanionScreen(
                 onUsbAutoBridgeChange = { viewModel.setUsbAutoBridge(it) },
                 onClose = { viewModel.toggleSettings() }
             )
-        }
-
-        // "Connect your AI" quick-access button — floats at the bottom while
-        // the Settings panel is open so the user can re-open the wizard at any time.
-        if (uiState.showSettings) {
-            androidx.compose.foundation.layout.Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .imePadding()
-                    .padding(bottom = 16.dp)
-            ) {
-                Surface(
-                    onClick = { viewModel.toggleSetupWizard() },
-                    shape = RoundedCornerShape(16.dp),
-                    color = Color(0xFF1F6FEB),
-                    modifier = Modifier.padding(horizontal = 24.dp)
-                ) {
-                    Text(
-                        text = "Connect your AI",
-                        color = Color.White,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 14.sp,
-                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
-                    )
-                }
-            }
         }
 
         if (uiState.showModelManager) {
@@ -888,6 +885,27 @@ fun CompanionScreen(
             )
         }
 
+        if (uiState.showRobotScreen) {
+            RobotScreen(
+                robotStatus = uiState.robotStatus,
+                robotBodyEnabled = uiState.robotBodyEnabled,
+                robotUseBluetooth = uiState.robotUseBluetooth,
+                robotBtAddress = uiState.robotBtAddress,
+                robotHost = uiState.robotHost,
+                robotPort = uiState.robotPort,
+                robotScanning = uiState.robotScanning,
+                robotScanResults = uiState.robotScanResults,
+                onRobotBodyChange = { viewModel.setRobotBody(it) },
+                onRobotUseBluetoothChange = { viewModel.setRobotUseBluetooth(it) },
+                onRobotBtAddressChange = { viewModel.setRobotBtAddress(it) },
+                onRobotHostChange = { viewModel.setRobotHost(it) },
+                onRobotPortChange = { viewModel.setRobotPort(it) },
+                onRobotScan = { viewModel.scanForRobotBases() },
+                onRefresh = { viewModel.refreshRobot() },
+                onClose = { viewModel.toggleRobotScreen() }
+            )
+        }
+
         if (uiState.showConnectorsScreen) {
             PluginsConnectorsScreen(
                 state = uiState,
@@ -966,7 +984,7 @@ fun CompanionScreen(
         // Tool approval card: a risky action is blocked until you decide
         uiState.pendingApproval?.let { approval ->
             Surface(
-                color = Color(0xFF161B22),
+                color = MaterialTheme.colorScheme.surface,
                 shape = RoundedCornerShape(16.dp),
                 border = androidx.compose.foundation.BorderStroke(
                     1.dp,
@@ -987,18 +1005,20 @@ fun CompanionScreen(
                         } else {
                             "Approval needed"
                         },
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text(approval.title, color = Color(0xFF58A6FF), fontSize = 14.sp)
+                    Text(approval.title, color = MaterialTheme.colorScheme.primary, fontSize = 14.sp)
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text(approval.detail, color = Color.Gray, fontSize = 12.sp)
+                    Text(approval.detail, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                     Spacer(modifier = Modifier.height(16.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Button(
                             onClick = { viewModel.resolveApproval(false) },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2C2C2C)),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant),
                             modifier = Modifier.weight(1f)
                         ) {
                             Text("Deny")
@@ -1007,10 +1027,12 @@ fun CompanionScreen(
                             onClick = { viewModel.resolveApproval(true) },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = if (approval.riskLevel == com.example.meowmba.core.agent.tools.RiskLevel.DESTRUCTIVE) {
-                                    Color(0xFFF85149)
+                                    MaterialTheme.colorScheme.error
                                 } else {
-                                    Color(0xFF3FB950)
-                                }
+                                    MaterialTheme.colorScheme.primary
+                                },
+                                contentColor = if (approval.riskLevel == com.example.meowmba.core.agent.tools.RiskLevel.DESTRUCTIVE)
+                                    MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onPrimary,
                             ),
                             modifier = Modifier.weight(1f)
                         ) {
@@ -1033,7 +1055,6 @@ fun CompanionScreen(
                 modifier = Modifier.fillMaxSize(),
             )
         }
-        }
 
         // Unfolded split: the browser used to own the right half. That half is
         // free again now that pages go to a real browser instead.
@@ -1048,6 +1069,7 @@ private fun AvatarMotionHost(
     uiState: CompanionState,
     paused: Boolean,
     modifier: Modifier = Modifier,
+    interactive: Boolean = true,
 ) {
     val motionTilt by viewModel.motionTiltDeg.collectAsState()
     val motionLean by viewModel.motionLean.collectAsState()
@@ -1068,11 +1090,11 @@ private fun AvatarMotionHost(
     ) {
         AvatarRenderer(
             state = uiState,
-            onZoneClick = { viewModel.onAvatarZoneClick(it) },
-            onSwipeUp = { viewModel.toggleAppDrawer() },
-            onSwipeDown = { viewModel.openTiles() },
-            onSwipeLeft = { viewModel.toggleBrowser() },
-            onSwipeRight = { viewModel.openChat() },
+            onZoneClick = { if (interactive) viewModel.onAvatarZoneClick(it) },
+            onSwipeUp = { if (interactive) viewModel.toggleAppDrawer() },
+            onSwipeDown = { if (interactive) viewModel.openTiles() },
+            onSwipeLeft = { if (interactive) viewModel.toggleBrowser() },
+            onSwipeRight = { if (interactive) viewModel.openChat() },
             paused = paused,
             faceGazeX = faceGaze?.first,
             faceGazeY = faceGaze?.second,
@@ -1087,4 +1109,3 @@ private fun AvatarMotionHost(
         )
     }
 }
-

@@ -27,6 +27,7 @@ import com.example.meowmba.core.agent.runtime.AuditSink
 import com.example.meowmba.core.agent.runtime.HermesAgentBrain
 import com.example.meowmba.core.agent.runtime.HermesConfig
 import com.example.meowmba.core.agent.runtime.LlmToolCallRouter
+import com.example.meowmba.core.agent.runtime.NeedleAgentBrain
 import com.example.meowmba.core.agent.runtime.SubmitResult
 import com.example.meowmba.core.agent.runtime.TaskStatus
 import com.example.meowmba.core.agent.runtime.ToolCallPromptMode
@@ -399,6 +400,8 @@ class CompanionViewModel(
      * tests can substitute a fake — this is the agent-framework adapter seam.
      */
     internal var hermesBrain: AgentBrainRouter? = null
+    /** First-run default for local action routing; null means unavailable, never simulated. */
+    internal var needleBrain: AgentBrainRouter? = null
 
     private var matcher = WakePhraseMatcher()
     private var wakeWordEngine: WakeWordEngine? = null
@@ -893,6 +896,9 @@ class CompanionViewModel(
                 backgroundListeningEnabled = storage.getBooleanPreference(KEY_BACKGROUND_LISTENING, false),
                 carModeEnabled = storage.getBooleanPreference(KEY_CAR_MODE, false),
                 avatarStyle = AvatarStyle.fromKey(storage.getPreference(KEY_AVATAR_STYLE)),
+                appTheme = AppTheme.fromKey(storage.getPreference("app_theme")),
+                appearanceMode = AppearanceMode.fromKey(storage.getPreference("appearance_mode")),
+                avatarFeatureColor = AvatarColors.parse(storage.getPreference("avatar_feature_color"), 0xFFE8D5B9L),
                 avatarEyeColor = AvatarColors.parse(
                     storage.getPreference(KEY_AVATAR_EYE_COLOR), AvatarColors.DEFAULT_EYE),
                 avatarGlowColor = AvatarColors.parse(
@@ -963,7 +969,9 @@ class CompanionViewModel(
                 com.example.meowmba.core.setup.SetupWiring.LocalModelKind.ASR -> {
                     viewModelScope.launch {
                         runCatching {
-                            com.example.meowmba.core.audio.VoiceModelStore(ctx).ensureAsr()
+                            val store = com.example.meowmba.core.audio.VoiceModelStore(ctx)
+                            store.ensureAsr().getOrThrow()
+                            store.ensureWhisper().getOrThrow()
                         }
                     }
                 }
@@ -977,6 +985,7 @@ class CompanionViewModel(
                 }
             }
         }
+        ensureNeedleDefault()
 
         ttsManager?.onSpeechStarted = {
             _uiState.value = _uiState.value.copy(interactionState = InteractionState.SPEAKING)            // HALF-DUPLEX GUARD: the moment her voice starts, close the
@@ -2134,6 +2143,17 @@ class CompanionViewModel(
         if (_uiState.value.selectedModel == MODEL_OMNIROUTE) {
             omniRoute = buildOmniRoute()
         }
+    }
+
+    /** Apply credentials/provider choices written by onboarding without an app restart. */
+    fun reloadSetupConfiguration() {
+        val storage = secureStorage ?: return
+        val selected = storage.getPreference(KEY_SELECTED_MODEL)
+            ?.takeIf { it in availableModelProviders(storage.context) }
+            ?: MODEL_OMNIROUTE
+        _uiState.value = _uiState.value.copy(selectedModel = selected)
+        updateProvider(selected)
+        refreshAsrBackendState()
     }
 
     /**
@@ -3766,6 +3786,78 @@ class CompanionViewModel(
         }
     }
 
+    fun downloadWhisperModel() {
+        val ctx = secureStorage?.context ?: return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(voicePackReady = false, voicePackLabel = "Getting Whisper…", voicePackProgress = 0f)
+            val result = com.example.meowmba.core.audio.VoiceModelStore(ctx).ensureWhisper { fraction, label ->
+                _uiState.value = _uiState.value.copy(voicePackLabel = label, voicePackProgress = fraction)
+            }
+            _uiState.value = _uiState.value.copy(
+                voicePackReady = result.isSuccess,
+                voicePackLabel = result.fold({ "Whisper ready" }, { it.message ?: "Whisper download failed" }),
+                voicePackProgress = null,
+            )
+            refreshAsrBackendState()
+            attachWhisperRefiner()
+        }
+    }
+
+    fun repairStreamingAsrModel() = requestAsrModel()
+
+    fun scanPhoneForModels() {
+        val ctx = secureStorage?.context ?: return
+        viewModelScope.launch(ioDispatcher) {
+            _uiState.value = _uiState.value.copy(modelScanRunning = true)
+            val found = runCatching {
+                val projection = arrayOf(
+                    android.provider.MediaStore.Downloads._ID,
+                    android.provider.MediaStore.Downloads.DISPLAY_NAME,
+                    android.provider.MediaStore.Downloads.SIZE,
+                )
+                val out = mutableListOf<DiscoveredModelFile>()
+                ctx.contentResolver.query(
+                    android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                    projection, null, null,
+                    android.provider.MediaStore.Downloads.DATE_MODIFIED + " DESC",
+                )?.use { cursor ->
+                    val idCol = cursor.getColumnIndexOrThrow(android.provider.MediaStore.Downloads._ID)
+                    val nameCol = cursor.getColumnIndexOrThrow(android.provider.MediaStore.Downloads.DISPLAY_NAME)
+                    val sizeCol = cursor.getColumnIndexOrThrow(android.provider.MediaStore.Downloads.SIZE)
+                    while (cursor.moveToNext()) {
+                        val name = cursor.getString(nameCol) ?: continue
+                        if (!ModelCatalog.isValidModelFileName(name)) continue
+                        val uri = android.content.ContentUris.withAppendedId(
+                            android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                            cursor.getLong(idCol),
+                        )
+                        out += DiscoveredModelFile(uri.toString(), name, cursor.getLong(sizeCol))
+                    }
+                }
+                out.distinctBy { it.uri }
+            }.getOrDefault(emptyList())
+            _uiState.value = _uiState.value.copy(
+                discoveredModelFiles = found,
+                modelScanRunning = false,
+                captionText = if (found.isEmpty()) "No compatible models found in Downloads" else "Found ${found.size} model(s)",
+            )
+        }
+    }
+
+    fun importDiscoveredModel(model: DiscoveredModelFile) {
+        val ctx = secureStorage?.context ?: return
+        val dl = downloader ?: return
+        viewModelScope.launch(ioDispatcher) {
+            runCatching {
+                val target = dl.destinationFor(model.fileName)
+                ctx.contentResolver.openInputStream(android.net.Uri.parse(model.uri))?.use { input ->
+                    target.outputStream().use { input.copyTo(it) }
+                } ?: error("The downloaded file is no longer available")
+                installDownloadedModel(target.absolutePath)
+            }.onFailure { setDownloadError("import:${model.fileName}", it.message ?: "Import failed") }
+        }
+    }
+
     /**
      * Keeps the always-on partial mirror alive for as long as the always-on loop
      * is running. Started from [armAlwaysOnCapture] (NOT [startAlwaysOnListening])
@@ -4971,7 +5063,9 @@ class CompanionViewModel(
         val registry = agentToolRegistry ?: return null
 
         hermesBrain?.route(text, registry)?.let { return it }
-        // Hermes declined/unreachable, or not configured: on-device brain next
+        // An explicitly configured Hermes server wins; Needle is the default
+        // local router and falls through cleanly when it declines conversation.
+        needleBrain?.route(text, registry)?.let { return it }
 
         val provider = currentProvider ?: return null
         return LlmToolCallRouter(
@@ -6210,6 +6304,7 @@ class CompanionViewModel(
     }
 
     fun toggleSettings() {
+        if (_uiState.value.showSettings) rebuildOmniRoute()
         _uiState.value = _uiState.value.copy(showSettings = !_uiState.value.showSettings)
     }
 
@@ -6354,8 +6449,40 @@ class CompanionViewModel(
         }
     }
 
+    /**
+     * On a fresh install, fetch the tiny default action model in the background.
+     * A failed request stays visible in the model manager and can be retried;
+     * chat and deterministic commands remain usable throughout.
+     */
+    private fun ensureNeedleDefault() {
+        val option = ModelCatalog.options.firstOrNull { it.id == "needle-2" } ?: return
+        val installed = downloader?.installedFile(option)
+        if (installed != null) {
+            loadNeedle(installed)
+            return
+        }
+        // Retry on the next app launch if the phone was offline. The per-session
+        // download guard prevents duplicate work while this ViewModel is alive.
+        if (secureStorage != null) downloadModel(option)
+    }
+
+    private fun loadNeedle(file: File) {
+        needleBrain = runCatching { NeedleAgentBrain(file) }.getOrNull()
+    }
+
     /** Download any model from a custom URL (must be a MediaPipe .task bundle). */
     fun downloadCustomModel(url: String, fileName: String) {
+        if (!com.example.meowmba.core.agent.ModelSourceResolver.isDirect(url) || fileName.isBlank()) {
+            val requestId = "custom:${fileName.ifBlank { "repository" }}"
+            viewModelScope.launch {
+                setDownloadProgress(requestId, ModelDownloader.DownloadProgress())
+                com.example.meowmba.core.agent.ModelSourceResolver.resolve(url, fileName).fold(
+                    onSuccess = { downloadCustomModel(it.url, it.fileName) },
+                    onFailure = { setDownloadError(requestId, it.message ?: "Could not find a compatible model") },
+                )
+            }
+            return
+        }
         val id = "custom:$fileName"
         val dl = downloader ?: run {
             setDownloadError(id, "Downloads are unavailable in this build")
@@ -6537,9 +6664,17 @@ class CompanionViewModel(
         downloader?.installedFile(option) != null
 
     private fun installDownloadedModel(path: String) {
-        secureStorage?.saveEndpoint("local", path)
+        val file = File(path)
+        val option = ModelCatalog.optionForFile(file.name)
+        if (option?.runtime == com.example.meowmba.core.agent.LocalModelRuntime.NEEDLE) {
+            loadNeedle(file)
+        } else {
+            secureStorage?.saveEndpoint("local", path)
+        }
         refreshLoadedModels()
-        updateProvider(_uiState.value.selectedModel)
+        if (option?.runtime != com.example.meowmba.core.agent.LocalModelRuntime.NEEDLE) {
+            updateProvider(_uiState.value.selectedModel)
+        }
     }
 
     private fun setDownloadProgress(id: String, progress: ModelDownloader.DownloadProgress) {
@@ -6566,6 +6701,13 @@ class CompanionViewModel(
         _uiState.value = _uiState.value.copy(showToolsScreen = !_uiState.value.showToolsScreen)
     }
 
+    /** LOOI body panel (Robot tile). Refreshes the live link state on open. */
+    fun toggleRobotScreen() {
+        val show = !_uiState.value.showRobotScreen
+        _uiState.value = _uiState.value.copy(showRobotScreen = show)
+        if (show) refreshRobot()
+    }
+
     // ── Plugins & MCP connectors ────────────────────────────────────────────
 
     fun toggleConnectorsScreen() {
@@ -6589,7 +6731,8 @@ class CompanionViewModel(
     /** Connect a discovered app so the agent can drive it. */
     fun connectDiscoveredApp(packageName: String, label: String) {
         val mgr = connectorManager ?: return
-        val app = ConnectorManager.DiscoveredApp(packageName, label)
+        val app = _uiState.value.discoverableApps.firstOrNull { it.packageName == packageName }
+            ?: ConnectorManager.DiscoveredApp(packageName, label)
         mgr.upsert(mgr.connectorForApp(app).copy(configured = true, enabled = true))
         refreshConnectorUi()
     }
@@ -6917,8 +7060,21 @@ class CompanionViewModel(
             if (store.asrReady()) attachAsrEngine()
             attachWakeEngine()
             viewModelScope.launch {
-                store.ensureAsr()
+                val asrInstall = store.ensureAsr()
+                val whisperInstall = if (asrInstall.isSuccess &&
+                    asrBackend == com.example.meowmba.core.audio.AsrBackend.WHISPER_LOCAL
+                ) {
+                    store.ensureWhisper { fraction, label ->
+                        _uiState.value = _uiState.value.copy(voicePackProgress = fraction, voicePackLabel = label)
+                    }
+                } else Result.success(Unit)
                 attachAsrEngine()
+                attachWhisperRefiner()
+                refreshAsrBackendState()
+                _uiState.value = _uiState.value.copy(
+                    voicePackProgress = null,
+                    voicePackLabel = (asrInstall.exceptionOrNull() ?: whisperInstall.exceptionOrNull())?.message,
+                )
                 if (shouldAlwaysOnMic()) updateVoiceListeningMode()
             }
             return
@@ -6935,6 +7091,12 @@ class CompanionViewModel(
                         voicePackProgress = frac,
                         voicePackLabel = label,
                     )
+                }
+            }
+            if (result.isSuccess) {
+                store.ensureAsr()
+                if (asrBackend == com.example.meowmba.core.audio.AsrBackend.WHISPER_LOCAL) {
+                    store.ensureWhisper()
                 }
             }
             _uiState.value = _uiState.value.copy(
@@ -7224,6 +7386,21 @@ class CompanionViewModel(
     fun setAvatarStyle(style: AvatarStyle) {
         _uiState.value = _uiState.value.copy(avatarStyle = style)
         secureStorage?.savePreference(KEY_AVATAR_STYLE, style.key)
+    }
+
+    fun setAppTheme(theme: AppTheme) {
+        _uiState.value = _uiState.value.copy(appTheme = theme)
+        secureStorage?.savePreference("app_theme", theme.key)
+    }
+
+    fun setAppearanceMode(mode: AppearanceMode) {
+        _uiState.value = _uiState.value.copy(appearanceMode = mode)
+        secureStorage?.savePreference("appearance_mode", mode.key)
+    }
+
+    fun setAvatarFeatureColor(argb: Long) {
+        _uiState.value = _uiState.value.copy(avatarFeatureColor = argb)
+        secureStorage?.savePreference("avatar_feature_color", AvatarColors.toPref(argb))
     }
 
     fun setAvatarEyeColor(argb: Long) {
@@ -8094,6 +8271,7 @@ class CompanionViewModel(
         showAgentsScreen = false,
         showProjectsScreen = false,
         showToolsScreen = false,
+        showRobotScreen = false,
         showConnectorsScreen = false,
         showVaultScreen = false,
         showBrowser = false,
