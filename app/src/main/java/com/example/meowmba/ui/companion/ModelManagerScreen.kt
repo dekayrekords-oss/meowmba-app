@@ -43,6 +43,8 @@ fun ModelManagerScreen(
     onCustomDownload: (String, String) -> Unit = { _, _ -> },
     onUseInstalledFile: (String) -> Unit = {},
     onDeleteInstalledFile: (String) -> Unit = {},
+    onScanPhone: () -> Unit = {},
+    onImportFoundModel: (DiscoveredModelFile) -> Unit = {},
     onOpenVoiceModels: () -> Unit = {},
     onClose: () -> Unit
 ) {
@@ -51,7 +53,7 @@ fun ModelManagerScreen(
     if (showProviderPicker) {
         ModalBottomSheet(
             onDismissRequest = { showProviderPicker = false },
-            containerColor = Color(0xFF121212)
+            containerColor = MaterialTheme.colorScheme.background
         ) {
             ModelSelector(
                 selectedModel = state.selectedModel,
@@ -69,12 +71,12 @@ fun ModelManagerScreen(
             TopAppBar(
                 title = { Text("LLM Manager", fontFamily = FontFamily.Monospace) },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFF0D1117),
-                    titleContentColor = Color.White
+                    containerColor = MaterialTheme.colorScheme.background,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface
                 )
             )
         },
-        containerColor = Color(0xFF0D1117)
+        containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         Column(
             modifier = Modifier
@@ -112,7 +114,7 @@ fun ModelManagerScreen(
             Text(
                 "Currently Loaded",
                 style = MaterialTheme.typography.titleLarge,
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.Bold
             )
             Row(
@@ -121,12 +123,12 @@ fun ModelManagerScreen(
             ) {
                 Text(
                     "Active provider: ${state.selectedModel}",
-                    color = Color.Gray,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 12.sp,
                     modifier = Modifier.weight(1f)
                 )
             TextButton(onClick = { showProviderPicker = true }) {
-                Text("Change", color = Color(0xFF58A6FF), fontSize = 12.sp)
+                Text("Change", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
             }
         }
 
@@ -134,7 +136,7 @@ fun ModelManagerScreen(
 
             val loaded = state.loadedModels
             LoadedModelCard(
-                icon = { Icon(Icons.Default.PhoneAndroid, contentDescription = null, tint = Color(0xFF58A6FF)) },
+                icon = { Icon(Icons.Default.PhoneAndroid, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                 title = "Local · on this phone",
                 primary = loaded.localName,
                 details = listOf(
@@ -148,7 +150,7 @@ fun ModelManagerScreen(
             Spacer(modifier = Modifier.height(12.dp))
 
             LoadedModelCard(
-                icon = { Icon(Icons.Default.Cloud, contentDescription = null, tint = Color(0xFF3FB950)) },
+                icon = { Icon(Icons.Default.Cloud, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                 title = "OpenRouter · cloud",
                 primary = "OpenRouter · ${loaded.networkModel}",
                 details = listOf("Endpoint: ${loaded.networkEndpoint}"),
@@ -196,7 +198,7 @@ fun ModelManagerScreen(
                         CircularProgressIndicator(
                             modifier = Modifier.size(14.dp),
                             strokeWidth = 2.dp,
-                            color = Color(0xFF58A6FF)
+                            color = MaterialTheme.colorScheme.primary
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                     }
@@ -209,9 +211,9 @@ fun ModelManagerScreen(
                 Text(
                     result,
                     color = if (result.startsWith("Connected") || result.startsWith("Ollama reachable") || result.startsWith("Model file present")) {
-                        Color(0xFF3FB950)
+                        MaterialTheme.colorScheme.primary
                     } else {
-                        Color(0xFFF85149)
+                        MaterialTheme.colorScheme.error
                     },
                     fontSize = 12.sp,
                     fontFamily = FontFamily.Monospace
@@ -223,7 +225,7 @@ fun ModelManagerScreen(
             Text(
                 "Local Intelligence",
                 style = MaterialTheme.typography.titleLarge,
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.Bold
             )
 
@@ -248,8 +250,24 @@ fun ModelManagerScreen(
                 Spacer(modifier = Modifier.height(12.dp))
             }
 
-            // Curated catalog
-            ModelCatalog.options.forEach { option ->
+            var selectedCatalogId by remember { mutableStateOf(ModelCatalog.options.first().id) }
+            var catalogMenuOpen by remember { mutableStateOf(false) }
+            val compatible = ModelCatalog.options.filter { it.minRamGb <= 11 }
+            Text("Add a compatible model", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
+            Box {
+                OutlinedButton(onClick = { catalogMenuOpen = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text(compatible.firstOrNull { it.id == selectedCatalogId }?.displayName ?: "Choose model")
+                }
+                DropdownMenu(expanded = catalogMenuOpen, onDismissRequest = { catalogMenuOpen = false }) {
+                    compatible.forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text("${option.displayName} · ${option.approxSize}") },
+                            onClick = { selectedCatalogId = option.id; catalogMenuOpen = false },
+                        )
+                    }
+                }
+            }
+            compatible.firstOrNull { it.id == selectedCatalogId }?.let { option ->
                 CatalogModelItem(
                     option = option,
                     state = state,
@@ -260,6 +278,19 @@ fun ModelManagerScreen(
                 Spacer(modifier = Modifier.height(12.dp))
             }
 
+            OutlinedButton(onClick = onScanPhone, enabled = !state.modelScanRunning, modifier = Modifier.fillMaxWidth()) {
+                Text(if (state.modelScanRunning) "Searching Downloads…" else "Search this phone for downloaded models")
+            }
+            state.discoveredModelFiles.forEach { found ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(found.fileName, color = MaterialTheme.colorScheme.onSurface, fontSize = 12.sp)
+                        Text("${found.sizeBytes / 1_048_576} MB · Downloads", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
+                    }
+                    TextButton(onClick = { onImportFoundModel(found) }) { Text("Add") }
+                }
+            }
+
             // Custom installs: real bundles on disk that are not in the catalog
             val customInstalled = state.installedModels.filter { it.catalogDisplayName == null }
             if (customInstalled.isNotEmpty()) {
@@ -267,7 +298,7 @@ fun ModelManagerScreen(
                 Text(
                     "Custom installs",
                     style = MaterialTheme.typography.titleMedium,
-                    color = Color.White
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 customInstalled.forEach { file ->
@@ -310,8 +341,8 @@ private fun VoiceRecognitionEntryCard(
     onClick: () -> Unit,
 ) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF161B22)),
-        border = BorderStroke(1.dp, Color(0xFF30363D)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         shape = RoundedCornerShape(12.dp),
         modifier = Modifier
             .fillMaxWidth()
@@ -324,25 +355,25 @@ private fun VoiceRecognitionEntryCard(
             Icon(
                 Icons.Default.Mic,
                 contentDescription = null,
-                tint = if (isCloud) Color(0xFFD29922) else Color(0xFF58A6FF),
+                tint = if (isCloud) Color(0xFFD29922) else MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(22.dp),
             )
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(
                     "Voice Recognition",
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
                 )
                 Spacer(Modifier.height(3.dp))
                 Text(
                     "Speech-to-text: $backendName",
-                    color = Color.Gray,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 11.sp,
                 )
             }
-            Text("›", color = Color(0xFF58A6FF), fontSize = 22.sp)
+            Text("›", color = MaterialTheme.colorScheme.primary, fontSize = 22.sp)
         }
     }
 }
@@ -356,12 +387,12 @@ fun LoadedModelCard(
     status: LoadStatus
 ) {
     Surface(
-        color = Color(0xFF161B22),
+        color = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(12.dp),
         border = BorderStroke(
             1.dp,
-            if (status == LoadStatus.ACTIVE) Color(0xFF3FB950).copy(alpha = 0.6f)
-            else Color.White.copy(alpha = 0.1f)
+            if (status == LoadStatus.ACTIVE) MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
         )
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -370,15 +401,15 @@ fun LoadedModelCard(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     title,
-                    color = Color.Gray,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.weight(1f)
                 )
                 val (label, color) = when (status) {
-                    LoadStatus.ACTIVE -> "ACTIVE" to Color(0xFF3FB950)
+                    LoadStatus.ACTIVE -> "ACTIVE" to MaterialTheme.colorScheme.primary
                     LoadStatus.STANDBY -> "STANDBY" to Color(0xFFD29922)
-                    LoadStatus.NOT_CONFIGURED -> "NOT CONFIGURED" to Color(0xFFF85149)
+                    LoadStatus.NOT_CONFIGURED -> "NOT CONFIGURED" to MaterialTheme.colorScheme.error
                 }
                 Surface(color = color.copy(alpha = 0.15f), shape = RoundedCornerShape(4.dp)) {
                     Text(
@@ -393,9 +424,9 @@ fun LoadedModelCard(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            Text(primary, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Text(primary, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 16.sp)
             details.forEach {
-                Text(it, color = Color.Gray, fontSize = 12.sp)
+                Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
             }
         }
     }
@@ -404,17 +435,17 @@ fun LoadedModelCard(
 @Composable
 fun HardwareStatusCard(caps: HardwareCapabilities) {
     Surface(
-        color = Color(0xFF161B22),
+        color = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Memory, contentDescription = null, tint = Color(0xFF58A6FF))
+                Icon(Icons.Default.Memory, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     "System Resources",
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.SemiBold
                 )
             }
@@ -423,20 +454,20 @@ fun HardwareStatusCard(caps: HardwareCapabilities) {
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column {
-                    Text("RAM", color = Color.Gray, fontSize = 12.sp)
-                    Text("%.1f GB".format(caps.ramGb), color = Color.White, fontWeight = FontWeight.Bold)
+                    Text("RAM", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                    Text("%.1f GB".format(caps.ramGb), color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
                 }
                 Column {
-                    Text("CPU", color = Color.Gray, fontSize = 12.sp)
-                    Text("${caps.cpuCores} Cores", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text("CPU", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                    Text("${caps.cpuCores} Cores", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
                 }
                 Column {
-                    Text("Android", color = Color.Gray, fontSize = 12.sp)
-                    Text("API ${caps.androidApi}", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text("Android", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                    Text("API ${caps.androidApi}", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
                 }
                 Column {
-                    Text("ARCH", color = Color.Gray, fontSize = 12.sp)
-                    Text(if (caps.is64Bit) "64-bit" else "32-bit", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text("ARCH", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                    Text(if (caps.is64Bit) "64-bit" else "32-bit", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
                 }
             }
 
@@ -445,7 +476,7 @@ fun HardwareStatusCard(caps: HardwareCapabilities) {
             // AI accelerator row
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 val npuLabel = if (caps.hasNpu) "✅ NPU" else "— NPU"
-                Text(npuLabel, color = if (caps.hasNpu) Color(0xFF3FB950) else Color.Gray, fontSize = 11.sp)
+                Text(npuLabel, color = if (caps.hasNpu) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
             }
         }
     }
@@ -466,30 +497,33 @@ fun CatalogModelItem(
         state.loadedModels.activeSource == ModelSource.LOCAL
 
     Surface(
-        color = Color(0xFF161B22),
+        color = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(12.dp),
-        border = if (isActive) BorderStroke(1.dp, Color(0xFF3FB950).copy(alpha = 0.6f)) else null,
+        border = if (isActive) BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)) else null,
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     option.displayName,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f)
                 )
                 if (option.recommended) {
-                    Badge(Color(0xFF238636), "REC")
+                    Badge(Color(0xFF238636), "DEFAULT · AUTO")
                 }
                 if (option.requiresHfToken) {
                     Badge(Color(0xFFD29922), "HF TOKEN")
                 }
+                if (option.runtime == com.example.meowmba.core.agent.LocalModelRuntime.NEEDLE) {
+                    Badge(Color(0xFF8957E5), "NEEDLE")
+                }
             }
-            Text(option.description, color = Color.Gray, fontSize = 12.sp)
+            Text(option.description, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
             Text(
                 "${option.approxSize} · ${option.minRamGb}GB+ RAM",
-                color = Color(0xFF58A6FF),
+                color = MaterialTheme.colorScheme.primary,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Medium
             )
@@ -499,19 +533,25 @@ fun CatalogModelItem(
             when {
                 installed -> {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Badge(Color(0xFF3FB950), "INSTALLED")
+                        Badge(MaterialTheme.colorScheme.primary, "INSTALLED")
                         Spacer(modifier = Modifier.width(8.dp))
-                        if (!isActive) {
+                        if (!isActive && option.runtime.canActivate) {
                             TextButton(onClick = onUse) {
-                                Text("Use", color = Color(0xFF58A6FF), fontSize = 12.sp)
+                                Text("Use", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
                             }
+                        } else if (!option.runtime.canActivate) {
+                            Text(
+                                "Loaded automatically as the default action brain",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 11.sp,
+                            )
                         }
                         Spacer(modifier = Modifier.weight(1f))
                         IconButton(onClick = onDelete, modifier = Modifier.size(28.dp)) {
                             Icon(
                                 Icons.Default.Delete,
                                 contentDescription = "Delete model",
-                                tint = Color.Gray,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(16.dp)
                             )
                         }
@@ -525,20 +565,20 @@ fun CatalogModelItem(
                         )
                         Text(
                             "${(progress.fraction!! * 100).toInt()}% · ${progress.received / 1_048_576} MB",
-                            color = Color.Gray, fontSize = 11.sp
+                            color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp
                         )
                     } else {
                         LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                         Text(
                             "${progress.received / 1_048_576} MB…",
-                            color = Color.Gray, fontSize = 11.sp
+                            color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp
                         )
                     }
                 }
                 progress?.error != null -> {
-                    Text(progress.error, color = Color(0xFFF85149), fontSize = 12.sp)
+                    Text(progress.error, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
                     TextButton(onClick = onDownload) {
-                        Text("Retry", color = Color(0xFF58A6FF), fontSize = 12.sp)
+                        Text("Retry", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
                     }
                 }
                 else -> {
@@ -570,16 +610,16 @@ fun CustomInstalledItem(
     val tooLarge = file.sizeBytes > ramGb * 1_073_741_824L * 0.45
 
     Surface(
-        color = Color(0xFF161B22),
+        color = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(12.dp),
-        border = if (isActive) BorderStroke(1.dp, Color(0xFF3FB950).copy(alpha = 0.6f)) else null,
+        border = if (isActive) BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)) else null,
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(file.fileName, color = Color.White, fontWeight = FontWeight.Bold)
+            Text(file.fileName, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
             Text(
                 "${file.sizeBytes / 1_048_576} MB · custom download",
-                color = Color(0xFF58A6FF),
+                color = MaterialTheme.colorScheme.primary,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Medium
             )
@@ -587,24 +627,24 @@ fun CustomInstalledItem(
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     "Likely too large for this %.0f GB phone — loading it can crash the app.".format(ramGb),
-                    color = Color(0xFFF85149),
+                    color = MaterialTheme.colorScheme.error,
                     fontSize = 11.sp
                 )
             }
             Spacer(modifier = Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Badge(Color(0xFF3FB950), "INSTALLED")
+                Badge(MaterialTheme.colorScheme.primary, "INSTALLED")
                 if (tooLarge) {
                     Spacer(modifier = Modifier.width(8.dp))
-                    Badge(Color(0xFFF85149), "TOO LARGE")
+                    Badge(MaterialTheme.colorScheme.error, "TOO LARGE")
                 }
                 if (isActive) {
                     Spacer(modifier = Modifier.width(8.dp))
-                    Badge(Color(0xFF3FB950), "ACTIVE")
+                    Badge(MaterialTheme.colorScheme.primary, "ACTIVE")
                 } else {
                     Spacer(modifier = Modifier.width(8.dp))
                     TextButton(onClick = onUse) {
-                        Text("Use", color = Color(0xFF58A6FF), fontSize = 12.sp)
+                        Text("Use", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
                     }
                 }
                 Spacer(modifier = Modifier.weight(1f))
@@ -612,7 +652,7 @@ fun CustomInstalledItem(
                     Icon(
                         Icons.Default.Delete,
                         contentDescription = "Delete model",
-                        tint = Color.Gray,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(16.dp)
                     )
                 }
@@ -646,15 +686,15 @@ fun CustomModelDownload(
     val progress = state.modelDownloads[id]
 
     Surface(
-        color = Color(0xFF161B22),
+        color = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(12.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             TextButton(onClick = { expanded = !expanded }) {
                 Text(
-                    if (expanded) "Hide custom download" else "Any model (custom URL)",
-                    color = Color(0xFF58A6FF),
+                    if (expanded) "Hide repository import" else "Import from Hugging Face or GitHub",
+                    color = MaterialTheme.colorScheme.primary,
                     fontSize = 13.sp
                 )
             }
@@ -662,7 +702,7 @@ fun CustomModelDownload(
                 OutlinedTextField(
                     value = url,
                     onValueChange = { url = it },
-                    label = { Text("Download URL (https://…)") },
+                    label = { Text("Model page, repository, or direct file URL") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -670,14 +710,13 @@ fun CustomModelDownload(
                 OutlinedTextField(
                     value = fileName,
                     onValueChange = { fileName = it },
-                    label = { Text("Save as (e.g. hermes3-3b.task)") },
+                    label = { Text("Save as (optional for page/repository)") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
                 Text(
-                    "Only .task bundles run on the current on-device runtime. " +
-                        "Use Wi-Fi — model files are large.",
-                    color = Color.Gray,
+                    "Accepts Hugging Face model pages, GitHub repositories/releases, or direct .task, .litertlm, and .cact files.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 11.sp
                 )
                 Spacer(modifier = Modifier.height(8.dp))
@@ -690,14 +729,14 @@ fun CustomModelDownload(
                         )
                     }
                     progress?.error != null -> {
-                        Text(progress.error, color = Color(0xFFF85149), fontSize = 12.sp)
+                        Text(progress.error, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
                     }
                 }
 
                 Spacer(modifier = Modifier.height(4.dp))
                 OutlinedButton(
                     onClick = { onCustomDownload(url.trim(), fileName.trim()) },
-                    enabled = url.isNotBlank() && fileName.isNotBlank() &&
+                    enabled = url.isNotBlank() &&
                         (progress == null || progress.done || progress.error != null),
                     shape = RoundedCornerShape(8.dp)
                 ) {
@@ -728,8 +767,8 @@ private fun MetaGlassesCard(viewModel: CompanionViewModel) {
     val activity = LocalContext.current as? android.app.Activity
 
     Card(
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF161B22)),
-        border = BorderStroke(1.dp, Color(0xFF30363D)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         shape = RoundedCornerShape(12.dp),
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -737,7 +776,7 @@ private fun MetaGlassesCard(viewModel: CompanionViewModel) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     "Meta Ray-Ban glasses",
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
                     modifier = Modifier.weight(1f),
@@ -751,7 +790,7 @@ private fun MetaGlassesCard(viewModel: CompanionViewModel) {
                     },
                     color = when {
                         !hasSdk -> Color(0xFF6E7681)
-                        streaming || connected -> Color(0xFF3FB950)
+                        streaming || connected -> MaterialTheme.colorScheme.primary
                         else -> Color(0xFF6E7681)
                     },
                     fontSize = 10.sp,
@@ -759,19 +798,19 @@ private fun MetaGlassesCard(viewModel: CompanionViewModel) {
                 )
             }
             Spacer(Modifier.height(6.dp))
-            Text(status, color = Color.Gray, fontSize = 11.sp)
+            Text(status, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
             Spacer(Modifier.height(12.dp))
             Row {
                 if (activity != null) {
                     TextButton(onClick = { viewModel.glassesSetup(activity) }) {
-                        Text("Setup glasses", color = Color(0xFF58A6FF), fontSize = 12.sp)
+                        Text("Setup glasses", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
                     }
                 }
                 TextButton(onClick = { viewModel.glassesConnect() }) {
-                    Text("Connect", color = Color(0xFF58A6FF), fontSize = 12.sp)
+                    Text("Connect", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
                 }
                 TextButton(onClick = { viewModel.glassesDisconnect() }) {
-                    Text("Disconnect", color = Color(0xFF8B949E), fontSize = 12.sp)
+                    Text("Disconnect", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                 }
             }
             if (!hasSdk) {

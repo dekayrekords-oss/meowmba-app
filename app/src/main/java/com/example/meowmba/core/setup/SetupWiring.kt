@@ -54,7 +54,7 @@ object SetupWiring {
     val BRAIN_PROVIDERS: List<BrainProvider> = listOf(
         BrainProvider(
             id = "local",
-            name = "Run on this phone",
+            name = "Run on this phone (Needle 2 actions)",
             path = Path.LOCAL,
             getKeyUrl = null,
             defaultModel = "local",
@@ -122,7 +122,10 @@ object SetupWiring {
         }
         s.savePreference(PREF_BRAIN_PROVIDER, providerId)
         // The rest of the app reads the "selected model" for the brain lane.
-        s.savePreference("selected_model", p.defaultModel)
+        // The provider picker stores its user-facing router label. The chosen
+        // service itself is selected inside OmniRoute via default_brain.
+        s.savePreference("selected_model", "Omniroute (Local router)")
+        s.savePreference("default_brain", providerId)
     }
 
     /** True once a brain path is actually usable. */

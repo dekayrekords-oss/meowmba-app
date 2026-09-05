@@ -3,6 +3,8 @@ package com.example.meowmba.core.plugins
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import androidx.core.graphics.drawable.toBitmap
 import com.example.meowmba.core.agent.tools.ConfirmationPolicy
 import com.example.meowmba.core.agent.tools.RiskLevel
 import com.example.meowmba.core.agent.tools.Tool
@@ -136,7 +138,12 @@ class ConnectorManager(
                 .mapNotNull { ri ->
                     val pkg = ri.activityInfo?.packageName ?: return@mapNotNull null
                     if (pkg == appContext.packageName) return@mapNotNull null
-                    DiscoveredApp(packageName = pkg, label = ri.loadLabel(pm)?.toString() ?: pkg)
+                    DiscoveredApp(
+                        packageName = pkg,
+                        label = ri.loadLabel(pm)?.toString() ?: pkg,
+                        icon = runCatching { ri.loadIcon(pm).toBitmap(96, 96) }.getOrNull(),
+                        capability = AppCapability.INTENT_ONLY,
+                    )
                 }
                 .distinctBy { it.packageName }
                 .sortedBy { it.label.lowercase() }
@@ -264,7 +271,21 @@ class ConnectorManager(
     }
 
     /** Installed app the user picked from discovery. */
-    data class DiscoveredApp(val packageName: String, val label: String)
+    data class DiscoveredApp(
+        val packageName: String,
+        val label: String,
+        /** Actual launcher artwork supplied by PackageManager, never a guessed logo. */
+        val icon: Bitmap? = null,
+        /** Conservative: a launcher intent is not evidence of an MCP/AppFunctions API. */
+        val capability: AppCapability = AppCapability.INTENT_ONLY,
+    )
+}
+
+/** What Meowmba has actually discovered for an installed package. */
+enum class AppCapability(val label: String, val detail: String) {
+    INTENT_ONLY("Open app", "Meow can open this app; it has not advertised an MCP or AppFunctions connection."),
+    APP_FUNCTIONS_RESTRICTED("AppFunctions restricted", "Android has not granted this build permission to execute this app's functions."),
+    MCP_SERVER("MCP available", "This app advertised a reachable MCP connection."),
 }
 
 private fun mcpSchema(schema: JSONObject): Map<String, String> {

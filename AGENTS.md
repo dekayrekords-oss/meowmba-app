@@ -1,5 +1,13 @@
 # Meowmba — guide for AI contributors
 
+## Active appearance revision and agent assignments
+
+For the current user-requested animation/chat/orb work, read `docs/IMMERSIVE_COMPANION_PLAN.md` and `docs/AGENT_PLAN.md`. They supersede the older orb-ribbon direction, not the security rules or unrelated roadmap below.
+
+Preferred implementation workers use this computer's OpenCode CLI with `opencode/big-pickle`; the executable/model listing is verified, authenticated request access is not. Do not imply local GPU inference merely because the CLI is local. No automatic paid-model fallback or unrestricted `--auto` execution.
+
+Use bounded file ownership, preserve uncommitted changes, and keep one build owner. The integrator owns shared screen/state/ViewModel wiring. New priorities: diffuse floating-parameter Jarvis, retractable compact chat, expressive eyes, anti-repetition direction, safe scene/prop support, and measured optimization. No installation or data clearing without the separate user authorization required by the plan.
+
 > Read this before changing the app. The README describes shipped phases; this
 > file is the working state + how to not break things.
 
@@ -17,11 +25,13 @@ Remotes:
 - `prog` — same server, prog account: `prog@192.168.1.69:/home/prog/git/meowmba-app.git`
 - `origin` — the notebook, `meow-nb:/home/claude/git/meowmba-app.git`
 
-**Sync state (2026-09-01):** `lan` is the CANONICAL repo — it is the one that
+**Sync state (2026-09-03):** `lan` is the CANONICAL repo — it is the one that
 gets the real work, and its `main` is what the phone runs. `prog`'s bare repo
 was 54 commits behind (stuck at `867f275`, Aug 25) because everything landed on
 `lan` after that; both are now at `9b6006e` (v1.3.0), and `prog-main` was
-fast-forwarded to the same commit.
+fast-forwarded to the same commit. The `meowmba-130` worktree is now at
+`2def58c` / v1.3.10 on `origin/main`; do not assume the older `main` ref or a
+v1.3.0 worktree is current merely because its directory name is simpler.
 
 **Fetch both before you build anything.** Building from `prog-main` while
 `lan/main` had moved on shipped a build that silently reverted a week of work —
@@ -69,7 +79,42 @@ plus intent-capture, or Robolectric, or extracting the service start behind an
 interface. If you touch downloads, fix these; otherwise don't confuse them with
 failures from your change.
 
-## Work state (as of 2026-07-31)
+## Work state (as of 2026-09-03)
+
+### Current release line — v1.3.10 (`2def58c`)
+
+- Plugins & MCP Connectors replaced the old Tools tile. `McpHttpClient` handles
+  remote HTTP MCP; `McpHttpServer` + `PhoneMcpServer` expose approved phone
+  capabilities over LAN. Connector secrets remain in `SecureStorageManager`.
+- The app gallery is curated in `core/plugins/AppConnections.kt`; live adapters
+  live in `ServiceIntegrations.kt`. A card is not proof of a working service:
+  connection tests and honest error/status text are mandatory.
+- `SkillRunner` executes bounded on-device skills. It is not permission to add
+  a general shell or bypass `AgentOrchestrator`.
+- Gemini cloud ASR is selectable, but this is still transcription in the
+  ASR→LLM→TTS cascade. Native Gemini Live audio is not shipped yet.
+- The onboarding wizard (`SetupWizardRoute` + `SetupWiring`) guides local,
+  free-cloud, and paid-cloud setup. Keep setup paths usable by non-developers.
+- Home Assistant, Spotify, and GitHub have live clients. Other catalog entries
+  may be setup templates or intent/deep-link integrations; label them exactly.
+
+### Agent implementation plan (priority order)
+
+1. Preserve deterministic routing, permissions, approval cards, and audit when
+   adding any cloud, MCP, AppFunctions, or native-audio capability.
+2. Finish remote MCP OAuth: protected-resource discovery, authorization-server
+   discovery, PKCE, callback, encrypted refresh tokens, revocation, and logout.
+3. Add native conversational audio behind a separate pipeline selector. Local
+   wake detection, endpointing, deterministic commands, captions, and fallback
+   must continue to work.
+4. Build the installed-app catalog from PackageManager with real labels/icons.
+   Classify each entry as remote MCP, Android AppFunctions, intent, or UI
+   automation. Never advertise an ordinary installed app as an MCP server.
+5. Treat Android AppFunctions as preview-gated. Android 16 provides the API,
+   but cross-app discovery/execution requires `EXECUTE_APP_FUNCTIONS` and is
+   currently restricted to approved system agents. Detect and explain denial.
+6. Verify on the Fold with real accounts and inspect Room `audit_log`; passing
+   unit tests alone is insufficient for account linking, audio, BLE, or OAuth.
 
 1. **Invented avatar animations — COMMITTED** (`6d23205`; new `ui/companion/CustomAnimation.kt`,
    `core/agent/tools/AvatarAnimateTool.kt`; edits to `AgentModel.kt`,

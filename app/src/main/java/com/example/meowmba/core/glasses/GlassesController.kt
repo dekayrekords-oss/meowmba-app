@@ -203,7 +203,7 @@ class MetaGlassesController(private val context: Context) {
 
     suspend fun ensureRegistered(activity: Activity): Boolean {
         val b = obtainBridge() ?: run {
-            setStatus("no MWDAT SDK in this build")
+            setStatus("Meta wearable support is unavailable in this installation")
             return false
         }
         return try {

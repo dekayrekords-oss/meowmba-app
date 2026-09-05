@@ -580,17 +580,17 @@ class CatMotionEngine {
     // and settles last. Body fields used to be copied raw out of the frame
     // accumulator, which meant the head could not overshoot, could not settle,
     // and hard-cut to zero the instant a clip ended.
-    private val bodyX = Spring(70f, 0.30f)
-    private val bodyY = Spring(70f, 0.30f)
-    private val bodyTiltS = Spring(80f, 0.32f)
-    private val bodyScaleS = Spring(95f, 0.36f)
-    private val bodySquashS = Spring(95f, 0.30f)
+    private val bodyX = Spring(82f, 0.38f)
+    private val bodyY = Spring(82f, 0.38f)
+    private val bodyTiltS = Spring(92f, 0.40f)
+    private val bodyScaleS = Spring(105f, 0.42f)
+    private val bodySquashS = Spring(105f, 0.38f)
 
     // Ear follow-through, driven by the head's own motion. Light appendages lag
     // the heavy mass on the SAME axis and as a PAIR — the faster the head, the
     // bigger the lag.
-    private val trailX = Trailing(88f, 0.28f)
-    private val trailY = Trailing(110f, 0.26f)
+    private val trailX = Trailing(100f, 0.32f)
+    private val trailY = Trailing(122f, 0.30f)
 
     private val motion = Motion()
 
