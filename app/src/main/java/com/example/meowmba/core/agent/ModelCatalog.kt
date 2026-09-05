@@ -23,14 +23,32 @@ data class LocalModelOption(
     val fileName: String,
     val minRamGb: Int,
     val requiresHfToken: Boolean,
-    val recommended: Boolean = false
+    val recommended: Boolean = false,
+    val runtime: LocalModelRuntime = LocalModelRuntime.LITERT,
 )
+
+enum class LocalModelRuntime(val label: String, val canActivate: Boolean) {
+    LITERT("LiteRT / MediaPipe", true),
+    NEEDLE("Needle native", false),
+}
 
 object ModelCatalog {
 
     private const val HF = "https://huggingface.co"
 
     val options: List<LocalModelOption> = listOf(
+        LocalModelOption(
+            id = "needle-2",
+            displayName = "Needle 2",
+            description = "45M-parameter structured tool router by Cactus Compute. Apache 2.0 and optimized for tiny on-device agents.",
+            approxSize = "~13.7 MB",
+            downloadUrl = "$HF/Cactus-Compute/needle2/resolve/b739205bcda01f71ebf0ba180f75a885d515ad96/needle2.cact",
+            fileName = "needle2.cact",
+            minRamGb = 1,
+            requiresHfToken = false,
+            recommended = true,
+            runtime = LocalModelRuntime.NEEDLE,
+        ),
         LocalModelOption(
             id = "gemma-4-e2b",
             displayName = "Gemma 4 E2B IT",
@@ -40,7 +58,7 @@ object ModelCatalog {
             fileName = "gemma-4-E2B-it.litertlm",
             minRamGb = 4,
             requiresHfToken = false,
-            recommended = true
+            recommended = false
         ),
         LocalModelOption(
             id = "qwen-0.5b",
@@ -96,7 +114,7 @@ object ModelCatalog {
      */
     fun isValidModelFileName(name: String): Boolean =
         name.matches(Regex("[a-zA-Z0-9._-]+")) &&
-            (name.endsWith(".task") || name.endsWith(".litertlm"))
+            (name.endsWith(".task") || name.endsWith(".litertlm") || name.endsWith(".cact"))
 }
 
 /**

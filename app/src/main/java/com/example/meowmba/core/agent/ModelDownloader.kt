@@ -69,7 +69,7 @@ class ModelDownloader(
     fun listInstalled(): List<File> =
         modelsDir.listFiles { f ->
             f.isFile && f.length() > 0 &&
-                (f.name.endsWith(".task") || f.name.endsWith(".litertlm"))
+                (f.name.endsWith(".task") || f.name.endsWith(".litertlm") || f.name.endsWith(".cact"))
         }?.sortedBy { it.name } ?: emptyList()
 
     private val options get() = ModelCatalog.options

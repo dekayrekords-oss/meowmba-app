@@ -38,6 +38,7 @@ class UtteranceCapture(
     private val scope: CoroutineScope,
     /** Text already finalized by the session that promoted idle listening into a turn. */
     private val initialText: String = "",
+    private val initialAudio: CapturedSpeechAudio? = null,
     /** Quiet needed before the turn is considered over. */
     private val silenceToFinishMs: Long = SILENCE_TO_FINISH_MS,
     /** Semantic override for the post-result hold; always bounded by [silenceToFinishMs]. */
@@ -59,6 +60,7 @@ class UtteranceCapture(
 ) {
 
     private val segments = mutableListOf<String>()
+    private val audioSegments = mutableListOf<CapturedSpeechAudio>()
     private val _live = MutableStateFlow("")
 
     /** Everything heard so far this turn, including the in-progress partial. */
@@ -82,7 +84,9 @@ class UtteranceCapture(
         this.onFinal = onFinal
         this.onError = onError
         segments.clear()
+        audioSegments.clear()
         initialText.trim().takeIf { it.isNotEmpty() }?.let { segments += it }
+        initialAudio?.takeIf { it.isUsable }?.let { audioSegments += it }
         _live.value = ""
         startedAt = now()
         lastVoiceAt = startedAt
@@ -143,6 +147,7 @@ class UtteranceCapture(
 
     private fun onSessionResult(text: String) {
         if (finished) return
+        bankAudioSegment()
         val trimmed = text.trim()
         if (trimmed.isNotEmpty() && trimmed != segments.lastOrNull()) {
             segments += trimmed
@@ -212,6 +217,17 @@ class UtteranceCapture(
     /** True once any words have been banked or are in the live partial. */
     fun hasHeardSpeech(): Boolean = hasSpeech()
 
+    fun capturedAudio(): CapturedSpeechAudio? {
+        if (audioSegments.isEmpty()) return null
+        val rate = audioSegments.first().sampleRate
+        val compatible = audioSegments.filter { it.sampleRate == rate && it.pcm16.isNotEmpty() }
+        if (compatible.isEmpty()) return null
+        val joined = ShortArray(compatible.sumOf { it.pcm16.size })
+        var at = 0
+        compatible.forEach { segment -> segment.pcm16.copyInto(joined, at); at += segment.pcm16.size }
+        return CapturedSpeechAudio(joined, rate)
+    }
+
     /** prog's semantic endpointing: how long the given text still gets to speak. */
     private fun requiredSilence(): Long = endpointDelayFor(segments.joinToString(" "))
         .coerceIn(250L, silenceToFinishMs)
@@ -243,12 +259,22 @@ class UtteranceCapture(
         partialJob?.cancel()
         engine.stopListening()
         bankLivePartial()
+        bankAudioSegment()
         val text = segments.joinToString(" ").trim()
         if (text.isEmpty()) {
             onError?.invoke(SpeechRecognizer.ERROR_NO_MATCH)
         } else {
             onFinal?.invoke(text)
         }
+    }
+
+    private fun bankAudioSegment() {
+        val captured = (engine as? SpeechAudioCapture)?.snapshotCapturedAudio()
+            ?.takeIf { it.isUsable } ?: return
+        val duplicate = audioSegments.lastOrNull()?.let { last ->
+            last.sampleRate == captured.sampleRate && last.pcm16.contentEquals(captured.pcm16)
+        } == true
+        if (!duplicate) audioSegments += captured
     }
 
     private fun fail(code: Int) {

@@ -98,6 +98,34 @@ class VoiceModelStore(private val context: Context) {
             }
         }
 
+    /** Install or repair the offline Whisper final-transcript model. */
+    suspend fun ensureWhisper(onProgress: (Float, String) -> Unit = { _, _ -> }): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            if (whisperReady()) return@withContext Result.success(Unit)
+            runCatching {
+                whisperDir.mkdirs()
+                val files = VoiceModelPack.whisperDownloads.entries.toList()
+                files.forEachIndexed { index, (name, url) ->
+                    val target = File(whisperDir, name)
+                    val floor = VoiceModelPack.WHISPER_MIN_BYTES[name] ?: 1L
+                    if (target.isFile && target.length() >= floor) return@forEachIndexed
+                    target.delete()
+                    val start = index.toFloat() / files.size
+                    val span = 1f / files.size
+                    downloadTo(url, target) { received, total ->
+                        val part = total?.takeIf { it > 0 }?.let { received.toFloat() / it } ?: 0f
+                        onProgress(
+                            (start + span * part).coerceIn(0f, 0.99f),
+                            "Downloading Whisper ${index + 1}/${files.size}…",
+                        )
+                    }
+                    check(target.length() >= floor) { "$name download was incomplete" }
+                }
+                check(whisperReady()) { "Whisper files did not install correctly" }
+                onProgress(1f, "Whisper ready")
+            }
+        }
+
     private suspend fun ensureAsrFiles(onProgress: (Float, String) -> Unit) {
         if (asrReady()) return
         if (copyAsrFromAssets()) return

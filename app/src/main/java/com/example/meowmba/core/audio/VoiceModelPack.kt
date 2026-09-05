@@ -130,6 +130,14 @@ object VoiceModelPack {
     const val WHISPER_TAR_URL =
         "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/$WHISPER_DIR.tar.bz2"
 
+    /** Individual official files are more reliable on Android than unpacking the large tarball. */
+    private const val WHISPER_HF = "https://huggingface.co/csukuangfj/$WHISPER_DIR/resolve/main"
+    val whisperDownloads: Map<String, String> = linkedMapOf(
+        WHISPER_ENCODER to "$WHISPER_HF/$WHISPER_ENCODER",
+        WHISPER_DECODER to "$WHISPER_HF/$WHISPER_DECODER",
+        WHISPER_TOKENS to "$WHISPER_HF/$WHISPER_TOKENS",
+    )
+
     /** True only when every Whisper file meets its published size floor. */
     fun whisperComplete(dir: File): Boolean = whisperRequired.all { name ->
         File(dir, name).let { it.isFile && it.length() >= (WHISPER_MIN_BYTES[name] ?: 1L) }

@@ -39,7 +39,7 @@ import kotlinx.coroutines.flow.asStateFlow
  *    tears down the previous session first so back-to-back sessions never
  *    collide with the recognition service's lingering teardown.
  */
-class SpeechService(context: Context) : SpeechEngine {
+class SpeechService(context: Context) : SpeechEngine, SpeechAudioCapture {
 
     override val isAvailable: Boolean =
         SpeechRecognizer.isOnDeviceRecognitionAvailable(context) ||
@@ -77,6 +77,11 @@ class SpeechService(context: Context) : SpeechEngine {
 
     /** Last ~2s of recognizer PCM when the service delivers buffers. */
     fun lastHeardPcm(): ShortArray = interactive.lastHeardPcm()
+
+    override fun snapshotCapturedAudio(): CapturedSpeechAudio? =
+        lastHeardPcm().takeIf { it.isNotEmpty() }?.let {
+            CapturedSpeechAudio(it, CAPTURE_SAMPLE_RATE)
+        }
 
     override fun stopListening() = interactive.stopListening()
 
@@ -694,6 +699,7 @@ class SpeechService(context: Context) : SpeechEngine {
 
         /** Rolling capture for speaker ID — ~2s at 16 kHz mono 16-bit. */
         private const val HEARD_PCM_SAMPLES = 16_000 * 2
+        private const val CAPTURE_SAMPLE_RATE = 16_000
 
         /**
          * Capture-window hints. ~2.5s of silence before a sentence is considered

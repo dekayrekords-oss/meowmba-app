@@ -29,14 +29,26 @@ import java.nio.file.Files
 class ModelCatalogTest {
 
     @Test
-    fun `catalog has five distinct, downloadable options`() {
-        assertEquals(5, ModelCatalog.options.size)
-        assertEquals(5, ModelCatalog.options.map { it.id }.distinct().size)
-        assertEquals(5, ModelCatalog.options.map { it.fileName }.distinct().size)
+    fun `catalog has six distinct downloadable options`() {
+        assertEquals(6, ModelCatalog.options.size)
+        assertEquals(6, ModelCatalog.options.map { it.id }.distinct().size)
+        assertEquals(6, ModelCatalog.options.map { it.fileName }.distinct().size)
         assertTrue(ModelCatalog.options.all { it.downloadUrl.startsWith("https://") })
         assertTrue(ModelCatalog.options.all {
-            it.fileName.endsWith(".task") || it.fileName.endsWith(".litertlm")
+            it.fileName.endsWith(".task") || it.fileName.endsWith(".litertlm") ||
+                it.fileName.endsWith(".cact")
         })
+    }
+
+    @Test
+    fun `needle 2 is an ungated downloadable native tool router`() {
+        val needle = ModelCatalog.options.first { it.id == "needle-2" }
+        assertEquals("needle2.cact", needle.fileName)
+        assertTrue(needle.downloadUrl.contains("/Cactus-Compute/needle2/resolve/"))
+        assertTrue(needle.downloadUrl.endsWith("/needle2.cact"))
+        assertFalse(needle.requiresHfToken)
+        assertTrue(needle.recommended)
+        assertFalse(needle.runtime.canActivate)
     }
 
     @Test
@@ -59,6 +71,7 @@ class ModelCatalogTest {
     fun `filename validation`() {
         assertTrue(ModelCatalog.isValidModelFileName("qwen2.5-0.5b.task"))
         assertTrue(ModelCatalog.isValidModelFileName("hermes3-3b.litertlm"))
+        assertTrue(ModelCatalog.isValidModelFileName("needle2.cact"))
         assertFalse(ModelCatalog.isValidModelFileName("../evil.task"))
         assertFalse(ModelCatalog.isValidModelFileName("a/b.task"))
         assertFalse(ModelCatalog.isValidModelFileName("model.gguf"))

@@ -32,6 +32,8 @@ class VoiceModelPackTest {
         assertTrue(VoiceModelPack.ASR_TAR_URL.startsWith("https://github.com/k2-fsa/sherpa-onnx/"))
         assertTrue(VoiceModelPack.VAD_URL.startsWith("https://"))
         assertTrue(VoiceModelPack.SPEAKER_URL.startsWith("https://"))
+        assertEquals(3, VoiceModelPack.whisperDownloads.size)
+        assertTrue(VoiceModelPack.whisperDownloads.values.all { it.startsWith("https://huggingface.co/") })
     }
 
     /**

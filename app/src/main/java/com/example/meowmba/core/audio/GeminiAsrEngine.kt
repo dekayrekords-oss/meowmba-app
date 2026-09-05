@@ -62,7 +62,7 @@ class GeminiAsrEngine(
     /** Model id; defaults to [AsrBackend.DEFAULT_GEMINI_MODEL]. */
     private val model: () -> String = { AsrBackend.DEFAULT_GEMINI_MODEL },
     private val client: HttpClient = defaultClient,
-) : SpeechEngine {
+) : SpeechEngine, SpeechAudioCapture {
 
     override val isListening: StateFlow<Boolean> get() = local.isListening
     override val partialResults: StateFlow<String> get() = local.partialResults
@@ -70,6 +70,8 @@ class GeminiAsrEngine(
     /** Cloud transcription is pointless without the local capture path. */
     override val isAvailable: Boolean
         get() = local.isAvailable && !apiKey().isNullOrBlank()
+
+    override fun snapshotCapturedAudio(): CapturedSpeechAudio? = local.snapshotCapturedAudio()
 
     private var onResult: ((String) -> Unit)? = null
     private var onError: ((Int) -> Unit)? = null

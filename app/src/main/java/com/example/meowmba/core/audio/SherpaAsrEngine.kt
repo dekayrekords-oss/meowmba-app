@@ -45,7 +45,7 @@ class SherpaAsrEngine(
      * with SCO on. Sherpa needs 16kHz; an 8kHz SCO link is upsampled 2x.
      */
     private val bluetoothSco: Boolean = false,
-) : SpeechEngine {
+) : SpeechEngine, SpeechAudioCapture {
 
     /** True when a Bluetooth SCO audio device is connected right now. */
     fun bluetoothHeadsetConnected(): Boolean {
@@ -79,6 +79,11 @@ class SherpaAsrEngine(
     @Volatile
     var lastHeardPcm: ShortArray = ShortArray(0)
         private set
+
+    override fun snapshotCapturedAudio(): CapturedSpeechAudio? =
+        lastHeardPcm.takeIf { it.isNotEmpty() }?.let {
+            CapturedSpeechAudio(it.copyOf(), SAMPLE_RATE)
+        }
 
     /**
      * Optional local-Whisper refiner. When set, a finished utterance is also
