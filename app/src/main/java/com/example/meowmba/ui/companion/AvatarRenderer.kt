@@ -230,7 +230,7 @@ fun AvatarRenderer(
     // every vsync and consumed only inside the draw lambda.
     val shotHolder = remember { arrayOfNulls<MotionPose>(1) }
     var faceRadiusPx by remember { mutableStateOf(200f) }
-    val useGodotFace = state.avatarStyle == AvatarStyle.NEO
+    val useGodotFace = state.avatarStyle == AvatarStyle.NEO || state.avatarStyle == AvatarStyle.PEARL
     val useSignalOrb = state.avatarStyle == AvatarStyle.SIGNAL
     // Single ambient clock (seconds). Advanced at ~60 fps and only while visible.
     // Reading this in the Canvas draw lambda invalidates draw only — not a
@@ -263,11 +263,11 @@ fun AvatarRenderer(
                 val dt = ((now - lastNs) / 1_000_000_000.0).coerceIn(0.0, 0.05)
                 lastNs = now
                 clockBase[0] += dt
-                // Ambient redraws at 30fps, not display rate: breathing/blink/
-                // sway are sub-Hz motion, and a full vector-face rebuild at
-                // 120Hz was the idle hot-phone baseline. Phase stays exact
-                // because clockBase still accumulates every vsync above.
-                if (now - lastDrawNs >= 33_333_333L) {
+                // Keep the vector face at the display refresh rate. The avatar
+                // is a performance, not a slideshow: limiting the draw pass
+                // to 30fps makes eye tracking, speech, and follow-through
+                // visibly step on 90/120Hz phones.
+                if (now - lastDrawNs >= 8_333_333L) {
                     lastDrawNs = now
                     clockSec = clockBase[0].toFloat()
                     drawEpoch++
@@ -744,6 +744,7 @@ fun AvatarRenderer(
         val mouthWobble = triWave(1.9f, 0.88f, 1.12f, phaseSec = 0.7f)
         val haloPulse = triWave(1.0f, 0.25f, 0.6f, phaseSec = 1.3f)
         val tailSway = sinWave(3.6f, -0.14f, 0.14f, phaseSec = 3.9f)
+        val earBreath = sinWave(4.9f, -1f, 1f, phaseSec = 0.8f)
         val godotClockT = tSec  // seconds; Godot face uses sin(t * k)
 
         val w = size.width
@@ -906,8 +907,9 @@ fun AvatarRenderer(
                 // apart instead of dragging them.
                 earPitchDeg = (earPerk - 1f) * 36f +
                     (if (listening) voice * 8f else 0f) +
-                    earLag * 14f,
-                earSplayDeg = 10f + earDroop * 0.35f,
+                    earLag * 14f +
+                    earBreath * 1.4f,
+                earSplayDeg = 10f + earDroop * 0.35f + earBreath * 0.8f,
                 // Follow-through: the ears trail the skull and overshoot when
                 // it stops, on top of their own ambient twitch.
                 // Genuine asymmetry only — the independent per-ear twitches.
@@ -998,6 +1000,8 @@ fun AvatarRenderer(
                     eyeColor = Color(state.avatarEyeColor),
                     glowColor = Color(state.avatarGlowColor),
                     glowStrength = if (effectivePose.glowPulse) 0.42f else 0.28f,
+                    pearl = state.avatarStyle == AvatarStyle.PEARL,
+                    featureColor = Color(state.avatarFeatureColor),
                 )
                 }
             }

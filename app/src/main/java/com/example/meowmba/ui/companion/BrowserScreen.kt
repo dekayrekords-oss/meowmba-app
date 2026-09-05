@@ -1,5 +1,6 @@
 package com.example.meowmba.ui.companion
 
+import androidx.compose.material3.MaterialTheme
 import android.annotation.SuppressLint
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -55,7 +56,7 @@ fun BrowserScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF0D1117))
+            .background(MaterialTheme.colorScheme.background)
     ) {
         Spacer(Modifier.height(24.dp))
         Row(
@@ -65,11 +66,11 @@ fun BrowserScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text("Agent browser", color = Color.White, fontSize = 18.sp)
+                Text("Agent browser", color = MaterialTheme.colorScheme.onSurface, fontSize = 18.sp)
                 Text(
                     if (goal.isNullOrBlank()) "Build a page or scrape a URL"
                     else goal,
-                    color = Color(0xFF8B949E),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 12.sp,
                     maxLines = 2,
                 )
@@ -78,7 +79,7 @@ fun BrowserScreen(
                 urlText = ""
                 WebViewBridge.loadWorkshop()
             }) {
-                Text("Workshop", color = Color(0xFF58A6FF), fontSize = 13.sp)
+                Text("Workshop", color = MaterialTheme.colorScheme.primary, fontSize = 13.sp)
             }
         }
         OutlinedTextField(
@@ -87,7 +88,7 @@ fun BrowserScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 6.dp),
-            placeholder = { Text("URL — then say scrape this page", color = Color.White.copy(alpha = 0.5f)) },
+            placeholder = { Text("URL — then say scrape this page", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
             keyboardActions = KeyboardActions(onGo = { go(urlText) }),
@@ -175,7 +176,7 @@ private fun LiveCodePanel(kind: String, code: String) {
     ) {
         Text(
             "$label · ${if (code.isBlank()) "idle" else "${code.length} chars"}",
-            color = Color(0xFF58A6FF),
+            color = MaterialTheme.colorScheme.primary,
             fontSize = 12.sp,
         )
         Spacer(Modifier.height(4.dp))

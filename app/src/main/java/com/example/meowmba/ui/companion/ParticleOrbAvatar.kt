@@ -140,6 +140,9 @@ class ParticleOrbSim(val n: Int = 650) {
     private val pz = FloatArray(n)
     private val flyers = ArrayList<Flyer>()
     private var lastT = Float.NaN
+    // Smoothed energy keeps the aura responsive without flickering when the
+    // audio level is noisy or the state changes at a frame boundary.
+    private var energy = 0.08f
 
     fun draw(
         scope: DrawScope,
@@ -158,6 +161,8 @@ class ParticleOrbSim(val n: Int = 650) {
             lastT = clockSec
             val lvl = level.coerceIn(0f, 1f)
             val think = if (thinking) 1f else 0f
+            val targetEnergy = (lvl * 0.82f + think * 0.42f).coerceIn(0f, 1f)
+            energy += (targetEnergy - energy) * (1f - kotlin.math.exp((-dt * 8f).toDouble())).toFloat()
             val baseR = domeRadius * 0.80f
             // Reference sizes are px at baseR ≈ 0.38·minWH; rescale to our dome.
             val k = domeRadius / 300f
@@ -169,6 +174,9 @@ class ParticleOrbSim(val n: Int = 650) {
             drawCircle(cyan.copy(alpha = 0.05f * a), baseR * 1.15f, center)
             drawCircle(cyan.copy(alpha = 0.07f * a), baseR * 0.80f, center)
             drawCircle(cyan.copy(alpha = 0.08f * a), baseR * 0.50f, center)
+            // A restrained outer bloom gives the sphere a glassy edge while
+            // keeping the idle state quiet and avoiding a large shader pass.
+            drawCircle(cyan.copy(alpha = (0.025f + energy * 0.035f) * a), baseR * (1.28f + energy * 0.05f), center)
 
             // ── Outer pulse rings ──
             for (i in 0 until 4) {
@@ -218,6 +226,58 @@ class ParticleOrbSim(val n: Int = 650) {
                         style = Stroke(width = 1f),
                     )
                 }
+            }
+
+            // ── Orbital energy ribbons ──
+            // Elliptical arcs read as a rotating field around the volume. A
+            // handful of strokes is substantially cheaper than a particle
+            // ribbon and remains crisp at large tablet/foldable sizes.
+            val ribbonSpeed = 18f + energy * 14f + think * 8f
+            for (ribbon in 0 until 3) {
+                val tilt = 0.30f + ribbon * 0.17f + energy * 0.06f
+                val ellipseW = baseR * (1.72f + ribbon * 0.10f)
+                val ellipseH = baseR * tilt
+                val ribbonAngle = clockSec * ribbonSpeed * (if (ribbon == 1) -0.78f else 1f) + ribbon * 61f
+                val ribbonColor = if (ribbon == 1) violet else cyan
+                val ribbonAlpha = (0.13f + energy * 0.14f + think * 0.08f) * a
+                rotate(ribbonAngle, pivot = center) {
+                    drawArc(
+                        color = ribbonColor.copy(alpha = ribbonAlpha),
+                        startAngle = 202f + ribbon * 7f,
+                        sweepAngle = 116f + energy * 28f,
+                        useCenter = false,
+                        topLeft = Offset(center.x - ellipseW / 2f, center.y - ellipseH / 2f),
+                        size = Size(ellipseW, ellipseH),
+                        style = Stroke(width = (1.4f + energy * 1.5f) * k.coerceAtLeast(0.8f)),
+                    )
+                    drawArc(
+                        color = Color.White.copy(alpha = (0.10f + energy * 0.10f) * a),
+                        startAngle = 202f + ribbon * 7f,
+                        sweepAngle = 26f + energy * 12f,
+                        useCenter = false,
+                        topLeft = Offset(center.x - ellipseW / 2f, center.y - ellipseH / 2f),
+                        size = Size(ellipseW, ellipseH),
+                        style = Stroke(width = 0.8f * k.coerceAtLeast(0.8f)),
+                    )
+                }
+            }
+
+            // ── Deterministic energy filaments ──
+            // These provide a subtle circuit-like structure between the core
+            // and shell; phases are fixed so there is no per-frame RNG.
+            val filamentCount = 12
+            for (filament in 0 until filamentCount) {
+                val angle = filament * (2f * PI.toFloat() / filamentCount) + clockSec * 0.22f
+                val wave = 0.5f + 0.5f * sin(clockSec * 2.2f + filament * 1.7f)
+                val inner = baseR * (0.18f + wave * 0.05f)
+                val outer = baseR * (0.78f + energy * 0.13f + wave * 0.06f)
+                val filamentColor = if (filament % 4 == 0) violet else cyan
+                drawLine(
+                    filamentColor.copy(alpha = (0.035f + energy * 0.07f + wave * 0.025f) * a),
+                    Offset(center.x + cos(angle) * inner, center.y + sin(angle) * inner * 0.86f),
+                    Offset(center.x + cos(angle) * outer, center.y + sin(angle) * outer * 0.86f),
+                    strokeWidth = (0.7f + energy * 0.9f) * k.coerceAtLeast(0.8f),
+                )
             }
 
             // ── Particles: rotate, project, depth-sort back→front ──
@@ -346,6 +406,17 @@ class ParticleOrbSim(val n: Int = 650) {
                 ) f.life -= 0.06f * steps
                 if (f.life <= 0f) flyers.removeAt(i)
             }
+
+            // Reassert the core above the shell and flyers: a tiny specular
+            // point plus a breathing ring makes the center feel volumetric.
+            val corePulse = 1f + sin(clockSec * 3.4f) * (0.025f + energy * 0.06f)
+            drawCircle(
+                color = (if (thinking) violet else cyan).copy(alpha = (0.20f + energy * 0.16f) * a),
+                radius = nr * 1.18f * corePulse,
+                center = center,
+                style = Stroke(width = (1f + energy * 1.2f) * k.coerceAtLeast(0.8f)),
+            )
+            drawCircle(Color.White.copy(alpha = (0.86f + energy * 0.12f) * a), nr * 0.32f, center)
 
             // ── Caption under the sphere ──
             val caption = ParticleOrbContent.captionFor(

@@ -128,7 +128,6 @@ class MainActivity : ComponentActivity() {
         checkPermissions()
 
         setContent {
-            MeowmbaTheme(darkTheme = true) {
                 val viewModel: CompanionViewModel = viewModel(
                     factory = object : ViewModelProvider.Factory {
                         override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -173,6 +172,11 @@ class MainActivity : ComponentActivity() {
                 )
 
                 val uiState by viewModel.uiState.collectAsState()
+                MeowmbaTheme(
+                    darkTheme = uiState.appearanceMode.isDark(androidx.compose.foundation.isSystemInDarkTheme()),
+                    dynamicColor = false,
+                    professional = uiState.appTheme == com.example.meowmba.ui.companion.AppTheme.PROFESSIONAL,
+                ) {
 
                 // First-launch onboarding gate: computed once from persisted prefs.
                 var needsOnboarding by remember {
@@ -292,6 +296,7 @@ class MainActivity : ComponentActivity() {
                         com.example.meowmba.ui.onboarding.SetupWizardRoute(
                             onFinished = {
                                 com.example.meowmba.core.setup.SetupWiring.markOnboardingDone(this@MainActivity)
+                                viewModel.reloadSetupConfiguration()
                                 needsOnboarding = false
                                 if (showOnboarding) viewModel.toggleSetupWizard()
                             },

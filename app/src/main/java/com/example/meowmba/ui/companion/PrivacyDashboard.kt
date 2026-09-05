@@ -33,7 +33,7 @@ fun PrivacyDashboard(
 ) {
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = Color(0xFF0D1117)
+        color = MaterialTheme.colorScheme.background
     ) {
         Column(
             modifier = Modifier
@@ -42,12 +42,12 @@ fun PrivacyDashboard(
                 .verticalScroll(rememberScrollState())
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Security, contentDescription = null, tint = Color(0xFF3FB950))
+                Icon(Icons.Default.Security, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(
                     text = "Privacy & Security",
                     style = MaterialTheme.typography.headlineSmall,
-                    color = Color.White
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
 
@@ -82,7 +82,7 @@ fun PrivacyDashboard(
                     "on device. Cloud backup of chat and keys is off. HTTP is only allowed on " +
                     "your own network; everything else must be HTTPS.",
                 style = MaterialTheme.typography.bodySmall,
-                color = Color.Gray
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             Spacer(modifier = Modifier.height(40.dp))
@@ -113,14 +113,14 @@ fun PrivacyItem(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.weight(1f)
         ) {
-            Icon(icon, contentDescription = null, tint = if (isEnabled) Color.White else Color.Gray)
+            Icon(icon, contentDescription = null, tint = if (isEnabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(modifier = Modifier.width(16.dp))
             Column {
-                Text(text = label, color = Color.White)
+                Text(text = label, color = MaterialTheme.colorScheme.onSurface)
                 Text(
                     text = description,
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color.Gray
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }

@@ -88,7 +88,7 @@ fun NavScreen(
         status = "Installed $ok of ${uris.size} pack(s)"
     }
 
-    Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF0D1117)) {
+    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
             modifier = Modifier
                 .padding(24.dp)
@@ -105,7 +105,7 @@ fun NavScreen(
                 Text(
                     "NAV",
                     style = MaterialTheme.typography.headlineMedium,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f),
                 )
                 TextButton(onClick = onClose) { Text("CLOSE") }
@@ -113,20 +113,20 @@ fun NavScreen(
             Text(
                 "Offline-first. Region packs are searched before the online fallback, " +
                     "so this works with no signal.",
-                color = Color(0xFF8B949E),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 11.sp,
             )
 
             // ── Offline packs ───────────────────────────────────────────────────
             Spacer(Modifier.height(20.dp))
-            Text("Offline region packs", style = MaterialTheme.typography.titleMedium, color = Color.White)
+            Text("Offline region packs", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
             Spacer(Modifier.height(8.dp))
 
             if (packs.isEmpty()) {
                 Text(
                     "None installed — offline search will find nothing. Build one with " +
                         "scripts/build_poi_pack.py from an OpenStreetMap extract, then import it.",
-                    color = Color(0xFF8B949E),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 12.sp,
                 )
             } else {
@@ -137,7 +137,7 @@ fun NavScreen(
                     ) {
                         Text(
                             p.region,
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.onSurface,
                             fontSize = 13.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -145,7 +145,7 @@ fun NavScreen(
                         )
                         Text(
                             "${"%,d".format(p.poiCount)} places · ${p.sizeBytes / 1_000_000}MB",
-                            color = Color(0xFF8B949E),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 11.sp,
                         )
                         TextButton(onClick = {
@@ -159,7 +159,7 @@ fun NavScreen(
                 Text(
                     "${"%,d".format(packs.sumOf { it.poiCount })} places across " +
                         "${packs.size} region(s)",
-                    color = Color(0xFF8B949E),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 11.sp,
                 )
             }
@@ -176,18 +176,18 @@ fun NavScreen(
 
             // ── Online fallback ─────────────────────────────────────────────────
             Spacer(Modifier.height(20.dp))
-            Text("Online fallback", style = MaterialTheme.typography.titleMedium, color = Color.White)
+            Text("Online fallback", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
             Spacer(Modifier.height(4.dp))
             Text(
                 "Optional Geoapify key, used only when the offline packs have no match. " +
                     "Free tier is about 3,000 lookups a day.",
-                color = Color(0xFF8B949E),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 11.sp,
             )
             Spacer(Modifier.height(4.dp))
             Text(
                 text = "Get a free API key →",
-                color = Color(0xFF58A6FF),
+                color = MaterialTheme.colorScheme.primary,
                 fontSize = 12.sp,
                 textDecoration = TextDecoration.Underline,
                 modifier = Modifier.clickable {
@@ -216,13 +216,13 @@ fun NavScreen(
 
             // ── Saved places ────────────────────────────────────────────────────
             Spacer(Modifier.height(20.dp))
-            Text("Saved places", style = MaterialTheme.typography.titleMedium, color = Color.White)
+            Text("Saved places", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
             Spacer(Modifier.height(8.dp))
 
             if (savedPlaces.isEmpty()) {
                 Text(
                     "None yet. Name this spot below, or just say \"remember this as home\".",
-                    color = Color(0xFF8B949E),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 12.sp,
                 )
             } else {
@@ -233,7 +233,7 @@ fun NavScreen(
                     ) {
                         Text(
                             p.name,
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.onSurface,
                             fontSize = 13.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -241,7 +241,7 @@ fun NavScreen(
                         )
                         Text(
                             "%.4f, %.4f".format(p.lat, p.lon),
-                            color = Color(0xFF8B949E),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 10.sp,
                         )
                         TextButton(onClick = {
@@ -281,7 +281,7 @@ fun NavScreen(
 
             status?.let {
                 Spacer(Modifier.height(12.dp))
-                Text(it, color = Color(0xFF8B949E), fontSize = 11.sp)
+                Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
             }
             Spacer(Modifier.height(24.dp))
         }

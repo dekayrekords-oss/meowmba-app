@@ -16,6 +16,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -84,6 +85,7 @@ fun SettingsScreen(
 
     onBargeInChange: (Boolean) -> Unit = {},
     onOpenAccessibility: () -> Unit = {},
+    onOpenSetup: () -> Unit = {},
     idleChatterEnabled: Boolean = true,
     onIdleChatterChange: (Boolean) -> Unit = {},
 
@@ -136,16 +138,20 @@ fun SettingsScreen(
         )
     }
     var localModelPath by remember { mutableStateOf(secureStorage.getEndpoint("local") ?: "/data/local/tmp/llm/gemma.bin") }
-    var showAdvanced by remember { mutableStateOf(false) }
+    var showAdvanced by rememberSaveable { mutableStateOf(false) }
     var openaiModel by remember { mutableStateOf(secureStorage.getModelName("openai") ?: "gpt-4o-mini") }
     var showKey by remember { mutableStateOf(false) }
     var openaiEndpoint by remember { mutableStateOf(secureStorage.getEndpoint("openai") ?: "") }
     var opencodeEndpoint by remember { mutableStateOf(secureStorage.getEndpoint("opencode") ?: "") }
     var openrouterEndpoint by remember { mutableStateOf(secureStorage.getEndpoint("openrouter") ?: "") }
+    var voiceSectionOpen by rememberSaveable { mutableStateOf(false) }
+    var deviceSectionOpen by rememberSaveable { mutableStateOf(false) }
+    var aiSectionOpen by rememberSaveable { mutableStateOf(false) }
+    var mediaSectionOpen by rememberSaveable { mutableStateOf(false) }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = Color(0xFF0D1117)
+        color = MaterialTheme.colorScheme.background
     ) {
         Column(
             modifier = Modifier
@@ -156,13 +162,45 @@ fun SettingsScreen(
             Text(
                 text = "Settings",
                 style = MaterialTheme.typography.headlineMedium,
-                color = Color.White
+                color = MaterialTheme.colorScheme.onSurface
             )
+
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Personalize Memba, connect services, and choose how it listens. Save and Close applies provider settings; API keys are stored securely as entered.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Finish setup", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                        Text("Guided setup for AI, voice and connections.", style = MaterialTheme.typography.bodySmall)
+                    }
+                    Button(onClick = onOpenSetup) { Text("Start setup") }
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+
+            SettingsSectionHeader(
+                title = "Voice & behavior",
+                summary = if (wakeWordEnabled) "Wake phrase on · ${if (conversationMode) "conversation mode on" else "conversation mode off"}" else "Wake phrase off",
+                expanded = voiceSectionOpen,
+                onToggle = { voiceSectionOpen = !voiceSectionOpen },
+            )
+            if (voiceSectionOpen) {
 
             Spacer(modifier = Modifier.height(24.dp))
 
             // Companion Voice
-            Text("Companion Voice", style = MaterialTheme.typography.titleMedium, color = Color.White)
+            Text("Companion Voice", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
             Spacer(modifier = Modifier.height(8.dp))
             SettingsTextField(
                 value = companionName,
@@ -173,7 +211,7 @@ fun SettingsScreen(
             Text(
                 text = "Also always answers to \"Hey Memba\" and \"Hey Meow\".",
                 style = MaterialTheme.typography.bodySmall,
-                color = Color.Gray
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -248,6 +286,16 @@ fun SettingsScreen(
                 checked = bargeInEnabled,
                 onCheckedChange = onBargeInChange
             )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+            SettingsSectionHeader(
+                title = "Phone & device",
+                summary = if (watchModeEnabled || backgroundListeningEnabled || (robotStatus.contains("body", ignoreCase = true) && !robotStatus.contains("simulated", ignoreCase = true))) "Connected or active" else "Review device access and automation",
+                expanded = deviceSectionOpen,
+                onToggle = { deviceSectionOpen = !deviceSectionOpen },
+            )
+            if (deviceSectionOpen) {
 
             Spacer(modifier = Modifier.height(8.dp))
             Text(
@@ -302,15 +350,21 @@ fun SettingsScreen(
                 }
             }
 
-            // ── Robot body (LOOI) ─────────────────────────────────────────
+            // Base controls appear only after a real body link exists. Setup
+            // belongs in the guided wizard; an unattached phone should not be
+            // confronted with hardware-specific controls.
+            val physicalBaseAttached = robotStatus.contains("body", ignoreCase = true) &&
+                !robotStatus.contains("simulated", ignoreCase = true) &&
+                !robotStatus.contains("offline", ignoreCase = true)
+            if (physicalBaseAttached) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Robot body (LOOI)",
+                text = "Robot base",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
             Text(
-                text = "Drive a physical LOOI-style base. With no body attached the cat stays simulated. Current: " + robotStatus + ".",
+                text = "A physical robot base is attached. Current: " + robotStatus.replace("LOOI", "base", ignoreCase = true) + ".",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -334,7 +388,7 @@ fun SettingsScreen(
                 Column(modifier = Modifier.weight(1f)) {
                     Text("Connect over Bluetooth", style = MaterialTheme.typography.bodyLarge)
                     Text(
-                        "Default. Talks to a paired LOOI base over classic Bluetooth. Turn off to use Wi-Fi/TCP instead.",
+                        "Uses the attached base over Bluetooth. Turn off to use Wi-Fi/TCP instead.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -356,7 +410,7 @@ fun SettingsScreen(
                 if (robotScanResults.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        "Tap your LOOI base to use its address:",
+                        "Tap your robot base to use its address:",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -373,7 +427,7 @@ fun SettingsScreen(
                                 Text(address, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             if (address == robotBtAddress) {
-                                Text("in use", style = MaterialTheme.typography.bodySmall, color = Color(0xFF81C784))
+                                Text("in use", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                             }
                         }
                     }
@@ -396,6 +450,7 @@ fun SettingsScreen(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
+            }
             }
 
             if (routines.isNotEmpty()) {
@@ -432,30 +487,7 @@ fun SettingsScreen(
                     }
                 }
             }
-            VoiceToggle(
-                label = "Agent brain",
-                description = "Understands natural tool commands (\"make a file called todo.txt\") " +
-                    "using the active model. Select a local model on the Hardware page for fully " +
-                    "offline use — a local model file must be present.",
-                checked = agentBrainEnabled,
-                onCheckedChange = onAgentBrainChange
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            SettingsTextField(
-                value = hermesAgentUrl,
-                onValueChange = onHermesUrlChange,
-                label = { Text("Hermes agent endpoint (optional)") },
-                modifier = Modifier.fillMaxWidth()
-            )
-            Text(
-                text = "OpenAI-compatible agent (hermes-agent v0.19+), e.g. http://192.168.1.10:8642. " +
-                    "Leave blank for on-device routing only.",
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.Gray
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -463,7 +495,7 @@ fun SettingsScreen(
                 Text(
                     "Advanced",
                     style = MaterialTheme.typography.titleMedium,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f)
                 )
                 OutlinedButton(onClick = { showAdvanced = !showAdvanced }) {
@@ -473,19 +505,26 @@ fun SettingsScreen(
             Text(
                 text = "Image/music/video generation, API keys, servers and the desktop bridge.",
                 style = MaterialTheme.typography.bodySmall,
-                color = Color.Gray
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             if (showAdvanced) {
+            SettingsSectionHeader(
+                title = "Media & memory",
+                summary = "Image, music, video, and semantic memory services",
+                expanded = mediaSectionOpen,
+                onToggle = { mediaSectionOpen = !mediaSectionOpen },
+            )
+            if (mediaSectionOpen) {
             // On-device image generation (stable-diffusion.cpp, native GGUF weights)
-            Text("Image generation", style = MaterialTheme.typography.titleMedium, color = Color.White)
+            Text("Image generation", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
             val imageOption = com.example.meowmba.core.agent.ImageModelCatalog.options.first()
-            Text(imageOption.displayName, color = Color.White, fontWeight = FontWeight.Bold)
-            Text(imageOption.description, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+            Text(imageOption.displayName, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
+            Text(imageOption.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(
                 "${imageOption.approxSize} · ${imageOption.minRamGb}GB+ RAM. Runs fully on-device; " +
                     "expect a few seconds to a minute per image depending on the phone.",
                 style = MaterialTheme.typography.bodySmall,
-                color = Color.Gray
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(8.dp))
             // imageModelInstalled() is a disk stat — check it once per composition and
@@ -497,13 +536,13 @@ fun SettingsScreen(
             when {
                 imageModelInstalledNow -> {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Installed", color = Color(0xFF3FB950), fontSize = 12.sp)
+                        Text("Installed", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
                         Spacer(modifier = Modifier.weight(1f))
                         TextButton(onClick = {
                             onDeleteImageModel()
                             imageModelInstalledNow = false
                         }) {
-                            Text("Delete", color = Color(0xFFF85149), fontSize = 12.sp)
+                            Text("Delete", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
                         }
                     }
                 }
@@ -516,20 +555,20 @@ fun SettingsScreen(
                         Text(
                             "${(imageModelDownload.fraction!! * 100).toInt()}% · " +
                                 "${imageModelDownload.received / 1_048_576} MB",
-                            color = Color.Gray, fontSize = 11.sp
+                            color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp
                         )
                     } else {
                         LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                         Text(
                             "${imageModelDownload.received / 1_048_576} MB…",
-                            color = Color.Gray, fontSize = 11.sp
+                            color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp
                         )
                     }
                 }
                 imageModelDownload?.error != null -> {
-                    Text(imageModelDownload.error, color = Color(0xFFF85149), fontSize = 12.sp)
+                    Text(imageModelDownload.error, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
                     TextButton(onClick = onDownloadImageModel) {
-                        Text("Retry", color = Color(0xFF58A6FF), fontSize = 12.sp)
+                        Text("Retry", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
                     }
                 }
                 else -> {
@@ -542,7 +581,7 @@ fun SettingsScreen(
                 text = "No model installed → image requests use the configured server " +
                     "if one is set below, otherwise a simple canvas drawing.",
                 style = MaterialTheme.typography.bodySmall,
-                color = Color.Gray
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -557,7 +596,7 @@ fun SettingsScreen(
                     "http://192.168.1.10:9100. Leave blank to always use " +
                     "on-device generation.",
                 style = MaterialTheme.typography.bodySmall,
-                color = Color.Gray
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             VoiceToggle(
                 label = "Prefer server for images",
@@ -570,7 +609,7 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             // Music generation (opt-in remote server only — no on-device generator)
-            Text("Music generation", style = MaterialTheme.typography.titleMedium, color = Color.White)
+            Text("Music generation", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
             Spacer(modifier = Modifier.height(8.dp))
             SettingsTextField(
                 value = musicServerUrl,
@@ -583,13 +622,13 @@ fun SettingsScreen(
                     "http://192.168.1.10:9200. Leave blank to use a simple " +
                     "procedural tone sequence instead.",
                 style = MaterialTheme.typography.bodySmall,
-                color = Color.Gray
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             Spacer(modifier = Modifier.height(24.dp))
 
             // Video generation (opt-in remote server — no on-device path exists)
-            Text("Video generation", style = MaterialTheme.typography.titleMedium, color = Color.White)
+            Text("Video generation", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
             SettingsTextField(
                 value = videoServerUrl,
                 onValueChange = onVideoServerUrlChange,
@@ -602,13 +641,13 @@ fun SettingsScreen(
                     "animated-frames placeholder. Real generation takes several " +
                     "minutes per clip.",
                 style = MaterialTheme.typography.bodySmall,
-                color = Color.Gray
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             Spacer(modifier = Modifier.height(24.dp))
 
             // Semantic memory (meow-mem0): share on-device facts with Meow's brain.
-            Text("Semantic memory", style = MaterialTheme.typography.titleMedium, color = Color.White)
+            Text("Semantic memory", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
             Spacer(modifier = Modifier.height(8.dp))
             SettingsTextField(
                 value = mem0ServerUrl,
@@ -622,15 +661,17 @@ fun SettingsScreen(
                     "here so the server-side brain can recall them. Leave blank to " +
                     "keep memory on-device only.",
                 style = MaterialTheme.typography.bodySmall,
-                color = Color.Gray
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+
+            }
 
             Spacer(modifier = Modifier.height(24.dp))
 
             // Avatar: which face the companion wears. The full picker (with previews
             // and the animation shelf) lives on the Avatar tile; this is the same
             // setting for anyone who looks for it here first.
-            Text("Avatar", style = MaterialTheme.typography.titleMedium, color = Color.White)
+            Text("Avatar", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
             Spacer(modifier = Modifier.height(8.dp))
             AvatarStyle.entries.forEach { option ->
                 Row(
@@ -646,11 +687,11 @@ fun SettingsScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Column {
-                        Text(option.label, color = Color.White)
+                        Text(option.label, color = MaterialTheme.colorScheme.onSurface)
                         Text(
                             option.description,
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color.Gray,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
@@ -659,7 +700,7 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             // Car assistant: knows when you're driving, tracks trips, watches for crashes.
-            Text("Car assistant", style = MaterialTheme.typography.titleMedium, color = Color.White)
+            Text("Car assistant", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
             Spacer(modifier = Modifier.height(8.dp))
             VoiceToggle(
                 label = "Drive mode",
@@ -681,7 +722,7 @@ fun SettingsScreen(
                 text = "Used by the crash alert — say \"text mom\" after a detected " +
                     "impact and Meow will open a text with your location ready to send.",
                 style = MaterialTheme.typography.bodySmall,
-                color = Color.Gray
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -696,12 +737,12 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             // ── Phone Control (Accessibility) ─────────────────────────────
-            Text("Phone Control", style = MaterialTheme.typography.titleMedium, color = Color.White)
+            Text("Phone Control", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
             Text(
                 text = "Meow can control your phone — tap, swipe, type, and navigate any app " +
                     "using voice commands. This requires the accessibility service to be enabled.",
                 style = MaterialTheme.typography.bodySmall,
-                color = Color.Gray
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -726,21 +767,53 @@ fun SettingsScreen(
                 text = "Say things like “tap on Settings”, “scroll down”, “go back”, " +
                     "or give multi-step goals like “play Sublime on Spotify”.",
                 style = MaterialTheme.typography.bodySmall,
-                color = Color.Gray
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             Spacer(modifier = Modifier.height(24.dp))
 
             // OpenAI Configuration
+            SettingsSectionHeader(
+                title = "AI providers",
+                summary = "Cloud keys, models, endpoints, and local routing",
+                expanded = aiSectionOpen,
+                onToggle = { aiSectionOpen = !aiSectionOpen },
+            )
+            if (aiSectionOpen) {
+            VoiceToggle(
+                label = "Agent brain",
+                description = "Understands natural tool commands (\"make a file called todo.txt\") " +
+                    "using the active model. Select a local model on the Hardware page for fully " +
+                    "offline use — a local model file must be present.",
+                checked = agentBrainEnabled,
+                onCheckedChange = onAgentBrainChange
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            SettingsTextField(
+                value = hermesAgentUrl,
+                onValueChange = onHermesUrlChange,
+                label = { Text("Hermes agent endpoint (optional)") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Text(
+                text = "OpenAI-compatible agent (hermes-agent v0.19+), e.g. http://192.168.1.10:8642. " +
+                    "Leave blank for on-device routing only.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("OpenAI Cloud", style = MaterialTheme.typography.titleMedium, color = Color.White)
+                Text("OpenAI Cloud", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
                 Spacer(modifier = Modifier.width(8.dp))
                 KeyStatusBadge(openaiKey.isNotBlank(), "OpenAI")
             }
             BeginnerHelp("Lets Meow talk to GPT. Create an account at platform.openai.com and paste your API key here.")
             ApiKeyField(
                 value = openaiKey,
-                onValueChange = { openaiKey = it },
+                onValueChange = { openaiKey = it; secureStorage.saveApiKey("openai", it.trim()) },
                 label = "API Key",
                 show = showKey,
                 onToggleShow = { showKey = !showKey },
@@ -769,14 +842,14 @@ fun SettingsScreen(
 
             // BigPickle (OpenCode Zen) — free fallback brain, can be made the default.
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("BigPickle (OpenCode Zen)", style = MaterialTheme.typography.titleMedium, color = Color.White)
+                Text("BigPickle (OpenCode Zen)", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
                 Spacer(modifier = Modifier.width(8.dp))
                 KeyStatusBadge(opencodeKey.isNotBlank(), "BigPickle")
             }
             BeginnerHelp("A free fallback brain from OpenCode Zen. Sign up at opencode.ai to get a key — no payment needed to start.")
             ApiKeyField(
                 value = opencodeKey,
-                onValueChange = { opencodeKey = it },
+                onValueChange = { opencodeKey = it; secureStorage.saveApiKey("opencode", it.trim()) },
                 label = "OpenCode Zen API key",
                 show = showKey,
                 onToggleShow = { showKey = !showKey },
@@ -811,14 +884,14 @@ fun SettingsScreen(
 
             // Hugging Face token (gated model downloads like Gemma)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Hugging Face", style = MaterialTheme.typography.titleMedium, color = Color.White)
+                Text("Hugging Face", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
                 Spacer(modifier = Modifier.width(8.dp))
                 KeyStatusBadge(hfToken.isNotBlank(), "Hugging Face")
             }
             BeginnerHelp("Only needed if you want to download gated voice/AI models from Hugging Face (e.g. Gemma). Most users can skip this.")
             ApiKeyField(
                 value = hfToken,
-                onValueChange = { hfToken = it },
+                onValueChange = { hfToken = it; secureStorage.saveApiKey("huggingface", it.trim()) },
                 label = "Token (for gated models like Gemma)",
                 show = showKey,
                 onToggleShow = { showKey = !showKey },
@@ -835,14 +908,14 @@ fun SettingsScreen(
             // one key from openrouter.ai and meow works anywhere. Free default
             // model; any OpenRouter model id works in the field below.
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("OpenRouter (openrouter.ai)", style = MaterialTheme.typography.titleMedium, color = Color.White)
+                Text("OpenRouter (openrouter.ai)", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
                 Spacer(modifier = Modifier.width(8.dp))
                 KeyStatusBadge(openrouterKey.isNotBlank(), "OpenRouter")
             }
             BeginnerHelp("The easiest way to give Meow a cloud brain — no server needed. Sign up at openrouter.ai and grab a free key; many models are free.")
             ApiKeyField(
                 value = openrouterKey,
-                onValueChange = { openrouterKey = it },
+                onValueChange = { openrouterKey = it; secureStorage.saveApiKey("openrouter", it.trim()) },
                 label = "API key",
                 show = showKey,
                 onToggleShow = { showKey = !showKey },
@@ -879,7 +952,7 @@ fun SettingsScreen(
             ) {
                 Text(
                     openRouterCatalogNote,
-                    color = Color.Gray,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 12.sp,
                     modifier = Modifier.weight(1f),
                 )
@@ -904,9 +977,9 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(24.dp))
             
             // SSH servers meow may manage (encrypted, allowlisted commands only)
-            Text("Servers (SSH)", style = MaterialTheme.typography.titleMedium, color = Color.White)
+            Text("Servers (SSH)", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
             if (savedServers.isNotEmpty()) {
-                Text("Saved: " + savedServers.joinToString(", "), color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
+                Text("Saved: " + savedServers.joinToString(", "), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f), fontSize = 12.sp)
             }
             SettingsTextField(
                 value = sshName, onValueChange = { sshName = it },
@@ -957,14 +1030,15 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             // Local Model Configuration
-            Text("Local Model (MediaPipe)", style = MaterialTheme.typography.titleMedium, color = Color.White)
+            Text("Local Model (MediaPipe)", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
             SettingsTextField(
                 value = localModelPath,
                 onValueChange = { localModelPath = it },
                 label = { Text("Model Path on Device") },
                 modifier = Modifier.fillMaxWidth()
             )
-            
+            }
+
             }
 
             Spacer(modifier = Modifier.height(40.dp))
@@ -1008,16 +1082,16 @@ fun DesktopBridgeSection(
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    Text("Desktop Bridge", style = MaterialTheme.typography.titleMedium, color = Color.White)
+    Text("Desktop Bridge", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
     Spacer(modifier = Modifier.height(4.dp))
 
     val current = paired
     if (current != null) {
-        Text("Paired: ${current.name} (${current.host}:${current.port})", color = Color.White)
+        Text("Paired: ${current.name} (${current.host}:${current.port})", color = MaterialTheme.colorScheme.onSurface)
         Text(
             text = "cert ${current.certSha256.take(16)}… · requests are HMAC-signed, cert pinned",
             style = MaterialTheme.typography.bodySmall,
-            color = Color.Gray
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(modifier = Modifier.height(8.dp))
         Row {
@@ -1061,7 +1135,7 @@ fun DesktopBridgeSection(
         Text(
             text = "Run `meowmba-bridge.py --pair` on a computer on this network, then find it here and enter the code it shows.",
             style = MaterialTheme.typography.bodySmall,
-            color = Color.Gray
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -1092,11 +1166,11 @@ fun DesktopBridgeSection(
                 RadioButton(selected = selected == d, onClick = null)
                 Spacer(modifier = Modifier.width(8.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("${d.name} · ${d.host}:${d.port}", color = Color.White, fontSize = 13.sp)
+                    Text("${d.name} · ${d.host}:${d.port}", color = MaterialTheme.colorScheme.onSurface, fontSize = 13.sp)
                     Text(
                         "cert ${d.certSha256.take(12)}…" + (if (d.pairingOpen) " · pairing open" else ""),
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (d.pairingOpen) Color(0xFF81C784) else Color.Gray
+                        color = if (d.pairingOpen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -1139,17 +1213,17 @@ fun DesktopBridgeSection(
             })
             Spacer(modifier = Modifier.width(8.dp))
             Column {
-                Text("USB Auto-Bridge", color = Color.White, fontSize = 13.sp)
+                Text("USB Auto-Bridge", color = MaterialTheme.colorScheme.onSurface, fontSize = 13.sp)
                 Text(
                     text = if (usbAutoBridgeEnabled) "Auto-pairs when plugged into this computer via USB" else "Plug in via USB for automatic pairing",
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color.Gray
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
 
         Spacer(modifier = Modifier.height(12.dp))
-        Text("Or paste the full payload manually:", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+        Text("Or paste the full payload manually:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(modifier = Modifier.height(4.dp))
         SettingsTextField(
             value = payload,
@@ -1178,7 +1252,7 @@ fun DesktopBridgeSection(
         Text(
             text = it,
             style = MaterialTheme.typography.bodySmall,
-            color = if (messageIsError) Color(0xFFE57373) else Color(0xFF81C784)
+            color = if (messageIsError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
         )
     }
 }
@@ -1234,7 +1308,7 @@ fun BridgeWorkspaceBrowser(bridgeManager: DesktopBridgeManager) {
             }
         }
     ) {
-        Text(if (active) "Hide workspace browser" else "Browse workspace (read-only)", color = Color(0xFF58A6FF), fontSize = 13.sp)
+        Text(if (active) "Hide workspace browser" else "Browse workspace (read-only)", color = MaterialTheme.colorScheme.primary, fontSize = 13.sp)
     }
 
     if (active) {
@@ -1245,18 +1319,18 @@ fun BridgeWorkspaceBrowser(bridgeManager: DesktopBridgeManager) {
                 color = Color(0xFFD29922)
             )
         }
-        Text(currentPath, style = MaterialTheme.typography.bodySmall, color = Color.Gray, fontFamily = FontFamily.Monospace)
+        Text(currentPath, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontFamily = FontFamily.Monospace)
         Spacer(modifier = Modifier.height(4.dp))
 
         val floor = roots.firstOrNull()
         if (floor != null && currentPath != floor) {
             TextButton(onClick = { preview = null; load(currentPath.substringBeforeLast('/', "/")) }) {
-                Text(".. (up)", color = Color(0xFF58A6FF), fontSize = 12.sp)
+                Text(".. (up)", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
             }
         }
 
         error?.let {
-            Text(it, style = MaterialTheme.typography.bodySmall, color = Color(0xFFE57373))
+            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
         }
 
         entries.forEach { entry ->
@@ -1283,24 +1357,24 @@ fun BridgeWorkspaceBrowser(bridgeManager: DesktopBridgeManager) {
             ) {
                 Text(
                     text = if (entry.dir) "[dir] ${entry.name}" else "${entry.name} · ${entry.size / 1024} KB",
-                    color = if (entry.dir) Color(0xFF58A6FF) else Color.White,
+                    color = if (entry.dir) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                     fontSize = 12.sp,
                     fontFamily = if (entry.dir) FontFamily.Default else FontFamily.Monospace
                 )
             }
         }
         if (listTruncated) {
-            Text("…listing capped by the desktop", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+            Text("…listing capped by the desktop", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
 
         preview?.let { file ->
             Spacer(modifier = Modifier.height(8.dp))
-            Surface(color = Color(0xFF161B22), shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)) {
+            Surface(color = MaterialTheme.colorScheme.surface, shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             file.path.substringAfterLast('/'),
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.onSurface,
                             fontSize = 12.sp,
                             modifier = Modifier.weight(1f)
                         )
@@ -1308,7 +1382,7 @@ fun BridgeWorkspaceBrowser(bridgeManager: DesktopBridgeManager) {
                     }
                     Text(
                         file.content.take(4000),
-                        color = Color(0xFF9ECBFF),
+                        color = MaterialTheme.colorScheme.primary,
                         fontSize = 11.sp,
                         fontFamily = FontFamily.Monospace
                     )
@@ -1316,7 +1390,7 @@ fun BridgeWorkspaceBrowser(bridgeManager: DesktopBridgeManager) {
                         Text(
                             "preview capped — full file is ${file.size / 1024} KB on the desktop",
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color.Gray
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -1340,8 +1414,8 @@ fun VoiceToggle(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(label, color = Color.White)
-            Text(description, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+            Text(label, color = MaterialTheme.colorScheme.onSurface)
+            Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Spacer(modifier = Modifier.width(16.dp))
         Switch(checked = checked, onCheckedChange = onCheckedChange)
@@ -1375,16 +1449,16 @@ private fun OpenRouterModelPicker(
             value = if (expanded) query else display,
             onValueChange = { query = it; expanded = true },
             label = { Text(label) },
-            placeholder = { Text("Type to search", color = Color.Gray) },
+            placeholder = { Text("Type to search", color = MaterialTheme.colorScheme.onSurfaceVariant) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             modifier = Modifier
                 .fillMaxWidth()
                 .menuAnchor(),
             colors = TextFieldDefaults.colors(
-                focusedContainerColor = Color(0xFF1E1E1E),
-                unfocusedContainerColor = Color(0xFF1E1E1E),
-                focusedTextColor = Color.White,
-                unfocusedTextColor = Color.White,
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
             ),
         )
         ExposedDropdownMenu(
@@ -1395,10 +1469,10 @@ private fun OpenRouterModelPicker(
                 DropdownMenuItem(
                     text = {
                         Column {
-                            Text(model.name, color = Color.White)
+                            Text(model.name, color = MaterialTheme.colorScheme.onSurface)
                             Text(
                                 model.id + if (model.free) " · free" else "",
-                                color = Color.Gray,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 11.sp,
                             )
                         }
@@ -1417,12 +1491,12 @@ private fun OpenRouterModelPicker(
 @Composable
 private fun KeyStatusBadge(configured: Boolean, providerName: String) {
     Surface(
-        color = if (configured) Color(0xFF4CAF50).copy(alpha = 0.15f) else Color.Gray.copy(alpha = 0.15f),
+        color = if (configured) Color(0xFF4CAF50).copy(alpha = 0.15f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f),
         shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
     ) {
         Text(
             text = if (configured) "\u2713 Connected" else "Not set",
-            color = if (configured) Color(0xFF4CAF50) else Color.Gray,
+            color = if (configured) Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.labelSmall,
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
         )
@@ -1457,7 +1531,7 @@ private fun BeginnerHelp(text: String) {
     Text(
         text = text,
         style = MaterialTheme.typography.bodySmall,
-        color = Color.Gray,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(top = 2.dp),
     )
 }
@@ -1467,7 +1541,7 @@ private fun PlainStep(text: String) {
     Text(
         text = text,
         style = MaterialTheme.typography.bodySmall,
-        color = Color(0xFF9E9E9E),
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(vertical = 2.dp),
     )
 }
@@ -1477,7 +1551,7 @@ private fun ApiKeyLink(url: String, label: String) {
     val context = LocalContext.current
     Text(
         text = label,
-        color = Color(0xFF58A6FF),
+        color = MaterialTheme.colorScheme.primary,
         fontSize = 13.sp,
         modifier = Modifier
             .padding(top = 4.dp)
@@ -1505,10 +1579,10 @@ fun SettingsTextField(
         label = label,
         modifier = modifier,
         colors = TextFieldDefaults.colors(
-            focusedContainerColor = Color(0xFF1E1E1E),
-            unfocusedContainerColor = Color(0xFF1E1E1E),
-            focusedTextColor = Color.White,
-            unfocusedTextColor = Color.White
+            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+            focusedTextColor = MaterialTheme.colorScheme.onSurface,
+            unfocusedTextColor = MaterialTheme.colorScheme.onSurface
         )
     )
 }
@@ -1536,17 +1610,17 @@ private fun ApiKeyField(
                 Icon(
                     imageVector = if (show) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                     contentDescription = if (show) "Hide key" else "Show key",
-                    tint = Color.Gray,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         },
         modifier = Modifier.fillMaxWidth(),
         colors = TextFieldDefaults.colors(
-            focusedContainerColor = Color(0xFF1E1E1E),
-            unfocusedContainerColor = Color(0xFF1E1E1E),
-            focusedTextColor = Color.White,
-            unfocusedTextColor = Color.White,
-            cursorColor = Color.White,
+            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+            focusedTextColor = MaterialTheme.colorScheme.onSurface,
+            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+            cursorColor = MaterialTheme.colorScheme.onSurface,
         ),
     )
 }
@@ -1568,13 +1642,46 @@ private fun ProviderEndpointField(
     Text(
         text = helper,
         style = MaterialTheme.typography.bodySmall,
-        color = Color.Gray
+        color = MaterialTheme.colorScheme.onSurfaceVariant
     )
 }
 
 
 /** Route-id → display label for the "Default brain" selector. */
 private fun brainLabel(id: String): String = BRAIN_CHOICES.firstOrNull { it.first == id }?.second ?: "Auto"
+
+/** Compact progressive-disclosure header used to keep the settings overview scannable. */
+@Composable
+private fun SettingsSectionHeader(
+    title: String,
+    summary: String,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onToggle),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Text(
+                text = if (expanded) "Hide" else "Show",
+                color = MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.labelLarge,
+            )
+        }
+    }
+}
 
 private val BRAIN_CHOICES = listOf(
     "auto" to "Auto (Omniroute)",

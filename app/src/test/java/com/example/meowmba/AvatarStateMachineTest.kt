@@ -24,7 +24,7 @@ class AvatarStateMachineTest {
 
     @Test
     fun `idle pose is neutral`() {
-        val pose = poseOf(CompanionState())
+        val pose = poseOf(CompanionState(isCameraEnabled = true))
         assertEquals(1.0f, pose.eyeOpen, 0.001f)
         assertEquals(MouthMode.IDLE, pose.mouth)
         assertFalse(pose.happyEyes)
@@ -35,7 +35,7 @@ class AvatarStateMachineTest {
 
     @Test
     fun `listening perks ears, widens eyes, dilates pupils, pulses halo`() {
-        val pose = poseOf(CompanionState(interactionState = InteractionState.LISTENING))
+        val pose = poseOf(CompanionState(interactionState = InteractionState.LISTENING, isCameraEnabled = true))
         assertTrue("eyes widen", pose.eyeOpen > 1.0f)
         assertTrue("ears perk", pose.earPerk > 1.0f)
         assertTrue("pupils dilate", pose.pupilSize >= 0.5f)
@@ -79,7 +79,7 @@ class AvatarStateMachineTest {
 
     @Test
     fun `happy emotion shows happy arcs and raised mouth`() {
-        val pose = poseOf(CompanionState(emotion = CompanionEmotion.HAPPY))
+        val pose = poseOf(CompanionState(emotion = CompanionEmotion.HAPPY, isCameraEnabled = true))
         assertTrue(pose.happyEyes)
         assertEquals(MouthMode.HAPPY, pose.mouth)
     }
@@ -92,7 +92,7 @@ class AvatarStateMachineTest {
 
     @Test
     fun `sleepy emotion droops ears and closes eyes`() {
-        val pose = poseOf(CompanionState(emotion = CompanionEmotion.SLEEPY))
+        val pose = poseOf(CompanionState(emotion = CompanionEmotion.SLEEPY, isCameraEnabled = true))
         assertTrue(pose.eyeOpen <= 0.2f)
         assertTrue(pose.earDroopDeg > 0f)
     }

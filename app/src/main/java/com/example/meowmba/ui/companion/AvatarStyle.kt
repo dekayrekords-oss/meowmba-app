@@ -7,6 +7,11 @@ package com.example.meowmba.ui.companion
  * keeps the same pose inputs but renders the Meow OS particle sphere instead.
  */
 enum class AvatarStyle(val key: String, val label: String, val description: String) {
+    PEARL(
+        key = "pearl",
+        label = "Pearl",
+        description = "Sculpted floating features, expressive eyes and a soft glow. Inspired by the concept.",
+    ),
     SIGNAL(
         key = "signal",
         label = "Jarvis Orb",

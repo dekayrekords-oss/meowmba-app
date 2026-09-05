@@ -65,7 +65,7 @@ fun MemoryScreen(
     }
     val displayed = if (state.memorySearchResults != null) state.memorySearchResults else filtered
 
-    Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF0D1117)) {
+    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
             modifier = Modifier
                 .safeDrawingPadding()
@@ -76,16 +76,16 @@ fun MemoryScreen(
                 Text(
                     "Memory",
                     style = MaterialTheme.typography.headlineMedium,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f)
                 )
                 IconButton(onClick = onClose) {
-                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                    Icon(Icons.Default.Close, contentDescription = "Close", tint = MaterialTheme.colorScheme.onSurface)
                 }
             }
             Text(
                 "${state.allMemories.size} memories stored on this device",
-                color = Color.Gray,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 12.sp
             )
             // The glasses link is a fact about what is installed, not a promise:
@@ -97,7 +97,7 @@ fun MemoryScreen(
                 } else {
                     "MetaMemory app not installed"
                 },
-                color = if (state.metaMemoryLinked) Color(0xFF58A6FF) else Color.Gray,
+                color = if (state.metaMemoryLinked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 12.sp
             )
             // Semantic memory sync is opt-in via a configured mem0 server URL.
@@ -108,9 +108,9 @@ fun MemoryScreen(
                     else -> "Semantic memory sync off (set a server in Settings)"
                 },
                 color = when {
-                    state.mem0Linked -> Color(0xFF58A6FF)
+                    state.mem0Linked -> MaterialTheme.colorScheme.primary
                     state.mem0ServerUrl.isNotBlank() -> Color(0xFFD29922)
-                    else -> Color.Gray
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
                 },
                 fontSize = 12.sp
             )
@@ -122,7 +122,7 @@ fun MemoryScreen(
             ScrollableTabRow(
                 selectedTabIndex = tabs.indexOf(selectedTab),
                 containerColor = Color.Transparent,
-                contentColor = Color(0xFF58A6FF),
+                contentColor = MaterialTheme.colorScheme.primary,
                 edgePadding = 0.dp
             ) {
                 tabs.forEach { tab ->
@@ -157,14 +157,14 @@ fun MemoryScreen(
                     query = it
                     onSearch(it)
                 },
-                placeholder = { Text("Search memories…", color = Color.Gray) },
+                placeholder = { Text("Search memories…", color = MaterialTheme.colorScheme.onSurfaceVariant) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color(0xFF161B22),
-                    unfocusedContainerColor = Color(0xFF161B22),
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White
+                    focusedContainerColor = MaterialTheme.colorScheme.surface,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                    focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface
                 ),
                 shape = RoundedCornerShape(12.dp)
             )
@@ -177,10 +177,10 @@ fun MemoryScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Save new memories", color = Color.White, fontSize = 14.sp)
+                    Text("Save new memories", color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp)
                     Text(
                         if (state.memoryPaused) "Paused — nothing is written" else "On — companion remembers",
-                        color = Color.Gray,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 11.sp
                     )
                 }
@@ -190,14 +190,14 @@ fun MemoryScreen(
             Spacer(modifier = Modifier.height(4.dp))
 
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Keep for:", color = Color.Gray, fontSize = 12.sp)
+                Text("Keep for:", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                 Spacer(modifier = Modifier.width(8.dp))
                 listOf(30 to "30d", 90 to "90d", 365 to "1y", 0 to "∞").forEach { (days, label) ->
                     val selected = state.retentionDays == days
                     TextButton(
                         onClick = { onRetentionChange(days) },
                         colors = ButtonDefaults.textButtonColors(
-                            contentColor = if (selected) Color(0xFF58A6FF) else Color.Gray
+                            contentColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     ) {
                         Text(label, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
@@ -225,7 +225,7 @@ fun MemoryScreen(
                     onClick = { confirmClear = true },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFF85149))
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
                 ) {
                     Text("Clear all", fontSize = 12.sp)
                 }
@@ -238,7 +238,7 @@ fun MemoryScreen(
                 Text(
                     if (state.memorySearchResults != null) "No memories match \"$query\"."
                     else "No memories yet. Say \"remember that …\" or just talk — checkpoints appear here.",
-                    color = Color.Gray,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 13.sp
                 )
             } else {
@@ -261,7 +261,7 @@ fun MemoryScreen(
                     confirmClear = false
                     onClearAll()
                 }) {
-                    Text("Delete everything", color = Color(0xFFF85149))
+                    Text("Delete everything", color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
@@ -278,15 +278,15 @@ private enum class MemoryTab(val label: String) {
 @Composable
 private fun MemoryCard(memory: MemoryEntity, onDelete: () -> Unit) {
     val typeColor = when (memory.type) {
-        MemoryType.SEMANTIC -> Color(0xFF3FB950)
-        MemoryType.EPISODIC -> Color(0xFF58A6FF)
+        MemoryType.SEMANTIC -> MaterialTheme.colorScheme.primary
+        MemoryType.EPISODIC -> MaterialTheme.colorScheme.primary
         MemoryType.PROJECT -> Color(0xFFD29922)
         MemoryType.PREFERENCE -> Color(0xFFBC8CFF)
     }
     val dateFormat = remember { SimpleDateFormat("MMM d, HH:mm", Locale.getDefault()) }
 
     Surface(
-        color = Color(0xFF161B22),
+        color = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(12.dp)
     ) {
         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -304,17 +304,17 @@ private fun MemoryCard(memory: MemoryEntity, onDelete: () -> Unit) {
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         dateFormat.format(Date(memory.timestamp)),
-                        color = Color.Gray,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 11.sp
                     )
                 }
                 Spacer(modifier = Modifier.height(6.dp))
-                Text(memory.content, color = Color.White, fontSize = 13.sp)
+                Text(memory.content, color = MaterialTheme.colorScheme.onSurface, fontSize = 13.sp)
                 if (memory.tags.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         memory.tags.joinToString(" · "),
-                        color = Color.Gray,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 11.sp
                     )
                 }
@@ -323,7 +323,7 @@ private fun MemoryCard(memory: MemoryEntity, onDelete: () -> Unit) {
                 Icon(
                     Icons.Default.Delete,
                     contentDescription = "Delete memory",
-                    tint = Color.Gray,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(18.dp)
                 )
             }

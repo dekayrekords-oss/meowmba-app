@@ -27,7 +27,7 @@ fun ProjectsScreen(
     onDelete: (Long) -> Unit,
     onClose: () -> Unit,
 ) {
-    Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF0D1117)) {
+    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
             modifier = Modifier
                 .safeDrawingPadding()
@@ -38,22 +38,22 @@ fun ProjectsScreen(
                 Text(
                     "Projects",
                     style = MaterialTheme.typography.headlineMedium,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f)
                 )
                 IconButton(onClick = onClose) {
-                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                    Icon(Icons.Default.Close, contentDescription = "Close", tint = MaterialTheme.colorScheme.onSurface)
                 }
             }
             Text(
                 "Say “let’s start a project” — website, photos, or code. Tap one to pick up that chat.",
-                color = Color.Gray,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 13.sp,
             )
             Spacer(modifier = Modifier.height(16.dp))
 
             if (state.projects.isEmpty()) {
-                Text("No projects yet.", color = Color(0xFF8B949E), fontSize = 14.sp)
+                Text("No projects yet.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
             } else {
                 state.projects.forEach { project ->
                     ProjectRow(
@@ -83,7 +83,7 @@ private fun ProjectRow(
         else -> Icons.Default.Folder
     }
     Surface(
-        color = if (active) Color(0xFF21262D) else Color(0xFF161B22),
+        color = if (active) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(12.dp),
         modifier = Modifier
             .fillMaxWidth()
@@ -96,15 +96,15 @@ private fun ProjectRow(
             Icon(icon, contentDescription = null, tint = Color(0xFF00E676), modifier = Modifier.size(28.dp))
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(project.name, color = Color.White, fontSize = 16.sp)
+                Text(project.name, color = MaterialTheme.colorScheme.onSurface, fontSize = 16.sp)
                 Text(
                     "${project.kindLabel} · ${project.whenLabel}",
-                    color = Color(0xFF8B949E),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 12.sp,
                 )
             }
             IconButton(onClick = onDelete) {
-                Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color(0xFFF85149))
+                Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
             }
         }
     }

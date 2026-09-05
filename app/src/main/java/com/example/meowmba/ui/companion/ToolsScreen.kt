@@ -22,7 +22,7 @@ fun ToolsScreen(
     onClose: () -> Unit,
 ) {
     val tools = state.routines.filter { it.userMade }
-    Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF0D1117)) {
+    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
             modifier = Modifier
                 .safeDrawingPadding()
@@ -33,22 +33,22 @@ fun ToolsScreen(
                 Text(
                     "Tools",
                     style = MaterialTheme.typography.headlineMedium,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f)
                 )
                 IconButton(onClick = onClose) {
-                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                    Icon(Icons.Default.Close, contentDescription = "Close", tint = MaterialTheme.colorScheme.onSurface)
                 }
             }
             Text(
                 "Say “make a tool” — like an automatic music player at 7am. It lands here.",
-                color = Color.Gray,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 13.sp,
             )
             Spacer(modifier = Modifier.height(16.dp))
 
             if (tools.isEmpty()) {
-                Text("No tools yet.", color = Color(0xFF8B949E), fontSize = 14.sp)
+                Text("No tools yet.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
             } else {
                 tools.forEach { tool ->
                     ToolRow(tool, onToggle = { on -> onToggle(tool.id, on) })
@@ -62,7 +62,7 @@ fun ToolsScreen(
 @Composable
 private fun ToolRow(tool: RoutineUi, onToggle: (Boolean) -> Unit) {
     Surface(
-        color = Color(0xFF161B22),
+        color = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(12.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -73,12 +73,12 @@ private fun ToolRow(tool: RoutineUi, onToggle: (Boolean) -> Unit) {
             Icon(Icons.Default.Build, contentDescription = null, tint = Color(0xFFFFD600), modifier = Modifier.size(28.dp))
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(tool.name, color = Color.White, fontSize = 16.sp)
+                Text(tool.name, color = MaterialTheme.colorScheme.onSurface, fontSize = 16.sp)
                 val whenBit = tool.whenLabel.ifBlank { "no time set" }
                 val extra = tool.detail.takeIf { it.isNotBlank() }
                 Text(
                     if (extra != null) "$whenBit · $extra" else whenBit,
-                    color = Color(0xFF8B949E),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 12.sp,
                 )
             }

@@ -16,6 +16,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.material3.FilterChip
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -51,6 +58,7 @@ import androidx.compose.ui.unit.sp
  * since the whole point is to watch the face.
  */
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 fun AvatarScreen(
     style: AvatarStyle,
     onSelectStyle: (AvatarStyle) -> Unit,
@@ -61,8 +69,15 @@ fun AvatarScreen(
     glowColor: Long = AvatarColors.DEFAULT_GLOW,
     onSelectEyeColor: (Long) -> Unit = {},
     onSelectGlowColor: (Long) -> Unit = {},
+    featureColor: Long = 0xFFE8D5B9L,
+    onSelectFeatureColor: (Long) -> Unit = {},
+    appTheme: AppTheme = AppTheme.COMPANION,
+    onSelectTheme: (AppTheme) -> Unit = {},
+    appearanceMode: AppearanceMode = AppearanceMode.DARK,
+    onSelectAppearance: (AppearanceMode) -> Unit = {},
+    preview: @Composable () -> Unit = {},
 ) {
-    Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF0D1117)) {
+    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
             modifier = Modifier
                 .safeDrawingPadding()
@@ -76,19 +91,40 @@ fun AvatarScreen(
             ) {
                 Text(
                     text = "Avatar",
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
                 )
                 IconButton(onClick = onClose) {
-                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                    Icon(Icons.Default.Close, contentDescription = "Close", tint = MaterialTheme.colorScheme.onSurface)
                 }
             }
 
             Spacer(modifier = Modifier.height(8.dp))
+            Text("App theme", style = MaterialTheme.typography.titleMedium)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                AppTheme.entries.forEach { option ->
+                    FilterChip(selected = appTheme == option,
+                        onClick = { onSelectTheme(option) }, label = { Text(option.label) })
+                }
+            }
+            Text("Professional adds a focused workspace and coordinated colors throughout the app.",
+                style = MaterialTheme.typography.bodySmall)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                AppearanceMode.entries.forEach { option ->
+                    FilterChip(selected = appearanceMode == option,
+                        onClick = { onSelectAppearance(option) }, label = { Text(option.label) })
+                }
+            }
+            Text("Live preview", style = MaterialTheme.typography.titleMedium)
+            Box(Modifier.fillMaxWidth().height(260.dp).clip(RoundedCornerShape(24.dp))
+                // Was hard-coded to the old dark-mode background, so the preview
+                // stayed near-black even with Light appearance selected.
+                .background(MaterialTheme.colorScheme.surfaceVariant)) { preview() }
+            Spacer(Modifier.height(18.dp))
             Text(
                 text = "Face style",
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onSurface,
                 style = MaterialTheme.typography.titleMedium,
             )
             Spacer(modifier = Modifier.height(10.dp))
@@ -105,26 +141,34 @@ fun AvatarScreen(
             Spacer(modifier = Modifier.height(18.dp))
             Text(
                 text = "Eye color",
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onSurface,
                 style = MaterialTheme.typography.titleMedium,
             )
             Text(
-                text = "Tint of the Godot face eyes.",
-                color = Color.Gray,
+                text = "Iris color for Pearl and Godot.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall,
             )
             Spacer(modifier = Modifier.height(10.dp))
             ColorSwatchRow(selected = eyeColor, onSelect = onSelectEyeColor)
 
+            if (style == AvatarStyle.PEARL) {
+                Spacer(Modifier.height(18.dp))
+                Text("Cat color", style = MaterialTheme.typography.titleMedium)
+                Text("Ears, eyelids, nose, mouth and whiskers.", style = MaterialTheme.typography.bodySmall)
+                Spacer(Modifier.height(10.dp))
+                ColorSwatchRow(selected = featureColor, onSelect = onSelectFeatureColor)
+            }
+
             Spacer(modifier = Modifier.height(18.dp))
             Text(
                 text = "Glow color",
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onSurface,
                 style = MaterialTheme.typography.titleMedium,
             )
             Text(
                 text = "Soft halo behind the face — shows over a transparent desk.",
-                color = Color.Gray,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall,
             )
             Spacer(modifier = Modifier.height(10.dp))
@@ -133,12 +177,12 @@ fun AvatarScreen(
             Spacer(modifier = Modifier.height(18.dp))
             Text(
                 text = "Animations",
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onSurface,
                 style = MaterialTheme.typography.titleMedium,
             )
             Text(
                 text = "All styles share every animation — only the face changes. Tap one to watch it play.",
-                color = Color.Gray,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall,
             )
             Spacer(modifier = Modifier.height(10.dp))
@@ -146,7 +190,7 @@ fun AvatarScreen(
             if (animations.isEmpty()) {
                 Text(
                     text = "No animations yet.",
-                    color = Color.Gray,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium,
                 )
             } else {
@@ -171,10 +215,10 @@ private fun StyleRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .background(if (selected) Color(0xFF14251C) else Color(0xFF161B22))
+            .background(if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface)
             .border(
                 width = if (selected) 2.dp else 1.dp,
-                color = if (selected) Color(0xFF3FB950) else Color(0xFF30363D),
+                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
                 shape = RoundedCornerShape(14.dp),
             )
             .clickable(onClick = onClick)
@@ -184,15 +228,15 @@ private fun StyleRow(
         EyePreview(style = option, modifier = Modifier.size(72.dp, 48.dp))
         Spacer(modifier = Modifier.size(14.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(option.label, color = Color.White, fontWeight = FontWeight.SemiBold)
+            Text(option.label, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold)
             Text(
                 option.description,
-                color = Color.Gray,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall,
             )
         }
         if (selected) {
-            Icon(Icons.Default.Check, contentDescription = "Selected", tint = Color(0xFF3FB950))
+            Icon(Icons.Default.Check, contentDescription = "Selected", tint = MaterialTheme.colorScheme.primary)
         }
     }
 }
@@ -203,16 +247,16 @@ private fun AnimationRow(name: String, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFF161B22))
+            .background(MaterialTheme.colorScheme.surface)
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color(0xFF3FB950))
+        Icon(Icons.Default.PlayArrow, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
         Spacer(modifier = Modifier.size(12.dp))
         Text(
             text = name.replaceFirstChar { it.uppercase() },
-            color = Color.White,
+            color = MaterialTheme.colorScheme.onSurface,
             style = MaterialTheme.typography.bodyMedium,
         )
     }
@@ -264,7 +308,7 @@ private fun EyePreview(style: AvatarStyle, modifier: Modifier = Modifier) {
                 }
                 drawCircle(Color.White, r * 0.10f, c)
             }
-            AvatarStyle.NEO -> drawEyeNeo(
+            AvatarStyle.PEARL, AvatarStyle.NEO -> drawEyeNeo(
                 side = 1f,
                 tiltDeg = 0f,
                 cx = cx,
@@ -317,14 +361,15 @@ private fun ColorSwatchRow(
     onSelect: (Long) -> Unit,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         AvatarColors.swatches.forEach { swatch ->
             val isOn = (swatch.argb and 0xFFFFFFFFL) == (selected and 0xFFFFFFFFL)
             Box(
                 modifier = Modifier
-                    .size(if (isOn) 36.dp else 32.dp)
+                    .size(48.dp)
+                    .semantics { contentDescription = swatch.label + if (isOn) ", selected" else "" }
                     .clip(CircleShape)
                     .background(Color(swatch.argb))
                     .border(
@@ -337,4 +382,3 @@ private fun ColorSwatchRow(
         }
     }
 }
-

@@ -81,7 +81,7 @@ fun BackgroundScreen(
         }
     }
 
-    Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF0D1117)) {
+    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
             modifier = Modifier
                 .safeDrawingPadding()
@@ -95,16 +95,16 @@ fun BackgroundScreen(
                 Text(
                     text = "Background",
                     style = MaterialTheme.typography.headlineMedium,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f),
                 )
                 IconButton(onClick = onClose) {
-                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                    Icon(Icons.Default.Close, contentDescription = "Close", tint = MaterialTheme.colorScheme.onSurface)
                 }
             }
             Text(
                 text = "What sits behind the companion.",
-                color = Color(0xFF8B949E),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 13.sp,
             )
 
@@ -118,7 +118,7 @@ fun BackgroundScreen(
                     modifier = Modifier.weight(1f),
                     onClick = { onSelect(selection.copy(kind = BackgroundKind.NONE, value = "")) },
                 ) {
-                    Box(Modifier.fillMaxSize().background(Color(0xFF0D1117)))
+                    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background))
                 }
                 ChoiceTile(
                     label = "Live weather",
@@ -212,10 +212,10 @@ fun BackgroundScreen(
 
             Button(
                 onClick = { picker.launch(arrayOf("image/*")) },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF21262D)),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Icon(Icons.Default.Image, contentDescription = null, tint = Color(0xFF58A6FF))
+                Icon(Icons.Default.Image, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.height(0.dp))
                 Text(
                     text = if (selection.kind == BackgroundKind.IMAGE) {
@@ -223,7 +223,7 @@ fun BackgroundScreen(
                     } else {
                         "  Choose a picture"
                     },
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
             }
 
@@ -234,7 +234,7 @@ fun BackgroundScreen(
                         .fillMaxWidth()
                         .height(160.dp)
                         .clip(RoundedCornerShape(16.dp))
-                        .border(2.dp, Color(0xFF58A6FF), RoundedCornerShape(16.dp)),
+                        .border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(16.dp)),
                 ) {
                     AppBackground(
                         selection = selection.copy(dimPercent = 0),
@@ -259,13 +259,13 @@ fun BackgroundScreen(
                     },
                     valueRange = 0f..90f,
                     colors = SliderDefaults.colors(
-                        thumbColor = Color(0xFF58A6FF),
-                        activeTrackColor = Color(0xFF58A6FF),
+                        thumbColor = MaterialTheme.colorScheme.primary,
+                        activeTrackColor = MaterialTheme.colorScheme.primary,
                     ),
                     modifier = Modifier.weight(1f),
                 )
                 Spacer(Modifier.padding(horizontal = 6.dp))
-                Text("${selection.dimPercent}%", color = Color.White, fontSize = 13.sp)
+                Text("${selection.dimPercent}%", color = MaterialTheme.colorScheme.onSurface, fontSize = 13.sp)
             }
 
             Spacer(Modifier.height(40.dp))
@@ -277,7 +277,7 @@ fun BackgroundScreen(
 private fun SectionLabel(text: String) {
     Text(
         text = text.uppercase(),
-        color = Color(0xFF8B949E),
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
         fontSize = 11.sp,
         fontWeight = FontWeight.Bold,
         modifier = Modifier.padding(bottom = 8.dp),
@@ -302,10 +302,10 @@ private fun ChoiceTile(
                 .fillMaxWidth()
                 .aspectRatio(1f)
                 .clip(RoundedCornerShape(14.dp))
-                .background(Color(0xFF161B22))
+                .background(MaterialTheme.colorScheme.surface)
                 .border(
                     width = if (selected) 2.dp else 1.dp,
-                    color = if (selected) Color(0xFF58A6FF) else Color(0xFF30363D),
+                    color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
                     shape = RoundedCornerShape(14.dp),
                 ),
         ) {
@@ -316,7 +316,7 @@ private fun ChoiceTile(
                         .align(Alignment.TopEnd)
                         .padding(4.dp)
                         .clip(RoundedCornerShape(50))
-                        .background(Color(0xFF58A6FF))
+                        .background(MaterialTheme.colorScheme.primary)
                         .padding(2.dp),
                 ) {
                     Icon(
@@ -331,7 +331,7 @@ private fun ChoiceTile(
         Spacer(Modifier.height(6.dp))
         Text(
             text = label,
-            color = if (selected) Color.White else Color(0xFF8B949E),
+            color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 11.sp,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
         )

@@ -12,6 +12,7 @@ object AvatarColors {
     data class Swatch(val argb: Long, val label: String)
 
     val swatches: List<Swatch> = listOf(
+        Swatch(0xFFE8D5B9L, "Pearl"),
         Swatch(0xFF4DFF85L, "Mint"),
         Swatch(0xFF58A6FFL, "Blue"),
         Swatch(0xFF79C0FFL, "Sky"),

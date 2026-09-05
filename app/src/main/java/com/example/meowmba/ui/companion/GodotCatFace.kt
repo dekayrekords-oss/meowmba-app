@@ -8,6 +8,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.lerp
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
@@ -79,6 +80,8 @@ fun DrawScope.drawGodotCatFace(
     eyeColor: Color = EyeGreen,
     glowColor: Color = EyeGreen,
     glowStrength: Float = 0.28f,
+    pearl: Boolean = false,
+    featureColor: Color = Color(0xFFE8D5B9),
 ) {
     val a = clock.faceAlpha
     val t = clock.t
@@ -99,19 +102,20 @@ fun DrawScope.drawGodotCatFace(
     }
 
     // Ears
-    drawGodotEar(origin, R, -1f, pose, clock, lineW)
-    drawGodotEar(origin, R, 1f, pose, clock, lineW)
+    drawGodotEar(origin, R, -1f, pose, clock, lineW, if (pearl) featureColor else EarPink, pearl)
+    drawGodotEar(origin, R, 1f, pose, clock, lineW, if (pearl) featureColor else EarPink, pearl)
 
     // Eyes
-    drawGodotEye(origin, R, -1f, pose, clock, lineW, eyeColor)
-    drawGodotEye(origin, R, 1f, pose, clock, lineW, eyeColor)
+    drawGodotEye(origin, R, -1f, pose, clock, lineW, eyeColor, pearl, featureColor)
+    drawGodotEye(origin, R, 1f, pose, clock, lineW, eyeColor, pearl, featureColor)
 
     // Nose + mouth + tongue
-    drawGodotNoseMouth(origin, R, pose, clock, lineW)
+    drawGodotNoseMouth(origin, R, pose, clock, lineW,
+        if (pearl) featureColor else NosePink, if (pearl) featureColor else MouthPink)
 
     // Whiskers
-    drawGodotWhiskers(origin, R, -1f, pose, clock)
-    drawGodotWhiskers(origin, R, 1f, pose, clock)
+    drawGodotWhiskers(origin, R, -1f, pose, clock, if (pearl) featureColor else WhiskCyan, pearl)
+    drawGodotWhiskers(origin, R, 1f, pose, clock, if (pearl) featureColor else WhiskCyan, pearl)
 
     // Paws (from jaw/lick or head tip)
     val pawOn = when {
@@ -119,7 +123,7 @@ fun DrawScope.drawGodotCatFace(
         abs(pose.headTiltDeg) > 6f -> ((abs(pose.headTiltDeg) - 4f) / 12f).coerceIn(0f, 1f)
         else -> 0f
     }
-    if (pawOn > 0.02f) {
+    if (!pearl && pawOn > 0.02f) {
         val side = if (pose.headTiltDeg >= 0f) 1f else -1f
         drawGodotPaw(
             origin + Offset(side * R * 0.42f, R * 0.55f + pose.offsetY * 0.1f),
@@ -151,6 +155,8 @@ private fun DrawScope.drawGodotEar(
     pose: MotionPose,
     clock: GodotFaceClock,
     lineW: Float,
+    EarPink: Color = com.example.meowmba.ui.companion.EarPink,
+    pearl: Boolean = false,
 ) {
     val a = clock.faceAlpha
     val idx = if (side < 0f) 0 else 1
@@ -201,6 +207,19 @@ private fun DrawScope.drawGodotEar(
     val pIn = tri(0f, -hh * 0.09f, hw * 0.60f, hh * 0.66f, 0.34f, 22)
     val pCore = tri(0f, -hh * 0.13f, hw * 0.38f, hh * 0.46f, 0.36f, 18)
 
+    if (pearl) {
+        drawPath(pOut, Brush.linearGradient(
+            listOf(lerp(EarPink, Color.White, 0.6f).withA(a), EarPink.withA(a),
+                lerp(EarPink, Color.Black, 0.55f).withA(a)),
+            start = base + Offset(-hw, -hh), end = base + Offset(hw, hh * 0.2f)))
+        drawPath(pIn, Brush.linearGradient(
+            listOf(lerp(EarPink, Color.Black, 0.55f).withA(a), EarPink.withA(a)),
+            start = base + Offset(0f, -hh), end = base))
+        drawPath(pOut, lerp(EarPink, Color.White, 0.5f).withA(a),
+            style = Stroke(width = lineW * 1.2f, cap = StrokeCap.Round))
+        return
+    }
+
     // Lighter fills — outline carries the shape, not thick bands.
     drawPath(pOut, Color(EarPink.red * 0.10f, EarPink.green * 0.05f, EarPink.blue * 0.06f, 0.50f * a))
     drawPath(pMid, EarPink.copy(alpha = 0.09f * a))
@@ -218,6 +237,8 @@ private fun DrawScope.drawGodotEye(
     clock: GodotFaceClock,
     lineW: Float,
     eyeColor: Color = EyeGreen,
+    pearl: Boolean = false,
+    featureColor: Color = Color(0xFFE8D5B9),
 ) {
     val a = clock.faceAlpha
     val eye = origin + Offset(side * R * 0.48f, -R * 0.07f)
@@ -268,15 +289,27 @@ private fun DrawScope.drawGodotEye(
     )
 
     softGlow(eye, hw * 1.6f, eyeColor, 0.05f * a)
-    drawPath(aperture, Color(0.030f, 0.070f, 0.055f, a))
+    if (pearl) {
+        drawPath(aperture, featureColor.withA(a), style = Stroke(R * 0.055f))
+        drawPath(aperture, Brush.verticalGradient(
+            listOf(Color(0xFF726A61).withA(a), Color(0xFFF4EEE4).withA(a)),
+            startY = eye.y - up, endY = eye.y + lo))
+    } else drawPath(aperture, Color(0.030f, 0.070f, 0.055f, a))
 
     if (openness > 0.06f) {
         val iris = eye + Offset(clock.gazeX * hw * 0.58f, clock.gazeY * (up + lo) * 0.42f)
-        val ir = min(hw * 0.66f, (up + lo) * 0.60f)
+        // Pearl lids close over the iris; the iris must not shrink during a blink.
+        val ir = if (pearl) R * 0.23f else min(hw * 0.66f, (up + lo) * 0.60f)
         val fx = 1f - 0.30f * abs(clock.gazeX)
         val fy = 1f - 0.14f * abs(clock.gazeY)
 
         clipPath(aperture) {
+            if (pearl) {
+                drawCircle(Brush.radialGradient(
+                    listOf(Color(0xFFD0AA66).withA(a), eyeColor.withA(a),
+                        lerp(eyeColor, Color.Black, 0.72f).withA(a)),
+                    center = iris, radius = ir), ir, iris)
+            }
             // Iris rings
             for ((scale, alpha) in listOf(
                 1.00f to 0.22f, 0.86f to 0.36f, 0.66f to 0.52f, 0.44f to 0.70f,
@@ -288,8 +321,9 @@ private fun DrawScope.drawGodotEye(
                 )
             }
             // Fibres
-            for (i in 0 until 22) {
-                val ang = i / 22f * PI.toFloat() * 2f + 0.11f
+            val fibreCount = if (pearl) 72 else 22
+            for (i in 0 until fibreCount) {
+                val ang = i.toFloat() / fibreCount * PI.toFloat() * 2f + 0.11f
                 val d = Offset(cos(ang) * fx, sin(ang) * fy)
                 drawLine(
                     color = eyeColor.copy(alpha = 0.14f * a),
@@ -321,9 +355,19 @@ private fun DrawScope.drawGodotEye(
                 val w = pw * (1f - abs(tt * 2f - 1f).pow(1.7f)).pow(0.48f)
                 slit.add(Offset(iris.x - w * fx, pTop + (pBot - pTop) * tt))
             }
-            drawPath(GodotCatDraw.pathFrom(slit), Color.Black.copy(alpha = a))
+            if (pearl) {
+                drawOval(Color(0xFF081315).withA(a),
+                    topLeft = iris - Offset(pw * 1.35f, ir * 0.76f),
+                    size = androidx.compose.ui.geometry.Size(pw * 2.7f, ir * 1.52f))
+            } else drawPath(GodotCatDraw.pathFrom(slit), Color.Black.copy(alpha = a))
             // Lid shadow
-            drawOval(
+            if (pearl) {
+                drawRect(Brush.verticalGradient(
+                    listOf(Color.Black.withA(a * 0.58f), Color.Transparent),
+                    startY = eye.y - up, endY = eye.y + lo * 0.25f),
+                    topLeft = eye - Offset(hw, up),
+                    size = androidx.compose.ui.geometry.Size(hw * 2f, up + lo))
+            } else drawOval(
                 color = Color.Black.copy(alpha = 0.38f * a),
                 topLeft = Offset(eye.x - hw * 1.35f, eye.y - up * 1.02f - up * 0.92f),
                 size = androidx.compose.ui.geometry.Size(hw * 2.7f, up * 1.84f),
@@ -345,7 +389,8 @@ private fun DrawScope.drawGodotEye(
         }
     }
 
-    drawPath(aperture, hdr(eyeColor, 0.55f, a), style = Stroke(width = lineW * 0.42f, cap = StrokeCap.Round))
+    drawPath(aperture, hdr(if (pearl) featureColor else eyeColor, 0.55f, a),
+        style = Stroke(width = lineW * (if (pearl) 1.1f else 0.42f), cap = StrokeCap.Round))
     softGlow(eye, hw * 1.4f, eyeColor, 0.06f * a * (openness + 0.3f).coerceIn(0f, 1f))
 }
 
@@ -355,6 +400,8 @@ private fun DrawScope.drawGodotNoseMouth(
     pose: MotionPose,
     clock: GodotFaceClock,
     lineW: Float,
+    NosePink: Color = com.example.meowmba.ui.companion.NosePink,
+    MouthPink: Color = com.example.meowmba.ui.companion.MouthPink,
 ) {
     val a = clock.faceAlpha
     // Godot: nose/mouth share the R*0.52 face-local anchor.
@@ -524,6 +571,8 @@ private fun DrawScope.drawGodotWhiskers(
     side: Float,
     pose: MotionPose,
     clock: GodotFaceClock,
+    WhiskCyan: Color = com.example.meowmba.ui.companion.WhiskCyan,
+    pearl: Boolean = false,
 ) {
     val a = clock.faceAlpha
     val base = origin + Offset(0f, R * 0.48f)
@@ -547,6 +596,19 @@ private fun DrawScope.drawGodotWhiskers(
             sin(tw * 1.4f)
         }
         val phase = energy * (1f - 0.18f * (i + 1))
+        if (pearl) {
+            val start = Offset(origin.x + side * R * 0.22f, y0)
+            val end = Offset(origin.x + side * R * 0.94f,
+                y0 + i * R * 0.18f + phase * amp * side)
+            val whisker = Path().apply {
+                moveTo(start.x, start.y)
+                quadraticBezierTo(origin.x + side * R * 0.55f,
+                    y0 - R * 0.10f + i * R * 0.10f, end.x, end.y)
+            }
+            drawPath(whisker, WhiskCyan.withA(a * 0.85f),
+                style = Stroke(R * 0.009f, cap = StrokeCap.Round))
+            continue
+        }
         drawLine(
             color = WhiskCyan.copy(alpha = 0.45f * a),
             start = Offset(origin.x + side * R * 0.12f, y0),

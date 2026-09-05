@@ -1,5 +1,6 @@
 package com.example.meowmba.ui.companion
 
+import androidx.compose.material3.MaterialTheme
 import android.content.Context
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -176,7 +177,7 @@ fun AppDrawerScreen(
             placeholder = {
                 Text(
                     if (listening) "Listening…" else "Ask, search Google, or find an app",
-                    color = Color.White.copy(alpha = 0.55f),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -190,24 +191,24 @@ fun AppDrawerScreen(
                         Icon(
                             Icons.Default.Mic,
                             contentDescription = if (listening) "Stop listening" else "Speak",
-                            tint = if (listening) Color(0xFF00E5FF) else Color.White.copy(alpha = 0.85f),
+                            tint = if (listening) Color(0xFF00E5FF) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
                         )
                     }
                     IconButton(onClick = { submit() }) {
                         Icon(
                             Icons.Default.Search,
                             contentDescription = "Go",
-                            tint = Color.White.copy(alpha = 0.85f),
+                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
                         )
                     }
                 }
             },
             colors = OutlinedTextFieldDefaults.colors(
-                focusedTextColor = Color.White,
-                unfocusedTextColor = Color.White,
-                cursorColor = Color.White,
-                focusedBorderColor = Color.White.copy(alpha = 0.55f),
-                unfocusedBorderColor = Color.White.copy(alpha = 0.28f),
+                focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                cursorColor = MaterialTheme.colorScheme.onSurface,
+                focusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.28f),
             ),
         )
         if (hint != null) {
@@ -220,14 +221,14 @@ fun AppDrawerScreen(
             ) {
                 Text(
                     hint,
-                    color = Color(0xFFFFD75E),
+                    color = MaterialTheme.colorScheme.primary,
                     fontSize = 13.sp,
                     modifier = Modifier.clickable { submit() },
                 )
                 if (kind != DrawerQuery.Kind.WEB_SEARCH && query.isNotBlank()) {
                     Text(
                         "Google",
-                        color = Color.White.copy(alpha = 0.55f),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
                         fontSize = 13.sp,
                         modifier = Modifier.clickable {
                             val q = query.trim()
@@ -244,18 +245,18 @@ fun AppDrawerScreen(
         }
         if (submitted && (thinking || !answer.isNullOrBlank())) {
             Surface(
-                color = Color(0xFF1A1A1A),
+                color = MaterialTheme.colorScheme.surface,
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp, vertical = 4.dp),
             ) {
                 Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                    Text("Meow", color = Color(0xFFFFD75E), fontSize = 11.sp)
+                    Text("Meow", color = MaterialTheme.colorScheme.primary, fontSize = 11.sp)
                     Spacer(Modifier.height(4.dp))
                     Text(
                         if (thinking && answer.isNullOrBlank()) "Thinking…" else answer.orEmpty(),
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onSurface,
                         fontSize = 14.sp,
                     )
                 }
@@ -272,7 +273,7 @@ fun AppDrawerScreen(
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Back",
-                    tint = Color.White,
+                    tint = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier
                         .size(22.dp)
                         .clickable { openFolderId = null },
@@ -280,13 +281,13 @@ fun AppDrawerScreen(
                 Spacer(Modifier.width(10.dp))
                 Text(
                     openFolder.name,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontSize = 16.sp,
                     modifier = Modifier.weight(1f),
                 )
                 Text(
                     "Rename",
-                    color = Color.White.copy(alpha = 0.6f),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                     fontSize = 12.sp,
                     modifier = Modifier.clickable { actionFolder = openFolder },
                 )
@@ -364,7 +365,7 @@ fun AppDrawerScreen(
                     Spacer(Modifier.height(4.dp))
                     Text(
                         folder.name,
-                        color = Color(0xFFFFD75E),
+                        color = MaterialTheme.colorScheme.primary,
                         fontSize = 11.sp,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
@@ -388,7 +389,7 @@ fun AppDrawerScreen(
                     Spacer(Modifier.height(4.dp))
                     Text(
                         (if (pinned) "★ " else "") + app.label,
-                        color = if (pinned) Color(0xFFFFD75E) else Color.White,
+                        color = if (pinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                         fontSize = 11.sp,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
@@ -397,7 +398,7 @@ fun AppDrawerScreen(
                     if (extra.isNotBlank()) {
                         Text(
                             extra,
-                            color = Color.White.copy(alpha = 0.45f),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
                             fontSize = 9.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -435,7 +436,7 @@ fun AppDrawerScreen(
                 pins.isEmpty() -> "Long-press an app to pin it or add it to a folder"
                 else -> "Swipe left to go back"
             },
-            color = Color.White.copy(alpha = 0.5f),
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
             fontSize = 12.sp,
             textAlign = TextAlign.Center,
             modifier = Modifier
@@ -449,8 +450,8 @@ fun AppDrawerScreen(
     if (targetApp != null) {
         AlertDialog(
             onDismissRequest = { actionApp = null },
-            containerColor = Color(0xFF1A1A1A),
-            title = { Text(targetApp.label, color = Color.White) },
+            containerColor = MaterialTheme.colorScheme.surface,
+            title = { Text(targetApp.label, color = MaterialTheme.colorScheme.onSurface) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     DialogLine(
@@ -485,7 +486,7 @@ fun AppDrawerScreen(
             },
             confirmButton = {
                 TextButton(onClick = { actionApp = null }) {
-                    Text("Close", color = Color.White.copy(alpha = 0.7f))
+                    Text("Close", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
                 }
             },
         )
@@ -495,8 +496,8 @@ fun AppDrawerScreen(
     if (targetFolder != null) {
         AlertDialog(
             onDismissRequest = { actionFolder = null },
-            containerColor = Color(0xFF1A1A1A),
-            title = { Text(targetFolder.name, color = Color.White) },
+            containerColor = MaterialTheme.colorScheme.surface,
+            title = { Text(targetFolder.name, color = MaterialTheme.colorScheme.onSurface) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     DialogLine("Rename") {
@@ -515,7 +516,7 @@ fun AppDrawerScreen(
             },
             confirmButton = {
                 TextButton(onClick = { actionFolder = null }) {
-                    Text("Close", color = Color.White.copy(alpha = 0.7f))
+                    Text("Close", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
                 }
             },
         )
@@ -525,22 +526,22 @@ fun AppDrawerScreen(
         val renameId = renamingFolderId
         AlertDialog(
             onDismissRequest = { namingFolder = false },
-            containerColor = Color(0xFF1A1A1A),
+            containerColor = MaterialTheme.colorScheme.surface,
             title = {
-                Text(if (renameId != null) "Rename folder" else "New folder", color = Color.White)
+                Text(if (renameId != null) "Rename folder" else "New folder", color = MaterialTheme.colorScheme.onSurface)
             },
             text = {
                 OutlinedTextField(
                     value = folderName,
                     onValueChange = { folderName = it.take(24) },
                     singleLine = true,
-                    placeholder = { Text("Folder name", color = Color.White.copy(alpha = 0.45f)) },
+                    placeholder = { Text("Folder name", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)) },
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        cursorColor = Color.White,
-                        focusedBorderColor = Color(0xFFFFD75E),
-                        unfocusedBorderColor = Color.White.copy(alpha = 0.3f),
+                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        cursorColor = MaterialTheme.colorScheme.onSurface,
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
                     ),
                 )
             },
@@ -555,11 +556,11 @@ fun AppDrawerScreen(
                         renamingFolderId = null
                         namingForPackage = null
                     },
-                ) { Text("Save", color = Color(0xFFFFD75E)) }
+                ) { Text("Save", color = MaterialTheme.colorScheme.primary) }
             },
             dismissButton = {
                 TextButton(onClick = { namingFolder = false }) {
-                    Text("Cancel", color = Color.White.copy(alpha = 0.7f))
+                    Text("Cancel", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
                 }
             },
         )
@@ -570,11 +571,11 @@ fun AppDrawerScreen(
 private fun DrawerChip(label: String, selected: Boolean, onClick: () -> Unit) {
     Text(
         label,
-        color = if (selected) Color(0xFF1A1400) else Color.White.copy(alpha = 0.8f),
+        color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
         fontSize = 12.sp,
         modifier = Modifier
             .clip(RoundedCornerShape(14.dp))
-            .background(if (selected) Color(0xFFFFD75E) else Color(0xFF222222))
+            .background(if (selected) MaterialTheme.colorScheme.primary else Color(0xFF222222))
             .clickable(onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 5.dp),
     )
@@ -584,7 +585,7 @@ private fun DrawerChip(label: String, selected: Boolean, onClick: () -> Unit) {
 private fun DialogLine(label: String, onClick: () -> Unit) {
     Text(
         label,
-        color = Color.White,
+        color = MaterialTheme.colorScheme.onSurface,
         fontSize = 15.sp,
         modifier = Modifier
             .fillMaxWidth()
@@ -606,7 +607,7 @@ private fun FolderTile(packages: List<String>) {
             Icon(
                 Icons.Default.Folder,
                 contentDescription = "Folder",
-                tint = Color(0xFFFFD75E),
+                tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(26.dp),
             )
         } else {

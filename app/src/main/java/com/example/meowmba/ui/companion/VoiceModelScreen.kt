@@ -42,6 +42,8 @@ import com.example.meowmba.core.audio.AsrBackendStatus
 fun VoiceModelScreen(
     state: CompanionState,
     onSelectBackend: (AsrBackend) -> Unit = {},
+    onDownloadWhisper: () -> Unit = {},
+    onRepairStreamingModel: () -> Unit = {},
     onClose: () -> Unit,
 ) {
     val statuses = state.asrBackendStatuses.ifEmpty {
@@ -56,16 +58,16 @@ fun VoiceModelScreen(
                 title = { Text("Voice Recognition", fontFamily = FontFamily.Monospace) },
                 navigationIcon = {
                     TextButton(onClick = onClose) {
-                        Text("Back", color = Color(0xFF58A6FF), fontSize = 13.sp)
+                        Text("Back", color = MaterialTheme.colorScheme.primary, fontSize = 13.sp)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFF0D1117),
-                    titleContentColor = Color.White,
+                    containerColor = MaterialTheme.colorScheme.background,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface,
                 ),
             )
         },
-        containerColor = Color(0xFF0D1117),
+        containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
         Column(
             modifier = Modifier
@@ -75,7 +77,7 @@ fun VoiceModelScreen(
         ) {
             Text(
                 "Which engine turns your speech into text",
-                color = Color.Gray,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 12.sp,
             )
 
@@ -88,6 +90,21 @@ fun VoiceModelScreen(
                     cloudModel = state.asrCloudModel,
                     onSelect = { onSelectBackend(status.backend) },
                 )
+                Spacer(Modifier.height(12.dp))
+            }
+
+            val whisper = statuses.firstOrNull { it.backend == AsrBackend.WHISPER_LOCAL }
+            if (whisper?.available == false) {
+                Button(onClick = onDownloadWhisper, modifier = Modifier.fillMaxWidth()) {
+                    Text("Download or repair Whisper")
+                }
+                if (whisper.reason.contains("streaming", ignoreCase = true)) {
+                    OutlinedButton(onClick = onRepairStreamingModel, modifier = Modifier.fillMaxWidth()) {
+                        Text("Repair live-listening model")
+                    }
+                }
+                state.voicePackLabel?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp) }
+                state.voicePackProgress?.let { LinearProgressIndicator(progress = { it }, modifier = Modifier.fillMaxWidth()) }
                 Spacer(Modifier.height(12.dp))
             }
 
@@ -124,7 +141,12 @@ fun VoiceModelScreen(
                             "Recorded speech is uploaded to OpenRouter and transcribed by " +
                                 "${state.asrCloudModel}. Wake-word detection stays on-device — " +
                                 "only the utterance after it is sent.",
-                            color = Color.Gray,
+                            // Deliberately NOT onSurfaceVariant: this card's container is a
+                            // fixed dark amber, so a themed (near-black in Light mode) text
+                            // colour measured ~1.9:1 against it — unreadable, on a privacy
+                            // disclosure of all things. The card never flips brightness, so
+                            // its text must not either. This cream reads ~13:1 on the amber.
+                            color = Color(0xFFF0DCC0),
                             fontSize = 12.sp,
                         )
                     }
@@ -135,7 +157,7 @@ fun VoiceModelScreen(
             Text(
                 "How it works",
                 style = MaterialTheme.typography.titleSmall,
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.Bold,
             )
             Spacer(Modifier.height(6.dp))
@@ -144,7 +166,7 @@ fun VoiceModelScreen(
                     "and stop talking, so partial text appears instantly. The finished " +
                     "sentence is then re-transcribed for accuracy. If the network fails, " +
                     "the on-device text is used instead of dropping the turn.",
-                color = Color.Gray,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 12.sp,
             )
 
@@ -161,10 +183,10 @@ private fun VoiceBackendCard(
     onSelect: () -> Unit,
 ) {
     val enabled = status.available
-    val accent = if (selected) Color(0xFF3FB950) else Color(0xFF30363D)
+    val accent = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
     Card(
         colors = CardDefaults.cardColors(
-            containerColor = if (selected) Color(0xFF10261A) else Color(0xFF161B22),
+            containerColor = if (selected) Color(0xFF10261A) else MaterialTheme.colorScheme.surface,
         ),
         border = BorderStroke(1.dp, accent),
         shape = RoundedCornerShape(12.dp),
@@ -186,7 +208,7 @@ private fun VoiceBackendCard(
                 tint = when {
                     !enabled -> Color(0xFF6E7681)
                     status.backend.isCloud -> Color(0xFFD29922)
-                    else -> Color(0xFF58A6FF)
+                    else -> MaterialTheme.colorScheme.primary
                 },
                 modifier = Modifier.size(22.dp),
             )
@@ -194,14 +216,14 @@ private fun VoiceBackendCard(
             Column(Modifier.weight(1f)) {
                 Text(
                     status.backend.displayName,
-                    color = if (enabled) Color.White else Color(0xFF6E7681),
+                    color = if (enabled) MaterialTheme.colorScheme.onSurface else Color(0xFF6E7681),
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
                 )
                 Spacer(Modifier.height(3.dp))
                 Text(
                     status.backend.subtitle,
-                    color = if (enabled) Color.Gray else Color(0xFF545D68),
+                    color = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF545D68),
                     fontSize = 11.sp,
                 )
                 if (!enabled && status.reason.isNotBlank()) {
@@ -217,7 +239,7 @@ private fun VoiceBackendCard(
                 Spacer(Modifier.width(10.dp))
                 Box(
                     modifier = Modifier
-                        .background(Color(0xFF3FB950), RoundedCornerShape(50))
+                        .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(50))
                         .padding(horizontal = 8.dp, vertical = 4.dp),
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {

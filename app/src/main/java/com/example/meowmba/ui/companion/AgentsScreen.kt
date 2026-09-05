@@ -52,7 +52,7 @@ fun AgentsScreen(
         }
     }
 
-    Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF0D1117)) {
+    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
             modifier = Modifier
                 .safeDrawingPadding()
@@ -63,11 +63,11 @@ fun AgentsScreen(
                 Text(
                     "Agents & Tools",
                     style = MaterialTheme.typography.headlineMedium,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f)
                 )
                 IconButton(onClick = onClose) {
-                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                    Icon(Icons.Default.Close, contentDescription = "Close", tint = MaterialTheme.colorScheme.onSurface)
                 }
             }
 
@@ -126,7 +126,7 @@ fun AgentsScreen(
 private fun SectionTitle(text: String) {
     Text(
         text,
-        color = Color.White,
+        color = MaterialTheme.colorScheme.onSurface,
         fontWeight = FontWeight.Bold,
         fontSize = 16.sp,
         modifier = Modifier.padding(bottom = 8.dp)
@@ -135,7 +135,7 @@ private fun SectionTitle(text: String) {
 
 @Composable
 private fun Body(text: String) {
-    Text(text, color = Color.Gray, fontSize = 13.sp)
+    Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
 }
 
 @Composable
@@ -145,12 +145,12 @@ private fun AgentCard(
     onClick: (() -> Unit)? = null,
 ) {
     val (label, color) = when {
-        !agent.available -> "UNAVAILABLE" to Color(0xFFF85149)
+        !agent.available -> "UNAVAILABLE" to MaterialTheme.colorScheme.error
         agent.statusNote != null -> "LIMITED" to Color(0xFFD29922)
-        else -> "ACTIVE" to Color(0xFF3FB950)
+        else -> "ACTIVE" to MaterialTheme.colorScheme.primary
     }
     Surface(
-        color = Color(0xFF161B22),
+        color = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(12.dp),
         modifier = if (onClick != null) {
             Modifier.fillMaxWidth().clickable(onClick = onClick)
@@ -162,14 +162,14 @@ private fun AgentCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     agent.name,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f)
                 )
                 if (taskCount > 0) {
                     Text(
                         "$taskCount",
-                        color = Color(0xFF58A6FF),
+                        color = MaterialTheme.colorScheme.primary,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(end = 8.dp),
@@ -185,7 +185,7 @@ private fun AgentCard(
                     )
                 }
             }
-            Text(agent.purpose, color = Color.Gray, fontSize = 12.sp)
+            Text(agent.purpose, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
             agent.statusNote?.let {
                 Text(it, color = color, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
             }
@@ -196,14 +196,14 @@ private fun AgentCard(
 @Composable
 private fun TaskCard(task: AgentTask, onCancel: () -> Unit) {
     val (label, color) = when (task.status) {
-        TaskStatus.QUEUED -> "QUEUED" to Color.Gray
-        TaskStatus.RUNNING -> "RUNNING" to Color(0xFF58A6FF)
+        TaskStatus.QUEUED -> "QUEUED" to MaterialTheme.colorScheme.onSurfaceVariant
+        TaskStatus.RUNNING -> "RUNNING" to MaterialTheme.colorScheme.primary
         TaskStatus.WAITING_APPROVAL -> "NEEDS YOU" to Color(0xFFD29922)
-        TaskStatus.COMPLETED -> "DONE" to Color(0xFF3FB950)
-        TaskStatus.FAILED -> "FAILED" to Color(0xFFF85149)
-        TaskStatus.CANCELLED -> "CANCELLED" to Color.Gray
+        TaskStatus.COMPLETED -> "DONE" to MaterialTheme.colorScheme.primary
+        TaskStatus.FAILED -> "FAILED" to MaterialTheme.colorScheme.error
+        TaskStatus.CANCELLED -> "CANCELLED" to MaterialTheme.colorScheme.onSurfaceVariant
     }
-    Surface(color = Color(0xFF161B22), shape = RoundedCornerShape(12.dp)) {
+    Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(12.dp)) {
         Row(
             modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -212,7 +212,7 @@ private fun TaskCard(task: AgentTask, onCancel: () -> Unit) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         task.title,
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onSurface,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.weight(1f)
@@ -228,12 +228,12 @@ private fun TaskCard(task: AgentTask, onCancel: () -> Unit) {
                     }
                 }
                 task.result?.let {
-                    Text(it, color = Color.Gray, fontSize = 11.sp, maxLines = 2)
+                    Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp, maxLines = 2)
                 }
             }
             if (!task.isTerminal) {
                 TextButton(onClick = onCancel) {
-                    Text("Cancel", color = Color(0xFFF85149), fontSize = 12.sp)
+                    Text("Cancel", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
                 }
             }
         }
@@ -246,14 +246,14 @@ private fun AuditRow(entry: AuditEntryEntity) {
     Row(modifier = Modifier.padding(vertical = 3.dp)) {
         Text(
             timeFormat.format(Date(entry.timestamp)),
-            color = Color.Gray,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 11.sp,
             fontFamily = FontFamily.Monospace
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text(
             "${entry.action} · ${entry.agentId} · ${entry.detail}",
-            color = Color.White.copy(alpha = 0.8f),
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
             fontSize = 11.sp
         )
     }
@@ -275,7 +275,7 @@ private fun AgentDetail(
     val tasks = state.activeTasks.filter { it.agentId == agent.id }
     val audit = state.auditEntries.filter { it.agentId == agent.id }
 
-    Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF0D1117)) {
+    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
             modifier = Modifier
                 .safeDrawingPadding()
@@ -284,15 +284,15 @@ private fun AgentDetail(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = onBack) {
-                    Text("‹ Agents", color = Color(0xFF58A6FF), fontSize = 14.sp)
+                    Text("‹ Agents", color = MaterialTheme.colorScheme.primary, fontSize = 14.sp)
                 }
             }
             Text(
                 agent.name,
                 style = MaterialTheme.typography.headlineMedium,
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onSurface,
             )
-            Text(agent.purpose, color = Color.Gray, fontSize = 13.sp)
+            Text(agent.purpose, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
 
             Spacer(modifier = Modifier.height(16.dp))
             SectionTitle("Can use")
@@ -301,7 +301,7 @@ private fun AgentDetail(
             } else {
                 Text(
                     agent.allowedTools.sorted().joinToString("  ·  "),
-                    color = Color(0xFF8B949E),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 12.sp,
                     fontFamily = FontFamily.Monospace,
                 )

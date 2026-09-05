@@ -45,13 +45,13 @@ private val VAULT_HR = Regex("^---+$")
 private val VAULT_INLINE = Regex("\\*\\*(.+?)\\*\\*|\\*(.+?)\\*|`(.+?)`|\\[\\[(.+?)\\]\\]")
 
 private val DATE_FMT = SimpleDateFormat("MMM d, yyyy", Locale.US)
-private val VAULT_BG = Color(0xFF0D1117)
-private val PANEL_BG = Color(0xFF161B22)
-private val ACCENT = Color(0xFF58A6FF)
-private val MUTED = Color(0xFF8B949E)
-private val SURFACE = Color(0xFF21262D)
-private val BORDER = Color(0xFF30363D)
-private val GREEN = Color(0xFF3FB950)
+private val VAULT_BG: Color @Composable get() = MaterialTheme.colorScheme.background
+private val PANEL_BG: Color @Composable get() = MaterialTheme.colorScheme.surface
+private val ACCENT: Color @Composable get() = MaterialTheme.colorScheme.primary
+private val MUTED: Color @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant
+private val SURFACE: Color @Composable get() = MaterialTheme.colorScheme.surfaceVariant
+private val BORDER: Color @Composable get() = MaterialTheme.colorScheme.outlineVariant
+private val GREEN: Color @Composable get() = MaterialTheme.colorScheme.primary
 private val PURPLE = Color(0xFFD2A8FF)
 
 /**
@@ -114,7 +114,7 @@ fun VaultScreen(
                         mode = VaultMode.LIST
                         refresh()
                     }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.onSurface)
                     }
                 }
 
@@ -125,7 +125,7 @@ fun VaultScreen(
                         VaultMode.EDIT -> if (selectedNote == null) "New Note" else "Edit"
                     },
                     style = MaterialTheme.typography.titleLarge,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f)
                 )
@@ -139,7 +139,7 @@ fun VaultScreen(
                             Icon(Icons.Default.Edit, contentDescription = "Edit", tint = ACCENT)
                         }
                         IconButton(onClick = { confirmDelete = true }) {
-                            Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color(0xFFF85149))
+                            Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
                         }
                     }
                     VaultMode.EDIT -> IconButton(onClick = { saveAndReturn() }) {
@@ -185,7 +185,7 @@ fun VaultScreen(
         AlertDialog(
             containerColor = PANEL_BG,
             onDismissRequest = { confirmDelete = false },
-            title = { Text("Delete note?", color = Color.White) },
+            title = { Text("Delete note?", color = MaterialTheme.colorScheme.onSurface) },
             text = { Text("\"${selectedNote?.title}\" will be permanently deleted.", color = MUTED) },
             confirmButton = {
                 TextButton(onClick = {
@@ -193,7 +193,7 @@ fun VaultScreen(
                     refresh()
                     mode = VaultMode.LIST
                     confirmDelete = false
-                }) { Text("Delete", color = Color(0xFFF85149)) }
+                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
                 TextButton(onClick = { confirmDelete = false }) { Text("Cancel", color = MUTED) }
@@ -232,7 +232,7 @@ private fun NoteList(
             BasicTextField(
                 value = query,
                 onValueChange = onQueryChange,
-                textStyle = TextStyle(color = Color.White, fontSize = 14.sp),
+                textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp),
                 cursorBrush = SolidColor(ACCENT),
                 modifier = Modifier.weight(1f),
                 decorationBox = { inner ->
@@ -274,7 +274,7 @@ private fun NoteCard(note: VaultNote, onClick: () -> Unit) {
             .clickable(onClick = onClick)
             .padding(14.dp)
     ) {
-        Text(note.title, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+        Text(note.title, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
         if (note.tags.isNotEmpty()) {
             Spacer(modifier = Modifier.height(4.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -350,7 +350,7 @@ private fun NoteEditor(
             .verticalScroll(rememberScrollState())
     ) {
         EditorField(value = title, onValueChange = onTitleChange, placeholder = "Note title…",
-            textStyle = TextStyle(color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold))
+            textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 20.sp, fontWeight = FontWeight.Bold))
         HorizontalDivider(color = BORDER, modifier = Modifier.padding(vertical = 8.dp))
 
         EditorField(value = tags, onValueChange = onTagsChange, placeholder = "tags, comma-separated (optional)",
@@ -361,7 +361,7 @@ private fun NoteEditor(
             value = body,
             onValueChange = onBodyChange,
             placeholder = "Write in Markdown…\n\n# Heading\n**bold** *italic*\n[[wikilink]]",
-            textStyle = TextStyle(color = Color.White, fontSize = 14.sp, fontFamily = FontFamily.Monospace),
+            textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, fontFamily = FontFamily.Monospace),
             modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 400.dp)
         )
     }
@@ -421,12 +421,12 @@ private fun MarkdownBody(text: String, onWikiLink: (String) -> Unit = {}) {
             }
             // H1
             line.startsWith("# ") -> {
-                Text(line.removePrefix("# "), color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Text(line.removePrefix("# "), color = MaterialTheme.colorScheme.onSurface, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(8.dp))
             }
             // H2
             line.startsWith("## ") -> {
-                Text(line.removePrefix("## "), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                Text(line.removePrefix("## "), color = MaterialTheme.colorScheme.onSurface, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                 HorizontalDivider(color = BORDER, modifier = Modifier.padding(vertical = 6.dp))
             }
             // H3
@@ -471,11 +471,11 @@ private fun InlineText(raw: String, onWikiLink: (String) -> Unit) {
             if (pos < match.range.first) append(raw.substring(pos, match.range.first))
             when {
                 match.groupValues[1].isNotEmpty() ->
-                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = Color.White)) {
+                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)) {
                         append(match.groupValues[1])
                     }
                 match.groupValues[2].isNotEmpty() ->
-                    withStyle(SpanStyle(fontStyle = FontStyle.Italic, color = Color.White)) {
+                    withStyle(SpanStyle(fontStyle = FontStyle.Italic, color = MaterialTheme.colorScheme.onSurface)) {
                         append(match.groupValues[2])
                     }
                 match.groupValues[3].isNotEmpty() ->
@@ -499,12 +499,12 @@ private fun InlineText(raw: String, onWikiLink: (String) -> Unit) {
 
     val wikiLinks = annotated.getStringAnnotations("wikilink", 0, annotated.length)
     if (wikiLinks.isEmpty()) {
-        Text(annotated, color = MUTED.copy(alpha = 1f).let { Color(0xFFE6EDF3) }, fontSize = 14.sp,
+        Text(annotated, color = MUTED.copy(alpha = 1f).let { MaterialTheme.colorScheme.onSurface }, fontSize = 14.sp,
             lineHeight = 22.sp, modifier = Modifier.padding(bottom = 2.dp))
     } else {
         androidx.compose.foundation.text.ClickableText(
             text = annotated,
-            style = TextStyle(color = Color(0xFFE6EDF3), fontSize = 14.sp, lineHeight = 22.sp),
+            style = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, lineHeight = 22.sp),
             onClick = { offset ->
                 annotated.getStringAnnotations("wikilink", offset, offset)
                     .firstOrNull()?.let { onWikiLink(it.item) }

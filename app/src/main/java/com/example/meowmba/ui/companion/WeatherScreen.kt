@@ -63,7 +63,7 @@ fun WeatherScreen(
     val effectiveTimeOfDay = previewTimeOfDay ?: clockTimeOfDay
     val moon = rememberMoonPhase()
 
-    Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF0D1117)) {
+    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
             modifier = Modifier
                 .safeDrawingPadding()
@@ -77,14 +77,14 @@ fun WeatherScreen(
                 Text(
                     text = "Weather",
                     style = MaterialTheme.typography.headlineMedium,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f),
                 )
                 IconButton(onClick = onRefresh) {
-                    Icon(Icons.Default.Refresh, "Refresh", tint = Color(0xFF58A6FF))
+                    Icon(Icons.Default.Refresh, "Refresh", tint = MaterialTheme.colorScheme.primary)
                 }
                 IconButton(onClick = onClose) {
-                    Icon(Icons.Default.Close, "Close", tint = Color.White)
+                    Icon(Icons.Default.Close, "Close", tint = MaterialTheme.colorScheme.onSurface)
                 }
             }
 
@@ -110,15 +110,15 @@ fun WeatherScreen(
                     Row(verticalAlignment = Alignment.Top) {
                         Text(
                             "${shown.temperatureF}",
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.onSurface,
                             fontSize = 46.sp,
                             fontWeight = FontWeight.Light,
                         )
-                        Text("°", color = Color.White, fontSize = 22.sp)
+                        Text("°", color = MaterialTheme.colorScheme.onSurface, fontSize = 22.sp)
                     }
                     Text(
                         "${shown.condition.emoji}  ${shown.condition.label}",
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onSurface,
                         fontSize = 14.sp,
                     )
                     shown.place?.let {
@@ -150,7 +150,7 @@ fun WeatherScreen(
                 Spacer(Modifier.height(10.dp))
                 Text(
                     "No reading yet — tap refresh. Needs location access and a network.",
-                    color = Color(0xFF8B949E),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 12.sp,
                 )
             }
@@ -161,18 +161,18 @@ fun WeatherScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(16.dp))
-                    .background(Color(0xFF161B22))
+                    .background(MaterialTheme.colorScheme.surface)
                     .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(MoonPhase.emoji(moon), fontSize = 30.sp)
                 Spacer(Modifier.padding(horizontal = 8.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(MoonPhase.label(moon), color = Color.White, fontSize = 15.sp)
+                    Text(MoonPhase.label(moon), color = MaterialTheme.colorScheme.onSurface, fontSize = 15.sp)
                     Text(
                         "${(MoonPhase.illumination(moon) * 100).toInt()}% lit · " +
                             "day ${(moon * 29.53f).toInt()} of 29",
-                        color = Color(0xFF8B949E),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 12.sp,
                     )
                 }
@@ -184,21 +184,21 @@ fun WeatherScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(16.dp))
-                    .background(Color(0xFF161B22))
+                    .background(MaterialTheme.colorScheme.surface)
                     .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         "Always show weather",
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onSurface,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Medium,
                     )
                     Text(
                         "Keeps the animation playing all the time, matching the real " +
                             "conditions and the time of day. Refreshes every 15 minutes.",
-                        color = Color(0xFF8B949E),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 12.sp,
                     )
                 }
@@ -206,7 +206,7 @@ fun WeatherScreen(
                     checked = ambientEnabled,
                     onCheckedChange = onAmbientChange,
                     colors = SwitchDefaults.colors(
-                        checkedThumbColor = Color.White,
+                        checkedThumbColor = MaterialTheme.colorScheme.onSurface,
                         checkedTrackColor = Color(0xFF2F81F7),
                     ),
                 )
@@ -239,7 +239,7 @@ fun WeatherScreen(
 private fun SectionHeader(text: String) {
     Text(
         text = text.uppercase(),
-        color = Color(0xFF8B949E),
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
         fontSize = 11.sp,
         fontWeight = FontWeight.Bold,
         modifier = Modifier.padding(bottom = 8.dp),
@@ -249,8 +249,8 @@ private fun SectionHeader(text: String) {
 @Composable
 private fun Stat(label: String, value: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium)
-        Text(label.uppercase(), color = Color(0xFF8B949E), fontSize = 9.sp)
+        Text(value, color = MaterialTheme.colorScheme.onSurface, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+        Text(label.uppercase(), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 9.sp)
     }
 }
 
@@ -258,15 +258,15 @@ private fun Stat(label: String, value: String) {
 private fun TimeChip(label: String, selected: Boolean, onClick: () -> Unit) {
     Text(
         text = label,
-        color = if (selected) Color.White else Color(0xFF8B949E),
+        color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
         fontSize = 12.sp,
         fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
         modifier = Modifier
             .clip(RoundedCornerShape(12.dp))
-            .background(if (selected) Color(0xFF1F6FEB) else Color(0xFF161B22))
+            .background(if (selected) Color(0xFF1F6FEB) else MaterialTheme.colorScheme.surface)
             .border(
                 width = 1.dp,
-                color = if (selected) Color(0xFF58A6FF) else Color(0xFF30363D),
+                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
                 shape = RoundedCornerShape(12.dp),
             )
             .clickable(onClick = onClick)

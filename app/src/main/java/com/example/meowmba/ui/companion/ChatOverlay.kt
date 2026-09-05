@@ -55,7 +55,7 @@ fun ChatOverlay(
                 .fillMaxWidth()
                 .fillMaxHeight(0.6f)
                 .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
-                .background(Color(0xFF121212).copy(alpha = 0.95f))
+                .background(MaterialTheme.colorScheme.background.copy(alpha = 0.95f))
                 // Ride the keyboard and clear the gesture/nav bar: the sheet's
                 // background extends into the inset area, the content (input
                 // row included) is pushed above it.
@@ -73,21 +73,21 @@ fun ChatOverlay(
                     Text(
                         text = title,
                         style = MaterialTheme.typography.titleLarge,
-                        color = Color.White
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     if (onLeaveProject != null) {
                         TextButton(onClick = onLeaveProject, contentPadding = PaddingValues(0.dp)) {
-                            Text("Back to inbox", color = Color(0xFF58A6FF), fontSize = 12.sp)
+                            Text("Back to inbox", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
                         }
                     }
                 }
                 IconButton(onClick = onClose) {
-                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                    Icon(Icons.Default.Close, contentDescription = "Close", tint = MaterialTheme.colorScheme.onSurface)
                 }
             }
             
             Spacer(modifier = Modifier.height(8.dp))
-            HorizontalDivider(color = Color.Gray.copy(alpha = 0.3f))
+            HorizontalDivider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
             
             // Chat History (live from Room via CompanionState)
             LaunchedEffect(messages.size) {
@@ -115,12 +115,12 @@ fun ChatOverlay(
                     Icon(
                         Icons.Default.CallEnd,
                         contentDescription = "Hang up",
-                        tint = Color(0xFFF85149),
+                        tint = MaterialTheme.colorScheme.error,
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
                         if (listening) "On a call — listening…" else "On a call with Meow · tap to hang up",
-                        color = Color(0xFF3FB950),
+                        color = MaterialTheme.colorScheme.primary,
                         fontSize = 13.sp,
                     )
                 }
@@ -150,10 +150,10 @@ fun ChatOverlay(
                         )
                     },
                     colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color(0xFF1E1E1E),
-                        unfocusedContainerColor = Color(0xFF1E1E1E),
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White
+                        focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface
                     ),
                     shape = RoundedCornerShape(24.dp)
                 )
@@ -162,14 +162,14 @@ fun ChatOverlay(
                     Icon(
                         Icons.Default.Mic,
                         contentDescription = if (listening) "Stop listening" else "Speak",
-                        tint = if (listening || callActive) Color(0xFF00E5FF) else Color.White.copy(alpha = 0.85f),
+                        tint = if (listening || callActive) Color(0xFF00E5FF) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
                     )
                 }
                 IconButton(onClick = onCallClick) {
                     Icon(
                         if (callActive) Icons.Default.CallEnd else Icons.Default.Call,
                         contentDescription = if (callActive) "Hang up" else "Start voice call",
-                        tint = if (callActive) Color(0xFFF85149) else Color(0xFF3FB950),
+                        tint = if (callActive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
                     )
                 }
                 IconButton(
@@ -182,9 +182,9 @@ fun ChatOverlay(
                     },
                     modifier = Modifier
                         .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xFF448AFF))
+                        .background(MaterialTheme.colorScheme.primary)
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = Color.White)
+                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = MaterialTheme.colorScheme.onPrimary)
                 }
             }
         }
@@ -205,14 +205,14 @@ fun ChatMessage(sender: String, message: String, isCompanion: Boolean, onDelete:
         ) {
             if (isCompanion) {
                 Surface(
-                    color = Color(0xFF2C2C2C),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
                     shape = RoundedCornerShape(16.dp),
                     tonalElevation = 2.dp
                 ) {
                     Text(
                         text = message,
                         modifier = Modifier.padding(12.dp),
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onSurface,
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
@@ -220,7 +220,7 @@ fun ChatMessage(sender: String, message: String, isCompanion: Boolean, onDelete:
                 IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
                     Icon(
                         Icons.Default.Close, contentDescription = "Delete",
-                        tint = Color.White.copy(alpha = 0.4f),
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
                         modifier = Modifier.size(14.dp)
                     )
                 }
@@ -230,20 +230,20 @@ fun ChatMessage(sender: String, message: String, isCompanion: Boolean, onDelete:
                 IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
                     Icon(
                         Icons.Default.Close, contentDescription = "Delete",
-                        tint = Color.White.copy(alpha = 0.4f),
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
                         modifier = Modifier.size(14.dp)
                     )
                 }
                 Spacer(modifier = Modifier.width(4.dp))
                 Surface(
-                    color = Color(0xFF448AFF),
+                    color = MaterialTheme.colorScheme.primary,
                     shape = RoundedCornerShape(16.dp),
                     tonalElevation = 2.dp
                 ) {
                     Text(
                         text = message,
                         modifier = Modifier.padding(12.dp),
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onPrimary,
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
@@ -252,7 +252,7 @@ fun ChatMessage(sender: String, message: String, isCompanion: Boolean, onDelete:
         Text(
             text = sender,
             style = MaterialTheme.typography.labelSmall,
-            color = Color.Gray,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 2.dp, start = 4.dp, end = 4.dp)
         )
     }
