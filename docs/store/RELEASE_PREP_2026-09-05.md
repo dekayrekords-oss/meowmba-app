@@ -1,5 +1,10 @@
 # Release preparation — September 5, 2026
 
+**Later signed candidate:** see [SIGNED_RELEASE_1.3.20.md](SIGNED_RELEASE_1.3.20.md).
+The Play package is now verified as `com.meow.meowmba`, and the matching upload
+key was found on Meow. The unsigned build/package notes below are historical.
+Device, version-code availability and policy gates are not completed by signing.
+
 ## Scope
 
 This release-prep commit contains the Android app changes currently in the
