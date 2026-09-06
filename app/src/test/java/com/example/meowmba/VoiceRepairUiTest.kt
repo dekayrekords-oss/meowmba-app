@@ -3,6 +3,7 @@ package com.example.meowmba
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import com.example.meowmba.core.audio.AsrBackend
 import com.example.meowmba.core.audio.AsrBackendStatus
 import com.example.meowmba.ui.companion.CompanionState
@@ -27,12 +28,13 @@ class VoiceRepairUiTest {
                 VoiceModelScreen(
                     state = CompanionState(asrBackend = AsrBackend.WHISPER_LOCAL,
                         asrBackendStatuses = listOf(AsrBackendStatus(AsrBackend.WHISPER_LOCAL, false, "Needs streaming ASR and Whisper"))),
-                    onDownloadWhisper = { download++ }, onRepairStreamingModel = { repair++ }, onClose = {})
+                    onDownloadWhisper = { download++ }, onRepairStreamingModel = { repair++ },
+                    onDownloadLocalVoices = {}, onSelectLocalVoice = {}, onPreviewLocalVoice = {}, onUseSystemVoice = {}, onClose = {})
             }
         }
         compose.onNodeWithText("IN USE").assertDoesNotExist()
-        compose.onNodeWithText("Download or repair Whisper").performClick()
-        compose.onNodeWithText("Repair live-listening model").performClick()
+        compose.onNodeWithText("Download or repair Whisper").performScrollTo().performClick()
+        compose.onNodeWithText("Repair live-listening model").performScrollTo().performClick()
         assertEquals(1, download)
         assertEquals(1, repair)
     }

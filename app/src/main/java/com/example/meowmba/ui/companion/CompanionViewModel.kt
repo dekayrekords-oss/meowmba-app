@@ -3691,8 +3691,50 @@ class CompanionViewModel(
 
     fun toggleVoiceModelScreen() {
         val showing = !_uiState.value.showVoiceModelScreen
-        if (showing) refreshAsrBackendState()
+        if (showing) { refreshAsrBackendState(); refreshLocalVoices() }
         _uiState.value = _uiState.value.copy(showVoiceModelScreen = showing)
+    }
+
+    private var localVoiceDownloadJob: Job? = null
+    private fun refreshLocalVoices() {
+        val ctx = secureStorage?.context ?: return
+        _uiState.value = _uiState.value.copy(
+            localVoicesReady = com.example.meowmba.core.audio.LocalVoicePack(ctx).ready(),
+            localVoiceId = com.example.meowmba.core.audio.LocalVoices.selected(ctx).id,
+            localVoiceEnabled = com.example.meowmba.core.audio.LocalVoices.enabled(ctx))
+    }
+    fun downloadLocalVoices() {
+        val ctx = secureStorage?.context ?: return
+        if (localVoiceDownloadJob?.isActive == true) return
+        localVoiceDownloadJob = viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(localVoiceProgress = 0f, localVoiceMessage = "Getting offline voices…")
+            val result = com.example.meowmba.core.audio.LocalVoicePack(ctx).install { progress, label ->
+                _uiState.value = _uiState.value.copy(localVoiceProgress = progress, localVoiceMessage = label)
+            }
+            if (result.isSuccess) com.example.meowmba.core.audio.LocalVoices.select(ctx,
+                com.example.meowmba.core.audio.LocalVoices.selected(ctx).id)
+            _uiState.value = _uiState.value.copy(localVoiceProgress = null,
+                localVoiceMessage = result.fold({ "Four voices ready · speech stays on this phone" }, { it.message ?: "Voice download failed" }))
+            refreshLocalVoices()
+        }
+    }
+    fun selectLocalVoice(id: String) {
+        val ctx = secureStorage?.context ?: return
+        if (!com.example.meowmba.core.audio.LocalVoicePack(ctx).ready()) return
+        ttsManager?.stop()
+        com.example.meowmba.core.audio.LocalVoices.select(ctx, id)
+        refreshLocalVoices()
+    }
+    fun previewLocalVoice(id: String) {
+        val ctx = secureStorage?.context ?: return
+        if (!com.example.meowmba.core.audio.LocalVoicePack(ctx).ready()) return
+        (ttsManager as? com.example.meowmba.core.audio.TextToSpeechManager)?.previewLocalVoice(id)
+    }
+    fun useSystemVoice() {
+        val ctx = secureStorage?.context ?: return
+        ttsManager?.stop()
+        com.example.meowmba.core.audio.LocalVoices.useSystem(ctx)
+        refreshLocalVoices()
     }
 
     private fun alwaysOnSpeechEngine(): SpeechEngine? = preferredSpeechEngine()

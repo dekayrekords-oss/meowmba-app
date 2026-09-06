@@ -77,6 +77,11 @@ data class CompanionState(
     val facesInView: Int = 0,
     /** Wake-word models are on disk (or not needed yet). */
     val voicePackReady: Boolean = true,
+    val localVoicesReady: Boolean = false,
+    val localVoiceId: String = "af_heart",
+    val localVoiceEnabled: Boolean = false,
+    val localVoiceProgress: Float? = null,
+    val localVoiceMessage: String? = null,
     val voicePackLabel: String? = null,
     val voicePackProgress: Float? = null,
     val activeTask: String? = null,

@@ -46,10 +46,11 @@ class MeowAccessibilityService : AccessibilityService() {
             visited++
             val text = node.text?.toString()?.lowercase() ?: ""
             val desc = node.contentDescription?.toString()?.lowercase() ?: ""
-            if (want in text || want in desc) found.add(node) else node.recycle()
             for (i in 0 until node.childCount) {
                 node.getChild(i)?.let { if (!found.contains(it)) queue.add(it) }
             }
+            // Read children before recycling this node (important on API 31/32).
+            if (want in text || want in desc) found.add(node) else node.recycle()
         }
         return found
     }

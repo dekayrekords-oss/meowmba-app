@@ -6,7 +6,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import android.content.pm.PackageManager
+import com.example.meowmba.core.agent.tools.InstalledApps
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -94,6 +94,12 @@ class PhoneAgentLoop(
 
             val screenContent = svc.readScreenCompact()
             val activePackage = svc.getActivePackage()
+            if (activePackage == "unknown") {
+                val message = "I can't inspect the current screen. Reconnect Meow Accessibility, or open an app that exposes accessible controls. No task completion was verified."
+                lastSummary = message
+                onComplete(message)
+                break
+            }
             val prompt = buildPrompt(g, activePackage, screenContent, history)
 
             val response = try {
@@ -167,7 +173,7 @@ class PhoneAgentLoop(
                     val pm = svc.applicationContext?.packageManager
                     if (pm != null) {
                         val intent = pm.getLaunchIntentForPackage(
-                            resolvePackage(pm, appName) ?: ""
+                            InstalledApps.find(svc, appName)?.packageName ?: ""
                         )
                         if (intent != null) {
                             intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -183,42 +189,6 @@ class PhoneAgentLoop(
         }
     }
 
-    /** Resolve a user-friendly app name to a package name. */
-    private fun resolvePackage(pm: PackageManager, name: String): String? {
-        val lower = name.lowercase()
-        // Well-known app mapping
-        val known = mapOf(
-            "spotify" to "com.spotify.music",
-            "youtube" to "com.google.android.youtube",
-            "instagram" to "com.instagram.android",
-            "tiktok" to "com.zhiliaoapp.musically",
-            "netflix" to "com.netflix.mediaclient",
-            "chrome" to "com.android.chrome",
-            "gmail" to "com.google.android.gm",
-            "maps" to "com.google.android.apps.maps",
-            "whatsapp" to "com.whatsapp",
-            "telegram" to "org.telegram.messenger",
-            "twitter" to "com.twitter.android",
-            "discord" to "com.discord",
-            "reddit" to "com.reddit.frontpage",
-            "amazon" to "com.amazon.mShop.android.shopping",
-            "uber" to "com.ubercab",
-            "snapchat" to "com.snapchat.android",
-            "messages" to "com.google.android.apps.messaging",
-            "camera" to "com.sec.android.app.camera",
-            "photos" to "com.google.android.apps.photos",
-            "settings" to "com.android.settings",
-            "calculator" to "com.sec.android.app.popupcalculator",
-            "clock" to "com.sec.android.app.clockpackage",
-            "calendar" to "com.samsung.android.calendar",
-        )
-        known[lower]?.let { return it }
-        // Fuzzy: search installed apps by label
-        val installed = pm.getInstalledApplications(PackageManager.GET_META_DATA)
-        return installed.firstOrNull {
-            pm.getApplicationLabel(it).toString().equals(name, ignoreCase = true)
-        }?.packageName
-    }
 
     companion object {
         /** Static check for WakeWordService: skip "One moment" TTS when the loop is running. */

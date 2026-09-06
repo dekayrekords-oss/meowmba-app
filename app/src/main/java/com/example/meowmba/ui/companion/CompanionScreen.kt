@@ -828,6 +828,10 @@ fun CompanionScreen(
                 onSelectBackend = { viewModel.setAsrBackend(it) },
                 onDownloadWhisper = { viewModel.downloadWhisperModel() },
                 onRepairStreamingModel = { viewModel.repairStreamingAsrModel() },
+                onDownloadLocalVoices = { viewModel.downloadLocalVoices() },
+                onSelectLocalVoice = { viewModel.selectLocalVoice(it) },
+                onPreviewLocalVoice = { viewModel.previewLocalVoice(it) },
+                onUseSystemVoice = { viewModel.useSystemVoice() },
                 onClose = { viewModel.toggleVoiceModelScreen() }
             )
         }
