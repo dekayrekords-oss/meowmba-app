@@ -1,5 +1,16 @@
 # MEOWMBA MASTER PLAN
 
+## Current release checkpoint — September 5, 2026
+
+- Release candidate: 1.3.20 / versionCode 24, current application ID
+  `com.example.meowmba`. Older package/version declarations below are historical.
+- 3D work is paused by the user. No Blender assets or Filament model framework
+  are included in the app; keep prototypes outside app source sets.
+- Unsigned release bundle built and native alignment inspected. This is not
+  store approval, signed delivery, device acceptance, or completion of all plans.
+- Current evidence and required next steps:
+  [release checklist](docs/store/RELEASE_PREP_2026-09-05.md).
+
 ## Current priority — immersive companion revision
 
 Detailed scope: [docs/IMMERSIVE_COMPANION_PLAN.md](docs/IMMERSIVE_COMPANION_PLAN.md). Execution ownership: [docs/AGENT_PLAN.md](docs/AGENT_PLAN.md). These override older animation/orb descriptions for this revision; unrelated roadmap work remains intact.

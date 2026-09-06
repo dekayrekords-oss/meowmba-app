@@ -1,5 +1,17 @@
 # Agent execution plan — immersive companion revision
 
+## Current override — September 5 release preparation
+
+The user paused 3D work and explicitly excluded it from the app. The Filament
+dependencies, 3D avatar entry and model picker/renderer are removed from the
+app source sets. Prototype Kotlin files/tests remain locally under
+`art/avatars/framework-draft/`; Blender studies remain outside the release.
+All 3D checkpoints below are historical, not authorization to integrate them.
+
+Release evidence and remaining publication gates are maintained in
+`store/RELEASE_PREP_2026-09-05.md`. Chat/orb/cleanup/appearance focused tests
+pass; this does not complete phone QA or the earlier animation roadmap.
+
 Status: assignments planned, not launched by writing this file. Primary specification: IMMERSIVE_COMPANION_PLAN.md. Preserve the existing dirty worktree and earlier appearance work.
 
 ## Model and execution policy

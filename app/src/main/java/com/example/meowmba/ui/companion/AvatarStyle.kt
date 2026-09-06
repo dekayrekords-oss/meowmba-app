@@ -7,7 +7,6 @@ package com.example.meowmba.ui.companion
  * keeps the same pose inputs but renders the Meow OS particle sphere instead.
  */
 enum class AvatarStyle(val key: String, val label: String, val description: String) {
-    MODEL_3D("model_3d", "3D Model", "Your imported Blender / GLB avatar, with supported live expressions and animations."),
     PEARL(
         key = "pearl",
         label = "Pearl",

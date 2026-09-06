@@ -1,4 +1,9 @@
-# Play listing + App content (copy-paste)
+# Play listing + App content (historical draft — review required)
+
+Do not submit this draft unchanged. See `RELEASE_PREP_2026-09-05.md` for the
+current package/signing gates. Reconcile the Memba app name, cloud/MCP/service
+data flows, privacy disclosures and AccessibilityService policy before using
+these older form answers. The privacy URL and graphics need live verification.
 
 Use this for **step 5** (Store listing) and **step 6** (App content forms).
 Package: `com.meow.meowmba`
@@ -27,7 +32,7 @@ What you can do
 • Keep projects and tools, then pick them up later
 • Open apps, set timers, search the web, and get directions
 • Optional phone cleanup — you confirm every delete
-• Optional robot body (LOOI) over Bluetooth
+• Optional compatible robot base, when physically attached
 • Optional on-device or cloud AI — you choose, and you paste your own API key
 
 Privacy

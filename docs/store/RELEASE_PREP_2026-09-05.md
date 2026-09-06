@@ -16,29 +16,43 @@ or install the 3D model.
 
 ## Build status
 
-`./gradlew :app:bundleRelease` was attempted with Android Studio's bundled JDK.
-Gradle configuration, resource processing, signing validation and Kotlin/KSP
-tasks started successfully. The build stopped in native CMake configuration
-because the host could not resolve GitHub while fetching
-`stable-diffusion.cpp`; the downloaded `needle2/libneedle.a` was empty and
-failed its pinned SHA-256 check. Retry on a network-enabled build host or
-provide the already-verified dependency through the documented cache. Do not
-ship an artifact from a failed or unverified native build.
+The native dependency failure was resolved using the verified local cache.
+`:app:bundleRelease` succeeded with `-PallowUnsignedRelease=true` and the
+cache properties documented in [NATIVE_BUILD.md](../NATIVE_BUILD.md).
+The candidate is **unsigned**, not ready for Play upload.
+
+- Artifact: `app/build/outputs/bundle/release/app-release.aab` (about 180 MiB).
+- `scripts/check_release_bundle.py` inspected all 13 bundled arm64 libraries:
+  every ELF LOAD segment has at least 16 KB alignment, including sherpa/ONNX.
+- No JAR signature entries and no GLB/GLTF/Blender assets in the bundle.
+- Filament dependencies and the 3D avatar entry/picker/renderer are excluded.
+- Focused unit/UI tests: Appearance (6), ChatOverlay (4), CleanupDocumentsProvider
+  (3), OrbOrientation (3), OrbScatter (1): 17 tests, no failures/skips.
+- Full regression, Play-generated APK validation and 16 KB device testing remain
+  pending. ELF alignment alone is not end-to-end 16 KB compatibility proof.
+- MWDAT is disabled because no build-time SDK token was available. Do not
+  advertise direct Meta glasses SDK support for this candidate.
 
 ## Signing
 
-`app/build.gradle.kts` uses `keystore.properties` when present and otherwise
-falls back to the debug key so development builds remain reproducible. A Play
-release must be built with the existing upload/release keystore; never commit
-that keystore or its passwords. Verify the signer and Play Console package
-identity before upload.
+Release builds no longer fall back to a debug certificate. A normal release
+build fails without `keystore.properties`; an unsigned validation artifact
+requires the explicit `-PallowUnsignedRelease=true` switch. A Play release must
+use the existing upload/release key; never commit the key or passwords.
+No production signing key was available in the checked locations.
 
 ## Remaining Play Console gates
 
-1. Build a clean release AAB after native dependency/network recovery.
-2. Verify signing certificate, version code, ABI packaging and native libraries.
-3. Complete the existing listing, privacy policy, data-safety, content-rating,
-   target-API and app-access forms in `docs/store/PLAY_LISTING.md`.
+1. Confirm the actual Play Console package and upload certificate. Code currently
+   preserves `com.example.meowmba`, while historical store docs proposed
+   `com.meow.meowmba`. Do not silently change the installed app's identity or
+   uninstall it. Verify that versionCode 24 exceeds the Console's existing code.
+2. Build with the real signing configuration; validate using bundletool and
+   Play-generated APKs. Test supported CPU/device coverage: native compile flags
+   currently request ARMv8.7-A, not a generic older arm64 baseline.
+3. Update and verify the draft listing, privacy policy, data-safety, content-rating,
+   target-API and app-access forms. Current cloud, MCP and connected-service data
+   flows require review; older 'all data stays on device' wording is insufficient.
 4. Capture current phone screenshots and a feature graphic; do not use Blender
    previews as app screenshots.
 5. Run the release smoke checklist on the Fold: onboarding/key persistence,
@@ -46,5 +60,14 @@ identity before upload.
    permissions, background/resume and account logout.
 6. Upload to an internal/closed Play test track and inspect crash/ANR reports
    before production rollout.
+7. Review AccessibilityService phone automation against current Play policy;
+   autonomous initiation/planning/execution is restricted, and a generic
+   'user-enabled, confirm first' declaration is not proof of compliance.
+   See [Google Play Accessibility policy](https://support.google.com/googleplay/android-developer/answer/10964491?hl=en).
+
+The existing listing/privacy drafts and historical master-plan completion
+claims are not verified publication declarations. See the
+[Android 16 KB guide](https://developer.android.com/guide/practices/page-sizes)
+for the remaining native-device validation steps.
 
 No Play Console upload or production publication was performed in this task.

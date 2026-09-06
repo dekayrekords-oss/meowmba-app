@@ -187,11 +187,6 @@ fun AvatarRenderer(
     shakeCount: Int = 0,
     modifier: Modifier = Modifier
 ) {
-    if (state.avatarStyle == AvatarStyle.MODEL_3D) {
-        ModelAvatar(state, paused, faceGazeX ?: 0f, faceGazeY ?: 0f,
-            motionLean, motionLurch, mouthEnergy, modifier)
-        return
-    }
     val basePose = CatAvatarStateMachine.resolvePose(state)
     val haptics = LocalHapticFeedback.current
 

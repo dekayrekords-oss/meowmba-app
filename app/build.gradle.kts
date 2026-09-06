@@ -15,8 +15,8 @@ configurations.configureEach {
 }
 
 // Release signing. Reads keystore.properties (gitignored) from the project
-// root when present; fresh checkouts fall back to the debug keystore so the
-// build never breaks. Example keystore.properties:
+// root when present. Release builds never fall back to a debug certificate.
+// Example keystore.properties:
 //   storeFile=/path/to/meowmba-release.keystore
 //   storePassword=...
 //   keyAlias=meowmba
@@ -24,7 +24,10 @@ configurations.configureEach {
 val keystorePropsFile = rootProject.file("keystore.properties")
 val keystoreProps = Properties()
 if (keystorePropsFile.exists()) {
-    keystoreProps.load(keystorePropsFile.inputStream())
+    keystorePropsFile.inputStream().use { keystoreProps.load(it) }
+}
+val hasCompleteReleaseSigning = listOf("storeFile", "storePassword", "keyAlias", "keyPassword").all {
+    !keystoreProps.getProperty(it).isNullOrBlank()
 }
 
 // MWDAT (Meta glasses SDK) gating — same conditional-compile pattern as
@@ -94,13 +97,19 @@ android {
                     "-DGGML_LLAMAFILE=OFF"
                 )
                 abiFilters += "arm64-v8a"
+                providers.gradleProperty("nativeNeedleLibrary").orNull?.let {
+                    arguments += "-DNEEDLE_LIBRARY=$it"
+                }
+                providers.gradleProperty("nativeSdSource").orNull?.let {
+                    arguments += "-DFETCHCONTENT_SOURCE_DIR_STABLE_DIFFUSION_CPP=$it"
+                }
             }
         }
     }
 
     signingConfigs {
         create("release") {
-            if (keystorePropsFile.exists()) {
+            if (hasCompleteReleaseSigning) {
                 storeFile = file(keystoreProps.getProperty("storeFile"))
                 storePassword = keystoreProps.getProperty("storePassword")
                 keyAlias = keystoreProps.getProperty("keyAlias")
@@ -130,12 +139,12 @@ android {
             optimization {
                 enable = false
             }
-            // Real release keystore when configured, debug key otherwise
-            // (same behaviour as before this block existed).
-            signingConfig = if (keystorePropsFile.exists()) {
+            // An explicitly requested unsigned candidate can be inspected,
+            // but can never be mistaken for a signed Play upload.
+            signingConfig = if (hasCompleteReleaseSigning) {
                 signingConfigs.getByName("release")
             } else {
-                signingConfigs.getByName("debug")
+                null
             }
         }
     }
@@ -230,10 +239,28 @@ tasks.withType<Test>().configureEach {
     // dump told us nothing that forkEvery does not already address.
 }
 
+val verifyReleaseSigningConfiguration = tasks.register("verifyReleaseSigningConfiguration") {
+    // Capture values at configuration time; task execution must not access
+    // the Project/script object (configuration-cache compatibility).
+    val allowUnsigned = providers.gradleProperty("allowUnsignedRelease").orNull == "true"
+    val hasSigningFile = keystorePropsFile.exists()
+    val completeSigning = hasCompleteReleaseSigning
+    val releaseKeyFile = keystoreProps.getProperty("storeFile")?.takeIf { it.isNotBlank() }?.let { file(it) }
+    doLast {
+        check(hasSigningFile || allowUnsigned) {
+            "Release signing is missing. Configure keystore.properties, or use -PallowUnsignedRelease=true for an unsigned validation artifact."
+        }
+        if (hasSigningFile) {
+            check(completeSigning) { "keystore.properties is incomplete" }
+            check(releaseKeyFile?.isFile == true) { "Release keystore does not exist" }
+        }
+    }
+}
+tasks.matching { it.name == "preReleaseBuild" }.configureEach {
+    dependsOn(verifyReleaseSigningConfiguration)
+}
+
 dependencies {
-    implementation("com.google.android.filament:filament-android:1.68.5")
-    implementation("com.google.android.filament:gltfio-android:1.68.5")
-    implementation("com.google.android.filament:filament-utils-android:1.68.5")
     if (hasMwdat) {
         implementation("com.meta.wearable:mwdat-core:0.8.0")
         implementation("com.meta.wearable:mwdat-camera:0.8.0")

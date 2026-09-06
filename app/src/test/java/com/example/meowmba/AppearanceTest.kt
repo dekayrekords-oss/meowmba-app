@@ -17,6 +17,7 @@ class AppearanceTest {
         assertEquals(AppearanceMode.DARK, AppearanceMode.fromKey(null))
         assertEquals(AvatarStyle.NEO, AvatarStyle.fromKey("neo"))
         assertEquals(AvatarStyle.SIGNAL, AvatarStyle.fromKey("signal"))
+        assertEquals(AvatarStyle.DEFAULT, AvatarStyle.fromKey("model_3d"))
     }
 
     @Test fun `explicit brightness overrides system setting`() {

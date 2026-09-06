@@ -1,10 +1,15 @@
 # Play Store submission
 
-Code-side store prep is in. You still have to do the Console work.
+**Historical submission notes — not a current release checklist.** Follow
+[the September 5 release checklist](store/RELEASE_PREP_2026-09-05.md) for
+1.3.20 / code 24. The current artifact is unsigned and uses
+`com.example.meowmba`. Package, signing, privacy/data-safety and policy review
+remain publication gates. Older version/size/declaration claims below must
+not be copied into Console without revalidation.
 
 ## Already done in the app
 
-- Application id **`com.meow.meowmba`** (Play rejects `com.example.*`).
+- Earlier proposed release application id: `com.meow.meowmba`; not current.
 - Release minify + resource shrink + native debug symbols.
 - Debug broadcast that could write API keys is **debug builds only**.
 - Runtime IPC: same-signer permission + certificate check.
@@ -16,8 +21,9 @@ Code-side store prep is in. You still have to do the Console work.
 
 ## You must do
 
-1. **Uninstall the old debug app** (`com.example.meowmba`) then install the
-   new release — ids differ, they cannot update in place.
+1. **Preserve the installed app and its data.** Confirm package and signing
+   identity first. A different package cannot update the existing app in place;
+   do not uninstall it as part of release preparation.
 2. Host `docs/PRIVACY.md` as a public **https** page. Paste that URL in
    Play Console → App content → Privacy policy.
 3. Play Console → Create app → package `com.meow.meowmba`.
