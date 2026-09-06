@@ -115,7 +115,7 @@ class LaunchAppTool(private val context: Context) : Tool {
         displayName = "Open an app",
         description = "Open an installed app on this phone by name. " +
             "Example: \"open Spotify\", \"launch Gmail\".",
-        inputSchema = mapOf("name" to "string"),
+        inputSchema = mapOf("name" to "string", "purpose" to "optional: inbox"),
         riskLevel = RiskLevel.MODERATE,
         environments = setOf(ToolEnvironment.PHONE),
         confirmationPolicy = ConfirmationPolicy.NONE,
@@ -139,7 +139,8 @@ class LaunchAppTool(private val context: Context) : Tool {
             withContext(Dispatchers.Main.immediate) {
                 context.startActivity(launch)
             }
-            ToolResult.Success("Opened ${match.label}.")
+            ToolResult.Success("Opened ${match.label}." +
+                if (args["purpose"] == "inbox") " I haven't read any messages. The inbox is open for you to review." else "")
         } catch (e: Exception) {
             ToolResult.Failure("Couldn't open ${match.label}: ${e.message}")
         }

@@ -198,6 +198,13 @@ object AgentRouter {
         // someone@example.com" starts with "open", so a prefix-only rule handed the whole
         // sentence to the app launcher and it reported no app by that name.
         composeEmail(raw)?.let { return it }
+        // Reading mail is not a chat capability. Open the real inbox, but do
+        // not claim its contents were read. Includes the observed ASR "emile".
+        val mailCommand = WakePhraseMatcher.normalize(stripLeadIn(raw))
+        if (Regex("^(?:check|read|show|open)(?: me)? (?:my |the )?(?:e ?mail|emails|inbox|gmail|emile)\\b").containsMatchIn(mailCommand)) {
+            return AgentIntent("phone", "phone.launch_app",
+                mapOf("name" to "gmail", "purpose" to "inbox"), "Open Gmail inbox")
+        }
         extractAfter(raw, listOf("send an email to ", "send email to ", "email "))?.let { target ->
             val to = boundTarget(target) ?: return@let
             return AgentIntent("email", "email.send", mapOf("to" to to, "subject" to "", "body" to ""),

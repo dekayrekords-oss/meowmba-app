@@ -3753,19 +3753,30 @@ class CompanionViewModel(
         }
     }
 
+    private var whisperDownloadJob: Job? = null
+
     fun downloadWhisperModel() {
         val ctx = secureStorage?.context ?: return
-        viewModelScope.launch {
+        if (whisperDownloadJob?.isActive == true) return
+        whisperDownloadJob = viewModelScope.launch {
             _uiState.value = _uiState.value.copy(voicePackReady = false, voicePackLabel = "Getting Whisper…", voicePackProgress = 0f)
-            val result = com.example.meowmba.core.audio.VoiceModelStore(ctx).ensureWhisper { fraction, label ->
-                _uiState.value = _uiState.value.copy(voicePackLabel = label, voicePackProgress = fraction)
+            val store = com.example.meowmba.core.audio.VoiceModelStore(ctx)
+            val result = runCatching {
+                store.ensureAsr { fraction, label ->
+                    _uiState.value = _uiState.value.copy(voicePackLabel = label, voicePackProgress = fraction)
+                }.getOrThrow()
+                store.ensureWhisper { fraction, label ->
+                    _uiState.value = _uiState.value.copy(voicePackLabel = label, voicePackProgress = fraction)
+                }.getOrThrow()
             }
+            if (result.exceptionOrNull() is kotlinx.coroutines.CancellationException) throw result.exceptionOrNull()!!
             _uiState.value = _uiState.value.copy(
                 voicePackReady = result.isSuccess,
                 voicePackLabel = result.fold({ "Whisper ready" }, { it.message ?: "Whisper download failed" }),
                 voicePackProgress = null,
             )
             refreshAsrBackendState()
+            attachAsrEngine()
             attachWhisperRefiner()
         }
     }
@@ -4907,8 +4918,15 @@ class CompanionViewModel(
             // Multi-step phone goals: verbs that clearly need the autonomous
             // loop. The on-device LLM router often misses these, so we catch
             // them deterministically before falling into the model-based router.
+            val deterministicIntent = AgentRouter.route(text)
+            if (deterministicIntent != null) {
+                submitAgentIntent(deterministicIntent)
+                return@launch
+            }
             if (isMultiStepPhoneGoal(text)) {
-                phoneAgentLoop?.setGoal(text)
+                val loop = phoneAgentLoop
+                if (loop == null) speak("Phone control isn't ready. No app action was performed.")
+                else loop.setGoal(text)
                 return@launch
             }
 
@@ -5194,22 +5212,8 @@ class CompanionViewModel(
     private fun tryLaunchAppImmediately(text: String): Boolean {
         val intent = AgentRouter.route(text) ?: return false
         if (intent.toolId != "phone.launch_app") return false
-        val tool = agentToolRegistry?.byId("phone.launch_app")
-            ?: secureStorage?.context?.let { LaunchAppTool(it) }
-            ?: return false
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(
-                captionText = intent.title,
-                interactionState = InteractionState.IDLE,
-            )
-            when (val result = tool.execute(intent.args)) {
-                is com.example.meowmba.core.agent.tools.ToolResult.Success -> {
-                    _uiState.value = _uiState.value.copy(captionText = result.output)
-                    updateVoiceListeningMode()
-                }
-                is com.example.meowmba.core.agent.tools.ToolResult.Failure -> speak(result.error)
-            }
-        }
+        // Keep the fast path, but never skip tool ownership, policy or audit.
+        submitAgentIntent(intent)
         return true
     }
 

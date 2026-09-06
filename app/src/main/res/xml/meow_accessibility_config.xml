@@ -5,4 +5,5 @@
     android:notificationTimeout="200"
     android:accessibilityFlags="flagDefault|flagReportViewIds|flagRetrieveInteractiveWindows"
     android:canPerformGestures="true"
+    android:canRetrieveWindowContent="true"
     android:description="@string/meow_accessibility_description" />

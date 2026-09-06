@@ -826,6 +826,8 @@ fun CompanionScreen(
             VoiceModelScreen(
                 state = uiState,
                 onSelectBackend = { viewModel.setAsrBackend(it) },
+                onDownloadWhisper = { viewModel.downloadWhisperModel() },
+                onRepairStreamingModel = { viewModel.repairStreamingAsrModel() },
                 onClose = { viewModel.toggleVoiceModelScreen() }
             )
         }

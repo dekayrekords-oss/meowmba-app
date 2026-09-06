@@ -42,8 +42,8 @@ import com.example.meowmba.core.audio.AsrBackendStatus
 fun VoiceModelScreen(
     state: CompanionState,
     onSelectBackend: (AsrBackend) -> Unit = {},
-    onDownloadWhisper: () -> Unit = {},
-    onRepairStreamingModel: () -> Unit = {},
+    onDownloadWhisper: () -> Unit,
+    onRepairStreamingModel: () -> Unit,
     onClose: () -> Unit,
 ) {
     val statuses = state.asrBackendStatuses.ifEmpty {
@@ -91,21 +91,19 @@ fun VoiceModelScreen(
                     onSelect = { onSelectBackend(status.backend) },
                 )
                 Spacer(Modifier.height(12.dp))
-            }
-
-            val whisper = statuses.firstOrNull { it.backend == AsrBackend.WHISPER_LOCAL }
-            if (whisper?.available == false) {
-                Button(onClick = onDownloadWhisper, modifier = Modifier.fillMaxWidth()) {
-                    Text("Download or repair Whisper")
-                }
-                if (whisper.reason.contains("streaming", ignoreCase = true)) {
-                    OutlinedButton(onClick = onRepairStreamingModel, modifier = Modifier.fillMaxWidth()) {
-                        Text("Repair live-listening model")
+                if (status.backend == AsrBackend.WHISPER_LOCAL && !status.available) {
+                    Button(onClick = onDownloadWhisper, enabled = state.voicePackProgress == null, modifier = Modifier.fillMaxWidth()) {
+                        Text("Download or repair Whisper")
                     }
+                    if (status.reason.contains("streaming", ignoreCase = true)) {
+                        OutlinedButton(onClick = onRepairStreamingModel, enabled = state.voicePackProgress == null, modifier = Modifier.fillMaxWidth()) {
+                            Text("Repair live-listening model")
+                        }
+                    }
+                    state.voicePackLabel?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp) }
+                    state.voicePackProgress?.let { LinearProgressIndicator(progress = { it }, modifier = Modifier.fillMaxWidth()) }
+                    Spacer(Modifier.height(12.dp))
                 }
-                state.voicePackLabel?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp) }
-                state.voicePackProgress?.let { LinearProgressIndicator(progress = { it }, modifier = Modifier.fillMaxWidth()) }
-                Spacer(Modifier.height(12.dp))
             }
 
             Spacer(Modifier.height(8.dp))
@@ -235,7 +233,7 @@ private fun VoiceBackendCard(
                     )
                 }
             }
-            if (selected) {
+            if (selected && enabled) {
                 Spacer(Modifier.width(10.dp))
                 Box(
                     modifier = Modifier

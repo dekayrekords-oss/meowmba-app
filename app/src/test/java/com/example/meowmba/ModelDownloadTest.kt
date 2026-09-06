@@ -9,7 +9,10 @@ import com.example.meowmba.ui.companion.CompanionViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.cancel
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -120,6 +123,16 @@ class ModelDownloadImageCatalogTest {
 @OptIn(ExperimentalCoroutinesApi::class)
 class ModelDownloadViewModelTest {
 
+    private val createdModels = mutableListOf<CompanionViewModel>()
+    private fun modelTest(block: suspend TestScope.() -> Unit) = runTest {
+        try { block() } finally {
+            // A live ViewModel owns recurring microphone/health jobs. They
+            // must not keep virtual time advancing forever after this test.
+            createdModels.forEach { it.viewModelScope.cancel() }
+            createdModels.clear()
+        }
+    }
+
     private val testDispatcher = UnconfinedTestDispatcher()
     private lateinit var modelsDir: File
     private lateinit var mockStorage: SecureStorageManager
@@ -157,18 +170,20 @@ class ModelDownloadViewModelTest {
     }
 
     private fun viewModel() = CompanionViewModel(
-        secureStorage = mockStorage,
+        // These isolated download tests have no account or first-run setup.
+        // Supplying storage would also start the unrelated default Needle download.
+        secureStorage = null,
         modelsDir = modelsDir,
         modelDownloader = downloader
-    )
+    ).also { createdModels.add(it) }
 
     @Test
-    fun `downloading a catalog model installs it and marks it ready`() = runTest {
+    fun `downloading a catalog model installs it and marks it ready`() = modelTest {
         val vm = viewModel()
         val option = ModelCatalog.options.first { !it.requiresHfToken }
 
         vm.downloadModel(option)
-        advanceUntilIdle()
+        runCurrent()
 
         assertEquals(1, engineCalls)
         assertTrue(vm.uiState.value.modelDownloads[option.id]?.done == true)
@@ -178,12 +193,12 @@ class ModelDownloadViewModelTest {
     }
 
     @Test
-    fun `gated model without token fails honestly and never calls the network`() = runTest {
+    fun `gated model without token fails honestly and never calls the network`() = modelTest {
         val vm = viewModel()
         val gated = ModelCatalog.options.single { it.requiresHfToken }
 
         vm.downloadModel(gated)
-        advanceUntilIdle()
+        runCurrent()
 
         assertEquals(0, engineCalls)
         val progress = vm.uiState.value.modelDownloads[gated.id]
@@ -192,7 +207,7 @@ class ModelDownloadViewModelTest {
     }
 
     @Test
-    fun `custom download validates filename and installs on success`() = runTest {
+    fun `custom download validates filename and installs on success`() = modelTest {
         val vm = viewModel()
 
         vm.downloadCustomModel("https://example.com/m.task", "../evil.task")
@@ -204,13 +219,13 @@ class ModelDownloadViewModelTest {
         assertEquals(0, engineCalls)
 
         vm.downloadCustomModel("https://example.com/m.task", "m.task")
-        advanceUntilIdle()
+        runCurrent()
         assertEquals(1, engineCalls)
         assertTrue(File(modelsDir, "m.task").exists())
     }
 
     @Test
-    fun `an already-downloaded model is adopted automatically at startup`() = runTest {
+    fun `an already-downloaded model is adopted automatically at startup`() = modelTest {
         // Pre-install a catalog model before the ViewModel exists
         val option = ModelCatalog.options.first()
         File(modelsDir, option.fileName).writeBytes(ByteArray(64))
@@ -221,11 +236,11 @@ class ModelDownloadViewModelTest {
     }
 
     @Test
-    fun `deleting an installed model returns to not-installed honestly`() = runTest {
+    fun `deleting an installed model returns to not-installed honestly`() = modelTest {
         val vm = viewModel()
         val option = ModelCatalog.options.first { !it.requiresHfToken }
         vm.downloadModel(option)
-        advanceUntilIdle()
+        runCurrent()
         assertTrue(vm.uiState.value.loadedModels.localInstalled)
 
         vm.deleteDownloadedModel(option)
@@ -234,12 +249,12 @@ class ModelDownloadViewModelTest {
     }
 
     @Test
-    fun `downloadImageModel without a models directory fails honestly instead of crashing`() = runTest {
+    fun `downloadImageModel without a models directory fails honestly instead of crashing`() = modelTest {
         // No modelsDir/modelDownloader injected → the ViewModel's `downloader` is null,
         // so this must hit the early guard and never touch DownloadService.start (which
         // needs a real Android Context — the same reason the three catalog-model download
         // tests above fail under plain JUnit rather than Robolectric).
-        val vm = CompanionViewModel(secureStorage = mockStorage)
+        val vm = CompanionViewModel().also { createdModels.add(it) }
         val option = ImageModelCatalog.options.first()
 
         vm.downloadImageModel(option)
@@ -250,7 +265,7 @@ class ModelDownloadViewModelTest {
     }
 
     @Test
-    fun `deleting the image model returns to not-installed honestly`() = runTest {
+    fun `deleting the image model returns to not-installed honestly`() = modelTest {
         // Install by writing the file directly (not via downloadImageModel, which
         // routes through the same real DownloadService.start Android dependency the
         // three pre-existing catalog-download tests above already can't exercise
@@ -266,7 +281,7 @@ class ModelDownloadViewModelTest {
     }
 
     @Test
-    fun `an already-downloaded image model is detected at startup without any download`() = runTest {
+    fun `an already-downloaded image model is detected at startup without any download`() = modelTest {
         val option = ImageModelCatalog.options.first()
         File(modelsDir, option.fileName).writeBytes(ByteArray(64))
 
