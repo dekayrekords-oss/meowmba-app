@@ -170,6 +170,7 @@ data class CompanionState(
     val memorySearchResults: List<MemoryEntity>? = null,
     val showMemoryScreen: Boolean = false,
     val showStudioScreen: Boolean = false,
+    val showAssetBrowser: Boolean = false,
     /** Invented clip currently playing over the face, or null. Clears itself when done. */
     val activeAnimation: CustomAnimationSpec? = null,
     /** Godot-style channel composition currently driving the face, if any. */
@@ -464,6 +465,7 @@ fun faceModeActive(state: CompanionState): Boolean =
         !state.showPrivacyDashboard &&
         !state.showMemoryScreen &&
         !state.showStudioScreen &&
+        !state.showAssetBrowser &&
         !state.showAgentsScreen &&
         !state.showBackgroundScreen &&
         !state.showWeatherScreen &&

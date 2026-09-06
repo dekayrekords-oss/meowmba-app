@@ -565,6 +565,7 @@ fun CompanionScreen(
                     "Privacy" -> viewModel.togglePrivacyDashboard()
                     "Memory" -> viewModel.toggleMemoryScreen()
                     "Studio" -> viewModel.toggleStudioScreen()
+                    "Files" -> viewModel.toggleAssetBrowser()
                     "NAV" -> viewModel.toggleNavScreen()
                     "Weather" -> viewModel.toggleWeatherScreen()
                     "Background" -> viewModel.toggleBackgroundScreen()
@@ -857,6 +858,12 @@ fun CompanionScreen(
                 onExport = { viewModel.exportMemoriesJson() },
                 onClose = { viewModel.toggleMemoryScreen() }
             )
+        }
+
+        if (uiState.showAssetBrowser) {
+            AssetBrowserScreen(askAi = viewModel::askAssetBrain,
+                onProjects = { viewModel.toggleAssetBrowser(); viewModel.toggleProjectsScreen() },
+                onClose = viewModel::toggleAssetBrowser)
         }
 
         if (uiState.showStudioScreen) {

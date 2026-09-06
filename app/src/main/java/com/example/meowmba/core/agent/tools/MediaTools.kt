@@ -92,12 +92,12 @@ class MediaGenerateTool(
         if (bitmap != null) {
             val name = fileNameFor(prompt, prefix = "image")
             return@withContext try {
-                workspace.resolve(name)?.let { file ->
+                workspace.newAsset("photos", name).let { file ->
                     FileOutputStream(file).use { out ->
                         check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)) { "PNG encoding failed" }
                     }
                     ToolResult.Success(
-                        "Image saved as \"$name\" in the workspace: $prompt" +
+                        "Image saved as \"${file.relativeTo(workspace.root).invariantSeparatorsPath}\" in the workspace: $prompt" +
                             "\nMEDIA_FILE:${file.absolutePath}"
                     )
                 } ?: ToolResult.Failure("Could not write image — path is outside the workspace.")
@@ -243,10 +243,10 @@ class MediaGenerateVideoTool(
                 .replace(Regex("\\s+"), "_")
             val fileName = if (safeName.isNotBlank()) "video_${safeName}.mp4" else "video_${System.currentTimeMillis()}.mp4"
             return@withContext try {
-                workspace.resolve(fileName)?.let { file ->
+                workspace.newAsset("videos", fileName).let { file ->
                     FileOutputStream(file).use { out -> out.write(remoteBytes) }
                     ToolResult.Success(
-                        "Video saved as \"$fileName\" in the workspace: $prompt\nMEDIA_FILE:${file.absolutePath}"
+                        "Video saved as \"${file.relativeTo(workspace.root).invariantSeparatorsPath}\" in the workspace: $prompt\nMEDIA_FILE:${file.absolutePath}"
                     )
                 } ?: ToolResult.Failure("Could not write video — path is outside the workspace.")
             } catch (e: Exception) {
@@ -358,10 +358,10 @@ class MediaGenerateAudioTool(
                 .replace(Regex("\\s+"), "_")
             val fileName = if (safeName.isNotBlank()) "audio_${safeName}.wav" else "audio_${System.currentTimeMillis()}.wav"
             return@withContext try {
-                workspace.resolve(fileName)?.let { file ->
+                workspace.newAsset("audio", fileName).let { file ->
                     FileOutputStream(file).use { out -> out.write(remoteBytes) }
                     ToolResult.Success(
-                        "Audio saved as \"$fileName\" ($durationSec sec) in the workspace: $prompt\nMEDIA_FILE:${file.absolutePath}"
+                        "Audio saved as \"${file.relativeTo(workspace.root).invariantSeparatorsPath}\" ($durationSec sec) in the workspace: $prompt\nMEDIA_FILE:${file.absolutePath}"
                     )
                 } ?: ToolResult.Failure("Could not write audio — path is outside workspace.")
             } catch (e: Exception) {
@@ -388,10 +388,10 @@ class MediaGenerateAudioTool(
         val fileName = if (safeName.isNotBlank()) "audio_${safeName}.wav" else "audio_${System.currentTimeMillis()}.wav"
 
         return@withContext try {
-            workspace.resolve(fileName)?.let { file ->
+            workspace.newAsset("audio", fileName).let { file ->
                 writeWav(file, sampleRate, samples)
                 ToolResult.Success(
-                    "Audio saved as \"$fileName\" ($durationSec sec) in the workspace: $prompt\nMEDIA_FILE:${file.absolutePath}"
+                    "Audio saved as \"${file.relativeTo(workspace.root).invariantSeparatorsPath}\" ($durationSec sec) in the workspace: $prompt\nMEDIA_FILE:${file.absolutePath}"
                 )
             } ?: ToolResult.Failure("Could not write audio — path is outside workspace.")
         } catch (e: Exception) {

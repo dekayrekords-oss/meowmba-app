@@ -114,6 +114,12 @@ object AgentRouter {
         }
 
         // Exact-phrase commands (normalized for tolerance)
+        if (says("open files", "open the file browser", "open file browser", "open my library", "open asset library"))
+            return AgentIntent("file", "file.browser", emptyMap(), "open Files library")
+        if (says("clean up library", "clean up my library", "analyze library storage"))
+            return AgentIntent("file", "file.cleanup", emptyMap(), "review library cleanup")
+        val assetSearch = Regex("^(?:find files|search files|find assets|search library)(?: for| about)? (.+)$", RegexOption.IGNORE_CASE).find(stripAddress(raw))
+        if (assetSearch != null) return AgentIntent("file", "file.search", mapOf("query" to assetSearch.groupValues[1]), "search saved assets")
         if (normalized in setOf("list files", "list the files", "show files", "show me the files",
                 "what files do i have", "show workspace", "list workspace")) {
             return AgentIntent("file", "file.list", emptyMap(), "list workspace files")

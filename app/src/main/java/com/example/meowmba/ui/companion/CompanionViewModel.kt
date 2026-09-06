@@ -1178,6 +1178,12 @@ class CompanionViewModel(
             toolRegistry.register(FileWriteTool(workspace))
             toolRegistry.register(FileDeleteTool(workspace))
             toolRegistry.register(FileListTool(workspace))
+            val assetLibrary = com.example.meowmba.core.files.AssetLibrary(workspaceRoot)
+            listOf("browser", "search", "cleanup", "move", "trash", "restore").forEach { operation ->
+                toolRegistry.register(com.example.meowmba.core.agent.tools.AssetTool(assetLibrary, operation) {
+                    if (!_uiState.value.showAssetBrowser) toggleAssetBrowser()
+                })
+            }
             toolRegistry.register(ProjectCreateTool(workspace))
         }
         // Phase 6c/6d: desktop bridge tools ride the same registry — the
@@ -1468,7 +1474,8 @@ class CompanionViewModel(
             // screenshot pages in the swipe-left browser. Pages the agent
             // builds get persisted under web_pages/.
             appContext?.let { ctx ->
-                val pagesDir = java.io.File(ctx.filesDir, "web_pages")
+                val pagesDir = workspaceRoot?.let { java.io.File(it, "documents/web-pages") }
+                    ?: java.io.File(ctx.filesDir, "web_pages")
                 toolRegistry.register(
                     WebBrowserTool(java.io.File(ctx.filesDir, "web_screenshots"), pagesDir)
                 )
@@ -1719,7 +1726,7 @@ class CompanionViewModel(
             )
         }
         if (workspaceRoot != null) {
-            val ws = Workspace(workspaceRoot)
+            val ws = Workspace(workspaceRoot) { _uiState.value.activeProjectId?.let { "projects/project-$it" } }
             toolRegistry.register(EmailDraftTool(ws))
             // Read the path at call time, not registration time, so installing
             // the weights takes effect without restarting the app.
@@ -6719,6 +6726,33 @@ class CompanionViewModel(
         _uiState.value = _uiState.value.copy(showProjectsScreen = !_uiState.value.showProjectsScreen)
     }
 
+    fun toggleAssetBrowser() {
+        val opening = !_uiState.value.showAssetBrowser
+        _uiState.value = if (opening) _uiState.value.withPanelsClosed().copy(showAssetBrowser = true, showAppDrawer = false, showVoiceModelScreen = false) else _uiState.value.copy(showAssetBrowser = false)
+    }
+
+    /** Metadata-only planner. It cannot execute tools; the browser validates and reviews results. */
+    suspend fun askAssetBrain(prompt: String): String {
+        val provider = omniRoute ?: currentProvider ?: error("Choose a working AI model in Settings first")
+        if (provider is com.example.meowmba.core.agent.OmniRoute) {
+            val result = StringBuilder()
+            provider.generateStreaming(prompt, preferRouteId = preferredChatRouteId()).collect { response ->
+                when (response) {
+                    is com.example.meowmba.core.agent.ModelResponse.Partial -> result.append(response.text)
+                    is com.example.meowmba.core.agent.ModelResponse.Complete -> if (result.isBlank()) result.append(response.text)
+                    is com.example.meowmba.core.agent.ModelResponse.Error -> error(response.message)
+                }
+                check(result.length <= 32000) { "AI response exceeded the planning limit" }
+            }
+            return result.toString().ifBlank { error("AI returned no plan") }
+        }
+        return when (val response = provider.generate(prompt)) {
+            is com.example.meowmba.core.agent.ModelResponse.Complete -> response.text
+            is com.example.meowmba.core.agent.ModelResponse.Error -> error(response.message)
+            else -> error("AI returned no complete plan")
+        }
+    }
+
     fun toggleToolsScreen() {
         _uiState.value = _uiState.value.copy(showToolsScreen = !_uiState.value.showToolsScreen)
     }
@@ -8290,6 +8324,7 @@ class CompanionViewModel(
         showPrivacyDashboard = false,
         showMemoryScreen = false,
         showStudioScreen = false,
+        showAssetBrowser = false,
         showWeatherScreen = false,
         showBackgroundScreen = false,
         showNavScreen = false,

@@ -25,6 +25,7 @@ private class FakeMusicGenerator(
 }
 
 @RunWith(RobolectricTestRunner::class)
+@org.robolectric.annotation.Config(sdk = [35])
 class MediaGenerateAudioToolRoutingTest {
 
     private fun workspace(): Workspace =

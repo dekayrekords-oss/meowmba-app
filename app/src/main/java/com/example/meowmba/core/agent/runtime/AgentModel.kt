@@ -88,7 +88,7 @@ object AgentRegistry {
         AgentDefinition(
             id = "file", name = "Shelve",
             purpose = "Organizes the workspace: read, write, and delete files (sandboxed).",
-            allowedTools = setOf("file.read", "file.write", "file.delete", "file.list")
+            allowedTools = setOf("file.read", "file.write", "file.delete", "file.list", "file.browser", "file.search", "file.cleanup", "file.move", "file.trash", "file.restore")
         ),
         AgentDefinition(
             id = "memory", name = "Keeper",
@@ -98,12 +98,12 @@ object AgentRegistry {
         AgentDefinition(
             id = "project", name = "Builder",
             purpose = "Creates and organizes project folders and manifests.",
-            allowedTools = setOf("project.create", "file.write", "file.read", "file.list")
+            allowedTools = setOf("project.create", "file.write", "file.read", "file.list", "file.search", "file.move")
         ),
         AgentDefinition(
             id = "coding", name = "Forge",
             purpose = "Helps write, edit, and debug code inside projects.",
-            allowedTools = setOf("file.read", "file.write", "file.list", "project.create")
+            allowedTools = setOf("file.read", "file.write", "file.list", "project.create", "file.search")
         ),
         AgentDefinition(
             id = "research", name = "Scout",

@@ -16,7 +16,7 @@ import kotlinx.coroutines.withContext
 object CommandHeuristics {
     private val SIGNAL_WORDS = setOf(
         // Files, projects, memory
-        "create", "make", "file", "folder", "project", "delete", "remove",
+        "create", "make", "file", "files", "assets", "library", "organize", "cleanup", "clean", "folder", "project", "delete", "remove",
         "read", "open", "write", "save", "search", "find", "list", "show",
         "task", "workspace", "memory", "remember", "note", "scaffold", "todo",
         // Email and calendar — these tools are registered but were unreachable

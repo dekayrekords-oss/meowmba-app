@@ -76,12 +76,20 @@ class FileReadTool(private val workspace: Workspace) : Tool {
 
     override suspend fun execute(args: Map<String, String>): ToolResult {
         val path = args["path"] ?: return ToolResult.Failure("Missing 'path'")
-        val content = workspace.read(path)
-        return if (content != null) {
-            ToolResult.Success(content.take(4000))
-        } else {
-            ToolResult.Failure("Cannot read '$path' (missing, unreadable, or outside the workspace)")
-        }
+        val file = workspace.resolve(path)?.takeIf { it.isFile }
+            ?: return ToolResult.Failure("Cannot read '$path' (missing or outside the workspace)")
+        if (com.example.meowmba.core.files.AssetLibrary.category(file.name) != "Documents")
+            return ToolResult.Failure("This is a media or archive file, not text. Open it in Files with a compatible viewer.")
+        // Imported videos/documents can be gigabytes. Never read the whole file just to return 4 KB.
+        return runCatching {
+            val buffer = CharArray(4001)
+            val count = file.bufferedReader().use { reader ->
+                var total = 0
+                while (total < buffer.size) { val n = reader.read(buffer, total, buffer.size - total); if (n < 0) break; total += n }
+                total
+            }
+            ToolResult.Success(String(buffer, 0, count.coerceAtMost(4000)) + if (count > 4000) "\n[Text preview truncated]" else "")
+        }.getOrElse { ToolResult.Failure("Could not read '$path': ${it.message}") }
     }
 }
 
@@ -130,16 +138,17 @@ class FileListTool(private val workspace: Workspace) : Tool {
     override val definition = ToolDefinition(
         id = "file.list",
         displayName = "List files",
-        description = "List everything in the workspace.",
+        description = "List a bounded preview of library files and folders, excluding Trash and linked paths. Use file.search to find specific assets.",
         inputSchema = emptyMap(),
         riskLevel = RiskLevel.SAFE
     )
 
     override suspend fun execute(args: Map<String, String>): ToolResult {
-        val entries = workspace.list()
+        val scan = com.example.meowmba.core.files.AssetLibrary(workspace.root).scan()
+        val entries = scan.entries.map { it.path + if (it.folder) "/" else "" }.sorted()
         return ToolResult.Success(
             if (entries.isEmpty()) "Workspace is empty."
-            else entries.take(50).joinToString("\n")
+            else entries.take(50).joinToString("\n") + if (scan.truncated || entries.size > 50) "\n[Partial listing; use file.search or Files]" else ""
         )
     }
 }

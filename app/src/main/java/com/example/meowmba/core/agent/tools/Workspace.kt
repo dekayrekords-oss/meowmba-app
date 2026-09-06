@@ -10,11 +10,15 @@ import java.io.File
  *
  * Pure JVM (java.io.File), fully unit-testable.
  */
-class Workspace(val root: File) {
+class Workspace(val root: File, private val activeProjectFolder: () -> String? = { null }) {
 
     init {
         root.mkdirs()
     }
+
+    /** Shared with Files: unique outputs, grouped under the active project when present. */
+    fun newAsset(folder: String, name: String): File = com.example.meowmba.core.files.AssetLibrary(root)
+        .newOutput(activeProjectFolder()?.let { "$it/$folder" } ?: folder, name)
 
     /**
      * Resolve a user/agent-supplied relative path against the sandbox root.

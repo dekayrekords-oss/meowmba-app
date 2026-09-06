@@ -62,8 +62,8 @@ class GlassesTakePhotoTool(
                     "(Setup glasses → Connect) and approve camera permission in Meta AI."
             )
         }
-        val file = workspace.resolve("glasses/photo_${System.currentTimeMillis()}.jpg")
-            ?: return@withContext ToolResult.Failure("Could not write photo — path is outside the workspace.")
+        val file = runCatching { workspace.newAsset("photos", "glasses_${System.currentTimeMillis()}.jpg") }
+            .getOrElse { return@withContext ToolResult.Failure("Could not save glasses photo: ${it.message}") }
         runCatching {
             file.parentFile?.mkdirs()
             FileOutputStream(file).use { it.write(frame) }

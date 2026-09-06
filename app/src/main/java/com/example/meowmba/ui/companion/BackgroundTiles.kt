@@ -106,6 +106,7 @@ data class MembaTile(val name: String, val icon: ImageVector, val color: Color)
 
 val tileItems: List<MembaTile> @Composable get() = listOf(
     MembaTile("Memory", Icons.Default.Terminal, MaterialTheme.colorScheme.primary),
+    MembaTile("Files", Icons.Default.FolderOpen, Color(0xFFFFC857)),
     MembaTile("Studio", Icons.Default.Palette, Color(0xFFFF5CA8)),
     MembaTile("Hardware", Icons.Default.Memory, Color(0xFF00E5FF)),
     MembaTile("Robot", Icons.Default.Android, Color(0xFF4DB6AC)),
