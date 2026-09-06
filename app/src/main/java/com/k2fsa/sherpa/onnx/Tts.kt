@@ -3,6 +3,16 @@ package com.k2fsa.sherpa.onnx
 
 import android.content.res.AssetManager
 
+/** JNI looks up invoke(float[]): Integer, which an invokedynamic lambda lacks. */
+@androidx.annotation.Keep
+internal class NativeTtsCallback(private val callback: (FloatArray) -> Int) : (FloatArray) -> Int {
+    private var failure: Throwable? = null
+    // Never leave a pending Java exception inside JNI: native allocation would abort.
+    override fun invoke(samples: FloatArray): Int = try { callback(samples) }
+        catch (error: Throwable) { failure = error; 0 }
+    fun rethrowFailure() { failure?.let { throw it } }
+}
+
 data class OfflineTtsVitsModelConfig(
     var model: String = "",
     var lexicon: String = "",
@@ -170,13 +180,14 @@ class OfflineTts(
         speed: Float = 1.0f,
         callback: (samples: FloatArray) -> Int
     ): GeneratedAudio {
+        val nativeCallback = NativeTtsCallback(callback)
         return generateWithCallbackImpl(
             ptr,
             text = text,
             sid = sid,
             speed = speed,
-            callback = callback
-        )
+            callback = nativeCallback
+        ).also { nativeCallback.rethrowFailure() }
     }
 
     fun generateWithConfig(
@@ -191,7 +202,8 @@ class OfflineTts(
         config: GenerationConfig,
         callback: (samples: FloatArray) -> Int
     ): GeneratedAudio {
-        return generateWithConfigImpl(ptr, text, config, callback)
+        val nativeCallback = NativeTtsCallback(callback)
+        return generateWithConfigImpl(ptr, text, config, nativeCallback).also { nativeCallback.rethrowFailure() }
     }
 
     fun allocate(assetManager: AssetManager? = null) {
@@ -408,4 +420,3 @@ fun getOfflineTtsConfig(
         ruleFars = ruleFars,
     )
 }
-

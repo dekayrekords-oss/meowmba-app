@@ -13,6 +13,35 @@ import org.junit.Test
 import java.io.File
 
 class LocalVoiceDeviceTest {
+    @Test fun localPlaybackAndStop() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val started = java.util.concurrent.CountDownLatch(1)
+        val finished = java.util.concurrent.CountDownLatch(1)
+        val error = java.util.concurrent.atomic.AtomicReference<String?>(null)
+        val speech = LocalNeuralSpeech(context, { started.countDown() }, { finished.countDown() }, { error.set(it) })
+        try {
+            speech.enqueue("Hello. These voices run locally on your phone.", true, LocalVoices.find("af_heart"))
+            assertTrue("Playback did not start: ${error.get()}", started.await(45, java.util.concurrent.TimeUnit.SECONDS))
+            assertTrue("Playback did not finish: ${error.get()}", finished.await(30, java.util.concurrent.TimeUnit.SECONDS))
+            assertNull(error.get())
+            assertFalse(speech.isSpeaking())
+        } finally { speech.shutdown() }
+        val nextStarted = java.util.concurrent.CountDownLatch(1)
+        val cancelSpeech = LocalNeuralSpeech(context, { nextStarted.countDown() }, {}, { error.set(it) })
+        try {
+            cancelSpeech.enqueue("This longer sentence tests whether stopping speech interrupts playback promptly and keeps the conversation responsive.", true)
+            assertTrue(nextStarted.await(45, java.util.concurrent.TimeUnit.SECONDS))
+            val before = android.os.SystemClock.elapsedRealtime()
+            cancelSpeech.stop()
+            assertFalse(cancelSpeech.isSpeaking())
+            val latency = android.os.SystemClock.elapsedRealtime() - before
+            assertTrue("Stop took $latency ms", latency < 500)
+            Thread.sleep(1000)
+            assertNull(error.get())
+            println("VOICE_PLAYBACK completed=true stop_return_ms=$latency")
+        } finally { cancelSpeech.shutdown() }
+    }
+
     @Test fun installAndGenerateFourOfflineVoices() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val store = LocalVoicePack(context)
@@ -43,6 +72,12 @@ class LocalVoiceDeviceTest {
         LocalVoices.select(context, "af_heart")
         assertEquals("af_heart", LocalVoices.selected(context).id)
         assertTrue(LocalVoices.enabled(context))
+        // Instrumentation terminates the process immediately; await apply()'s disk write.
+        val prefs = File(context.applicationInfo.dataDir, "shared_prefs/local_neural_voice.xml")
+        val deadline = System.currentTimeMillis() + 5000
+        while ((!prefs.isFile || !prefs.readText().contains("af_heart")) && System.currentTimeMillis() < deadline)
+            Thread.sleep(50)
+        assertTrue("Voice selection was not saved to disk", prefs.isFile && prefs.readText().contains("af_heart"))
     }
 
     @Test fun launchRepresentativeInstalledApps() {

@@ -1,16 +1,41 @@
-# On-phone voices and broader app support — 1.3.24 / code 28
+# On-phone voices and broader app support — 1.3.25 / code 29
 
 ## Status
 
-Implemented and built; not yet installed. The one-time 349,418,188-byte model
-download and connected-device tests are awaiting user approval. No server-side
-voice inference or paid API is used by this implementation. The existing chat
+Installed on the Fold with an in-place update, preserving app data and Whisper.
+The 349,418,188-byte pack was downloaded on Meow, checked against the pinned
+SHA-256, validated for safe archive entries, and transferred by USB. Direct
+GitHub connections failed on the phone and Mac; the in-app download path is
+therefore not verified end-to-end. No server-side voice inference or paid API
+is used by this implementation. The existing chat
 model/provider is unchanged; this does not claim the entire AI stack is offline.
 
-The final build and all 39 targeted JVM/UI tests pass. Connected native voice
-generation, playback latency, listening quality and app-launch tests are
-prepared but have not run for this version. Human-indistinguishable speech and
-ElevenLabs-equivalent quality are not verified or guaranteed.
+The initial feature build passed 39 targeted JVM/UI tests; the callback repair
+passed all 6 voice regression tests. On the Fold, native generation of four
+distinct non-silent 24 kHz samples, AudioTrack playback/completion and stop,
+and actual chat-command launches of Chrome, Calculator and My Files passed.
+Human-indistinguishable speech and ElevenLabs-equivalent quality are not
+verified or guaranteed. Listening quality still needs user evaluation.
+
+The first hardware test found a JNI callback crash caused by Kotlin's generated
+lambda lacking invoke(float[]): Integer. Version 1.3.25 uses a kept concrete
+adapter and defers callback exceptions until outside JNI. Version 1.3.24 should
+not be used for neural playback.
+
+## Measured generation on the Fold
+
+| Voice | First audio | Total synthesis | Generated duration |
+|---|---:|---:|---:|
+| Heart (cold model) | 2261 ms | 4321 ms | 3341 ms |
+| Bella (warm model) | 1331 ms | 4596 ms | 3233 ms |
+| Fenrir (warm model) | 1463 ms | 4350 ms | 3205 ms |
+| Michael (warm model) | 1694 ms | 5275 ms | 3832 ms |
+
+These are one-run observations, not latency guarantees. Synthesis was slower
+than real time in this sample; sentence gaps and further CPU optimization need
+evaluation before claiming premium conversational responsiveness. AudioTrack
+completed its playback test and stop returned in 7 ms (software measurement,
+not an acoustic latency measurement). Samples are in the release voices folder.
 
 ## Four voice choices
 
@@ -57,11 +82,14 @@ See also the [original voice catalog](https://huggingface.co/hexgrad/Kokoro-82M/
   permissions and Android restrictions remain. Some older gesture/loop paths
   still need stronger completion/approval integration from the agent audit.
 
-## Next verification
+## Remaining verification
 
-Install without clearing user data, download/check the pack, synthesize and
-save all four samples on the Fold, measure cold/warm first-audio latency and
-real-time factor, listen to the results, and test actual AudioTrack playback
-and stop behavior. Check Chrome, Calculator and My Files through the real
-chat submission method, without inspecting account contents. Reconnect
-Accessibility manually if Android still marks the service disconnected.
+Evaluate the four samples by ear and profile longer conversational replies.
+Retest the in-app download when GitHub connectivity works. Android still marks
+MeowAccessibilityService crashed/disconnected: the user must toggle Meow
+Assistant off/on under Accessibility / Installed apps before screen-based
+control can be verified. No accessibility permission was force-granted.
+
+A separate pre-existing crash log (before this installation) shows Ktor Android
+stream cancellation failing with AsyncTimeout "Unbalanced enter/exit". This
+was not repaired in the local-voice change and remains a reliability follow-up.

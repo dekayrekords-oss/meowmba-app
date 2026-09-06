@@ -7,6 +7,17 @@ import org.junit.Test
 import java.io.File
 
 class LocalVoiceTest {
+    @Test fun `native speech callback exposes the exact JNI method`() {
+        val callback = com.k2fsa.sherpa.onnx.NativeTtsCallback { 1 }
+        val method = callback.javaClass.getDeclaredMethod("invoke", FloatArray::class.java)
+        assertEquals(java.lang.Integer::class.java, method.returnType)
+        assertEquals(1, method.invoke(callback, floatArrayOf(0.5f)))
+    }
+    @Test fun `callback failure cancels before rethrowing outside JNI`() {
+        val callback = com.k2fsa.sherpa.onnx.NativeTtsCallback { error("Playback stopped") }
+        assertEquals(0, callback(floatArrayOf()))
+        assertThrows(IllegalStateException::class.java) { callback.rethrowFailure() }
+    }
     @Test fun `four real speaker identities are two female and two male`() {
         assertEquals(4, LocalVoices.all.size)
         assertEquals(2, LocalVoices.all.count { it.gender == "Female" })
