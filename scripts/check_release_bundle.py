@@ -41,6 +41,9 @@ def main():
     libraries = []
     with zipfile.ZipFile(args.bundle) as archive:
         names = archive.namelist()
+        required = {f"base/lib/arm64-v8a/{name}" for name in (
+            "libsherpa-onnx-jni.so", "libonnxruntime.so", "libneedle_jni_bridge.so", "libsd_jni_bridge.so")}
+        result["missing_required_native_libraries"] = sorted(required - set(names))
         result["signature_entries"] = [name for name in names if
             name.upper().startswith("META-INF/") and
             name.upper().endswith((".RSA", ".DSA", ".EC", ".SF"))]
@@ -60,7 +63,8 @@ def main():
     result["all_native_libraries_16kb_aligned"] = bool(libraries) and all(
         lib["passes_16kb_alignment"] for lib in libraries)
     print(json.dumps(result, indent=2))
-    return 0 if result["all_native_libraries_16kb_aligned"] else 1
+    return 0 if (result["all_native_libraries_16kb_aligned"] and
+                 not result["missing_required_native_libraries"]) else 1
 
 
 if __name__ == "__main__":
