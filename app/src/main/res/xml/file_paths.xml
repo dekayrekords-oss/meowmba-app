@@ -13,6 +13,8 @@
     <files-path name="posts" path="posts/" />
     <files-path name="media" path="media/" />
     <files-path name="workspace" path="workspace/" />
+    <!-- MainActivity uses memba_workspace as the tool workspace root. -->
+    <files-path name="memba_workspace" path="memba_workspace/" />
     <files-path name="web_pages" path="web_pages/" />
     <files-path name="desktop_screenshots" path="desktop_screenshots/" />
     <external-files-path name="external" path="." />

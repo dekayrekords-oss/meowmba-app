@@ -37,6 +37,40 @@ The SDK-enabled debug application and test sources compiled successfully.
 
 ## Agent-by-agent assessment
 
+### Connected Fold follow-up — September 5, 2026
+
+The Fold (SM-F966U1) is USB-authorized on the Mac, not Meow. It runs the
+development package `com.example.meowmba`, version 1.3.20 / code 24. The Play
+package `com.meow.meowmba` is not installed. Its signing certificate matches
+Meow's debug keystore, so a compatible in-place update can preserve app data.
+No update has been installed during this check.
+
+Meow's Accessibility service is not enabled; only Google Voice Access is.
+Cross-app tap/type automation therefore cannot currently run. Camera, mic,
+calendar and media permissions are granted. Downloaded model and voice-model
+directories remain present; presence alone does not certify model loading.
+
+The saved connector catalog marks several embedded app adapters configured,
+but that is not proof of authenticated MCP or successful task execution.
+Android resolves the tested media intents to installed photo/video viewers,
+and an HTML content URI to Chrome. This confirms eligible handlers, not actual
+rendering or playback.
+
+An additional concrete sharing defect was found: MainActivity stores tool
+artifacts under `filesDir/memba_workspace`, while FileProvider only allowed
+`workspace`. Added the actual runtime directory explicitly, with regression
+coverage for reading a nested artifact via a content URI and rejecting the
+private vault. The first audit's provider-path tests missed this runtime-root
+mismatch. Live external opening still requires the updated app and a device
+test; no user account actions were sent.
+
+Follow-up validation: all seven ArtifactViewer tests pass, including reading
+the actual nested workspace artifact and rejecting the vault. Reset the
+AndroidX authority cache between Robolectric tests because their filesDir
+changes. SDK-enabled debug APK 1.3.22 / code 26 built successfully; its
+certificate matches the installed code 24 and both native voice libraries
+are present. This is a development test artifact, not a new Play submission.
+
 | Agent | Actual implementation | Remaining real-world requirement |
 |---|---|---|
 | Meow | Routes single tool requests and handles conversation, avatar and notes | Working selected model; final result must come from actual tool execution |
