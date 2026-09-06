@@ -126,7 +126,7 @@ object AgentRegistry {
         ),
         AgentDefinition(
             id = "email", name = "Post",
-            purpose = "Drafts and sends email.",
+            purpose = "Saves drafts or opens a prefilled email composer. You tap Send in your email app.",
             allowedTools = setOf("email.send", "email.draft")
         ),
         AgentDefinition(
@@ -137,7 +137,7 @@ object AgentRegistry {
         AgentDefinition(
             id = "computer", name = "Bridge",
             purpose = "Controls paired computers through the desktop bridge.",
-            allowedTools = setOf("desktop.write_file", "desktop.run_build", "desktop.run_script")
+            allowedTools = setOf("desktop.write_file", "desktop.run_build", "desktop.run_script", "desktop.control")
         ),
         AgentDefinition(
             id = "phone", name = "Paws",
@@ -152,7 +152,7 @@ object AgentRegistry {
         ),
         AgentDefinition(
             id = "phone_control", name = "Claw",
-            purpose = "Full phone control: operates any app via taps, types, swipes, and navigation.",
+            purpose = "Operates accessible app screens through taps, typing and navigation. Requires Accessibility and a working model; some app screens cannot be controlled.",
             allowedTools = setOf(
                 "ui.automate", "phone.launch_app", "phone.list_apps"
             ),
@@ -160,12 +160,12 @@ object AgentRegistry {
         ),
         AgentDefinition(
             id = "media", name = "Canvas",
-            purpose = "Generates simple images from text descriptions.",
+            purpose = "Generates images, videos and audio using configured backends. Image/video failures are reported without placeholder results.",
             allowedTools = setOf("media.generate_image", "media.generate_video", "media.generate_audio")
         ),
         AgentDefinition(
-            id = "robot", name = "Looi",
-            purpose = "Moves the physical LOOI base: drive, turn, neck, headlight.",
+            id = "robot", name = "Robot base",
+            purpose = "Moves an attached robot base: drive, turn, neck, headlight.",
             allowedTools = setOf("robot.move")
         ),
         AgentDefinition(

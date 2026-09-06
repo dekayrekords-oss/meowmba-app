@@ -125,6 +125,9 @@ class AgentOrchestrator(
     // ── Internals ───────────────────────────────────────────────────────────
 
     private fun launchTask(task: AgentTask) {
+        // Reserve the slot before dispatch: multiple submits can happen before
+        // the dispatcher runs the first coroutine (and otherwise exceed the limit).
+        updateTask(task.id) { it.copy(status = TaskStatus.RUNNING, startedAt = System.currentTimeMillis()) }
         jobs[task.id] = scope.launch {
             try {
                 runTask(task)

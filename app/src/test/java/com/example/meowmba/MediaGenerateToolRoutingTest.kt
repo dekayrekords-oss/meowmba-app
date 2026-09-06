@@ -24,7 +24,7 @@ private class FakeImageGenerator(
     override suspend fun generate(prompt: String, iterations: Int, seed: Int): Result<Bitmap> {
         callCount++
         return if (succeeds) {
-            Result.success(mock(Bitmap::class.java))
+            Result.success(Bitmap.createBitmap(4, 4, Bitmap.Config.ARGB_8888))
         } else {
             Result.failure(IllegalStateException("$name failed"))
         }
@@ -43,6 +43,7 @@ private class ThrowingImageGenerator(val name: String) : ImageGenerator {
 }
 
 @RunWith(RobolectricTestRunner::class)
+@org.robolectric.annotation.Config(sdk = [35])
 class MediaGenerateToolRoutingTest {
 
     private fun workspace(): Workspace {
@@ -103,13 +104,13 @@ class MediaGenerateToolRoutingTest {
     }
 
     @Test
-    fun `falls back to the canvas placeholder when nothing is configured`() = runTest {
+    fun `missing backend fails honestly without a placeholder`() = runTest {
         val tool = MediaGenerateTool(workspace())
 
         val result = tool.execute(mapOf("prompt" to "a cat"))
 
-        assertTrue(result is ToolResult.Success)
-        assertTrue((result as ToolResult.Success).output.contains("canvas_"))
+        assertTrue(result is ToolResult.Failure)
+        assertTrue((result as ToolResult.Failure).error.contains("No image was created"))
     }
 
     @Test
@@ -148,7 +149,7 @@ class MediaGenerateToolRoutingTest {
     }
 
     @Test
-    fun `every backend throwing still produces the canvas placeholder, never a crash`() = runTest {
+    fun `every backend throwing reports failure instead of fake success`() = runTest {
         val local = ThrowingImageGenerator(name = "local")
         val remote = ThrowingImageGenerator(name = "remote")
         val tool = MediaGenerateTool(
@@ -160,7 +161,7 @@ class MediaGenerateToolRoutingTest {
 
         val result = tool.execute(mapOf("prompt" to "a cat"))
 
-        assertTrue(result is ToolResult.Success)
-        assertTrue((result as ToolResult.Success).output.contains("canvas_"))
+        assertTrue(result is ToolResult.Failure)
+        assertTrue((result as ToolResult.Failure).error.contains("No image was created"))
     }
 }

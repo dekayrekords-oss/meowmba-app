@@ -68,7 +68,7 @@ object SpeechIntents {
     )
 
     /** "in the browser", "on the side browser", "in browser"… */
-    private val SHOW_BROWSER_PLACE = Regex("\\b(in|on)( the)? (\\w+ )?browser")
+    private val SHOW_BROWSER_PLACE = Regex("\\b(in|on)( the)? (?:(?:\\w+ )?browser|chrome|file viewer)\\b")
 
     /** Compiled once: per-utterance Regex() allocs showed up in turn-path profiles. */
     private val ON_IN_APP = Regex("\\b(?:on|in)\\s+(\\w+)\\s*$")

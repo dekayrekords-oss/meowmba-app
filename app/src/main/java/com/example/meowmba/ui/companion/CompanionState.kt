@@ -267,6 +267,8 @@ data class CompanionState(
     /** A tool call waiting for the user's explicit decision, if any. */
     val pendingApproval: ApprovalRequest? = null,
     val showAgentsScreen: Boolean = false,
+    /** Tools registered in this installation; not a claim of live account/hardware access. */
+    val registeredAgentTools: Set<String> = emptySet(),
     val showProjectsScreen: Boolean = false,
     val showToolsScreen: Boolean = false,
     /** Full-screen LOOI body panel opened from the Robot tile. */
@@ -316,7 +318,7 @@ data class CompanionState(
      * images, there's no on-device generator to prefer against.
      */
     val musicServerUrl: String = "",
-    /** Opt-in HTTP server for video generation. Empty = frame-manifest placeholder only. */
+    /** Opt-in HTTP server for video generation. Empty = video generation unavailable. */
     val videoServerUrl: String = "",
     /** Active model downloads by id (catalog option id or "custom:<fileName>"). */
     val modelDownloads: Map<String, ModelDownloader.DownloadProgress> = emptyMap(),

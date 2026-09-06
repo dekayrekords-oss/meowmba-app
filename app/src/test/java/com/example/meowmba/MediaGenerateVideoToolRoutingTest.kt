@@ -20,13 +20,28 @@ private class FakeVideoGenerator(
     override suspend fun generate(prompt: String, onProgress: (String) -> Unit): Result<ByteArray> {
         callCount++
         onProgress("testing progress callback")
-        return if (succeeds) Result.success(byteArrayOf(1, 2, 3))
+        return if (succeeds) Result.success(byteArrayOf(0, 0, 0, 16) + "ftypisom0000".toByteArray())
                else Result.failure(IllegalStateException("boom"))
     }
 }
 
 @RunWith(RobolectricTestRunner::class)
+@org.robolectric.annotation.Config(sdk = [35])
 class MediaGenerateVideoToolRoutingTest {
+
+    @Test
+    fun `error payload masquerading as video is rejected`() = runTest {
+        val ws = workspace()
+        val remote = object : VideoGenerator {
+            override fun isAvailable() = true
+            override suspend fun generate(prompt: String, onProgress: (String) -> Unit) =
+                Result.success("<html>server error</html>".toByteArray())
+        }
+        val result = MediaGenerateVideoTool(ws, remoteGenerator = { remote })
+            .execute(mapOf("prompt" to "cat playing"))
+        assertTrue(result is ToolResult.Failure)
+        assertTrue(ws.root.listFiles().orEmpty().isEmpty())
+    }
 
     private fun workspace(): Workspace =
         Workspace(kotlin.io.path.createTempDirectory().toFile())
@@ -43,23 +58,23 @@ class MediaGenerateVideoToolRoutingTest {
     }
 
     @Test
-    fun `falls back to the frame-manifest placeholder when nothing is configured`() = runTest {
+    fun `missing video backend fails without pretending a still frame is video`() = runTest {
         val tool = MediaGenerateVideoTool(workspace())
 
         val result = tool.execute(mapOf("prompt" to "a cat playing"))
 
-        assertTrue(result is ToolResult.Success)
-        assertTrue((result as ToolResult.Success).output.contains("video_"))
+        assertTrue(result is ToolResult.Failure)
+        assertTrue((result as ToolResult.Failure).error.contains("No playable video was created"))
     }
 
     @Test
-    fun `falls back to the placeholder when the remote generator fails`() = runTest {
+    fun `remote generation failure remains a failure`() = runTest {
         val remote = FakeVideoGenerator(available = true, succeeds = false)
         val tool = MediaGenerateVideoTool(workspace(), remoteGenerator = { remote })
 
         val result = tool.execute(mapOf("prompt" to "a cat playing"))
 
         assertEquals(1, remote.callCount)
-        assertTrue(result is ToolResult.Success)
+        assertTrue(result is ToolResult.Failure)
     }
 }

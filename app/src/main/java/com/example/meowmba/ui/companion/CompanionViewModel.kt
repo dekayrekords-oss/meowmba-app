@@ -2742,13 +2742,7 @@ class CompanionViewModel(
             },
             workspaceRoot
         )
-        val exts = setOf(
-            "html", "htm", "png", "jpg", "jpeg", "gif", "webp",
-            "mp4", "webm", "wav", "mp3"
-        )
-        return dirs.flatMap { it.listFiles()?.toList() ?: emptyList() }
-            .filter { it.isFile && it.extension.lowercase() in exts }
-            .maxByOrNull { it.lastModified() }
+        return com.example.meowmba.core.media.ArtifactViewer.latest(dirs)
     }
 
     /**
@@ -2764,35 +2758,15 @@ class CompanionViewModel(
      * declared in the manifest with a one-off read grant.
      */
     fun showFileInBrowser(file: java.io.File) {
+        // Dismiss the old bitmap popup, which cannot render videos or audio.
+        _uiState.value = _uiState.value.copy(generatedMedia = null)
         val ctx = secureStorage?.context ?: run {
-            _uiState.value = _uiState.value.copy(
-                captionText = "I can't open ${file.name} — no browser context in this build.",
-            )
+            _uiState.value = _uiState.value.copy(captionText = "No app context to open ${file.name}.")
             return
         }
-        val mime = mimeFor(file)
-        val uri = runCatching {
-            androidx.core.content.FileProvider.getUriForFile(
-                ctx, "${ctx.packageName}.fileprovider", file,
-            )
-        }.getOrElse {
-            _uiState.value = _uiState.value.copy(
-                captionText = "I couldn't share ${file.name} with the browser.",
-            )
-            return
-        }
-        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
-            .setDataAndType(uri, mime)
-            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-            .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        if (!startInChrome(ctx, intent)) {
-            _uiState.value = _uiState.value.copy(
-                captionText = "No browser installed to show ${file.name}.",
-            )
-            return
-        }
+        val result = com.example.meowmba.core.media.ArtifactViewer.open(ctx, file)
         _uiState.value = _uiState.value.copy(
-            captionText = "Opened ${file.name} in Chrome.",
+            captionText = result.getOrElse { "Couldn't open ${file.name}: ${it.message}" },
         )
     }
 
@@ -2816,19 +2790,8 @@ class CompanionViewModel(
         return runCatching { ctx.startActivity(chooser) }.isSuccess
     }
 
-    private fun mimeFor(file: java.io.File): String = when (file.extension.lowercase()) {
-        "html", "htm" -> "text/html"
-        "png" -> "image/png"
-        "jpg", "jpeg" -> "image/jpeg"
-        "gif" -> "image/gif"
-        "mp4" -> "video/mp4"
-        "wav" -> "audio/wav"
-        "mp3" -> "audio/mpeg"
-        "kt", "json", "css" -> "text/plain"
-        "js" -> "text/javascript"
-        "py" -> "text/x-python"
-        else -> "text/plain"
-    }
+    private fun mimeFor(file: java.io.File): String =
+        com.example.meowmba.core.media.ArtifactViewer.mimeFor(file)
 
     internal fun mediaPageHtml(file: java.io.File): String {
         val ext = file.extension.lowercase()
@@ -6700,7 +6663,10 @@ class CompanionViewModel(
     // ── Agent screen & controls ─────────────────────────────────────────────
 
     fun toggleAgentsScreen() {
-        _uiState.value = _uiState.value.copy(showAgentsScreen = !_uiState.value.showAgentsScreen)
+        _uiState.value = _uiState.value.copy(
+            showAgentsScreen = !_uiState.value.showAgentsScreen,
+            registeredAgentTools = agentToolRegistry?.definitions()?.map { it.id }?.toSet() ?: emptySet(),
+        )
     }
 
     fun toggleProjectsScreen() {

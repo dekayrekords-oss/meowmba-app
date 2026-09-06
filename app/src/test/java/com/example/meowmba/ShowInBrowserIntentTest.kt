@@ -22,6 +22,8 @@ class ShowInBrowserIntentTest {
         assertTrue(matches("show it in the browser"))
         assertTrue(matches("show me in the browser"))
         assertTrue(matches("show that in the browser"))
+        assertTrue(matches("open it in chrome"))
+        assertTrue(matches("show it in the file viewer"))
     }
 
     @Test

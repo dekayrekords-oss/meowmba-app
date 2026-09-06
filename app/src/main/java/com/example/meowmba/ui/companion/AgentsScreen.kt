@@ -75,13 +75,14 @@ fun AgentsScreen(
 
             // ── Agent roster ────────────────────────────────────────────────
             SectionTitle("Agents")
-            Body("Tap an agent to see what it has worked on.")
+            Body("Tap an agent for its tools and task history. Tools ready means installed, not that accounts, permissions or hardware have been verified.")
             Spacer(modifier = Modifier.height(8.dp))
             AgentRegistry.agents.forEach { agent ->
                 val worked = state.activeTasks.count { it.agentId == agent.id }
                 AgentCard(
                     agent = agent,
                     taskCount = worked,
+                    registeredTools = state.registeredAgentTools,
                     onClick = { onSelectAgent(agent.id) },
                 )
                 Spacer(modifier = Modifier.height(8.dp))
@@ -142,12 +143,15 @@ private fun Body(text: String) {
 private fun AgentCard(
     agent: AgentDefinition,
     taskCount: Int = 0,
+    registeredTools: Set<String> = emptySet(),
     onClick: (() -> Unit)? = null,
 ) {
+    val installed = agent.allowedTools.count { it in registeredTools }
     val (label, color) = when {
         !agent.available -> "UNAVAILABLE" to MaterialTheme.colorScheme.error
-        agent.statusNote != null -> "LIMITED" to Color(0xFFD29922)
-        else -> "ACTIVE" to MaterialTheme.colorScheme.primary
+        installed == 0 -> "NO TOOLS" to MaterialTheme.colorScheme.error
+        installed < agent.allowedTools.size -> "PARTIAL" to Color(0xFFD29922)
+        else -> "TOOLS READY" to MaterialTheme.colorScheme.primary
     }
     Surface(
         color = MaterialTheme.colorScheme.surface,
@@ -186,6 +190,8 @@ private fun AgentCard(
                 }
             }
             Text(agent.purpose, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+            Text("$installed/${agent.allowedTools.size} tools installed · check task results for success",
+                color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
             agent.statusNote?.let {
                 Text(it, color = color, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
             }
@@ -295,12 +301,14 @@ private fun AgentDetail(
             Text(agent.purpose, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
 
             Spacer(modifier = Modifier.height(16.dp))
-            SectionTitle("Can use")
+            SectionTitle("Tool installation")
             if (agent.allowedTools.isEmpty()) {
                 Body("No tools assigned.")
             } else {
                 Text(
-                    agent.allowedTools.sorted().joinToString("  ·  "),
+                    agent.allowedTools.sorted().joinToString("\n") {
+                        "$it — ${if (it in state.registeredAgentTools) "installed" else "missing"}"
+                    },
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 12.sp,
                     fontFamily = FontFamily.Monospace,
