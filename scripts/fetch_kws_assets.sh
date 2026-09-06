@@ -3,10 +3,10 @@
 # VAD, speaker verification, and the always-on ASR model.
 #
 # These are gitignored (26MB of .so + 5MB KWS model + ~68MB ASR model), so a fresh
-# clone needs this once. Without them the app still builds and runs —
-# WakeWordEngineFactory falls back to the old SpeechRecognizer loop and
-# SherpaAsrEngine.isAvailable is false — so this is not a build prerequisite,
-# only a voice-quality one.
+# clone needs this once. Release builds require the native libraries and fail
+# preflight without them. Debug builds may fall back to SpeechRecognizer when
+# they are absent, with SherpaAsrEngine.isAvailable false. Model assets below
+# are debug-only; Play builds download model data after installation.
 #
 # Usage:  scripts/fetch_kws_assets.sh
 set -euo pipefail

@@ -80,8 +80,8 @@ android {
         // versionCode 20 (1.3.16), so an install at 20 would not register as an
         // upgrade and preserving app data would be a coin flip. 21 > 20 makes it
         // a genuine in-place upgrade that keeps the Room database and models.
-        versionCode = 25
-        versionName = "1.3.21"
+        versionCode = 26
+        versionName = "1.3.22"
 
         buildConfigField("boolean", "HAS_MWDAT_SDK", hasMwdat.toString())
         manifestPlaceholders["mwdat_application_id"] = mwdatApplicationId
@@ -264,6 +264,32 @@ val verifyReleaseSigningConfiguration = tasks.register("verifyReleaseSigningConf
 }
 tasks.matching { it.name == "preReleaseBuild" }.configureEach {
     dependsOn(verifyReleaseSigningConfiguration)
+}
+
+// These gitignored runtimes must be restored in every fresh release checkout.
+// Downloadable voice models cannot replace missing native executable libraries.
+val verifyVoiceReleaseConfiguration = tasks.register("verifyVoiceReleaseConfiguration") {
+    val requiredLibraries = listOf("libsherpa-onnx-jni.so", "libonnxruntime.so")
+        .map { layout.projectDirectory.file("src/main/jniLibs/arm64-v8a/$it").asFile }
+    doLast {
+        val missing = requiredLibraries.filter { !it.isFile || it.length() == 0L }
+        check(missing.isEmpty()) {
+            "Missing native voice runtimes: ${missing.joinToString { it.name }}. Run scripts/fetch_kws_assets.sh before building a release."
+        }
+    }
+}
+tasks.matching { it.name == "preReleaseBuild" }.configureEach {
+    dependsOn(verifyVoiceReleaseConfiguration)
+}
+
+// Check the packaged artifact as well as the inputs, catching packaging omissions
+// and incompatible ELF alignment before the bundle can be handed off to Play.
+val verifyReleaseBundle = tasks.register<Exec>("verifyReleaseBundle") {
+    commandLine("python3", rootProject.file("scripts/check_release_bundle.py").absolutePath,
+        layout.buildDirectory.file("outputs/bundle/release/app-release.aab").get().asFile.absolutePath)
+}
+tasks.matching { it.name == "bundleRelease" }.configureEach {
+    finalizedBy(verifyReleaseBundle)
 }
 
 val verifyMwdatSdkConfiguration = tasks.register("verifyMwdatSdkConfiguration") {
