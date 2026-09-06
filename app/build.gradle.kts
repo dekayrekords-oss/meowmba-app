@@ -21,7 +21,9 @@ configurations.configureEach {
 //   storePassword=...
 //   keyAlias=meowmba
 //   keyPassword=...
-val keystorePropsFile = rootProject.file("keystore.properties")
+val keystorePropsFile = rootProject.file(
+    providers.gradleProperty("releaseSigningProperties").orNull ?: "keystore.properties"
+)
 val keystoreProps = Properties()
 if (keystorePropsFile.exists()) {
     keystorePropsFile.inputStream().use { keystoreProps.load(it) }
@@ -69,9 +71,9 @@ android {
     }
 
     defaultConfig {
-        // Kept on the legacy id on purpose: phones (and their Room data) are
-        // installed under com.example.meowmba; switching ids orphans that data.
-        applicationId = "com.example.meowmba"
+        // Verified against the existing Play Console app. The debug variant
+        // retains com.example.meowmba below, preserving its installed data.
+        applicationId = "com.meow.meowmba"
         minSdk = 31
         targetSdk = 36
         // Bumped from 20 for the appearance upgrade: the phone is already on
