@@ -1,12 +1,9 @@
 package com.example.meowmba.ui.companion
 
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
@@ -25,12 +22,12 @@ import kotlin.random.Random
  * Source: `jarvis_mode.js` on the MEOW server
  * (`~/memba-server/meow_os/jarvis_mode.js`, "JARVIS mode — black-field
  * parameter-particle orb"): a floating sphere where each particle is a model
- * parameter. Fibonacci-sphere seeds in 7 shells, per-particle tumble rates,
- * depth-sorted cyan→violet dots, pulse rings, a bright nucleus, lat/long
- * wireframe, and — while thinking — particles eject with trails toward the
+ * parameter motif. Fibonacci-sphere seeds in 7 shells, per-particle tumble
+ * rates, perspective-projected cyan→violet dots and a diffuse transparent
+ * halo. While thinking, particles eject with trails toward the
  * reply ("◈ INFERENCE" caption; "N PARAMETERS" at rest).
  *
- * This file mirrors that behavior on the phone's draw clock. The pure parts
+ * This adaptation uses the phone's draw clock. The pure parts
  * (seeds, rotation, caption) live in [ParticleOrbContent] and are JVM
  * unit-tested; [ParticleOrbSim] holds the per-frame sim state (slot order,
  * flyers) allocation-free across frames, exactly like the JS slots array.
@@ -143,6 +140,8 @@ class ParticleOrbSim(val n: Int = 650) {
     // Smoothed energy keeps the aura responsive without flickering when the
     // audio level is noisy or the state changes at a frame boundary.
     private var energy = 0.08f
+    private var seenShake: Int? = null
+    private var scatterAge = 10f
 
     fun draw(
         scope: DrawScope,
@@ -155,142 +154,65 @@ class ParticleOrbSim(val n: Int = 650) {
         ringColor: Color,
         alpha: Float,
         offline: Boolean,
+        viewRotation: FloatArray? = null,
+        shakeCount: Int = 0,
+        forceLean: Float = 0f,
+        forceLurch: Float = 0f,
     ) {
         with(scope) {
             val dt = if (lastT.isNaN()) 0.016f else (clockSec - lastT).coerceIn(0f, 0.05f)
             lastT = clockSec
+            // A newly composed avatar must not replay an old shake.
+            if (seenShake != null && shakeCount != seenShake) scatterAge = 0f
+            seenShake = shakeCount
+            scatterAge += dt
+            val scatter = orbScatterAmount(scatterAge)
             val lvl = level.coerceIn(0f, 1f)
             val think = if (thinking) 1f else 0f
             val targetEnergy = (lvl * 0.82f + think * 0.42f).coerceIn(0f, 1f)
             energy += (targetEnergy - energy) * (1f - kotlin.math.exp((-dt * 8f).toDouble())).toFloat()
-            val baseR = domeRadius * 0.80f
+            val baseR = domeRadius * 0.96f
             // Reference sizes are px at baseR ≈ 0.38·minWH; rescale to our dome.
             val k = domeRadius / 300f
             val a = alpha * if (offline) 0.6f else 1f
             val cyan = if (offline) Color(0xFFF85149) else ringColor
             val violet = if (offline) Color(0xFFF85149) else Color(0xFFA78BFA)
 
-            // ── Volumetric halo (concentric washes, no per-frame shader) ──
-            drawCircle(cyan.copy(alpha = 0.05f * a), baseR * 1.15f, center)
-            drawCircle(cyan.copy(alpha = 0.07f * a), baseR * 0.80f, center)
-            drawCircle(cyan.copy(alpha = 0.08f * a), baseR * 0.50f, center)
-            // A restrained outer bloom gives the sphere a glassy edge while
-            // keeping the idle state quiet and avoiding a large shader pass.
-            drawCircle(cyan.copy(alpha = (0.025f + energy * 0.035f) * a), baseR * (1.28f + energy * 0.05f), center)
-
-            // ── Outer pulse rings ──
-            for (i in 0 until 4) {
-                val pulseR = baseR * (0.55f + i * 0.22f) +
-                    sin(clockSec * 1.1f + i) * (domeRadius * 0.02f + lvl * domeRadius * 0.06f)
-                drawCircle(
-                    cyan.copy(alpha = (0.05f + (1 - i / 4f) * 0.07f + lvl * 0.06f) * a),
-                    pulseR.coerceAtLeast(8f), center,
-                    style = Stroke(width = 1.4f * k.coerceAtLeast(0.8f)),
-                )
-            }
-
-            // ── Bright nucleus (grows with voice + thought) ──
-            val nr = baseR * 0.16f * (1 + lvl * 0.12f + think * 0.18f)
-            drawCircle(Color.White.copy(alpha = 0.95f * a), nr * 0.45f, center)
+            // Smooth falloff reaches zero before the draw boundary. No filled
+            // disks or wireframe: depth comes from the projected particle volume.
+            val haloR = baseR * 1.55f
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(
-                        (if (thinking) violet else cyan).copy(alpha = 0.85f * a),
-                        Color.Transparent,
-                    ),
-                    center = center, radius = nr * 2.2f,
+                    0f to cyan.copy(alpha = (0.10f + energy * 0.045f) * a),
+                    0.28f to cyan.copy(alpha = 0.075f * a),
+                    0.55f to violet.copy(alpha = 0.032f * a),
+                    0.78f to cyan.copy(alpha = 0.008f * a),
+                    1f to cyan.copy(alpha = 0f),
+                    center = center, radius = haloR,
                 ),
-                radius = nr * 2.2f, center = center,
+                radius = haloR, center = center,
             )
-
-            // ── Lat/long wireframe for volume ──
-            for (s in 1..5) {
-                val rr = baseR * (0.35f + s * 0.13f)
-                rotate(clockSec * 2.8f * s.toFloat(), pivot = center) {
-                    drawOval(
-                        cyan.copy(alpha = (0.07f + think * 0.05f) * a),
-                        topLeft = Offset(center.x - rr * (1 + lvl * 0.04f), center.y - rr * 0.72f),
-                        size = Size(rr * 2 * (1 + lvl * 0.04f), rr * 2 * 0.72f),
-                        style = Stroke(width = 1f),
-                    )
-                }
-            }
-            for (m in 0 until 6) {
-                val ang = clockSec * 0.15f + m * PI.toFloat() / 3
-                rotate(ang * 57.3f, pivot = center) {
-                    val wHalf = baseR * 0.95f * kotlin.math.abs(cos(ang * 0.5f)) + baseR * 0.2f
-                    drawOval(
-                        Color(0xFF78B4FF).copy(alpha = (0.04f + think * 0.04f) * a),
-                        topLeft = Offset(center.x - wHalf, center.y - baseR * 0.95f),
-                        size = Size(wHalf * 2, baseR * 2 * 0.95f),
-                        style = Stroke(width = 1f),
-                    )
-                }
-            }
-
-            // ── Orbital energy ribbons ──
-            // Elliptical arcs read as a rotating field around the volume. A
-            // handful of strokes is substantially cheaper than a particle
-            // ribbon and remains crisp at large tablet/foldable sizes.
-            val ribbonSpeed = 18f + energy * 14f + think * 8f
-            for (ribbon in 0 until 3) {
-                val tilt = 0.30f + ribbon * 0.17f + energy * 0.06f
-                val ellipseW = baseR * (1.72f + ribbon * 0.10f)
-                val ellipseH = baseR * tilt
-                val ribbonAngle = clockSec * ribbonSpeed * (if (ribbon == 1) -0.78f else 1f) + ribbon * 61f
-                val ribbonColor = if (ribbon == 1) violet else cyan
-                val ribbonAlpha = (0.13f + energy * 0.14f + think * 0.08f) * a
-                rotate(ribbonAngle, pivot = center) {
-                    drawArc(
-                        color = ribbonColor.copy(alpha = ribbonAlpha),
-                        startAngle = 202f + ribbon * 7f,
-                        sweepAngle = 116f + energy * 28f,
-                        useCenter = false,
-                        topLeft = Offset(center.x - ellipseW / 2f, center.y - ellipseH / 2f),
-                        size = Size(ellipseW, ellipseH),
-                        style = Stroke(width = (1.4f + energy * 1.5f) * k.coerceAtLeast(0.8f)),
-                    )
-                    drawArc(
-                        color = Color.White.copy(alpha = (0.10f + energy * 0.10f) * a),
-                        startAngle = 202f + ribbon * 7f,
-                        sweepAngle = 26f + energy * 12f,
-                        useCenter = false,
-                        topLeft = Offset(center.x - ellipseW / 2f, center.y - ellipseH / 2f),
-                        size = Size(ellipseW, ellipseH),
-                        style = Stroke(width = 0.8f * k.coerceAtLeast(0.8f)),
-                    )
-                }
-            }
-
-            // ── Deterministic energy filaments ──
-            // These provide a subtle circuit-like structure between the core
-            // and shell; phases are fixed so there is no per-frame RNG.
-            val filamentCount = 12
-            for (filament in 0 until filamentCount) {
-                val angle = filament * (2f * PI.toFloat() / filamentCount) + clockSec * 0.22f
-                val wave = 0.5f + 0.5f * sin(clockSec * 2.2f + filament * 1.7f)
-                val inner = baseR * (0.18f + wave * 0.05f)
-                val outer = baseR * (0.78f + energy * 0.13f + wave * 0.06f)
-                val filamentColor = if (filament % 4 == 0) violet else cyan
-                drawLine(
-                    filamentColor.copy(alpha = (0.035f + energy * 0.07f + wave * 0.025f) * a),
-                    Offset(center.x + cos(angle) * inner, center.y + sin(angle) * inner * 0.86f),
-                    Offset(center.x + cos(angle) * outer, center.y + sin(angle) * outer * 0.86f),
-                    strokeWidth = (0.7f + energy * 0.9f) * k.coerceAtLeast(0.8f),
-                )
-            }
 
             // ── Particles: rotate, project, depth-sort back→front ──
             val t = clockSec
             for (idx in 0 until n) {
                 val p = specs[idx]
-                val (x, y, z) = ParticleOrbContent.rotateDir(
+                val (localX, localY, localZ) = ParticleOrbContent.rotateDir(
                     p.dx, p.dy, p.dz, p.spinY, p.spinX, p.spinZ, t + p.phase,
                 )
-                val rr = baseR * p.radiusFrac * (1 + lvl * 0.06f + think * 0.08f)
-                px[idx] = center.x + x * rr
-                py[idx] = center.y + y * rr * 0.9f
-                pz[idx] = z
+                // Sensor space is Y-up; Canvas is Y-down. Rotate in 3D before
+                // perspective and depth sorting, not as a flat screen tilt.
+                val m = viewRotation
+                val x = if (m == null) localX else m[0] * localX - m[1] * localY + m[2] * localZ
+                val y = if (m == null) localY else -(m[3] * localX - m[4] * localY + m[5] * localZ)
+                val z = if (m == null) localZ else m[6] * localX - m[7] * localY + m[8] * localZ
+                val spread = scatter * (0.45f + (sin(p.phase) + 1f) * 0.40f)
+                val rr = baseR * p.radiusFrac * (1 + lvl * 0.06f + think * 0.08f + spread)
+                val depthZ = (z * p.radiusFrac + forceLurch * 0.16f * p.radiusFrac).coerceIn(-1.4f, 1.4f)
+                val perspective = 2.8f / (2.8f - depthZ)
+                px[idx] = center.x + (x * rr + forceLean * baseR * z * 0.18f) * perspective
+                py[idx] = center.y + (y * rr + forceLurch * baseR * z * 0.12f) * perspective
+                pz[idx] = depthZ
             }
             // Insertion sort on the persistent order: z changes little per
             // frame, so this runs ~O(n) on nearly-sorted data (as in the JS).
@@ -316,17 +238,28 @@ class ParticleOrbSim(val n: Int = 650) {
             for (rank in 0 until n) {
                 val idx = order[rank]
                 val p = specs[idx]
-                val depth = 0.35f + 0.65f * ((pz[idx] + 1f) * 0.5f)
-                val sz = (p.size * 1.55f * depth * (1 + think * 0.35f + lvl * 0.25f) * k)
-                    .coerceAtLeast(1.2f)
-                val light = 45 + ((depth * 20).toInt() / 20f) * 35
+                val depth = ((pz[idx] + 1f) * 0.5f).coerceIn(0f, 1f)
+                val sz = (p.size * 2.25f * depth * (1 + think * 0.35f + lvl * 0.25f) * k)
+                    .coerceAtLeast(1.7f)
+                val light = 30f + depth * 65f
+                val point = Offset(px[idx], py[idx])
+                // Sparse foreground bloom adds depth without hundreds of shaders.
+                if (depth > 0.68f && idx % 5 == 0) {
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            listOf(cyan.copy(alpha = 0.18f * depth * a), cyan.copy(alpha = 0f)),
+                            center = point, radius = sz * 4.5f,
+                        ),
+                        radius = sz * 4.5f, center = point,
+                    )
+                }
                 drawCircle(
-                    Color.hsv(p.hue, 0.95f, (light / 100f).coerceIn(0f, 1f), (0.25f + depth * 0.7f) * a),
+                    Color.hsv(p.hue, 0.72f, (light / 100f).coerceIn(0f, 1f), (0.12f + depth * depth * 0.83f) * a),
                     sz, Offset(px[idx], py[idx]),
                 )
                 if (depth > 0.65f) {
                     drawCircle(
-                        Color.White.copy(alpha = 0.5f * a),
+                        Color.White.copy(alpha = 0.55f * depth * a),
                         sz * 0.4f, Offset(px[idx] - sz * 0.25f, py[idx] - sz * 0.25f),
                     )
                 }
@@ -406,17 +339,6 @@ class ParticleOrbSim(val n: Int = 650) {
                 ) f.life -= 0.06f * steps
                 if (f.life <= 0f) flyers.removeAt(i)
             }
-
-            // Reassert the core above the shell and flyers: a tiny specular
-            // point plus a breathing ring makes the center feel volumetric.
-            val corePulse = 1f + sin(clockSec * 3.4f) * (0.025f + energy * 0.06f)
-            drawCircle(
-                color = (if (thinking) violet else cyan).copy(alpha = (0.20f + energy * 0.16f) * a),
-                radius = nr * 1.18f * corePulse,
-                center = center,
-                style = Stroke(width = (1f + energy * 1.2f) * k.coerceAtLeast(0.8f)),
-            )
-            drawCircle(Color.White.copy(alpha = (0.86f + energy * 0.12f) * a), nr * 0.32f, center)
 
             // ── Caption under the sphere ──
             val caption = ParticleOrbContent.captionFor(

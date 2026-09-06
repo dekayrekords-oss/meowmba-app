@@ -1,6 +1,7 @@
 package com.example.meowmba.ui.companion
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -66,7 +67,10 @@ internal fun ProfessionalWorkspace(
                         // Was hard-coded to the old dark-mode background, which
                         // left a near-black panel in Light mode. surfaceVariant
                         // keeps the avatar stage distinct in both brightnesses.
-                        .background(colors.surfaceVariant)) { avatar() }
+                        // Touching the orb toggles the mic, same as the orb tap
+                        // contract — the stage is a shortcut, not just a prop.
+                        .background(colors.surfaceVariant)
+                        .clickable { viewModel.onAvatarZoneClick(AvatarZone.EAR_LEFT) }) { avatar() }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(state.interactionState.name.lowercase().replaceFirstChar { it.uppercase() },
                             style = MaterialTheme.typography.titleLarge, color = colors.onSurface)

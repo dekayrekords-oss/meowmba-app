@@ -75,8 +75,8 @@ android {
         // versionCode 20 (1.3.16), so an install at 20 would not register as an
         // upgrade and preserving app data would be a coin flip. 21 > 20 makes it
         // a genuine in-place upgrade that keeps the Room database and models.
-        versionCode = 23
-        versionName = "1.3.19"
+        versionCode = 24
+        versionName = "1.3.20"
 
         ndk {
             abiFilters += "arm64-v8a"
@@ -158,6 +158,7 @@ android {
         compose = true
         buildConfig = true
     }
+    testOptions.unitTests.isIncludeAndroidResources = true
 
     // MediaPipe / LiteRT AARs ship every ABI. We only ship arm64 (the Fold).
     // Without this the Play APK is ~390 MB and over the 200 MB cap.
@@ -230,6 +231,9 @@ tasks.withType<Test>().configureEach {
 }
 
 dependencies {
+    implementation("com.google.android.filament:filament-android:1.68.5")
+    implementation("com.google.android.filament:gltfio-android:1.68.5")
+    implementation("com.google.android.filament:filament-utils-android:1.68.5")
     if (hasMwdat) {
         implementation("com.meta.wearable:mwdat-core:0.8.0")
         implementation("com.meta.wearable:mwdat-camera:0.8.0")
@@ -285,6 +289,8 @@ dependencies {
     testImplementation(libs.ktor.client.mock)
     testImplementation(libs.mockitoCore)
     testImplementation(libs.robolectric)
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)

@@ -562,15 +562,15 @@ class Spring(
  * heavy and trail everything.
  */
 class CatMotionEngine {
-    private val open = Spring(185f, 0.42f, initial = 1f)
-    private val pupil = Spring(120f, 0.70f, initial = 0.45f)
+    private val open = Spring(150f, 1f, initial = 1f)
+    private val pupil = Spring(65f, 1f, initial = 0.45f)
     private val ear = Spring(150f, 0.32f)
     private val splay = Spring(150f, 0.34f, initial = 12f)
     private val earSplit = Spring(150f, 0.34f)
-    private val eyeW = Spring(200f, 0.38f, initial = 1f)
-    private val eyeH = Spring(200f, 0.36f, initial = 1f)
-    private val eyeTilt = Spring(170f, 0.40f)
-    private val lowerLid = Spring(190f, 0.38f)
+    private val eyeW = Spring(150f, 1f, initial = 1f)
+    private val eyeH = Spring(150f, 1f, initial = 1f)
+    private val eyeTilt = Spring(130f, 1f)
+    private val lowerLid = Spring(150f, 1f)
     private val jaw = Spring(170f, 0.40f)
     private val mouthW = Spring(170f, 0.40f, initial = 1f)
     private val curl = Spring(170f, 0.40f)

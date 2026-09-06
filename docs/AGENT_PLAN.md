@@ -62,3 +62,39 @@ Every dispatched task states:
 - [ ] Q1/I1 integrated validation and release gate.
 
 No task is complete merely because code was generated. Record actual commands, results, and artifact paths; separate source completion from device acceptance.
+# 3D framework checkpoint
+
+Independent UI/optimization review requested and completed on September 5.
+Integrator fixed the chat visibility/draft/call issues, model diagnostics and
+opaque-screen animation lifetime. Findings and remaining device gates are in
+`UI_REVIEW_2026-09-05.md`. A first rigged cat exists in `art/avatars/snow-cat`;
+phone rendering acceptance is still pending.
+
+Integrator implemented the optional Filament GLB framework; authoring contract:
+`AVATAR_MODEL_CONTRACT.md`. Model import, selected-library persistence, named
+state clips and live morph controls are implemented. Remaining bounded work:
+author/import a real character, validate rig channels and backgrounds on phone,
+profile native lifecycle/memory, and test fold/resume. This does not mark the
+earlier eye-acting pilot or scene/prop library complete.
+
+## Refined cat asset checkpoint — September 5, 2026
+
+User-requested cleanup produced `art/avatars/snow-cat-v2/`, preserving v1.
+The Blender source and GLB now have blended facial anatomy, rounded ear bowls,
+curved amber irises, sliding lids and finer modeled fur. Export is ~3.2 MB and
+61,944 triangles; shared blink/gaze/jaw names and eight state clips retained.
+`scripts/verify_snow_cat_refined.py` checks the contract and renders reimported
+GLB neutral/blink/gaze-jaw poses. Remaining gates: user visual approval, full
+acting library, runtime lighting and phone performance. No installation.
+
+## Direction correction — first model preferred
+
+The user rejected v2's rounded redesign and asked to retain the first model,
+clean stray/jagged geometry, and follow the supplied kitten illustration.
+Current candidate: `art/avatars/snow-cat-reference/`, built with
+`scripts/build_snow_cat.py -- --reference-cleanup`. Original v1/v2 assets remain
+available. Fur tessellation/normals and floating lid strips were corrected;
+reference-view pose and eye proportions were adjusted. GLB contract assertions
+and neutral/blink/gaze-jaw render checks passed. Likeness is still not exact:
+flowing fur, eye depth and the lower ruff need further visual authoring. Do not
+mark the model approved or claim film-quality animation. No installation.

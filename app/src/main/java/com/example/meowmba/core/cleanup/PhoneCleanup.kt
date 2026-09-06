@@ -370,6 +370,30 @@ object PhoneCleanup {
         }
     }
 
+    /** Ask the default compatible browser first; fall back to Android's picker. */
+    fun openSuggestions(context: Context, plan: Plan): String {
+        val count = plan.items.count { it.uri != null }
+        if (count == 0) return "No file suggestions to open."
+        val authority = "${context.packageName}.cleanup.documents"
+        val root = android.provider.DocumentsContract.buildRootUri(authority, "suggestions")
+        val folder = android.provider.DocumentsContract.buildDocumentUri(authority, "suggestions")
+        context.contentResolver.notifyChange(
+            android.provider.DocumentsContract.buildChildDocumentsUri(authority, "suggestions"), null)
+        val browse = Intent(Intent.ACTION_VIEW).setDataAndType(root, "vnd.android.document/root")
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (runCatching { context.startActivity(browse) }.isSuccess) {
+            return "Opened Cleanup suggestions in the file browser with $count files for review. Nothing was deleted."
+        }
+        val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*")
+            .addCategory(Intent.CATEGORY_OPENABLE)
+            .putExtra(android.provider.DocumentsContract.EXTRA_INITIAL_URI, folder)
+            .putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return if (runCatching { context.startActivity(picker) }.isSuccess) {
+            "Opened Android's file picker. Choose Cleanup suggestions if it opens elsewhere. Review $count files, then return to Memba to confirm cleanup. Nothing was deleted."
+        } else "Could not open a compatible file browser. Your suggestions are listed here; nothing was deleted."
+    }
+
     fun openUsageAccess(context: Context) {
         context.startActivity(
             Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)

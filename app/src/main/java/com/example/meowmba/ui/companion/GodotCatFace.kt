@@ -242,7 +242,7 @@ private fun DrawScope.drawGodotEye(
 ) {
     val a = clock.faceAlpha
     val eye = origin + Offset(side * R * 0.48f, -R * 0.07f)
-    val breath = 1f + 0.025f * sin(clock.t * 1.7f + side)
+    val breath = 1f
     val blink = clock.blink.coerceIn(0.05f, 1.2f)
     // Cap openness — phone canvas makes Godot's full scale look oversized.
     val openness = (blink * pose.eyeOpen.coerceIn(0.12f, 1.15f)).coerceIn(0.05f, 1.2f)
@@ -297,9 +297,10 @@ private fun DrawScope.drawGodotEye(
     } else drawPath(aperture, Color(0.030f, 0.070f, 0.055f, a))
 
     if (openness > 0.06f) {
-        val iris = eye + Offset(clock.gazeX * hw * 0.58f, clock.gazeY * (up + lo) * 0.42f)
-        // Pearl lids close over the iris; the iris must not shrink during a blink.
-        val ir = if (pearl) R * 0.23f else min(hw * 0.66f, (up + lo) * 0.60f)
+        // The lid moves over a stable eyeball: blinking must not move or
+        // shrink the iris, including when looking away from the center.
+        val iris = eye + Offset(clock.gazeX * R * 0.19f, clock.gazeY * R * 0.20f)
+        val ir = if (pearl) R * 0.23f else R * 0.218f
         val fx = 1f - 0.30f * abs(clock.gazeX)
         val fy = 1f - 0.14f * abs(clock.gazeY)
 

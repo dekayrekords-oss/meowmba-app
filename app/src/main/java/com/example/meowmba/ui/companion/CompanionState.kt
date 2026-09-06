@@ -155,6 +155,8 @@ data class CompanionState(
     val connectionTestRunning: Boolean = false,
     /** Conversation history, sourced live from Room. */
     val chatMessages: List<ChatUiMessage> = emptyList(),
+    val liveAssistantReply: String? = null,
+    val liveReplyConversationId: Long = 0L,
     /** Memories recalled for the current turn, each with its "why". */
     val recalledMemories: List<RecalledMemory> = emptyList(),
     /** All stored memories (Memory screen list). */

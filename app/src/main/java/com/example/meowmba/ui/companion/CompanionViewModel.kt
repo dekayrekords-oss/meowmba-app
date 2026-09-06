@@ -648,6 +648,8 @@ class CompanionViewModel(
 
     /** Continuous lateral force (-1..1, + = pushed right) for the avatar lean. */
     private val _motionLean = kotlinx.coroutines.flow.MutableStateFlow(0f)
+    private val _avatarShakeCount = kotlinx.coroutines.flow.MutableStateFlow(0)
+    val avatarShakeCount = _avatarShakeCount.asStateFlow()
 
     /** Continuous braking/launch force (-1..1, + = braking throw) for the lurch. */
     private val _motionLurch = kotlinx.coroutines.flow.MutableStateFlow(0f)
@@ -1571,6 +1573,7 @@ class CompanionViewModel(
                             sense.shakeCount.collect { count ->
                                 if (count > lastSeen) {
                                     lastSeen = count
+                                    _avatarShakeCount.value = count
                                     noteMoodEvent(com.example.meowmba.core.personality.MoodEvent.Shake)
                                     val spec = CustomAnimations.BUILT_INS["happy bop"]
                                         ?: CustomAnimations.BUILT_INS.values.randomOrNull()
@@ -2573,6 +2576,7 @@ class CompanionViewModel(
             emotion = CompanionEmotion.CURIOUS
         )
         val epoch = supersedeResponseTurn()
+        val replyConversationId = conversationId()
         responseJob = viewModelScope.launch(swallowAsyncFatals) {
             val userMessageId = persistTurn(MessageRole.USER, text)
             val onCall = _uiState.value.callMode
@@ -2638,7 +2642,8 @@ class CompanionViewModel(
                             .replace("\\t", "\t")
                             .replace("\\r", "\r")
                         fullResponse += partial
-                        _uiState.value = _uiState.value.copy(captionText = fullResponse)
+                        _uiState.value = _uiState.value.copy(captionText = fullResponse,
+                            liveAssistantReply = fullResponse, liveReplyConversationId = replyConversationId)
                         val chunk = com.example.meowmba.core.audio.SpeechChunker
                             .nextChunk(fullResponse, spokenUpTo)
                         if (chunk != null) {
@@ -2654,7 +2659,7 @@ class CompanionViewModel(
                             if (tail.isNotEmpty()) {
                                 speakStreaming(tail, first = spokenUpTo == 0)
                             }
-                            recordSpokenResponse(fullResponse)
+                            recordSpokenResponse(fullResponse, replyConversationId)
                             if (!_uiState.value.memoryPaused) {
                                 memoryRepository?.saveEpisodicCheckpoint(text, fullResponse, userMessageId)
                                 pushMemoriesToMem0()
@@ -4842,6 +4847,7 @@ class CompanionViewModel(
         // Ktor job — that crashes this device. Epoch makes the old stream
         // a no-op; TTS is stopped immediately.
         val epoch = supersedeResponseTurn()
+        val replyConversationId = conversationId()
         // THINKING is the state every mic re-arm path refuses to run in, and
         // nothing else guarantees we leave it: a provider that never emits a
         // terminal token, a TTS engine that swallows the utterance, or a
@@ -4861,6 +4867,8 @@ class CompanionViewModel(
                 _uiState.value = _uiState.value.copy(
                     interactionState = InteractionState.IDLE,
                     captionText = "That took too long — I gave up on it. Ask me again?",
+                    liveAssistantReply = "That took too long — please try again.",
+                    liveReplyConversationId = conversationId(),
                 )
                 // Order matters: the state must already read IDLE, because
                 // startWakeStandby refuses to re-arm from anything else.
@@ -5014,7 +5022,8 @@ class CompanionViewModel(
                             .replace("\\t", "\t")
                             .replace("\\r", "\r")
                         fullResponse += partial
-                        _uiState.value = _uiState.value.copy(captionText = fullResponse)
+                        _uiState.value = _uiState.value.copy(captionText = fullResponse,
+                            liveAssistantReply = fullResponse, liveReplyConversationId = replyConversationId)
                         val chunk = com.example.meowmba.core.audio.SpeechChunker
                             .nextChunk(fullResponse, spokenUpTo)
                         if (chunk != null) {
@@ -5031,7 +5040,7 @@ class CompanionViewModel(
                             if (tail.isNotEmpty()) {
                                 speakStreaming(tail, first = spokenUpTo == 0)
                             }
-                            recordSpokenResponse(fullResponse)
+                            recordSpokenResponse(fullResponse, replyConversationId)
                             // Episodic checkpoint: resume exactly where we left off
                             if (!_uiState.value.memoryPaused) {
                                 memoryRepository?.saveEpisodicCheckpoint(text, fullResponse, userMessageId)
@@ -5519,9 +5528,9 @@ class CompanionViewModel(
      * Once-per-reply bookkeeping. Kept out of [speakStreaming] so a reply spoken as
      * five sentences still lands in memory and notifications as ONE assistant message.
      */
-    private fun recordSpokenResponse(full: String) {
+    private fun recordSpokenResponse(full: String, replyConversationId: Long = conversationId()) {
         viewModelScope.launch {
-            persistTurn(MessageRole.ASSISTANT, full)
+            memoryRepository?.addMessage(MessageRole.ASSISTANT, full, replyConversationId, null)
         }
         // Response notifications only when the app is in the background — in
         // the foreground the face + spoken reply are the feedback.
@@ -5532,6 +5541,7 @@ class CompanionViewModel(
     private fun speak(text: String) {
         fuLog("speak: \"${text.take(80)}\"")
         if (handedOffToBackground) return
+        _uiState.value = _uiState.value.copy(liveAssistantReply = text, liveReplyConversationId = conversationId())
         if (_uiState.value.isMuted) {
             fuLog("speak skipped: mouth muted")
             return
@@ -6014,7 +6024,6 @@ class CompanionViewModel(
 
     fun toggleChat() {
         val opening = !_uiState.value.isChatExpanded
-        if (!opening && _uiState.value.callMode) endCallMode()
         _uiState.value = _uiState.value.copy(isChatExpanded = opening)
         updateVoiceListeningMode()
     }
@@ -6328,6 +6337,8 @@ class CompanionViewModel(
      */
     internal fun showProviderError(message: String) {
         _uiState.value = _uiState.value.copy(
+            liveAssistantReply = "Can't reach ${_uiState.value.selectedModel}: $message",
+            liveReplyConversationId = conversationId(),
             interactionState = InteractionState.OFFLINE,
             errorMessage = message,
             captionText = "Can't reach ${_uiState.value.selectedModel}: $message",
@@ -6977,7 +6988,10 @@ class CompanionViewModel(
     private fun publishChat() {
         val conv = conversationId()
         val name = _uiState.value.name
+        val savedReply = cachedMessages.lastOrNull { it.conversationId == conv && it.role == MessageRole.ASSISTANT }
+        val live = _uiState.value.liveAssistantReply
         _uiState.value = _uiState.value.copy(
+            liveAssistantReply = if (_uiState.value.liveReplyConversationId == conv && savedReply?.content == live) null else live,
             chatMessages = cachedMessages.filter { it.conversationId == conv }.map { message ->
                 ChatUiMessage(
                     id = message.id,
@@ -8460,6 +8474,7 @@ class CompanionViewModel(
     /** Stop talking and ignore any in-flight model stream. Never job.cancel(). */
     private fun supersedeResponseTurn(): Long {
         val next = ++responseEpoch
+        _uiState.value = _uiState.value.copy(liveAssistantReply = null)
         runCatching { ttsManager?.stop() }
         return next
     }

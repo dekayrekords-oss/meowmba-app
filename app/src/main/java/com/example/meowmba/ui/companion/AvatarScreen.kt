@@ -137,6 +137,7 @@ fun AvatarScreen(
                 )
                 Spacer(modifier = Modifier.height(10.dp))
             }
+            AvatarModelPicker(onSelectStyle)
 
             Spacer(modifier = Modifier.height(18.dp))
             Text(
@@ -308,7 +309,7 @@ private fun EyePreview(style: AvatarStyle, modifier: Modifier = Modifier) {
                 }
                 drawCircle(Color.White, r * 0.10f, c)
             }
-            AvatarStyle.PEARL, AvatarStyle.NEO -> drawEyeNeo(
+            AvatarStyle.MODEL_3D, AvatarStyle.PEARL, AvatarStyle.NEO -> drawEyeNeo(
                 side = 1f,
                 tiltDeg = 0f,
                 cx = cx,

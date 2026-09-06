@@ -395,3 +395,11 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 ---
 
 *Updated: 2026-09-03 from meowmba-130 worktree at commit 2def58c (v1.3.10).*
+# Interchangeable 3D avatars — implementation checkpoint
+
+Added a Filament GLB renderer, private local model library, persistent selection,
+Avatar-page import UI, shared named morph/state animation contract, smooth gaze,
+speech energy, driving-force response and external privacy indicators. Existing
+avatar styles remain available. See `docs/AVATAR_MODEL_CONTRACT.md` for authoring
+and limitations. Compilation and focused contract tests passed; hardware render,
+asset QA and installation remain pending. No Blender character was supplied.

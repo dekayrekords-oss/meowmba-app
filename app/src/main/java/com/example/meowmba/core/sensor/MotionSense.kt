@@ -66,16 +66,28 @@ class MotionSense(context: Context) : RobotPoseSource {
     private var screenLean = 0f
     private var smoothLeanG = 0f
     private var smoothSurgeG = 0f
+    private var gravityReady = false
+    private var started = false
+    private var fusedGravityActive = false
 
     private val listener = object : SensorEventListener {
         override fun onSensorChanged(event: SensorEvent) {
+            if (event.sensor.type == Sensor.TYPE_GRAVITY) {
+                event.values.copyInto(gravity, endIndex = 3)
+                gravityReady = true
+                return
+            }
             if (event.sensor.type != Sensor.TYPE_ACCELEROMETER) return
             val (x, y, z) = floatArrayOf(event.values[0], event.values[1], event.values[2])
             val magnitude = sqrt(x * x + y * y + z * z)
+            if (!gravityReady) {
+                event.values.copyInto(gravity, endIndex = 3)
+                gravityReady = true
+            }
 
             // Shake: free-fall-ish spike beyond gravity, debounced 1s.
             if (magnitude > SHAKE_G * SensorManager.GRAVITY_EARTH) {
-                val now = System.currentTimeMillis()
+                val now = android.os.SystemClock.elapsedRealtime()
                 if (now - lastShakeAt > SHAKE_DEBOUNCE_MS) {
                     lastShakeAt = now
                     _shakeCount.value++
@@ -93,7 +105,9 @@ class MotionSense(context: Context) : RobotPoseSource {
 
             // Gravity reference: slower low-pass than the display tilt, so
             // sustained orientation wins over bumps and vibration.
-            for (i in 0..2) gravity[i] = gravity[i] * GRAVITY_KEEP + event.values[i] * (1f - GRAVITY_KEEP)
+            if (!fusedGravityActive) {
+                for (i in 0..2) gravity[i] = gravity[i] * GRAVITY_KEEP + event.values[i] * (1f - GRAVITY_KEEP)
+            }
             // Screen-plane tilt holds its last value when the phone goes flat.
             MotionMath.screenLeanDeg(gravity[0], gravity[1])?.let { screenLean = it }
 
@@ -123,15 +137,23 @@ class MotionSense(context: Context) : RobotPoseSource {
     }
 
     fun start() {
+        if (started) return
         val accel = sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) ?: return
-        // NORMAL (~5Hz) is plenty for an 8-degree avatar lean: UI rate fired
-        // 15-60x/s forever — even in the background — and fanned out to avatar
-        // recomposition + servo writes per sample.
-        sensorManager.registerListener(listener, accel, SensorManager.SENSOR_DELAY_NORMAL)
+        // 20 Hz catches brief shakes and turns; downstream deadbands prevent
+        // unchanged samples from recomposing the avatar.
+        gravityReady = false
+        started = sensorManager.registerListener(listener, accel, 50_000)
+        // Prefer fused gravity so a sustained turn is not quickly absorbed
+        // into an accelerometer-only gravity estimate.
+        fusedGravityActive = started && sensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY)?.let {
+            sensorManager.registerListener(listener, it, 50_000)
+        } == true
     }
 
     fun stop() {
         sensorManager?.unregisterListener(listener)
+        started = false
+        fusedGravityActive = false
     }
 
     companion object {
@@ -140,7 +162,7 @@ class MotionSense(context: Context) : RobotPoseSource {
         const val MAX_TILT_DEG = 8f
         private const val LOW_PASS = 0.12f
         /** Gravity estimator: keep 90% of the old vector per sample (~1s settle). */
-        private const val GRAVITY_KEEP = 0.90f
+        private const val GRAVITY_KEEP = 0.98f
         /** Force channels: fast enough to feel a turn, slow enough to not buzz. */
         private const val FORCE_LOW_PASS = 0.25f
     }

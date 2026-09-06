@@ -176,10 +176,22 @@ fun AvatarRenderer(
     faceScale: Float? = null,
     /** Lateral force on the phone, -1..1 (+ = pushed right). Turns lean the head. */
     motionLean: Float = 0f,
+    /**
+     * Whether the face consumes touches at all. `false` turns the avatar into a
+     * statue: no taps, no drags, no petting — the parent surface decides what a
+     * touch means (the Professional workspace binds the stage to the mic).
+     */
+    pointerEnabled: Boolean = true,
     /** Longitudinal force, -1..1 (+ = braking throw). Braking lurches the head. */
     motionLurch: Float = 0f,
+    shakeCount: Int = 0,
     modifier: Modifier = Modifier
 ) {
+    if (state.avatarStyle == AvatarStyle.MODEL_3D) {
+        ModelAvatar(state, paused, faceGazeX ?: 0f, faceGazeY ?: 0f,
+            motionLean, motionLurch, mouthEnergy, modifier)
+        return
+    }
     val basePose = CatAvatarStateMachine.resolvePose(state)
     val haptics = LocalHapticFeedback.current
 
@@ -232,6 +244,7 @@ fun AvatarRenderer(
     var faceRadiusPx by remember { mutableStateOf(200f) }
     val useGodotFace = state.avatarStyle == AvatarStyle.NEO || state.avatarStyle == AvatarStyle.PEARL
     val useSignalOrb = state.avatarStyle == AvatarStyle.SIGNAL
+    val orbOrientation = rememberOrbOrientation(useSignalOrb && !paused)
     // Single ambient clock (seconds). Advanced at ~60 fps and only while visible.
     // Reading this in the Canvas draw lambda invalidates draw only — not a
     // full-composition thrash of 9 rememberInfiniteTransition states @ vsync.
@@ -441,20 +454,11 @@ fun AvatarRenderer(
         }
         while (true) {
             // A cat stares at one spot, then glances at something else.
-            delay(Random.nextLong(1100L, 3800L))
-            val tx = (Random.nextFloat() * 2f - 1f) * 0.7f
-            val ty = (Random.nextFloat() * 2f - 1f) * 0.45f
+            delay(Random.nextLong(2800L, 6500L))
+            val tx = (Random.nextFloat() * 2f - 1f) * 0.42f
+            val ty = (Random.nextFloat() * 2f - 1f) * 0.24f
             val jump = hypot(tx - saccadeX.value, ty - saccadeY.value)
-            // Anticipation: the eyes wind back a hair against a big glance
-            // before making it. Two frames' worth of counter-move, far too
-            // brief to read as its own motion — it just makes the glance land.
-            if (jump > 0.5f) {
-                val backX = saccadeX.value - (tx - saccadeX.value) * 0.10f
-                val backY = saccadeY.value - (ty - saccadeY.value) * 0.10f
-                val antX = launch { saccadeX.animateTo(backX, tween(70)) }
-                val antY = launch { saccadeY.animateTo(backY, tween(70)) }
-                antX.join(); antY.join()
-            }
+            // Gaze travels directly to its fixation without a reverse twitch.
             // Saccadic blink: a real eye blinks through a large gaze shift, and
             // the blink is what hides the jump. REQUESTED, not performed here —
             // an Animatable has one owner, and a second coroutine calling
@@ -464,8 +468,8 @@ fun AvatarRenderer(
             // half-closed, at a random moment with nothing on screen to explain
             // it. The ambient loop owns the lid; this only asks.
             if (jump > 0.75f) blinkRequests.trySend(Unit)
-            val moveX = launch { saccadeX.animateTo(tx, tween(140)) }
-            val moveY = launch { saccadeY.animateTo(ty, tween(140)) }
+            val moveX = launch { saccadeX.animateTo(tx, tween(280, easing = FastOutSlowInEasing)) }
+            val moveY = launch { saccadeY.animateTo(ty, tween(280, easing = FastOutSlowInEasing)) }
             moveX.join()
             moveY.join()
         }
@@ -504,12 +508,12 @@ fun AvatarRenderer(
     val gazeSpec = if (trackingNow && chaseHard) {
         spring<Float>(
             dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessHigh,
+            stiffness = 180f,
         )
     } else if (trackingNow) {
         spring<Float>(
-            dampingRatio = 0.86f,
-            stiffness = Spring.StiffnessMedium,
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = 120f,
         )
     } else {
         tween(500)
@@ -601,17 +605,21 @@ fun AvatarRenderer(
     val petted = lastPetAt != 0L
 
     Canvas(
-        modifier = modifier
-            .fillMaxSize()
-            .onSizeChanged { sz ->
-                // Match draw-time fit so CatMotion scales stay consistent.
-                faceRadiusPx = fitGodotFaceRadius(sz.width.toFloat(), sz.height.toFloat())
-            }
-            .semantics {
-                contentDescription =
-                    "Memba cat avatar, currently ${state.interactionState.name.lowercase()}"
-            }
-            .pointerInput(state.avatarStyle) {
+        modifier = {
+            val base = modifier
+                .fillMaxSize()
+                .onSizeChanged { sz ->
+                    // Match draw-time fit so CatMotion scales stay consistent.
+                    faceRadiusPx = fitGodotFaceRadius(sz.width.toFloat(), sz.height.toFloat())
+                }
+                .semantics {
+                    contentDescription =
+                        "Memba cat avatar, currently ${state.interactionState.name.lowercase()}"
+                }
+            if (!pointerEnabled) base
+            else
+                base
+                    .pointerInput(state.avatarStyle) {
                 detectTapGestures(
                     onTap = { offset ->
                         touchGaze = normalizeGaze(offset, size.width, size.height)
@@ -624,7 +632,7 @@ fun AvatarRenderer(
                             AuraHomeContent.auraZoneAt(
                                 tap = offset,
                                 center = Offset(w / 2f, fitGodotFaceCenterY(w, h)),
-                                ringRadius = fitGodotFaceRadius(w, h) * 0.80f,
+                                ringRadius = fitGodotFaceRadius(w, h) * 0.816f,
                             )
                         } else {
                             zoneAt(offset, size.width, size.height)
@@ -679,6 +687,7 @@ fun AvatarRenderer(
                     }
                 }
             }
+            }()
     ) {
         // Subscribe draw pass to the single vsync-locked clock (not composition).
         val _epoch = drawEpoch
@@ -818,7 +827,11 @@ fun AvatarRenderer(
                 scope = this,
                 measurer = textMeasurer,
                 center = center,
-                domeRadius = R * 0.80f,
+                domeRadius = R * 0.816f,
+                viewRotation = orbOrientation.value,
+                shakeCount = shakeCount,
+                forceLean = leanAnim,
+                forceLurch = lurchAnim,
                 thinking = state.interactionState == InteractionState.THINKING,
                 level = mouthEnergy?.value ?: if (
                     orbSpeaking ||
@@ -879,27 +892,19 @@ fun AvatarRenderer(
             val listening = state.interactionState ==
                 com.example.meowmba.ui.companion.InteractionState.LISTENING
             val voice = talk.coerceIn(0f, 1f)
-            val voiceEyeOpen = when {
-                speaking -> (eyeOpen * (0.88f + 0.28f * voice)).coerceIn(0.15f, 1.35f)
-                listening -> (eyeOpen * (1.0f + 0.18f * voice)).coerceIn(0.15f, 1.35f)
-                else -> eyeOpen
-            }
-            val voicePupil = when {
-                speaking -> (pupilSize * (0.85f + 0.45f * voice)).coerceIn(0.08f, 0.95f)
-                listening -> (pupilSize * (0.95f + 0.35f * voice)).coerceIn(0.08f, 0.95f)
-                else -> pupilSize
-            }
+            // Eye expression follows the emotional pose, not syllable energy.
+            // Speech drives the mouth; pulsing the pupils reads as a twitch.
             val liveTalking = speaking || listening
             // The resting face: ambient life + blink + ear twitch + voice drive
             // + face-tracking pan. Always built, never skipped.
             val restingPose = MotionPose(
-                eyeOpen = (voiceEyeOpen * blink.value).coerceIn(0.12f, 1.35f),
-                pupilSize = voicePupil,
-                eyeWidthScale = if (speaking) 1f + 0.04f * voice else 1f,
-                eyeHeightScale = if (speaking) 1f - 0.06f * voice else 1f,
+                eyeOpen = eyeOpen.coerceIn(0.12f, 1.35f),
+                pupilSize = pupilSize,
+                eyeWidthScale = 1f,
+                eyeHeightScale = 1f,
                 // Ramped like every other follow term, not toggled.
                 eyeTiltDeg = gazeX * 4f * trackingWeight,
-                lowerLid = if (effectivePose.happyEyes) 0.35f else if (speaking) 0.12f + 0.15f * voice else 0.10f,
+                lowerLid = if (effectivePose.happyEyes) 0.35f else 0.10f,
                 // Head-tracking inertia belongs on PITCH, symmetrically: both
                 // ears hang behind the skull together. It used to be summed
                 // into earSplitDeg, which the ear draw applies with opposite
@@ -943,8 +948,8 @@ fun AvatarRenderer(
             // everything ambient keeps running underneath it.
             val gPose = shotHolder[0]?.let { shot ->
                 shot.copy(
-                    // A cat holding a pose still blinks.
-                    eyeOpen = (shot.eyeOpen * blink.value).coerceIn(0.05f, 1.6f),
+                    // The eye renderer applies the shared blink once.
+                    eyeOpen = shot.eyeOpen.coerceIn(0.05f, 1.6f),
                     // While the voice is live the jaw belongs to speech, but a
                     // clip that opens wider than the syllable keeps its shape.
                     jawOpen = if (liveTalking) {

@@ -106,22 +106,20 @@ object AuraHomeContent {
     }
 
     /**
-     * Dome tap zones. The dome has no ears/eyes, so cat-face geometry would map
-     * taps to invisible features. Instead: the mouth area toggles speech mute
-     * (the fastest reversible action), the rest of the dome opens the tile
-     * menu, and everything else falls through to the tile menu too — one
-     * predictable rule.
+     * Dome tap zone for the orb. The dome has no ears/eyes, so cat-face
+     * geometry would map taps to invisible features; instead the rule is one
+     * shortcut: touching the orb toggles the microphone (the strongest
+     * privacy action, and the one clients keep asking to bind). It reuses the
+     * EAR_LEFT tap contract so re-enabling the mic also restores the right
+     * listening mode. Taps outside the orb fall through to the tile menu, and
+     * long-press still opens quick settings.
      *
      * @param tap tap position in px, [center] orb center in px, [ringRadius] outer ring radius in px.
      */
     fun auraZoneAt(tap: Offset, center: Offset, ringRadius: Float): AvatarZone {
         if (ringRadius <= 0f) return AvatarZone.BACKGROUND
         val dist = hypot(tap.x - center.x, tap.y - center.y)
-        return when {
-            dist <= ringRadius * 0.30f -> AvatarZone.MOUTH
-            dist <= ringRadius * 1.15f -> AvatarZone.BACKGROUND
-            else -> AvatarZone.BACKGROUND
-        }
+        return if (dist <= ringRadius * 1.15f) AvatarZone.EAR_LEFT else AvatarZone.BACKGROUND
     }
 
     /** Long-press anywhere on the orb opens quick settings (mirrors forehead). */

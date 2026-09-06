@@ -18,6 +18,7 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -74,8 +75,8 @@ fun CompanionScreen(
     // Meow freezes while a surface covers the face — chat sheet, app menu,
     // or the full-screen (folded) browser. In split view the avatar stays
     // alive beside the browser.
-    val animationsPaused = uiState.showAvatarScreen || uiState.showAppDrawer || uiState.isChatExpanded ||
-        (uiState.showBrowser && !splitBrowser)
+    val animationsPaused = !faceModeActive(uiState.copy(isChatExpanded = false)) ||
+        uiState.showConnectorsScreen || showOnboarding || (uiState.showBrowser && !splitBrowser)
 
     val isNeo = uiState.avatarStyle == AvatarStyle.NEO
     val hasUserBg = uiState.background.kind !=
@@ -242,7 +243,7 @@ fun CompanionScreen(
             // Animated Captions — only while a turn is actually live: your
             // speech (live transcript) or the reply. Never the idle hint.
             AnimatedVisibility(
-                visible = uiState.captionText != null &&
+                visible = !uiState.isChatExpanded && uiState.captionText != null &&
                     uiState.interactionState != InteractionState.IDLE,
                 enter = fadeIn() + expandVertically(),
                 exit = fadeOut() + shrinkVertically(),
@@ -971,11 +972,24 @@ fun CompanionScreen(
             } else null,
             listening = uiState.interactionState == InteractionState.LISTENING,
             listenPartial = uiState.captionText,
+            liveReply = uiState.liveAssistantReply.takeIf { uiState.liveReplyConversationId == uiState.activeConversationId },
+            thinking = uiState.interactionState == InteractionState.THINKING,
+            conversationKey = uiState.activeConversationId.toString(),
             onMicClick = { viewModel.onChatMicClick() },
             callActive = uiState.callMode,
             onCallClick = { viewModel.toggleCallMode() },
             modifier = Modifier.align(Alignment.BottomCenter)
         )
+
+        if (uiState.callMode && !uiState.isChatExpanded && !showOnboarding) {
+            Surface(modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding(),
+                shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.primaryContainer) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = { viewModel.openChat() }) { Text("Voice call active · Open chat") }
+                    TextButton(onClick = { viewModel.toggleCallMode() }) { Text("Hang up") }
+                }
+            }
+        }
 
         // Drawn AFTER ChatOverlay deliberately. In a Box, later children
         // paint on top; while this sat earlier in the file the approval
@@ -1074,6 +1088,7 @@ private fun AvatarMotionHost(
     val motionTilt by viewModel.motionTiltDeg.collectAsState()
     val motionLean by viewModel.motionLean.collectAsState()
     val motionLurch by viewModel.motionLurch.collectAsState()
+    val shakeCount by viewModel.avatarShakeCount.collectAsState()
     val faceGaze by viewModel.faceGaze.collectAsState()
     // Deliberately NOT `by`: delegating would read the value here, in
     // composition, and every TTS word boundary would recompose this screen.
@@ -1084,7 +1099,7 @@ private fun AvatarMotionHost(
     Box(
         modifier = modifier.graphicsLayer {
             // ViewModel already clamps to ±14°; don't squash it back to ±4 here.
-            rotationZ = motionTilt.coerceIn(-14f, 14f)
+            rotationZ = if (uiState.avatarStyle == AvatarStyle.SIGNAL) 0f else motionTilt.coerceIn(-14f, 14f)
             clip = false
         }
     ) {
@@ -1096,6 +1111,10 @@ private fun AvatarMotionHost(
             onSwipeLeft = { if (interactive) viewModel.toggleBrowser() },
             onSwipeRight = { if (interactive) viewModel.openChat() },
             paused = paused,
+            // Statue mode: no gesture consumption either, so a non-interactive
+            // stage (the Professional workspace orb) leaves taps to its parent
+            // — the clickable that flips the mic.
+            pointerEnabled = interactive,
             faceGazeX = faceGaze?.first,
             faceGazeY = faceGaze?.second,
             mouthEnergy = mouthEnergy,
@@ -1105,6 +1124,7 @@ private fun AvatarMotionHost(
             faceScale = facePose?.scale,
             motionLean = motionLean,
             motionLurch = motionLurch,
+            shakeCount = shakeCount,
             chaseHard = chaseHard,
         )
     }

@@ -25,6 +25,7 @@ class PhoneCleanupTool(
         description = "Scan or tidy photos, screenshots, videos, music, downloads, " +
             "unused apps, and messages. Args: kind = all|photos|videos|music|" +
             "documents|files|messages|apps, action = scan|organize|tidy. " +
+            "Scanning opens all suggested files in a compatible file browser for review. " +
             "Deletes require a system confirmation sheet.",
         inputSchema = mapOf("kind" to "string", "action" to "string"),
         riskLevel = RiskLevel.MODERATE,
@@ -51,7 +52,7 @@ class PhoneCleanupTool(
             )
         }
         val plan = PhoneCleanup.scan(context, kind)
-        return ToolResult.Success(PhoneCleanup.format(plan))
+        return ToolResult.Success(PhoneCleanup.format(plan) + "\n" + PhoneCleanup.openSuggestions(context, plan))
     }
 
     private fun organize(kind: String): ToolResult {
