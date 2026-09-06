@@ -36,6 +36,11 @@ class GlassesTakePhotoTool(
         if (glasses == null) {
             return@withContext ToolResult.Failure("No glasses controller in this build.")
         }
+        if (!glasses.hasSdk()) {
+            return@withContext ToolResult.Failure(
+                "Glasses camera support is not included in this installation. Update to a glasses-enabled build; adding an API key in Settings cannot install the SDK."
+            )
+        }
         var frame = glasses.latestJpeg.value
         if (frame == null) {
             // Nudge the stream, then wait for first light.
@@ -44,6 +49,12 @@ class GlassesTakePhotoTool(
                 while (glasses.latestJpeg.value == null) delay(250)
                 glasses.latestJpeg.value
             }
+        }
+        if (!glasses.isRealDevice.value || !glasses.isStreaming.value ||
+            System.currentTimeMillis() - MetaGlassesController.lastFrameAtMs.value > 12_000L) {
+            return@withContext ToolResult.Failure(
+                "No fresh camera frame from real glasses. Reconnect them on the Hardware page and try again."
+            )
         }
         if (frame == null) {
             return@withContext ToolResult.Failure(

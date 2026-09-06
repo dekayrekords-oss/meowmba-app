@@ -3707,8 +3707,7 @@ class CompanionViewModel(
         val gc = glassesController ?: return
         viewModelScope.launch {
             val registered = gc.ensureRegistered(activity)
-            if (registered) {
-                gc.ensureCameraPermission(activity)
+            if (registered && gc.ensureCameraPermission(activity)) {
                 glassesConnect()
             }
         }

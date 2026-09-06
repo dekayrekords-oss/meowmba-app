@@ -106,6 +106,16 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Meowmba">
+        <!-- Public SDK app-attestation configuration, NOT the GitHub PAT. -->
+        <meta-data
+            android:name="com.meta.wearable.mwdat.APPLICATION_ID"
+            android:value="${mwdat_application_id}" />
+        <meta-data
+            android:name="com.meta.wearable.mwdat.CLIENT_TOKEN"
+            android:value="${mwdat_client_token}" />
+        <meta-data
+            android:name="com.meta.wearable.mwdat.ANALYTICS_OPT_OUT"
+            android:value="true" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -126,6 +136,14 @@
                      default-home choice and re-show the launcher picker. -->
                 <category android:name="android.intent.category.HOME" />
                 <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <!-- Configure the matching scheme in Wearables Developer Center.
+                 Variant-specific so debug and Play registrations cannot collide. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="${applicationId}.mwdat" />
             </intent-filter>
         </activity>
 

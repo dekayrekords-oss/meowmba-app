@@ -1,0 +1,13 @@
+# Copy outside the repository, e.g. /home/claude/.config/meowmba/mwdat.properties.
+# chmod 600 that file. Never paste credentials into chat, commits, or app Settings.
+# Pass -PmwdatProperties=/absolute/path/mwdat.properties to Gradle.
+
+# GitHub CLASSIC personal access token with read:packages (build machine only).
+# It is used only to download Meta's SDK from GitHub Packages, never packaged.
+github_token=
+
+# Wearables Developer Center app configuration (NOT your Meta app secret).
+# These SDK attestation values are embedded in the app as required by Meta.
+# Leave blank/0 only for DEBUG Developer Mode, not a release build.
+mwdat_application_id=
+mwdat_client_token=

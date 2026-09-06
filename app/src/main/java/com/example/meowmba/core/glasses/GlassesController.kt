@@ -7,6 +7,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.util.Log
+import com.example.meowmba.BuildConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -181,14 +182,20 @@ class MetaGlassesController(private val context: Context) {
 
     /** True if MWDAT classes were compiled into this APK. */
     fun hasSdk(): Boolean = try {
-        Class.forName("com.example.meowmba.core.glasses.MwdatGlassesBridge")
-        true
+        BuildConfig.HAS_MWDAT_SDK && Class.forName(
+            "com.example.meowmba.core.glasses.MwdatGlassesBridge",
+            false,
+            javaClass.classLoader,
+        ).let { GlassesBridge::class.java.isAssignableFrom(it) }
     } catch (_: Exception) {
+        false
+    } catch (_: LinkageError) {
         false
     }
 
     private fun obtainBridge(): GlassesBridge? {
         bridge?.let { return it }
+        if (!hasSdk()) return null
         return try {
             val b = Class.forName("com.example.meowmba.core.glasses.MwdatGlassesBridge")
                 .getDeclaredConstructor()
@@ -197,6 +204,9 @@ class MetaGlassesController(private val context: Context) {
             b
         } catch (e: Exception) {
             Log.w("MeowGlasses", "MWDAT bridge load failed: ${e.localizedMessage}")
+            null
+        } catch (e: LinkageError) {
+            Log.w("MeowGlasses", "MWDAT dependency load failed", e)
             null
         }
     }
@@ -239,7 +249,7 @@ class MetaGlassesController(private val context: Context) {
     fun connect(force: Boolean = false) {
         val b = obtainBridge()
         if (b == null) {
-            startMock()
+            sdkUnavailable()
             return
         }
         _isRealDevice.value = true
@@ -264,8 +274,8 @@ class MetaGlassesController(private val context: Context) {
         try {
             setStatus("connecting MWDAT session…")
             b.connect(context, this)
-            // Soft flag: session start is async. True "linked" when frames arrive.
-            _isConnected.value = true
+            // True "linked" only when a real frame arrives, not merely when an
+            // asynchronous connect request was accepted.
             Log.i("MeowGlasses", "Meta Glasses: MWDAT bridge connect requested")
         } catch (e: Exception) {
             _isConnected.value = false
@@ -306,9 +316,7 @@ class MetaGlassesController(private val context: Context) {
      */
     fun ensureCaptureStream() {
         if (!hasSdk()) {
-            startMock()
-            startMockFrames()
-            setStatus("mock frames (no MWDAT in APK)")
+            sdkUnavailable()
             return
         }
         _isRealDevice.value = true
@@ -346,6 +354,8 @@ class MetaGlassesController(private val context: Context) {
         runCatching { bridge?.disconnect() }
         _isConnected.value = false
         _isStreaming.value = false
+        _isRealDevice.value = false
+        clearFrames()
         setStatus("disconnected")
         Log.i("MeowGlasses", "Meta Glasses: disconnected")
     }
@@ -355,6 +365,23 @@ class MetaGlassesController(private val context: Context) {
         _isRealDevice.value = false
         setStatus("mock mode")
         Log.i("MeowGlasses", "Meta Glasses: mock mode (add github_token for real DAT)")
+    }
+
+    private fun clearFrames() {
+        _latestJpegShared.value = null
+        _lastFrameAtMs.value = 0L
+        _frameSeq.value = 0L
+    }
+
+    /** Missing hardware support must never fabricate a successful photo. */
+    private fun sdkUnavailable() {
+        stopMockFrames()
+        connecting.set(false)
+        _isConnected.value = false
+        _isStreaming.value = false
+        _isRealDevice.value = false
+        clearFrames()
+        setStatus("Glasses camera support is not included in this installation. Update to a glasses-enabled build.")
     }
 
     fun startMockFrames() {

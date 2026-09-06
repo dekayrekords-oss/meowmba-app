@@ -32,13 +32,16 @@ val hasCompleteReleaseSigning = listOf("storeFile", "storePassword", "keyAlias",
     !keystoreProps.getProperty(it).isNullOrBlank()
 }
 
-// MWDAT (Meta glasses SDK) gating — same conditional-compile pattern as
-// meta-memory-app so a tokenless checkout still builds clean.
+// Debug development without glasses may omit the SDK. Release builds below
+// fail explicitly instead of silently shipping a broken glasses card.
 val localProps = Properties().apply {
     val f = rootProject.file("local.properties")
     if (f.exists()) f.inputStream().use { load(it) }
 }
-val githubToken = (localProps.getProperty("github_token") ?: System.getenv("GITHUB_TOKEN") ?: "").trim()
+val hasMwdat = gradle.extra["mwdat.enabled"] as Boolean
+val hasMwdatDownloadToken = gradle.extra["mwdat.hasGithubToken"] as Boolean
+val mwdatApplicationId = gradle.extra["mwdat.applicationId"] as String
+val mwdatClientToken = gradle.extra["mwdat.clientToken"] as String
 
 // Debug signing: `adb install -r` only replaces the on-device build if the
 // signature matches, and the phone's build was signed with meow's debug key —
@@ -47,13 +50,10 @@ val githubToken = (localProps.getProperty("github_token") ?: System.getenv("GITH
 // that key in local.properties (gitignored); without it the default
 // per-machine debug keystore is used, as before.
 val debugKeystorePath = (localProps.getProperty("debugKeystore") ?: "").trim()
-val hasMwdat = githubToken.isNotBlank() &&
-    Regex("^(gh[pousr]_[A-Za-z0-9]{36,255}|github_pat_[A-Za-z0-9_]{22,255})$").matches(githubToken)
 println(
     when {
         hasMwdat -> "MWDAT (Meta glasses SDK): ENABLED"
-        githubToken.isBlank() -> "MWDAT: disabled — add github_token to local.properties"
-        else -> "MWDAT: disabled — github_token format not recognized"
+        else -> "MWDAT: disabled for debug development; release requires the SDK. See docs/META_GLASSES_SETUP.md"
     }
 )
 
@@ -82,6 +82,10 @@ android {
         // a genuine in-place upgrade that keeps the Room database and models.
         versionCode = 24
         versionName = "1.3.20"
+
+        buildConfigField("boolean", "HAS_MWDAT_SDK", hasMwdat.toString())
+        manifestPlaceholders["mwdat_application_id"] = mwdatApplicationId
+        manifestPlaceholders["mwdat_client_token"] = mwdatClientToken
 
         ndk {
             abiFilters += "arm64-v8a"
@@ -155,8 +159,8 @@ android {
         targetCompatibility = JavaVersion.VERSION_11
     }
     // Meta Wearables DAT (Ray-Ban glasses). Compiles the real SDK bridge only
-    // when local.properties carries a valid github_token; without one the
-    // feature degrades honestly ("no MWDAT SDK in this build") like MetaMemory.
+    // when configured in settings.gradle.kts. verifyMwdatReleaseConfiguration
+    // prevents the tokenless development variant from becoming a Play build.
     sourceSets {
         getByName("main") {
             if (hasMwdat) {
@@ -262,11 +266,37 @@ tasks.matching { it.name == "preReleaseBuild" }.configureEach {
     dependsOn(verifyReleaseSigningConfiguration)
 }
 
+val verifyMwdatSdkConfiguration = tasks.register("verifyMwdatSdkConfiguration") {
+    val included = hasMwdat
+    val tokenPresent = hasMwdatDownloadToken
+    doLast {
+        check(included && tokenPresent) {
+            "Meta glasses SDK is missing. Configure a GitHub classic PAT with read:packages in an external mwdat.properties file, then build with -PincludeMwdat=true -PmwdatProperties=/absolute/path/mwdat.properties. See docs/META_GLASSES_SETUP.md."
+        }
+    }
+}
+val verifyMwdatReleaseConfiguration = tasks.register("verifyMwdatReleaseConfiguration") {
+    dependsOn(verifyMwdatSdkConfiguration)
+    val registeredApp = mwdatApplicationId != "0" && mwdatClientToken != "0"
+    doLast {
+        check(registeredApp) {
+            "Meta glasses release registration is missing. Set mwdat_application_id and mwdat_client_token from the Wearables Developer Center. Zero values are for debug Developer Mode only. See docs/META_GLASSES_SETUP.md."
+        }
+    }
+}
+tasks.matching { it.name == "preReleaseBuild" }.configureEach {
+    dependsOn(verifyMwdatReleaseConfiguration)
+}
+if (hasMwdat) {
+    tasks.matching { it.name == "preDebugBuild" }.configureEach {
+        dependsOn(verifyMwdatSdkConfiguration)
+    }
+}
+
 dependencies {
     if (hasMwdat) {
         implementation("com.meta.wearable:mwdat-core:0.8.0")
         implementation("com.meta.wearable:mwdat-camera:0.8.0")
-        implementation("com.meta.wearable:mwdat-mockdevice:0.8.0")
     }
     // SSH client (mwiede fork is the maintained jsch).
     implementation("com.github.mwiede:jsch:0.2.21")

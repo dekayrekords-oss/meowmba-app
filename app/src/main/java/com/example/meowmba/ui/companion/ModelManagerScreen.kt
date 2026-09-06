@@ -783,7 +783,7 @@ private fun MetaGlassesCard(viewModel: CompanionViewModel) {
                 )
                 Text(
                     when {
-                        !hasSdk -> "NO SDK IN BUILD"
+                        !hasSdk -> "UPDATE REQUIRED"
                         streaming -> "STREAMING"
                         connected -> "LINKED"
                         else -> "OFF"
@@ -802,11 +802,11 @@ private fun MetaGlassesCard(viewModel: CompanionViewModel) {
             Spacer(Modifier.height(12.dp))
             Row {
                 if (activity != null) {
-                    TextButton(onClick = { viewModel.glassesSetup(activity) }) {
+                    TextButton(onClick = { viewModel.glassesSetup(activity) }, enabled = hasSdk) {
                         Text("Setup glasses", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
                     }
                 }
-                TextButton(onClick = { viewModel.glassesConnect() }) {
+                TextButton(onClick = { viewModel.glassesConnect() }, enabled = hasSdk) {
                     Text("Connect", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
                 }
                 TextButton(onClick = { viewModel.glassesDisconnect() }) {
@@ -816,9 +816,17 @@ private fun MetaGlassesCard(viewModel: CompanionViewModel) {
             if (!hasSdk) {
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "This build has no MWDAT SDK (github_token missing at build time). " +
-                        "The glasses mic still works over plain Bluetooth when selected on the Voice Recognition page.",
+                    "Glasses camera support is not included in this installation. " +
+                        "It requires an app update, not an API key in Settings. " +
+                        "You can still select the paired Bluetooth microphone on the Voice Recognition page; availability depends on your phone and connection.",
                     color = Color(0xFFD29922),
+                    fontSize = 11.sp,
+                )
+            } else {
+                Text(
+                    "Pair your glasses in the Meta AI app, then tap Setup glasses and approve registration and camera access. " +
+                        "Test builds also require Developer Mode or access through your Meta testing release channel.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 11.sp,
                 )
             }
