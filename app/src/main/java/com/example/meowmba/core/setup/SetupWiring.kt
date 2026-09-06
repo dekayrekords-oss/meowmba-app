@@ -58,8 +58,8 @@ object SetupWiring {
             path = Path.LOCAL,
             getKeyUrl = null,
             defaultModel = "local",
-            blurb = "Fully private — no account or key. Meow downloads a small voice model " +
-                "to your phone so everything works offline. Best for privacy.",
+            blurb = "On-phone action routing needs a separate model download. " +
+                "Voice models download separately; connected services can still require internet access.",
         ),
         BrainProvider(
             id = "bigpickle",
@@ -67,8 +67,8 @@ object SetupWiring {
             path = Path.FREE_CLOUD,
             getKeyUrl = "https://opencode.ai/zen",
             defaultModel = "big-pickle",
-            blurb = "A flexible free cloud brain. Needs a free key from opencode.ai — " +
-                "no credit card. Great everyday default.",
+            blurb = "Cloud conversation using an OpenCode Zen key. " +
+                "Check the provider's current availability and pricing before connecting.",
         ),
         BrainProvider(
             id = "openrouter",

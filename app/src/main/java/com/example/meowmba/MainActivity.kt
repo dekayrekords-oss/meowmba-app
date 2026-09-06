@@ -125,7 +125,8 @@ class MainActivity : ComponentActivity() {
         val workspaceRoot = java.io.File(filesDir, "memba_workspace")
         val modelsDir = java.io.File(filesDir, "models")
 
-        checkPermissions()
+        // Do not present a wall of permission prompts before first-run guidance.
+        // The wizard offers an explicit, explained permission-review action.
 
         setContent {
                 val viewModel: CompanionViewModel = viewModel(
@@ -294,6 +295,7 @@ class MainActivity : ComponentActivity() {
                     // Onboarding wizard: full-screen overlay above everything.
                     if (wizardVisible) {
                         com.example.meowmba.ui.onboarding.SetupWizardRoute(
+                            onEnablePermissions = { checkPermissions() },
                             onFinished = {
                                 com.example.meowmba.core.setup.SetupWiring.markOnboardingDone(this@MainActivity)
                                 viewModel.reloadSetupConfiguration()
@@ -451,7 +453,7 @@ class MainActivity : ComponentActivity() {
     private fun checkPermissions() {
         // Mic, location and camera together. Anything already granted is dropped, so a
         // returning user is not re-prompted for what they have already allowed.
-        val core = listOf(
+        val core = (listOf(
             Manifest.permission.RECORD_AUDIO,
             Manifest.permission.ACCESS_FINE_LOCATION,
             Manifest.permission.ACCESS_COARSE_LOCATION,
@@ -469,18 +471,13 @@ class MainActivity : ComponentActivity() {
             // only already-bonded devices — which never includes an unpaired
             // LOOI, making the base look undiscoverable.
             Manifest.permission.BLUETOOTH_SCAN,
-        ).filter {
+        ) + if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            listOf(Manifest.permission.POST_NOTIFICATIONS)
+        } else emptyList()).filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
         if (core.isNotEmpty()) {
             corePermissionsLauncher.launch(core.toTypedArray())
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(
-                this, Manifest.permission.POST_NOTIFICATIONS
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
 

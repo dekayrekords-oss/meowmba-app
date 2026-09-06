@@ -187,6 +187,7 @@ fun SettingsScreen(
                     Button(onClick = onOpenSetup) { Text("Start setup") }
                 }
             }
+            BetaHelpCard()
             Spacer(modifier = Modifier.height(16.dp))
 
             SettingsSectionHeader(

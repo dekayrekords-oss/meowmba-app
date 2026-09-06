@@ -6,6 +6,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.activity.compose.BackHandler
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -25,9 +28,13 @@ import com.example.meowmba.core.setup.SetupWiring
 fun SetupWizardRoute(
     onFinished: () -> Unit,
     modifier: Modifier = Modifier,
+    onEnablePermissions: () -> Unit = {},
 ) {
-    var step by remember { mutableIntStateOf(0) }
+    var step by rememberSaveable { mutableIntStateOf(0) }
     val context = LocalContext.current
+    val wizardScroll = rememberScrollState()
+    LaunchedEffect(step) { wizardScroll.scrollTo(0) }
+    BackHandler { if (step > 0) step-- else onFinished() }
 
     Surface(
         modifier = modifier.fillMaxSize(),
@@ -36,24 +43,34 @@ fun SetupWizardRoute(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+                .safeDrawingPadding()
+                .imePadding()
+                .verticalScroll(wizardScroll)
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Spacer(Modifier.height(48.dp))
+            Spacer(Modifier.height(12.dp))
             Text(
-                text = "Connect your AI",
+                text = "Welcome to Meow",
                 color = MaterialTheme.colorScheme.onBackground,
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                text = "A few quick steps to get Meow talking.",
+                text = "Choose what you need. You can change everything later in Settings.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 14.sp,
             )
-            Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.height(16.dp))
+            LinearProgressIndicator(progress = { (step + 1) / 4f }, modifier = Modifier.fillMaxWidth())
+            Text("Step ${step + 1} of 4", modifier = Modifier.padding(top = 8.dp), style = MaterialTheme.typography.labelMedium)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                TextButton(onClick = { step-- }, enabled = step > 0) { Text("Back") }
+                TextButton(onClick = onFinished) { Text("Explore first") }
+            }
+            Text("Local models download separately. Keep Wi-Fi on; see Hardware and Voice recognition for progress or retry. Basic app-opening commands do not require a cloud key.", style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.height(16.dp))
 
             when (step) {
                 0 -> BrainStep(
@@ -69,7 +86,6 @@ fun SetupWizardRoute(
                 1 -> TtsStep(
                     onSelectLocal = {
                         SetupWiring.setTts(context, SetupWiring.Path.LOCAL, null)
-                        SetupWiring.requestLocalModel(context, SetupWiring.LocalModelKind.TTS)
                         step = 2
                     },
                     onNext = { step = 2 },
@@ -87,14 +103,15 @@ fun SetupWizardRoute(
                     },
                     onSkip = { step = 3 },
                 )
-                else -> AdvancedSetupStep(context = context, onFinished = onFinished)
+                else -> AdvancedSetupStep(context = context, onFinished = onFinished, onEnablePermissions = onEnablePermissions)
             }
         }
     }
 }
 
 @Composable
-private fun AdvancedSetupStep(context: Context, onFinished: () -> Unit) {
+private fun AdvancedSetupStep(context: Context, onFinished: () -> Unit, onEnablePermissions: () -> Unit) {
+    var showConnections by rememberSaveable { mutableStateOf(false) }
     var hf by remember { mutableStateOf("") }
     var github by remember { mutableStateOf("") }
     var spotify by remember { mutableStateOf("") }
@@ -102,9 +119,14 @@ private fun AdvancedSetupStep(context: Context, onFinished: () -> Unit) {
     var homeToken by remember { mutableStateOf("") }
     val storage = remember { com.example.meowmba.core.security.SecureStorageManager(context) }
 
-    Text("Step 4 — Optional connections", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+    Text("Make it yours", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
     Spacer(Modifier.height(8.dp))
-    Text("Only fill in services you want Meow to use. Everything is stored securely on this phone.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+    Text("Android permissions are optional. Microphone enables voice; camera enables photos; location supports nearby features; calendar supports events; Bluetooth connects accessories; notifications show background activity. You can decline any request and keep exploring.", style = MaterialTheme.typography.bodySmall)
+    OutlinedButton(onClick = onEnablePermissions, modifier = Modifier.fillMaxWidth()) { Text("Review Android permissions") }
+    Text("Controlling buttons in other apps needs Accessibility enabled separately in Settings. Meow asks for approval before sensitive actions.", style = MaterialTheme.typography.bodySmall)
+    TextButton(onClick = { showConnections = !showConnections }) { Text(if (showConnections) "Hide optional connections" else "Add optional connections") }
+    if (showConnections) {
+    Text("Only add services you use. Keys are stored securely on this phone. Saving a key does not verify the connection; test it in Plugins & MCP Connectors.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
     listOf(
         Triple("Hugging Face token", hf) { v: String -> hf = v },
         Triple("GitHub access token", github) { v: String -> github = v },
@@ -112,7 +134,11 @@ private fun AdvancedSetupStep(context: Context, onFinished: () -> Unit) {
         Triple("Home Assistant URL", homeUrl) { v: String -> homeUrl = v },
         Triple("Home Assistant long-lived token", homeToken) { v: String -> homeToken = v },
     ).forEach { (label, value, change) ->
-        OutlinedTextField(value = value, onValueChange = change, label = { Text(label) }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp))
+        OutlinedTextField(value = value, onValueChange = change, label = { Text(label) }, singleLine = true,
+            visualTransformation = if (label.endsWith("URL")) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp))
+    }
+    if (homeUrl.isBlank() != homeToken.isBlank()) Text("Home Assistant needs both its URL and token.", color = MaterialTheme.colorScheme.error)
     }
     Spacer(Modifier.height(12.dp))
     Button(
@@ -126,8 +152,9 @@ private fun AdvancedSetupStep(context: Context, onFinished: () -> Unit) {
             onFinished()
         },
         modifier = Modifier.fillMaxWidth(),
-    ) { Text("Save setup and finish") }
-    TextButton(onClick = onFinished) { Text("Finish without optional connections") }
+        enabled = homeUrl.isBlank() == homeToken.isBlank(),
+    ) { Text("Save and open Meow") }
+    Text("Try: Open Chrome • Open Files • Play a happy bop. Tap the background to find tiles. Beta help & feedback is near the top of Settings.", style = MaterialTheme.typography.bodySmall)
 }
 
 @Composable
@@ -137,24 +164,27 @@ private fun BrainStep(
 ) {
     var selectedId by remember { mutableStateOf<String?>(null) }
     var key by remember { mutableStateOf("") }
+    var showCloud by rememberSaveable { mutableStateOf(false) }
     val ctx = LocalContext.current
 
-    Text("Step 1 — Brain", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+    Text("Your AI", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
     Spacer(Modifier.height(16.dp))
     Text("How should Meow think?", color = MaterialTheme.colorScheme.onBackground, fontSize = 16.sp)
     Spacer(Modifier.height(12.dp))
 
-    SetupWiring.brainProviders().forEach { provider ->
+    Text("Start with on-phone actions, or connect a cloud provider for conversation. Cloud requests leave your phone and may have usage charges.", style = MaterialTheme.typography.bodySmall)
+    SetupWiring.brainProviders().filter { it.id == "local" || showCloud }.forEach { provider ->
         OutlinedButton(
             onClick = {
                 if (provider.id == "local") onSelectLocal()
-                else selectedId = provider.id
+                else { key = ""; selectedId = provider.id }
             },
             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         ) {
             Text(provider.name)
         }
     }
+    TextButton(onClick = { showCloud = !showCloud; selectedId = null; key = "" }) { Text(if (showCloud) "Hide cloud providers" else "Connect a cloud provider") }
 
     val provider = selectedId?.let { SetupWiring.brainProvider(it) }
     if (provider != null) {
@@ -178,6 +208,7 @@ private fun BrainStep(
             onValueChange = { key = it },
             label = { Text("API key") },
             singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(8.dp))
@@ -205,10 +236,11 @@ private fun TtsStep(
     Spacer(Modifier.height(12.dp))
     // Only LOCAL is currently wired (Android's TTS engine). Honesty: no fake cloud TTS.
     OutlinedButton(onClick = onSelectLocal, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-        Text("Local (on-device, no key needed)")
+        Text("Use phone voice — no API key")
     }
+    Text("Uses the phone's speech engine. Four optional neural voices are available in voice settings after a ~350 MB download. Their speed depends on your phone.", style = MaterialTheme.typography.bodySmall)
     Spacer(Modifier.height(4.dp))
-    TextButton(onClick = onNext) { Text("Skip") }
+    TextButton(onClick = onNext) { Text("Set up later") }
 }
 
 @Composable
@@ -219,6 +251,7 @@ private fun AsrStep(
     onSkip: () -> Unit,
 ) {
     var key by remember { mutableStateOf("") }
+    var showCloud by rememberSaveable { mutableStateOf(false) }
 
     Text("Step 3 — Hearing", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
     Spacer(Modifier.height(16.dp))
@@ -228,29 +261,34 @@ private fun AsrStep(
         onClick = onSelectLocal,
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
     ) {
-        Text("Local (on-device Whisper, needs a download)")
+        Text("Use Whisper on this phone")
     }
+    Text("Whisper needs roughly 160 MB of model files plus the voice runtime. It is ready only after the download completes. You can type while it downloads.", style = MaterialTheme.typography.bodySmall)
+    TextButton(onClick = { showCloud = !showCloud; key = "" }) { Text(if (showCloud) "Hide cloud transcription" else "Optional cloud transcription") }
+    if (showCloud) {
     OutlinedTextField(
         value = key,
         onValueChange = { key = it },
         label = { Text("Gemini key (optional — cloud ASR)") },
         singleLine = true,
+        visualTransformation = PasswordVisualTransformation(),
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
     )
     Text(
-        text = "If you leave this blank you keep the local Whisper listener. " +
-            "A Gemini key lets Meow transcribe via the cloud when local Whisper is unavailable.",
+        text = "Gemini cloud transcription sends audio to Google. It needs internet access and may have usage charges. Leave this off to keep transcription on your phone.",
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         fontSize = 12.sp,
     )
     Button(
         onClick = {
             val trimmed = key.trim()
-            if (trimmed.isNotEmpty()) onSelectCloud(trimmed) else onSelectLocal()
+            if (trimmed.isNotEmpty()) onSelectCloud(trimmed)
         },
+        enabled = key.trim().isNotEmpty(),
         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
     ) {
-        Text("Continue")
+        Text("Save cloud transcription")
     }
-    TextButton(onClick = onSkip) { Text("Skip") }
+    }
+    TextButton(onClick = onSkip) { Text("Use text for now") }
 }
