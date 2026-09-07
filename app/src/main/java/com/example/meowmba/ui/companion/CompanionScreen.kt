@@ -82,7 +82,8 @@ fun CompanionScreen(
     // Meow freezes while a surface covers the face — chat sheet, app menu,
     // or the full-screen (folded) browser. In split view the avatar stays
     // alive beside the browser.
-    val animationsPaused = !faceModeActive(uiState.copy(isChatExpanded = false)) ||
+    val avatarWorkAllowed = rememberAvatarWorkAllowed()
+    val animationsPaused = !avatarWorkAllowed || !faceModeActive(uiState.copy(isChatExpanded = false)) ||
         uiState.showConnectorsScreen || showOnboarding || (uiState.showBrowser && !splitBrowser)
 
     val isNeo = uiState.avatarStyle == AvatarStyle.NEO
