@@ -2611,7 +2611,7 @@ class CompanionViewModel(
                 _uiState.value.name, text, recentMessages, recalled,
                 learned = if (onCall) null else learnedBlock(),
                 speakerName = lastSpeakerName,
-                deviceFacts = liveDeviceFacts(),
+                deviceFacts = liveDeviceFacts(text),
                 voiceCall = onCall,
             )
             var fullResponse = ""
@@ -2854,9 +2854,10 @@ class CompanionViewModel(
     // ── Robot body (LOOI) ────────────────────────────────────────────────
 
     /** Ground-truth battery + body for the chat prompt. Never guessed. */
-    private fun liveDeviceFacts(): String {
+    private fun liveDeviceFacts(userInput: String): String {
         val ctx = secureStorage?.context
-        val battery = if (ctx != null) {
+        val includeBattery = PromptBuilder.requestsBatteryStatus(userInput)
+        val battery = if (!includeBattery) "" else if (ctx != null) {
             com.example.meowmba.core.agent.tools.BatteryReading.factLine(
                 com.example.meowmba.core.agent.tools.BatteryReading.read(ctx),
             )
@@ -2867,6 +2868,7 @@ class CompanionViewModel(
             batteryLine = battery,
             robotLive = robotManager.hasLiveBody,
             robotStatus = _uiState.value.robotStatus,
+            includeBattery = includeBattery,
         )
     }
 
@@ -5016,7 +5018,7 @@ class CompanionViewModel(
                 _uiState.value.name, text, recentMessages, recalled, capabilities,
                 learned = learnedBlock(),
                 speakerName = lastSpeakerName,
-                deviceFacts = liveDeviceFacts(),
+                deviceFacts = liveDeviceFacts(text),
             )
 
             var fullResponse = ""

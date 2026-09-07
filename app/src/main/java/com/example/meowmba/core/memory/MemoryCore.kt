@@ -186,6 +186,8 @@ object PromptBuilder {
     ): String = buildString {
         // No cat roleplay, no forced "meow": plain ChatGPT-style assistant.
         append("You are a helpful AI assistant. Answer naturally and concisely.\n")
+        append("Do not volunteer battery percentage or charging status. Only discuss these when the user asks about phone power. ")
+        append("Previous battery reports in conversation history are not requests to repeat them and are not current readings.\n")
         if (voiceCall) {
             append("You are on a live voice call. Reply in one or two short spoken ")
             append("sentences. No markdown, no lists, no preamble.\n")
@@ -280,13 +282,19 @@ object PromptBuilder {
      * Ground-truth block for battery and the robot body. The chat model has
      * invented "I'm at 5%" and "I'm on a LOOI" with nothing connected.
      */
+    /** Battery telemetry belongs in relevant answers, not every chat turn. */
+    fun requestsBatteryStatus(input: String): Boolean =
+        Regex("\\b(battery|batteries|charging|charger|charge|charged|power|percentage|percent)\\b", RegexOption.IGNORE_CASE)
+            .containsMatchIn(input)
+
     fun deviceFacts(
         batteryLine: String,
         robotLive: Boolean,
         robotStatus: String,
+        includeBattery: Boolean = true,
     ): String = buildString {
         append("FACTS about this phone right now — use these, never invent others:\n")
-        append("- ").append(batteryLine).append('\n')
+        if (includeBattery) append("- ").append(batteryLine).append('\n')
         if (robotLive) {
             append("- A LOOI robot base IS connected (").append(robotStatus).append(").\n")
         } else {
