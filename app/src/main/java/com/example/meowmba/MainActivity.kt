@@ -57,14 +57,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private val requestPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { isGranted: Boolean ->
-        if (isGranted) {
-            // Permission granted
-        }
-    }
-
     /**
      * Asks for everything the companion needs in ONE prompt: microphone, location, camera.
      *
@@ -76,6 +68,7 @@ class MainActivity : ComponentActivity() {
     private val corePermissionsLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { granted ->
+        granted[Manifest.permission.RECORD_AUDIO]?.let { companionViewModel?.onMicrophonePermissionResult(it) }
         granted[Manifest.permission.CAMERA]?.let { companionViewModel?.onCameraPermissionResult(it) }
     }
 

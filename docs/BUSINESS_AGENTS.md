@@ -1,4 +1,4 @@
-# Phone-hosted business agents — 1.3.30 / code 34
+# Phone-hosted business agents — 1.3.32 / code 36
 
 Status: implemented as a preview, undergoing connected Flip 6 acceptance. Do not describe
 this as an unrestricted desktop agent or a verified replacement for all business
@@ -58,6 +58,16 @@ different systems; chat/voice can enqueue and inspect the durable jobs.
   interruption. Full speech acceptance remains a separate release gate.
 - Agent editing closes only after a successful save. Failed saves keep the
   user's entries visible and allow retry.
+- Voice capture checks the actual microphone grant before starting. Denial
+  stops the always-on retry loop, wake capture and pending follow-ups without
+  changing the user's microphone privacy toggle. Permission results and
+  foreground resume reconcile the state. Startup model-download progress is
+  owned by its install coroutine; failed installs no longer claim readiness.
+- Interrupting speech with a missing local recognizer returns to idle with
+  install/repair guidance, rather than remaining stuck in the speaking state.
+- Agent-status questions use actual task/job tools before generic chat routing.
+  An immediately completed tool result is not overwritten by an "is on it"
+  preamble. Task listings exclude the task that is listing them.
 
 ## Getting started
 
@@ -87,7 +97,7 @@ Enqueueing is acknowledged as **queued**, never as goal completion.
 
 ## Acceptance evidence
 
-- The final focused JVM run passed **117 tests, 0 failures**: workflow safety,
+- The 1.3.30 focused JVM run passed **117 tests, 0 failures**: workflow safety,
   real HTTP MCP transport with a synthetic server, files, stream accumulation,
   routing, image-response parsing and compatible voice/model checks.
 - A real Flip 6 file/approval/checkpoint test passed.
@@ -128,13 +138,16 @@ Enqueueing is acknowledged as **queued**, never as goal completion.
 - Three Android emulator UI tests passed: create/read a local agent in the dark
   theme, and inspect/deny exact file-write arguments in the light theme with
   no file written, plus failed-save field preservation and successful retry.
-  Screenshots were inspected. Flip UI navigation remains
-  unverified because its secure lock screen prevented a Compose hierarchy.
+  Screenshots were inspected. A subsequent physical Flip test passed local
+  agent creation/readback in a test-only activity displayed above keyguard;
+  its screenshot was inspected. This does not verify unlocked MainActivity
+  navigation. Light approval-denial and failed-save/retry checks were blocked
+  when the secure display relocked; those physical attempts are not passes.
 - Heat protection was observed on the physical Flip. Repeated installation,
   local inference and visible Play Store background work kept it around
   38–39°C; two subsequent four-minute cooldown waits expired without running
   another job. The thermal gate was not bypassed.
-- The latest completed full regression run was **1,187 tests: 20 failed,
+- The 1.3.30 full regression checkpoint was **1,187 tests: 20 failed,
   5 skipped**. None of the business workflow/MCP tests failed. Remaining
   failures include older voice-capture expectations, router-with-no-model and
   orb-tap expectations, plus ViewModel/Main-dispatcher lifetime contamination.
@@ -142,13 +155,48 @@ Enqueueing is acknowledged as **queued**, never as goal completion.
   The varying failure count also exposes asynchronous test contamination.
   Results are preserved separately from the later focused run. Do not publish
   this preview based only on the 117 focused passes.
+- During the physical follow-up, startup with RECORD_AUDIO denied exposed an
+  ERROR_INSUFFICIENT_PERMISSIONS retry every two seconds. After the permission
+  guard was installed, the same denial remained in effect and PID 29000 logs
+  from 03:21:55 through 03:31:37 MST showed no capture-start/error loop.
+  Actual speech and grant/revoke UI acceptance remain unverified.
+- The 1.3.31 focused run passed **86 tests, 0 failures**, covering permission
+  denial/callbacks, companion and vision states, business workflows and voice
+  policy. New tests assert zero capture calls with a denied OS permission,
+  including speech-finish/follow-up paths, and no model download from a
+  context without app-private storage.
+- Interim 1.3.31 full suite: **1,194 tests, 11 failed, 5 skipped**. Failures:
+  AgentViewModelTest (1), AuraHomeContentTest (1), ModelStatusTest (2), StudioTest
+  (1, asynchronous test-lifetime contamination), VoicePipelineTest (6).
+  No business-workflow test failed. This is still not release approval; neither
+  obsolete expectations nor asynchronous failures were silently skipped.
+  XML evidence is in `Meowmba-Releases/business-agents-1.3.31-qa/`, with the
+  focused and full runs preserved separately.
+- Subsequent fixes resolved these failures. Voice fixtures now explicitly
+  supply the current capture backend, use their test dispatcher and close
+  continuous listeners before runTest drains its scheduler. The model-status
+  fixture no longer starts a real Needle download that finishes in another
+  test's Main dispatcher. Provider/orb expectations reflect the actual saved
+  configuration and documented microphone tap zone. No production platform
+  fallback was restored to make a fake recognizer pass.
+  The task-status test exposed and fixed a real generic-chat routing bug; it
+  now requires a completed `task.list` tool and exactly the actual spoken
+  result. Another regression covers missing-recognizer interruption.
+- Two consecutive final full runs: **1,195 tests, 0 failures, 5 conditional
+  skips** each (1,190 passed). The skips are all `MetaGlassesUnavailableTest`, which targets the
+  no-SDK variant; this build has MWDAT enabled. Evidence is preserved in
+  `Meowmba-Releases/business-agents-1.3.32-qa/`. A green JVM suite does not
+  sign off real phone speech, notifications or live business-account access.
+- The Flip reached 39.3°C during the follow-up; no additional local-model
+  workload was run. Temporary stay-awake-while-charging was restored to its
+  original value 0. Keyguard remains a physical acceptance blocker.
 
 ## Device/build provenance
 
 - Test device: Samsung Galaxy Z Flip 6, SM-F741U.
 - Play package `com.meow.meowmba` remains 1.3.27 / code 31, unchanged.
 - Side-by-side debug package `com.example.meowmba`: **Meow Assistant Preview**,
-  1.3.30 / code 34, signed with
+  1.3.32 / code 36, signed with
   Meow's debug certificate. SDK enabled. Voice/KWS/VAD assets included.
 - Debug-only JNI reuse from the previous 1.3.29 APK; no bridge source changes.
   Release builds explicitly reject `prebuiltDebugNativeDir`.
@@ -158,9 +206,9 @@ Enqueueing is acknowledged as **queued**, never as goal completion.
   `b3ca0d2f076785a8f4b2219ddbd2bdb99954eae1`, 2,588,147,712 bytes.
   SHA-256 `181938105e0eefd105961417e8da75903eacda102c4fce9ce90f50b97139a63c`
   verified on the Mac and after transfer into the debug app's private storage.
-- Handoff APK: `Meowmba-Releases/meowmba-1.3.30-code34-business-preview.apk`
+- Handoff APK: `Meowmba-Releases/meowmba-1.3.32-code36-business-preview.apk`
   on the build Mac. It is a debug preview, not an uploadable Play release.
-  SHA-256 `47668e33919b7a9c13425bae48f6198313c4252c31104deeecfd00aecd51587d`.
+  SHA-256 `7e86e40c3090cb591b9ac158114c0edab7d0be96a3a82ae9cc46daeb6b4b46c3`.
   Final on-phone `base.apk` hash matches. Code implementation `c84fdc4` is
   pushed to Meow's `feat/image-services-settings`; no main merge or Play upload.
   Temporary active QA agents were removed and job histories preserved. There
@@ -188,11 +236,10 @@ business judgment in an LLM summary is correct. Review important outputs.
 No personal/business accounts were connected for these acceptance tests, and
 no real mail, financial transaction, or customer data was used. Cross-app
 automation still depends on Android permissions and supported app surfaces.
-No Play release has been submitted for 1.3.30 at this checkpoint.
+No Play release has been submitted for this business-agent preview.
 
 Remaining acceptance gates: broader varied business-workload coverage, unlocked Flip
-navigation/notifications/real speech, account-authorized MCP service workflows,
-and resolution or clean-baseline isolation of the full-suite failures. Browser
+navigation/notifications/real speech, and account-authorized MCP service workflows. Browser
 OAuth, arbitrary control of every installed app, and desktop-equivalent 24/7
 local compute are not claimed.
 

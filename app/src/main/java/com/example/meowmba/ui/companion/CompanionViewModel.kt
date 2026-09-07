@@ -202,9 +202,13 @@ class CompanionViewModel(
     /** Studio character bibles. Null in unit tests; tools degrade honestly. */
     private val characterDao: com.example.meowmba.core.database.CharacterDao? = null,
     /** Meta Ray-Ban glasses (MWDAT frame bus + status). Null in unit tests. */
-    internal val glassesController: com.example.meowmba.core.glasses.MetaGlassesController? = null
+    internal val glassesController: com.example.meowmba.core.glasses.MetaGlassesController? = null,
+    /** Injectable capture backend for deterministic tests. Android production
+     * leaves this null and resolves the user's installed recognition backend. */
+    private val captureEngine: SpeechEngine? = null,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(CompanionState())
+    private var microphonePermissionBlocked = false
     private var asrDownloadJob: Job? = null
     private var asrDownloadFailed = false
     private var idleAnimationDirector: IdleAnimationDirector? = null
@@ -1810,7 +1814,8 @@ class CompanionViewModel(
             }
             val orchestrator = AgentOrchestrator(viewModelScope, toolRegistry, agentAuditSink)
             toolRegistry.register(TaskListTool {
-                orchestrator.tasks.value.take(10).map { "[${it.status}] ${it.title} (${it.agentId})" }
+                orchestrator.tasks.value.filter { it.toolId != "task.list" }
+                    .take(10).map { "[${it.status}] ${it.title} (${it.agentId})" }
             })
             orchestrator.onTaskCompleted = { task ->
                 val result = task.result ?: ""
@@ -3352,7 +3357,39 @@ class CompanionViewModel(
     fun reclaimWakeMicForForeground() {
         handedOffToBackground = false
         appInBackground = false
+        secureStorage?.context?.let { microphonePermissionBlocked = !systemMicrophonePermissionGranted(it) }
         updateVoiceListeningMode()
+    }
+
+    private fun systemMicrophonePermissionGranted(context: android.content.Context): Boolean =
+        context.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+
+    private fun canCaptureMicrophone(): Boolean = !microphonePermissionBlocked &&
+        (secureStorage?.context?.let(::systemMicrophonePermissionGranted) ?: true)
+
+    /** Permission denial is not a transient recognizer failure. Keep the user's
+     * privacy toggle unchanged, but stop all retry paths until a grant/resume.
+     * The Flip previously retried ERROR_INSUFFICIENT_PERMISSIONS every 2s while
+     * its first-run permission dialog had not even been completed. */
+    fun onMicrophonePermissionResult(granted: Boolean) {
+        microphonePermissionBlocked = !granted
+        if (granted) {
+            if (_uiState.value.captionText == speechErrorCaption(SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS))
+                _uiState.value = _uiState.value.copy(captionText = null)
+            updateVoiceListeningMode()
+        } else {
+            followUpJob?.cancel()
+            wakeAckListenJob?.cancel()
+            wakeAckPending = false
+            stopAlwaysOnListening()
+            stopWakeLoopAndRelease()
+            speechService?.stopListening()
+            utteranceCapture?.cancel()
+            utteranceCapture = null
+            _uiState.value = _uiState.value.copy(interactionState = InteractionState.IDLE,
+                captionText = speechErrorCaption(SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS))
+        }
     }
 
     /**
@@ -3394,6 +3431,7 @@ class CompanionViewModel(
     }
 
     private fun startWakeStandby(force: Boolean = false) {
+        if (!canCaptureMicrophone()) return
         if (handedOffToBackground) {
             // The background service owns the mic after a hand-off. Late
             // recognizer callbacks from the torn-down turn still route
@@ -3471,6 +3509,7 @@ class CompanionViewModel(
 
     /** True while the foreground app owns the always-on conversation mic. */
     private fun shouldAlwaysOnMic(): Boolean {
+        if (!canCaptureMicrophone()) return false
         val s = _uiState.value
         if (handedOffToBackground) return false
         if (s.isNoting && s.isMicEnabled) return true
@@ -3491,6 +3530,11 @@ class CompanionViewModel(
      * turn) so the two can never disagree.
      */
     private fun updateVoiceListeningMode() {
+        if (!canCaptureMicrophone()) {
+            stopAlwaysOnListening()
+            stopWakeLoopAndRelease()
+            return
+        }
         if (shouldAlwaysOnMic()) {
             // Foreground always-on owns the mic. Immediate start—a delayed arm
             // left the app deaf after cold launch / resume.
@@ -3531,6 +3575,7 @@ class CompanionViewModel(
      * first syllable of every turn.
      */
     private fun preferredSpeechEngine(): SpeechEngine? {
+        captureEngine?.let { return it.takeIf { engine -> engine.isAvailable } }
         // An explicit pick on the Hardware → Voice Recognition page wins over
         // the health heuristics. It falls THROUGH rather than returning null
         // when the chosen backend is not usable right now (no key, model still
@@ -3759,6 +3804,7 @@ class CompanionViewModel(
     }
 
     private fun startAlwaysOnListeningAfterKws() {
+        if (!canCaptureMicrophone()) { stopAlwaysOnListening(); return }
         if (sherpaAsrEngine == null) attachAsrEngine()
         val engine = alwaysOnSpeechEngine()
         if (engine == null) {
@@ -4109,6 +4155,10 @@ class CompanionViewModel(
                 onError = { code ->
                     alwaysOnSessionOpen = false
                     fuLog("always-on ASR error code=$code")
+                    if (code == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
+                        onMicrophonePermissionResult(false)
+                        return@startListening
+                    }
                     if (alwaysOnActive && shouldAlwaysOnMic() &&
                         _uiState.value.interactionState == InteractionState.IDLE
                     ) {
@@ -4379,6 +4429,7 @@ class CompanionViewModel(
      * face command, and does not close the drawer.
      */
     fun startDrawerVoiceSearch() {
+        if (!canCaptureMicrophone()) { onMicrophonePermissionResult(false); return }
         if (!_uiState.value.isMicEnabled) {
             _uiState.value = _uiState.value.copy(
                 captionText = "Microphone is off — tap an ear to re-enable",
@@ -4435,6 +4486,7 @@ class CompanionViewModel(
     }
 
     private fun startListening(prompt: String = "Listening...") {
+        if (!canCaptureMicrophone()) { onMicrophonePermissionResult(false); return }
         transientListenRetries = 0
         followUpJob?.cancel()
         isFollowUpListen = false
@@ -4446,13 +4498,14 @@ class CompanionViewModel(
         val engine = preferredSpeechEngine()
         if (engine == null) {
             stopWakeLoopAndRelease()
-            if (speechService != null) {
+            if (speechService != null || captureEngine != null) {
                 // A recognizer IS configured but none of them are usable right
                 // now (not installed / wedged). Silently falling into mock mode
                 // from here faked an entire conversational turn — the one thing
                 // the honesty contract forbids. Say so instead.
                 _uiState.value = _uiState.value.copy(
-                    captionText = "Speech recognition isn't available on this device — no recognizer service installed"
+                    interactionState = InteractionState.IDLE,
+                    captionText = "Speech recognition isn't available. Open Voice recognition to install or repair a local model."
                 )
                 return
             }
@@ -4462,7 +4515,8 @@ class CompanionViewModel(
         if (!engine.isAvailable) {
             stopWakeLoopAndRelease()
             _uiState.value = _uiState.value.copy(
-                captionText = "Speech recognition isn't available on this device — no recognizer service installed"
+                interactionState = InteractionState.IDLE,
+                captionText = "Speech recognition isn't available. Open Voice recognition to install or repair a local model."
             )
             return
         }
@@ -4542,6 +4596,10 @@ class CompanionViewModel(
      * no service) are surfaced honestly instead of looking like a dead button.
      */
     private fun onListeningError(code: Int) {
+        if (code == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
+            onMicrophonePermissionResult(false)
+            return
+        }
         // Errors that must not end an active follow-up: silence (6/7, the user has not
         // spoken yet) and session-conflict (ERROR_CLIENT 5 / ERROR_RECOGNIZER_BUSY 8,
         // the barge-in watch or a wake re-arm raced the capture). Hard-resetting on any
@@ -4824,6 +4882,15 @@ class CompanionViewModel(
         }
         if (SpeechIntents.isSpeedQuestion(normalizedTurn)) {
             answerHowFast()
+            return
+        }
+        // Status about our own agents is tool evidence, not a question for a
+        // chat model. The generic question branch swallowed "what tasks are
+        // running", giving a model/setup reply instead of the actual jobs.
+        AgentRouter.route(text)?.takeIf {
+            it.toolId in setOf("task.list", "business.agents", "business.jobs")
+        }?.let {
+            submitAgentIntent(it)
             return
         }
         // Informational questions get answered directly by the brain — never
@@ -5313,6 +5380,10 @@ class CompanionViewModel(
                     updateVoiceListeningMode()
                     return
                 }
+                // A fast read can finish on Main.immediate before submit()
+                // returns. Its real result has already been spoken; a late
+                // "is on it" preamble would overwrite that answer.
+                if (orchestrator.tasks.value.any { it.id == result.taskId && it.isTerminal }) return
                 val agentName = AgentRegistry.byId(intent.agentId)?.name ?: "Agent"
                 speak(
                     if (result.queued) {
@@ -5852,7 +5923,7 @@ class CompanionViewModel(
      */
     private fun startInterruptionWatch() {
         val s = _uiState.value
-        if (speechService == null || !s.isMicEnabled) return
+        if (speechService == null || !s.isMicEnabled || !canCaptureMicrophone()) return
         speechService.startListening(
             onResult = { text ->
                 // Quiet-open sessions end with an empty transcript; that is not
@@ -5914,6 +5985,7 @@ class CompanionViewModel(
 
     /** Conversation mode: stay for a follow-up question, then time out to idle. */
     private fun startFollowUpListening() {
+        if (!canCaptureMicrophone()) { onMicrophonePermissionResult(false); return }
         fuLog("startFollowUpListening")
         followUpJob?.cancel()
         // Free the continuous wake AudioRecord and any always-on session first —
@@ -7133,17 +7205,23 @@ class CompanionViewModel(
             attachWakeEngine()
             return
         }
+        // Never resolve a missing Android storage root against the process's
+        // working directory (including context-only JVM/test hosts).
+        if (ctx.filesDir == null) return
         val store = com.example.meowmba.core.audio.VoiceModelStore(ctx)
         if (store.isReady()) {
             if (store.asrReady()) attachAsrEngine()
             attachWakeEngine()
             viewModelScope.launch {
+                val installScope = this
                 val asrInstall = store.ensureAsr()
                 val whisperInstall = if (asrInstall.isSuccess &&
                     asrBackend == com.example.meowmba.core.audio.AsrBackend.WHISPER_LOCAL
                 ) {
                     store.ensureWhisper { fraction, label ->
-                        _uiState.value = _uiState.value.copy(voicePackProgress = fraction, voicePackLabel = label)
+                        if (installScope.isActive) installScope.launch {
+                            _uiState.value = _uiState.value.copy(voicePackProgress = fraction, voicePackLabel = label)
+                        }
                     }
                 } else Result.success(Unit)
                 attachAsrEngine()
@@ -7163,24 +7241,26 @@ class CompanionViewModel(
             voicePackProgress = 0f,
         )
         viewModelScope.launch {
+            val installScope = this
             val result = store.ensure { frac, label ->
-                viewModelScope.launch {
+                // The callback runs on IO. Keep UI work a child of this install,
+                // rather than reopening viewModelScope after its owner closes.
+                if (installScope.isActive) installScope.launch {
                     _uiState.value = _uiState.value.copy(
                         voicePackProgress = frac,
                         voicePackLabel = label,
                     )
                 }
             }
-            if (result.isSuccess) {
-                store.ensureAsr()
-                if (asrBackend == com.example.meowmba.core.audio.AsrBackend.WHISPER_LOCAL) {
-                    store.ensureWhisper()
-                }
-            }
+            val asrInstall = if (result.isSuccess) store.ensureAsr() else result
+            val whisperInstall = if (asrInstall.isSuccess &&
+                asrBackend == com.example.meowmba.core.audio.AsrBackend.WHISPER_LOCAL
+            ) store.ensureWhisper() else asrInstall
             _uiState.value = _uiState.value.copy(
-                voicePackReady = true,
+                voicePackReady = result.isSuccess && store.isReady(),
                 voicePackProgress = null,
-                voicePackLabel = result.exceptionOrNull()?.message,
+                voicePackLabel = (result.exceptionOrNull() ?: asrInstall.exceptionOrNull()
+                    ?: whisperInstall.exceptionOrNull())?.message,
             )
             attachWakeEngine()
             attachAsrEngine()
