@@ -42,11 +42,8 @@ class MediaGenerateTool(
         riskLevel = RiskLevel.MODERATE,
         environments = setOf(ToolEnvironment.PHONE),
         confirmationPolicy = ConfirmationPolicy.NONE,
-        // 15s was inherited from the canvas-only days, when this tool drew a
-        // bitmap and returned instantly. On-device diffusion loads ~2 GB of
-        // weights and runs 20 denoising steps — the orchestrator was killing
-        // it mid-generation every time. The canvas fallback still returns in
-        // milliseconds, so a long ceiling costs it nothing.
+        // Community workers may queue for minutes. Horde has its own 9-minute
+        // ceiling and cancels the remote ticket; leave time for cleanup here.
         timeoutMs = 600_000
     )
 

@@ -9,6 +9,7 @@ import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.*
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.*
+import io.ktor.utils.io.readAvailable
 import kotlinx.coroutines.*
 import kotlinx.serialization.json.*
 import java.io.ByteArrayOutputStream

@@ -777,7 +777,13 @@ fun CompanionScreen(
 
                 onBargeInChange = { viewModel.setBargeIn(it) },
                 onOpenAccessibility = { viewModel.openAccessibilitySettings() },
-                onOpenSetup = { viewModel.toggleSetupWizard() },
+                onOpenSetup = { viewModel.toggleSettings(); viewModel.toggleSetupWizard() },
+                onOpenVoiceModels = { viewModel.toggleSettings(); viewModel.toggleVoiceModelScreen() },
+                onOpenModels = { viewModel.toggleSettings(); viewModel.toggleModelManager() },
+                appTheme = uiState.appTheme,
+                appearanceMode = uiState.appearanceMode,
+                onAppThemeChange = viewModel::setAppTheme,
+                onAppearanceModeChange = viewModel::setAppearanceMode,
                 idleChatterEnabled = uiState.idleChatterEnabled,
                 onIdleChatterChange = { viewModel.setIdleChatter(it) },
 

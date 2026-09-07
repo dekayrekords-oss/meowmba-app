@@ -92,6 +92,13 @@ fun SettingsScreen(
     onBargeInChange: (Boolean) -> Unit = {},
     onOpenAccessibility: () -> Unit = {},
     onOpenSetup: () -> Unit = {},
+    onOpenVoiceModels: () -> Unit = {},
+    onOpenModels: () -> Unit = {},
+    appTheme: AppTheme = AppTheme.COMPANION,
+    appearanceMode: AppearanceMode = AppearanceMode.DARK,
+    onAppThemeChange: (AppTheme) -> Unit = {},
+    onAppearanceModeChange: (AppearanceMode) -> Unit = {},
+    loadOpenRouterCatalog: suspend (String?) -> Result<List<OpenRouterModel>> = { OpenRouterModels.fetch(it) },
     idleChatterEnabled: Boolean = true,
     onIdleChatterChange: (Boolean) -> Unit = {},
 
@@ -137,7 +144,7 @@ fun SettingsScreen(
     val settingsScope = rememberCoroutineScope()
     LaunchedEffect(page) {
         if (page != "AI & models" || openRouterCatalog.isNotEmpty()) return@LaunchedEffect
-        OpenRouterModels.fetch(openrouterKey.ifBlank { null }).fold(
+        loadOpenRouterCatalog(openrouterKey.ifBlank { null }).fold(
             onSuccess = { list ->
                 openRouterCatalog = list
                 openRouterCatalogNote = "${list.size} models from OpenRouter"
@@ -154,7 +161,8 @@ fun SettingsScreen(
     var imageService by remember { mutableStateOf(ImageServiceSettings.selected(secureStorage)) }
     val scroll = rememberScrollState()
     LaunchedEffect(page) { scroll.scrollTo(0) }
-    val saveProviders = {
+    val saveProviders: () -> Unit = {
+        if (page == "AI & models") {
         secureStorage.saveApiKey("openai", openaiKey)
         secureStorage.saveApiKey("opencode", opencodeKey)
         secureStorage.savePreference("default_brain", defaultBrain)
@@ -168,6 +176,7 @@ fun SettingsScreen(
         secureStorage.saveEndpoint("openrouter", openrouterEndpoint)
         secureStorage.saveEndpoint("local", localModelPath)
         onSaved()
+        }
     }
     val back = {
         saveProviders()
@@ -222,6 +231,7 @@ fun SettingsScreen(
             }
             if (page == "Help & feedback") BetaHelpCard()
             if (page == "Voice & behavior") {
+            OutlinedButton(onClick = onOpenVoiceModels, modifier = Modifier.fillMaxWidth()) { Text("Voice recognition & voice models") }
 
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -671,6 +681,21 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             if (page == "Appearance") {
+            Text("Color mode", style = MaterialTheme.typography.titleMedium)
+            AppearanceMode.entries.forEach { mode ->
+                Row(Modifier.fillMaxWidth().clickable { onAppearanceModeChange(mode) }, verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(selected = appearanceMode == mode, onClick = { onAppearanceModeChange(mode) })
+                    Text(mode.name.lowercase().replaceFirstChar { it.titlecase() })
+                }
+            }
+            Text("App theme", style = MaterialTheme.typography.titleMedium)
+            AppTheme.entries.forEach { theme ->
+                Row(Modifier.fillMaxWidth().clickable { onAppThemeChange(theme) }, verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(selected = appTheme == theme, onClick = { onAppThemeChange(theme) })
+                    Text(theme.name.lowercase().replaceFirstChar { it.titlecase() })
+                }
+            }
+            HorizontalDivider(Modifier.padding(vertical = 16.dp))
             // Avatar: which face the companion wears. The full picker (with previews
             // and the animation shelf) lives on the Avatar tile; this is the same
             // setting for anyone who looks for it here first.
@@ -744,45 +769,8 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             }
-            if (page == "Phone & device") {
-            // ── Phone Control (Accessibility) ─────────────────────────────
-            Text("Phone Control", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-            Text(
-                text = "Meow can control your phone — tap, swipe, type, and navigate any app " +
-                    "using voice commands. This requires the accessibility service to be enabled.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                val accessEnabled = remember { com.example.meowmba.core.access.MeowAccessibilityService.isEnabled() }
-                if (accessEnabled) {
-                    Text("✅ Connected", color = Color(0xFF4CAF50), style = MaterialTheme.typography.bodyLarge)
-                } else {
-                    Text("❌ Not enabled", color = Color(0xFFFF5252), style = MaterialTheme.typography.bodyLarge)
-                    Spacer(modifier = Modifier.width(12.dp))
-                    val context = LocalContext.current
-                    Button(onClick = {
-                        val intent = android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
-                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                        context.startActivity(intent)
-                    }) {
-                        Text("Enable")
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Say things like “tap on Settings”, “scroll down”, “go back”, " +
-                    "or give multi-step goals like “play Sublime on Spotify”.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            }
             if (page == "AI & models") {
+            OutlinedButton(onClick = { saveProviders(); onOpenModels() }, modifier = Modifier.fillMaxWidth()) { Text("Download & manage AI models") }
             VoiceToggle(
                 label = "Agent brain",
                 description = "Understands natural tool commands (\"make a file called todo.txt\") " +
@@ -1652,7 +1640,7 @@ private val SETTINGS_CATEGORIES = listOf(
     SettingsCategory("Images", "AI Horde, Cloudflare and on-phone images", Icons.Default.Image),
     SettingsCategory("Music & video", "Media-generation services", Icons.Default.Movie),
     SettingsCategory("Phone & device", "App control, access and device behavior", Icons.Default.PhoneAndroid),
-    SettingsCategory("Appearance", "Choose your companion's avatar", Icons.Default.Palette),
+    SettingsCategory("Appearance", "Dark/light mode, themes and avatars", Icons.Default.Palette),
     SettingsCategory("Connections & memory", "Desktop bridge, servers and shared memory", Icons.Default.Link),
     SettingsCategory("Driving", "Drive mode and emergency contact", Icons.Default.DirectionsCar),
     SettingsCategory("Help & feedback", "Beta help, testing and support", Icons.Default.HelpOutline),
