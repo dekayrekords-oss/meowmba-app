@@ -172,6 +172,16 @@ class ToolCallParserTest {
 }
 
 class CommandHeuristicsTest {
+    @Test fun `mentions are not requests but explicit actions and followups remain`() {
+        listOf("Just chillin with the cats.", "jsut chillin with the cats", "I watched a video",
+            "my cat likes to dance", "I love that photo", "the files are fine", "(buzzing)").forEach {
+            assertTrue("Must stay chat: $it", !CommandHeuristics.mightBeCommand(it))
+        }
+        listOf("make a video of cats", "could you please generate a video of cats",
+            "hey can you make a file for me", "do it", "make that longer", "change it to blue", "yes").forEach {
+            assertTrue("Must remain routable: $it", CommandHeuristics.mightBeCommand(it))
+        }
+    }
 
     @Test
     fun `command-like text passes the gate`() {
@@ -269,6 +279,8 @@ class LlmToolCallRouterTest {
         val provider = FakeModelProvider("""{"tool": "file.delete", "args": {"path": "everything"}}""")
         val router = LlmToolCallRouter(provider, registry)
         assertNull(router.route("how are you feeling today"))
+        assertNull(router.route("just chillin with the cats", context = "User: make a cat video\nAssistant: Video failed"))
+        assertNull(router.route("I watched a video about cats"))
         assertEquals(0, provider.generateCalls)
     }
 

@@ -5216,6 +5216,9 @@ class CompanionViewModel(
         val kwIntent = AgentRouter.route(text)
         kwIntent?.let { return it }
         if (!_uiState.value.agentBrainEnabled) return null
+        // Apply to every model router, not just the final LLM fallback. A
+        // model prompt alone did not stop Needle turning casual chat into video.
+        if (!com.example.meowmba.core.agent.runtime.CommandHeuristics.mightBeCommand(text)) return null
         val registry = agentToolRegistry ?: return null
 
         val context = followUpContextFor(text)

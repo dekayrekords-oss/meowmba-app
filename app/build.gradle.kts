@@ -83,8 +83,8 @@ android {
         // versionCode 20 (1.3.16), so an install at 20 would not register as an
         // upgrade and preserving app data would be a coin flip. 21 > 20 makes it
         // a genuine in-place upgrade that keeps the Room database and models.
-        versionCode = 39
-        versionName = "1.3.35"
+        versionCode = 40
+        versionName = "1.3.36"
 
         buildConfigField("boolean", "HAS_MWDAT_SDK", hasMwdat.toString())
         manifestPlaceholders["mwdat_application_id"] = mwdatApplicationId

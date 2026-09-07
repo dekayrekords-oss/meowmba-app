@@ -1,5 +1,19 @@
 # Agent execution plan — immersive companion revision
 
+## September 7: casual-chat tool gate — 1.3.36/code40
+
+The Flip correctly transcribed "Just chillin with the cats" but Needle
+proposed video generation. Added the action-request prefilter before the
+Hermes/Needle chain and inside Needle itself; the same filter remains in the
+LLM fallback. Casual nouns/mentions no longer qualify on their own. Polite
+imperatives and explicit contextual continuations remain routable; approvals
+are unchanged. Regression tests verify that casual chat cannot invoke the
+native router, even if a tool-capable model would otherwise propose an action,
+and that old video conversation context cannot promote this phrase to a task.
+This fix does not configure a video provider or sign off unrelated media,
+noise-transcription, desktop-availability or thermal issues. The phone reached
+42.3°C during the user's session and the preview was force-stopped to cool.
+
 ## September 7: cover toggle — 1.3.35/code39
 
 Added Settings → Phone & device → Cover-screen avatar with saved opt-in,
