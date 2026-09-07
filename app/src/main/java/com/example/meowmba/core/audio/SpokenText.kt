@@ -11,6 +11,7 @@ object SpokenText {
      * Always-on AiAi and the 20M zipformer both emit these on silence.
      */
     fun isUsable(raw: String): Boolean {
+        if (isNonSpeechAnnotation(raw)) return false
         val t = normalize(raw).trim()
         if (t.isEmpty()) return false
         val letters = t.filter { it.isLetter() }
@@ -94,6 +95,7 @@ object SpokenText {
      * Fold often ends with an empty final).
      */
     fun preferFinal(official: String, partial: String): String {
+        if (isNonSpeechAnnotation(official)) return ""
         val o = normalize(official).trim()
         val p = normalize(partial).trim()
         val oOk = isUsable(o)
@@ -122,6 +124,32 @@ object SpokenText {
      * Measured on device: "Yo, what's up buddy" → "Ovites up body" / "Ulat's up buddy".
      */
     fun polish(raw: String): String = repair(normalize(raw))
+
+    /** Only explicit decoder annotations, not speech ABOUT music/noise. */
+    fun isNonSpeechAnnotation(raw: String): Boolean {
+        val trimmed = raw.trim().trimEnd('.', ',', '!', '?').trim()
+        if (trimmed.isEmpty()) return false
+        val annotations = NON_SPEECH_ANNOTATION.findAll(trimmed).toList()
+        return annotations.isNotEmpty() &&
+            NON_SPEECH_ANNOTATION.replace(trimmed, "").trim().isEmpty() &&
+            annotations.all { it.groupValues[1].trim().lowercase() in NON_SPEECH_LABELS }
+    }
+
+    /** A successful noise/empty final must not resurrect a hallucinated partial.
+     * Null is reserved for unavailable/failed refinement, where streaming wins.
+     */
+    internal fun refinedTranscript(streaming: String, refined: String?): String? = when {
+        refined == null -> streaming.takeIf(::isUsable)
+        else -> refined.takeIf(::isUsable)
+    }
+
+    private val NON_SPEECH_ANNOTATION = Regex("[\\[(]([^\\[\\]()]+)[\\])]")
+    private val NON_SPEECH_LABELS = setOf(
+        "buzzing", "buzz", "music", "background music", "silence", "noise",
+        "background noise", "static", "humming", "applause", "laughter", "laughing",
+        "sigh", "sighing", "breathing", "coughing", "inaudible", "unintelligible",
+        "blank_audio", "no speech", "wind", "rustling", "beep", "beeping",
+    )
 
     internal fun repair(sentence: String): String {
         if (sentence.isBlank()) return sentence

@@ -1,14 +1,10 @@
 package com.example.meowmba.ui.companion
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -79,23 +75,13 @@ fun WeatherScene(
     intensity: Float = 1f,
     /** Tonight's real moon phase (0 new, 0.5 full). */
     moonPhase: Float = rememberMoonPhase(),
+    paused: Boolean = false,
 ) {
-    val clock by rememberInfiniteTransition(label = "scene").animateFloat(
-        initialValue = 0f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            tween(CYCLE_MS, easing = LinearEasing), androidx.compose.animation.core.RepeatMode.Restart
-        ),
-        label = "clock",
-    )
+    val sceneClock = rememberSceneClock(paused)
+    val clock by remember(sceneClock) { derivedStateOf { sceneClock.phase(CYCLE_MS) } }
     // Independent slower clock for gusts and lightning, so neither locks to the particle
     // period and repeats visibly.
-    val slow by rememberInfiniteTransition(label = "scene-slow").animateFloat(
-        initialValue = 0f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            tween(SLOW_CYCLE_MS, easing = LinearEasing), androidx.compose.animation.core.RepeatMode.Restart
-        ),
-        label = "slow",
-    )
+    val slow by remember(sceneClock) { derivedStateOf { sceneClock.phase(SLOW_CYCLE_MS) } }
 
     val field = remember(condition) { Field(condition) }
 

@@ -17,12 +17,18 @@ import com.k2fsa.sherpa.onnx.OnlineStream
 import com.k2fsa.sherpa.onnx.OnlineTransducerModelConfig
 import com.k2fsa.sherpa.onnx.getFeatureConfig
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
@@ -72,7 +78,10 @@ class SherpaAsrEngine(
     private var onError: ((Int) -> Unit)? = null
 
     private var recognizer: OnlineRecognizer? = null
-    private var captureJob: Job? = null
+    @Volatile private var captureJob: Job? = null
+    private val captureMutex = Mutex()
+    @Volatile private var destroyed = false
+    @Volatile private var finalizer: SpeechFinalizer? = null
 
     @Volatile
     private var running = false
@@ -100,6 +109,10 @@ class SherpaAsrEngine(
     var whisperRefiner: WhisperAsrEngine? = null
 
     override fun startListening(onResult: (String) -> Unit, onError: (Int) -> Unit) {
+        if (destroyed) {
+            onError(android.speech.SpeechRecognizer.ERROR_CLIENT)
+            return
+        }
         this.onResult = onResult
         this.onError = onError
         _partialResults.value = ""
@@ -124,21 +137,49 @@ class SherpaAsrEngine(
     }
 
     override fun destroy() {
+        if (destroyed) return
+        destroyed = true
         stopListening()
-        runCatching { recognizer?.release() }
-        recognizer = null
+        // Native decode/read cannot be interrupted mid-call. Dispose after it
+        // exits, off main, even if the owning ViewModel scope was cancelled.
+        CoroutineScope(Dispatchers.Default).launch {
+            captureMutex.withLock {
+                runCatching { recognizer?.release() }
+                recognizer = null
+            }
+        }
     }
 
     private fun start() {
         if (running || captureJob?.isActive == true) return
         running = true
         _isListening.value = true
-        captureJob = scope.launch(Dispatchers.Default) { captureLoop() }
+        // A cancelled AudioRecord.read/native decode may still be returning.
+        // Wait for its finally/release before starting another stream. Checking
+        // the PARENT scope's isActive allowed the old loop to resume when a
+        // new session set the shared running flag back to true.
+        val job = scope.launch(Dispatchers.Default, start = CoroutineStart.LAZY) {
+            try {
+                captureMutex.withLock {
+                    currentCoroutineContext().ensureActive()
+                    captureLoop()
+                }
+            } finally {
+                if (captureJob === currentCoroutineContext()[Job]) {
+                    running = false
+                    _isListening.value = false
+                    captureJob = null
+                }
+            }
+        }
+        captureJob = job
+        job.start()
     }
 
     fun stop() {
         running = false
         _isListening.value = false
+        finalizer?.close()
         captureJob?.cancel()
     }
 
@@ -146,7 +187,7 @@ class SherpaAsrEngine(
         stop()
         val job = captureJob ?: return
         withTimeoutOrNull(timeoutMs) { job.join() }
-        if (!job.isActive) captureJob = null
+        if (job.isCompleted && captureJob === job) captureJob = null
     }
 
     private suspend fun captureLoop() {
@@ -165,7 +206,7 @@ class SherpaAsrEngine(
             runCatching { buildRecognizer() }.getOrElse {
                 Log.w(TAG, "ASR init failed", it)
                 null
-            }
+            }?.also { recognizer = it }
         }
         if (rec == null) {
             running = false
@@ -239,7 +280,20 @@ class SherpaAsrEngine(
         }
 
         var stream: OnlineStream? = null
-        val uttered = ArrayList<Short>(SAMPLE_RATE * 8)
+        val uttered = PcmRingBuffer(SAMPLE_RATE * 20)
+        val sessionFinalizer = SpeechFinalizer(
+            CoroutineScope(scope.coroutineContext + Dispatchers.Default),
+            refine = { audio -> whisperRefiner?.transcribe(audio) },
+            deliver = { text ->
+                withContext(Dispatchers.Main.immediate) {
+                    if (running) {
+                        Log.i(TAG, "final ASR: \"$text\"")
+                        runCatching { onResult?.invoke(text) }
+                    }
+                }
+            },
+        )
+        finalizer = sessionFinalizer
         try {
             effectiveRecord.startRecording()
             val s = rec.createStream()
@@ -250,27 +304,30 @@ class SherpaAsrEngine(
             stream = s
             Log.i(TAG, "always-on ASR listening")
             val pcm = ShortArray(CHUNK_SAMPLES)
+            val fullFrame = FloatArray(CHUNK_SAMPLES * if (scoRate8k) 2 else 1)
+            val signalGate = DigitalSilenceGate()
 
-            while (running && scope.isActive) {
+            while (running && currentCoroutineContext().isActive) {
                 val read = effectiveRecord.read(pcm, 0, pcm.size)
+                currentCoroutineContext().ensureActive()
                 if (read <= 0) continue
-                for (i in 0 until read) uttered.add(pcm[i])
-                if (uttered.size > SAMPLE_RATE * 20) {
-                    uttered.subList(0, uttered.size - SAMPLE_RATE * 12).clear()
-                }
+                if (!signalGate.shouldDecode(pcm, read)) continue
+                // Store at the rate advertised to Whisper and audio consumers.
+                // Previously 8k SCO was incorrectly sent to Whisper as 16k.
+                uttered.append(pcm, read, repeatEach = if (scoRate8k) 2 else 1)
 
                 // Sherpa wants 16kHz. An 8kHz SCO link is linearly upsampled
                 // 2x — cheap and adequate for recognition.
                 val frame: FloatArray
                 if (scoRate8k) {
-                    frame = FloatArray(read * 2)
+                    frame = if (read == pcm.size) fullFrame else FloatArray(read * 2)
                     for (i in 0 until read) {
                         val v = pcm[i] / PCM16_FULL_SCALE
                         frame[2 * i] = v
                         frame[2 * i + 1] = v
                     }
                 } else {
-                    frame = FloatArray(read)
+                    frame = if (read == pcm.size) fullFrame else FloatArray(read)
                     for (i in 0 until read) frame[i] = pcm[i] / PCM16_FULL_SCALE
                 }
                 s.acceptWaveform(frame, SAMPLE_RATE)
@@ -283,41 +340,17 @@ class SherpaAsrEngine(
 
                 if (rec.isEndpoint(s)) {
                     rec.reset(s)
+                    signalGate.reset()
                     if (text.isNotBlank()) {
-                        val pcm = uttered.toShortArray()
+                        val pcm = uttered.snapshot()
                         lastHeardPcm = pcm
                         uttered.clear()
                         Log.i(TAG, "always-on ASR: \"$text\"")
-                        val deliver = onResult
-                        val refiner = whisperRefiner
-                        if (refiner != null) {
-                            // Refine off the capture thread, then deliver on
-                            // main. Launch, don't withContext: processUserSpeech
-                            // cancels in-flight Ktor jobs, and those cancel
-                            // handlers can throw (OkHttp Unbalanced
-                            // enter/exit). That must not tear down this capture
-                            // loop or crash the main thread as a
-                            // CompletionHandlerException.
-                            scope.launch(Dispatchers.Default) {
-                                val refined = runCatching { refiner.transcribe(pcm) }
-                                    .onFailure { Log.w(TAG, "whisper refine failed", it) }
-                                    .getOrNull()
-                                    ?.takeIf { SpokenText.isUsable(it) }
-                                if (refined != null && refined != text) {
-                                    Log.i(TAG, "whisper refined: \"$text\" -> \"$refined\"")
-                                }
-                                withContext(Dispatchers.Main.immediate) {
-                                    runCatching { deliver?.invoke(refined ?: text) }
-                                }
-                            }
-                        } else {
-                            // Launch, don't withContext: processUserSpeech cancels
-                            // in-flight Ktor jobs, and those cancel handlers can
-                            // throw (OkHttp Unbalanced enter/exit). That must not
-                            // tear down this capture loop or crash the main thread
-                            // as a CompletionHandlerException.
-                            scope.launch(Dispatchers.Main.immediate) {
-                                runCatching { deliver?.invoke(text) }
+                        Log.d(TAG, "ASR endpoint samples=${pcm.size} digitalSilence=${pcm.all { it == 0.toShort() }}")
+                        if (!sessionFinalizer.offer(text, pcm) && running) {
+                            Log.w(TAG, "ASR refinement queue full")
+                            withContext(Dispatchers.Main.immediate) {
+                                onError?.invoke(android.speech.SpeechRecognizer.ERROR_RECOGNIZER_BUSY)
                             }
                         }
                     } else {
@@ -326,9 +359,13 @@ class SherpaAsrEngine(
                     _partialResults.value = ""
                 }
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             if (running) Log.w(TAG, "ASR capture loop failed", e)
         } finally {
+            sessionFinalizer.close()
+            if (finalizer === sessionFinalizer) finalizer = null
             runCatching { effectiveRecord.stop() }
             runCatching { effectiveRecord.release() }
             if (scoStarted) {
@@ -341,9 +378,6 @@ class SherpaAsrEngine(
                 }
             }
             runCatching { stream?.release() }
-            running = false
-            _isListening.value = false
-            captureJob = null
         }
     }
 
@@ -361,38 +395,43 @@ class SherpaAsrEngine(
      * once, and the spotter has already released AudioRecord by wake time).
      */
     suspend fun transcribePcm(pcm: ShortArray): String? {
-        if (pcm.isEmpty()) return null
-        if (running || captureJob?.isActive == true) return null
-        if (!VoiceModelStore(context).asrReady()) return null
-        val rec = recognizer ?: withContext(Dispatchers.IO) {
-            runCatching { buildRecognizer() }.getOrElse {
-                Log.w(TAG, "pre-roll ASR init failed", it)
-                null
-            }
-        } ?: return null
-        recognizer = rec
-        return withContext(Dispatchers.Default) {
-            runCatching {
-                val s = rec.createStream()
-                if (s.ptr == 0L) {
-                    Log.w(TAG, "pre-roll createStream failed")
-                    return@runCatching null
+        // Never wait behind an active open-mic session for a pre-roll request.
+        if (destroyed || pcm.isEmpty() || running) return null
+        return captureMutex.withLock {
+            if (destroyed || pcm.isEmpty()) return@withLock null
+            if (running || captureJob?.isCompleted == false) return@withLock null
+            if (!VoiceModelStore(context).asrReady()) return@withLock null
+            val rec = recognizer ?: withContext(Dispatchers.IO) {
+                runCatching { buildRecognizer() }.getOrElse {
+                    Log.w(TAG, "pre-roll ASR init failed", it)
+                    null
+                }?.also { recognizer = it }
+            } ?: return@withLock null
+            recognizer = rec
+            withContext(Dispatchers.Default) {
+                runCatching {
+                    val s = rec.createStream()
+                    if (s.ptr == 0L) {
+                        Log.w(TAG, "pre-roll createStream failed")
+                        return@runCatching null
+                    }
+                    try {
+                        val frame = FloatArray(pcm.size)
+                        for (i in pcm.indices) frame[i] = pcm[i] / PCM16_FULL_SCALE
+                        s.acceptWaveform(frame, SAMPLE_RATE)
+                        // Flush the tail: without inputFinished the last chunk can
+                        // sit undecoded and the transcript loses trailing words.
+                        s.inputFinished()
+                        while (rec.isReady(s)) rec.decode(s)
+                        SpokenText.polish(rec.getResult(s).text)
+                    } finally {
+                        runCatching { s.release() }
+                    }
+                }.getOrElse {
+                    if (it is CancellationException) throw it
+                    Log.w(TAG, "pre-roll transcription failed", it)
+                    null
                 }
-                try {
-                    val frame = FloatArray(pcm.size)
-                    for (i in pcm.indices) frame[i] = pcm[i] / PCM16_FULL_SCALE
-                    s.acceptWaveform(frame, SAMPLE_RATE)
-                    // Flush the tail: without inputFinished the last chunk can
-                    // sit undecoded and the transcript loses trailing words.
-                    s.inputFinished()
-                    while (rec.isReady(s)) rec.decode(s)
-                    SpokenText.polish(rec.getResult(s).text)
-                } finally {
-                    runCatching { s.release() }
-                }
-            }.getOrElse {
-                Log.w(TAG, "pre-roll transcription failed", it)
-                null
             }
         }
     }

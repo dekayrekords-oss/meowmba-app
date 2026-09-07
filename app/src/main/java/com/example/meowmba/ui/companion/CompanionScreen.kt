@@ -129,6 +129,7 @@ fun CompanionScreen(
                 selection = uiState.background,
                 weather = uiState.ambientWeather ?: uiState.weather,
                 modifier = Modifier.matchParentSize(),
+                paused = animationsPaused,
             )
         }
 
@@ -460,6 +461,7 @@ fun CompanionScreen(
                     // Held back: this layer is in front of the face.
                     intensity = overlayIntensity(w.condition),
                     modifier = Modifier.matchParentSize(),
+                    paused = animationsPaused,
                 )
             }
         }

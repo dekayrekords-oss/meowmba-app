@@ -1,5 +1,20 @@
 # Agent execution plan — immersive companion revision
 
+## September 7: thermal optimization — 1.3.37/code41
+
+Implemented cached analytic glows, lifecycle/occlusion-aware background clocks,
+primitive PCM ring, correct SCO rate, ordered cancellable refinement, capture
+restart/native lifetime serialization, noise-annotation and digital-zero guards.
+Models, thread counts, animation rates, particles, approvals and local execution
+are unchanged. Evidence and remaining acceptance are in
+`THERMAL_OPTIMIZATION_2026-09-07.md`. The phone locked during the visible-profile
+attempt: temperature improvement during normal use is not yet signed off.
+JVM: 1,215 tests, zero failures/errors, five conditional skips. Three physical
+checks pass. Locked/digitally-muted CPU after startup fell from about 130–210%
+to 8–12%; this does not establish visible-rendering or conversation performance.
+The old Play package was removed at the user's explicit request; preservation
+instructions below describe older work, not authorization to reinstall it.
+
 ## September 7: casual-chat tool gate — 1.3.36/code40
 
 The Flip correctly transcribed "Just chillin with the cats" but Needle

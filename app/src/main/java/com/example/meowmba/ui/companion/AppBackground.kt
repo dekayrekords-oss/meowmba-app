@@ -43,6 +43,7 @@ fun AppBackground(
     /** Current sky, for [BackgroundKind.LIVE_WEATHER]. Null falls back to a plain sky. */
     weather: WeatherNow?,
     modifier: Modifier = Modifier,
+    paused: Boolean = false,
 ) {
     Box(modifier = modifier.fillMaxSize()) {
         when (selection.kind) {
@@ -64,9 +65,10 @@ fun AppBackground(
                             isDay = tod.isLight,
                             timeOfDay = tod,
                             modifier = Modifier.fillMaxSize(),
+                            paused = paused,
                         )
                     }
-                    animation != null -> AnimatedBackground(animation, Modifier.fillMaxSize())
+                    animation != null -> AnimatedBackground(animation, Modifier.fillMaxSize(), paused)
                     else -> Unit
                 }
             }
@@ -76,8 +78,9 @@ fun AppBackground(
                     condition = w.condition,
                     isDay = w.isDay,
                     modifier = Modifier.fillMaxSize(),
+                    paused = paused,
                 )
-            } ?: AnimatedBackground(BackgroundAnimation.STARFIELD, Modifier.fillMaxSize())
+            } ?: AnimatedBackground(BackgroundAnimation.STARFIELD, Modifier.fillMaxSize(), paused)
         }
 
         if (selection.kind != BackgroundKind.NONE && selection.dimPercent > 0) {

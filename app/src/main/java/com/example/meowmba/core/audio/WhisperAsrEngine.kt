@@ -8,7 +8,12 @@ import com.k2fsa.sherpa.onnx.OfflineRecognizerConfig
 import com.k2fsa.sherpa.onnx.OfflineWhisperModelConfig
 import com.k2fsa.sherpa.onnx.getFeatureConfig
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.coroutineContext
 
 /**
  * Local Whisper (base.en, int8) batch transcriber.
@@ -35,6 +40,7 @@ class WhisperAsrEngine(private val context: Context) {
 
     @Volatile
     private var recognizer: OfflineRecognizer? = null
+    private val decodeMutex = Mutex()
 
     fun isAvailable(): Boolean = VoiceModelStore(context).whisperReady()
 
@@ -45,19 +51,21 @@ class WhisperAsrEngine(private val context: Context) {
      * reused; the heavy work runs on [Dispatchers.Default] — never the main
      * thread (a multi-second block there is what froze the whole app).
      */
-    suspend fun transcribe(pcm: ShortArray): String? {
-        if (pcm.isEmpty()) return null
-        if (!isAvailable()) return null
+    suspend fun transcribe(pcm: ShortArray): String? = decodeMutex.withLock {
+        coroutineContext.ensureActive()
+        if (pcm.isEmpty()) return@withLock null
+        if (!isAvailable()) return@withLock null
+        if (pcm.all { it == 0.toShort() }) return@withLock ""
 
         val rec = recognizer ?: withContext(Dispatchers.IO) {
             runCatching { buildRecognizer() }.getOrElse {
                 Log.w(TAG, "whisper init failed", it)
                 null
-            }
-        } ?: return null
-        recognizer = rec
+            }?.also { recognizer = it }
+        } ?: return@withLock null
 
-        return withContext(Dispatchers.Default) {
+        withContext(Dispatchers.Default) {
+            coroutineContext.ensureActive()
             runCatching {
                 val stream = rec.createStream()
                 try {
@@ -70,6 +78,7 @@ class WhisperAsrEngine(private val context: Context) {
                     runCatching { stream.release() }
                 }
             }.getOrElse {
+                if (it is CancellationException) throw it
                 Log.w(TAG, "whisper transcription failed", it)
                 null
             }

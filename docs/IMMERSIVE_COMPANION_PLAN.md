@@ -1,5 +1,12 @@
 # Immersive companion — detailed revision plan
 
+September 7 thermal checkpoint: section 8's waste-removal pass is implemented
+in 1.3.37/code41 without reducing model/animation quality settings. Background
+clocks, analytic shader caching, speech buffers and inference/capture lifetime
+fixes are recorded in `THERMAL_OPTIMIZATION_2026-09-07.md`. Normal-use thermal
+acceptance still requires an unlocked, matched physical-device profile; this
+checkpoint does not mark the wider animation/content roadmap complete.
+
 Status: planned; this document does not mark the requested changes implemented.
 This revision supersedes the earlier orb-ribbon direction and fixed-height chat behavior in APPEARANCE_UPGRADE_PLAN.md. Keep the Professional theme, Light/Dark/System choices, color customization, privacy guarantees, and existing settings organization.
 

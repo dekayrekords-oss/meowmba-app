@@ -1,15 +1,10 @@
 package com.example.meowmba.ui.companion
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -36,21 +31,11 @@ import kotlin.random.Random
  * remains the brightest thing on screen.
  */
 @Composable
-fun AnimatedBackground(animation: BackgroundAnimation, modifier: Modifier = Modifier) {
-    val clock by rememberInfiniteTransition(label = "bg").animateFloat(
-        initialValue = 0f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            tween(BG_CYCLE_MS, easing = LinearEasing), RepeatMode.Restart,
-        ),
-        label = "bg-clock",
-    )
-    val slow by rememberInfiniteTransition(label = "bg-slow").animateFloat(
-        initialValue = 0f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            tween(BG_SLOW_MS, easing = LinearEasing), RepeatMode.Restart,
-        ),
-        label = "bg-slow-clock",
-    )
+fun AnimatedBackground(animation: BackgroundAnimation, modifier: Modifier = Modifier, paused: Boolean = false) {
+    val sceneClock = rememberSceneClock(paused)
+    // Read inside Canvas, never in composition. Both layers share one clock.
+    val clock by remember(sceneClock) { derivedStateOf { sceneClock.phase(BG_CYCLE_MS) } }
+    val slow by remember(sceneClock) { derivedStateOf { sceneClock.phase(BG_SLOW_MS) } }
     val field = remember(animation) { BgField(animation.ordinal) }
 
     Box(modifier = modifier) {
@@ -110,18 +95,13 @@ private fun DrawScope.skyWash(ramp: List<Color>) {
 }
 
 private fun DrawScope.stars(f: BgField, clock: Float, gain: Float) {
+    val glow = RadialGlow.brush(Color.White)
     f.points.forEach { p ->
         val tw = 0.2f + 0.8f * (0.5f + 0.5f * sin((clock + p.phase) * 4f * PI.toFloat()))
         val r = (0.9f + 2.0f * p.scale) * gain
         // Very slow lateral drift so the field is alive without ever looking like motion.
         val c = Offset(wrap01(p.x + clock * 0.02f * p.speed) * size.width, p.y * size.height)
-        drawCircle(
-            brush = Brush.radialGradient(
-                listOf(Color.White.copy(alpha = 0.9f * tw * gain), Color.Transparent),
-                center = c, radius = r,
-            ),
-            radius = r, center = c,
-        )
+        drawRadialGlow(c, r, glow, 0.9f * tw * gain)
     }
 }
 
