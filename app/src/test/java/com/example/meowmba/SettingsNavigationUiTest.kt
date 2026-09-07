@@ -87,6 +87,22 @@ class SettingsNavigationUiTest {
         verify(storage).savePreference(ImageServiceSettings.PROVIDER, ImageService.CLOUDFLARE.name)
     }
 
+    @Test fun editingMaskedProviderKeyDoesNotSaveMaskCharacters() {
+        `when`(storage.getApiKey("openai")).thenReturn("original-test-key")
+        var loads = 0
+        compose.setContent { MaterialTheme {
+            SettingsScreen(secureStorage = storage, onClose = {}, loadOpenRouterCatalog = { loads++; Result.success(emptyList()) })
+        } }
+        compose.onNodeWithText("AI & models").performClick()
+        compose.onNodeWithText("API Key").performScrollTo()
+            .assert(SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsProperties.Password))
+            .performTextReplacement("replacement-test-key")
+        compose.onNodeWithContentDescription("Back to settings").performClick()
+        verify(storage, atLeastOnce()).saveApiKey("openai", "replacement-test-key")
+        verify(storage, never()).saveApiKey(eq("openai"), contains("•"))
+        assertEquals(1, loads)
+    }
+
     @Test fun imageProviderDraftIsNotSavedByMerelyBrowsingChoices() {
         compose.setContent { MaterialTheme {
             Column(Modifier.verticalScroll(rememberScrollState())) { ImageGenerationSetup(storage) }

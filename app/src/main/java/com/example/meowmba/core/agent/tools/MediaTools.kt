@@ -26,7 +26,10 @@ class MediaGenerateTool(
     /** Supplies the remote generator. Null unless the user configured a server URL. */
     private val remoteGenerator: (() -> com.example.meowmba.core.media.ImageGenerator?)? = null,
     /** True when Settings has "prefer server" selected. Defaults to local-first. */
-    private val preferServer: () -> Boolean = { false }
+    private val preferServer: () -> Boolean = { false },
+    /** Captures provider choice/credentials once, so changing settings mid-request
+     * cannot send a formerly local prompt to a newly selected cloud provider. */
+    private val generatorPlan: (() -> List<() -> com.example.meowmba.core.media.ImageGenerator?>)? = null,
 ) : Tool {
     override val definition = ToolDefinition(
         id = "media.generate_image",
@@ -57,7 +60,7 @@ class MediaGenerateTool(
      */
     private suspend fun tryGenerators(fullPrompt: String): Result<Bitmap> {
         var safeError: Throwable? = null
-        val order = if (preferServer()) {
+        val order = generatorPlan?.invoke() ?: if (preferServer()) {
             listOf(remoteGenerator, localGenerator)
         } else {
             listOf(localGenerator, remoteGenerator)

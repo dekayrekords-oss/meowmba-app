@@ -1733,30 +1733,19 @@ class CompanionViewModel(
             toolRegistry.register(
                 MediaGenerateTool(
                     ws,
-                    localGenerator = {
-                        val service = com.example.meowmba.core.media.ImageServiceSettings.selected(secureStorage)
-                        // Read the installed path at call time, not registration time, so
-                        // installing/deleting the weights takes effect without a restart.
+                    generatorPlan = {
+                        // Snapshot the provider at task start; changes in Settings apply
+                        // to the next image, never to an in-flight request's fallback.
                         val modelPath = downloader?.installedFile(ImageModelCatalog.options.first())?.path
-                        if (modelPath != null && service in listOf(com.example.meowmba.core.media.ImageService.LOCAL, com.example.meowmba.core.media.ImageService.LEGACY)) {
-                            SDCppImageGenerator(modelPath)
-                        } else {
-                            null
-                        }
-                    },
-                    remoteGenerator = {
-                        val service = com.example.meowmba.core.media.ImageServiceSettings.selected(secureStorage)
-                        val online = com.example.meowmba.core.media.ImageServiceSettings.online(secureStorage) { text ->
+                        com.example.meowmba.core.media.ImageServiceSettings.plan(
+                            storage = secureStorage,
+                            local = { modelPath?.let { SDCppImageGenerator(it) } },
+                            serverUrl = secureStorage?.getPreference("image_server_url") ?: _uiState.value.imageServerUrl,
+                            preferServer = _uiState.value.preferServerImageGen,
+                        ) { text ->
                             _uiState.value = _uiState.value.copy(captionText = text)
                         }
-                        val url = secureStorage?.getPreference("image_server_url") ?: _uiState.value.imageServerUrl
-                        if (online != null) online else if (url.isNotBlank() && service in listOf(com.example.meowmba.core.media.ImageService.CUSTOM, com.example.meowmba.core.media.ImageService.LEGACY)) {
-                            com.example.meowmba.core.media.RemoteImageGenerator(url)
-                        } else {
-                            null
-                        }
                     },
-                    preferServer = { _uiState.value.preferServerImageGen }
                 )
             )
             toolRegistry.register(

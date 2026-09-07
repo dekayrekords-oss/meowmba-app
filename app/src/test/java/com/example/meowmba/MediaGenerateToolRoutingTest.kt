@@ -51,6 +51,32 @@ class MediaGenerateToolRoutingTest {
         return Workspace(dir)
     }
 
+    @Test fun `cancelling an image never starts a fallback backend`() = runTest {
+        val local = FakeImageGenerator(available = true, succeeds = true, name = "local")
+        val cancelling = object : ImageGenerator {
+            override fun isAvailable() = true
+            override suspend fun generate(prompt: String, iterations: Int, seed: Int): Result<Bitmap> {
+                throw kotlinx.coroutines.CancellationException("user cancelled")
+            }
+        }
+        val tool = MediaGenerateTool(workspace(), localGenerator = { local }, remoteGenerator = { cancelling }, preferServer = { true })
+        try {
+            tool.execute(mapOf("prompt" to "cat"))
+            org.junit.Assert.fail("Cancellation must propagate")
+        } catch (_: kotlinx.coroutines.CancellationException) { }
+        assertEquals(0, local.callCount)
+    }
+
+    @Test fun `safe provider errors reach the user without being replaced by generic setup text`() = runTest {
+        val provider = object : ImageGenerator {
+            override fun isAvailable() = true
+            override suspend fun generate(prompt: String, iterations: Int, seed: Int): Result<Bitmap> =
+                Result.failure(com.example.meowmba.core.media.ImageServiceException("Cloudflare quota exhausted. Try later."))
+        }
+        val result = MediaGenerateTool(workspace(), remoteGenerator = { provider }).execute(mapOf("prompt" to "cat"))
+        assertTrue((result as ToolResult.Failure).error.contains("quota exhausted"))
+    }
+
     @Test
     fun `local-first default tries local before server`() = runTest {
         val local = FakeImageGenerator(available = true, succeeds = true, name = "local")

@@ -163,11 +163,11 @@ fun SettingsScreen(
     LaunchedEffect(page) { scroll.scrollTo(0) }
     val saveProviders: () -> Unit = {
         if (page == "AI & models") {
-        secureStorage.saveApiKey("openai", openaiKey)
-        secureStorage.saveApiKey("opencode", opencodeKey)
+        secureStorage.saveApiKey("openai", openaiKey.trim())
+        secureStorage.saveApiKey("opencode", opencodeKey.trim())
         secureStorage.savePreference("default_brain", defaultBrain)
-        secureStorage.saveApiKey("huggingface", hfToken)
-        secureStorage.saveApiKey("openrouter", openrouterKey)
+        secureStorage.saveApiKey("huggingface", hfToken.trim())
+        secureStorage.saveApiKey("openrouter", openrouterKey.trim())
         secureStorage.saveModelName("openrouter", openrouterModel)
         secureStorage.saveModelName("openrouter_vision", openrouterVision)
         secureStorage.saveModelName("openai", openaiModel)

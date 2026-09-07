@@ -19,10 +19,25 @@ object ImageServiceSettings {
     fun selected(storage: SecureStorageManager?): ImageService =
         ImageService.entries.firstOrNull { it.name == storage?.getPreference(PROVIDER) } ?: ImageService.LEGACY
 
-    fun online(storage: SecureStorageManager?, onProgress: (String) -> Unit): ImageGenerator? = when (selected(storage)) {
-        ImageService.HORDE -> HordeImageGenerator(storage?.getApiKey(HORDE_KEY).orEmpty(),
-            storage?.getBooleanPreference(HORDE_CONSENT, false) == true, onProgress)
-        ImageService.CLOUDFLARE -> CloudflareImageGenerator(storage?.getPreference(CF_ACCOUNT).orEmpty(), storage?.getApiKey(CF_KEY).orEmpty())
-        else -> null
+    fun plan(
+        storage: SecureStorageManager?, local: () -> ImageGenerator?,
+        serverUrl: String, preferServer: Boolean, onProgress: (String) -> Unit,
+    ): List<() -> ImageGenerator?> {
+        val custom = { serverUrl.takeIf { it.isNotBlank() }?.let { RemoteImageGenerator(it) } }
+        return when (selected(storage)) {
+            ImageService.LEGACY -> if (preferServer) listOf(custom, local) else listOf(local, custom)
+            ImageService.LOCAL -> listOf(local)
+            ImageService.CUSTOM -> listOf(custom)
+            ImageService.HORDE -> {
+                val key = storage?.getApiKey(HORDE_KEY).orEmpty()
+                val consent = storage?.getBooleanPreference(HORDE_CONSENT, false) == true
+                listOf({ HordeImageGenerator(key, consent, onProgress) })
+            }
+            ImageService.CLOUDFLARE -> {
+                val account = storage?.getPreference(CF_ACCOUNT).orEmpty()
+                val key = storage?.getApiKey(CF_KEY).orEmpty()
+                listOf({ CloudflareImageGenerator(account, key) })
+            }
+        }
     }
 }

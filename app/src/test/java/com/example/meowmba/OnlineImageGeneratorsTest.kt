@@ -70,7 +70,9 @@ class OnlineImageGeneratorsTest {
         assertTrue(generator.generate("cat").exceptionOrNull()!!.message!!.contains("sharing"))
     }
 
-    @Test fun hordeQueuesPollsAndDecodesWithoutFollowingImageUrls() = runTest {
+    // Ktor's mock engine uses a real dispatcher: virtual runTest time otherwise
+    // jumps past the queue deadline while a real-thread response is in flight.
+    @Test fun hordeQueuesPollsAndDecodesWithoutFollowingImageUrls() = runBlocking {
         var checks = 0
         val progress = mutableListOf<String>()
         val engine = MockEngine { request ->
@@ -96,7 +98,7 @@ class OnlineImageGeneratorsTest {
         result.getOrThrow().recycle()
     }
 
-    @Test fun hordePersonalKeyRequestsNoDatasetSharingAndCancelsFaultedJob() = runTest {
+    @Test fun hordePersonalKeyRequestsNoDatasetSharingAndCancelsFaultedJob() = runBlocking {
         var deleted = false
         val engine = MockEngine { request ->
             when (request.method) {
@@ -114,7 +116,7 @@ class OnlineImageGeneratorsTest {
         assertTrue(deleted)
     }
 
-    @Test fun cancellationDeletesHordeTicketAndIsNotConvertedToFailure() = runTest {
+    @Test fun cancellationDeletesHordeTicketAndIsNotConvertedToFailure() = runBlocking {
         val polling = CompletableDeferred<Unit>()
         var deleted = false
         val engine = MockEngine { request ->
