@@ -84,9 +84,9 @@ private suspend fun <T> safeImageCall(service: String, block: suspend () -> T): 
 class CloudflareImageGenerator(
     private val accountId: String,
     private val token: String,
-    engine: HttpClientEngine = Android.create(),
+    engine: HttpClientEngine? = null,
 ) : ImageGenerator {
-    private val client = imageClient(engine)
+    private val client by lazy { imageClient(engine ?: Android.create()) }
     private val headers get() = mapOf("Authorization" to "Bearer $token")
     override fun isAvailable() = accountId.matches(Regex("[a-fA-F0-9]{32}")) && token.isNotBlank()
 
@@ -120,10 +120,10 @@ class HordeImageGenerator(
     private val apiKey: String = "",
     private val anonymousSharingAccepted: Boolean = false,
     private val onProgress: (String) -> Unit = {},
-    engine: HttpClientEngine = Android.create(),
+    engine: HttpClientEngine? = null,
     private val pollMillis: Long = 5_000,
 ) : ImageGenerator {
-    private val client = imageClient(engine)
+    private val client by lazy { imageClient(engine ?: Android.create()) }
     private val anonymous get() = apiKey.isBlank() || apiKey == ANONYMOUS_KEY
     private val headers get() = mapOf("apikey" to apiKey.ifBlank { ANONYMOUS_KEY }, "Client-Agent" to "MeowAssistant:1.3.29:dekayrekords@gmail.com")
     override fun isAvailable() = !anonymous || anonymousSharingAccepted

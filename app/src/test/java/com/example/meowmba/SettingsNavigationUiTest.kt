@@ -99,7 +99,9 @@ class SettingsNavigationUiTest {
             .performTextReplacement("replacement-test-key")
         compose.onNodeWithContentDescription("Back to settings").performClick()
         verify(storage, atLeastOnce()).saveApiKey("openai", "replacement-test-key")
-        verify(storage, never()).saveApiKey(eq("openai"), contains("•"))
+        assertFalse(mockingDetails(storage).invocations.any {
+            it.method.name == "saveApiKey" && it.arguments[0] == "openai" && (it.arguments[1] as String).contains("•")
+        })
         assertEquals(1, loads)
     }
 
