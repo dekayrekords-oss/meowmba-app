@@ -69,6 +69,16 @@ changing Settings while a request runs cannot redirect that prompt to a new clou
   still requires the user's account/token and has not been verified.
 - UI rendering and tests cover category navigation, dark/light appearance, consent,
   explicit saving, masked-key editing and optional first-run setup.
+- Focused regression: **38 tests passed, zero failures/skips** — online image services
+  (9), provider selection (4), Settings UI (6), onboarding UI (6), image-tool routing (9),
+  existing on-device SD.cpp (4). Horde timeout tests use a real coroutine clock because
+  a virtual clock can expire while Ktor's mock engine is still on a real dispatcher.
+- Light/dark overview and Appearance page renders were visually inspected. Debug APK
+  metadata is `com.example.meowmba`, 1.3.29/code33, min SDK31/target36; APK signature
+  verification passed. Code build source: `5e1e952` (later commits are documentation).
+- Local privacy-policy sources were updated for optional Horde/Cloudflare prompt
+  transmission and third-party retention. The hosted policy and Play declarations
+  have not been published or changed by this task.
 - This change does not install an app, clear data or submit to Google Play. Installation
   and device acceptance remain a separate approval gate. Before a public release,
   review store privacy/Data safety disclosures for the newly optional image services.
