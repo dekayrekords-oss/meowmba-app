@@ -63,8 +63,8 @@ fun SetupWizardRoute(
                 fontSize = 14.sp,
             )
             Spacer(Modifier.height(16.dp))
-            LinearProgressIndicator(progress = { (step + 1) / 4f }, modifier = Modifier.fillMaxWidth())
-            Text("Step ${step + 1} of 4", modifier = Modifier.padding(top = 8.dp), style = MaterialTheme.typography.labelMedium)
+            LinearProgressIndicator(progress = { (step + 1) / 5f }, modifier = Modifier.fillMaxWidth())
+            Text("Step ${step + 1} of 5", modifier = Modifier.padding(top = 8.dp), style = MaterialTheme.typography.labelMedium)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 TextButton(onClick = { step-- }, enabled = step > 0) { Text("Back") }
                 TextButton(onClick = onFinished) { Text("Explore first") }
@@ -103,6 +103,12 @@ fun SetupWizardRoute(
                     },
                     onSkip = { step = 3 },
                 )
+                3 -> {
+                    val storage = remember { com.example.meowmba.core.security.SecureStorageManager(context) }
+                    ImageGenerationSetup(storage)
+                    OutlinedButton(onClick = { step = 4 }, modifier = Modifier.fillMaxWidth()) { Text("Continue to permissions & connections") }
+                    Text("Image setup is optional. Continue without changing your existing choice, or tap Use this option above to save a new one.", style = MaterialTheme.typography.bodySmall)
+                }
                 else -> AdvancedSetupStep(context = context, onFinished = onFinished, onEnablePermissions = onEnablePermissions)
             }
         }
@@ -154,7 +160,7 @@ private fun AdvancedSetupStep(context: Context, onFinished: () -> Unit, onEnable
         modifier = Modifier.fillMaxWidth(),
         enabled = homeUrl.isBlank() == homeToken.isBlank(),
     ) { Text("Save and open Meow") }
-    Text("Try: Open Chrome • Open Files • Play a happy bop. Tap the background to find tiles. Beta help & feedback is near the top of Settings.", style = MaterialTheme.typography.bodySmall)
+    Text("Try: Open Chrome • Open Files • Play a happy bop. Tap the background to find tiles. Beta help is in Settings → Help & feedback.", style = MaterialTheme.typography.bodySmall)
 }
 
 @Composable

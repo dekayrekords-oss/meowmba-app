@@ -1734,18 +1734,23 @@ class CompanionViewModel(
                 MediaGenerateTool(
                     ws,
                     localGenerator = {
+                        val service = com.example.meowmba.core.media.ImageServiceSettings.selected(secureStorage)
                         // Read the installed path at call time, not registration time, so
                         // installing/deleting the weights takes effect without a restart.
                         val modelPath = downloader?.installedFile(ImageModelCatalog.options.first())?.path
-                        if (modelPath != null) {
+                        if (modelPath != null && service in listOf(com.example.meowmba.core.media.ImageService.LOCAL, com.example.meowmba.core.media.ImageService.LEGACY)) {
                             SDCppImageGenerator(modelPath)
                         } else {
                             null
                         }
                     },
                     remoteGenerator = {
-                        val url = _uiState.value.imageServerUrl
-                        if (url.isNotBlank()) {
+                        val service = com.example.meowmba.core.media.ImageServiceSettings.selected(secureStorage)
+                        val online = com.example.meowmba.core.media.ImageServiceSettings.online(secureStorage) { text ->
+                            _uiState.value = _uiState.value.copy(captionText = text)
+                        }
+                        val url = secureStorage?.getPreference("image_server_url") ?: _uiState.value.imageServerUrl
+                        if (online != null) online else if (url.isNotBlank() && service in listOf(com.example.meowmba.core.media.ImageService.CUSTOM, com.example.meowmba.core.media.ImageService.LEGACY)) {
                             com.example.meowmba.core.media.RemoteImageGenerator(url)
                         } else {
                             null

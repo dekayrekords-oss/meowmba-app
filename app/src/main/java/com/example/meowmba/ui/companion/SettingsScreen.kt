@@ -4,6 +4,12 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
+import androidx.activity.compose.BackHandler
+import androidx.compose.material.icons.filled.*
+import androidx.compose.ui.graphics.vector.ImageVector
+import com.example.meowmba.core.media.ImageService
+import com.example.meowmba.core.media.ImageServiceSettings
+import com.example.meowmba.ui.onboarding.ImageGenerationSetup
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Visibility
@@ -108,6 +114,7 @@ fun SettingsScreen(
     onSaved: () -> Unit = {},
     onClose: () -> Unit
 ) {
+    var page by rememberSaveable { mutableStateOf<String?>(null) }
     var openaiKey by remember { mutableStateOf(secureStorage.getApiKey("openai") ?: "") }
     var opencodeKey by remember { mutableStateOf(secureStorage.getApiKey("opencode") ?: "") }
     var defaultBrain by remember { mutableStateOf(secureStorage.getPreference("default_brain") ?: "auto") }
@@ -128,7 +135,8 @@ fun SettingsScreen(
     var openRouterCatalog by remember { mutableStateOf<List<OpenRouterModel>>(emptyList()) }
     var openRouterCatalogNote by remember { mutableStateOf("Loading models…") }
     val settingsScope = rememberCoroutineScope()
-    LaunchedEffect(Unit) {
+    LaunchedEffect(page) {
+        if (page != "AI & models" || openRouterCatalog.isNotEmpty()) return@LaunchedEffect
         OpenRouterModels.fetch(openrouterKey.ifBlank { null }).fold(
             onSuccess = { list ->
                 openRouterCatalog = list
@@ -138,36 +146,55 @@ fun SettingsScreen(
         )
     }
     var localModelPath by remember { mutableStateOf(secureStorage.getEndpoint("local") ?: "/data/local/tmp/llm/gemma.bin") }
-    var showAdvanced by rememberSaveable { mutableStateOf(false) }
     var openaiModel by remember { mutableStateOf(secureStorage.getModelName("openai") ?: "gpt-4o-mini") }
     var showKey by remember { mutableStateOf(false) }
     var openaiEndpoint by remember { mutableStateOf(secureStorage.getEndpoint("openai") ?: "") }
     var opencodeEndpoint by remember { mutableStateOf(secureStorage.getEndpoint("opencode") ?: "") }
     var openrouterEndpoint by remember { mutableStateOf(secureStorage.getEndpoint("openrouter") ?: "") }
-    var voiceSectionOpen by rememberSaveable { mutableStateOf(false) }
-    var deviceSectionOpen by rememberSaveable { mutableStateOf(false) }
-    var aiSectionOpen by rememberSaveable { mutableStateOf(false) }
-    var mediaSectionOpen by rememberSaveable { mutableStateOf(false) }
+    var imageService by remember { mutableStateOf(ImageServiceSettings.selected(secureStorage)) }
+    val scroll = rememberScrollState()
+    LaunchedEffect(page) { scroll.scrollTo(0) }
+    val saveProviders = {
+        secureStorage.saveApiKey("openai", openaiKey)
+        secureStorage.saveApiKey("opencode", opencodeKey)
+        secureStorage.savePreference("default_brain", defaultBrain)
+        secureStorage.saveApiKey("huggingface", hfToken)
+        secureStorage.saveApiKey("openrouter", openrouterKey)
+        secureStorage.saveModelName("openrouter", openrouterModel)
+        secureStorage.saveModelName("openrouter_vision", openrouterVision)
+        secureStorage.saveModelName("openai", openaiModel)
+        secureStorage.saveEndpoint("openai", openaiEndpoint)
+        secureStorage.saveEndpoint("opencode", opencodeEndpoint)
+        secureStorage.saveEndpoint("openrouter", openrouterEndpoint)
+        secureStorage.saveEndpoint("local", localModelPath)
+        onSaved()
+    }
+    val back = {
+        saveProviders()
+        if (page != null) page = null else onClose()
+    }
+    BackHandler(onBack = back)
 
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background
     ) {
+        Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding()) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = back) {
+                    Icon(Icons.Default.ArrowBack, contentDescription = if (page == null) "Close settings" else "Back to settings")
+                }
+                Text(page ?: "Settings", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+            }
         Column(
             modifier = Modifier
-                .safeDrawingPadding()
-                .padding(24.dp)
-                .verticalScroll(rememberScrollState())
+                .weight(1f)
+                .verticalScroll(scroll)
+                .padding(horizontal = 20.dp, vertical = 12.dp)
         ) {
+            if (page == null) {
             Text(
-                text = "Settings",
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Personalize Memba, connect services, and choose how it listens. Save and Close applies provider settings; API keys are stored securely as entered.",
+                text = "Everything in its place. Tap a category to open its options.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -182,21 +209,19 @@ fun SettingsScreen(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Finish setup", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                        Text("Guided setup for AI, voice and connections.", style = MaterialTheme.typography.bodySmall)
+                        Text("AI, voice, images and connections.", style = MaterialTheme.typography.bodySmall)
                     }
-                    Button(onClick = onOpenSetup) { Text("Start setup") }
+                    Button(onClick = { saveProviders(); onOpenSetup() }) { Text("Start setup") }
                 }
             }
-            BetaHelpCard()
             Spacer(modifier = Modifier.height(16.dp))
-
-            SettingsSectionHeader(
-                title = "Voice & behavior",
-                summary = if (wakeWordEnabled) "Wake phrase on · ${if (conversationMode) "conversation mode on" else "conversation mode off"}" else "Wake phrase off",
-                expanded = voiceSectionOpen,
-                onToggle = { voiceSectionOpen = !voiceSectionOpen },
-            )
-            if (voiceSectionOpen) {
+            SETTINGS_CATEGORIES.forEach { category ->
+                SettingsCategoryCard(category) { page = category.title }
+                Spacer(Modifier.height(10.dp))
+            }
+            }
+            if (page == "Help & feedback") BetaHelpCard()
+            if (page == "Voice & behavior") {
 
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -290,13 +315,7 @@ fun SettingsScreen(
             }
 
             Spacer(modifier = Modifier.height(12.dp))
-            SettingsSectionHeader(
-                title = "Phone & device",
-                summary = if (watchModeEnabled || backgroundListeningEnabled || (robotStatus.contains("body", ignoreCase = true) && !robotStatus.contains("simulated", ignoreCase = true))) "Connected or active" else "Review device access and automation",
-                expanded = deviceSectionOpen,
-                onToggle = { deviceSectionOpen = !deviceSectionOpen },
-            )
-            if (deviceSectionOpen) {
+            if (page == "Phone & device") {
 
             Spacer(modifier = Modifier.height(8.dp))
             Text(
@@ -489,33 +508,13 @@ fun SettingsScreen(
                 }
             }
             }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    "Advanced",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.weight(1f)
-                )
-                OutlinedButton(onClick = { showAdvanced = !showAdvanced }) {
-                    Text(if (showAdvanced) "Hide" else "Show")
-                }
-            }
-            Text(
-                text = "Image/music/video generation, API keys, servers and the desktop bridge.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            if (showAdvanced) {
-            SettingsSectionHeader(
-                title = "Media & memory",
-                summary = "Image, music, video, and semantic memory services",
-                expanded = mediaSectionOpen,
-                onToggle = { mediaSectionOpen = !mediaSectionOpen },
-            )
-            if (mediaSectionOpen) {
+            if (page == "Images") {
+            ImageGenerationSetup(secureStorage, onSelected = {
+                imageService = it
+                if (it == ImageService.CUSTOM) onImageServerUrlChange(secureStorage.getPreference("image_server_url").orEmpty())
+            })
+            if (imageService == ImageService.LOCAL || imageService == ImageService.LEGACY) {
+            HorizontalDivider(Modifier.padding(vertical = 20.dp))
             // On-device image generation (stable-diffusion.cpp, native GGUF weights)
             Text("Image generation", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
             val imageOption = com.example.meowmba.core.agent.ImageModelCatalog.options.first()
@@ -523,7 +522,7 @@ fun SettingsScreen(
             Text(imageOption.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(
                 "${imageOption.approxSize} · ${imageOption.minRamGb}GB+ RAM. Runs fully on-device; " +
-                    "expect a few seconds to a minute per image depending on the phone.",
+                    "generation can take several minutes and needs substantial free memory.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -579,12 +578,13 @@ fun SettingsScreen(
                 }
             }
             Text(
-                text = "No model installed → image requests use the configured server " +
-                    "if one is set below, otherwise a simple canvas drawing.",
+                text = "A downloaded model is required for local images. If generation fails, Meow reports the error; it does not substitute a drawing.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
+            }
+            if (imageService == ImageService.LEGACY) {
             Spacer(modifier = Modifier.height(16.dp))
             SettingsTextField(
                 value = imageServerUrl,
@@ -606,7 +606,9 @@ fun SettingsScreen(
                 checked = preferServerImageGen,
                 onCheckedChange = onPreferServerImageGenChange
             )
-
+            }
+            }
+            if (page == "Music & video") {
             Spacer(modifier = Modifier.height(24.dp))
 
             // Music generation (opt-in remote server only — no on-device generator)
@@ -620,8 +622,7 @@ fun SettingsScreen(
             )
             Text(
                 text = "Your own music-generation server, e.g. " +
-                    "http://192.168.1.10:9200. Leave blank to use a simple " +
-                    "procedural tone sequence instead.",
+                    "http://192.168.1.10:9200. A working server is required; leaving this blank disables music generation.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -638,15 +639,15 @@ fun SettingsScreen(
             )
             Text(
                 text = "Your own video-generation server, e.g. " +
-                    "http://192.168.1.10:9300. Leave blank to always use the " +
-                    "animated-frames placeholder. Real generation takes several " +
-                    "minutes per clip.",
+                    "http://192.168.1.10:9300. A working server is required. Generation can take several minutes per clip.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            }
+            if (page == "Connections & memory") {
             // Semantic memory (meow-mem0): share on-device facts with Meow's brain.
             Text("Semantic memory", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
             Spacer(modifier = Modifier.height(8.dp))
@@ -669,6 +670,7 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            if (page == "Appearance") {
             // Avatar: which face the companion wears. The full picker (with previews
             // and the animation shelf) lives on the Avatar tile; this is the same
             // setting for anyone who looks for it here first.
@@ -700,6 +702,8 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            }
+            if (page == "Driving") {
             // Car assistant: knows when you're driving, tracks trips, watches for crashes.
             Text("Car assistant", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
             Spacer(modifier = Modifier.height(8.dp))
@@ -728,6 +732,8 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            }
+            if (page == "Connections & memory") {
             // Desktop Bridge (Phase 6): pair with a computer running meowmba-bridge.py
             DesktopBridgeSection(
                 secureStorage,
@@ -737,6 +743,8 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            }
+            if (page == "Phone & device") {
             // ── Phone Control (Accessibility) ─────────────────────────────
             Text("Phone Control", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
             Text(
@@ -773,14 +781,8 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // OpenAI Configuration
-            SettingsSectionHeader(
-                title = "AI providers",
-                summary = "Cloud keys, models, endpoints, and local routing",
-                expanded = aiSectionOpen,
-                onToggle = { aiSectionOpen = !aiSectionOpen },
-            )
-            if (aiSectionOpen) {
+            }
+            if (page == "AI & models") {
             VoiceToggle(
                 label = "Agent brain",
                 description = "Understands natural tool commands (\"make a file called todo.txt\") " +
@@ -977,6 +979,8 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
             
+            }
+            if (page == "Connections & memory") {
             // SSH servers meow may manage (encrypted, allowlisted commands only)
             Text("Servers (SSH)", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
             if (savedServers.isNotEmpty()) {
@@ -1006,9 +1010,10 @@ fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(modifier = Modifier.height(8.dp))
-            SettingsTextField(
+            OutlinedTextField(
                 value = sshPassword, onValueChange = { sshPassword = it },
                 label = { Text("Password (stored encrypted on this phone only)") },
+                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(modifier = Modifier.height(8.dp))
@@ -1030,6 +1035,8 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            }
+            if (page == "AI & models") {
             // Local Model Configuration
             Text("Local Model (MediaPipe)", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
             SettingsTextField(
@@ -1040,31 +1047,17 @@ fun SettingsScreen(
             )
             }
 
-            }
-
             Spacer(modifier = Modifier.height(40.dp))
             
             Button(
                 onClick = {
-                    secureStorage.saveApiKey("openai", openaiKey)
-                    secureStorage.saveApiKey("opencode", opencodeKey)
-                    secureStorage.savePreference("default_brain", defaultBrain)
-                    secureStorage.saveApiKey("huggingface", hfToken)
-                    secureStorage.saveApiKey("openrouter", openrouterKey)
-                    secureStorage.saveModelName("openrouter", openrouterModel)
-                    secureStorage.saveModelName("openrouter_vision", openrouterVision)
-                    secureStorage.saveModelName("openai", openaiModel)
-                    secureStorage.saveEndpoint("openai", openaiEndpoint)
-                    secureStorage.saveEndpoint("opencode", opencodeEndpoint)
-                    secureStorage.saveEndpoint("openrouter", openrouterEndpoint)
-                    secureStorage.saveEndpoint("local", localModelPath)
-                    onSaved()
-                    onClose()
+                    back()
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Save and Close")
+                Text(if (page == null) "Close settings" else "Done")
             }
+        }
         }
     }
 }
@@ -1590,8 +1583,8 @@ fun SettingsTextField(
 
 /**
  * API-key text field that hides the secret behind dots until the user taps the
- * eye toggle. Full dot-masking while hidden (not just a password transform) so
- * the key is never glanceable on a shared screen.
+ * eye toggle. Mask visually, never replace the editable value with bullets:
+ * doing that corrupts existing keys when the user edits a masked field.
  */
 @Composable
 private fun ApiKeyField(
@@ -1602,8 +1595,9 @@ private fun ApiKeyField(
     onToggleShow: () -> Unit,
 ) {
     TextField(
-        value = if (show) value else value.replace(Regex("."), "•"),
+        value = value,
         onValueChange = onValueChange,
+        visualTransformation = if (show) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
         label = { Text(label) },
         singleLine = true,
         trailingIcon = {
@@ -1651,18 +1645,26 @@ private fun ProviderEndpointField(
 /** Route-id → display label for the "Default brain" selector. */
 private fun brainLabel(id: String): String = BRAIN_CHOICES.firstOrNull { it.first == id }?.second ?: "Auto"
 
-/** Compact progressive-disclosure header used to keep the settings overview scannable. */
+private data class SettingsCategory(val title: String, val summary: String, val icon: ImageVector)
+private val SETTINGS_CATEGORIES = listOf(
+    SettingsCategory("Voice & behavior", "Wake phrase, conversation and listening", Icons.Default.Mic),
+    SettingsCategory("AI & models", "AI providers, keys and model routing", Icons.Default.Psychology),
+    SettingsCategory("Images", "AI Horde, Cloudflare and on-phone images", Icons.Default.Image),
+    SettingsCategory("Music & video", "Media-generation services", Icons.Default.Movie),
+    SettingsCategory("Phone & device", "App control, access and device behavior", Icons.Default.PhoneAndroid),
+    SettingsCategory("Appearance", "Choose your companion's avatar", Icons.Default.Palette),
+    SettingsCategory("Connections & memory", "Desktop bridge, servers and shared memory", Icons.Default.Link),
+    SettingsCategory("Driving", "Drive mode and emergency contact", Icons.Default.DirectionsCar),
+    SettingsCategory("Help & feedback", "Beta help, testing and support", Icons.Default.HelpOutline),
+)
+
+/** Category cards navigate to a focused page, never expand a long form in the overview. */
 @Composable
-private fun SettingsSectionHeader(
-    title: String,
-    summary: String,
-    expanded: Boolean,
-    onToggle: () -> Unit,
-) {
+private fun SettingsCategoryCard(category: SettingsCategory, onOpen: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onToggle),
+            .clickable(onClick = onOpen),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
     ) {
         Row(
@@ -1671,15 +1673,13 @@ private fun SettingsSectionHeader(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            Icon(category.icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.width(14.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Text(summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(category.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(category.summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Text(
-                text = if (expanded) "Hide" else "Show",
-                color = MaterialTheme.colorScheme.primary,
-                style = MaterialTheme.typography.labelLarge,
-            )
+            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

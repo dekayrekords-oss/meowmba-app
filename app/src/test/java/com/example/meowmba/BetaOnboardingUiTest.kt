@@ -31,7 +31,7 @@ class BetaOnboardingUiTest {
             SetupWizardRoute(onFinished = { finished = true }, onEnablePermissions = { permissions++ })
         } }
         compose.onNodeWithText("Welcome to Meow").assertExists()
-        compose.onNodeWithText("Step 1 of 4").assertExists()
+        compose.onNodeWithText("Step 1 of 5").assertExists()
         compose.onNodeWithText("API key").assertDoesNotExist()
         compose.onNodeWithText("OpenAI (GPT)").assertDoesNotExist()
         render("onboarding-light")

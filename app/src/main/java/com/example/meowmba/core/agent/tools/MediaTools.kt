@@ -47,7 +47,7 @@ class MediaGenerateTool(
         // weights and runs 20 denoising steps — the orchestrator was killing
         // it mid-generation every time. The canvas fallback still returns in
         // milliseconds, so a long ceiling costs it nothing.
-        timeoutMs = 300_000
+        timeoutMs = 600_000
     )
 
     /**
@@ -58,7 +58,8 @@ class MediaGenerateTool(
      * A backend exception permits trying the next configured backend.
      * If all attempts fail, no substitute artwork is presented as success.
      */
-    private suspend fun tryGenerators(fullPrompt: String): Bitmap? {
+    private suspend fun tryGenerators(fullPrompt: String): Result<Bitmap> {
+        var safeError: Throwable? = null
         val order = if (preferServer()) {
             listOf(remoteGenerator, localGenerator)
         } else {
@@ -67,15 +68,20 @@ class MediaGenerateTool(
         for (supplier in order) {
             val generator = supplier?.invoke() ?: continue
             if (!generator.isAvailable()) continue
-            val result = runCatching { generator.generate(fullPrompt) }.getOrNull()
-            result?.getOrNull()?.let { return it }
+            val result = try { generator.generate(fullPrompt) }
+                catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                catch (_: Exception) { null }
+            result?.getOrNull()?.let { return Result.success(it) }
+            val error = result?.exceptionOrNull()
+            if (error is kotlinx.coroutines.CancellationException) throw error
+            if (error is com.example.meowmba.core.media.ImageServiceException) safeError = error
             if (result == null) {
                 Log.w(TAG, "image backend threw instead of returning a Result")
             } else {
-                Log.w(TAG, "image backend failed: ${result.exceptionOrNull()?.message}")
+                Log.w(TAG, "image backend failed (${error?.javaClass?.simpleName})")
             }
         }
-        return null
+        return Result.failure(safeError ?: IllegalStateException("Image generation is unavailable or failed. Configure a working image provider or install a supported on-device model in Settings → Images."))
     }
 
     private companion object {
@@ -88,7 +94,8 @@ class MediaGenerateTool(
         val style = args["style"]?.takeIf { it.isNotBlank() }?.lowercase() ?: "auto"
         val fullPrompt = if (style != "auto") "$prompt, $style style" else prompt
 
-        val bitmap = tryGenerators(fullPrompt)
+        val result = tryGenerators(fullPrompt)
+        val bitmap = result.getOrNull()
         if (bitmap != null) {
             val name = fileNameFor(prompt, prefix = "image")
             return@withContext try {
@@ -109,8 +116,7 @@ class MediaGenerateTool(
         }
 
         ToolResult.Failure(
-            "Image generation is unavailable or failed. Configure a working image server " +
-                "or load a supported on-device image model in Settings. No image was created."
+            "${result.exceptionOrNull()?.message} No image was created."
         )
     }
 
