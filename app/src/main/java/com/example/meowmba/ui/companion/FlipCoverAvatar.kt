@@ -17,8 +17,15 @@ import androidx.compose.ui.unit.dp
 internal fun isFlipCoverWindow(
     manufacturer: String, model: String, displayId: Int, widthDp: Int, heightDp: Int,
 ): Boolean = manufacturer.equals("samsung", ignoreCase = true) &&
-    model.startsWith("SM-F7", ignoreCase = true) && displayId != 0 &&
+    model.startsWith("SM-F7", ignoreCase = true) && displayId == 1 &&
     widthDp in 1..600 && heightDp in 1..600
+
+/** Opt-in for compact cover candidates. Samsung display 1 is verified on the
+ * Flip 6 and carries FLAG_PRESENTATION; generic candidates exclude that flag.
+ * Tall/main-display cover screens already use the standard avatar-first layout. */
+internal fun useCoverAvatarLayout(
+    enabled: Boolean, displayId: Int, coverCandidate: Boolean, widthDp: Int, heightDp: Int,
+): Boolean = enabled && coverCandidate && displayId != 0 && widthDp in 1..600 && heightDp in 1..600
 
 /** Reuses the existing avatar/motion runtime. Shared approval and other
  * overlays remain in CompanionScreen above this compact base surface. */
@@ -52,9 +59,10 @@ internal fun FlipCoverAvatar(
 }
 
 @Composable
-internal fun FlipCoverSetupCard() {
-    if (!android.os.Build.MANUFACTURER.equals("samsung", true) ||
-        !android.os.Build.MODEL.startsWith("SM-F7", true)) return
+internal fun FlipCoverSetupCard(showOnAllDevices: Boolean = false) {
+    val samsungFlip = android.os.Build.MANUFACTURER.equals("samsung", true) &&
+        android.os.Build.MODEL.startsWith("SM-F7", true)
+    if (!showOnAllDevices && !samsungFlip) return
     val context = LocalContext.current
     var showHelp by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf(false) }
@@ -65,13 +73,15 @@ internal fun FlipCoverSetupCard() {
         onDismissRequest = { showHelp = false },
         title = { Text("Meow on your cover screen") },
         text = { Column {
-            Text("1. Install Samsung Good Lock and its MultiStar module.\n\n" +
-                "2. In MultiStar, open I love Galaxy Foldable, then Launcher widget or Enable Launcher, and select Meow.\n\n" +
-                "3. Add the launcher widget to your cover screen, then open Meow from it. Your selected avatar will fit the smaller display.\n\n" +
-                "Availability and labels depend on your Flip model and One UI version.")
+            Text(if (samsungFlip) "1. Turn on Cover-screen avatar in Settings → Phone & device.\n\n" +
+                "2. Install Samsung Good Lock and its MultiStar module if your One UI version requires them.\n\n" +
+                "3. In MultiStar, open I love Galaxy Foldable, then Launcher widget or Enable Launcher, and select this Meow app (Meow Assistant Preview for test builds).\n\n" +
+                "4. Add the launcher widget to your cover screen, then open Meow from it.\n\n" +
+                "Availability and labels depend on your Flip model and One UI version. This does not replace the system cover home or lock screen."
+            else "Enable Meow in your manufacturer's external-display or continue-apps settings, if available, then open it on the cover screen. Compact built-in secondary screens use the cover layout; tall cover screens retain the standard avatar view.\n\nNot every foldable allows third-party cover apps. This toggle cannot unlock that support or replace the system lock screen. It does not enable the microphone, camera or always-on display.")
             if (error) Text("No browser is available. Open Good Lock from the Galaxy Store.")
         } },
-        confirmButton = { TextButton(onClick = {
+        confirmButton = { if (samsungFlip) TextButton(onClick = {
             error = runCatching { context.startActivity(android.content.Intent(
                 android.content.Intent.ACTION_VIEW,
                 android.net.Uri.parse("https://www.samsung.com/sg/support/mobile-devices/explore-new-cover-screen-widgets-on-the-galaxy-z-flip5/")

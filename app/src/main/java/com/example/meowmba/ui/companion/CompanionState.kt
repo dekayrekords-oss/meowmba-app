@@ -54,6 +54,7 @@ data class ProjectUi(
 )
 
 data class CompanionState(
+    val coverAvatarEnabled: Boolean = false,
     val name: String = "Meow",
     val interactionState: InteractionState = InteractionState.IDLE,
     val emotion: CompanionEmotion = CompanionEmotion.IDLE,

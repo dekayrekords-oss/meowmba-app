@@ -892,6 +892,7 @@ class CompanionViewModel(
             _uiState.value = _uiState.value.copy(
                 name = if (savedName.isNullOrBlank()) _uiState.value.name else savedName,
                 wakeWordEnabled = storage.getBooleanPreference(KEY_WAKE_WORD, false),
+                coverAvatarEnabled = storage.getBooleanPreference("cover_avatar_enabled", false),
                 requireWakeWordInFace = storage.getBooleanPreference(KEY_REQUIRE_WAKE_IN_FACE, false),
                 conversationMode = storage.getBooleanPreference(KEY_CONVERSATION, false),
                 bargeInEnabled = storage.getBooleanPreference(KEY_BARGE_IN, true),
@@ -2347,6 +2348,11 @@ class CompanionViewModel(
     }
 
     /** Enable/disable conversation follow-up mode (persisted). */
+    fun setCoverAvatarEnabled(enabled: Boolean) {
+        secureStorage?.saveBooleanPreference("cover_avatar_enabled", enabled)
+        _uiState.value = _uiState.value.copy(coverAvatarEnabled = enabled)
+    }
+
     fun setConversationMode(enabled: Boolean) {
         _uiState.value = _uiState.value.copy(conversationMode = enabled)
         secureStorage?.saveBooleanPreference(KEY_CONVERSATION, enabled)

@@ -71,9 +71,13 @@ fun CompanionScreen(
     val screenWidthDp = LocalConfiguration.current.screenWidthDp
     val coverContext = LocalContext.current
     val coverConfiguration = LocalConfiguration.current
-    val isFlipCover = isFlipCoverWindow(
-        android.os.Build.MANUFACTURER, android.os.Build.MODEL,
+    val isFlipCover = useCoverAvatarLayout(
+        uiState.coverAvatarEnabled,
         coverContext.display?.displayId ?: 0,
+        isFlipCoverWindow(android.os.Build.MANUFACTURER, android.os.Build.MODEL,
+            coverContext.display?.displayId ?: 0, screenWidthDp, coverConfiguration.screenHeightDp) ||
+            (coverContext.display?.let { it.flags and android.view.Display.FLAG_PRESENTATION == 0 } == true &&
+                coverConfiguration.touchscreen == android.content.res.Configuration.TOUCHSCREEN_FINGER),
         screenWidthDp, coverConfiguration.screenHeightDp,
     )
     val isUnfolded = screenWidthDp >= 600
@@ -744,6 +748,8 @@ fun CompanionScreen(
             SettingsScreen(
                 secureStorage = secureStorage,
                 companionName = uiState.name,
+                coverAvatarEnabled = uiState.coverAvatarEnabled,
+                onCoverAvatarChange = viewModel::setCoverAvatarEnabled,
                 wakeWordEnabled = uiState.wakeWordEnabled,
                 requireWakeWordInFace = uiState.requireWakeWordInFace,
                 conversationMode = uiState.conversationMode,

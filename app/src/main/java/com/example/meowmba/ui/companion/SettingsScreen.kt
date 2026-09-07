@@ -44,6 +44,8 @@ import kotlinx.coroutines.launch
 fun SettingsScreen(
     secureStorage: SecureStorageManager,
     companionName: String = "Meow",
+    coverAvatarEnabled: Boolean = false,
+    onCoverAvatarChange: (Boolean) -> Unit = {},
     wakeWordEnabled: Boolean = false,
     requireWakeWordInFace: Boolean = false,
     conversationMode: Boolean = false,
@@ -326,6 +328,14 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
             if (page == "Phone & device") {
+
+            VoiceToggle(
+                label = "Cover-screen avatar",
+                description = "Use your selected avatar in a compact layout when Meow is opened on a supported foldable cover display. Requires your phone's cover-app setup; does not replace its lock screen or launch automatically when folded.",
+                checked = coverAvatarEnabled,
+                onCheckedChange = onCoverAvatarChange,
+            )
+            FlipCoverSetupCard(showOnAllDevices = true)
 
             Spacer(modifier = Modifier.height(8.dp))
             Text(

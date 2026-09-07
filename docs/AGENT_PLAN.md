@@ -1,5 +1,16 @@
 # Agent execution plan — immersive companion revision
 
+## September 7: cover toggle — 1.3.35/code39
+
+Added Settings → Phone & device → Cover-screen avatar with saved opt-in,
+Samsung/generic setup guidance and the existing selected avatar/approval layer.
+The switch controls compact cover rendering only, not OS cover-home replacement
+or automatic launching. Main and tall cover screens retain normal avatar UI.
+Physical Flip display metadata checked; actual cover launch/fold/mic/approval
+acceptance remains pending. Other OEM detection is conservative best-effort.
+This change does not resolve the separately reported ambient-noise greeting
+loop or unavailable-desktop approval bug.
+
 ## September 7: conversational context follow-up — 1.3.34/code38
 
 - Fixed the observed weather → location reply → Files misroute. Weather holds
