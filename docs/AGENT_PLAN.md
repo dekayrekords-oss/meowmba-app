@@ -1,5 +1,22 @@
 # Agent execution plan — immersive companion revision
 
+## September 6: onboarding and Flip cover follow-up
+
+- Implemented cover avatar base surface and Flip-only setup help in AvatarScreen.
+  Shared approvals remain above it. See FLIP_COVER_SETUP.md for acceptance steps.
+- Pending: validate on a connected Galaxy Z Flip and prepare a complete signed build.
+- Pending recovery/integration: optional-token guided setup and local/OpenRouter
+  onboarding changes were edited in a temporary checkout on the prior Mac, but
+  were not committed to Meow before the session moved computers. Do not claim
+  those changes are included in this checkout or installed on a phone.
+- Onboarding acceptance requires a real inference response. Needle is an action
+  router, not a conversational model; constructing its wrapper or finding its
+  model file does not verify working local conversation. OpenRouter key status
+  alone also cannot verify that the selected model can produce a reply.
+- User confirmed OpenRouter. Present local model download first, obtain explicit
+  cloud consent, link directly to OpenRouter keys, verify generation before
+  completing onboarding, and keep existing saved credentials intact.
+
 ## Current override — September 5 release preparation
 
 The user paused 3D work and explicitly excluded it from the app. The Filament

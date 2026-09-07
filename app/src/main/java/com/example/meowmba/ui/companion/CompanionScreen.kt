@@ -69,6 +69,13 @@ fun CompanionScreen(
     // agent browser lives in the right half while the companion keeps the
     // left, so meow can drive the browser in real time while you watch.
     val screenWidthDp = LocalConfiguration.current.screenWidthDp
+    val coverContext = LocalContext.current
+    val coverConfiguration = LocalConfiguration.current
+    val isFlipCover = isFlipCoverWindow(
+        android.os.Build.MANUFACTURER, android.os.Build.MODEL,
+        coverContext.display?.displayId ?: 0,
+        screenWidthDp, coverConfiguration.screenHeightDp,
+    )
     val isUnfolded = screenWidthDp >= 600
     val splitBrowser = isUnfolded && uiState.showBrowser
     val halfWidth = (screenWidthDp / 2).dp
@@ -99,7 +106,12 @@ fun CompanionScreen(
                 .fillMaxSize()
                 .then(if (splitBrowser) Modifier.padding(end = halfWidth) else Modifier)
         ) {
-        if (uiState.appTheme == AppTheme.PROFESSIONAL) {
+        if (isFlipCover) {
+            FlipCoverAvatar(uiState, onMicClick = viewModel::onMicClick) {
+                AvatarMotionHost(viewModel, uiState, animationsPaused,
+                    Modifier.fillMaxSize(), interactive = false)
+            }
+        } else if (uiState.appTheme == AppTheme.PROFESSIONAL) {
             ProfessionalWorkspace(uiState, viewModel) {
                 AvatarMotionHost(viewModel, uiState, animationsPaused || uiState.showAvatarScreen,
                     Modifier.fillMaxSize(), interactive = false)

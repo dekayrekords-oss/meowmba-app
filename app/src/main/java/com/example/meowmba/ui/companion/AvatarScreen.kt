@@ -101,6 +101,7 @@ fun AvatarScreen(
             }
 
             Spacer(modifier = Modifier.height(8.dp))
+            FlipCoverSetupCard()
             Text("App theme", style = MaterialTheme.typography.titleMedium)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 AppTheme.entries.forEach { option ->

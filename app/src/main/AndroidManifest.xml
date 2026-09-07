@@ -122,6 +122,7 @@
             android:label="@string/app_name"
             android:theme="@style/Theme.Meowmba"
             android:launchMode="singleTask"
+            android:resizeableActivity="true"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|uiMode|density"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
