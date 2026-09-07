@@ -205,6 +205,8 @@ class CompanionViewModel(
     internal val glassesController: com.example.meowmba.core.glasses.MetaGlassesController? = null
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(CompanionState())
+    private var asrDownloadJob: Job? = null
+    private var asrDownloadFailed = false
     private var idleAnimationDirector: IdleAnimationDirector? = null
     val uiState = _uiState.asStateFlow()
     private var cachedMessages: List<com.example.meowmba.core.database.MessageEntity> = emptyList()
@@ -777,7 +779,8 @@ class CompanionViewModel(
         refreshRobot()
         // Give the ~2 GB on-device model back when it stops being used. Checked
         // once a minute; a fresh question reloads it.
-        viewModelScope.launch {
+        // Housekeeping is wall-clock work, not UI work or a virtual-test clock.
+        viewModelScope.launch(Dispatchers.Default) {
             while (true) {
                 kotlinx.coroutines.delay(60_000L)
                 runCatching { releaseIdleLocalBrain() }
@@ -1032,20 +1035,23 @@ class CompanionViewModel(
         // on device: a follow-up error raced resetState, the re-arm chain gave
         // up silently, and the app sat deaf with a frozen caption until the
         // user restarted it.
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.Default) {
             while (true) {
                 // 30s, skipped in background: the old 10s tick woke the CPU
                 // forever even with the screen off, and the background service
                 // owns the mic there anyway so a restart would be futile.
                 kotlinx.coroutines.delay(30_000)
-                if (appInBackground || handedOffToBackground) continue
-                val s = _uiState.value
-                if (s.isMicEnabled && !s.isMuted &&
-                    s.interactionState == InteractionState.IDLE && shouldAlwaysOnMic() &&
-                    !alwaysOnActive && !alwaysOnSessionOpen && alwaysOnRearmJob == null
-                ) {
-                    fuLog("voice wedge detected — forcing always-on restart")
-                    startAlwaysOnListening()
+                withContext(Dispatchers.Main.immediate) {
+                    if (!appInBackground && !handedOffToBackground) {
+                        val s = _uiState.value
+                        if (s.isMicEnabled && !s.isMuted &&
+                            s.interactionState == InteractionState.IDLE && shouldAlwaysOnMic() &&
+                            !alwaysOnActive && !alwaysOnSessionOpen && alwaysOnRearmJob == null
+                        ) {
+                            fuLog("voice wedge detected — forcing always-on restart")
+                            startAlwaysOnListening()
+                        }
+                    }
                 }
             }
         }
@@ -1169,6 +1175,9 @@ class CompanionViewModel(
         }
         val appCtx = secureStorage?.context
         if (appCtx != null) {
+            com.example.meowmba.core.workflows.BusinessControlTools.register(toolRegistry,
+                { com.example.meowmba.core.workflows.WorkflowRuntime.get(appCtx) },
+                { openBusinessAgents() })
             toolRegistry.register(RememberingTool(appCtx, start = true))
             toolRegistry.register(RememberingTool(appCtx, start = false))
         }
@@ -3774,20 +3783,32 @@ class CompanionViewModel(
 
     private fun requestAsrModel() {
         val ctx = secureStorage?.context ?: return
+        // An unavailable storage context cannot host models. In tests this
+        // also prevents a mocked Context from launching real network downloads.
+        if (ctx.filesDir == null || asrDownloadJob?.isActive == true || asrDownloadFailed) return
         val store = com.example.meowmba.core.audio.VoiceModelStore(ctx)
         if (store.asrReady()) {
             attachAsrEngine()
             if (shouldAlwaysOnMic()) startAlwaysOnListening()
             return
         }
-        viewModelScope.launch {
+        asrDownloadJob = viewModelScope.launch {
+            val owner = this
             _uiState.value = _uiState.value.copy(
                 captionText = "Getting always-on listening…",
             )
-            store.ensureAsr { _, label ->
-                viewModelScope.launch {
+            val result = store.ensureAsr { _, label ->
+                if (owner.isActive) owner.launch {
                     _uiState.value = _uiState.value.copy(captionText = label)
                 }
+            }
+            result.exceptionOrNull()?.let { failure ->
+                if (failure is kotlinx.coroutines.CancellationException) throw failure
+                // Do not re-enter startAlwaysOnListening -> requestAsrModel
+                // after a failed download, or the watchdog loops forever.
+                asrDownloadFailed = true
+                _uiState.value = _uiState.value.copy(captionText = "Voice model setup failed. Open Voice recognition to retry.")
+                return@launch
             }
             attachAsrEngine()
             if (shouldAlwaysOnMic() &&
@@ -3826,7 +3847,7 @@ class CompanionViewModel(
         }
     }
 
-    fun repairStreamingAsrModel() = requestAsrModel()
+    fun repairStreamingAsrModel() { asrDownloadFailed = false; requestAsrModel() }
 
     fun scanPhoneForModels() {
         val ctx = secureStorage?.context ?: return
@@ -5810,8 +5831,8 @@ class CompanionViewModel(
      */
     fun interrupt() {
         if (_uiState.value.interactionState != InteractionState.SPEAKING) return
-        supersedeResponseTurn()
         suppressSpeechFinished = true
+        supersedeResponseTurn() // Stops TTS once; suppress its callback first.
         // A barge-in during the wake ack consumes that turn: drop the pending
         // ack so its fallback timer cannot open a SECOND capture on top of the
         // one startListening below opens.
@@ -5820,7 +5841,6 @@ class CompanionViewModel(
             wakeAckListenJob?.cancel()
             wakeAckListenJob = null
         }
-        ttsManager?.stop()
         startListening(prompt = "Listening…")
     }
 
@@ -6717,6 +6737,9 @@ class CompanionViewModel(
             registeredAgentTools = agentToolRegistry?.definitions()?.map { it.id }?.toSet() ?: emptySet(),
         )
     }
+
+    fun openBusinessAgents() { _uiState.value = _uiState.value.copy(showBusinessAgents = true, showAgentsScreen = false) }
+    fun closeBusinessAgents() { _uiState.value = _uiState.value.copy(showBusinessAgents = false) }
 
     fun toggleProjectsScreen() {
         _uiState.value = _uiState.value.copy(showProjectsScreen = !_uiState.value.showProjectsScreen)
@@ -8325,6 +8348,7 @@ class CompanionViewModel(
         showBackgroundScreen = false,
         showNavScreen = false,
         showAgentsScreen = false,
+        showBusinessAgents = false,
         showProjectsScreen = false,
         showToolsScreen = false,
         showRobotScreen = false,

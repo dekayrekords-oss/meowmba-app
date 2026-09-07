@@ -74,6 +74,7 @@ object AgentRegistry {
             // orchestrator's check with "Meow isn't allowed to use vault.note.*".
             allowedTools = setOf(
                 "task.list",
+                "business.agents", "business.start", "business.jobs", "business.open",
                 "avatar.animate",
                 "avatar.describe_animation",
                 "vault.note.list",

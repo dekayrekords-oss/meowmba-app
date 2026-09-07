@@ -74,6 +74,7 @@ fun AgentsScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             // ── Agent roster ────────────────────────────────────────────────
+            BusinessAgentsLauncher()
             SectionTitle("Agents")
             Body("Tap an agent for its tools and task history. Tools ready means installed, not that accounts, permissions or hardware have been verified.")
             Spacer(modifier = Modifier.height(8.dp))

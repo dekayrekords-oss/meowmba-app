@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.meowmba.core.audio.AudioStreamingManager
 import com.example.meowmba.core.audio.SpeechService
@@ -104,6 +106,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching { com.example.meowmba.core.workflows.WorkflowRuntime.get(applicationContext).recover() }
+                .onFailure { android.util.Log.w("BusinessAgents", "Saved workflows could not be resumed; data was preserved") }
+        }
         enableEdgeToEdge()
         // Transparent window so the Godot face + glow float over wallpaper.
         // Keep the window touchable — FLAG_NOT_TOUCHABLE must never be set.
@@ -155,6 +161,7 @@ class MainActivity : ComponentActivity() {
                                 glassesController = com.example.meowmba.core.glasses.MetaGlassesController(this@MainActivity)
                             ).also {
                                 companionViewModel = it
+                                if (pendingBusinessAgents) { pendingBusinessAgents = false; it.openBusinessAgents() }
                                 // onResume often runs before first composition assigns
                                 // the VM — arm always-on / wake here so the face mic
                                 // is not left dead until the next resume.
@@ -420,8 +427,13 @@ class MainActivity : ComponentActivity() {
 
     /** Wake command arriving before the ViewModel exists (cold launch). */
     private var pendingWakeCommand: String? = null
+    private var pendingBusinessAgents = false
 
     private fun consumeWakeCommand(source: Intent?) {
+        if (source?.getBooleanExtra(com.example.meowmba.core.workflows.BusinessNotifications.OPEN_TEAM, false) == true) {
+            source.removeExtra(com.example.meowmba.core.workflows.BusinessNotifications.OPEN_TEAM)
+            companionViewModel?.openBusinessAgents() ?: run { pendingBusinessAgents = true }
+        }
         val command = source?.getStringExtra(WakeWordService.EXTRA_WAKE_COMMAND)
         if (command != null) {
             source.removeExtra(WakeWordService.EXTRA_WAKE_COMMAND)

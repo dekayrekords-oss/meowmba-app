@@ -30,7 +30,7 @@ class LocalVoiceTest {
         for (bad in listOf("../secret", "/etc/passwd", "kokoro/../../secret")) {
             assertThrows(IllegalArgumentException::class.java) { LocalVoicePack.safeEntry(root, bad) }
         }
-        assertEquals(File(root, "kokoro/model.onnx"), LocalVoicePack.safeEntry(root, "kokoro/model.onnx"))
+        assertEquals(File(root, "kokoro/model.onnx").canonicalFile, LocalVoicePack.safeEntry(root, "kokoro/model.onnx"))
     }
     @Test fun `failed app actions stay failures`() {
         for (message in listOf("I couldn't find Gmail on screen.", "No active window.", "Global action back failed.", "Found field but couldn't type into it."))

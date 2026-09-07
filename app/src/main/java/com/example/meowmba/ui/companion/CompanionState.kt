@@ -273,6 +273,7 @@ data class CompanionState(
     /** A tool call waiting for the user's explicit decision, if any. */
     val pendingApproval: ApprovalRequest? = null,
     val showAgentsScreen: Boolean = false,
+    val showBusinessAgents: Boolean = false,
     /** Tools registered in this installation; not a claim of live account/hardware access. */
     val registeredAgentTools: Set<String> = emptySet(),
     val showProjectsScreen: Boolean = false,
@@ -467,6 +468,7 @@ fun faceModeActive(state: CompanionState): Boolean =
         !state.showStudioScreen &&
         !state.showAssetBrowser &&
         !state.showAgentsScreen &&
+        !state.showBusinessAgents &&
         !state.showBackgroundScreen &&
         !state.showWeatherScreen &&
         !state.showNavScreen &&

@@ -11,6 +11,7 @@ import io.ktor.serialization.kotlinx.json.*
 import io.ktor.utils.io.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 
@@ -37,7 +38,7 @@ class RemoteModelProvider(
     } else {
         ApiStyle.OPENAI_COMPATIBLE
     }
-) : ModelProvider {
+) : ModelProvider, java.io.Closeable {
 
     enum class ApiStyle { OLLAMA, OPENAI_COMPATIBLE }
 
@@ -71,7 +72,8 @@ class RemoteModelProvider(
                 ApiStyle.OLLAMA -> streamOllama(prompt)
                 ApiStyle.OPENAI_COMPATIBLE -> streamOpenAI(prompt)
             }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e }
+        catch (e: Exception) {
             Log.w(TAG, "$name unreachable: ${e.message ?: "network error"}")
             emit(ModelResponse.Error("$name unreachable: ${e.message ?: "network error"}"))
         }
@@ -131,6 +133,8 @@ class RemoteModelProvider(
         }
         return result
     }
+
+    override fun close() { client.close() }
 
     /**
      * Health check used by the Hardware page's "Test connection" button.

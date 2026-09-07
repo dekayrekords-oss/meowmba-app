@@ -45,7 +45,12 @@ class AssetLibrary(val root: File) {
 
     fun ensureFolders() { folders.forEach { check(resolve(it).mkdirs() || resolve(it).isDirectory) } }
     fun entry(file: File): AssetEntry {
-        val path = file.relativeTo(root).invariantSeparatorsPath
+        // resolve() returns a canonical file; a platform root alias (macOS
+        // /tmp -> /private/tmp, or Android /data/data) must not become ../...
+        // when an imported/generated file is handed back to the browser.
+        // Keep the leaf path lexical so resolve() still rejects inner symlinks.
+        val base = if (file.absolutePath.startsWith(root.canonicalPath + File.separator)) root.canonicalFile else root
+        val path = file.relativeTo(base).invariantSeparatorsPath
         resolve(path)
         return AssetEntry(path, file.name, file.isDirectory, if (file.isFile) file.length() else 0, file.lastModified(),
             if (file.isDirectory) "Folders" else category(file.name))

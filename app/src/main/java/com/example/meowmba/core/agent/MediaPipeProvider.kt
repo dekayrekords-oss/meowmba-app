@@ -19,7 +19,8 @@ import java.util.concurrent.Executors
  */
 class MediaPipeProvider(
     private val context: Context,
-    private val modelPath: String
+    private val modelPath: String,
+    private val maxTokens: Int = 512,
 ) : ModelProvider {
 
     override val name: String = "Gemma (Local)"
@@ -50,12 +51,16 @@ class MediaPipeProvider(
             }.asCoroutineDispatcher()
     }
 
-    private val llmInference: LlmInference by lazy {
+    private val engineDelegate = lazy {
         val options = LlmInference.LlmInferenceOptions.builder()
             .setModelPath(modelPath)
-            .setMaxTokens(512)
+            .setMaxTokens(maxTokens)
             .build()
         LlmInference.createFromOptions(context, options)
+    }
+    private val llmInference: LlmInference by engineDelegate
+    suspend fun release() = withContext(inferenceDispatcher) {
+        if (engineDelegate.isInitialized()) llmInference.close()
     }
 
     override fun generateStreaming(prompt: String): Flow<ModelResponse> = callbackFlow {

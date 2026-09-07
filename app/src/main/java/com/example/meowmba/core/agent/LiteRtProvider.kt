@@ -86,9 +86,13 @@ class LiteRtProvider(
      * released. Safe to call when nothing is loaded.
      */
     fun release(): Boolean {
-        val e = synchronized(engineLock) { engines.remove(modelPath) } ?: return false
-        android.util.Log.i("LiteRt", "released on-device brain (freed the resident model)")
-        return runCatching { e.close(); true }.getOrDefault(false)
+        // A background worker can still be generating when the activity hides.
+        // Closing that shared engine would free native memory under a live call.
+        if (!sessionMutex.tryLock()) return false
+        return try {
+            val e = synchronized(engineLock) { engines.remove(modelPath) } ?: return false
+            runCatching { e.close(); true }.getOrDefault(false)
+        } finally { sessionMutex.unlock() }
     }
 
     /**
@@ -140,7 +144,11 @@ class LiteRtProvider(
         runCatching { engine() }
     }
 
-    override fun generateStreaming(prompt: String): Flow<ModelResponse> = flow {
+    override fun generateStreaming(prompt: String): Flow<ModelResponse> = stream(prompt, limitSentences = true)
+
+    private fun stream(prompt: String, limitSentences: Boolean, jsonSchema: String? = null): Flow<ModelResponse> = flow {
+        sessionMutex.lock()
+        try {
         if (!File(modelPath).exists()) {
             emit(ModelResponse.Error("Model file not found at $modelPath"))
             return@flow
@@ -153,8 +161,12 @@ class LiteRtProvider(
             samplerConfig = SamplerConfig(
                 topK = 40,
                 topP = 0.95,
-                temperature = 0.8,
+                temperature = if (limitSentences) 0.8 else 0.1,
             ),
+            automaticToolCalling = false,
+            maxOutputToken = if (limitSentences) 512 else 1536,
+            enableResponseFormat = jsonSchema != null,
+            thinkingConfig = if (limitSentences) null else com.google.ai.edge.litertlm.ThinkingConfig(enableThinking = false),
         )
 
         val conversation = try {
@@ -177,25 +189,26 @@ class LiteRtProvider(
             return@flow
         }
 
+        val accumulated = ModelTextAccumulator()
         var fullText = ""
         try {
-            conversation.sendMessageAsync(prompt).collect { message ->
+            conversation.sendMessageAsync(prompt,
+                responseFormat = jsonSchema?.let { com.google.ai.edge.litertlm.ResponseFormat.json(it) }
+            ).collect { message ->
                 val text = message.contents.contents
                     .filterIsInstance<Content.Text>()
                     .joinToString("") { it.text }
-                val delta = if (text.startsWith(fullText)) {
-                    text.removePrefix(fullText)
-                } else {
-                    text
-                }
-                fullText = text
-                if (delta.isNotEmpty()) {
-                    emit(ModelResponse.Partial(delta))
+                // LiteRT sends DELTAS, not cumulative transcripts. Replacing
+                // fullText with each chunk reduced a JSON answer to its final
+                // '}' on the Flip 6 and made every agent decision fail parsing.
+                fullText = accumulated.append(text)
+                if (text.isNotEmpty()) {
+                    emit(ModelResponse.Partial(text))
                 }
                 // litertlm 0.13.1 has no maxTokens, and uncapped Gemma rambles
                 // for half a minute of TTS. Voice answers stay conversational:
                 // stop generating after a few complete sentences.
-                if (SENTENCES.findAll(fullText).count() >= MAX_REPLY_SENTENCES) {
+                if (limitSentences && SENTENCES.findAll(fullText).count() >= MAX_REPLY_SENTENCES) {
                     throw ReplyCapException()
                 }
             }
@@ -213,13 +226,25 @@ class LiteRtProvider(
                 runCatching { conversation.close() }
             }
         }
+        } finally { sessionMutex.unlock() }
     }
 
     private class ReplyCapException : RuntimeException()
 
+    /** JSON/tool decisions must not be cut off after three prose sentences.
+     * The asynchronous native path also lets job cancellation stop generation. */
+    suspend fun generateStructured(prompt: String, jsonSchema: String = "{\"type\":\"object\"}"): ModelResponse {
+        var result: ModelResponse = ModelResponse.Error("No model response")
+        stream(prompt, limitSentences = false, jsonSchema = jsonSchema).collect { response ->
+            if (response is ModelResponse.Complete || response is ModelResponse.Error) result = response
+        }
+        return result
+    }
+
     private companion object {
         /** Guards all access to [engines] so build/release are atomic across instances. */
         val engineLock = Any()
+        val sessionMutex = kotlinx.coroutines.sync.Mutex()
 
         /** modelPath -> resident engine. Never grows beyond the models on disk. */
         val engines = java.util.concurrent.ConcurrentHashMap<String, Engine>()
@@ -271,7 +296,10 @@ class LiteRtProvider(
         // Suspends the whole (value-returning, non-flow) call off the main thread.
         // Engine init can block for seconds (see generateStreaming); unlike a flow,
         // a suspend value call has no emission-context invariant to violate.
-        withContext(Dispatchers.Default) { generateOffMain(prompt) }
+        withContext(Dispatchers.Default) {
+            sessionMutex.lock()
+            try { generateOffMain(prompt) } finally { sessionMutex.unlock() }
+        }
 
     private suspend fun generateOffMain(prompt: String): ModelResponse {
         val config = ConversationConfig(

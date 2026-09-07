@@ -1,5 +1,32 @@
 # Agent execution plan — immersive companion revision
 
+## September 7: standalone business-agent implementation
+
+User authorized implementation and extensive testing on the connected Flip 6.
+Active acceptance log: `docs/BUSINESS_AGENTS.md`.
+
+- Implemented: durable custom agents, delegation, tool grants, completion-proof
+  requirements, approvals, histories, local/cloud setup, MCP HTTP connections,
+  scheduling, notifications and chat/voice job controls.
+- Verified: 117 focused JVM checks, three explicitly configured local-AI runs,
+  and three operations-template WorkManager cases with force-stop/restart,
+  persisted approval, exact CSV total, one verified write and completion.
+  Varied totals: 25.25, 9.33, 5088.68; the third case changed column names and
+  status capitalization. A real local-model/Android MCP synthetic CRM workflow
+  passed after fixing named/typed arguments and adding pre-approval validation.
+  Dark creation, light approval-denial and failed-save/retry UI checks pass in
+  an Android emulator.
+  No business accounts have been connected or exercised.
+- Remaining gates: broader business-workload coverage; unlocked Flip
+  navigation/notifications/voice; authorized real-service workflows; final
+  source sync and preview handoff. Thermal cooldown waits are real constraints,
+  not permission to bypass safeguards or substitute a scripted model.
+- Full suite is not green: latest completed run 1,187 tests, 20 failed, 5 skipped.
+  Resolve/baseline-isolate existing voice/router/orb expectations and ViewModel
+  test lifetime failures before a Play release. No new business test failed.
+- Preserve the existing Play installation and data. Testing uses the separate
+  debug package, not a destructive uninstall or a Play upload.
+
 ## September 6: onboarding and Flip cover follow-up
 
 - Implemented cover avatar base surface and Flip-only setup help in AvatarScreen.

@@ -128,6 +128,15 @@ object AgentRouter {
                 "what are you working on", "show agent tasks")) {
             return AgentIntent("main", "task.list", emptyMap(), "list agent tasks")
         }
+        if (normalized in setOf("open business agents", "open my agent team", "show my agent team"))
+            return AgentIntent("main", "business.open", emptyMap(), "open business agents")
+        if (normalized in setOf("list business agents", "list my business agents"))
+            return AgentIntent("main", "business.agents", emptyMap(), "list business agents")
+        if (normalized in setOf("business job status", "show business jobs", "check business jobs"))
+            return AgentIntent("main", "business.jobs", emptyMap(), "check saved business jobs")
+        Regex("^(?:ask|run) business agent (.+?) to (.+)$", RegexOption.IGNORE_CASE).find(stripAddress(raw))?.let {
+            return AgentIntent("main", "business.start", mapOf("agent" to it.groupValues[1], "goal" to it.groupValues[2]), "queue business-agent goal")
+        }
         if (normalized in setOf("start remembering", "start remembering everything",
                 "remember everything", "keep track of everything", "start memory capture")) {
             return AgentIntent("memory", "memory.start_remembering", emptyMap(), "start remembering via MetaMemory")

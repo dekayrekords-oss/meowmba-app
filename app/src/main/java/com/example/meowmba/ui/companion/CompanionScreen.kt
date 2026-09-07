@@ -892,6 +892,10 @@ fun CompanionScreen(
             )
         }
 
+        if (uiState.showBusinessAgents) {
+            androidx.activity.compose.BackHandler { viewModel.closeBusinessAgents() }
+            BusinessAgentsScreen { viewModel.closeBusinessAgents() }
+        }
         if (uiState.showAgentsScreen) {
             AgentsScreen(
                 state = uiState,

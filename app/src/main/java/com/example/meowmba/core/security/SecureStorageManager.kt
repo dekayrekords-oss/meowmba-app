@@ -28,6 +28,18 @@ class SecureStorageManager(val context: Context) {
         return sharedPreferences.getString("api_key_$provider", null)
     }
 
+    /** Connection wizards call this off the main thread. Do not report a
+     * verified connection as saved until encrypted preferences reach disk. */
+    fun saveVerifiedApiKey(provider: String, key: String) {
+        check(sharedPreferences.edit().putString("api_key_$provider", key).commit()) { "Could not save the key securely; please retry" }
+        check(getApiKey(provider) == key) { "The saved key could not be verified" }
+    }
+
+    fun saveVerifiedEndpoint(provider: String, endpoint: String) {
+        check(sharedPreferences.edit().putString("endpoint_$provider", endpoint).commit()) { "Could not save the model selection; please retry" }
+        check(getEndpoint(provider) == endpoint) { "The saved selection could not be verified" }
+    }
+
     fun saveEndpoint(provider: String, url: String) {
         sharedPreferences.edit().putString("endpoint_$provider", url).apply()
     }
