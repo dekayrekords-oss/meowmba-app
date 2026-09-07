@@ -18,14 +18,20 @@ Active acceptance log: `docs/BUSINESS_AGENTS.md`.
   an Android emulator.
   No business accounts have been connected or exercised.
 - Remaining gates: broader business-workload coverage; unlocked Flip
-  navigation/notifications/voice; authorized real-service workflows; final
-  source sync and preview handoff. Thermal cooldown waits are real constraints,
+  navigation/notifications/voice; authorized real-service workflows. Thermal cooldown waits are real constraints,
   not permission to bypass safeguards or substitute a scripted model.
 - Full suite is not green: latest completed run 1,187 tests, 20 failed, 5 skipped.
   Resolve/baseline-isolate existing voice/router/orb expectations and ViewModel
   test lifetime failures before a Play release. No new business test failed.
 - Preserve the existing Play installation and data. Testing uses the separate
   debug package, not a destructive uninstall or a Play upload.
+- Handoff: implementation commit `c84fdc4` pushed and verified on Meow's
+  `feat/image-services-settings`. Final preview APK installed in place and its
+  on-phone SHA-256 matches the build artifact documented in BUSINESS_AGENTS.md.
+  Play package stays 1.3.27/code31; preview is 1.3.30/code34. Synthetic active
+  team fixtures were removed, histories preserved, no pending jobs left running.
+  The Flip still reports secure keyguard showing/input restricted; user unlock
+  is required for physical interaction acceptance. Do not mark all work done.
 
 ## September 6: onboarding and Flip cover follow-up
 

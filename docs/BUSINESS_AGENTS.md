@@ -161,6 +161,11 @@ Enqueueing is acknowledged as **queued**, never as goal completion.
 - Handoff APK: `Meowmba-Releases/meowmba-1.3.30-code34-business-preview.apk`
   on the build Mac. It is a debug preview, not an uploadable Play release.
   SHA-256 `47668e33919b7a9c13425bae48f6198313c4252c31104deeecfd00aecd51587d`.
+  Final on-phone `base.apk` hash matches. Code implementation `c84fdc4` is
+  pushed to Meow's `feat/image-services-settings`; no main merge or Play upload.
+  Temporary active QA agents were removed and job histories preserved. There
+  are no active business jobs left running. The local model selection remains
+  ready for the user to add the operations template or create their own agent.
 
 ## Reproducing the device checks
 
