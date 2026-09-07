@@ -115,7 +115,8 @@ class UtteranceCapture(
                     // Said something (final or still sitting in a partial), then
                     // stopped. Partials are the only record AiAi keeps on a hang
                     // — if we wait for a segment here the words are discarded.
-                    hasSpeech() && quiet >= silenceToFinishMs -> finish()
+                    hasSpeech() && quiet >= silenceToFinishMs &&
+                        (!engine.deliversFinalResults || segments.isNotEmpty()) -> finish()
                     // Never said anything at all.
                     !hasSpeech() && quiet >= initialSilenceMs ->
                         fail(SpeechRecognizer.ERROR_SPEECH_TIMEOUT)
@@ -153,6 +154,10 @@ class UtteranceCapture(
             segments += trimmed
             lastVoiceAt = now()
             _live.value = segments.joinToString(" ")
+        }
+        if (engine.deliversFinalResults && segments.isNotEmpty()) {
+            finish()
+            return
         }
         // Checked on completed sessions only. A partial can say "stop" on its way to
         // "stop by the store", and acting on that would cut the user off — which is the
@@ -242,6 +247,7 @@ class UtteranceCapture(
      * full utterance, not a duplicate.
      */
     private fun bankLivePartial(): Boolean {
+        if (engine.deliversFinalResults) return segments.isNotEmpty()
         val live = _live.value.trim()
         if (live.isEmpty()) return segments.isNotEmpty()
         val banked = segments.joinToString(" ").trim()

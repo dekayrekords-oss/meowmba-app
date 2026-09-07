@@ -63,6 +63,7 @@ class GeminiAsrEngine(
     private val model: () -> String = { AsrBackend.DEFAULT_GEMINI_MODEL },
     private val client: HttpClient = defaultClient,
 ) : SpeechEngine, SpeechAudioCapture {
+    override val deliversFinalResults = true
 
     override val isListening: StateFlow<Boolean> get() = local.isListening
     override val partialResults: StateFlow<String> get() = local.partialResults

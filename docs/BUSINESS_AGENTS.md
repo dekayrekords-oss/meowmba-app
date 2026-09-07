@@ -1,4 +1,13 @@
-# Phone-hosted business agents — 1.3.33 / code 37
+# Phone-hosted business agents — preview acceptance history
+
+Latest installed preview: **1.3.34/code38**, with bounded conversational context
+and final-transcript routing fixes. See AGENT_PLAN.md's context checkpoint.
+Full suite: 1,202 tests, zero failures/errors, five conditional skips.
+Actual Flip city lookup without location permission and Hugging Face DNS/HTTPS
+passed. APK SHA-256: `d1d59e7d868cf07b7ffebd8a9368f0f736be061b5deeaceeaa95754bfbfb4dfe`.
+Artifact: `Meowmba-Releases/meowmba-1.3.34-code38-context-preview.apk` on the Mac.
+The versioned 1.3.33 provenance below is the previous acceptance checkpoint,
+not the currently installed preview. The Play package remains unchanged.
 
 Status: implemented as a preview, undergoing connected Flip 6 acceptance. Do not describe
 this as an unrestricted desktop agent or a verified replacement for all business

@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.StateFlow
 
 /** Speech-to-text provider. */
 interface SpeechEngine {
+    /** Local endpointed engines deliver finals themselves; never execute their preview text. */
+    val deliversFinalResults: Boolean get() = false
     /** True while the recognizer is actively capturing audio. */
     val isListening: StateFlow<Boolean>
 

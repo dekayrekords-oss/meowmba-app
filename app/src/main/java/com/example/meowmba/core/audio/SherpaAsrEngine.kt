@@ -46,6 +46,7 @@ class SherpaAsrEngine(
      */
     private val bluetoothSco: Boolean = false,
 ) : SpeechEngine, SpeechAudioCapture {
+    override val deliversFinalResults = true
 
     /** True when a Bluetooth SCO audio device is connected right now. */
     fun bluetoothHeadsetConnected(): Boolean {

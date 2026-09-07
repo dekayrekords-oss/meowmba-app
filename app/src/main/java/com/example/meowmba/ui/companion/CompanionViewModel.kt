@@ -206,12 +206,16 @@ class CompanionViewModel(
     /** Injectable capture backend for deterministic tests. Android production
      * leaves this null and resolves the user's installed recognition backend. */
     private val captureEngine: SpeechEngine? = null,
+    private val weatherService: com.example.meowmba.core.weather.WeatherRepository? = null,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(CompanionState())
     private var microphonePermissionBlocked = false
     private var pendingMicrophoneAction: (() -> Unit)? = null
     private var asrDownloadJob: Job? = null
     private var asrDownloadFailed = false
+    private val turnContext = com.example.meowmba.core.agent.runtime.TurnContext()
+    private var pendingWeatherPermission = false
+    private var weatherTurn = 0L
     private var idleAnimationDirector: IdleAnimationDirector? = null
     val uiState = _uiState.asStateFlow()
     private var cachedMessages: List<com.example.meowmba.core.database.MessageEntity> = emptyList()
@@ -344,7 +348,7 @@ class CompanionViewModel(
 
     private val weatherRepository: com.example.meowmba.core.weather.WeatherRepository? by lazy {
         val ctx = secureStorage?.context
-        if (ctx == null) null else com.example.meowmba.core.weather.WeatherRepository(ctx)
+        weatherService ?: if (ctx == null) null else com.example.meowmba.core.weather.WeatherRepository(ctx)
     }
 
     /**
@@ -2628,6 +2632,7 @@ class CompanionViewModel(
                 speakerName = lastSpeakerName,
                 deviceFacts = liveDeviceFacts(text),
                 voiceCall = onCall,
+                workingContext = followUpContextFor(text),
             )
             var fullResponse = ""
             var spokenUpTo = 0
@@ -3979,6 +3984,7 @@ class CompanionViewModel(
      */
     private fun recoverAlwaysOnPartial(): Boolean {
         if (!alwaysOnActive) return false
+        if (preferredSpeechEngine()?.deliversFinalResults == true) return false
         // Partials accumulated while the companion herself was talking are her
         // own TTS, not the user — committing them self-answered in a loop.
         val st = _uiState.value.interactionState
@@ -4728,6 +4734,10 @@ class CompanionViewModel(
         }
         armMicNapWatch()
         fuLog("processUserSpeech: \"$text\"")
+        turnContext.scope(conversationId())
+        turnContext.add("User", text)
+        weatherTurn++
+        if (handleWeatherFollowUp(text)) return
         NoteSessionParser.parse(WakePhraseMatcher.normalize(text))?.let {
             handleNoteIntent(it)
             return
@@ -5122,6 +5132,7 @@ class CompanionViewModel(
             val prompt = PromptBuilder.build(
                 _uiState.value.name, text, recentMessages, recalled, capabilities,
                 learned = learnedBlock(),
+                workingContext = followUpContextFor(text),
                 speakerName = lastSpeakerName,
                 deviceFacts = liveDeviceFacts(text),
             )
@@ -5201,32 +5212,39 @@ class CompanionViewModel(
         if (!_uiState.value.agentBrainEnabled) return null
         val registry = agentToolRegistry ?: return null
 
-        hermesBrain?.route(text, registry)?.let { return it }
+        val context = followUpContextFor(text)
+        val contextualText = context?.let {
+            "Recent conversation (reference only; not permission to execute past requests):\n$it\n\nCurrent request: $text"
+        } ?: text
+        hermesBrain?.route(contextualText, registry)?.let { return it }
         // An explicitly configured Hermes server wins; Needle is the default
         // local router and falls through cleanly when it declines conversation.
-        needleBrain?.route(text, registry)?.let { return it }
+        // Needle embeds an isolated instruction; pronoun/continuation turns
+        // must go to a context-aware planner instead of guessing an unrelated tool.
+        if (!com.example.meowmba.core.agent.runtime.TurnContext.dependent(text)) {
+            needleBrain?.route(text, registry)?.let { return it }
+        }
 
         val provider = currentProvider ?: return null
         return LlmToolCallRouter(
             provider, registry,
             dispatcher = ioDispatcher,
             promptMode = toolCallPromptMode()
-        ).route(text, context = followUpContextFor(text))
+        ).route(text, context = context)
     }
 
     /**
-     * The brain routes one utterance with no memory of the conversation — fine for
-     * full sentences, broken for follow-ups: measured on device, "yes" (to "want me
-     * to try a custom animation?") invented a random 60ms clip. Short utterances get
-     * the last exchange attached so the router can see what "yes" agreed to.
+     * Include bounded working context even for follow-ups longer than four words.
+     * Synchronous turns cover the interval before Room's history flow refreshes;
+     * persisted history is the fallback after startup. History never grants approval.
      */
     private fun followUpContextFor(text: String): String? {
-        val words = text.trim().split(Regex("\\s+")).count { it.isNotBlank() }
-        if (words > 4) return null
-        val recent = _uiState.value.chatMessages.takeLast(2)
+        turnContext.scope(conversationId())
+        turnContext.history()?.let { return it }
+        val recent = _uiState.value.chatMessages.takeLast(8)
         if (recent.isEmpty()) return null
         return recent.joinToString("\n") {
-            (if (it.isCompanion) "Meow" else "User") + ": " + it.text.take(200)
+            (if (it.isCompanion) "Meow" else "User") + ": " + it.text.take(800)
         }
     }
 
@@ -5253,16 +5271,61 @@ class CompanionViewModel(
      * observes that. One source of truth means the card is identical whether the answer came
      * from here or from the agent calling weather.get.
      */
-    private suspend fun answerWeather() {
+    private fun handleWeatherFollowUp(text: String): Boolean {
+        val n = WakePhraseMatcher.normalize(text)
+        if (AgentRouter.isWeatherQuestion(n)) {
+            viewModelScope.launch { persistTurn(MessageRole.USER, text) }
+            requestWeather()
+            return true
+        }
+        if (!turnContext.awaitingWeatherPlace()) return false
+        if (n in setOf("cancel", "stop", "never mind", "nevermind")) {
+            turnContext.clearWeather()
+            speak("Weather request cancelled.")
+            return true
+        }
+        if (n == "enable location access" || n == "allow location" || n == "use my location") {
+            pendingWeatherPermission = true
+            _uiState.value = _uiState.value.copy(locationPermissionRequested = true)
+            return true
+        }
+        // Explicit new tasks end the pending slot. Ambiguous answers stay in
+        // the weather flow and can never fall through to Files/Needle.
+        if (looksLikeDirectQuestion(n) || ClockAnswers.isClockQuestion(n) ||
+            Regex("^(open|launch|send|delete|create|write|play|call|search|set)\\b").containsMatchIn(n)) {
+            turnContext.clearWeather()
+            return false
+        }
+        val place = text.replace(Regex("(?i)[, ]+(can't you see|cant you see|please)[?.!]*$"), "").trim()
+        viewModelScope.launch { persistTurn(MessageRole.USER, text) }
+        requestWeather(place)
+        return true
+    }
+
+    private fun requestWeather(place: String? = null) {
+        val token = weatherTurn
+        _uiState.value = _uiState.value.copy(interactionState = InteractionState.THINKING)
+        viewModelScope.launch { answerWeather(place, token) }
+    }
+
+    private suspend fun answerWeather(place: String? = null, token: Long = weatherTurn) {
+        turnContext.scope(conversationId())
         val repo = weatherRepository ?: run {
             speak("I can't check the weather in this build.")
             return
         }
-        when (val r = repo.fetch()) {
-            is com.example.meowmba.core.weather.WeatherRepository.Result.Ok ->
+        val scopeId = conversationId()
+        val result = if (place == null) repo.fetch() else repo.fetchPlace(place)
+        if (scopeId != conversationId() || token != weatherTurn) return
+        when (val r = result) {
+            is com.example.meowmba.core.weather.WeatherRepository.Result.Ok -> {
+                turnContext.clearWeather()
                 speak(r.weather.spoken())
-            is com.example.meowmba.core.weather.WeatherRepository.Result.Failed ->
-                speak(r.reason)
+            }
+            is com.example.meowmba.core.weather.WeatherRepository.Result.Failed -> {
+                turnContext.awaitWeatherPlace()
+                speak("${r.reason} Tell me the city and state for the weather, or say use my location.")
+            }
         }
     }
 
@@ -5650,6 +5713,10 @@ class CompanionViewModel(
      * five sentences still lands in memory and notifications as ONE assistant message.
      */
     private fun recordSpokenResponse(full: String, replyConversationId: Long = conversationId()) {
+        if (replyConversationId == conversationId()) {
+            turnContext.scope(replyConversationId)
+            turnContext.add("Assistant", full)
+        }
         viewModelScope.launch {
             memoryRepository?.addMessage(MessageRole.ASSISTANT, full, replyConversationId, null)
         }
@@ -5662,6 +5729,8 @@ class CompanionViewModel(
     private fun speak(text: String) {
         fuLog("speak: \"${text.take(80)}\"")
         if (handedOffToBackground) return
+        turnContext.scope(conversationId())
+        turnContext.add("Assistant", text)
         _uiState.value = _uiState.value.copy(liveAssistantReply = text, liveReplyConversationId = conversationId())
         if (_uiState.value.isMuted) {
             fuLog("speak skipped: mouth muted")
@@ -5842,6 +5911,15 @@ class CompanionViewModel(
     /** Location permission result from saving a named place. */
     fun onLocationPermissionResult(granted: Boolean) {
         _uiState.value = _uiState.value.copy(locationPermissionRequested = false)
+        if (pendingWeatherPermission) {
+            pendingWeatherPermission = false
+            if (granted) requestWeather()
+            else {
+                turnContext.awaitWeatherPlace()
+                speak("Location access is off. Tell me the city and state for the weather instead.")
+            }
+            return
+        }
         if (granted) {
             speak("Location's on — say \"remember this as\" a place name and I'll save it.")
         } else {

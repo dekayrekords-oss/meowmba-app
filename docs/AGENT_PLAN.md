@@ -1,5 +1,27 @@
 # Agent execution plan — immersive companion revision
 
+## September 7: conversational context follow-up — 1.3.34/code38
+
+- Fixed the observed weather → location reply → Files misroute. Weather holds
+  a city slot for three minutes; city replies use geocoding/weather, not the
+  generic tool router. Cancel and explicit topic changes end the slot. Location
+  permission denial keeps the city alternative; permission grant resumes weather.
+- Chat and tool planning receive up to eight bounded working messages in the
+  current conversation, without the old four-word follow-up cutoff. Referential
+  follow-ups bypass the stateless Needle lane. History is not action approval.
+- Local endpointed ASR no longer executes partial hypotheses through either the
+  always-on fallback or UtteranceCapture. Final/refined results win; legacy
+  recognizers retain partial recovery. New regression checks an incorrect
+  "open files" partial followed by a corrected clock question.
+- Full JVM: 1,202 tests, zero failures/errors, five conditional skips (1,197
+  passed). Physical diagnostic: Hugging Face DNS/HTTPS and actual New River,
+  Arizona geocoding/weather both passed (two tests, 2.119 seconds).
+- Installed only Meow Assistant Preview 1.3.34/code38. Play remains code31.
+  Artifact/evidence: Meowmba-Releases/meowmba-1.3.34-code38-context-preview.apk
+  and Meowmba-Releases/context-1.3.34-qa on the build Mac.
+  Repeated human-spoken context/latency testing remains open; this is not a
+  claim of unlimited memory or reliable operation of every tool/service.
+
 ## September 7: standalone business-agent implementation
 
 User authorized implementation and extensive testing on the connected Flip 6.

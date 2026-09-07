@@ -84,6 +84,7 @@ class VoicePipelineTest {
 
     /** Fake STT: records calls, lets tests push partials/finals/errors. */
     class FakeSpeechEngine : SpeechEngine {
+        override var deliversFinalResults = false
         override val isListening: StateFlow<Boolean> = MutableStateFlow(false)
         override val partialResults = MutableStateFlow("")
         override var isAvailable = true
@@ -171,6 +172,17 @@ class VoicePipelineTest {
         viewModel.onWakeDetected("what time is it")
         assertEquals(1, fakeTts.spokenTexts.size)
         assertTrue(fakeTts.spokenTexts.single().any { it.isDigit() })
+    }
+
+    @Test fun `endpointed engines do not execute partials before corrected final`() = pipelineTest {
+        fakeStt.deliversFinalResults = true
+        viewModel.onMicClick()
+        fakeStt.simulatePartial("open files")
+        advanceTimeBy(2_000); runCurrent()
+        assertTrue(fakeTts.spokenTexts.isEmpty())
+        fakeStt.simulateResult("what time is it")
+        runCurrent()
+        assertTrue(fakeTts.spokenTexts.last().any { it.isDigit() })
     }
 
     @Test

@@ -38,6 +38,24 @@ class WeatherRepository(private val context: Context) {
         data class Failed(val reason: String) : Result
     }
 
+    /** A spoken city needs no device-location grant. Never treat it as another tool request. */
+    @Suppress("DEPRECATION")
+    suspend fun fetchPlace(place: String): Result = withContext(Dispatchers.IO) {
+        if (place.length !in 2..160) return@withContext Result.Failed("Please give a city and state.")
+        try {
+            val matches = android.location.Geocoder(context).getFromLocationName(place, 2).orEmpty()
+            if (matches.size != 1) return@withContext Result.Failed(
+                "I couldn't identify one location for $place."
+            )
+            val match = matches.single()
+            if (!match.hasLatitude() || !match.hasLongitude())
+                return@withContext Result.Failed("That place has no coordinates.")
+            fetch(match.latitude, match.longitude)
+        } catch (e: Exception) {
+            Result.Failed("I couldn't look up that city.")
+        }
+    }
+
     /**
      * Fetches current conditions for the user's location, or [lat]/[lon] when given.
      *
