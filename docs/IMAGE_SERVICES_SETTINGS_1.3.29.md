@@ -79,6 +79,12 @@ changing Settings while a request runs cannot redirect that prompt to a new clou
 - Local privacy-policy sources were updated for optional Horde/Cloudflare prompt
   transmission and third-party retention. The hosted policy and Play declarations
   have not been published or changed by this task.
+- Signed release bundle build and vital lint passed. Bundle is 193,724,585 bytes;
+  SHA-256 `42b7f4dc0c9198211d2c0b556165d247c6552435eb42b787913f46f00a90b51b`.
+  Packaging verification found all required voice/image native libraries and all
+  three image JNI exports, with every native ELF LOAD segment 16 KiB aligned.
+  MWDAT is enabled; no Blender/GLB/GLTF model assets are packaged. This is artifact
+  validation, not a claim of runtime testing on a 16 KiB device.
 - This change does not install an app, clear data or submit to Google Play. Installation
   and device acceptance remain a separate approval gate. Before a public release,
   review store privacy/Data safety disclosures for the newly optional image services.
