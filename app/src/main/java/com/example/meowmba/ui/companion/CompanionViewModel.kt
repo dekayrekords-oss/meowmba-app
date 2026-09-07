@@ -209,6 +209,7 @@ class CompanionViewModel(
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(CompanionState())
     private var microphonePermissionBlocked = false
+    private var pendingMicrophoneAction: (() -> Unit)? = null
     private var asrDownloadJob: Job? = null
     private var asrDownloadFailed = false
     private var idleAnimationDirector: IdleAnimationDirector? = null
@@ -3368,16 +3369,26 @@ class CompanionViewModel(
     private fun canCaptureMicrophone(): Boolean = !microphonePermissionBlocked &&
         (secureStorage?.context?.let(::systemMicrophonePermissionGranted) ?: true)
 
+    private fun requestMicrophoneFor(action: () -> Unit) {
+        if (_uiState.value.microphonePermissionRequested) return
+        onMicrophonePermissionResult(false)
+        pendingMicrophoneAction = action
+        _uiState.value = _uiState.value.copy(microphonePermissionRequested = true)
+    }
+
     /** Permission denial is not a transient recognizer failure. Keep the user's
      * privacy toggle unchanged, but stop all retry paths until a grant/resume.
      * The Flip previously retried ERROR_INSUFFICIENT_PERMISSIONS every 2s while
      * its first-run permission dialog had not even been completed. */
     fun onMicrophonePermissionResult(granted: Boolean) {
+        val resume = pendingMicrophoneAction
+        pendingMicrophoneAction = null
+        _uiState.value = _uiState.value.copy(microphonePermissionRequested = false)
         microphonePermissionBlocked = !granted
         if (granted) {
             if (_uiState.value.captionText == speechErrorCaption(SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS))
                 _uiState.value = _uiState.value.copy(captionText = null)
-            updateVoiceListeningMode()
+            if (resume != null) resume() else updateVoiceListeningMode()
         } else {
             followUpJob?.cancel()
             wakeAckListenJob?.cancel()
@@ -4408,6 +4419,8 @@ class CompanionViewModel(
             return
         }
 
+        if (!canCaptureMicrophone()) { requestMicrophoneFor { onMicClick() }; return }
+
         when (_uiState.value.interactionState) {
             InteractionState.IDLE -> startListening()
             InteractionState.SPEAKING -> interrupt()
@@ -4429,13 +4442,13 @@ class CompanionViewModel(
      * face command, and does not close the drawer.
      */
     fun startDrawerVoiceSearch() {
-        if (!canCaptureMicrophone()) { onMicrophonePermissionResult(false); return }
         if (!_uiState.value.isMicEnabled) {
             _uiState.value = _uiState.value.copy(
                 captionText = "Microphone is off — tap an ear to re-enable",
             )
             return
         }
+        if (!canCaptureMicrophone()) { requestMicrophoneFor { startDrawerVoiceSearch() }; return }
         if (_uiState.value.interactionState == InteractionState.LISTENING) {
             utteranceCapture?.cancel()
             utteranceCapture = null
@@ -4882,6 +4895,10 @@ class CompanionViewModel(
         }
         if (SpeechIntents.isSpeedQuestion(normalizedTurn)) {
             answerHowFast()
+            return
+        }
+        if (ClockAnswers.isClockQuestion(normalizedTurn)) {
+            speak(ClockAnswers.answer(normalizedTurn, System.currentTimeMillis(), java.util.TimeZone.getDefault()))
             return
         }
         // Status about our own agents is tool evidence, not a question for a
@@ -5584,18 +5601,19 @@ class CompanionViewModel(
     }
 
     /** Embedding recall over the recent memory pool, honoring the pause flag. */
-    private suspend fun recallMemories(text: String): List<RecallResult> =
+    private suspend fun recallMemories(text: String): List<RecallResult> {
+        val repo = memoryRepository ?: return emptyList()
+        if (_uiState.value.memoryPaused) return emptyList()
         // 200 cosine-rank + embedding on the turn path: ran on Main and hitched
         // every reply while the DB grew. CPU work on Default, DB on IO.
-        withContext(kotlinx.coroutines.Dispatchers.Default) {
-            val repo = memoryRepository ?: return@withContext emptyList()
-            if (_uiState.value.memoryPaused) return@withContext emptyList()
+        return withContext(kotlinx.coroutines.Dispatchers.Default) {
             val candidates = withContext(ioDispatcher) { repo.getRecentMemories(200) }
                 ?: return@withContext emptyList()
             if (candidates.isEmpty()) return@withContext emptyList()
             val queryEmbedding = embedder.getEmbedding(text)
             RecallEngine.rank(queryEmbedding, text, candidates)
         }
+    }
 
     /**
      * Speaks one chunk of a streamed reply. [first] starts a new utterance (flushing
@@ -6096,7 +6114,8 @@ class CompanionViewModel(
                     // so the mic never sits dead after an ear tap. The stale
                     // "microphone is off" sentinel caption is cleared too.
                     _uiState.value = _uiState.value.copy(captionText = null)
-                    updateVoiceListeningMode()
+                    if (canCaptureMicrophone()) updateVoiceListeningMode()
+                    else requestMicrophoneFor { updateVoiceListeningMode() }
                 }
             }
             AvatarZone.EYE_LEFT, AvatarZone.EYE_RIGHT -> {
@@ -6155,6 +6174,7 @@ class CompanionViewModel(
             )
             return
         }
+        if (!canCaptureMicrophone()) { requestMicrophoneFor { startCallMode() }; return }
         _uiState.value = _uiState.value.copy(
             callMode = true,
             isChatExpanded = true,

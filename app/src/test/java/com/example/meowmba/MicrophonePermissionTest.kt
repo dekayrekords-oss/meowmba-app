@@ -15,6 +15,45 @@ import org.mockito.Mockito.*
 
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class MicrophonePermissionTest {
+    @Test fun explicitTapRequestsPermissionAndGrantResumesTheRequestedCapture() = runTest {
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+        val context = mock(Context::class.java)
+        val storage = mock(SecureStorageManager::class.java)
+        `when`(storage.context).thenReturn(context)
+        `when`(context.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO))
+            .thenReturn(PackageManager.PERMISSION_DENIED)
+        val stt = VoicePipelineTest.FakeSpeechEngine()
+        val vm = CompanionViewModel(speechService = stt, captureEngine = stt, secureStorage = storage)
+        try {
+            repeat(3) { vm.onMicClick() }
+            assertTrue(vm.uiState.value.microphonePermissionRequested)
+            assertEquals(0, stt.startListeningCalls)
+            `when`(context.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO))
+                .thenReturn(PackageManager.PERMISSION_GRANTED)
+            vm.onMicrophonePermissionResult(true)
+            assertFalse(vm.uiState.value.microphonePermissionRequested)
+            assertEquals(InteractionState.LISTENING, vm.uiState.value.interactionState)
+            assertEquals(1, stt.startListeningCalls)
+        } finally { vm.viewModelScope.cancel(); Dispatchers.resetMain() }
+    }
+
+    @Test fun denialDoesNotReopenPermissionPromptWithoutAnotherUserAction() = runTest {
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+        val vm = CompanionViewModel()
+        try {
+            vm.onMicrophonePermissionResult(false)
+            vm.onMicClick()
+            assertTrue(vm.uiState.value.microphonePermissionRequested)
+            vm.onMicrophonePermissionResult(false)
+            advanceTimeBy(10_000); runCurrent()
+            assertFalse(vm.uiState.value.microphonePermissionRequested)
+            vm.reclaimWakeMicForForeground()
+            assertFalse(vm.uiState.value.microphonePermissionRequested)
+            vm.onMicClick()
+            assertTrue(vm.uiState.value.microphonePermissionRequested)
+        } finally { vm.viewModelScope.cancel(); Dispatchers.resetMain() }
+    }
+
     @Test fun interruptWithMissingLocalRecognizerDoesNotStayStuckSpeaking() = runTest {
         Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
         val tts = VoicePipelineTest.FakeSpeechSynthesizer()
@@ -65,6 +104,7 @@ class MicrophonePermissionTest {
             assertEquals(InteractionState.IDLE, vm.uiState.value.interactionState)
             assertTrue(vm.uiState.value.captionText.orEmpty().contains("Microphone permission is off"))
             assertTrue(vm.uiState.value.isMicEnabled)
+            vm.onMicrophonePermissionResult(false) // dismiss the last explicit request
             vm.openBusinessAgents() // no capture should start when permission returns over a tool page
             vm.onMicrophonePermissionResult(true)
             assertNull(vm.uiState.value.captionText)

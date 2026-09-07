@@ -337,6 +337,7 @@ data class CompanionState(
     /** Keep listening for the wake phrase in the background (foreground service). */
     val backgroundListeningEnabled: Boolean = false,
     /** Vision: set when a look request needs the CAMERA runtime permission. */
+    val microphonePermissionRequested: Boolean = false,
     val cameraPermissionRequested: Boolean = false,
     /** Locations: set when saving a named place needs location permission. */
     val locationPermissionRequested: Boolean = false,

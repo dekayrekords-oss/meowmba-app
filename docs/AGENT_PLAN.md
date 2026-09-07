@@ -16,16 +16,21 @@ Active acceptance log: `docs/BUSINESS_AGENTS.md`.
   passed after fixing named/typed arguments and adding pre-approval validation.
   Dark creation, light approval-denial and failed-save/retry UI checks pass in
   an Android emulator.
-  Follow-up: physical Flip local-agent creation/readback passed in its
-  test-only activity above keyguard. MainActivity navigation is still gated.
+  Unlocked follow-up: all three UI checks pass on the physical Flip, including
+  light-theme denial and failed-save/retry. MainActivity navigation and actual
+  notification taps from cold and warm processes also pass. Exact synthetic
+  write arguments were shown and Deny prevented both writes.
   Microphone-denial retry prevention and startup-download lifetime fixes pass
   86 focused checks; an installed denied-permission observation showed no
-  repeated capture/error loop. Real speech is not yet signed off.
+  repeated capture/error loop. Code 37 also requests audio permission on an
+  explicit voice action and resumes that action after grant. The actual Flip
+  permission dialog and Sherpa capture startup pass. Human-spoken input and
+  audible response are still awaiting user participation, not signed off.
   No business accounts have been connected or exercised.
-- Remaining gates: broader business-workload coverage; unlocked Flip
-  navigation/notifications/voice; authorized real-service workflows. Thermal cooldown waits are real constraints,
+- Remaining gates: broader business-workload coverage; real spoken Flip voice
+  round trips; authorized real-service workflows. Thermal cooldown waits are real constraints,
   not permission to bypass safeguards or substitute a scripted model.
-- Full-suite gate resolved: 1,195 tests, 0 failures, 5 conditional no-SDK skips
+- Full-suite gate resolved: 1,197 tests, 0 failures, 5 conditional no-SDK skips
   in the MWDAT-enabled build. Corrected obsolete capture/provider/orb fixtures
   and real-network/lifetime contamination. Also fixed real status questions
   bypassing task tools, late preambles overwriting completed results, and
@@ -33,15 +38,17 @@ Active acceptance log: `docs/BUSINESS_AGENTS.md`.
   Green JVM tests do not replace the remaining physical/account acceptance.
 - Preserve the existing Play installation and data. Testing uses the separate
   debug package, not a destructive uninstall or a Play upload.
-- Handoff: implementation commit `c84fdc4` pushed and verified on Meow's
+- Handoff: implementation is maintained on Meow's
   `feat/image-services-settings`. Final preview APK installed in place and its
   on-phone SHA-256 matches the build artifact documented in BUSINESS_AGENTS.md.
-  Play package stays 1.3.27/code31; preview is 1.3.32/code36. Synthetic active
+  Play package stays 1.3.27/code31; preview is 1.3.33/code37. Synthetic active
   team fixtures were removed, histories preserved, no pending jobs left running.
-  The Flip still reports secure keyguard showing/input restricted; user unlock
-  is required for physical interaction acceptance. Do not mark all work done.
+  The user unlocked the Flip and physical interaction progressed. Do not mark
+  all work done while the spoken/account acceptance gates remain.
   Temporary stay-awake-while-charging has been restored to its original 0;
-  the follow-up observed 39.3°C and did not run another model workload.
+  the unlocked follow-up reached 38.2°C and did not run another local planning
+  workload. Physical screenshots and the full suite XML are preserved in
+  `Meowmba-Releases/business-agents-1.3.33-qa/` on the build Mac.
 
 ## September 6: onboarding and Flip cover follow-up
 

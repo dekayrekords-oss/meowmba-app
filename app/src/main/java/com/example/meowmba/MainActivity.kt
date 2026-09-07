@@ -72,6 +72,10 @@ class MainActivity : ComponentActivity() {
         granted[Manifest.permission.CAMERA]?.let { companionViewModel?.onCameraPermissionResult(it) }
     }
 
+    private val microphonePermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted -> companionViewModel?.onMicrophonePermissionResult(granted) }
+
     private val cameraPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
@@ -210,6 +214,14 @@ class MainActivity : ComponentActivity() {
                     }
                     onDispose {
                         window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    }
+                }
+
+                // Ask only for microphone access after an explicit voice action,
+                // including when the user chose Explore first during setup.
+                androidx.compose.runtime.LaunchedEffect(uiState.microphonePermissionRequested) {
+                    if (uiState.microphonePermissionRequested) {
+                        microphonePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                     }
                 }
 

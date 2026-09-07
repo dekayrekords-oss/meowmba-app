@@ -167,12 +167,10 @@ class VoicePipelineTest {
     }
 
     @Test
-    fun `wake word with command goes straight to thinking and answers`() = pipelineTest {
+    fun `wake word clock question uses the device clock without a chat model`() = pipelineTest {
         viewModel.onWakeDetected("what time is it")
-        assertEquals(InteractionState.THINKING, viewModel.uiState.value.interactionState)
-        advanceUntilIdle() // run the mock response pipeline past its thinking delay
-        // No provider configured: the mock pipeline still answers out loud
         assertEquals(1, fakeTts.spokenTexts.size)
+        assertTrue(fakeTts.spokenTexts.single().any { it.isDigit() })
     }
 
     @Test
@@ -275,6 +273,9 @@ class VoicePipelineTest {
 
     @Test
     fun `recognizer stays live during playback without echo interrupting`() = pipelineTest {
+        // Avoid the rotating greeting's "hey" variant, which is deliberately
+        // an explicit wake override. This test isolates ordinary echo.
+        com.example.meowmba.core.agent.runtime.GreetingAnswers.resetVariantCounter(2)
         // Companion answers; the SelfVoiceFilter is now tracking its utterance
         viewModel.onUserTextSubmitted("hi")
         advanceUntilIdle()
@@ -304,9 +305,8 @@ class VoicePipelineTest {
     @Test
     fun `background wake command routes through the normal pipeline`() = pipelineTest {
         viewModel.onExternalWakeCommand("what time is it")
-        assertEquals(InteractionState.THINKING, viewModel.uiState.value.interactionState)
-        advanceUntilIdle()
         assertEquals(1, fakeTts.spokenTexts.size)
+        assertTrue(fakeTts.spokenTexts.single().any { it.isDigit() })
     }
 
     @Test

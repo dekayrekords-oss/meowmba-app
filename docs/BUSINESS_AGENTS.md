@@ -1,4 +1,4 @@
-# Phone-hosted business agents — 1.3.32 / code 36
+# Phone-hosted business agents — 1.3.33 / code 37
 
 Status: implemented as a preview, undergoing connected Flip 6 acceptance. Do not describe
 this as an unrestricted desktop agent or a verified replacement for all business
@@ -68,6 +68,11 @@ different systems; chat/voice can enqueue and inspect the durable jobs.
 - Agent-status questions use actual task/job tools before generic chat routing.
   An immediately completed tool result is not overwritten by an "is on it"
   preamble. Task listings exclude the task that is listing them.
+- An explicit mic, voice-search, call or microphone-enable action requests
+  RECORD_AUDIO alone and resumes that action after a grant. Denial does not
+  reopen the permission prompt automatically. This also works after choosing
+  Explore first in onboarding. Clock questions use the device clock before
+  generic chat routing, without loading a conversational model.
 
 ## Getting started
 
@@ -191,12 +196,47 @@ Enqueueing is acknowledged as **queued**, never as goal completion.
   workload was run. Temporary stay-awake-while-charging was restored to its
   original value 0. Keyguard remains a physical acceptance blocker.
 
+### Unlocked Flip follow-up — September 7, 1.3.33
+
+- The user unlocked the physical Flip. MainActivity navigation to the team
+  screen passed. All three `BusinessAgentUiTest` checks passed again on code
+  37 in 4.731 seconds: local agent creation/readback, light-theme exact
+  approval/denial without a write, and failed-save entry retention/retry.
+  Light/dark screenshots were pulled and visually inspected.
+- Real Android notification taps opened MainActivity's team screen from both
+  a cold process and a warm process (warm PID 25310 remained unchanged).
+  Each displayed the actual persisted synthetic `files.write` arguments;
+  tapping Deny produced BLOCKED/DENIED and no output file. Separate device
+  assertions verified denial and cleaned up each fixture, preserving history.
+  This uses a deterministic fixture brain, not an additional local-AI run.
+- The initial notification fixture assertion raced Android's asynchronous
+  delivery, although its actual notification appeared. The test now polls
+  for up to five seconds; the corrected prepare check passed. The failed
+  initial assertion is not counted as a pass.
+- After Explore first, tapping the microphone displayed the native audio-only
+  permission prompt. Selecting While using the app changed the avatar to
+  listening; native logs show Sherpa ASR loaded and capture began in PID 26080.
+  A silence timeout is recorded, not an insufficient-permission retry loop.
+  A human-spoken transcript, correct tool result and audible response remain
+  pending user participation; permission and capture startup alone do not
+  prove the speech round trip. Kokoro is not installed in this preview;
+  the currently connected synthesizer is Android system TTS.
+- Full regression: **1,197 tests, 0 failures/errors, 5 conditional skips**
+  (1,192 passed). The skips remain the MWDAT no-SDK variant tests. Added
+  explicit mic-request/grant/denial regressions; corrected clock routing and
+  an order-dependent rotating-greeting echo fixture.
+- Evidence: `Meowmba-Releases/business-agents-1.3.33-qa/` on the build Mac.
+  No real business account or external customer action was used. The fixture
+  checkpoint and synthetic active team/jobs were removed. The phone reached
+  38.2°C during UI/voice work; no new local planning workload was run.
+  Temporary stay-awake-while-charging was restored and verified as 0.
+
 ## Device/build provenance
 
 - Test device: Samsung Galaxy Z Flip 6, SM-F741U.
 - Play package `com.meow.meowmba` remains 1.3.27 / code 31, unchanged.
 - Side-by-side debug package `com.example.meowmba`: **Meow Assistant Preview**,
-  1.3.32 / code 36, signed with
+  1.3.33 / code 37, signed with
   Meow's debug certificate. SDK enabled. Voice/KWS/VAD assets included.
 - Debug-only JNI reuse from the previous 1.3.29 APK; no bridge source changes.
   Release builds explicitly reject `prebuiltDebugNativeDir`.
@@ -206,11 +246,11 @@ Enqueueing is acknowledged as **queued**, never as goal completion.
   `b3ca0d2f076785a8f4b2219ddbd2bdb99954eae1`, 2,588,147,712 bytes.
   SHA-256 `181938105e0eefd105961417e8da75903eacda102c4fce9ce90f50b97139a63c`
   verified on the Mac and after transfer into the debug app's private storage.
-- Handoff APK: `Meowmba-Releases/meowmba-1.3.32-code36-business-preview.apk`
+- Handoff APK: `Meowmba-Releases/meowmba-1.3.33-code37-business-preview.apk`
   on the build Mac. It is a debug preview, not an uploadable Play release.
-  SHA-256 `7e86e40c3090cb591b9ac158114c0edab7d0be96a3a82ae9cc46daeb6b4b46c3`.
-  Final on-phone `base.apk` hash matches. Code implementation `c84fdc4` is
-  pushed to Meow's `feat/image-services-settings`; no main merge or Play upload.
+  SHA-256 `67ddf16fb3ee6431c6746bb47de52f5c855642c916cea05e589884d2033bca02`.
+  Final on-phone `base.apk` hash matches. Source is maintained on Meow's
+  `feat/image-services-settings`; no main merge or Play upload.
   Temporary active QA agents were removed and job histories preserved. There
   are no active business jobs left running. The local model selection remains
   ready for the user to add the operations template or create their own agent.
@@ -226,8 +266,13 @@ com.example.meowmba.test/androidx.test.runner.AndroidJUnitRunner`.
 Optional prepare parameters are `amountB`, `amountC`, `amountColumn` and
 `statusColumn`; expected totals are computed independently with BigDecimal.
 `BusinessMcpDeviceTest` hosts its own loopback-only synthetic service.
-`BusinessAgentUiTest` requires an unlocked display; it passed on a scratch
-Android emulator. The existing Play app and its data must remain untouched.
+`BusinessAgentUiTest` requires an unlocked display and now passes on both a
+scratch emulator and the physical Flip. For real notification taps, run
+`BusinessNotificationDeviceTest#prepareApprovalNotification`, tap the posted
+notification, inspect the exact arguments and tap Deny, then run
+`#verifyDeniedAndCleanUp`. Keep the latter cleanup paired with preparation;
+do not leave synthetic approvals behind. The existing Play app and its data
+must remain untouched.
 
 ## Boundaries
 
@@ -238,8 +283,8 @@ no real mail, financial transaction, or customer data was used. Cross-app
 automation still depends on Android permissions and supported app surfaces.
 No Play release has been submitted for this business-agent preview.
 
-Remaining acceptance gates: broader varied business-workload coverage, unlocked Flip
-navigation/notifications/real speech, and account-authorized MCP service workflows. Browser
+Remaining acceptance gates: broader varied business-workload coverage, real
+spoken Flip speech round trips, and account-authorized MCP service workflows. Browser
 OAuth, arbitrary control of every installed app, and desktop-equivalent 24/7
 local compute are not claimed.
 
