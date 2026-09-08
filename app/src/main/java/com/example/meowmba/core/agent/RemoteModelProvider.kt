@@ -134,6 +134,27 @@ class RemoteModelProvider(
         return result
     }
 
+    /** Use the model's real tool-calling protocol for controller decisions.
+     * One proposed action is returned as JSON; this never executes a tool. */
+    suspend fun generateToolDecision(prompt: String, schema: String): ModelResponse {
+        if (style != ApiStyle.OPENAI_COMPATIBLE) return generate(prompt)
+        if (apiKey.isNullOrBlank()) return ModelResponse.Error("No API key configured for $name — complete Your AI setup")
+        return try {
+            val response = client.post("$normalizedBase/v1/chat/completions") {
+                header(HttpHeaders.Authorization, "Bearer $apiKey")
+                header("HTTP-Referer", "https://meowmba.local")
+                header("X-Title", "MEOWMBA")
+                contentType(ContentType.Application.Json)
+                setBody(toolDecisionBody(model, prompt, schema).toString())
+                timeout { requestTimeoutMillis = 60_000; socketTimeoutMillis = 60_000 }
+            }
+            val body = response.bodyAsText()
+            if (!response.status.isSuccess()) ModelResponse.Error("$name HTTP ${response.status.value}: ${StreamParsers.extractApiErrorMessage(body)}")
+            else parseToolDecision(body)
+        } catch (e: CancellationException) { throw e }
+        catch (e: Exception) { ModelResponse.Error("$name planning failed: ${e.message ?: "network error"}") }
+    }
+
     override fun close() { client.close() }
 
     /**
@@ -170,8 +191,29 @@ class RemoteModelProvider(
     } catch (e: Exception) {
         "Unreachable: ${e.message ?: "network error"}"
     }
-    private companion object {
+    companion object {
         const val TAG = "RemoteModel"
+        internal fun toolDecisionBody(model: String, prompt: String, schema: String): JsonObject = buildJsonObject {
+            put("model", model); put("stream", false); put("max_tokens", 900)
+            putJsonArray("messages") { add(buildJsonObject { put("role", "user"); put("content", prompt) }) }
+            putJsonArray("tools") { add(buildJsonObject {
+                put("type", "function")
+                putJsonObject("function") { put("name", "next_phone_action"); put("description", "Propose one next action; execution is handled by the phone after validation."); put("parameters", Json.parseToJsonElement(schema)) }
+            }) }
+            putJsonObject("tool_choice") { put("type", "function"); putJsonObject("function") { put("name", "next_phone_action") } }
+            put("parallel_tool_calls", false)
+        }
+        internal fun parseToolDecision(body: String): ModelResponse = runCatching {
+            val message = Json.parseToJsonElement(body).jsonObject["choices"]!!.jsonArray.first().jsonObject["message"]!!.jsonObject
+            val calls = message["tool_calls"]?.jsonArray ?: error("Model did not return a tool action; choose a tool-capable model")
+            check(calls.size == 1) { "Model returned multiple actions; nothing executed" }
+            val function = calls.single().jsonObject["function"]!!.jsonObject
+            check(function["name"]?.jsonPrimitive?.content == "next_phone_action") { "Unexpected tool name; nothing executed" }
+            val args = function["arguments"]!!.jsonPrimitive.content
+            check(args.length <= 16_000) { "Action was too large" }
+            check(PhoneAgentLoop.parseAction(args) != null) { "Invalid phone action" }
+            ModelResponse.Complete(args)
+        }.getOrElse { ModelResponse.Error(it.message ?: "Invalid planning reply") }
     }
 }
 

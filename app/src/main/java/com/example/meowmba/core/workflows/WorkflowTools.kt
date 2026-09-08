@@ -9,6 +9,7 @@ object WorkflowTools {
     fun local(root: File): ToolRegistry {
         val workspace = Workspace(root)
         return ToolRegistry().apply {
+            WorkflowDrafts.register(this, root)
             register(action("files.list", "List business files", mapOf("path" to "string")) { args ->
                 val dir = if (args["path"].isNullOrBlank()) root else workspace.resolve(args.getValue("path"))
                 require(dir?.isDirectory == true) { "Folder not found" }

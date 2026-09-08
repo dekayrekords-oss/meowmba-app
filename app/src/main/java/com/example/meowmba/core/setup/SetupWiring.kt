@@ -54,7 +54,7 @@ object SetupWiring {
     val BRAIN_PROVIDERS: List<BrainProvider> = listOf(
         BrainProvider(
             id = "local",
-            name = "Run on this phone (Needle 2 actions)",
+            name = "Run a conversation model on this phone",
             path = Path.LOCAL,
             getKeyUrl = null,
             defaultModel = "local",
@@ -134,8 +134,11 @@ object SetupWiring {
         val id = s.getPreference(PREF_BRAIN_PROVIDER) ?: return false
         val p = brainProvider(id) ?: return false
         return when (p.path) {
-            Path.LOCAL -> true
-            else -> !s.getApiKey(id).isNullOrBlank()
+            Path.LOCAL -> s.getEndpoint("local")?.let { path ->
+                java.io.File(path).isFile && (path.endsWith(".task") || path.endsWith(".litertlm")) &&
+                    s.getPreference("planner_verified_local") == path
+            } == true
+            else -> !s.getApiKey(id).isNullOrBlank() && s.getPreference("planner_verified_$id") == PlannerReadiness.cloudStamp(s.getModelName(id), s.getApiKey(id))
         }
     }
 

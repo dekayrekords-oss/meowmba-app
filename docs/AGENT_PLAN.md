@@ -1,5 +1,64 @@
 # Agent execution plan — immersive companion revision
 
+## September 7: cross-device control — 1.3.40/code44
+
+Implemented and installed as a preview. Follow `CROSS_DEVICE_CONTROL_2026-09-07.md`
+for measured evidence and outstanding device acceptance. No subagents were used
+for this increment; older worker preferences below are historical scope.
+
+- Phone-control work: native function-calling OpenRouter planner; stale frame
+  detection; indexed text fields; explicit no-type/no-send limits; existing
+  final social confirmation and sensitive-action handoff preserved.
+- Brain/setup work: encrypted-key onboarding with live tool-model filtering;
+  list installed brains and approve/verify a change before persistence.
+- Bluetooth work: paired inventory and Android setup navigation, not arbitrary
+  BLE protocol control or a claim that paired devices are connected.
+- Computer work: preserved code-based pairing; macOS bounded accessible UI
+  adapter; each action approved through the orchestrator; one parent goal to
+  avoid starving its child task. Native OS permission remains ungranted here.
+- Blender work: trusted primitive-scene JSON adapter and real exports, separate
+  from all paused avatar/model incorporation. No generated Python executor.
+- Acceptance work: 1,248 JVM/Compose tests (0 failures/errors; 5 skips), 14 Python
+  tests, device inventory/config retention, actual Blender render/export.
+  Reddit's first local-model run exposed a stopping-point/index bug, now fixed
+  in code44. Its final run is blocked until Accessibility is reconnected after
+  instrumentation. `openrouter/free` failed readiness; Gemma4 31B free returned
+  HTTP429. Local selection was preserved; no paid model enabled. Computer pairing/OS grants and physical
+  Bluetooth connection still need owner setup and acceptance.
+
+Meow became reachable again; fetch succeeded and did not reveal newer branch
+work. No remote push or Play upload was performed in this increment.
+
+## September 7: phone planning and business workflow upgrade — 1.3.38/code42
+
+Current implementation is in `PHONE_PLANNING_2026-09-07.md`. No changes to paused
+Blender/3D work. Preserve the thermal fixes and user's existing data/configuration.
+
+- Navigation owner: compound-goal routing, installed-app resolution, stable
+  Accessibility indexing, explicit task approval and single-use social-action
+  verification. Payments, deletion and permission grants remain manual.
+- Context owner: bounded restored/live history, role normalization, pronoun
+  planning and conservative broadcast-audio clarification. No claim of speaker ID.
+- Setup owner: local download/progress/verification, explicit cloud consent,
+  live tool-capable model catalog, tested encrypted keys, no silent local-to-cloud fallback.
+- Workflow owner: 30 searchable starter recipes, bounded executive team,
+  persistent source/event-keyed draft outbox. Existing checkpoint, cancellation,
+  delegation, approval and thermal controls remain authoritative.
+- Acceptance owner: JVM/Compose tests; real local-model planning and delegated
+  file workflow on the connected Fold. Normal-app Facebook composer and exact
+  `meow ai test` draft passed; no publication. Verify confirmation cancellation
+  and positive delivery separately, with explicit human final approval.
+  USB disconnected before the final exact-label/compound-routing refinement
+  installation; the latest APK is archived locally and must be installed after
+  reconnecting. See the evidence file for installed versus pending APK hashes.
+- Pending service work: actual email/signup connector setup, real-event polling
+  and deduplication, explicit unattended-reply policy, idempotent delivery and
+  reconciliation, Android overnight reliability. These are not completed by a
+  starter prompt or by installing the Gmail app.
+
+Meow's git remote was unreachable during this turn. Do not claim remote sync,
+Play publication, overnight reliability, or fully autonomous business operations.
+
 ## September 7: thermal optimization — 1.3.37/code41
 
 Implemented cached analytic glows, lifecycle/occlusion-aware background clocks,

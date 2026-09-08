@@ -74,6 +74,7 @@ object AgentRegistry {
             // orchestrator's check with "Meow isn't allowed to use vault.note.*".
             allowedTools = setOf(
                 "task.list",
+                "brain.models", "brain.select_model",
                 "business.agents", "business.start", "business.jobs", "business.open",
                 "avatar.animate",
                 "avatar.describe_animation",
@@ -138,7 +139,7 @@ object AgentRegistry {
         AgentDefinition(
             id = "computer", name = "Bridge",
             purpose = "Controls paired computers through the desktop bridge.",
-            allowedTools = setOf("desktop.write_file", "desktop.run_build", "desktop.run_script", "desktop.control")
+            allowedTools = setOf("desktop.write_file", "desktop.run_build", "desktop.run_script", "desktop.control", "desktop.run_goal", "desktop.blender_scene")
         ),
         AgentDefinition(
             id = "phone", name = "Paws",
@@ -149,13 +150,14 @@ object AgentRegistry {
                 "phone.dnd", "phone.battery", "phone.set_volume", "phone.take_photo",
                 "phone.compose_sms", "phone.dial_call", "phone.media_control", "phone.set_brightness",
                 "phone.cleanup",
+                "phone.bluetooth_devices", "phone.bluetooth_setup",
             )
         ),
         AgentDefinition(
             id = "phone_control", name = "Claw",
             purpose = "Operates accessible app screens through taps, typing and navigation. Requires Accessibility and a working model; some app screens cannot be controlled.",
             allowedTools = setOf(
-                "ui.automate", "phone.launch_app", "phone.list_apps"
+                "ui.automate", "phone.launch_app", "phone.list_apps", "phone.run_goal"
             ),
             maxConcurrentTasks = 1
         ),

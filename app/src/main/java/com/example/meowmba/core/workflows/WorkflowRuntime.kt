@@ -69,7 +69,11 @@ class WorkflowRuntime private constructor(context: Context) {
             val run = BusinessRun(agentId = agent.id, goal = "Test structured output. Return blocked with summary Model ready.")
             val decision = kotlinx.coroutines.withTimeout(90_000) { brain.decide(agent, run.frames.first(), run, emptyList(), emptyList()) }
             check(decision.action == "blocked" && decision.summary.isNotBlank()) { "Model did not return a valid structured decision" }
-            withContext(Dispatchers.IO) { storage.saveVerifiedEndpoint("local", path) }
+            com.example.meowmba.core.setup.PlannerReadiness.verify(checkNotNull(provider))
+            withContext(Dispatchers.IO) {
+                storage.saveVerifiedEndpoint("local", path)
+                storage.savePreference("planner_verified_local", path)
+            }
         } finally { testingLocalPath = null; releaseModel() }
     }
     fun coolEnough(): Boolean {

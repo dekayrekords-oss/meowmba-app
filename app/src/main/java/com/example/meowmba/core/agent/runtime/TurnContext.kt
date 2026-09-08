@@ -14,6 +14,16 @@ class TurnContext(private val now: () -> Long = System::currentTimeMillis) {
         while (turns.size > 8) turns.removeFirst()
     }
     fun history(): String? = turns.takeIf { it.isNotEmpty() }?.joinToString("\n") { "${it.first}: ${it.second}" }
+    fun historyWith(persisted: List<Pair<String, String>>): String? {
+        fun canonical(turn: Pair<String, String>) = (if (turn.first in setOf("Meow", "Assistant")) "Assistant" else turn.first) to turn.second.take(800)
+        val saved = persisted.takeLast(16).map(::canonical)
+        val live = turns.map(::canonical)
+        // Room may lag behind live speech. Merge at the largest overlapping
+        // suffix/prefix; a just-added User turn must not hide restored context.
+        val overlap = (minOf(saved.size, live.size) downTo 1).firstOrNull { saved.takeLast(it) == live.take(it) } ?: 0
+        val merged = (saved + live.drop(overlap)).takeLast(16)
+        return merged.takeIf { it.isNotEmpty() }?.joinToString("\n") { "${it.first}: ${it.second}" }
+    }
     fun awaitWeatherPlace() { weatherUntil = now() + 180_000 }
     fun awaitingWeatherPlace() = weatherUntil > now()
     fun clearWeather() { weatherUntil = 0 }

@@ -44,7 +44,12 @@ class AssetBrowserUiTest {
         compose.setContent { MaterialTheme {
             AssetBrowserScreen(askAi = { "{\"matches\":[]}" }, onProjects = {}, onClose = {})
         } }
-        compose.onNodeWithContentDescription("Add files or folder").performClick()
+        // Library indexing runs on IO and is not a Compose idling resource.
+        // The Add control is intentionally disabled until that work finishes.
+        compose.waitUntil(5_000) {
+            compose.onAllNodes(hasContentDescription("Add files or folder") and isEnabled()).fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithContentDescription("Add files or folder").assertIsEnabled().performClick()
         compose.onNodeWithText("Import files").assertExists()
         compose.onNodeWithText("Connect phone folder").assertExists()
         compose.onNodeWithText("New folder").assertExists()

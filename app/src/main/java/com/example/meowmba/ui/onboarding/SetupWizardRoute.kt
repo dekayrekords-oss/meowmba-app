@@ -67,22 +67,13 @@ fun SetupWizardRoute(
             Text("Step ${step + 1} of 5", modifier = Modifier.padding(top = 8.dp), style = MaterialTheme.typography.labelMedium)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 TextButton(onClick = { step-- }, enabled = step > 0) { Text("Back") }
-                TextButton(onClick = onFinished) { Text("Explore first") }
+                TextButton(onClick = onFinished) { Text("Explore without AI") }
             }
             Text("Local models download separately. Keep Wi-Fi on; see Hardware and Voice recognition for progress or retry. Basic app-opening commands do not require a cloud key.", style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(16.dp))
 
             when (step) {
-                0 -> BrainStep(
-                    onSelectLocal = {
-                        SetupWiring.setBrain(context, "local", null, null)
-                        step = 1
-                    },
-                    onSelectCloud = { id, key ->
-                        SetupWiring.setBrain(context, id, key, null)
-                        step = 1
-                    },
-                )
+                0 -> AgentBrainSetup(onContinue = { step = 1 })
                 1 -> TtsStep(
                     onSelectLocal = {
                         SetupWiring.setTts(context, SetupWiring.Path.LOCAL, null)
@@ -163,73 +154,6 @@ private fun AdvancedSetupStep(context: Context, onFinished: () -> Unit, onEnable
     Text("Try: Open Chrome • Open Files • Play a happy bop. Tap the background to find tiles. Beta help is in Settings → Help & feedback.", style = MaterialTheme.typography.bodySmall)
 }
 
-@Composable
-private fun BrainStep(
-    onSelectLocal: () -> Unit,
-    onSelectCloud: (String, String) -> Unit,
-) {
-    var selectedId by remember { mutableStateOf<String?>(null) }
-    var key by remember { mutableStateOf("") }
-    var showCloud by rememberSaveable { mutableStateOf(false) }
-    val ctx = LocalContext.current
-
-    Text("Your AI", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
-    Spacer(Modifier.height(16.dp))
-    Text("How should Meow think?", color = MaterialTheme.colorScheme.onBackground, fontSize = 16.sp)
-    Spacer(Modifier.height(12.dp))
-
-    Text("Start with on-phone actions, or connect a cloud provider for conversation. Cloud requests leave your phone and may have usage charges.", style = MaterialTheme.typography.bodySmall)
-    SetupWiring.brainProviders().filter { it.id == "local" || showCloud }.forEach { provider ->
-        OutlinedButton(
-            onClick = {
-                if (provider.id == "local") onSelectLocal()
-                else { key = ""; selectedId = provider.id }
-            },
-            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        ) {
-            Text(provider.name)
-        }
-    }
-    TextButton(onClick = { showCloud = !showCloud; selectedId = null; key = "" }) { Text(if (showCloud) "Hide cloud providers" else "Connect a cloud provider") }
-
-    val provider = selectedId?.let { SetupWiring.brainProvider(it) }
-    if (provider != null) {
-        Spacer(Modifier.height(16.dp))
-        Text("Key for ${provider.name}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
-        Text(provider.blurb, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
-        provider.getKeyUrl?.let { url ->
-            TextButton(onClick = {
-                ctx.startActivity(
-                    android.content.Intent(
-                        android.content.Intent.ACTION_VIEW,
-                        android.net.Uri.parse(url)
-                    ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                )
-            }) {
-                Text("Get a key →", color = MaterialTheme.colorScheme.primary, fontSize = 13.sp)
-            }
-        }
-        OutlinedTextField(
-            value = key,
-            onValueChange = { key = it },
-            label = { Text("API key") },
-            singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Spacer(Modifier.height(8.dp))
-        Button(
-            onClick = {
-                val trimmed = key.trim()
-                if (trimmed.isNotEmpty()) onSelectCloud(provider.id, trimmed)
-            },
-            enabled = key.trim().isNotEmpty(),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text("Save and continue")
-        }
-    }
-}
 
 @Composable
 private fun TtsStep(

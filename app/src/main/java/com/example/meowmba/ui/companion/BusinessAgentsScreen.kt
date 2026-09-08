@@ -49,6 +49,7 @@ internal fun BusinessAgentsScreen(onClose: () -> Unit) {
     var create by remember { mutableStateOf(false) }
     var setup by remember { mutableStateOf(false) }
     var mcpSetup by remember { mutableStateOf(false) }
+    var starters by remember { mutableStateOf(false) }
     val notifyPermission = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
     ) { granted -> if (!granted) error = "Notifications are off. Check Job history here for approvals and results." }
@@ -65,6 +66,15 @@ internal fun BusinessAgentsScreen(onClose: () -> Unit) {
                 TextButton(onClick = { notifyPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS) }) { Text("Enable job and approval notifications") }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Button(onClick = { editing = null; create = true }, modifier = Modifier.fillMaxWidth()) { Text("Create agent") }
+            OutlinedButton(onClick = { starters = true }, modifier = Modifier.fillMaxWidth()) { Text("Browse 30 workflow starters") }
+            Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(12.dp)) {
+                Text("CEO + specialist team", style = MaterialTheme.typography.titleMedium)
+                Text("Adds a chief of staff and three specialists. Local AI by default; edit each agent to allow cloud or grant a connected service. No schedules or email sending are enabled automatically.", style = MaterialTheme.typography.bodySmall)
+                TextButton(onClick = { change {
+                    WorkflowStarterCatalog.executiveTeam().filter { runtime.store.agent(it.id) == null }.forEach(runtime.store::saveAgent)
+                } }) { Text("Add executive team") }
+            } }
+            Text("Reply outbox: Files → business → drafts. Each source/event gets one saved draft to avoid duplicate replies. Nothing is sent automatically.", style = MaterialTheme.typography.bodySmall)
             OutlinedButton(onClick = { setup = !setup }, modifier = Modifier.fillMaxWidth()) { Text("Connect OpenRouter") }
             if (setup) BusinessCloudSetup()
             BusinessLocalSetup(runtime)
@@ -92,7 +102,7 @@ internal fun BusinessAgentsScreen(onClose: () -> Unit) {
                 WorkflowTemplates.operationsTeam().forEach(runtime.store::saveAgent)
             } }, modifier = Modifier.fillMaxWidth()) { Text("Add operations team template") }
             snapshot.agents.forEach { agent ->
-                var goal by remember(agent.id) { mutableStateOf("") }
+                var goal by remember(agent.id) { mutableStateOf(agent.scheduledGoal) }
                 Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(agent.name, style = MaterialTheme.typography.titleMedium)
                     Text("${agent.provider} · ${agent.tools.size} tools · ${agent.delegates.size} delegates" + if (agent.intervalMinutes > 0) " · every ${agent.intervalMinutes} min" else " · manual", style = MaterialTheme.typography.bodySmall)
@@ -131,6 +141,7 @@ internal fun BusinessAgentsScreen(onClose: () -> Unit) {
             }
         }
     }
+    if (starters) WorkflowStartersDialog(onClose = { starters = false }, onChoose = { editing = it; starters = false; create = true })
     if (create) AgentEditor(editing, snapshot.agents, runtime.tools.definitions().map { it.id }, onClose = { create = false }) { agent ->
         withContext(Dispatchers.IO) { runtime.store.saveAgent(agent); runtime.ensureSchedules() }
     }
@@ -194,7 +205,7 @@ private fun BusinessCloudSetup() {
     var consent by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
-    Row { Checkbox(consent, { consent = it }, enabled = !busy); Text("Allow a short test request to OpenRouter. Your key is encrypted on this phone.") }
+    Row { Checkbox(consent, { consent = it }, enabled = !busy); Text("Allow two synthetic planning tests through OpenRouter. Your key is encrypted on this phone; model usage charges may apply.") }
     TextButton(onClick = {
         runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://openrouter.ai/keys"))) }
             .onFailure { status = "Open a browser and visit openrouter.ai/keys" }
@@ -204,10 +215,9 @@ private fun BusinessCloudSetup() {
         try { withContext(Dispatchers.IO) {
             val storage = SecureStorageManager(context)
             val provider = RemoteModelProvider("OpenRouter", "https://openrouter.ai/api", supplied, storage.getModelName("openrouter") ?: "openrouter/free")
-            val response = try { kotlinx.coroutines.withTimeout(60_000) { provider.generate("Reply with OK.") } } finally { provider.close() }
-            check(response is ModelResponse.Complete && response.text.isNotBlank()) { (response as? ModelResponse.Error)?.message ?: "No model reply" }
+            try { com.example.meowmba.core.setup.PlannerReadiness.verify(provider) } finally { provider.close() }
             storage.saveVerifiedApiKey("openrouter", supplied)
-        }; key = ""; status = "Model replied successfully. Key saved." }
+        }; key = ""; status = "Navigation and follow-up checks passed. Key saved. Grant cloud consent separately for each agent." }
         catch (e: CancellationException) { throw e }
         catch (e: Exception) { status = e.message ?: "Connection failed" }
         finally { busy = false }

@@ -113,6 +113,24 @@ object AgentRouter {
             return normalized in set || command in set
         }
 
+        if (says("list your models", "list ai models", "show available ai models", "what models can you use"))
+            return AgentIntent(AgentRegistry.MAIN, "brain.models", emptyMap(), "list available AI models")
+        Regex("^(?:switch|change) (?:your |the )?(?:ai |llm )?model to (local|openrouter) (.+)$", RegexOption.IGNORE_CASE)
+            .matchEntire(stripAddress(raw))?.let {
+                return AgentIntent(AgentRegistry.MAIN, "brain.select_model", mapOf("provider" to it.groupValues[1].lowercase(), "model" to it.groupValues[2]), "verify and switch AI model to ${it.groupValues[2]}")
+            }
+        if (says("list bluetooth devices", "show paired bluetooth devices", "bluetooth status"))
+            return AgentIntent("phone", "phone.bluetooth_devices", emptyMap(), "Bluetooth devices")
+        Regex("^(?:connect|pair)(?: to)? (?:the )?bluetooth(?: device)?(?: (.+))?$", RegexOption.IGNORE_CASE)
+            .matchEntire(stripAddress(raw))?.let {
+                return AgentIntent("phone", "phone.bluetooth_setup", mapOf("name" to it.groupValues[1]), "connect Bluetooth ${it.groupValues[1]}")
+            }
+
+        Regex("^(?:on my (?:computer|desktop)[, ]+|use my (?:computer|desktop) to )(.+)$", RegexOption.IGNORE_CASE)
+            .matchEntire(stripAddress(raw))?.let {
+                return AgentIntent("computer", "desktop.run_goal", mapOf("goal" to it.groupValues[1]), "work on my computer: ${it.groupValues[1].take(100)}")
+            }
+
         // Exact-phrase commands (normalized for tolerance)
         if (says("open files", "open the file browser", "open file browser", "open my library", "open asset library"))
             return AgentIntent("file", "file.browser", emptyMap(), "open Files library")
@@ -250,7 +268,7 @@ object AgentRouter {
         // Desktop bridge
         if (normalized in setOf("what's on my desktop", "whats on my desktop",
                 "list my desktop", "desktop status", "bridge status")) {
-            return AgentIntent("computer", "desktop.run_build", mapOf("name" to "status"),
+            return AgentIntent("computer", "desktop.control", mapOf("action" to "status"),
                 "check desktop status")
         }
         extractAfter(raw, listOf("write a file on my desktop called ", "write a file on desktop called ",
@@ -371,8 +389,13 @@ object AgentRouter {
         }
         extractAfter(stripLeadIn(raw), listOf("open the app ", "open app ", "launch the app ",
             "launch app ", "launch ", "start the app ", "open "))?.let { rest ->
+            // Preserve the whole request. A launch is not completion of a task inside an app.
+            if (Regex("\\b(?:and then|and|then|to)\\s+(?:start|create|write|draft|search|find|read|check|show|tap|press|post|publish|send|share|reply|compose|open|look|make|ask|type|browse|summarize)\\b", RegexOption.IGNORE_CASE).containsMatchIn(rest)) {
+                return AgentIntent("phone_control", "phone.run_goal", mapOf("goal" to raw), raw.take(100))
+            }
             // Bounded: an app name is a name, not the rest of the sentence.
             val name = boundTarget(rest) ?: return@let
+            if (name.lowercase() in setOf("it", "that", "them", "that app", "the same app")) return@let
             // More than a few words is a sentence, not an app — "open up about your
             // feelings" must stay conversation rather than becoming a launch request
             // for an app called "up about your feelings".

@@ -7,16 +7,10 @@ import android.content.IntentFilter
 import android.os.BatteryManager
 import android.util.Log
 import kotlinx.coroutines.*
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import java.io.*
 import java.net.*
-import java.security.SecureRandom
-import javax.net.ssl.*
 
 /**
- * Monitors USB connection and auto-pairs with the desktop bridge daemon
+ * Monitors USB power and discovers the desktop bridge daemon
  * when the phone is tethered via USB.
  *
  * Detection strategy:
@@ -24,9 +18,9 @@ import javax.net.ssl.*
  *     physically plugged into a computer.
  *  2. Scan for the daemon on the USB tether subnet (192.168.42.x). The
  *     daemon broadcasts UDP presence every 2 s; we listen for it.
- *  3. When a daemon with an open pairing window is heard, auto-pair.
+ *  3. Complete explicit code pairing in Settings; retain trust across disconnects.
  *
- * On USB disconnect the bridge is unpaired automatically.
+ * USB loss never removes trust. Only explicit Unpair clears a paired desktop.
  */
 class UsbAutoBridgeManager(
     private val context: Context,
@@ -45,9 +39,8 @@ class UsbAutoBridgeManager(
         override fun onReceive(ctx: Context, intent: Intent) {
             when (intent.action) {
                 Intent.ACTION_POWER_CONNECTED -> {
-                    val plugged = intent.getIntExtra(
-                        BatteryManager.EXTRA_PLUGGED, -1
-                    )
+                    val plugged = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+                        ?.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1)
                     if (plugged == BatteryManager.BATTERY_PLUGGED_USB) {
                         Log.i(TAG, "USB power connected — scanning for bridge")
                         usbConnected = true
@@ -61,9 +54,8 @@ class UsbAutoBridgeManager(
                     onUsbStateChanged?.invoke(false)
                     cancelScan()
                     if (wasUsb && enabled) {
-                        Log.i(TAG, "USB disconnected — unpairing bridge")
+                        Log.i(TAG, "USB disconnected — retaining trusted desktop pairing")
                         pairedHost = null
-                        bridgeManager.unpair()
                     }
                 }
             }
@@ -83,13 +75,13 @@ class UsbAutoBridgeManager(
         // Check current state (phone may already be plugged in)
         val bm = context.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
         if (bm?.isCharging == true) {
-            val plugged = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_STATUS) != 0
             // Use the sticky intent instead for reliable USB detection
             val sticky = context.registerReceiver(null,
                 IntentFilter(Intent.ACTION_BATTERY_CHANGED))
             val chargePlug = sticky?.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1) ?: -1
             if (chargePlug == BatteryManager.BATTERY_PLUGGED_USB) {
                 usbConnected = true
+                onUsbStateChanged?.invoke(true)
                 if (enabled) startScan()
             }
         }
@@ -102,7 +94,7 @@ class UsbAutoBridgeManager(
         runCatching { context.unregisterReceiver(receiver) }
     }
 
-    /** True when the phone is currently plugged into USB (data connection). */
+    /** True when USB power is reported; this alone does not prove a data connection. */
     fun isUsbConnected(): Boolean = usbConnected
 
     /** Host/port of the bridge auto-paired via USB, or null. */
@@ -125,9 +117,7 @@ class UsbAutoBridgeManager(
             scanJob = launchGuarded {
                 val ok = bridgeManager.ping().isSuccess
                 if (!ok) {
-                    Log.w(TAG, "paired bridge ${current.host} unreachable via USB — re-pairing")
-                    bridgeManager.unpair()
-                    scanSubnet()
+                    Log.w(TAG, "paired bridge ${current.host} unreachable — retaining pairing; check desktop/network")
                 }
             }
             return
@@ -196,109 +186,14 @@ class UsbAutoBridgeManager(
         val ctx = kotlinx.coroutines.currentCoroutineContext()
         if (!ctx.isActive) return
 
-        // Phase 2: for any found daemon, attempt USB auto-pair
+        // Phase 2: discovery does not authorize trust or pairing.
         for ((_, d) in found) {
             if (!ctx.isActive) break
-            Log.i(TAG, "USB auto-pairing with ${d.name} (${d.host}:${d.port})")
-            val result = autoPair(d)
-            if (result.isSuccess) {
-                pairedHost = "${d.host}:${d.port}"
-                Log.i(TAG, "USB auto-pair succeeded with ${d.name}")
-                return
-            }
-            Log.w(TAG, "USB auto-pair with ${d.host} failed: ${result.exceptionOrNull()?.message}")
+            Log.i(TAG, "Found ${d.name}; complete one-time code pairing in Desktop Bridge settings")
         }
 
         if (found.isEmpty()) {
             Log.w(TAG, "USB subnet scan found no bridge with an open pairing window")
-        }
-    }
-
-    private suspend fun autoPair(
-        discovered: DesktopBridgeProtocol.DiscoveredBridge
-    ): Result<String> {
-        val secret = java.security.SecureRandom().let { r ->
-            ByteArray(32).also { r.nextBytes(it) }
-        }
-        val phoneName = "${android.os.Build.MODEL ?: "phone"} (USB)"
-        val body = DesktopBridgeProtocol.buildAutoPairBody(
-            secretB64 = DesktopBridgeProtocol.b64EncodeStd(secret),
-            phoneName = phoneName
-        )
-
-        val result = kotlinx.coroutines.withContext(Dispatchers.IO) {
-            runCatching {
-                post(discovered.host, discovered.port, "/pair", body,
-                    discovered.certSha256)
-            }
-        }.getOrElse {
-            return Result.failure(Exception("desktop unreachable: ${it.message}"))
-        }
-
-        return when (result.first) {
-            200 -> {
-                // A malformed 200 body must not throw out of the scan — fall
-                // back to the advertised name and let pairing proceed.
-                val desktopName = runCatching {
-                    Json.parseToJsonElement(
-                        String(result.second, Charsets.UTF_8)
-                    ).jsonObject["desktop_name"]?.jsonPrimitive?.content
-                }.getOrNull() ?: discovered.name
-                // Save pairing
-                bridgeManager.savePairing(
-                    discovered.host, discovered.port, desktopName,
-                    discovered.certSha256, DesktopBridgeProtocol.b64EncodeStd(secret)
-                )
-                Result.success(desktopName)
-            }
-            403 -> Result.failure(Exception("USB auto-pair rejected by daemon"))
-            else -> Result.failure(Exception("auto-pair failed (http ${result.first})"))
-        }
-    }
-
-    private fun post(
-        host: String, port: Int, path: String, body: ByteArray,
-        expectedCertSha256: String
-    ): Pair<Int, ByteArray> {
-        val trustManager = object : javax.net.ssl.X509TrustManager {
-            override fun checkServerTrusted(
-                chain: Array<java.security.cert.X509Certificate>, authType: String
-            ) {
-                val fp = DesktopBridgeProtocol.sha256Hex(chain[0].encoded)
-                if (!fp.equals(expectedCertSha256, ignoreCase = true)) {
-                    throw java.security.cert.CertificateException(
-                        "cert fingerprint mismatch"
-                    )
-                }
-            }
-            override fun checkClientTrusted(
-                chain: Array<java.security.cert.X509Certificate>, authType: String
-            ) = throw java.security.cert.CertificateException("not used")
-            override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate> = emptyArray()
-        }
-        val sslCtx = javax.net.ssl.SSLContext.getInstance("TLS")
-        sslCtx.init(null, arrayOf(trustManager), null)
-        val conn = (java.net.URL("https://$host:$port$path").openConnection()
-            as javax.net.ssl.HttpsURLConnection).apply {
-            sslSocketFactory = sslCtx.socketFactory
-            hostnameVerifier = javax.net.ssl.HostnameVerifier { _, _ -> true }
-            connectTimeout = 5000
-            readTimeout = 8000
-            requestMethod = "POST"
-            doOutput = true
-            setRequestProperty("Content-Type", "application/json")
-        }
-        try {
-            conn.outputStream.use { it.write(body) }
-            val code = conn.responseCode
-            val bytes = (if (code in 200..299) conn.inputStream else conn.errorStream)
-                ?.use { it.readBytes() } ?: ByteArray(0)
-            return code to bytes
-        } finally {
-            // Disconnect on EVERY path — an unreachable desktop throws from
-            // write/responseCode, and skipping disconnect leaked the socket
-            // on exactly the retries that happen most.
-            conn.disconnect()
         }
     }
 

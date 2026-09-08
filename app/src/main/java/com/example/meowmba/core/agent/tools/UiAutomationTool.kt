@@ -6,7 +6,7 @@ import kotlinx.coroutines.withContext
 
 /**
  * `ui.automate` — full phone control via the opt-in accessibility service.
- * Confirmation is NONE (approval is at the loop/task level, not per-action).
+ * Standalone calls require approval; the phone loop has its own task approval.
  * When the service is off, the tool fails honestly with instructions.
  */
 class UiAutomationTool : Tool {
@@ -25,7 +25,7 @@ class UiAutomationTool : Tool {
             "direction" to "up|down|left|right (scroll, swipe)"
         ),
         riskLevel = RiskLevel.MODERATE,
-        confirmationPolicy = ConfirmationPolicy.NONE
+        confirmationPolicy = ConfirmationPolicy.ALWAYS
     )
 
     private fun disabled() = ToolResult.Failure(
@@ -40,7 +40,7 @@ class UiAutomationTool : Tool {
         }
         when (val action = args["action"]?.trim()?.lowercase()) {
             "tap" -> args["text"]?.takeIf { it.isNotBlank() }
-                ?.let { actionResult(service.tapByText(it)) }
+                ?.let { actionResult(service.tapByText(it, allowConsequential = false)) }
                 ?: ToolResult.Failure("Missing 'text' for tap")
             "type" -> {
                 val field = args["field"]?.takeIf { it.isNotBlank() }
@@ -51,11 +51,9 @@ class UiAutomationTool : Tool {
             "scroll" -> actionResult(service.scroll(args["direction"]?.lowercase() != "up"))
             "read" -> ToolResult.Success("On screen: " + service.readScreen())
             "tap_index" -> args["index"]?.toIntOrNull()
-                ?.let { actionResult(service.tapByIndex(it)) }
+                ?.let { actionResult(service.tapByIndex(it, allowConsequential = false)) }
                 ?: ToolResult.Failure("Missing or invalid 'index' for tap_index")
-            "long_press" -> args["text"]?.takeIf { it.isNotBlank() }
-                ?.let { actionResult(service.longPress(it)) }
-                ?: ToolResult.Failure("Missing 'text' for long_press")
+            "long_press" -> ToolResult.Failure("Please long-press this control yourself.")
             "swipe" -> args["direction"]?.takeIf { it.isNotBlank() }
                 ?.let { actionResult(service.swipe(it)) }
                 ?: ToolResult.Failure("Missing 'direction' for swipe")

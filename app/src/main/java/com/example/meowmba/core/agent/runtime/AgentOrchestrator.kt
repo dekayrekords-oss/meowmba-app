@@ -84,6 +84,12 @@ class AgentOrchestrator(
         val tool = toolRegistry.byId(toolId)
             ?: return SubmitResult.Rejected("Tool '$toolId' is not installed")
 
+        // A desktop goal reserves one slot for its approved child action.
+        // A second parent waiting on approval would otherwise occupy that slot.
+        if (toolId == "desktop.run_goal" && _tasks.value.any { it.toolId == toolId && !it.isTerminal }) {
+            return SubmitResult.Rejected("Another desktop goal is active. Stop or finish it first.")
+        }
+
         val task = AgentTask(agentId = agentId, toolId = toolId, title = title, args = args)
         _tasks.value = listOf(task) + _tasks.value
 
@@ -149,7 +155,10 @@ class AgentOrchestrator(
         // Approval gate: risky tools wait for the user's explicit decision
         if (tool.definition.confirmationPolicy == ConfirmationPolicy.ALWAYS) {
             updateTask(task.id) { it.copy(status = TaskStatus.WAITING_APPROVAL) }
-            val argsSummary = task.args.entries.joinToString(", ") { "${it.key}=${it.value.take(40)}" }
+            val argsSummary = task.args.entries.joinToString("\n") {
+                val limit = if (task.toolId == "desktop.control" && it.key in setOf("value", "text")) 8000 else if (it.key == "goal") 3000 else 160
+                "${it.key}=${it.value.take(limit)}${if (it.value.length > limit) " … (truncated; review before approving)" else ""}"
+            }
             val request = ApprovalRequest(
                 taskId = task.id,
                 toolId = task.toolId,

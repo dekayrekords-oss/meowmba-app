@@ -23,6 +23,11 @@ import org.robolectric.annotation.GraphicsMode
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class BetaOnboardingUiTest {
     @get:Rule val compose = createAndroidComposeRule<androidx.activity.ComponentActivity>()
+    private lateinit var storageMock: org.mockito.MockedConstruction<com.example.meowmba.core.security.SecureStorageManager>
+    @Before fun fakeAndroidKeystoreForUiOnly() {
+        storageMock = org.mockito.Mockito.mockConstruction(com.example.meowmba.core.security.SecureStorageManager::class.java)
+    }
+    @After fun closeStorageMock() { storageMock.close() }
 
     @Test fun firstRunCanBeExploredWithoutKeysOrPermissionPrompt() {
         var finished = false
@@ -35,17 +40,18 @@ class BetaOnboardingUiTest {
         compose.onNodeWithText("API key").assertDoesNotExist()
         compose.onNodeWithText("OpenAI (GPT)").assertDoesNotExist()
         render("onboarding-light")
-        compose.onNodeWithText("Explore first").performClick()
+        compose.onNodeWithText("Explore without AI").performClick()
         assertTrue(finished)
         assertEquals(0, permissions)
     }
 
     @Test fun cloudChoicesAreOptionalAndCanBeCollapsed() {
         compose.setContent { MaterialTheme { SetupWizardRoute(onFinished = {}) } }
-        compose.onNodeWithText("Connect a cloud provider").performScrollTo().performClick()
-        compose.onNodeWithText("OpenAI (GPT)").assertExists()
-        compose.onNodeWithText("Hide cloud providers").performScrollTo().performClick()
-        compose.onNodeWithText("OpenAI (GPT)").assertDoesNotExist()
+        compose.onNodeWithText("Paste your OpenRouter key").assertDoesNotExist()
+        compose.onAllNodes(isToggleable()).onFirst().performScrollTo().performClick()
+        compose.onNodeWithText("Paste your OpenRouter key").assertExists()
+        compose.onAllNodes(isToggleable()).onFirst().performScrollTo().performClick()
+        compose.onNodeWithText("Paste your OpenRouter key").assertDoesNotExist()
     }
 
     @Test fun betaHelpStartsCompactAndExplainsOptIn() {
@@ -76,9 +82,8 @@ class BetaOnboardingUiTest {
 
     @Test fun cloudKeyInputIsMasked() {
         compose.setContent { MaterialTheme { SetupWizardRoute(onFinished = {}) } }
-        compose.onNodeWithText("Connect a cloud provider").performScrollTo().performClick()
-        compose.onNodeWithText("OpenAI (GPT)").performScrollTo().performClick()
-        compose.onNodeWithText("API key").assert(SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsProperties.Password))
+        compose.onAllNodes(isToggleable()).onFirst().performScrollTo().performClick()
+        compose.onNodeWithText("Paste your OpenRouter key").assert(SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsProperties.Password))
     }
 
     @Test fun recruitmentAndFeedbackAreHonestAndMinimal() {

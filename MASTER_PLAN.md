@@ -1,5 +1,41 @@
 # MEOWMBA MASTER PLAN
 
+## September 7, 2026 — cross-device control preview (1.3.40, code 44)
+
+- [x] Build and install code44 on the connected SM_F966U1, retaining user data and local models.
+- [x] Real OpenRouter function-calling decisions, changed-screen rejection, indexed editable controls and hard navigation-only/draft-only limits.
+- [x] Explain local versus stronger cloud planning, Accessibility, Bluetooth and computer setup in onboarding.
+- [x] Approved `brain.select_model`, read-only `brain.models`, paired Bluetooth inventory and guided Android pairing tools.
+- [x] Desktop 0.7 source: bounded macOS accessible controls with per-step approval, single-use snapshots, retained trust and no tokenless USB pairing.
+- [x] Bounded Blender scene/export adapter; actual Blender 5.2.1 .blend/.glb/PNG smoke passed. No avatar/model added to app assets.
+- [x] 1,248 JVM/Compose tests: zero failures/errors, five conditional skips; 14 Python helper tests passed.
+- [ ] Final phone UI acceptance: after instrumentation Android marked Meow Accessibility crashed/disconnected. Owner must reconnect it before final code44 Reddit/other-app and confirmation tests.
+- [ ] Verify/select a suitable OpenRouter model. The saved `openrouter/free` route failed planning; a live-catalog-verified Gemma4 31B free option returned HTTP429. Local selection was kept; paid usage requires an owner decision.
+- [ ] Pair the user's chosen computer and enable actual OS capabilities. Mac native UI permission was denied; Meow's Linux tty session is not a working GUI adapter.
+- [ ] Physical Bluetooth device pairing/profile acceptance, arbitrary-app/native desktop controls, confirmed outgoing delivery and long-running service integrations remain unsignoffed.
+
+Evidence and next steps: [cross-device preview](docs/CROSS_DEVICE_CONTROL_2026-09-07.md).
+
+## September 7, 2026 — phone planning / onboarding / workflow upgrade (1.3.38, code 42)
+
+- [x] Preserve multi-step app goals instead of discarding instructions after the app name.
+- [x] Resolve common ASR aliases and conservative spelling errors against installed apps; refuse ambiguous matches.
+- [x] Use one index map for accessible screen controls and taps. Navigation requires task approval; social/message controls add single-use on-screen verification. Payments, deletion and permissions stay manual.
+- [x] Merge restored conversation history with live turns; keep ambiguous pronouns out of the immediate app launcher.
+- [x] Ask for clarification on strong broadcast-ad cues; keep existing garble/echo filters. This is NOT reliable speaker/TV identification.
+- [x] Local-first conversation-model download, progress and real navigation/context checks; optional consented OpenRouter catalog and verified key setup.
+- [x] Add 30 configurable workflow starters, a chief-of-staff/specialist template, and an event-keyed local reply-draft outbox. Templates are not 30 new integrations.
+- [x] Live Facebook composer and exact `meow ai test` draft verified through the normal app; nothing published. Generic all-app control is not signed off.
+- [x] Reconnect USB and install the last confirmation/compound-routing refinement (included in code44).
+- [ ] Verify native Cancel/Confirm UI and separately authorized positive delivery on the final installed build.
+- [ ] Verify positive confirmed social-action delivery separately; never mistake a dispatched tap for a published post or sent message.
+- [ ] Configure the user's actual email/signup service and explicit read permissions; verify real-event polling, pagination and cursor behavior.
+- [ ] Before unattended replies: implement a narrowly scoped policy UI (account, recipients, topics, rate/budget limits, expiry and kill switch), trusted event IDs, server-side idempotency and delivery reconciliation. Current replies are drafts or individually approved service actions, NOT autonomous auto-replies.
+- [ ] Long-horizon acceptance: overnight Android scheduling/reboot/Doze, network loss, expired credentials, revoke/stop, thermal recovery and repeated-event tests with real services. No 24/7 guarantee on a phone.
+
+Implementation and measured acceptance: [phone planning upgrade](docs/PHONE_PLANNING_2026-09-07.md).
+Earlier checkpoints below remain historical; 3D work is still paused.
+
 ## Current release checkpoint — September 5, 2026
 
 - Release candidate: 1.3.20 / versionCode 24, current application ID

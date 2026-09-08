@@ -1076,6 +1076,8 @@ fun DesktopBridgeSection(
 
     Text("Desktop Bridge", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
     Spacer(modifier = Modifier.height(4.dp))
+    Text("Pair once with the desktop helper's code. Keep the helper running on the same reachable network. A USB cable alone does not enable app control.", style = MaterialTheme.typography.bodySmall)
+    Text("Bridge 0.7: macOS app controls need gui_enabled plus Accessibility/Automation permission. Blender needs blender_enabled, Blender installed and a dedicated workspace folder. Linux/Windows app navigation needs a compatible UI adapter; launching an app is not controlling it.", style = MaterialTheme.typography.bodySmall)
 
     val current = paired
     if (current != null) {
@@ -1205,9 +1207,9 @@ fun DesktopBridgeSection(
             })
             Spacer(modifier = Modifier.width(8.dp))
             Column {
-                Text("USB Auto-Bridge", color = MaterialTheme.colorScheme.onSurface, fontSize = 13.sp)
+                Text("USB bridge discovery", color = MaterialTheme.colorScheme.onSurface, fontSize = 13.sp)
                 Text(
-                    text = if (usbAutoBridgeEnabled) "Auto-pairs when plugged into this computer via USB" else "Plug in via USB for automatic pairing",
+                    text = if (usbAutoBridgeEnabled) "Checks the trusted desktop when USB reconnects; keeps pairing on disconnect" else "Discover over USB tethering; one-time code pairing is required",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

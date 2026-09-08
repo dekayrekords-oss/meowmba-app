@@ -92,8 +92,7 @@ class DesktopBridgeManager(
     }
 
     /**
-     * Persist a completed pairing. Used by [UsbAutoBridgeManager] after
-     * USB auto-pair completes.
+     * Persist a completed owner-confirmed pairing.
      */
     fun savePairing(host: String, port: Int, name: String, certSha256: String, secretB64: String) {
         secureStorage.savePreference(KEY_HOST, host)
@@ -190,6 +189,14 @@ class DesktopBridgeManager(
     }
 
     data class BridgeScreenshot(val path: String, val bytes: Long, val pngBase64: String)
+
+    suspend fun readUi(): Result<kotlinx.serialization.json.JsonObject> = rpc("ui_snapshot").mapCatching { Json.parseToJsonElement(it).jsonObject }
+    suspend fun uiAction(snapshotId: String, elementId: String, action: String, value: String): Result<String> =
+        rpc("ui_action", mapOf("snapshot_id" to snapshotId, "element_id" to elementId, "action" to action, "value" to value), 30_000).map { messageOf(it, "Action dispatched; read a fresh screen to verify.") }
+    suspend fun createBlenderScene(scene: String): Result<String> = runCatching {
+        val data = Json.parseToJsonElement(scene).jsonObject
+        rpc("blender_scene", mapOf("scene" to data), 200_000).getOrThrow()
+    }
 
     // ------------------------------------------------------------------
     // Control tools (Phase F1): desktop actions behind the paired bridge.
@@ -323,7 +330,7 @@ class DesktopBridgeManager(
         }
 
     /** Signed POST /rpc. Returns raw response body on HTTP 200. */
-    private suspend fun rpc(method: String, params: Map<String, Any?> = emptyMap()): Result<String> = withContext(Dispatchers.IO) {
+    private suspend fun rpc(method: String, params: Map<String, Any?> = emptyMap(), readTimeoutMs: Int = 15_000): Result<String> = withContext(Dispatchers.IO) {
         val bridge = pairedBridge()
             ?: return@withContext Result.failure(Exception("not paired — pair a desktop bridge first"))
         val secret = try {
@@ -338,6 +345,7 @@ class DesktopBridgeManager(
                     params.forEach { (k, v) ->
                         when (v) {
                             null -> put(k, JsonNull)
+                            is kotlinx.serialization.json.JsonElement -> put(k, v)
                             is String -> put(k, v)
                             is Int -> put(k, v)
                             is Long -> put(k, v)
@@ -357,7 +365,7 @@ class DesktopBridgeManager(
         val result = runCatching {
             post(
                 bridge.host, bridge.port, "/rpc", body, bridge.certSha256,
-                mapOf("X-Meowmba-Timestamp" to ts, "X-Meowmba-Signature" to signature)
+                mapOf("X-Meowmba-Timestamp" to ts, "X-Meowmba-Signature" to signature), readTimeoutMs
             )
         }.getOrElse { return@withContext Result.failure(Exception("desktop unreachable: ${it.message}")) }
 
@@ -383,7 +391,7 @@ class DesktopBridgeManager(
     /** POST JSON over TLS pinned to [expectedCertSha256]; returns (status, body). */
     private fun post(
         host: String, port: Int, path: String, body: ByteArray,
-        expectedCertSha256: String, extraHeaders: Map<String, String>
+        expectedCertSha256: String, extraHeaders: Map<String, String>, readTimeoutMs: Int = 15_000
     ): Pair<Int, ByteArray> {
         val trustManager = object : X509TrustManager {
             override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) {
@@ -407,7 +415,7 @@ class DesktopBridgeManager(
             // Certificate is pinned by fingerprint; hostname checking adds nothing here.
             hostnameVerifier = HostnameVerifier { _, _ -> true }
             connectTimeout = 10_000
-            readTimeout = 15_000
+            readTimeout = readTimeoutMs
             requestMethod = "POST"
             doOutput = true
             setRequestProperty("Content-Type", "application/json")

@@ -89,14 +89,35 @@ internal object InstalledApps {
         val target = core.joinToString("").ifEmpty { squash(query) }
         if (target.isEmpty()) return null
 
-        apps.firstOrNull { squash(it.label) == target }?.let { return it }
-        apps.firstOrNull { squash(it.label).startsWith(target) }?.let { return it }
-        apps.firstOrNull { squash(it.label).contains(target) }?.let { return it }
+        apps.filter { squash(it.label) == target }.let { if (it.isNotEmpty()) return it.singleOrNull() }
+        // ASR aliases only resolve to an app actually installed on this phone.
+        val alias = mapOf("factbook" to "facebook", "facebrook" to "facebook", "whatsup" to "whatsapp", "snapshat" to "snapchat")[target]
+        if (alias != null) return apps.filter { squash(it.label) == alias }.singleOrNull()
+        if (target.length < 3) return null
+        apps.filter { squash(it.label).startsWith(target) }.let { if (it.isNotEmpty()) return it.singleOrNull() }
+        apps.filter { squash(it.label).contains(target) }.let { if (it.isNotEmpty()) return it.singleOrNull() }
         // The spoken phrase contains a label: "set my alarm in the clock" → Clock.
         apps.filter { squash(it.label).length >= 3 && target.contains(squash(it.label)) }
             .maxByOrNull { squash(it.label).length }
             ?.let { return it }
-        return apps.firstOrNull { squash(it.packageName).contains(target) }
+        apps.filter { squash(it.packageName).contains(target) }.singleOrNull()?.let { return it }
+        // Conservative spelling correction: only a clear, unique winner. Short
+        // names and close ties require clarification rather than opening a random app.
+        if (target.length !in 5..40) return null
+        val ranked = apps.map { it to distance(target, squash(it.label)) }.sortedBy { it.second }
+        val best = ranked.firstOrNull() ?: return null
+        val limit = if (target.length >= 8) 2 else 1
+        return best.first.takeIf { best.second <= limit && (ranked.getOrNull(1)?.second ?: 99) >= best.second + 2 }
+    }
+
+    private fun distance(a: String, b: String): Int {
+        var row = IntArray(b.length + 1) { it }
+        for (i in a.indices) {
+            val next = IntArray(b.length + 1); next[0] = i + 1
+            for (j in b.indices) next[j + 1] = minOf(next[j] + 1, row[j + 1] + 1, row[j] + if (a[i] == b[j]) 0 else 1)
+            row = next
+        }
+        return row[b.length]
     }
 
     private fun squash(text: String): String =
@@ -128,7 +149,7 @@ class LaunchAppTool(private val context: Context) : Tool {
 
         val match = InstalledApps.find(context, name)
             ?: return@withContext ToolResult.Failure(
-                "No installed app matches \"$name\". Ask me to list your apps to see what's there."
+                "I couldn't confidently match \"$name\" to one installed app. Please say its full name, or ask me to list your apps."
             )
 
         val launch = context.packageManager.getLaunchIntentForPackage(match.packageName)

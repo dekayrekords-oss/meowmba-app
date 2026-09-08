@@ -445,7 +445,7 @@ class CompanionViewModel(
     private var awaitingNameUntilMs = 0L
     private var lastNameAskAtMs = 0L
 
-    /** USB auto-bridge manager — auto-pairs when tethered. */
+    /** USB bridge discovery — never pairs without the owner's code. */
     private var usbAutoBridge: UsbAutoBridgeManager? = null
 
     /** Suppresses the companion hearing its own TTS voice during barge-in. */
@@ -1222,8 +1222,13 @@ class CompanionViewModel(
                     }
                 )
             )
+            desktopNavigation = com.example.meowmba.core.agent.tools.DesktopNavigationTool(
+                bridgeManager, brain = { generateControllerAction(it) },
+                step = { args, title -> runApprovedDesktopStep(args, title) },
+            ).also { toolRegistry.register(it) }
+            toolRegistry.register(com.example.meowmba.core.agent.tools.BlenderSceneTool(bridgeManager))
 
-            // USB auto-bridge: auto-pair when tethered via USB
+            // USB discovery/reconnection preserves the owner's code-based pairing.
             usbAutoBridge = UsbAutoBridgeManager(it.context, bridgeManager, viewModelScope).apply {
                 onUsbStateChanged = { connected ->
                     _uiState.value = _uiState.value.copy(usbConnected = connected)
@@ -1369,6 +1374,15 @@ class CompanionViewModel(
             )
             // Phase F3: opt-in UI automation (off until enabled by the user).
             toolRegistry.register(UiAutomationTool())
+            val modelSwitcher = com.example.meowmba.core.agent.tools.AppModelSwitcher(appContext,
+                busy = { phoneAgentLoop?.isActive == true || desktopNavigation?.isActive == true }, changed = { reloadSetupConfiguration() })
+            toolRegistry.register(com.example.meowmba.core.agent.tools.ListBrainModelsTool { modelSwitcher.choices() })
+            toolRegistry.register(com.example.meowmba.core.agent.tools.SelectBrainModelTool { provider, model -> modelSwitcher.select(provider, model) })
+            toolRegistry.register(com.example.meowmba.core.agent.tools.BluetoothDevicesTool(appContext))
+            toolRegistry.register(com.example.meowmba.core.agent.tools.BluetoothSetupTool(appContext) { goal -> phoneAgentLoop?.let { it.setGoal(goal); true } ?: false })
+            toolRegistry.register(com.example.meowmba.core.agent.tools.PhoneGoalTool { goal ->
+                phoneAgentLoop?.let { it.setGoal(goal); true } ?: false
+            })
             // The body. Without this the companion could describe moving but
             // never actually move.
             toolRegistry.register(
@@ -1535,17 +1549,14 @@ class CompanionViewModel(
                 // Phone-control agent loop (accessibility-based, modeled on browserAgent)
                 phoneAgentLoop = com.example.meowmba.core.agent.PhoneAgentLoop(
                     scope = viewModelScope,
-                    brain = { prompt ->
-                        runCatching {
-                            (omniRoute?.generate(prompt) as? com.example.meowmba.core.agent.ModelResponse.Complete)?.text
-                        }.getOrNull()
-                    },
+                    brain = { prompt -> generateControllerAction(prompt) },
                     service = { com.example.meowmba.core.access.MeowAccessibilityService.instance },
                     announce = { msg ->
                         _uiState.value = _uiState.value.copy(captionText = msg)
                         speak(msg)
                     },
                     onComplete = { summary -> speak(summary) },
+                    audit = { event, detail -> agentAuditSink.log(event, "phone_control", null, detail) },
                 )
             }
             // Restore pinned apps (drawer favorites + two face shortcuts).
@@ -2016,6 +2027,33 @@ class CompanionViewModel(
 
     /** Phone-control agent: autonomous multi-step phone operation via accessibility. */
     private var phoneAgentLoop: com.example.meowmba.core.agent.PhoneAgentLoop? = null
+    private var desktopNavigation: com.example.meowmba.core.agent.tools.DesktopNavigationTool? = null
+
+    private suspend fun generateControllerAction(prompt: String): String {
+        val s = secureStorage
+        if (s != null && (_uiState.value.selectedModel == "OpenRouter (Cloud)" ||
+            (_uiState.value.selectedModel == MODEL_OMNIROUTE && preferredChatRouteId() == "openrouter"))) {
+            return RemoteModelProvider("OpenRouter", resolveEndpoint(s, "openrouter", OPENROUTER_ENDPOINT), s.getApiKey("openrouter"), s.getModelName("openrouter") ?: OPENROUTER_DEFAULT_MODEL).use {
+                com.example.meowmba.core.agent.PhoneAgentLoop.generateAction(it, prompt)
+            }
+        }
+        return com.example.meowmba.core.agent.PhoneAgentLoop.generateAction(currentProvider ?: omniRoute ?: buildOmniRoute(), prompt)
+    }
+
+    private suspend fun runApprovedDesktopStep(args: Map<String, String>, title: String): com.example.meowmba.core.agent.tools.ToolResult {
+        val runner = agentOrchestrator ?: return com.example.meowmba.core.agent.tools.ToolResult.Failure("Agent system is not ready")
+        val submitted = runner.submit("computer", "desktop.control", args, title)
+        if (submitted is SubmitResult.Rejected) return com.example.meowmba.core.agent.tools.ToolResult.Failure(submitted.reason)
+        val id = (submitted as SubmitResult.Started).taskId
+        try {
+            val task = runner.tasks.first { tasks -> tasks.any { it.id == id && it.isTerminal } }.first { it.id == id }
+            return if (task.status == TaskStatus.COMPLETED) com.example.meowmba.core.agent.tools.ToolResult.Success(task.result.orEmpty())
+                else com.example.meowmba.core.agent.tools.ToolResult.Failure(task.result ?: "Desktop step cancelled")
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            runner.cancel(id)
+            throw e
+        }
+    }
 
     /** One-shot flag: MainActivity watches this to launch the MediaProjection consent. */
     private val _screenWatchConsentRequested = kotlinx.coroutines.flow.MutableStateFlow(false)
@@ -2154,11 +2192,14 @@ class CompanionViewModel(
         val forced = (storage.getPreference("default_brain")
             ?: if (openRouterKey.isNullOrBlank()) "local" else "openrouter")
             .takeIf { it.isNotBlank() && it != "auto" }
-        val finalRoutes = if (forced != null && routes.any { it.id == forced }) {
-            routes.filter { it.id == forced || it.offline || it.id == "call" }.map {
+        val finalRoutes = if (forced != null) {
+            // A missing local model must not silently turn a local-only choice
+            // into cloud requests using another saved key.
+            routes.filter { it.id == forced || it.offline }.map {
                 if (it.id == forced) it.copy(priority = 1) else it
             }
         } else routes
+        if (finalRoutes.isEmpty()) return null
         return com.example.meowmba.core.agent.OmniRoute(finalRoutes).also { omniRoute = it }
     }
 
@@ -3191,7 +3232,7 @@ class CompanionViewModel(
         secureStorage?.saveBooleanPreference(KEY_KEEP_SCREEN_ON, enabled)
     }
 
-    /** Toggle USB auto-bridge. When enabled, monitors USB and auto-pairs. */
+    /** Toggle USB discovery and connection checks; existing trust is retained. */
     fun setUsbAutoBridge(enabled: Boolean) {
         _uiState.value = _uiState.value.copy(usbAutoBridgeEnabled = enabled)
         secureStorage?.saveBooleanPreference(KEY_USB_AUTO_BRIDGE, enabled)
@@ -4712,10 +4753,14 @@ class CompanionViewModel(
         }
     }
 
-    private fun processUserSpeech(raw: String) {
+    private fun processUserSpeech(raw: String, fromVoice: Boolean = true) {
         val text = com.example.meowmba.core.audio.SpokenText.polish(raw)
         if (!com.example.meowmba.core.audio.SpokenText.isUsable(text)) {
             fuLog("processUserSpeech dropped junk: \"$text\"")
+            return
+        }
+        if (fromVoice && com.example.meowmba.core.audio.VoiceIntentGuard.needsClarification(text)) {
+            speak("That may have been background audio. If you meant a request for me, please say Meow and repeat it.")
             return
         }
         // Transport-level idempotence (prog): overlapping callbacks and
@@ -4848,7 +4893,7 @@ class CompanionViewModel(
                 speak("Phone control stopped.")
                 return
             }
-            phoneAgentLoop?.setGoal(text)
+            submitPhoneGoal(text)
             return
         }
         // Phone-control loop: if active, "stop"/"cancel" kills it; else new speech updates the goal.
@@ -4859,8 +4904,12 @@ class CompanionViewModel(
                 speak("Phone control stopped.")
                 return
             }
-            // New speech while loop is active = new goal
-            phoneAgentLoop?.setGoal(text)
+            // Incidental conversation must not replace an approved running task.
+            if (com.example.meowmba.core.agent.runtime.CommandHeuristics.mightBeCommand(text)) {
+                val original = phoneAgentLoop?.goal.orEmpty()
+                phoneAgentLoop?.cancel()
+                submitPhoneGoal("Original task: $original\nUser update: $text")
+            } else speak("I'm still working on the phone task. Say stop to cancel, or give me a specific change.")
             return
         }
 
@@ -5092,7 +5141,7 @@ class CompanionViewModel(
             if (isMultiStepPhoneGoal(text)) {
                 val loop = phoneAgentLoop
                 if (loop == null) speak("Phone control isn't ready. No app action was performed.")
-                else loop.setGoal(text)
+                else submitPhoneGoal(text)
                 return@launch
             }
 
@@ -5103,7 +5152,7 @@ class CompanionViewModel(
                 // Multi-step phone control: if the LLM (not keyword) routed to phone_control,
                 // start the autonomous loop instead of single-shot execution.
                 if (agentIntent.agentId == "phone_control" && AgentRouter.route(text) == null) {
-                    phoneAgentLoop?.setGoal(text)
+                    submitPhoneGoal(text)
                     return@launch
                 }
                 submitAgentIntent(agentIntent)
@@ -5249,12 +5298,9 @@ class CompanionViewModel(
      */
     private fun followUpContextFor(text: String): String? {
         turnContext.scope(conversationId())
-        turnContext.history()?.let { return it }
-        val recent = _uiState.value.chatMessages.takeLast(8)
-        if (recent.isEmpty()) return null
-        return recent.joinToString("\n") {
-            (if (it.isCompanion) "Meow" else "User") + ": " + it.text.take(800)
-        }
+        return turnContext.historyWith(_uiState.value.chatMessages.takeLast(16).map {
+            (if (it.isCompanion) "Meow" else "User") to it.text
+        })
     }
 
     /**
@@ -5433,10 +5479,14 @@ class CompanionViewModel(
 
     private fun tryLaunchAppImmediately(text: String): Boolean {
         val intent = AgentRouter.route(text) ?: return false
-        if (intent.toolId != "phone.launch_app") return false
+        if (intent.toolId !in setOf("phone.launch_app", "phone.run_goal")) return false
         // Keep the fast path, but never skip tool ownership, policy or audit.
         submitAgentIntent(intent)
         return true
+    }
+
+    private fun submitPhoneGoal(text: String) {
+        submitAgentIntent(AgentRouter.AgentIntent("phone_control", "phone.run_goal", mapOf("goal" to text), text.take(100)))
     }
 
     private fun submitAgentIntent(intent: AgentRouter.AgentIntent) {
@@ -6316,7 +6366,7 @@ class CompanionViewModel(
     /** Text input from the chat workspace, routed through the same pipeline as speech. */
     fun onUserTextSubmitted(text: String) {
         if (text.isBlank()) return
-        processUserSpeech(text.trim())
+        processUserSpeech(text.trim(), fromVoice = false)
     }
 
     /**

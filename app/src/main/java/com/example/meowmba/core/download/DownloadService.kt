@@ -27,6 +27,9 @@ import java.io.File
 class DownloadService : Service() {
 
     companion object {
+        data class Status(val fileName: String = "", val active: Boolean = false, val received: Long = 0, val total: Long? = null, val error: String? = null)
+        private val mutableStatus = kotlinx.coroutines.flow.MutableStateFlow(Status())
+        val status: kotlinx.coroutines.flow.StateFlow<Status> = mutableStatus
         const val CHANNEL_ID = "meowmba_download"
         const val NOTIFICATION_ID = 100
         const val ACTION_DOWNLOAD = "com.example.meowmba.DOWNLOAD_MODEL"
@@ -68,6 +71,9 @@ class DownloadService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // One writer per service: a second request must not race or cancel a
+        // model that is already downloading into the same .part file.
+        if (job?.isActive == true) return START_NOT_STICKY
         if (intent?.action != ACTION_DOWNLOAD) {
             stopSelf()
             return START_NOT_STICKY
@@ -89,19 +95,28 @@ class DownloadService : Service() {
 
         job = scope.launch {
             try {
+                modelsDir.mkdirs()
+                mutableStatus.value = Status(fileName, active = true)
                 val dest = File(modelsDir, fileName)
                 val partFile = File(modelsDir, "$fileName.part")
                 partFile.delete()
 
+                var lastProgress = 0L
                 ModelDownloader.downloadWithKtor(url, partFile, hfToken) { received, total ->
                     val fraction = if (total != null && total > 0) {
                         (received.toFloat() / total).coerceIn(0f, 1f)
                     } else 0f
-                    updateNotification("Downloading $fileName", fraction)
+                    val now = android.os.SystemClock.elapsedRealtime()
+                    if (now - lastProgress >= 500 || received == total) {
+                        lastProgress = now
+                        mutableStatus.value = Status(fileName, true, received, total)
+                        updateNotification("Downloading $fileName", fraction)
+                    }
                 }
 
                 if (dest.exists()) dest.delete()
                 check(partFile.renameTo(dest)) { "Could not finalize download" }
+                mutableStatus.value = Status(fileName, received = dest.length(), total = dest.length())
 
                 withContext(Dispatchers.Main) {
                     val notification = buildNotification("$fileName downloaded", 1f)
@@ -109,6 +124,8 @@ class DownloadService : Service() {
                     manager.notify(NOTIFICATION_ID, notification)
                 }
             } catch (e: Exception) {
+                mutableStatus.value = Status(fileName, error = e.message ?: "Download interrupted; retry when online")
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 withContext(Dispatchers.Main) {
                     val notification = buildNotification("Download failed: ${e.message?.take(60) ?: "error"}", -1f)
                         .let { NotificationCompat.Builder(this@DownloadService, CHANNEL_ID)
