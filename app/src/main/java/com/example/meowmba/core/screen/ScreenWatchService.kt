@@ -5,8 +5,10 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
 import android.graphics.PixelFormat
@@ -16,33 +18,86 @@ import android.media.ImageReader
 import android.media.projection.MediaProjection
 import android.os.Handler
 import android.os.IBinder
+import android.os.PowerManager
 import android.util.DisplayMetrics
 import android.view.WindowManager
 import androidx.core.app.ServiceCompat
+import androidx.core.content.ContextCompat
 
 /**
  * Watches the phone's own screen while "watch mode" is on.
  *
- * Deliberately low-impact: one frame every 8 seconds, downscaled to at most
- * 512px wide JPEG-quality bitmap. The user grants MediaProjection once via
- * the system consent dialog; the persistent notification makes the capture
- * visible at all times.
+ * Deliberately low-impact: one frame every 30 seconds, downscaled to at most
+ * 512px wide, and parked entirely while the display is off. The user grants
+ * MediaProjection once via the system consent dialog; the persistent
+ * notification keeps the capture visible at all times.
  */
 class ScreenWatchService : Service() {
 
     private var projection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
     private var imageReader: ImageReader? = null
-    // Capture off the main thread: Bitmap allocs + buffer copies every 8s used
-    // to run on the UI looper and hitch scrolling exactly when watch mode was on.
+    // Capture off the main thread: Bitmap allocs + buffer copies used to run on
+    // the UI looper and hitch scrolling exactly when watch mode was on.
     private var captureThread: android.os.HandlerThread? = null
     private var handler: Handler? = null
+    /** True once watch mode is armed; stays true while the screen is merely off. */
+    private var captureArmed = false
+
+    /**
+     * Capturing while the display is off burns CPU for a frame nobody can change:
+     * MediaProjection still composites and the ImageReader still copies, but the
+     * content is frozen. This was a major contributor to sustained device heating,
+     * so the loop is parked whenever the screen goes off.
+     */
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                Intent.ACTION_SCREEN_OFF -> pauseCapture()
+                Intent.ACTION_SCREEN_ON -> resumeCapture()
+            }
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
         val t = android.os.HandlerThread("screen-watch").also { it.start() }
         captureThread = t
         handler = Handler(t.looper)
+        ContextCompat.registerReceiver(
+            this,
+            screenReceiver,
+            IntentFilter(Intent.ACTION_SCREEN_OFF).apply {
+                addAction(Intent.ACTION_SCREEN_ON)
+            },
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+    }
+
+    private fun isScreenOn(): Boolean {
+        val pm = getSystemService(Context.POWER_SERVICE) as? PowerManager
+        return pm?.isInteractive ?: true
+    }
+
+    /** Arms the loop but does not start it while the screen is off. */
+    private fun armCapture() {
+        captureArmed = true
+        if (isScreenOn()) scheduleNext()
+    }
+
+    private fun pauseCapture() {
+        handler?.removeCallbacks(captureLoop)
+    }
+
+    private fun resumeCapture() {
+        if (!captureArmed) return
+        if (!isScreenOn()) return
+        scheduleNext()
+    }
+
+    private fun scheduleNext() {
+        handler?.removeCallbacks(captureLoop)
+        handler?.post(captureLoop)
     }
 
     private val captureLoop = object : Runnable {
@@ -87,7 +142,7 @@ class ScreenWatchService : Service() {
             p.registerCallback(projectionCallback, handler)
             projection = p
             startVirtualDisplay()
-            handler?.post(captureLoop)
+            armCapture()
         }
         return START_NOT_STICKY
     }
@@ -116,6 +171,9 @@ class ScreenWatchService : Service() {
     }
 
     private fun captureFrame() {
+        // Defensive: the receiver should already have parked the loop, but never
+        // composite a frame for a display that is off.
+        if (!isScreenOn()) return
         val reader = imageReader ?: return
         val image = reader.acquireLatestImage() ?: return
         try {
@@ -150,7 +208,7 @@ class ScreenWatchService : Service() {
         ).build()
         return Notification.Builder(this, CHANNEL_ID)
             .setContentTitle("Meow is watching the screen")
-            .setContentText("One glance every few seconds while watch mode is on.")
+            .setContentText("One glance every 30 seconds while the screen is on.")
             .setSmallIcon(android.R.drawable.ic_menu_view)
             .setOngoing(true)
             .addAction(stopAction)
@@ -165,6 +223,8 @@ class ScreenWatchService : Service() {
     }
 
     override fun onDestroy() {
+        captureArmed = false
+        runCatching { unregisterReceiver(screenReceiver) }
         handler?.removeCallbacks(captureLoop)
         virtualDisplay?.release()
         imageReader?.close()
@@ -184,7 +244,13 @@ class ScreenWatchService : Service() {
         const val EXTRA_DATA = "projection_data"
         private const val CHANNEL_ID = "screen_watch"
         private const val NOTIF_ID = 4242
-        private const val INTERVAL_MS = 8_000L
+        // Was 8s. Continuous MediaProjection capture was the single largest
+        // contributor to device heating: measured Thermal Status 2 (MODERATE),
+        // skin 42.7 C, app holding ~38% CPU with 23+ min accumulated CPU time.
+        // 30s keeps watch mode responsive to real screen changes while cutting
+        // capture work ~3.7x, and the screen-off gate parks the loop entirely
+        // whenever the display is off.
+        private const val INTERVAL_MS = 30_000L
         private const val MAX_EDGE = 512
         private const val RESULT_OK_CODE = -1
 
