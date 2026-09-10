@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import kotlin.coroutines.resume
+import kotlinx.coroutines.ensureActive
 
 /**
  * Phase F3: opt-in UI automation. The service is OFF until the user enables
@@ -207,6 +208,34 @@ class MeowAccessibilityService : AccessibilityService() {
         return "Swiped $direction."
     }
 
+    /** Phone-agent gestures await Android's completion callback without blocking the UI.
+     * Cancellation stops the coroutine; it never claims an already-dispatched gesture was undone. */
+    suspend fun swipeForAgent(direction: String): String = kotlinx.coroutines.withTimeoutOrNull(1500) {
+        kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
+            val display = resources.displayMetrics
+            val cx = display.widthPixels / 2f; val cy = display.heightPixels / 2f
+            val dx = display.widthPixels * .25f; val dy = display.heightPixels * .25f
+            val path = Path()
+            when (direction.lowercase()) {
+                "up" -> { path.moveTo(cx, cy + dy); path.lineTo(cx, cy - dy) }
+                "down" -> { path.moveTo(cx, cy - dy); path.lineTo(cx, cy + dy) }
+                "left" -> { path.moveTo(cx + dx, cy); path.lineTo(cx - dx, cy) }
+                "right" -> { path.moveTo(cx - dx, cy); path.lineTo(cx + dx, cy) }
+                else -> { continuation.resume("Invalid swipe direction"); return@suspendCancellableCoroutine }
+            }
+            val gesture = GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0, 300)).build()
+            val submitted = dispatchGesture(gesture, object : GestureResultCallback() {
+                override fun onCompleted(gestureDescription: GestureDescription?) {
+                    if (continuation.isActive) continuation.resume("Swiped $direction.")
+                }
+                override fun onCancelled(gestureDescription: GestureDescription?) {
+                    if (continuation.isActive) continuation.resume("Gesture cancelled; outcome not verified")
+                }
+            }, null)
+            if (!submitted && continuation.isActive) continuation.resume("Gesture was not accepted")
+        }
+    } ?: "Gesture callback timed out; outcome not verified"
+
     /** Perform a global action: back, home, recents, notifications. */
     fun globalAction(action: String): String {
         val id = when (action.lowercase()) {
@@ -242,6 +271,48 @@ class MeowAccessibilityService : AccessibilityService() {
         return ("Interactive:\n$controls\nText: " + readScreen((budget - controls.length - 25).coerceAtLeast(0))).take(budget)
     }
 
+    /** Bounded semantic snapshot for verified phone workflows. Raw field values stay
+     * local; protected nodes never enter result checks or reusable recipes. */
+    fun observeForAgent(): com.example.meowmba.core.agent.PhoneObservation? =
+        AgentControlSnapshot.capture(this)?.use { it.observation }
+
+    /** Dispatch against the very nodes used for this fresh snapshot, then refresh
+     * the chosen node and its full semantics. No second index lookup or text search. */
+    suspend fun performAgentControl(action: com.example.meowmba.core.agent.PhoneAction,
+        before: com.example.meowmba.core.agent.PhoneObservation): String {
+        kotlinx.coroutines.currentCoroutineContext().ensureActive()
+        val capture = AgentControlSnapshot.capture(this) ?: return "Screen unavailable"
+        capture.use {
+            val frame = it.observation
+            if (!before.sameControls(frame)) return "Screen changed; action discarded"
+            if (com.example.meowmba.core.agent.PhoneActionSafety.screenNeedsManualControl(frame.pkg, frame.visibleText))
+                return "Handoff required: this payment, account or permission screen needs direct manual control."
+            val grounded = com.example.meowmba.core.agent.PhoneVerification.ground(action, frame) ?: return "No unique matching control"
+            val index = grounded.index ?: return "Missing control"
+            val node = it.controls.getOrNull(index - 1) ?: return "Missing control"
+            if (!node.refresh() || !node.isVisibleToUser ||
+                AgentControlSnapshot.control(node, index) != frame.controls[index - 1]) return "Control changed; action discarded"
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            if (grounded.type == "type") return setEditableText(node, grounded.value ?: return "Missing text", "#$index")
+            if (grounded.type !in setOf("tap", "tap_index")) return "Unsupported control action"
+            var target = node
+            val parents = mutableListOf<AccessibilityNodeInfo>()
+            try {
+                var hops = 0
+                while (!target.isClickable && hops++ < 3) {
+                    val parent = target.parent ?: break
+                    parents += parent; target = parent
+                }
+                if (!target.isEnabled || !target.isVisibleToUser || requiresHandoff(node, target))
+                    return com.example.meowmba.core.agent.PhoneActionSafety.SOCIAL_REVIEW
+                if (node !== target && (!target.refresh() || !target.isEnabled || !target.isVisibleToUser || requiresHandoff(node, target)))
+                    return "Handoff required: the control changed; review it yourself."
+                return if (target.performAction(AccessibilityNodeInfo.ACTION_CLICK)) "Tapped #$index."
+                    else "The observed control rejected the tap. Nothing was retried."
+            } finally { parents.forEach { it.recycle() } }
+        }
+    }
+
     /** Full editable values and bounds stay local; the model sees only the
      * bounded summary. Changes beyond a truncated label also invalidate plans. */
     fun controlFingerprint(): String? {
@@ -272,8 +343,11 @@ class MeowAccessibilityService : AccessibilityService() {
     /** Human confirmation stays above the target app, so the user sees what
      * they are approving. Dismissing, timeout, cancellation or any changed
      * app/content invalidates it. A dispatched tap is never retried. */
-    suspend fun confirmSocialTap(text: String?, index: Int?, goal: String): String {
-        val node = if (index != null) collectInteractiveElements().getOrNull(index - 1)
+    suspend fun confirmSocialTap(text: String?, index: Int?, goal: String,
+        selector: com.example.meowmba.core.agent.PhoneSelector? = null): String {
+        val node = if (selector != null) AgentControlSnapshot.capture(this)?.use { capture ->
+            capture.observation.find(selector)?.let { control -> AccessibilityNodeInfo.obtain(capture.controls[control.index - 1]) }
+        } else if (index != null) collectInteractiveElements().getOrNull(index - 1)
             else text?.let { query ->
                 val matches = findNodes(query).filter { it.isVisibleToUser }
                 val exact = matches.filter { readableLabel(it, 500)?.equals(query.trim(), true) == true }

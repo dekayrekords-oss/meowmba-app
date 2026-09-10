@@ -132,6 +132,16 @@ class BodyMotionMapTest {
     }
 
     @Test
+    fun `bounce recovery never outlives the clip final brake`() {
+        BodyProfile.entries.forEach { profile ->
+            val cues = BodyMotionMap.cues(spec(AnimFrame(atMs = 0),
+                AnimFrame(atMs = 500, bodyBounce = 0.8f)), profile)
+            assertTrue(cues.all { it.atMs <= 500 })
+            assertEquals(BodyCue(500, BodyVerb.Brake), cues.last())
+        }
+    }
+
+    @Test
     fun `cues are sorted by time`() {
         val cues = BodyMotionMap.cues(
             spec(

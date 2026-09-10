@@ -158,6 +158,11 @@ class ModelStatusTest {
     fun `configured provider-picker entries build providers but missing local weights do not`() = runTest {
         `when`(mockSecureStorage.getApiKey("openrouter")).thenReturn("synthetic-key-not-used-for-network")
         `when`(mockSecureStorage.getApiKey("openai")).thenReturn("synthetic-key-not-used-for-network")
+        for (id in listOf("anthropic", "custom", "opencode")) {
+            `when`(mockSecureStorage.getApiKey(id)).thenReturn("synthetic-key-not-used-for-network")
+            `when`(mockSecureStorage.getModelName(id)).thenReturn("test-model")
+        }
+        `when`(mockSecureStorage.getEndpoint("custom")).thenReturn("https://fixture.invalid")
         // Regression net: picker entries that build nothing trap users in
         // "No model is ready" (the removed Phi-3/Anthropic/Memba-Custom stubs).
         val vm = newVm(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)

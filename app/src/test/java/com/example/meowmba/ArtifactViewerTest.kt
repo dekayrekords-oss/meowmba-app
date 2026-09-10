@@ -27,6 +27,9 @@ class ArtifactViewerTest {
         assertEquals("audio/mp4", ArtifactViewer.mimeFor(File("song.m4a")))
         assertEquals("image/webp", ArtifactViewer.mimeFor(File("picture.webp")))
         assertEquals("application/pdf", ArtifactViewer.mimeFor(File("document.pdf")))
+        assertEquals("application/vnd.openxmlformats-officedocument.wordprocessingml.document", ArtifactViewer.mimeFor(File("document.docx")))
+        assertEquals("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", ArtifactViewer.mimeFor(File("sheet.xlsx")))
+        assertEquals("text/csv", ArtifactViewer.mimeFor(File("data.csv")))
     }
 
     @Test fun `external intent gives read access to the exact content uri`() {

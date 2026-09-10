@@ -21,7 +21,7 @@ object BusinessControlTools {
         }
         tool("business.agents", "List user-created business agents and their actual IDs") { _ ->
             runtime().store.state.value.agents.joinToString("\n") { "${it.id}: ${it.name} (${if (it.enabled) "enabled" else "disabled"}, ${it.provider})" }
-                .ifBlank { "No business agents yet. Open Agents → Create & run business agents." }
+                .ifBlank { "No business agents yet. Open Agents → Business mode." }
         }
         tool("business.start", "Queue a goal for a saved business agent. Use its exact ID or unique name from business.agents; this queues work, not a completed result.", mapOf("agent" to "string", "goal" to "string"), confirm = true) { args ->
             val rt = runtime()
@@ -29,11 +29,11 @@ object BusinessControlTools {
             val matches = rt.store.state.value.agents.filter { it.id == query || it.name.equals(query, ignoreCase = true) }
             check(matches.size == 1) { "Name does not identify exactly one agent. Use business.agents first." }
             val id = rt.enqueue(matches.single().id, args["goal"].orEmpty())
-            "Job queued, not completed: $id. Check business.jobs or open Your agent team for results and approvals."
+            "Job queued or already active, not completed: $id. Check business.jobs or open Business mode for results and approvals."
         }
         tool("business.jobs", "Read actual saved business-job statuses and result evidence") { _ ->
             runtime().store.state.value.runs.takeLast(8).asReversed().joinToString("\n\n") { "${it.id}: ${it.status}\n${it.goal}\n${it.note.take(1000)}" }.ifBlank { "No business jobs have run." }
         }
-        tool("business.open", "Open your business agent team, saved jobs and approvals") { _ -> open(); "Opened your business agent team, saved jobs and approvals." }
+        tool("business.open", "Open Business mode, saved jobs and approvals") { _ -> open(); "Opened Business mode, saved jobs and approvals." }
     }
 }

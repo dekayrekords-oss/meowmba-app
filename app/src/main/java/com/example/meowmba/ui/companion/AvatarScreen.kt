@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.shape.CircleShape
@@ -36,6 +38,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -75,8 +81,19 @@ fun AvatarScreen(
     onSelectTheme: (AppTheme) -> Unit = {},
     appearanceMode: AppearanceMode = AppearanceMode.DARK,
     onSelectAppearance: (AppearanceMode) -> Unit = {},
+    animal: AvatarAnimal = AvatarAnimal.NONE,
+    onSelectAnimal: (AvatarAnimal) -> Unit = {},
+    expressionIntensity: ExpressionIntensity = ExpressionIntensity.NATURAL,
+    onExpressionIntensity: (ExpressionIntensity) -> Unit = {},
+    playfulness: Playfulness = Playfulness.BALANCED,
+    onPlayfulness: (Playfulness) -> Unit = {},
+    diagnostics: @Composable () -> Unit = {},
     preview: @Composable () -> Unit = {},
 ) {
+    var search by remember { mutableStateOf("") }
+    var category by remember { mutableStateOf("New") }
+    var expanded by remember(search, category) { mutableStateOf(false) }
+    val choices = remember(animations, search, category) { avatarAnimationChoices(animations, category, search) }
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
             modifier = Modifier
@@ -139,6 +156,52 @@ fun AvatarScreen(
                 Spacer(modifier = Modifier.height(10.dp))
             }
 
+            Text("Create new performances", style = MaterialTheme.typography.titleMedium)
+            Text("Say “let’s go fishing”, “can you fish?” or “invent an animation of you juggling stars”. Your on-device model composes supported props and movements, then saves the result here. New creations take time; saved scenes replay immediately.", style = MaterialTheme.typography.bodySmall)
+            Text("Expression", style = MaterialTheme.typography.titleMedium)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ExpressionIntensity.entries.forEach { option ->
+                    FilterChip(selected = expressionIntensity == option, onClick = { onExpressionIntensity(option) }, label = { Text(option.label) })
+                }
+            }
+            Text("Idle playfulness", style = MaterialTheme.typography.titleMedium)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Playfulness.entries.forEach { option ->
+                    FilterChip(selected = playfulness == option, onClick = { onPlayfulness(option) }, label = { Text(option.label) })
+                }
+            }
+            Text("Quiet keeps small idle movements. Balanced and Lively add occasional scenes. Requested performances remain available.", style = MaterialTheme.typography.bodySmall)
+            diagnostics()
+            if (style.isLumen) {
+                  Text("Choose your character", style = MaterialTheme.typography.titleMedium)
+                  Text("Choose a form, or say “be a rabbit”, “be a panda” or “become a robot”. Each has its own expressive eyes. Your choice is remembered. Say “go back to normal” to return to eyes only.",
+                      style = MaterialTheme.typography.bodySmall)
+                  FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AvatarAnimal.entries.forEach { option ->
+                        val shown = if (style == AvatarStyle.LUMEN_CAT) AvatarAnimal.CAT else animal
+                        FilterChip(selected = shown == option, onClick = { onSelectAnimal(option) },
+                            label = { Text(option.label) })
+                    }
+                  }
+                Text("Tap an eye on the main screen to enable the camera. Lumen follows visible faces on-device; it does not identify people. Long-press for settings.",
+                    style = MaterialTheme.typography.bodySmall)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(selected = false, onClick = { onPlayAnimation("dog") }, label = { Text("Act like a dog") })
+                    FilterChip(selected = false, onClick = { onPlayAnimation("cat") }, label = { Text("Act like a cat") })
+                }
+                Text("Act-like performances are temporary. Choosing a form above, or saying “become”, keeps it until you change it. More forms can be added to the same rig.",
+                    style = MaterialTheme.typography.bodySmall)
+                Spacer(Modifier.height(12.dp))
+                Text("Emotion rehearsal", style = MaterialTheme.typography.titleMedium)
+                Text("Watch a feeling arrive, hold and settle. Conversation and touch also bring these expressions to life.",
+                    style = MaterialTheme.typography.bodySmall)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CompanionEmotion.entries.forEach { feeling ->
+                        FilterChip(selected = false, onClick = { onPlayAnimation("emotion:${feeling.name}") },
+                            label = { Text(feeling.name.lowercase().replaceFirstChar { it.uppercase() }) })
+                    }
+                }
+            }
             Spacer(modifier = Modifier.height(18.dp))
             Text(
                 text = "Eye color",
@@ -146,19 +209,20 @@ fun AvatarScreen(
                 style = MaterialTheme.typography.titleMedium,
             )
             Text(
-                text = "Iris color for Pearl and Godot.",
+                text = "Iris color for Lumen, Pearl and Godot.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall,
             )
             Spacer(modifier = Modifier.height(10.dp))
-            ColorSwatchRow(selected = eyeColor, onSelect = onSelectEyeColor)
+            ColorSwatchRow(selected = eyeColor, onSelect = onSelectEyeColor, label = "Eye color")
 
-            if (style == AvatarStyle.PEARL) {
+            if (style == AvatarStyle.PEARL || style.isLumen) {
                 Spacer(Modifier.height(18.dp))
-                Text("Cat color", style = MaterialTheme.typography.titleMedium)
-                Text("Ears, eyelids, nose, mouth and whiskers.", style = MaterialTheme.typography.bodySmall)
+                Text(if (style.isLumen) "Animal color" else "Cat color", style = MaterialTheme.typography.titleMedium)
+                Text(if (style.isLumen) "Ears, muzzle, markings and tail. Eyes and glow stay independent."
+                    else "Ears, nose, mouth and whiskers. Eyes and glow stay independent.", style = MaterialTheme.typography.bodySmall)
                 Spacer(Modifier.height(10.dp))
-                ColorSwatchRow(selected = featureColor, onSelect = onSelectFeatureColor)
+                ColorSwatchRow(selected = featureColor, onSelect = onSelectFeatureColor, label = "Feature color")
             }
 
             Spacer(modifier = Modifier.height(18.dp))
@@ -173,7 +237,7 @@ fun AvatarScreen(
                 style = MaterialTheme.typography.bodySmall,
             )
             Spacer(modifier = Modifier.height(10.dp))
-            ColorSwatchRow(selected = glowColor, onSelect = onSelectGlowColor)
+            ColorSwatchRow(selected = glowColor, onSelect = onSelectGlowColor, label = "Glow color")
 
             Spacer(modifier = Modifier.height(18.dp))
             Text(
@@ -182,26 +246,51 @@ fun AvatarScreen(
                 style = MaterialTheme.typography.titleMedium,
             )
             Text(
-                text = "All styles share every animation — only the face changes. Tap one to watch it play.",
+                text = "Original performances adapt to each face. Lumen adds floating props and one-eye winks. Tap one to watch, or ask ‘play Warm Hello animation’.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall,
             )
             Spacer(modifier = Modifier.height(10.dp))
+            OutlinedTextField(value = search, onValueChange = { search = it },
+                label = { Text("Search all animations") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                (listOf("New") + AvatarPerformanceCatalog.entries.map { it.category }.distinct() + "More").forEach { group ->
+                    FilterChip(selected = category == group && search.isBlank(), onClick = { category = group; search = "" }, label = { Text(group) })
+                }
+            }
+            TextButton(onClick = { onPlayAnimation("surprise me") }) { Text("Surprise me • a different performance") }
 
-            if (animations.isEmpty()) {
+            if (choices.isEmpty()) {
                 Text(
-                    text = "No animations yet.",
+                    text = if (animations.isEmpty()) "No animations yet." else "No matches. Try another name or category.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium,
                 )
             } else {
-                animations.forEach { name ->
+                (if (expanded) choices else choices.take(12)).forEach { name ->
                     AnimationRow(name = name, onClick = { onPlayAnimation(name) })
                     Spacer(modifier = Modifier.height(8.dp))
+                }
+                if (choices.size > 12) TextButton(onClick = { expanded = !expanded }) {
+                    Text(if (expanded) "Show fewer" else "Show all ${choices.size} animations")
                 }
             }
 
             Spacer(modifier = Modifier.height(40.dp))
+        }
+    }
+}
+
+internal fun avatarAnimationChoices(names: List<String>, category: String, query: String): List<String> {
+    val term = query.trim().lowercase(java.util.Locale.ROOT)
+    return names.distinct().filter { name ->
+        val entry = AvatarPerformanceCatalog.resolve(name)?.takeIf { it.title == name }
+        if (term.isNotEmpty()) name.lowercase(java.util.Locale.ROOT).contains(term) ||
+            entry?.aliases?.any { it.lowercase(java.util.Locale.ROOT).contains(term) } == true
+        else when (category) {
+            "New" -> entry != null
+            "More" -> entry == null
+            else -> entry?.category == category
         }
     }
 }
@@ -272,6 +361,7 @@ private fun AnimationRow(name: String, onClick: () -> Unit) {
 @Composable
 private fun EyePreview(style: AvatarStyle, modifier: Modifier = Modifier) {
     val eyeColor = Color(0xFF3FB950)
+    val lumenPainter = remember { LumenPainter() }
     Canvas(modifier = modifier) {
         val cx = size.width / 2f
         val cy = size.height / 2f
@@ -279,6 +369,9 @@ private fun EyePreview(style: AvatarStyle, modifier: Modifier = Modifier) {
         val eyeH = size.height * 0.62f
 
         when (style) {
+            AvatarStyle.LUMEN, AvatarStyle.LUMEN_CAT -> lumenPainter.draw(this,
+                LumenFrame(cat = if (style == AvatarStyle.LUMEN_CAT) 1f else 0f), Color(0xFF4DBCB7), Color(0xFF4DBCB7),
+                catFeatures = style == AvatarStyle.LUMEN_CAT, featureColor = Color(0xFFE8D5B9))
             AvatarStyle.SIGNAL -> {
                 // Jarvis Orb swatch: bright nucleus + scattered parameter dots.
                 val cyan = Color(0xFF5CE1FF)
@@ -357,20 +450,23 @@ private fun EyePreview(style: AvatarStyle, modifier: Modifier = Modifier) {
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 private fun ColorSwatchRow(
     selected: Long,
     onSelect: (Long) -> Unit,
+    label: String,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         AvatarColors.swatches.forEach { swatch ->
             val isOn = (swatch.argb and 0xFFFFFFFFL) == (selected and 0xFFFFFFFFL)
             Box(
                 modifier = Modifier
                     .size(48.dp)
-                    .semantics { contentDescription = swatch.label + if (isOn) ", selected" else "" }
+                    .semantics { contentDescription = "$label ${swatch.label}" + if (isOn) ", selected" else "" }
                     .clip(CircleShape)
                     .background(Color(swatch.argb))
                     .border(

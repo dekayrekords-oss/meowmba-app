@@ -65,6 +65,26 @@ class SecureStorageManager(val context: Context) {
         return sharedPreferences.getString("pref_$key", null)
     }
 
+    /** Style and anatomy are one reversible preference, including legacy Cat migration. */
+    fun saveAvatarForm(animalKey: String) {
+        sharedPreferences.edit().putString("pref_avatar_animal", animalKey)
+            .putString("pref_avatar_style", "lumen").apply()
+    }
+
+    /** One disk transaction for onboarding, so a saved key/default/readiness
+     * cannot be lost halfway through a process restart. Call off the UI thread. */
+    fun saveSetupSelection(preferences: Map<String, String>, provider: String? = null,
+        apiKey: String? = null, model: String? = null, endpoint: String? = null,
+        models: Map<String, String> = emptyMap()) {
+        val editor = sharedPreferences.edit()
+        preferences.forEach { (name, value) -> editor.putString("pref_$name", value) }
+        if (provider != null && apiKey != null) editor.putString("api_key_$provider", apiKey)
+        if (provider != null && model != null) editor.putString("model_$provider", model)
+        if (provider != null && endpoint != null) editor.putString("endpoint_$provider", endpoint)
+        models.forEach { (name, value) -> editor.putString("model_$name", value) }
+        check(editor.commit()) { "Could not save setup securely. Please retry." }
+    }
+
     fun saveBooleanPreference(key: String, value: Boolean) {
         sharedPreferences.edit().putBoolean("pref_bool_$key", value).apply()
     }

@@ -22,12 +22,11 @@ object RoadAlerts {
         "com.waze",
         "com.google.android.apps.maps",
         "com.google.android.apps.mapslite",
-        "com.google.android.googlequicksearchbox",
     )
 
     private val POLICE = listOf(
         "police", "cop", "cops", "officer", "speed trap", "speedtrap",
-        "radar", "checkpoint", "k-9", "k9",
+        "radar",
     )
     private val CAMERA = listOf(
         "speed camera", "speed cam", "red light camera", "traffic camera",
@@ -40,10 +39,13 @@ object RoadAlerts {
         if (packageName !in SOURCE_PACKAGES) return null
         val blob = listOfNotNull(title, text).joinToString(" ").lowercase()
         if (blob.isBlank()) return null
+        // Navigation destinations and removed reports are not nearby hazards.
+        if (Regex("\\b(?:no (?:police|cops|hazards)|police (?:station|department)|report (?:removed|dismissed)|no longer (?:there|reported))\\b")
+                .containsMatchIn(blob)) return null
         val kind = when {
-            POLICE.any { it in blob } -> RoadAlert.Kind.POLICE
-            CAMERA.any { it in blob } -> RoadAlert.Kind.CAMERA
-            HAZARD.any { it in blob } -> RoadAlert.Kind.HAZARD
+            CAMERA.any { containsPhrase(blob, it) } -> RoadAlert.Kind.CAMERA
+            POLICE.any { containsPhrase(blob, it) } -> RoadAlert.Kind.POLICE
+            HAZARD.any { containsPhrase(blob, it) } -> RoadAlert.Kind.HAZARD
             else -> return null
         }
         val source = when {
@@ -52,9 +54,9 @@ object RoadAlerts {
             else -> "Google"
         }
         val label = when (kind) {
-            RoadAlert.Kind.POLICE -> "Police nearby"
-            RoadAlert.Kind.CAMERA -> "Speed camera nearby"
-            RoadAlert.Kind.HAZARD -> "Road hazard nearby"
+            RoadAlert.Kind.POLICE -> "Police report"
+            RoadAlert.Kind.CAMERA -> "Camera report"
+            RoadAlert.Kind.HAZARD -> "Road hazard report"
         }
         val detail = (title ?: text ?: "").trim().take(80)
         return RoadAlert(
@@ -62,9 +64,12 @@ object RoadAlerts {
             summary = if (detail.isBlank() || detail.equals(label, ignoreCase = true)) {
                 "$label ($source)"
             } else {
-                "$label — $detail"
+                "$label ($source) — $detail"
             },
             source = source,
         )
     }
+
+    private fun containsPhrase(text: String, phrase: String): Boolean =
+        Regex("\\b" + Regex.escape(phrase) + "\\b").containsMatchIn(text)
 }

@@ -28,7 +28,7 @@ data class GeneratedMedia(
     val label: String,
     val timestamp: Long = System.currentTimeMillis()
 ) {
-    enum class MediaType { IMAGE, VIDEO, AUDIO }
+    enum class MediaType { IMAGE, VIDEO, AUDIO, DOCUMENT }
 }
 
 /**
@@ -58,6 +58,13 @@ data class CompanionState(
     val name: String = "Meow",
     val interactionState: InteractionState = InteractionState.IDLE,
     val emotion: CompanionEmotion = CompanionEmotion.IDLE,
+    /** Short, explicit acting rehearsal; never persists as a conversational mood. */
+    val emotionPreview: CompanionEmotion? = null,
+    val expressionPlan: ExpressionPlan? = null,
+    val expressionIntensity: ExpressionIntensity = ExpressionIntensity.NATURAL,
+    val playfulness: Playfulness = Playfulness.BALANCED,
+    /** Replaying the same immutable clip still starts a new performance. */
+    val avatarPerformanceSequence: Long = 0,
     val lookAtOffset: Offset = Offset.Zero, // Screen coordinates for eyes to track
     val captionText: String? = null,
     val isChatExpanded: Boolean = false,
@@ -94,6 +101,9 @@ data class CompanionState(
     val showAvatarScreen: Boolean = false,
     /** Which eye style the face is drawn in. Persisted across launches. */
     val avatarStyle: AvatarStyle = AvatarStyle.DEFAULT,
+    val avatarAnimal: AvatarAnimal = AvatarAnimal.NONE,
+    /** Temporary costume from an explicit performance; never persisted over the user's choice. */
+    val performanceAnimal: AvatarAnimal? = null,
     val appTheme: AppTheme = AppTheme.COMPANION,
     val appearanceMode: AppearanceMode = AppearanceMode.DARK,
     val avatarFeatureColor: Long = 0xFFE8D5B9L,
@@ -120,6 +130,7 @@ data class CompanionState(
     /** Phase G1: current mood label (content, excited, sleepy, ...). */
     val moodLabel: String = "content",
     val robotBodyEnabled: Boolean = false,
+    val robotConnected: Boolean = false,
     val robotHost: String = "192.168.1.200",
     val robotPort: String = "9100",
     val robotStatus: String = "simulated (no body)",
@@ -138,6 +149,9 @@ data class CompanionState(
     val commentaryEnabled: Boolean = false,
     /** Waze / Maps police alerts on the face. */
     val roadAlertsEnabled: Boolean = false,
+    val roadAlertStatus: String? = null,
+    val idleScenesEnabled: Boolean = true,
+    val voiceRecognitionStatus: String? = null,
     val policeAlert: String? = null,
     /** App drawer overlay (swipe right) is open. */
     val showAppDrawer: Boolean = false,
@@ -156,7 +170,7 @@ data class CompanionState(
     // avatar (and re-ran resolvePose) for the entire length of every reply.
     // It lives in CompanionViewModel.mouthEnergy as its own StateFlow, read
     // only inside the Canvas draw lambda.
-    /** Result of the last "Test connection" action on the Hardware page. */
+    /** Result of the last "Test connection" action on the LLM page. */
     val connectionTestResult: String? = null,
     val connectionTestRunning: Boolean = false,
     /** Conversation history, sourced live from Room. */
@@ -172,8 +186,11 @@ data class CompanionState(
     val showMemoryScreen: Boolean = false,
     val showStudioScreen: Boolean = false,
     val showAssetBrowser: Boolean = false,
+    val assetBrowserInitialPath: String = "",
     /** Invented clip currently playing over the face, or null. Clears itself when done. */
     val activeAnimation: CustomAnimationSpec? = null,
+    /** Quiet library gestures yield immediately to a conversation or an open panel. */
+    val ambientPerformance: Boolean = false,
     /** Godot-style channel composition currently driving the face, if any. */
     val activeComposed: ComposedExpression? = null,
     /** True only when the MetaMemory glasses app is actually installed — never assumed. */
@@ -282,7 +299,7 @@ data class CompanionState(
     /** Full-screen LOOI body panel opened from the Robot tile. */
     val showRobotScreen: Boolean = false,
 
-    /** Hardware → Voice Recognition: which speech-to-text backend to use. */
+    /** LLM → Voice Recognition: which speech-to-text backend to use. */
     val showVoiceModelScreen: Boolean = false,
     val asrBackend: com.example.meowmba.core.audio.AsrBackend =
         com.example.meowmba.core.audio.AsrBackend.DEFAULT,
@@ -293,6 +310,10 @@ data class CompanionState(
     val projects: List<ProjectUi> = emptyList(),
     val activeProjectId: Long? = null,
     val activeProjectName: String? = null,
+    val projectWork: com.example.meowmba.core.work.ProjectWorkSnapshot? = null,
+    val projectWorkBusy: Boolean = false,
+    val projectExecuting: Boolean = false,
+    val projectWorkMessage: String? = null,
     val activeConversationId: Long = 0L,
 
     /** Obsidian-style vault notes screen. */
@@ -335,6 +356,8 @@ data class CompanionState(
     /** Compatible bundles found in the public Downloads collection. */
     val discoveredModelFiles: List<DiscoveredModelFile> = emptyList(),
     val modelScanRunning: Boolean = false,
+    val modelScanMessage: String? = null,
+    val modelImportRunning: Boolean = false,
     /** Keep listening for the wake phrase in the background (foreground service). */
     val backgroundListeningEnabled: Boolean = false,
     /** Vision: set when a look request needs the CAMERA runtime permission. */
@@ -356,6 +379,9 @@ data class CompanionState(
     val faceGazeY: Float? = null,
     /** Generated media (image, video, audio) to show in a popup. */
     val generatedMedia: GeneratedMedia? = null,
+    val artifactOpenMessage: String? = null,
+    val phoneControlSetupGoal: String? = null,
+    val modelSetupRequired: Boolean = false,
     /** USB auto-bridge is monitoring for a tethered desktop connection. */
     val usbAutoBridgeEnabled: Boolean = false,
     /** True when the phone is plugged into USB (data connection). */
@@ -393,7 +419,7 @@ fun isLandscapeScreen(context: android.content.Context?): Boolean {
 }
 
 /**
- * Snapshot of what model is loaded where, shown on the Hardware (LLM Manager)
+ * Snapshot of what model is loaded where, shown on the LLM
  * page. Populated by the ViewModel from the same secure configuration that
  * builds the actual providers, so the page always reflects reality.
  */
@@ -410,6 +436,7 @@ data class LoadedModelsInfo(
     /** Network (LAN) server model — Ollama. */
     val networkEndpoint: String = "",
     val networkModel: String = "",
+    val networkKeyConfigured: Boolean = false,
     /** True when the local model file actually exists on disk. */
     val localInstalled: Boolean = false,
     /** Which source is actively serving responses right now. */
@@ -421,13 +448,16 @@ data class InstalledModelFile(
     val fileName: String,
     val sizeBytes: Long,
     /** Catalog display name when the file matches a curated option, else null (custom). */
-    val catalogDisplayName: String? = null
+    val catalogDisplayName: String? = null,
+    val downloadedAtMs: Long? = null,
+    val modifiedAtMs: Long? = null,
 )
 
 data class DiscoveredModelFile(
     val uri: String,
     val fileName: String,
     val sizeBytes: Long,
+    val modifiedAtMs: Long? = null,
 )
 
 /**
@@ -452,7 +482,16 @@ enum class CompanionEmotion {
     ALERT,
     SLEEPY,
     CONFUSED,
-    PROUD
+    PROUD,
+    ATTENTIVE,
+    UNDERSTANDING,
+    CONCERNED,
+    APOLOGETIC,
+    SURPRISED,
+    PLAYFUL,
+    AFFECTIONATE,
+    DETERMINED,
+    RELIEVED
 }
 
 /**

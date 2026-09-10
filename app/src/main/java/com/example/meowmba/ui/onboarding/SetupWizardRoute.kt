@@ -44,11 +44,23 @@ fun SetupWizardRoute(
             modifier = Modifier
                 .fillMaxSize()
                 .safeDrawingPadding()
-                .imePadding()
-                .verticalScroll(wizardScroll)
-                .padding(24.dp),
+                .imePadding(),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            // Keep the exit outside scrolling content and independent of AI
+            // readiness, downloads and optional permission setup.
+            Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = { step-- }, enabled = step > 0) { Text("Back") }
+                    OutlinedButton(onClick = onFinished) { Text("Skip setup") }
+                }
+                Text("Open Meow now — no key or model required. Finish later in Settings → Start setup.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            HorizontalDivider()
+            Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(wizardScroll).padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally) {
             Spacer(Modifier.height(12.dp))
             Text(
                 text = "Welcome to Meow",
@@ -65,11 +77,7 @@ fun SetupWizardRoute(
             Spacer(Modifier.height(16.dp))
             LinearProgressIndicator(progress = { (step + 1) / 5f }, modifier = Modifier.fillMaxWidth())
             Text("Step ${step + 1} of 5", modifier = Modifier.padding(top = 8.dp), style = MaterialTheme.typography.labelMedium)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                TextButton(onClick = { step-- }, enabled = step > 0) { Text("Back") }
-                TextButton(onClick = onFinished) { Text("Explore without AI") }
-            }
-            Text("Local models download separately. Keep Wi-Fi on; see Hardware and Voice recognition for progress or retry. Basic app-opening commands do not require a cloud key.", style = MaterialTheme.typography.bodySmall)
+            Text("To connect AI now, use a local model or OpenRouter. You can also skip setup and add AI later.", style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(16.dp))
 
             when (step) {
@@ -101,6 +109,7 @@ fun SetupWizardRoute(
                     Text("Image setup is optional. Continue without changing your existing choice, or tap Use this option above to save a new one.", style = MaterialTheme.typography.bodySmall)
                 }
                 else -> AdvancedSetupStep(context = context, onFinished = onFinished, onEnablePermissions = onEnablePermissions)
+            }
             }
         }
     }

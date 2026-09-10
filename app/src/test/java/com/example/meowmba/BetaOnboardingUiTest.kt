@@ -40,7 +40,45 @@ class BetaOnboardingUiTest {
         compose.onNodeWithText("API key").assertDoesNotExist()
         compose.onNodeWithText("OpenAI (GPT)").assertDoesNotExist()
         render("onboarding-light")
-        compose.onNodeWithText("Explore without AI").performClick()
+        compose.onNodeWithText("Skip setup").assertIsDisplayed().assertIsEnabled().performClick()
+        assertTrue(finished)
+        assertEquals(0, permissions)
+    }
+
+    @Test fun skipStaysVisibleWhileScrolledToTheEndWithNoWorkingAi() {
+        var finished = false
+        compose.setContent { MaterialTheme { SetupWizardRoute(onFinished = { finished = true }) } }
+        compose.onNodeWithText("AI ready · Continue").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithText("Skip setup").assertIsDisplayed().assertIsEnabled()
+        compose.onNodeWithText("Finish later in Settings → Start setup", substring = true).assertIsDisplayed()
+        render("onboarding-skip-scrolled")
+        compose.onNodeWithText("Skip setup").performClick()
+        assertTrue(finished)
+    }
+
+    @Test fun skipRemainsAvailableOnEveryOptionalStepWithoutRequestingPermissions() {
+        var finished = false
+        var permissions = 0
+        // A previously verified brain lets this UI test reach the optional
+        // steps without a real network request or touching device credentials.
+        storageMock.close()
+        storageMock = org.mockito.Mockito.mockConstruction(com.example.meowmba.core.security.SecureStorageManager::class.java) { storage, _ ->
+            org.mockito.Mockito.`when`(storage.getPreference("brain_provider")).thenReturn("openrouter")
+            org.mockito.Mockito.`when`(storage.getApiKey("openrouter")).thenReturn("test-key")
+            org.mockito.Mockito.`when`(storage.getModelName("openrouter")).thenReturn("test:free")
+            org.mockito.Mockito.`when`(storage.getPreference("chat_verified_openrouter")).thenReturn(
+                com.example.meowmba.core.setup.PlannerReadiness.cloudStamp("test:free", "test-key"))
+        }
+        compose.setContent { MaterialTheme {
+            SetupWizardRoute(onFinished = { finished = true }, onEnablePermissions = { permissions++ })
+        } }
+        listOf("AI ready · Continue", "Set up later", "Use text for now", "Continue to permissions & connections").forEachIndexed { index, action ->
+            compose.onNodeWithText("Step ${index + 1} of 5").assertExists()
+            compose.onNodeWithText("Skip setup").assertIsDisplayed().assertIsEnabled()
+            compose.onNodeWithText(action).performScrollTo().performClick()
+        }
+        compose.onNodeWithText("Step 5 of 5").assertExists()
+        compose.onNodeWithText("Skip setup").assertIsDisplayed().assertIsEnabled().performClick()
         assertTrue(finished)
         assertEquals(0, permissions)
     }
@@ -50,6 +88,8 @@ class BetaOnboardingUiTest {
         compose.onNodeWithText("Paste your OpenRouter key").assertDoesNotExist()
         compose.onAllNodes(isToggleable()).onFirst().performScrollTo().performClick()
         compose.onNodeWithText("Paste your OpenRouter key").assertExists()
+        compose.onNodeWithText("Get an OpenRouter API key ↗").performScrollTo()
+        render("onboarding-openrouter")
         compose.onAllNodes(isToggleable()).onFirst().performScrollTo().performClick()
         compose.onNodeWithText("Paste your OpenRouter key").assertDoesNotExist()
     }

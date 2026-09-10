@@ -166,6 +166,44 @@ class VisionPipelineTest {
     }
 
     @Test
+    fun `saved OpenAI vision model and endpoint apply to camera and browser`() = runTest {
+        `when`(mockSecureStorage.getApiKey("openai")).thenReturn("test-key")
+        `when`(mockSecureStorage.getModelName("openai_vision")).thenReturn("test-image-model")
+        `when`(mockSecureStorage.getEndpoint("openai")).thenReturn("https://vision.example.test")
+        val vm = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
+        vm.onModelSelected("OpenAI (Cloud)")
+        listOf(vm.visionProviderFor(), vm.browserVisionProvider()).forEach { provider ->
+            assertTrue(provider is OpenAIVisionProvider)
+            assertEquals("test-image-model", provider!!.javaClass.getDeclaredField("model").apply { isAccessible = true }.get(provider))
+            assertEquals("https://vision.example.test", provider.javaClass.getDeclaredField("baseUrl").apply { isAccessible = true }.get(provider))
+        }
+    }
+
+    @Test
+    fun `OpenAI default inside OmniRoute uses the saved OpenAI vision configuration`() = runTest {
+        `when`(mockSecureStorage.getApiKey("openai")).thenReturn("test-key")
+        `when`(mockSecureStorage.getPreference("default_brain")).thenReturn("openai")
+        `when`(mockSecureStorage.getModelName("openai_vision")).thenReturn("test-image-model")
+        val vm = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
+        vm.onModelSelected("Omniroute (Local router)")
+        val provider = vm.visionProviderFor()
+        assertEquals("OpenAI vision", provider?.name)
+        assertEquals("test-image-model", provider!!.javaClass.getDeclaredField("model").apply { isAccessible = true }.get(provider))
+    }
+
+    @Test
+    fun `OpenRouter vision uses the configured model and endpoint`() = runTest {
+        `when`(mockSecureStorage.getApiKey("openrouter")).thenReturn("test-key")
+        `when`(mockSecureStorage.getModelName("openrouter_vision")).thenReturn("test/vision")
+        `when`(mockSecureStorage.getEndpoint("openrouter")).thenReturn("https://gateway.example.test/api")
+        val vm = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
+        vm.onModelSelected("OpenRouter (Cloud)")
+        val provider = vm.visionProviderFor()!!
+        assertEquals("test/vision", provider.javaClass.getDeclaredField("model").apply { isAccessible = true }.get(provider))
+        assertEquals("https://gateway.example.test/api", provider.javaClass.getDeclaredField("baseUrl").apply { isAccessible = true }.get(provider))
+    }
+
+    @Test
     fun `on-device selection uses device vision`() = runTest {
         val vm = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
 

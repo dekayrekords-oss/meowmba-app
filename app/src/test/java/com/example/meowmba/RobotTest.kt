@@ -159,7 +159,7 @@ class RobotManagerTest {
     }
 
     @Test
-    fun `a lost face is searched for, and the search is bounded`() {
+    fun `a lost face never starts autonomous body search`() {
         val m = RobotManager()
         m.keepPersonInFrame(0.5f, -0.2f, 1f, nowMs = 1_000L)
         val sim = m.active as SimulatedMotorController
@@ -171,11 +171,11 @@ class RobotManagerTest {
             pansAfterLock,
             sim.history.count { it.startsWith("servo1") },
         )
-        // Past the hold they are really gone: sweep to find them again.
+        // Loss must never start an open-loop search on the physical body.
         m.keepPersonInFrame(null, null, null, nowMs = 1_800L)
-        assertTrue(
-            "a lost face must be searched for, got ${sim.history}",
-            sim.history.count { it.startsWith("servo1") } > pansAfterLock,
+        assertEquals(
+            "a lost face must not start a sweep, got ${sim.history}",
+            pansAfterLock, sim.history.count { it.startsWith("servo1") },
         )
         // ...but the sweep has a budget: it must stop instead of hunting forever.
         var now = 2_000L

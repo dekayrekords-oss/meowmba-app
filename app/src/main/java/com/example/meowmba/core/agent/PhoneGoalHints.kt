@@ -7,7 +7,7 @@ object PhoneGoalHints {
         // Generic read-only stopping point, based on an actually exposed field.
         if (!PhoneGoalLimits.mayType(goal) && Regex("\\b(?:find|open|show) (?:the )?search (?:box|field)\\b", RegexOption.IGNORE_CASE).containsMatchIn(goal) &&
             screen.lineSequence().any { it.contains("search", true) && it.endsWith("[edit]") })
-            return PhoneAction("done", text = "The search field is visible. I stopped without typing or posting.")
+            return PhoneAction("done", text = "The search field is visible. I stopped without typing or posting.", expect = PhoneExpectation("element", pkg, selector = PhoneSelector(role = "edit")))
         if (pkg != "com.facebook.katana") return null
         val request = Regex("^(?:open|launch) (?:the app )?(?:facebook|fact book)(?: app)? (?:and then|and|then|to) (?:start|create|open|write|make) (?:a |the |new )?post(?: (?:saying|that says) (.+))?[.!]?$", RegexOption.IGNORE_CASE)
             .matchEntire(goal.trim()) ?: return null
@@ -18,9 +18,9 @@ object PhoneGoalHints {
             (screen.contains("Post settings", true) || screen.contains("Audience", true))
         val newComposer = screen.contains("New post", true) && screen.contains("Next", true)
         if ((legacyComposer || newComposer) && screen.contains("[edit]", true)) {
-            if (draft == null) return PhoneAction("done", text = "Facebook's post composer is open. I didn't type or publish anything.")
+            if (draft == null) return PhoneAction("done", text = "Facebook's post composer is open. I didn't type or publish anything.", expect = PhoneExpectation("element", pkg, selector = PhoneSelector(role = "edit")))
             val editLabels = screen.lineSequence().mapNotNull { Regex("^(?:\\d+\\. )?(.*) \\[edit]$").matchEntire(it.trim())?.groupValues?.get(1) }.toList()
-            if (draft in editLabels) return PhoneAction("done", text = "Your Facebook draft is ready: $draft. Nothing was published; review it before posting.")
+            if (draft in editLabels) return PhoneAction("done", text = "Your Facebook draft is ready: $draft. Nothing was published; review it before posting.", expect = PhoneExpectation("editable_equals", pkg, draft, PhoneSelector(role = "edit")))
             if (editLabels.any { it == "What's on your mind?" }) return PhoneAction("type", field = "What's on your mind?", value = draft)
             return PhoneAction("blocked", text = "This composer already contains text. Please review it; I won't overwrite an existing draft.")
         }

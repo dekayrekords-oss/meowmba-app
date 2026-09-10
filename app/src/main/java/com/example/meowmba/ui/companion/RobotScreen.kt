@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.meowmba.core.robot.RobotBaseControlPolicy
 
 /**
  * LOOI body console, opened from the Robot tile. Every body option lives here
@@ -29,6 +30,7 @@ import androidx.compose.ui.unit.sp
 fun RobotScreen(
     robotStatus: String = "simulated (no body)",
     robotBodyEnabled: Boolean = false,
+    robotConnected: Boolean = false,
     robotUseBluetooth: Boolean = true,
     robotBtAddress: String = "",
     robotHost: String = "",
@@ -42,11 +44,11 @@ fun RobotScreen(
     onRobotPortChange: (String) -> Unit = {},
     onRobotScan: () -> Unit = {},
     onRefresh: () -> Unit = {},
+    onStop: () -> Unit = {},
     onClose: () -> Unit = {},
 ) {
-    val attached = robotStatus.contains("body", ignoreCase = true) &&
-        !robotStatus.contains("simulated", ignoreCase = true) &&
-        !robotStatus.contains("offline", ignoreCase = true)
+    val controlAvailable = RobotBaseControlPolicy.CONTROL_AVAILABLE
+    val attached = robotConnected && controlAvailable
     val statusColor = when {
         attached -> MaterialTheme.colorScheme.primary
         robotStatus.contains("offline", ignoreCase = true) -> MaterialTheme.colorScheme.error
@@ -74,7 +76,7 @@ fun RobotScreen(
                 }
             }
             Text(
-                "Connect a LOOI body over Bluetooth or Wi-Fi. All body options live here.",
+                "Physical control is temporarily unavailable. On-screen attention and avatar animation remain available.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 13.sp,
             )
@@ -91,7 +93,7 @@ fun RobotScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
-                        Icons.Default.CheckCircle,
+                        if (attached) Icons.Default.CheckCircle else Icons.Default.Android,
                         contentDescription = null,
                         tint = statusColor,
                         modifier = Modifier.size(20.dp)
@@ -100,31 +102,51 @@ fun RobotScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Status", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                         Text(
-                            robotStatus.replace("LOOI", "base", ignoreCase = true),
+                            if (!controlAvailable) RobotBaseControlPolicy.UNAVAILABLE_MESSAGE
+                            else robotStatus.replace("LOOI", "base", ignoreCase = true),
                             color = if (attached) MaterialTheme.colorScheme.onSurface else statusColor,
                             fontSize = 14.sp,
                         )
                     }
-                    OutlinedButton(onClick = onRefresh) {
+                    OutlinedButton(onClick = onRefresh, enabled = controlAvailable) {
                         Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Refresh")
+                        Text(if (!controlAvailable) "Unavailable" else if (attached) "Connected" else "Connect")
                     }
                 }
             }
             Spacer(modifier = Modifier.height(20.dp))
 
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                Button(onClick = onStop, modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) {
+                    Text("Disable control")
+                }
+                OutlinedButton(onClick = { onRobotBodyChange(false) }, modifier = Modifier.weight(1f)) {
+                    Text("Disconnect")
+                }
+            }
+            Text(
+                "Disconnect sends no motor command because the stop protocol is not verified. " +
+                    "It cannot guarantee that a moving base stops. Keep the base powered off.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(vertical = 12.dp),
+            )
+
             OptionRow(
-                title = "Enable robot body",
-                subtitle = "Makes the body respond to the face and to voice commands.",
+                title = "Connect robot base",
+                subtitle = "Locked off until the motor and stop protocols are verified for your base.",
             ) {
-                Switch(checked = robotBodyEnabled, onCheckedChange = onRobotBodyChange)
+                Switch(checked = robotBodyEnabled && controlAvailable, onCheckedChange = onRobotBodyChange,
+                    enabled = controlAvailable)
             }
             OptionRow(
                 title = "Connect over Bluetooth",
-                subtitle = "Uses the attached base over Bluetooth. Turn off to use Wi-Fi/TCP instead.",
+                subtitle = "Connection and scanning are disabled during the safety lockout.",
             ) {
-                Switch(checked = robotUseBluetooth, onCheckedChange = onRobotUseBluetoothChange)
+                Switch(checked = robotUseBluetooth, onCheckedChange = onRobotUseBluetoothChange,
+                    enabled = controlAvailable)
             }
 
             if (robotUseBluetooth) {
@@ -136,7 +158,7 @@ fun RobotScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(6.dp))
-                OutlinedButton(onClick = onRobotScan, enabled = !robotScanning) {
+                OutlinedButton(onClick = onRobotScan, enabled = controlAvailable && !robotScanning) {
                     Text(if (robotScanning) "Scanning for bases…" else "Find base (scan)")
                 }
                 if (robotScanResults.isNotEmpty()) {
@@ -159,7 +181,7 @@ fun RobotScreen(
                                 Text(address, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             if (address == robotBtAddress) {
-                                Text("in use", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                                Text("selected", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                             }
                         }
                     }

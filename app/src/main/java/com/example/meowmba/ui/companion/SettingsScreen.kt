@@ -31,7 +31,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.meowmba.core.agent.OpenRouterModel
-import com.example.meowmba.core.agent.OpenRouterModels
 import com.example.meowmba.core.bridge.DesktopBridgeManager
 import com.example.meowmba.core.security.SecureStorageManager
 import kotlinx.coroutines.launch
@@ -55,6 +54,9 @@ fun SettingsScreen(
     watchModeEnabled: Boolean = false,
     commentaryEnabled: Boolean = false,
     roadAlertsEnabled: Boolean = false,
+    roadAlertStatus: String? = null,
+    idleScenesEnabled: Boolean = true,
+    onIdleScenesChange: (Boolean) -> Unit = {},
     agentBrainEnabled: Boolean = true,
     hermesAgentUrl: String = "",
     imageServerUrl: String = "",
@@ -100,7 +102,6 @@ fun SettingsScreen(
     appearanceMode: AppearanceMode = AppearanceMode.DARK,
     onAppThemeChange: (AppTheme) -> Unit = {},
     onAppearanceModeChange: (AppearanceMode) -> Unit = {},
-    loadOpenRouterCatalog: suspend (String?) -> Result<List<OpenRouterModel>> = { OpenRouterModels.fetch(it) },
     idleChatterEnabled: Boolean = true,
     onIdleChatterChange: (Boolean) -> Unit = {},
 
@@ -124,7 +125,6 @@ fun SettingsScreen(
     onClose: () -> Unit
 ) {
     var page by rememberSaveable { mutableStateOf<String?>(null) }
-    var openaiKey by remember { mutableStateOf(secureStorage.getApiKey("openai") ?: "") }
     var opencodeKey by remember { mutableStateOf(secureStorage.getApiKey("opencode") ?: "") }
     var defaultBrain by remember { mutableStateOf(secureStorage.getPreference("default_brain") ?: "auto") }
     var brainMenuOpen by remember { mutableStateOf(false) }
@@ -135,48 +135,16 @@ fun SettingsScreen(
     var sshUser by remember { mutableStateOf("") }
     var sshPassword by remember { mutableStateOf("") }
     var savedServers by remember { mutableStateOf(sshRegistry.list().map { it.name }) }
-    var hfToken by remember { mutableStateOf(secureStorage.getApiKey("huggingface") ?: "") }
-    var openrouterKey by remember { mutableStateOf(secureStorage.getApiKey("openrouter") ?: "") }
-    var openrouterModel by remember { mutableStateOf(secureStorage.getModelName("openrouter") ?: "nvidia/nemotron-3-super-120b-a12b:free") }
-    var openrouterVision by remember {
-        mutableStateOf(secureStorage.getModelName("openrouter_vision") ?: "google/gemini-2.5-flash")
-    }
-    var openRouterCatalog by remember { mutableStateOf<List<OpenRouterModel>>(emptyList()) }
-    var openRouterCatalogNote by remember { mutableStateOf("Loading models…") }
-    val settingsScope = rememberCoroutineScope()
-    LaunchedEffect(page) {
-        if (page != "AI & models" || openRouterCatalog.isNotEmpty()) return@LaunchedEffect
-        loadOpenRouterCatalog(openrouterKey.ifBlank { null }).fold(
-            onSuccess = { list ->
-                openRouterCatalog = list
-                openRouterCatalogNote = "${list.size} models from OpenRouter"
-            },
-            onFailure = { openRouterCatalogNote = "Couldn't load models: ${it.message?.take(80)}" },
-        )
-    }
-    var localModelPath by remember { mutableStateOf(secureStorage.getEndpoint("local") ?: "/data/local/tmp/llm/gemma.bin") }
-    var openaiModel by remember { mutableStateOf(secureStorage.getModelName("openai") ?: "gpt-4o-mini") }
     var showKey by remember { mutableStateOf(false) }
-    var openaiEndpoint by remember { mutableStateOf(secureStorage.getEndpoint("openai") ?: "") }
     var opencodeEndpoint by remember { mutableStateOf(secureStorage.getEndpoint("opencode") ?: "") }
-    var openrouterEndpoint by remember { mutableStateOf(secureStorage.getEndpoint("openrouter") ?: "") }
     var imageService by remember { mutableStateOf(ImageServiceSettings.selected(secureStorage)) }
     val scroll = rememberScrollState()
     LaunchedEffect(page) { scroll.scrollTo(0) }
     val saveProviders: () -> Unit = {
         if (page == "AI & models") {
-        secureStorage.saveApiKey("openai", openaiKey.trim())
         secureStorage.saveApiKey("opencode", opencodeKey.trim())
         secureStorage.savePreference("default_brain", defaultBrain)
-        secureStorage.saveApiKey("huggingface", hfToken.trim())
-        secureStorage.saveApiKey("openrouter", openrouterKey.trim())
-        secureStorage.saveModelName("openrouter", openrouterModel)
-        secureStorage.saveModelName("openrouter_vision", openrouterVision)
-        secureStorage.saveModelName("openai", openaiModel)
-        secureStorage.saveEndpoint("openai", openaiEndpoint)
         secureStorage.saveEndpoint("opencode", opencodeEndpoint)
-        secureStorage.saveEndpoint("openrouter", openrouterEndpoint)
-        secureStorage.saveEndpoint("local", localModelPath)
         onSaved()
         }
     }
@@ -298,10 +266,16 @@ fun SettingsScreen(
             )
             VoiceToggle(
                 label = "Road alerts",
-                description = "Uses GPS to pull nearby police, speed cameras, and hazards " +
-                    "from the live map. No Waze or Maps route needed. Asks for location.",
+                description = "Official AZ511 road work in Arizona, community reports elsewhere, and OpenStreetMap cameras. Coverage is incomplete; mobile police reports are not guaranteed. Requires location.",
                 checked = roadAlertsEnabled,
                 onCheckedChange = onRoadAlertsChange
+            )
+            if (roadAlertsEnabled) roadAlertStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+            VoiceToggle(
+                label = "Random idle scenes",
+                description = "Mix chases, reading and occasional hats with quiet gestures while the avatar is resting.",
+                checked = idleScenesEnabled,
+                onCheckedChange = onIdleScenesChange,
             )
 
             VoiceToggle(
@@ -346,13 +320,15 @@ fun SettingsScreen(
             Text(
                 text = "Meow can find, tap, type and scroll on-screen when you ask. " +
                     "It uses the system accessibility service and stays OFF until you enable it. " +
-                    "Every action asks for confirmation first.",
+                    "Phone tasks require approval; consequential actions keep their separate confirmation or manual handoff.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             OutlinedButton(onClick = onOpenAccessibility) {
                 Text("Open accessibility settings")
             }
+
+            PhoneRecipeSettings()
 
             // ── Home screen ────────────────────────────────────────────────
             val context = LocalContext.current
@@ -393,7 +369,8 @@ fun SettingsScreen(
             // Base controls appear only after a real body link exists. Setup
             // belongs in the guided wizard; an unattached phone should not be
             // confronted with hardware-specific controls.
-            val physicalBaseAttached = robotStatus.contains("body", ignoreCase = true) &&
+            val physicalBaseAttached = com.example.meowmba.core.robot.RobotBaseControlPolicy.CONTROL_AVAILABLE &&
+                robotStatus.contains("body", ignoreCase = true) &&
                 !robotStatus.contains("simulated", ignoreCase = true) &&
                 !robotStatus.contains("offline", ignoreCase = true)
             if (physicalBaseAttached) {
@@ -780,11 +757,12 @@ fun SettingsScreen(
 
             }
             if (page == "AI & models") {
-            OutlinedButton(onClick = { saveProviders(); onOpenModels() }, modifier = Modifier.fillMaxWidth()) { Text("Download & manage AI models") }
+            OutlinedButton(onClick = { saveProviders(); onOpenModels() }, modifier = Modifier.fillMaxWidth()) { Text("Open LLM settings") }
+            Text("OpenRouter, OpenAI and vision settings are now in their cards on the LLM page.", style = MaterialTheme.typography.bodySmall)
             VoiceToggle(
                 label = "Agent brain",
                 description = "Understands natural tool commands (\"make a file called todo.txt\") " +
-                    "using the active model. Select a local model on the Hardware page for fully " +
+                    "using the active model. Select a local model on the LLM page for fully " +
                     "offline use — a local model file must be present.",
                 checked = agentBrainEnabled,
                 onCheckedChange = onAgentBrainChange
@@ -806,40 +784,6 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("OpenAI Cloud", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-                Spacer(modifier = Modifier.width(8.dp))
-                KeyStatusBadge(openaiKey.isNotBlank(), "OpenAI")
-            }
-            BeginnerHelp("Lets Meow talk to GPT. Create an account at platform.openai.com and paste your API key here.")
-            ApiKeyField(
-                value = openaiKey,
-                onValueChange = { openaiKey = it; secureStorage.saveApiKey("openai", it.trim()) },
-                label = "API Key",
-                show = showKey,
-                onToggleShow = { showKey = !showKey },
-            )
-            CopyKeyButton(openaiKey, "Copy OpenAI key")
-            ApiKeyLink(
-                url = "https://platform.openai.com/api-keys",
-                label = "Get an OpenAI API key",
-            )
-            ProviderEndpointField(
-                value = openaiEndpoint,
-                onValueChange = { openaiEndpoint = it },
-                label = "OpenAI base URL (optional)",
-                helper = "Leave blank for https://api.openai.com. Lets you point at a " +
-                    "self-hosted OpenAI-compatible proxy or gateway.",
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            SettingsTextField(
-                value = openaiModel,
-                onValueChange = { openaiModel = it },
-                label = { Text("Chat model (e.g. gpt-4o-mini)") },
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
 
             // BigPickle (OpenCode Zen) — free fallback brain, can be made the default.
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -883,100 +827,8 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Hugging Face token (gated model downloads like Gemma)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Hugging Face", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-                Spacer(modifier = Modifier.width(8.dp))
-                KeyStatusBadge(hfToken.isNotBlank(), "Hugging Face")
-            }
-            BeginnerHelp("Only needed if you want to download gated voice/AI models from Hugging Face (e.g. Gemma). Most users can skip this.")
-            ApiKeyField(
-                value = hfToken,
-                onValueChange = { hfToken = it; secureStorage.saveApiKey("huggingface", it.trim()) },
-                label = "Token (for gated models like Gemma)",
-                show = showKey,
-                onToggleShow = { showKey = !showKey },
-            )
-            CopyKeyButton(hfToken, "Copy HF token")
-            ApiKeyLink(
-                url = "https://huggingface.co/settings/tokens",
-                label = "Get a Hugging Face token",
-            )
-            
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            // OpenRouter — the standalone cloud brain. No home server needed:
-            // one key from openrouter.ai and meow works anywhere. Free default
-            // model; any OpenRouter model id works in the field below.
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("OpenRouter (openrouter.ai)", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-                Spacer(modifier = Modifier.width(8.dp))
-                KeyStatusBadge(openrouterKey.isNotBlank(), "OpenRouter")
-            }
-            BeginnerHelp("The easiest way to give Meow a cloud brain — no server needed. Sign up at openrouter.ai and grab a free key; many models are free.")
-            ApiKeyField(
-                value = openrouterKey,
-                onValueChange = { openrouterKey = it; secureStorage.saveApiKey("openrouter", it.trim()) },
-                label = "API key",
-                show = showKey,
-                onToggleShow = { showKey = !showKey },
-            )
-            CopyKeyButton(openrouterKey, "Copy OpenRouter key")
-            ApiKeyLink(
-                url = "https://openrouter.ai/keys",
-                label = "Get an OpenRouter API key",
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            OpenRouterModelPicker(
-                label = "Chat model",
-                selectedId = openrouterModel,
-                models = openRouterCatalog,
-                onSelect = { openrouterModel = it },
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            OpenRouterModelPicker(
-                label = "Vision model",
-                selectedId = openrouterVision,
-                models = openRouterCatalog.filter { it.vision },
-                onSelect = { openrouterVision = it },
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            ProviderEndpointField(
-                value = openrouterEndpoint,
-                onValueChange = { openrouterEndpoint = it },
-                label = "OpenRouter base URL (optional)",
-                helper = "Leave blank for https://openrouter.ai/api. No /v1 suffix — it is appended automatically.",
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    openRouterCatalogNote,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.sp,
-                    modifier = Modifier.weight(1f),
-                )
-                TextButton(onClick = {
-                    openRouterCatalogNote = "Loading models…"
-                    settingsScope.launch {
-                        OpenRouterModels.fetch(openrouterKey.ifBlank { null }).fold(
-                            onSuccess = { list ->
-                                openRouterCatalog = list
-                                openRouterCatalogNote = "${list.size} models from OpenRouter"
-                            },
-                            onFailure = {
-                                openRouterCatalogNote = "Couldn't load models: ${it.message?.take(80)}"
-                            },
-                        )
-                    }
-                }) { Text("Refresh") }
-            }
-            
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Spacer(modifier = Modifier.height(24.dp))
-            
+            Text("Local downloads, Hugging Face access and model files now live in LLM → Local.", style = MaterialTheme.typography.bodySmall)
+            OutlinedButton(onClick = onOpenModels, modifier = Modifier.fillMaxWidth()) { Text("Open LLM model settings") }
             }
             if (page == "Connections & memory") {
             // SSH servers meow may manage (encrypted, allowlisted commands only)
@@ -1034,17 +886,6 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             }
-            if (page == "AI & models") {
-            // Local Model Configuration
-            Text("Local Model (MediaPipe)", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-            SettingsTextField(
-                value = localModelPath,
-                onValueChange = { localModelPath = it },
-                label = { Text("Model Path on Device") },
-                modifier = Modifier.fillMaxWidth()
-            )
-            }
-
             Spacer(modifier = Modifier.height(40.dp))
             
             Button(
@@ -1076,8 +917,8 @@ fun DesktopBridgeSection(
 
     Text("Desktop Bridge", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
     Spacer(modifier = Modifier.height(4.dp))
-    Text("Pair once with the desktop helper's code. Keep the helper running on the same reachable network. A USB cable alone does not enable app control.", style = MaterialTheme.typography.bodySmall)
-    Text("Bridge 0.7: macOS app controls need gui_enabled plus Accessibility/Automation permission. Blender needs blender_enabled, Blender installed and a dedicated workspace folder. Linux/Windows app navigation needs a compatible UI adapter; launching an app is not controlling it.", style = MaterialTheme.typography.bodySmall)
+    Text("Pair once with the desktop helper's code. If the network cannot connect, Meow tries the same trusted Mac through a configured USB tunnel. Keep the helper running; USB debugging and the Mac tunnel must be enabled.", style = MaterialTheme.typography.bodySmall)
+    Text("Bridge 0.9 supports Logic workflows through its menus, track and region controls, plugin Controls view and export dialogs. Each edit has an approval and audit receipt. WAV checks include loudness and true peak when the Mac has libebur128. Enable Logic in the Mac helper and grant Accessibility. Custom controls and finished mixes still need review.", style = MaterialTheme.typography.bodySmall)
 
     val current = paired
     if (current != null) {
@@ -1095,7 +936,7 @@ fun DesktopBridgeSection(
                     scope.launch {
                         busy = true
                         message = bridgeManager.ping().fold(
-                            onSuccess = { messageIsError = false; "Pong — desktop alive (ts $it)" },
+                            onSuccess = { messageIsError = false; "Pong — desktop alive via ${bridgeManager.connectionDescription()} (ts $it)" },
                             onFailure = { messageIsError = true; it.message ?: "ping failed" }
                         )
                         busy = false
@@ -1418,7 +1259,7 @@ fun VoiceToggle(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun OpenRouterModelPicker(
+internal fun OpenRouterModelPicker(
     label: String,
     selectedId: String,
     models: List<OpenRouterModel>,
@@ -1456,9 +1297,14 @@ private fun OpenRouterModelPicker(
             ),
         )
         ExposedDropdownMenu(
-            expanded = expanded && shown.isNotEmpty(),
+            expanded = expanded && (shown.isNotEmpty() || query.isNotBlank()),
             onDismissRequest = { expanded = false; query = "" },
         ) {
+            if (query.isNotBlank() && models.none { it.id == query.trim() }) {
+                DropdownMenuItem(text = { Text("Use model ID: ${query.trim()}") }, onClick = {
+                    onSelect(query.trim()); query = ""; expanded = false
+                })
+            }
             shown.forEach { model ->
                 DropdownMenuItem(
                     text = {
@@ -1587,7 +1433,7 @@ fun SettingsTextField(
  * doing that corrupts existing keys when the user edits a masked field.
  */
 @Composable
-private fun ApiKeyField(
+internal fun ApiKeyField(
     value: String,
     onValueChange: (String) -> Unit,
     label: String,
@@ -1622,7 +1468,7 @@ private fun ApiKeyField(
 
 /** Secondary endpoint/base-URL field with a gray helper line underneath. */
 @Composable
-private fun ProviderEndpointField(
+internal fun ProviderEndpointField(
     value: String,
     onValueChange: (String) -> Unit,
     label: String,
@@ -1648,7 +1494,7 @@ private fun brainLabel(id: String): String = BRAIN_CHOICES.firstOrNull { it.firs
 private data class SettingsCategory(val title: String, val summary: String, val icon: ImageVector)
 private val SETTINGS_CATEGORIES = listOf(
     SettingsCategory("Voice & behavior", "Wake phrase, conversation and listening", Icons.Default.Mic),
-    SettingsCategory("AI & models", "AI providers, keys and model routing", Icons.Default.Psychology),
+    SettingsCategory("AI & models", "LLM settings, agent routing and downloads", Icons.Default.Psychology),
     SettingsCategory("Images", "AI Horde, Cloudflare and on-phone images", Icons.Default.Image),
     SettingsCategory("Music & video", "Media-generation services", Icons.Default.Movie),
     SettingsCategory("Phone & device", "App control, access and device behavior", Icons.Default.PhoneAndroid),
@@ -1686,8 +1532,10 @@ private fun SettingsCategoryCard(category: SettingsCategory, onOpen: () -> Unit)
 
 private val BRAIN_CHOICES = listOf(
     "auto" to "Auto (Omniroute)",
-    "bigpickle" to "BigPickle",
+    "bigpickle" to "OpenCode Zen",
     "openrouter" to "OpenRouter",
     "openai" to "OpenAI",
+    "anthropic" to "Claude / Anthropic",
+    "custom" to "Custom API",
     "local" to "On-device",
 )

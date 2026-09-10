@@ -28,126 +28,27 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
 
-/**
- * Cloud speech-to-text: local [SherpaAsrEngine] captures and endpoints, Gemini
- * transcribes the finished utterance.
- *
- * ## Why a decorator and not its own recognizer
- *
- * Gemini is request/response — it needs a COMPLETE utterance, so something has
- * to decide when the user stopped talking. The obvious candidate, Silero VAD,
- * is disabled in this build: sherpa-onnx v1.13.4's `Vad.acceptWaveform`
- * SIGSEGVs on this device (see [WakeWordEngineFactory.VAD_GATE_ENABLED]).
- * Sherpa's *recognizer* endpointing is a different native path and is known
- * good, and it is already holding the one AudioRecord this app is allowed to
- * contend for. So this engine borrows both: sherpa's endpoint fires, sherpa
- * hands over the PCM it just consumed via [SherpaAsrEngine.lastHeardPcm], and
- * that audio goes to Gemini.
- *
- * The user gets sherpa's partials instantly (so the UI never looks deaf) and
- * Gemini's far better text as the final result.
- *
- * ## Failure behaviour
- *
- * Never silently degrades. Any failure — no key, offline, HTTP error, empty
- * completion — delivers the LOCAL transcript instead and logs why. Losing a
- * turn entirely would be worse than answering a slightly misheard one, and
- * per house rule the fallback is visible in logcat rather than pretended away.
+/** Opt-in OpenRouter transcription over the shared local capture path.
+ * Completed audio is ordered and cancelled by RefiningSpeechEngine. Network
+ * failure reports local fallback; a successful empty final stays empty.
+ * Recognition accuracy and speech-in-noise behavior require device validation.
  */
 class GeminiAsrEngine(
-    private val local: SherpaAsrEngine,
-    private val scope: CoroutineScope,
+    local: SherpaAsrEngine,
+    scope: CoroutineScope,
     /** OpenRouter key, read fresh per request so Settings edits take effect. */
     private val apiKey: () -> String?,
     /** Model id; defaults to [AsrBackend.DEFAULT_GEMINI_MODEL]. */
     private val model: () -> String = { AsrBackend.DEFAULT_GEMINI_MODEL },
     private val client: HttpClient = defaultClient,
-) : SpeechEngine, SpeechAudioCapture {
-    override val deliversFinalResults = true
-
-    override val isListening: StateFlow<Boolean> get() = local.isListening
-    override val partialResults: StateFlow<String> get() = local.partialResults
-
-    /** Cloud transcription is pointless without the local capture path. */
+    onIssue: (String?) -> Unit = {},
+    localFallback: (suspend (ShortArray) -> String?)? = null,
+) : RefiningSpeechEngine(local, scope, onIssue, localFallback = localFallback) {
     override val isAvailable: Boolean
         get() = local.isAvailable && !apiKey().isNullOrBlank()
 
-    override fun snapshotCapturedAudio(): CapturedSpeechAudio? = local.snapshotCapturedAudio()
-
-    private var onResult: ((String) -> Unit)? = null
-    private var onError: ((Int) -> Unit)? = null
-
-    override fun startListening(onResult: (String) -> Unit, onError: (Int) -> Unit) {
-        this.onResult = onResult
-        this.onError = onError
-        local.startListening(
-            onResult = { localText -> finalizeWithGemini(localText) },
-            onError = { code -> this.onError?.invoke(code) },
-        )
-    }
-
-    override fun swapCallbacks(onResult: (String) -> Unit, onError: (Int) -> Unit) {
-        this.onResult = onResult
-        this.onError = onError
-        // The inner engine keeps OUR wrappers; only the outward-facing
-        // callbacks change. Re-registering the wrappers here would be
-        // harmless but pointless — they close over `this`, not the captured
-        // callbacks.
-        local.swapCallbacks(
-            onResult = { localText -> finalizeWithGemini(localText) },
-            onError = { code -> this.onError?.invoke(code) },
-        )
-    }
-
-    override fun setFocusedListening(on: Boolean) = local.setFocusedListening(on)
-
-    override fun stopListening() {
-        onResult = null
-        onError = null
-        local.stopListening()
-    }
-
-    override fun destroy() {
-        stopListening()
-        local.destroy()
-    }
-
-    /**
-     * Grab the audio for the utterance sherpa just finished and re-transcribe
-     * it in the cloud.
-     *
-     * [SherpaAsrEngine.lastHeardPcm] is read SYNCHRONOUSLY here: the capture
-     * loop overwrites it on the next endpoint, so deferring the read into the
-     * coroutine would transcribe the wrong utterance when someone talks again
-     * while a request is in flight.
-     */
-    private fun finalizeWithGemini(localText: String) {
-        val pcm = local.lastHeardPcm
-        val deliver = onResult
-        if (deliver == null) return
-        if (pcm.isEmpty()) {
-            deliver(localText)
-            return
-        }
-        scope.launch {
-            val cloud = runCatching { transcribe(pcm) }.getOrElse { e ->
-                Log.w(TAG, "cloud transcription threw; using local text", e)
-                null
-            }
-            val finalText = cloud?.takeIf { it.isNotBlank() } ?: localText
-            if (cloud.isNullOrBlank()) {
-                Log.i(TAG, "fell back to local transcript: \"$localText\"")
-            } else if (!cloud.equals(localText, ignoreCase = true)) {
-                Log.i(TAG, "gemini corrected \"$localText\" -> \"$finalText\"")
-            }
-            withContext(Dispatchers.Main.immediate) {
-                runCatching { deliver(finalText) }
-            }
-        }
-    }
-
     /** Returns Gemini's transcript, or null when unusable for any reason. */
-    private suspend fun transcribe(pcm: ShortArray): String? {
+    override suspend fun transcribe(pcm: ShortArray): String? {
         val key = apiKey()?.takeIf { it.isNotBlank() } ?: run {
             Log.w(TAG, "no OpenRouter key configured")
             return null
@@ -174,13 +75,13 @@ class GeminiAsrEngine(
                 setBody(requestBody(model(), b64).toString())
             }
             if (!response.status.isSuccess()) {
-                // Body carries OpenRouter's actual reason (bad key, model
-                // lacks audio input, out of credit). Log it verbatim — a bare
-                // status code sent us hunting the wrong thing before.
-                Log.w(TAG, "cloud ASR ${response.status}: ${response.bodyAsText().take(400)}")
-                return@withContext null
+                // Log status only; response bodies can include private request data.
+                Log.w(TAG, "cloud ASR HTTP ${response.status.value}")
+                throw CloudTranscriptionFailure("OpenRouter", response.status.value)
             }
-            parseTranscript(response.bodyAsText())
+            parseTranscript(response.bodyAsText()).also {
+                Log.i(TAG, "cloud transcription completed usable=${it != null} characters=${it?.length ?: 0}")
+            }
         }
     }
 
@@ -199,10 +100,11 @@ class GeminiAsrEngine(
 
         private val defaultClient by lazy {
             HttpClient {
+                followRedirects = false
                 install(HttpTimeout) {
                     connectTimeoutMillis = 10_000
-                    requestTimeoutMillis = 45_000
-                    socketTimeoutMillis = 45_000
+                    requestTimeoutMillis = 15_000
+                    socketTimeoutMillis = 15_000
                 }
             }
         }
@@ -226,6 +128,9 @@ class GeminiAsrEngine(
             put("model", model)
             // Transcription is a copy task; sampling only invents words.
             put("temperature", 0.0)
+            // Bound the reservation: provider defaults can reserve an entire
+            // context window and reject an otherwise affordable short transcript.
+            put("max_tokens", 1024)
             put(
                 "messages",
                 buildJsonArray {
@@ -272,8 +177,7 @@ class GeminiAsrEngine(
                 ?.jsonObject?.get("content")
                 ?.jsonPrimitive?.contentOrNull
                 ?: return@runCatching null
-            SpokenText.polish(content.trim().trim('"'))
-                .takeIf { it.isNotBlank() }
+            SpokenText.normalize(content.trim().trim('"'))
         }.getOrNull()
     }
 }

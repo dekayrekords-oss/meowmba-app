@@ -35,6 +35,7 @@ import java.util.UUID
 @Serializable data class WorkflowSnapshot(
     val version: Int = 1, val agents: List<BusinessAgent> = emptyList(), val runs: List<BusinessRun> = emptyList(),
     val connections: List<BusinessMcpConnection> = emptyList(),
+    val schedulesPaused: Boolean = false,
 )
 @Serializable data class BusinessMcpTool(val name: String, val description: String, val schema: String, val readOnlyHint: Boolean = false)
 @Serializable data class BusinessMcpConnection(
@@ -77,10 +78,14 @@ class WorkflowStore(private val file: File) {
         require(agent.tools.containsAll(agent.completionTools)) { "Required completion tools must be granted to this agent" }
         change { it.copy(agents = it.agents.filterNot { old -> old.id == agent.id } + agent) }
     }
-    fun enqueue(agentId: String, goal: String): String {
+    @Synchronized fun enqueue(agentId: String, goal: String): String {
         require(goal.isNotBlank() && goal.length <= 8000)
         check(agent(agentId)?.enabled == true) { "Agent is disabled or missing" }
-        val run = BusinessRun(agentId = agentId, goal = goal)
+        // Repeated taps or tool callbacks refer to the same unfinished job.
+        // Do not queue another run behind its pending approval or slow model.
+        state.value.runs.firstOrNull { it.agentId == agentId && it.goal == goal.trim() && it.status !in TERMINAL }
+            ?.let { return it.id }
+        val run = BusinessRun(agentId = agentId, goal = goal.trim())
         change { it.copy(runs = it.runs + run) }
         return run.id
     }
@@ -107,6 +112,7 @@ class WorkflowStore(private val file: File) {
             steps = run.steps.map { if (it.id == stepId) it.copy(status = if (approved) "APPROVED" else "DENIED") else it })
     }
     fun scheduleDue(now: Long) = change { snapshot ->
+        if (snapshot.schedulesPaused) return@change snapshot
         val additions = mutableListOf<BusinessRun>()
         val agents = snapshot.agents.map { agent ->
             val busy = snapshot.runs.any { it.agentId == agent.id && it.status !in TERMINAL }

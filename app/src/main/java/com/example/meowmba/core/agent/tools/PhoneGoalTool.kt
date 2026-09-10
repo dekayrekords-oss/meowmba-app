@@ -17,7 +17,7 @@ class PhoneGoalTool(private val start: (String) -> Boolean) : Tool {
         val goal = args["goal"]?.trim()?.takeIf { it.isNotEmpty() && it.length <= 3000 }
             ?: return@withContext ToolResult.Failure("Please give a phone task under 3,000 characters.")
         if (MeowAccessibilityService.instance == null)
-            return@withContext ToolResult.Failure("Enable Meow in Android Settings → Accessibility → Installed apps, then try again.")
+            return@withContext ToolResult.Failure("Meow Accessibility is disconnected. In Android Settings → Accessibility → Installed apps, turn Meow off and back on, then return and retry. No app action was performed.")
         if (start(goal)) ToolResult.Success("Started phone navigation. Completion has not been verified; final send or publish stays under your control.")
         else ToolResult.Failure("Phone planner is not ready. Complete Your AI setup first.")
     }

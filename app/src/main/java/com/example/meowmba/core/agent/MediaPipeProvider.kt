@@ -2,116 +2,89 @@ package com.example.meowmba.core.agent
 
 import android.content.Context
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
-import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.asCoroutineDispatcher
-import kotlinx.coroutines.channels.BufferOverflow
-import kotlinx.coroutines.channels.awaitClose
+import com.google.mediapipe.tasks.genai.llminference.LlmInferenceSession
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.buffer
-import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.util.concurrent.Executors
+import java.util.concurrent.Executor
 
-/**
- * Implementation of ModelProvider using MediaPipe LLM Inference (On-device).
- */
+/** MediaPipe 0.10.35 with an explicit cancellable session for each response. */
 class MediaPipeProvider(
     private val context: Context,
     private val modelPath: String,
     private val maxTokens: Int = 512,
 ) : ModelProvider {
-
     override val name: String = "Gemma (Local)"
+    private val modelKey = "mediapipe:$maxTokens:${File(modelPath).absolutePath}"
+    val isLoaded: Boolean get() = LocalInferenceRuntime.models.isLoaded(modelKey)
+    fun idleMs(nowMs: Long = System.currentTimeMillis()): Long = LocalInferenceRuntime.models.idleMs(modelKey, nowMs)
 
-    private companion object {
-        /**
-         * One thread for all on-device inference, for two reasons.
-         *
-         * It must not be the main thread: creating the engine memory-maps a
-         * multi-gigabyte model and `generateResponse` blocks until the whole
-         * completion is decoded. Neither had a dispatcher before, so both ran
-         * on whatever the caller was on — usually Main — which froze the UI,
-         * the avatar, and (because the speech recognizer's callbacks are
-         * main-thread) the microphone and wake word for the length of the
-         * turn. That is exactly the reported "the model is holding up the next
-         * call and the wake word stops working".
-         *
-         * And it must be exactly one thread: LlmInference holds a single
-         * native session, so two concurrent generations corrupt each other.
-         * Serializing here means a second request waits instead of racing.
-         */
-        private val inferenceDispatcher: CoroutineDispatcher =
-            Executors.newSingleThreadExecutor { r ->
-                Thread(r, "meow-llm").apply {
-                    isDaemon = true
-                    priority = Thread.NORM_PRIORITY - 1
-                }
-            }.asCoroutineDispatcher()
-    }
-
-    private val engineDelegate = lazy {
+    private fun createEngine(): LlmInference {
+        require(File(modelPath).extension.lowercase() in setOf("task", "bin")) {
+            "${File(modelPath).name} is not a chat model for MediaPipe. Select a compatible model in Your AI setup."
+        }
         val options = LlmInference.LlmInferenceOptions.builder()
-            .setModelPath(modelPath)
-            .setMaxTokens(maxTokens)
-            .build()
-        LlmInference.createFromOptions(context, options)
-    }
-    private val llmInference: LlmInference by engineDelegate
-    suspend fun release() = withContext(inferenceDispatcher) {
-        if (engineDelegate.isInitialized()) llmInference.close()
+            .setModelPath(modelPath).setMaxTokens(maxTokens).build()
+        return LlmInference.createFromOptions(context, options)
     }
 
-    override fun generateStreaming(prompt: String): Flow<ModelResponse> = callbackFlow {
+    /** A released provider can safely reload; it never retains a closed lazy engine. */
+    suspend fun release(): Boolean = withContext(LocalInferenceRuntime.dispatcher) {
+        LocalInferenceRuntime.models.releaseWhenIdle(modelKey)
+    }
+
+    override fun generateStreaming(prompt: String): Flow<ModelResponse> = flow {
         if (!File(modelPath).exists()) {
-            trySend(ModelResponse.Error("Model file not found at $modelPath"))
-            close()
-            return@callbackFlow
+            emit(ModelResponse.Error("Model file not found at $modelPath"))
+            return@flow
         }
-
-        // Instruct models leak template tokens / drift on a raw flat prompt —
-        // wrap in the model's native chat format (Qwen/Hermes: ChatML, Gemma: turns).
-        val templatedPrompt = ChatTemplate.wrap(modelPath, prompt)
         try {
-            llmInference.generateResponseAsync(templatedPrompt) { partialResult, done ->
-                trySend(ModelResponse.Partial(partialResult))
-                if (done) {
-                    trySend(ModelResponse.Complete(partialResult))
-                    close()
-                }
+            LocalInferenceRuntime.models.withModel(modelKey, ::createEngine) { engine ->
+                NativeTextGeneration.stream {
+                    val session = LlmInferenceSession.createFromOptions(engine,
+                        LlmInferenceSession.LlmInferenceSessionOptions.builder().build())
+                    object : NativeTextSession {
+                        override fun start(callback: NativeTextCallback) {
+                            session.addQueryChunk(ChatTemplate.wrap(modelPath, prompt))
+                            val future = session.generateResponseAsync { partial, done ->
+                                // Future completion precedes the last progress callback.
+                                // That authoritative full result includes the final delta.
+                                if (!done) callback.partial(partial)
+                            }
+                            future.addListener({
+                                try { callback.complete(future.get()) }
+                                catch (error: Exception) { callback.error(error.cause ?: error) }
+                            }, Executor { it.run() })
+                        }
+                        override fun cancel() = session.cancelGenerateResponseAsync()
+                        override fun close() = session.close()
+                    }
+                }.collect { emit(it) }
             }
-        } catch (e: Exception) {
-            trySend(ModelResponse.Error(e.message ?: "Inference error"))
-            close()
-        }
-        awaitClose { /* Cleanup if needed */ }
-    }
-        // Partial tokens are droppable under backpressure; the terminal
-        // Complete/Error is not — losing it leaves the turn hanging in
-        // THINKING forever, and the mic only re-arms from IDLE. Keep the
-        // newest and never block the native callback thread.
-        .buffer(capacity = 256, onBufferOverflow = BufferOverflow.DROP_OLDEST)
-        .flowOn(inferenceDispatcher)
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (error: Exception) { emit(ModelResponse.Error(error.message ?: "MediaPipe inference failed")) }
+    }.flowOn(LocalInferenceRuntime.dispatcher)
 
-    override suspend fun generate(prompt: String): ModelResponse =
-        withContext(inferenceDispatcher) {
-            try {
-                val response = llmInference.generateResponse(ChatTemplate.wrap(modelPath, prompt))
-                ModelResponse.Complete(response)
-            } catch (e: Exception) {
-                ModelResponse.Error(e.message ?: "Inference error")
-            }
+    /** The value-returning path uses the same native cancellation as streaming. */
+    override suspend fun generate(prompt: String): ModelResponse {
+        var result: ModelResponse = ModelResponse.Error("No model response")
+        generateStreaming(prompt).collect {
+            if (it is ModelResponse.Complete || it is ModelResponse.Error) result = it
         }
-
-    /**
-     * Load the model now, off the main thread, so the first prompt does not pay
-     * for it. Safe to call repeatedly — `lazy` collapses to a no-op.
-     */
-    suspend fun warmUp(): Result<Unit> = withContext(inferenceDispatcher) {
-        runCatching { llmInference; Unit }
+        return result
     }
 
-    /** Honest availability check for the Hardware page's local-model test. */
+    /** Explicit warm-up shares the generation lease; no eager route-build work. */
+    suspend fun warmUp(): Result<Unit> = withContext(LocalInferenceRuntime.dispatcher) {
+        try {
+            LocalInferenceRuntime.models.withModel(modelKey, ::createEngine) { }
+            Result.success(Unit)
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (error: Exception) { Result.failure(error) }
+    }
+
     fun isModelAvailable(): Boolean = File(modelPath).exists()
 }

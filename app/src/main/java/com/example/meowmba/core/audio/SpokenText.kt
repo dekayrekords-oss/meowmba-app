@@ -140,8 +140,13 @@ object SpokenText {
      */
     internal fun refinedTranscript(streaming: String, refined: String?): String? = when {
         refined == null -> streaming.takeIf(::isUsable)
-        else -> refined.takeIf(::isUsable)
+        else -> refined.takeIf(::isFinalTranscriptUsable)
     }
+
+    /** Final ASR must preserve numbers, other scripts, and natural repetitions.
+     * The streaming-preview heuristics are not acoustic confidence scores. */
+    fun isFinalTranscriptUsable(text: String): Boolean =
+        text.any { it.isLetterOrDigit() } && !isNonSpeechAnnotation(text)
 
     private val NON_SPEECH_ANNOTATION = Regex("[\\[(]([^\\[\\]()]+)[\\])]")
     private val NON_SPEECH_LABELS = setOf(
@@ -168,10 +173,10 @@ object SpokenText {
         t = t.replace(Regex("""\bbudd\b"""), "buddy")
 
         // --- YouTube (the 2023 zipformer doesn't know this word) ---
-        t = t.replace(
-            Regex("""\byou\s*two\b"""),
-            "YouTube",
-        )
+        // "You two" and "you to" are ordinary speech, not evidence of the
+        // media app. Rewriting them globally corrupted even correct Whisper
+        // finals ("I want you to..." became "I want YouTube..."). Ambiguous
+        // app-name recovery belongs after explicit app/media intent, not ASR.
         t = t.replace(
             Regex("""\byou\s*tube\b"""),
             "YouTube",
@@ -180,11 +185,6 @@ object SpokenText {
             Regex("""\byo\s*tube\b"""),
             "YouTube",
         )
-        t = t.replace(
-            Regex("""\byou\s*to\b"""),
-            "YouTube",
-        )
-
         // --- "meow" variants (not in the zipformer's vocabulary) ---
         t = t.replace(
             Regex("""\b(yo|yoh|yoa|yow|yom|yah|ya|ye|hee|hey|hi|oi|oh)\s*(meow|meo|meoo|miao|miau|mow|mo|mao|me ow|my ow|miow|miya|myo|me o|me oo|mem)\b"""),

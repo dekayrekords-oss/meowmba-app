@@ -36,6 +36,13 @@ fun AnimatedBackground(animation: BackgroundAnimation, modifier: Modifier = Modi
     // Read inside Canvas, never in composition. Both layers share one clock.
     val clock by remember(sceneClock) { derivedStateOf { sceneClock.phase(BG_CYCLE_MS) } }
     val slow by remember(sceneClock) { derivedStateOf { sceneClock.phase(BG_SLOW_MS) } }
+    if (isCompanionSceneBackground(animation)) {
+        val companionScene = remember { CompanionSceneBackgroundPainter() }
+        Box(modifier = modifier) {
+            Canvas(Modifier.fillMaxSize()) { companionScene.draw(this, animation, clock, slow) }
+        }
+        return
+    }
     val field = remember(animation) { BgField(animation.ordinal) }
 
     Box(modifier = modifier) {
@@ -248,6 +255,11 @@ private fun DrawScope.embers(f: BgField, clock: Float, slow: Float, scale: Float
  */
 @Composable
 fun AnimationThumbnail(animation: BackgroundAnimation, modifier: Modifier = Modifier) {
+    if (isCompanionSceneBackground(animation)) {
+        val companionScene = remember { CompanionSceneBackgroundPainter() }
+        Canvas(modifier) { companionScene.draw(this, animation, .25f, .15f) }
+        return
+    }
     val field = remember(animation) { BgField(animation.ordinal) }
     Canvas(modifier) {
         when (animation) {

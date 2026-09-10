@@ -112,12 +112,12 @@ class CreateComicTool(
         }
 
         val html = ComicRenderer.renderComicHtml(title, panels, cast)
-        val file = workspace.resolve("comics/${ComicRenderer.slugify(title)}.html")
-            ?: return@withContext ToolResult.Failure("Could not write comic — path is outside the workspace.")
+        val file = runCatching { workspace.newAsset("comics", "${ComicRenderer.slugify(title)}.html") }
+            .getOrElse { return@withContext ToolResult.Failure("Could not reserve comic output: ${it.message}") }
         runCatching {
-            file.parentFile?.mkdirs()
             file.writeText(html)
         }.onFailure {
+            runCatching { file.delete() } // Only this newly reserved, failed output.
             return@withContext ToolResult.Failure("Failed to save the comic: ${it.message}")
         }
         val note = if (unknown.isEmpty()) "" else
@@ -148,12 +148,12 @@ class WriteScriptTool(private val workspace: Workspace) : Tool {
 
         val html = ComicRenderer.renderScriptHtml(title, kind, body)
         val dir = when (kind) { "ad" -> "ads"; "post" -> "posts"; else -> "scripts" }
-        val file = workspace.resolve("$dir/${ComicRenderer.slugify(title)}.html")
-            ?: return@withContext ToolResult.Failure("Could not write $kind — path is outside the workspace.")
+        val file = runCatching { workspace.newAsset(dir, "${ComicRenderer.slugify(title)}.html") }
+            .getOrElse { return@withContext ToolResult.Failure("Could not reserve $kind output: ${it.message}") }
         runCatching {
-            file.parentFile?.mkdirs()
             file.writeText(html)
         }.onFailure {
+            runCatching { file.delete() } // Never remove a previous draft.
             return@withContext ToolResult.Failure("Failed to save the $kind: ${it.message}")
         }
         ToolResult.Success(

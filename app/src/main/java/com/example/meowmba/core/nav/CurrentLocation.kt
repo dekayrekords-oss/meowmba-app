@@ -30,6 +30,9 @@ object CurrentLocation {
         val atMs: Long = System.currentTimeMillis(),
         /** Metres per second when the platform reported it. */
         val speedMps: Float? = null,
+        val accuracyMeters: Float? = null,
+        val bearingDegrees: Float? = null,
+        val bearingAccuracyDegrees: Float? = null,
     ) {
         fun ageMs(nowMs: Long = System.currentTimeMillis()): Long = (nowMs - atMs).coerceAtLeast(0L)
         fun isFresh(maxAgeMs: Long = FRESH_MS, nowMs: Long = System.currentTimeMillis()): Boolean =
@@ -68,9 +71,12 @@ object CurrentLocation {
                         it.longitude,
                         it.time,
                         speedMps = if (it.hasSpeed()) it.speed else null,
+                        accuracyMeters = if (it.hasAccuracy()) it.accuracy else null,
+                        bearingDegrees = if (it.hasBearing()) it.bearing else null,
+                        bearingAccuracyDegrees = if (it.hasBearingAccuracy()) it.bearingAccuracyDegrees else null,
                     )
                 }
-            Log.i("CurrentLocation", "last(): providers=${providers.joinToString(",")} result=$result")
+            Log.i("CurrentLocation", "last(): providers=${providers.joinToString(",")} fix=${result != null} accuracy=${result?.accuracyMeters}")
             result
         } catch (e: SecurityException) {
             Log.w("CurrentLocation", "Location denied at call time: ${e.message}")
@@ -87,7 +93,12 @@ object CurrentLocation {
      * [onResult] is always invoked on the main thread, exactly once, with null on
      * timeout / denial / no fix. Safe to call from any thread; returns immediately.
      */
-    fun requestOnce(context: Context, timeoutMs: Long = 12_000L, onResult: (Fix?) -> Unit) {
+    fun requestOnce(
+        context: Context,
+        timeoutMs: Long = 12_000L,
+        requiredAccuracyMeters: Float? = null,
+        onResult: (Fix?) -> Unit,
+    ) {
         val main = Handler(Looper.getMainLooper())
         if (!hasPermission(context)) {
             main.post { onResult(null) }
@@ -104,6 +115,13 @@ object CurrentLocation {
         }
         val listener = object : LocationListener {
             override fun onLocationChanged(location: Location) {
+                // Road warnings cannot use a fast coarse-network delivery in
+                // place of the GPS fix still on its way. Other callers retain
+                // the original first-delivery behavior.
+                if (requiredAccuracyMeters != null &&
+                    (!location.hasAccuracy() || !location.accuracy.isFinite() ||
+                        location.accuracy !in 0f..requiredAccuracyMeters)
+                ) return
                 lm.removeUpdates(this)
                 finish(
                     Fix(
@@ -111,6 +129,9 @@ object CurrentLocation {
                         location.longitude,
                         location.time,
                         speedMps = if (location.hasSpeed()) location.speed else null,
+                        accuracyMeters = if (location.hasAccuracy()) location.accuracy else null,
+                        bearingDegrees = if (location.hasBearing()) location.bearing else null,
+                        bearingAccuracyDegrees = if (location.hasBearingAccuracy()) location.bearingAccuracyDegrees else null,
                     )
                 )
             }
@@ -157,6 +178,43 @@ object CurrentLocation {
 
     /** Last-known is usable for road alerts / nearby search below this age. */
     const val FRESH_MS = 90_000L
+
+    /** Shared by voice and tools: never save an old cached position as 'here'. */
+    suspend fun fresh(context: Context, maxAgeMs: Long = 30_000L, maxAccuracyMeters: Float = 150f): Fix? {
+        fun usable(fix: Fix): Boolean = fix.lat.isFinite() && fix.lon.isFinite() &&
+            fix.lat in -90.0..90.0 && fix.lon in -180.0..180.0 &&
+            System.currentTimeMillis() - fix.atMs in -2_000L..maxAgeMs &&
+            fix.accuracyMeters?.let { it.isFinite() && it in 0f..maxAccuracyMeters } == true
+        last(context)?.takeIf(::usable)?.let { return it }
+        return kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
+            requestOnce(context, requiredAccuracyMeters = maxAccuracyMeters) { fix ->
+                if (continuation.isActive) continuation.resumeWith(Result.success(fix?.takeIf(::usable)))
+            }
+        }
+    }
+
+    /** New platform callback avoids an unbounded geocoder call on a worker thread.
+     * Coordinates remain usable offline or on older devices. */
+    suspend fun address(context: Context, fix: Fix): String? {
+        if (android.os.Build.VERSION.SDK_INT < 33 || !android.location.Geocoder.isPresent()) return null
+        return kotlinx.coroutines.withTimeoutOrNull(3_000L) {
+            kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
+                try {
+                    android.location.Geocoder(context, java.util.Locale.getDefault()).getFromLocation(
+                        fix.lat, fix.lon, 1, object : android.location.Geocoder.GeocodeListener {
+                            override fun onGeocode(addresses: MutableList<android.location.Address>) {
+                                if (continuation.isActive) continuation.resumeWith(Result.success(addresses.firstOrNull()?.getAddressLine(0)))
+                            }
+                            override fun onError(errorMessage: String?) {
+                                if (continuation.isActive) continuation.resumeWith(Result.success(null))
+                            }
+                        })
+                } catch (_: Exception) {
+                    if (continuation.isActive) continuation.resumeWith(Result.success(null))
+                }
+            }
+        }
+    }
 
     private const val MPS_TO_MPH = 2.2369363f
 }

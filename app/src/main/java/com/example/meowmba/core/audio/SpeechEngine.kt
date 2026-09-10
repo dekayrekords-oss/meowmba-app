@@ -13,6 +13,10 @@ import kotlinx.coroutines.flow.StateFlow
 
 /** Speech-to-text provider. */
 interface SpeechEngine {
+    /** Continuous capture survives quiet endpoints; wrappers must preserve this contract. */
+    val continuousCapture: Boolean get() = false
+    /** Finished audio is being decoded; quiet capture is a different phase. */
+    val finalizationPending: Boolean get() = false
     /** Local endpointed engines deliver finals themselves; never execute their preview text. */
     val deliversFinalResults: Boolean get() = false
     /** True while the recognizer is actively capturing audio. */
@@ -39,6 +43,9 @@ interface SpeechEngine {
      * are not cut off. Default no-op for fakes.
      */
     fun setFocusedListening(on: Boolean) {}
+
+    /** End the audio input and request its final transcript without discarding it. */
+    fun finishInput(): Boolean = false
 
     /**
      * Swap callbacks on an already-running recognizer without stopping it.
@@ -67,8 +74,14 @@ interface SpeechSynthesizer {
      */
     var onWordBoundary: ((start: Int, end: Int) -> Unit)?
 
+    /** Optional bounded delivery controls; unsupported engines keep their normal voice. */
+    fun setExpression(expression: VoiceExpression) {}
+
     /** Speak [text], replacing anything currently playing. */
     fun speak(text: String)
+
+    /** Optional real backend start callback. Unsupported engines do not synthesize a timing sample. */
+    fun speak(text: String, onStarted: () -> Unit) = speak(text)
 
     /**
      * Append [text] after whatever is already queued, without interrupting it.

@@ -38,14 +38,15 @@ import java.util.Date
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AssetBrowserScreen(askAi: suspend (String) -> String, onProjects: () -> Unit, onClose: () -> Unit) {
+fun AssetBrowserScreen(askAi: suspend (String) -> String, onProjects: () -> Unit, onClose: () -> Unit,
+    initialPath: String = "") {
     val application = LocalContext.current.applicationContext as Application
     val vm: AssetBrowserViewModel = viewModel(factory = remember(application) { object : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST") override fun <T : ViewModel> create(modelClass: Class<T>): T = AssetBrowserViewModel(application) as T
     } })
     val state by vm.state.collectAsState()
     var category by rememberSaveable { mutableStateOf("Home") }
-    var path by rememberSaveable { mutableStateOf("") }
+    var path by rememberSaveable(initialPath) { mutableStateOf(initialPath) }
     var query by rememberSaveable { mutableStateOf("") }
     var sort by rememberSaveable { mutableStateOf("Newest") }
     var grid by rememberSaveable { mutableStateOf(false) }

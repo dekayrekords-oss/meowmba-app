@@ -1,18 +1,20 @@
 package com.example.meowmba.core.robot
 
+import kotlin.math.abs
+import kotlin.math.exp
+
 /**
- * Visual servo: keep a person in the camera frame using the LOOI base.
+ * Physical follow intent for a currently observed person, never visual idle motion.
  *
  * Eyes stay snappy in VisionManager. This object is the BODY: a slow
  * Schmitt-trigger so a locked face's box jitter does not left-right the
  * treads. Start a turn only past [X_START]; keep going until inside
  * [X_HOLD]; ignore sign flips shorter than [SIGN_LOCK_MS].
  *
- * Losing the face is not "do nothing". After [SEARCH_AFTER_MS] the base
- * sweeps the way they left, in bursts of [SEARCH_GIVE_UP_MS] with a
- * [SEARCH_PAUSE_MS] rest between them, for at most [MAX_SEARCH_BURSTS]
- * bursts — alternating direction, so a person who walked off to one side is
- * found again instead of the base hunting full circles forever.
+ * Losing the face always stops wheel intent. A brief gap preserves only the
+ * filter's last pose; it never authorizes a search sweep. The caller must stop
+ * following on missing/invalid observations, not actuate the fallback neck pose.
+ * Actual actuation and verified direction remain the body safety gate's job.
  */
 object KeepInFrame {
 
@@ -25,17 +27,11 @@ object KeepInFrame {
     const val SIGN_LOCK_MS = 280L
     const val APPROACH_SCALE = 0.78f
     const val AIMED = 0.45f
-    const val SEARCH_AFTER_MS = 400L
-    /** Length of one search sweep before resting. */
-    const val SEARCH_GIVE_UP_MS = 2_800L
-    const val SEARCH_PAUSE_MS = 2_000L
-    const val MAX_SEARCH_BURSTS = 3
-    /** Search is slower than re-centering: a sweep should not fling the body. */
-    const val SEARCH_SPEED = 15
-    const val SEARCH_TICKS = 4
+    const val FACE_HOLD_MS = 400L
     /** Speed cap while they sit at the lip of the frame. */
     const val EDGE_SPEED = 18
-    const val BODY_ALPHA = 0.40f
+    /** Approximately the old 0.4 blend at 10 Hz, independent of callback count. */
+    const val BODY_SMOOTHING_MS = 200L
 
     data class Command(
         val neckPitch: Float,
@@ -57,11 +53,7 @@ object KeepInFrame {
         var bodyY: Float = 0f
         var hasBody: Boolean = false
 
-        /** Search state: which way to sweep, how far into the budget we are. */
-        var searchDir: Int = 0
-        var searchBursts: Int = 0
-        var burstStartMs: Long = 0L
-        var pauseUntilMs: Long = 0L
+        internal var lastSampleAtMs: Long? = null
 
         fun reset() {
             turning = false
@@ -70,27 +62,11 @@ object KeepInFrame {
             bodyX = 0f
             bodyY = 0f
             hasBody = false
-            clearSearch()
-        }
-
-        /** A face is back: drop the search budget so the next loss starts fresh. */
-        fun clearSearch() {
-            searchDir = 0
-            searchBursts = 0
-            burstStartMs = 0L
-            pauseUntilMs = 0L
+            lastSampleAtMs = null
         }
     }
 
-    /** Which way to sweep: the side they were last on, else the last turn sign. */
-    private fun searchDirection(lastX: Float, tracker: Tracker): Int =
-        when {
-            lastX > 0f -> 1
-            lastX < 0f -> -1
-            tracker.sign != 0 -> tracker.sign
-            else -> 1
-        }
-
+    /** [nowMs] must use one monotonic clock; the caller owns observation freshness. */
     fun step(
         offsetX: Float?,
         offsetY: Float?,
@@ -100,45 +76,30 @@ object KeepInFrame {
         lastX: Float,
         tracker: Tracker = Tracker(),
     ): Command {
+        if (nowMs < 0L || offsetX?.isFinite() == false || offsetY?.isFinite() == false ||
+            scale?.isFinite() == false || !lastX.isFinite() || !tracker.isFinite()
+        ) return resetAndHold(tracker)
+
+        val previousAt = tracker.lastSampleAtMs
+        if (previousAt != null && (previousAt < 0L || nowMs < previousAt)) return resetAndHold(tracker)
+
         if (offsetX == null || offsetY == null) {
-            // Face gone. Hold the head, then sweep to find it again — bounded,
-            // because an unbounded sweep is the spin this replaced.
-            if (!tracker.hasBody) return Command(0f, 0, 0, 0f, searching = false)
-            val neck = if (kotlin.math.abs(tracker.bodyY) < Y_DEAD) 0f
-                else (tracker.bodyY * 0.40f).coerceIn(-0.55f, 0.55f)
-            val lostMs = if (lastSeenMs > 0L) nowMs - lastSeenMs else Long.MAX_VALUE
-            if (lostMs < SEARCH_AFTER_MS) {
-                tracker.turning = false
-                return Command(neck, 0, 0, 0f, searching = false)
+            val seenAt = previousAt ?: lastSeenMs
+            if (!tracker.hasBody || seenAt < 0L || seenAt > nowMs || nowMs - seenAt >= FACE_HOLD_MS) {
+                return resetAndHold(tracker)
             }
-            if (tracker.searchDir == 0) tracker.searchDir = searchDirection(lastX, tracker)
-            if (tracker.searchBursts >= MAX_SEARCH_BURSTS) {
-                // Swept both ways and found nobody: stop until a face returns.
-                tracker.reset()
-                return Command(neck, 0, 0, 0f, searching = false)
-            }
-            if (nowMs < tracker.pauseUntilMs) {
-                tracker.turning = false
-                return Command(neck, 0, 0, 0f, searching = false)
-            }
-            if (tracker.burstStartMs == 0L) tracker.burstStartMs = nowMs
-            if (nowMs - tracker.burstStartMs < SEARCH_GIVE_UP_MS) {
-                tracker.turning = true
-                return Command(
-                    neck,
-                    tracker.searchDir * SEARCH_SPEED,
-                    SEARCH_TICKS,
-                    0f,
-                    searching = true,
-                )
-            }
-            // One sweep done: rest, then sweep back the other way.
-            tracker.searchBursts++
-            tracker.searchDir = -tracker.searchDir
-            tracker.burstStartMs = 0L
-            tracker.pauseUntilMs = nowMs + SEARCH_PAUSE_MS
+            // Preserve a brief filter hold, but never preserve a turn or direction lock.
             tracker.turning = false
-            return Command(neck, 0, 0, 0f, searching = false)
+            tracker.sign = 0
+            tracker.signAtMs = 0L
+            return hold(neckPitch(tracker.bodyY))
+        }
+
+        // Repeated callbacks are not new tracking evidence and must not repeatedly
+        // pull the filter toward the same point or replay a wheel pulse.
+        if (previousAt == nowMs) {
+            tracker.turning = false
+            return hold(neckPitch(tracker.bodyY))
         }
         val rawX = offsetX.coerceIn(-1f, 1f)
         val rawY = offsetY.coerceIn(-1f, 1f)
@@ -147,19 +108,22 @@ object KeepInFrame {
             tracker.bodyY = rawY
             tracker.hasBody = true
         } else {
-            // They are back: the search budget is for the NEXT time they go.
-            tracker.clearSearch()
-            tracker.bodyX += (rawX - tracker.bodyX) * BODY_ALPHA
-            tracker.bodyY += (rawY - tracker.bodyY) * BODY_ALPHA
+            val elapsed = if (previousAt == null) 0L else nowMs - previousAt
+            val alpha = (1.0 - exp(-elapsed.toDouble() / BODY_SMOOTHING_MS)).toFloat()
+            tracker.bodyX += (rawX - tracker.bodyX) * alpha
+            tracker.bodyY += (rawY - tracker.bodyY) * alpha
         }
+        tracker.lastSampleAtMs = nowMs
         return command(tracker.bodyX, tracker.bodyY, nowMs, tracker)
     }
 
     internal fun command(x: Float, y: Float, nowMs: Long, tracker: Tracker): Command {
-        val neck = if (kotlin.math.abs(y) < Y_DEAD) 0f else (y * 0.40f).coerceIn(-0.55f, 0.55f)
-        val absX = kotlin.math.abs(x)
-        // Screen-right (x>0) → robot turns right. The opposite mapping
-        // chased the face out of frame.
+        if (!x.isFinite() || !y.isFinite() || !tracker.isFinite() || nowMs < 0L ||
+            nowMs < tracker.signAtMs
+        ) return resetAndHold(tracker)
+        val neck = neckPitch(y.coerceIn(-1f, 1f))
+        val absX = abs(x.coerceIn(-1f, 1f))
+        // This is screen-space intent only, not proof of the base's motor direction.
         val rawSign = if (x > 0f) 1 else if (x < 0f) -1 else 0
         val sign = when {
             rawSign == 0 -> tracker.sign
@@ -188,5 +152,17 @@ object KeepInFrame {
         // Face-lock must not also scoot — scale flicker plus a turn is the
         // lurch. Approach stays off until it has its own deadband.
         return Command(neck, turnSpeed, turnTicks, driveSpeed = 0f, searching = false)
+    }
+
+    private fun Tracker.isFinite(): Boolean = bodyX.isFinite() && bodyY.isFinite() &&
+        bodyX in -1f..1f && bodyY in -1f..1f && sign in -1..1
+
+    private fun neckPitch(y: Float): Float = if (abs(y) < Y_DEAD) 0f else y * 0.40f
+
+    private fun hold(neck: Float = 0f) = Command(neck, 0, 0, 0f, searching = false)
+
+    private fun resetAndHold(tracker: Tracker): Command {
+        tracker.reset()
+        return hold()
     }
 }

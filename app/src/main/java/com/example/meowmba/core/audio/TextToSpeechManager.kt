@@ -50,6 +50,7 @@ class TextToSpeechManager(private val context: Context) : SpeechSynthesizer {
 
     private var pendingUtterances = 0
     private val activeIds = mutableSetOf<String>()
+    private val startCallbacks = mutableMapOf<String, () -> Unit>()
     private var speakingStarted = false
 
     /**
@@ -90,7 +91,10 @@ class TextToSpeechManager(private val context: Context) : SpeechSynthesizer {
                     speakingStarted = true
                 }
                 onMain { synchronized(this@TextToSpeechManager) {
-                    if (utteranceId in activeIds) onSpeechStarted?.invoke()
+                    if (utteranceId in activeIds) {
+                        startCallbacks.remove(utteranceId)?.invoke()
+                        onSpeechStarted?.invoke()
+                    }
                 } }
             }
 
@@ -111,6 +115,7 @@ class TextToSpeechManager(private val context: Context) : SpeechSynthesizer {
             private fun finishOne(id: String?) {
                 synchronized(this@TextToSpeechManager) {
                     if (!activeIds.remove(id)) return
+                    startCallbacks.remove(id)
                     pendingUtterances = activeIds.size
                     if (pendingUtterances > 0) return
                     speakingStarted = false
@@ -130,7 +135,11 @@ class TextToSpeechManager(private val context: Context) : SpeechSynthesizer {
         })
     }
 
+    private var expression = VoiceExpression()
+    override fun setExpression(expression: VoiceExpression) { this.expression = expression.bounded() }
+
     override fun speak(text: String) = enqueue(text, flush = true)
+    override fun speak(text: String, onStarted: () -> Unit) = enqueue(text, flush = true, onStarted = onStarted)
 
     /**
      * Appends [text] to what is already being said instead of cutting it off.
@@ -148,27 +157,30 @@ class TextToSpeechManager(private val context: Context) : SpeechSynthesizer {
         neural.enqueue("Hi, I'm ${voice.name}. What would you like to do next?", true, voice)
     }
 
-    private fun enqueue(text: String, flush: Boolean) {
+    private fun enqueue(text: String, flush: Boolean, onStarted: (() -> Unit)? = null) {
         if (useNeural()) {
-            if (flush) { synchronized(this) { pendingUtterances = 0; activeIds.clear(); speakingStarted = false }; tts?.stop() }
+            if (flush) { synchronized(this) { pendingUtterances = 0; activeIds.clear(); startCallbacks.clear(); speakingStarted = false }; tts?.stop() }
             LocalVoiceRuntime.lastError.value = null
-            neural.enqueue(text, flush)
+            neural.enqueue(text, flush, rate = expression.rate, onStarted = onStarted)
             return
         }
         if (!isInitialized || text.isBlank()) return
         val id = "memba_utterance_${utteranceSeq++}"
         synchronized(this) {
             if (flush || pendingUtterances == 0) oldestPendingAtMs = System.currentTimeMillis()
-            if (flush) { activeIds.clear(); speakingStarted = false }
+            if (flush) { activeIds.clear(); startCallbacks.clear(); speakingStarted = false }
             activeIds.add(id)
+            if (onStarted != null) startCallbacks[id] = onStarted
             pendingUtterances = activeIds.size
         }
         val params = Bundle().apply {
             putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, id)
         }
+        tts?.setPitch(expression.pitch)
+        tts?.setSpeechRate(expression.rate)
         val mode = if (flush) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
         if (tts?.speak(text, mode, params, id) == TextToSpeech.ERROR) {
-            synchronized(this) { activeIds.remove(id); pendingUtterances = activeIds.size }
+            synchronized(this) { activeIds.remove(id); startCallbacks.remove(id); pendingUtterances = activeIds.size }
             if (pendingUtterances == 0) onMain { onSpeechFinished?.invoke() }
         }
     }
@@ -176,7 +188,7 @@ class TextToSpeechManager(private val context: Context) : SpeechSynthesizer {
     private var utteranceSeq = 0L
 
     override fun stop() {
-        synchronized(this) { pendingUtterances = 0; activeIds.clear(); speakingStarted = false }
+        synchronized(this) { pendingUtterances = 0; activeIds.clear(); startCallbacks.clear(); speakingStarted = false }
         neural.stop()
         tts?.stop()
     }

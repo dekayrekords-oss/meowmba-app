@@ -46,7 +46,7 @@ class DesktopControlTool(
             return ToolResult.Failure("No paired desktop — pair one in Settings → Desktop Bridge")
         }
         return when (val action = args["action"]?.trim()?.lowercase()) {
-            "status" -> bridge.status().fold({ ToolResult.Success("Connected to ${it.name} · ${it.platform} · bridge ${it.version}. UI/Blender still require their desktop capability switches and OS permissions.") }, { ToolResult.Failure(it.message ?: "Desktop unreachable") })
+            "status" -> bridge.status().fold({ ToolResult.Success("Connected to ${it.name} · ${it.platform} · bridge ${it.version}. UI/Blender still require their desktop capability switches and OS permissions. ${it.logicProReadiness}") }, { ToolResult.Failure(it.message ?: "Desktop unreachable") })
             "read_screen" -> bridge.readUi().fold({ ToolResult.Success(it.toString()) }, { ToolResult.Failure(it.message ?: "Desktop UI unavailable") })
             "click", "type" -> bridge.uiAction(args["snapshot_id"].orEmpty(), args["element_id"].orEmpty(), action, args["value"].orEmpty()).toTool()
             "open_app" -> args["name"]?.takeIf { it.isNotBlank() }?.let { bridge.openApp(it).toTool() }

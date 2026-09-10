@@ -43,6 +43,7 @@ fun DriveCard(
     trip: TripStats?,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    roadStatus: String? = null,
 ) {
     Column(
         modifier = modifier
@@ -88,6 +89,7 @@ fun DriveCard(
             }
         }
 
+        roadStatus?.let { Text(it, color = DrivePalette.onSurface, style = shadowed(12.sp)) }
         Spacer(Modifier.height(14.dp))
 
         Row(

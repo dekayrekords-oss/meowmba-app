@@ -91,7 +91,7 @@ internal object InstalledApps {
 
         apps.filter { squash(it.label) == target }.let { if (it.isNotEmpty()) return it.singleOrNull() }
         // ASR aliases only resolve to an app actually installed on this phone.
-        val alias = mapOf("factbook" to "facebook", "facebrook" to "facebook", "whatsup" to "whatsapp", "snapshat" to "snapchat")[target]
+        val alias = mapOf("factbook" to "facebook", "facebrook" to "facebook", "whatsup" to "whatsapp", "snapshat" to "snapchat", "linkedit" to "linkedin")[target]
         if (alias != null) return apps.filter { squash(it.label) == alias }.singleOrNull()
         if (target.length < 3) return null
         apps.filter { squash(it.label).startsWith(target) }.let { if (it.isNotEmpty()) return it.singleOrNull() }

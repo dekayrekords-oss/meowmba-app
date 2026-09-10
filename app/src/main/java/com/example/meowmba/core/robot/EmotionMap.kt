@@ -1,132 +1,117 @@
 package com.example.meowmba.core.robot
 
 import com.example.meowmba.ui.companion.AnimFrame
-import com.example.meowmba.ui.companion.Body as ComposedBody
+import com.example.meowmba.ui.companion.AvatarPose
+import com.example.meowmba.ui.companion.CatMotionEngine
 import com.example.meowmba.ui.companion.ComposedExpression
 import com.example.meowmba.ui.companion.CustomAnimationSpec
+import com.example.meowmba.ui.companion.MotionPose
+import com.example.meowmba.ui.companion.applyTo
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /**
- * Drives the body from a composed emotional expression, just as the face does.
+ * Compiles the face's actual composed score into bounded physical command intent.
+ * The former three phase mapper guessed a gesture/light from the body enum and
+ * lost bob reversals, a coil's held anticipation, and a snap's early strike.
+ * This samples CatMotionEngine instead, including its existing body springs.
  *
- * This is the WALL-E/E.M.O. design grammar: the body mirrors whatever the face
- * is feeling, on the same timeline. The avatar already renders [ComposedExpression]
- * on screen; this map turns the same expression into the body's verb timeline,
- * which [BodyScheduler] plays on the same clock. Face and base therefore cannot
- * disagree about what is being felt.
- *
- * Pure by construction — [profile] is an argument, so the "DESK never drives"
- * invariant holds here exactly as it does in [BodyMotionMap].
- *
- * The mapping is deliberately coarse: an expression is a pose with a character,
- * not a 12-frame clip. Emotion reads in two or three phases — attack, hold,
- * settle — which is plenty for a base that moves in whole-body gestures.
+ * This is a deterministic simulation from the score's neutral starting pose,
+ * not a measurement of the robot or a claim of identical physical dynamics.
+ * The face may carry spring velocity from an interrupted clip; the physical
+ * adapter has no measured joint state to reproduce that. Its existing safety
+ * lease, quarantine, scheduler and transport remain authoritative and unchanged.
  */
 object EmotionMap {
-
-    private const val HAPPY_GLOW = 0xFFD29922L
-    private val SINK_GLOW = 0xFF263238L
+    internal const val MAX_DURATION_MS = 10_000
+    internal const val MAX_BODY_AMP = 2f
+    internal const val SIMULATION_HZ = 120
+    private const val FACE_RADIUS = 200f
+    private const val NECK_BOB_SCALE = .5f // Same interpretation as BodyMotionMap's DESK bob.
+    private const val TILT_DEADZONE_DEG = 4f
 
     fun cues(expr: ComposedExpression, profile: BodyProfile): List<BodyCue> {
-        val durationMs = (expr.durationSeconds * 1000f).toInt().coerceAtLeast(500)
-        val holdMs = (durationMs * 0.5f).toInt()
-        val settleMs = durationMs - 200
-
-        val frames = buildList {
-            add(frameFor(expr, atMs = 0, amount = 1f))
-            add(frameFor(expr, atMs = holdMs, amount = 0.85f))
-            add(settleFrame(expr, atMs = settleMs))
+        val durationMs = durationMs(expr) ?: return listOf(BodyCue(0, BodyVerb.Brake))
+        if (!expr.bodyAmp.isFinite() || expr.bodyAmp !in 0f..MAX_BODY_AMP) {
+            return listOf(BodyCue(0, BodyVerb.Brake))
         }
-
-        return BodyMotionMap.cues(
-            CustomAnimationSpec("emotion:${label(expr)}", frames),
-            profile,
-        )
+        // An effect shorter than one existing neck interval has no representable
+        // physical choreography. Never stretch it or generate a faster pulse.
+        if (durationMs < BodyNeckProfile.SAMPLE_MS || expr.bodyAmp == 0f) {
+            return listOf(BodyCue(durationMs, BodyVerb.Brake))
+        }
+        val spec = sampledScore(expr, profile, durationMs)
+            ?: return listOf(BodyCue(0, BodyVerb.Brake))
+        // BodyScheduler already runs BodyNeckProfile.expand under its existing
+        // fenced lease. Keep that single application; do not double-profile or
+        // mark raw targets as profiled outside the lease. The terminal brake
+        // remains at the expression's own cutoff, with no post-clip decay lease.
+        return BodyMotionMap.cues(spec, profile).map { cue ->
+            val neck = cue.verb as? BodyVerb.Neck
+            // Gaze->pitch float arithmetic can exceed an exact endpoint by one
+            // ulp. Keep even simulated intent inside the existing motor bound.
+            if (neck == null) cue else cue.copy(verb = neck.copy(
+                pitch = neck.pitch.coerceIn(-RobotManager.NECK_RANGE, RobotManager.NECK_RANGE)))
+        }
     }
 
-    /**
-     * One frame's rapid (but legal) summary of the expression's character.
-     *
-     * Which face channels the base actually has: gaze (neck pitch), head tilt
-     * (turn), body bounce (bob or drive pulse), zest (turn), brightness
-     * (headlight). Everything else an expression says is face-only and stays
-     * on the face.
-     */
-    private fun frameFor(expr: ComposedExpression, atMs: Int, amount: Float): AnimFrame {
-        val amp = expr.bodyAmp * amount
+    private fun durationMs(expr: ComposedExpression): Int? {
+        val seconds = expr.durationSeconds
+        if (!seconds.isFinite() || seconds <= 0f || seconds > MAX_DURATION_MS / 1000f) return null
+        return (seconds * 1000f).roundToInt().takeIf { it in 1..MAX_DURATION_MS }
+    }
+
+    private fun sampledScore(expr: ComposedExpression, profile: BodyProfile, durationMs: Int): CustomAnimationSpec? {
+        val engine = CatMotionEngine().also { it.play(expr) }
+        val frames = mutableListOf(AnimFrame(0))
+        val spacingMs = BodyNeckProfile.SAMPLE_MS.toInt()
+        val ticksPerSample = SIMULATION_HZ * spacingMs / 1000
+        require(ticksPerSample > 0 && SIMULATION_HZ * spacingMs % 1000 == 0)
+        var tick = 0
+        // Each retained point lies on the existing 250 ms command cadence;
+        // the finer simulation captures face spring dynamics, never wire writes.
+        for (atMs in spacingMs until durationMs step spacingMs) {
+            val targetTick = atMs * SIMULATION_HZ / 1000
+            var motion = engine.restPose()
+            while (tick < targetTick) {
+                motion = engine.update(1f / SIMULATION_HZ, FACE_RADIUS) ?: engine.restPose()
+                tick++
+            }
+            if (!motionIsFinite(motion)) return null
+            frames += frameFor(motion, atMs, profile)
+        }
+        // An empty terminal keyframe fixes duration without inventing a final
+        // neck move less than 250 ms after the preceding point. Brake is exact.
+        frames += AnimFrame(durationMs)
+        return CustomAnimationSpec("emotion:${expr.body.name.lowercase()}", frames)
+    }
+
+    private fun frameFor(motion: MotionPose, atMs: Int, profile: BodyProfile): AnimFrame {
+        // Use the score's actual radius-normalized vertical travel for pitch.
+        // Visual perspective scale/squash has no neck axis; mixing it into the
+        // bob nearly cancels COIL's anticipation in the legacy face adapter.
+        // Ear asymmetry, eyelids and jaw have no matching actuator here; notably,
+        // do not turn the base just because one visual ear swings backwards.
+        val face = motion.applyTo(AvatarPose(), FACE_RADIUS)
+        val pitch = (motion.offsetY / (FACE_RADIUS * .25f) * NECK_BOB_SCALE)
+            .coerceIn(-RobotManager.NECK_RANGE, RobotManager.NECK_RANGE)
+        val tilt = motion.headTiltDeg.coerceIn(-25f, 25f)
         return AnimFrame(
             atMs = atMs,
-            pupilGazeUp = gazeUp(expr, amp),
-            headTiltDeg = headTiltDeg(expr, amp),
-            bodyBounce = bodyBounce(expr, amp),
-            tailWag = tailWag(expr, amp),
-            sparkle = sparkle(expr, amp),
-            glowColorHex = glow(expr, amp),
+            // Absolute neck target through the existing gaze-to-pitch mapper.
+            // Passing sampled DESK bounce directly would inject center pulses
+            // at +200ms and erase its held/reversing score before the next sample.
+            pupilGazeUp = (.5f - pitch * .5f).coerceIn(0f, 1f),
+            headTiltDeg = tilt,
+            // FLOOR retains the pre-existing positive-only drive pulse mapping.
+            // Its +200ms brake remains unchanged and cannot overrun the clip.
+            bodyBounce = if (profile == BodyProfile.FLOOR) face.bodyBounce else null,
+            // One turn proposal per point; tilt and wag both address the same base.
+            tailWag = if (abs(tilt) < TILT_DEADZONE_DEG) face.tailWag else null,
         )
     }
 
-    /** Neutral pose on the same axes, so the base has somewhere to settle. */
-    private fun settleFrame(expr: ComposedExpression, atMs: Int): AnimFrame = AnimFrame(
-        atMs = atMs,
-        pupilGazeUp = 0.5f,
-        headTiltDeg = 0f,
-        bodyBounce = 0f,
-        tailWag = 0f,
-    )
-
-    /** -1 fully up, 0 center, +1 down on the neck axis. */
-    private fun gazeUp(expr: ComposedExpression, amp: Float): Float = when (expr.body) {
-        // Looking up reads as lifted spirits.
-        ComposedBody.BOB, ComposedBody.RISE, ComposedBody.ORBIT, ComposedBody.FLOAT_UP, ComposedBody.SNAP_FWD -> (0.5f + 0.3f * amp).coerceIn(0f, 1f)
-        // Looking down reads as low spirits or wariness.
-        ComposedBody.SINK, ComposedBody.PULL_BACK, ComposedBody.COIL, ComposedBody.STAGGER, ComposedBody.TIP, ComposedBody.LURCH, ComposedBody.RECOIL -> (0.5f - 0.35f * amp).coerceIn(0f, 1f)
-        // Leaning toward a subject closes the gap naturally.
-        ComposedBody.LEAN_IN -> 0.45f
-        else -> 0.5f
-    }
-
-    private fun headTiltDeg(expr: ComposedExpression, amp: Float): Float? {
-        val tilt = when (expr.body) {
-            ComposedBody.LEAN_IN -> -12f * amp
-            ComposedBody.PULL_BACK -> 10f * amp
-            ComposedBody.SHAKE_H, ComposedBody.RECOIL, ComposedBody.SNAP_FWD, ComposedBody.TIP -> 6f * amp
-            else -> 0f
-        }
-        return if (abs(tilt) < 4f) null else tilt
-    }
-
-    private fun bodyBounce(expr: ComposedExpression, amp: Float): Float? {
-        val bounce = when (expr.body) {
-            ComposedBody.BOB, ComposedBody.RISE, ComposedBody.ORBIT -> 0.55f * amp
-            ComposedBody.NOD, ComposedBody.SNAP_FWD -> 0.3f * amp
-            ComposedBody.SINK, ComposedBody.COIL, ComposedBody.STAGGER, ComposedBody.TIP, ComposedBody.LURCH -> -0.4f * amp
-            else -> 0f
-        }
-        return if (abs(bounce) < 0.15f) null else bounce
-    }
-
-    private fun tailWag(expr: ComposedExpression, amp: Float): Float? {
-        val wag = when (expr.body) {
-            ComposedBody.WIGGLE, ComposedBody.SHAKE_H, ComposedBody.SHAKE_V, ComposedBody.BUZZ -> 0.9f * amp
-            ComposedBody.FLOAT_UP, ComposedBody.ORBIT -> 0.45f * amp
-            else -> 0f
-        }
-        return if (abs(wag) < 0.15f) null else wag
-    }
-
-    private fun sparkle(expr: ComposedExpression, amp: Float): Float? {
-        val s = when (expr.body) {
-            ComposedBody.BOB, ComposedBody.RISE, ComposedBody.FLOAT_UP, ComposedBody.SNAP_FWD, ComposedBody.WIGGLE -> 0.7f * amp
-            else -> 0f
-        }
-        return if (s > 0.5f) s else null
-    }
-
-    private fun glow(expr: ComposedExpression, amp: Float): Long? = when (expr.body) {
-        ComposedBody.BOB, ComposedBody.RISE, ComposedBody.FLOAT_UP, ComposedBody.SNAP_FWD, ComposedBody.WIGGLE -> if (amp > 0.4f) HAPPY_GLOW else null
-        ComposedBody.SINK, ComposedBody.COIL, ComposedBody.STAGGER, ComposedBody.TIP, ComposedBody.LURCH, ComposedBody.PULL_BACK, ComposedBody.RECOIL -> SINK_GLOW
-        else -> null
-    }
-
-    private fun label(expr: ComposedExpression): String = expr.body.name.lowercase()
+    private fun motionIsFinite(motion: MotionPose): Boolean =
+        motion.offsetX.isFinite() && motion.offsetY.isFinite() &&
+            motion.headTiltDeg.isFinite() && motion.scaleDelta.isFinite()
 }

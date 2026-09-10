@@ -27,21 +27,18 @@ class SettingsNavigationUiTest {
     private val storage = mock(SecureStorageManager::class.java)
 
     @Test fun overviewHasCardsNotLongFormsAndLoadsNoModelCatalog() {
-        var loads = 0
         compose.setContent { MaterialTheme {
-            SettingsScreen(secureStorage = storage, onClose = {}, loadOpenRouterCatalog = { loads++; Result.success(emptyList()) })
+            SettingsScreen(secureStorage = storage, onClose = {})
         } }
         compose.onNodeWithText("Images").assertExists()
         compose.onNodeWithText("Companion Voice").assertDoesNotExist()
         compose.onNodeWithText("Workers AI API token").assertDoesNotExist()
-        assertEquals(0, loads)
         render("settings-cards-light")
         compose.onNodeWithText("Voice & behavior").performClick()
         compose.onNodeWithText("Companion Voice").assertExists()
         compose.onNodeWithText("Images").assertDoesNotExist()
         compose.onNodeWithContentDescription("Back to settings").performClick()
         compose.onNodeWithText("Images").assertExists()
-        assertEquals(0, loads)
     }
 
     @Test fun darkAppearancePageKeepsLightAndDarkOptions() {
@@ -87,22 +84,22 @@ class SettingsNavigationUiTest {
         verify(storage).savePreference(ImageServiceSettings.PROVIDER, ImageService.CLOUDFLARE.name)
     }
 
-    @Test fun editingMaskedProviderKeyDoesNotSaveMaskCharacters() {
+    @Test fun providerSettingsMovedToLlmAndOldSettingsCannotOverwriteThem() {
         `when`(storage.getApiKey("openai")).thenReturn("original-test-key")
-        var loads = 0
+        var opened = false
         compose.setContent { MaterialTheme {
-            SettingsScreen(secureStorage = storage, onClose = {}, loadOpenRouterCatalog = { loads++; Result.success(emptyList()) })
+            SettingsScreen(secureStorage = storage, onClose = {}, onOpenModels = { opened = true })
         } }
         compose.onNodeWithText("AI & models").performClick()
-        compose.onNodeWithText("API Key").performScrollTo()
-            .assert(SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsProperties.Password))
-            .performTextReplacement("replacement-test-key")
+        compose.onNodeWithText("OpenAI Cloud").assertDoesNotExist()
+        compose.onNodeWithText("Vision model").assertDoesNotExist()
+        compose.onNodeWithText("OpenRouter (openrouter.ai)").assertDoesNotExist()
+        compose.onNodeWithText("Open LLM settings").performClick()
+        assertTrue(opened)
         compose.onNodeWithContentDescription("Back to settings").performClick()
-        verify(storage, atLeastOnce()).saveApiKey("openai", "replacement-test-key")
         assertFalse(mockingDetails(storage).invocations.any {
-            it.method.name == "saveApiKey" && it.arguments[0] == "openai" && (it.arguments[1] as String).contains("•")
+            it.method.name.startsWith("save") && it.arguments.firstOrNull() in listOf("openai", "openrouter", "openrouter_vision")
         })
-        assertEquals(1, loads)
     }
 
     @Test fun imageProviderDraftIsNotSavedByMerelyBrowsingChoices() {

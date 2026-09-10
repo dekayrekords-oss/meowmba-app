@@ -43,6 +43,8 @@ object CommandHeuristics {
     )
 
     fun mightBeCommand(text: String): Boolean {
+        if (AvatarFormRequest.parse(AgentRouter.stripAddress(text)) != null) return true
+        if (AvatarSceneRequest.parse(text) != null) return true
         val normalized = WakePhraseMatcher.normalize(text)
         if (normalized.matches(Regex("(yes|yeah|yep|sure|ok|okay)( please)?"))) return true
         val request = normalized
@@ -64,7 +66,7 @@ object CommandHeuristics {
         "remind", "draw", "paint", "sketch", "render", "generate", "animate", "launch",
         "start", "call", "text", "run", "build", "tap", "click", "press", "swipe",
         "scroll", "type", "control", "navigate", "play", "pause", "stop", "perform",
-        "dance", "wiggle", "lick", "do", "set", "turn", "change", "update", "move",
+        "dance", "wiggle", "lick", "do", "set", "turn", "change", "update", "move", "work", "plan",
     )
 }
 
@@ -116,6 +118,8 @@ class LlmToolCallRouter(
             withContext(dispatcher) {
                 provider.generate(prompt)
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             null
         } ?: return null

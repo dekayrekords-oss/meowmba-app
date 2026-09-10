@@ -69,14 +69,14 @@ class FileReadTool(private val workspace: Workspace) : Tool {
     override val definition = ToolDefinition(
         id = "file.read",
         displayName = "Read file",
-        description = "Read a text file from the workspace.",
+        description = "Read a text file. Relative names prefer the current project's files, then shared workspace references. A full projects/… path or leading / explicitly addresses the workspace root.",
         inputSchema = mapOf("path" to "path"),
         riskLevel = RiskLevel.SAFE
     )
 
     override suspend fun execute(args: Map<String, String>): ToolResult {
         val path = args["path"] ?: return ToolResult.Failure("Missing 'path'")
-        val file = workspace.resolve(path)?.takeIf { it.isFile }
+        val file = workspace.resolveRead(path)?.takeIf { it.isFile }
             ?: return ToolResult.Failure("Cannot read '$path' (missing or outside the workspace)")
         if (com.example.meowmba.core.files.AssetLibrary.category(file.name) != "Documents")
             return ToolResult.Failure("This is a media or archive file, not text. Open it in Files with a compatible viewer.")
@@ -97,7 +97,7 @@ class FileWriteTool(private val workspace: Workspace) : Tool {
     override val definition = ToolDefinition(
         id = "file.write",
         displayName = "Write file",
-        description = "Create or overwrite a text file in the workspace.",
+        description = "Create or overwrite a text document in the workspace and show the saved result. Use .md, .txt or .html for documents. This tool does not encode PDF, Office, images or other binary formats; never label plain text with those extensions.",
         inputSchema = mapOf("path" to "path", "content" to "string"),
         riskLevel = RiskLevel.MODERATE,
         confirmationPolicy = ConfirmationPolicy.ALWAYS
@@ -106,8 +106,12 @@ class FileWriteTool(private val workspace: Workspace) : Tool {
     override suspend fun execute(args: Map<String, String>): ToolResult {
         val path = args["path"] ?: return ToolResult.Failure("Missing 'path'")
         val content = args["content"] ?: ""
+        if (java.io.File(path).extension.lowercase() in setOf("pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "png", "jpg", "jpeg", "webp", "gif", "mp4", "webm", "mp3", "wav", "zip")) {
+            return ToolResult.Failure("file.write creates text, not binary files. Use .md, .txt or .html for a readable document, or a real export/generation tool for this format. No file was written.")
+        }
         return if (workspace.write(path, content)) {
-            ToolResult.Success("Wrote $path (${content.length} chars)")
+            val file = workspace.resolveWrite(path)!!
+            ToolResult.Success("Wrote ${file.relativeTo(workspace.root).path} (${content.length} chars)\nMEDIA_FILE:${file.absolutePath}")
         } else {
             ToolResult.Failure("Cannot write '$path' (outside the workspace)")
         }
@@ -138,13 +142,15 @@ class FileListTool(private val workspace: Workspace) : Tool {
     override val definition = ToolDefinition(
         id = "file.list",
         displayName = "List files",
-        description = "List a bounded preview of library files and folders, excluding Trash and linked paths. Use file.search to find specific assets.",
+        description = "List a bounded preview of this project's files and folders, or the whole library when no project is active, excluding Trash and linked paths. Returns workspace-relative paths for reading. Use file.search to find other library references.",
         inputSchema = emptyMap(),
         riskLevel = RiskLevel.SAFE
     )
 
     override suspend fun execute(args: Map<String, String>): ToolResult {
-        val scan = com.example.meowmba.core.files.AssetLibrary(workspace.root).scan()
+        val scan = runCatching { workspace.scanFiles() }.getOrElse {
+            return ToolResult.Failure("Cannot list files: ${it.message}")
+        }
         val entries = scan.entries.map { it.path + if (it.folder) "/" else "" }.sorted()
         return ToolResult.Success(
             if (entries.isEmpty()) "Workspace is empty."

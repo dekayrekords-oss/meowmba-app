@@ -44,6 +44,12 @@ class DesktopBridgeManager(
     private val secureStorage: SecureStorageManager,
     private val clock: () -> Long = { System.currentTimeMillis() / 1000 }
 ) {
+    private val transportFallback = BridgeTransportFallback()
+    @Volatile private var connectedHost: String? = null
+
+    fun connectionDescription(): String =
+        if (connectedHost == "127.0.0.1") "USB tunnel" else "network"
+
     data class PairedBridge(val host: String, val port: Int, val name: String, val certSha256: String)
 
     data class BridgeStatus(
@@ -52,7 +58,8 @@ class DesktopBridgeManager(
         val platform: String,
         val uptimeSeconds: Long,
         val workspaceRoots: List<String>,
-        val pairedPhone: String
+        val pairedPhone: String,
+        val logicProReadiness: String = "Logic Pro readiness not reported by this helper.",
     )
 
     data class BridgeFileEntry(val name: String, val dir: Boolean, val size: Long)
@@ -184,13 +191,18 @@ class DesktopBridgeManager(
             platform = obj["platform"]?.jsonPrimitive?.content ?: "",
             uptimeSeconds = obj["uptime_s"]?.jsonPrimitive?.long ?: 0,
             workspaceRoots = obj["workspace_roots"]?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList(),
-            pairedPhone = obj["paired_phone"]?.jsonPrimitive?.content ?: ""
+            pairedPhone = obj["paired_phone"]?.jsonPrimitive?.content ?: "",
+            logicProReadiness = LogicProPreflight.describe(obj["logic_pro"]),
         )
     }
 
     data class BridgeScreenshot(val path: String, val bytes: Long, val pngBase64: String)
 
     suspend fun readUi(): Result<kotlinx.serialization.json.JsonObject> = rpc("ui_snapshot").mapCatching { Json.parseToJsonElement(it).jsonObject }
+    suspend fun logicCall(method: String, params: Map<String, Any?>): Result<String> {
+        require(method in setOf("logic_inspect", "logic_edit", "logic_receipt", "logic_verify_audio", "logic_screen", "logic_act", "logic_cancel"))
+        return rpc(method, params, if (method == "logic_verify_audio") 140_000 else 40_000)
+    }
     suspend fun uiAction(snapshotId: String, elementId: String, action: String, value: String): Result<String> =
         rpc("ui_action", mapOf("snapshot_id" to snapshotId, "element_id" to elementId, "action" to action, "value" to value), 30_000).map { messageOf(it, "Action dispatched; read a fresh screen to verify.") }
     suspend fun createBlenderScene(scene: String): Result<String> = runCatching {
@@ -367,7 +379,10 @@ class DesktopBridgeManager(
                 bridge.host, bridge.port, "/rpc", body, bridge.certSha256,
                 mapOf("X-Meowmba-Timestamp" to ts, "X-Meowmba-Signature" to signature), readTimeoutMs
             )
-        }.getOrElse { return@withContext Result.failure(Exception("desktop unreachable: ${it.message}")) }
+        }.getOrElse {
+            if (it is kotlinx.coroutines.CancellationException) throw it
+            return@withContext Result.failure(Exception("desktop unreachable: ${it.message}"))
+        }
 
         when (result.first) {
             200 -> Result.success(String(result.second, Charsets.UTF_8))
@@ -389,7 +404,7 @@ class DesktopBridgeManager(
     // ------------------------------------------------------------------
 
     /** POST JSON over TLS pinned to [expectedCertSha256]; returns (status, body). */
-    private fun post(
+    private suspend fun post(
         host: String, port: Int, path: String, body: ByteArray,
         expectedCertSha256: String, extraHeaders: Map<String, String>, readTimeoutMs: Int = 15_000
     ): Pair<Int, ByteArray> {
@@ -410,23 +425,38 @@ class DesktopBridgeManager(
         val sslContext = SSLContext.getInstance("TLS")
         sslContext.init(null, arrayOf(trustManager), null)
 
-        val conn = (URL("https://$host:$port$path").openConnection() as HttpsURLConnection).apply {
+        suspend fun connect(endpoint: String): HttpsURLConnection {
+        val conn = (URL("https://$endpoint:$port$path").openConnection() as HttpsURLConnection).apply {
             sslSocketFactory = sslContext.socketFactory
             // Certificate is pinned by fingerprint; hostname checking adds nothing here.
             hostnameVerifier = HostnameVerifier { _, _ -> true }
-            connectTimeout = 10_000
+            connectTimeout = if (endpoint == "127.0.0.1") 1_500 else 3_000
             readTimeout = readTimeoutMs
             requestMethod = "POST"
             doOutput = true
+            // Streaming disables HttpURLConnection's automatic POST replay.
+            setFixedLengthStreamingMode(body.size)
             setRequestProperty("Content-Type", "application/json")
             extraHeaders.forEach { (k, v) -> setRequestProperty(k, v) }
         }
+        try {
+            cancellableBridgeIo(conn::disconnect) { conn.connect() }
+            connectedHost = endpoint
+            return conn
+        } catch (e: Exception) {
+            withContext(kotlinx.coroutines.NonCancellable + Dispatchers.IO) { conn.disconnect() }
+            throw e
+        }
+        }
+        suspend fun send(conn: HttpsURLConnection): Pair<Int, ByteArray> = cancellableBridgeIo(conn::disconnect) {
         try {
             conn.outputStream.use { it.write(body) }
             val code = conn.responseCode
             val bytes = (if (code in 200..299) conn.inputStream else conn.errorStream)
                 ?.use { it.readBytes() } ?: ByteArray(0)
-            return code to bytes
+            code to bytes
+        } catch (e: java.io.IOException) {
+            throw java.io.IOException("Desktop request may have started; inspect its state before retrying. ${e.message}", e)
         } finally {
             // Disconnect on EVERY path: unreachable desktops throw from
             // write/responseCode, and the retry loops hit that constantly —
@@ -434,6 +464,12 @@ class DesktopBridgeManager(
             // repeat.
             conn.disconnect()
         }
+        }
+        // Pairing still goes only to the explicitly selected desktop. Fallback
+        // is available solely after that desktop's certificate has been pinned.
+        return if (path == "/rpc") transportFallback.execute(
+            "$host:$port:$expectedCertSha256", host, ::connect, ::send
+        ) else send(connect(host))
     }
 
     companion object {

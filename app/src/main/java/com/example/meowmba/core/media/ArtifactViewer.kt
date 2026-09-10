@@ -25,6 +25,12 @@ object ArtifactViewer {
         "ogg" -> "audio/ogg"
         "flac" -> "audio/flac"
         "pdf" -> "application/pdf"
+        "docx" -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        "xlsx" -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        "pptx" -> "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        "csv" -> "text/csv"
+        "rtf" -> "application/rtf"
+        "eml" -> "message/rfc822"
         "json" -> "application/json"
         "txt", "md", "kt", "css", "js", "py" -> "text/plain"
         else -> "application/octet-stream"
@@ -36,9 +42,26 @@ object ArtifactViewer {
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
 
-    fun open(context: Context, file: File): Result<String> = runCatching {
+    /** Only these native writers append a trusted artifact marker as their final line.
+     * Read/search/MCP content may contain the same text and must not trigger a viewer. */
+    fun resultsForTool(toolId: String, result: String): List<File> {
+        if (toolId !in setOf("file.write", "email.draft", "media.generate_image", "media.generate_video",
+                "media.generate_audio", "studio.create_comic", "studio.write_script", "glasses.take_photo", "web.browser")) return emptyList()
+        return resultFiles(result.lineSequence().lastOrNull { it.isNotBlank() }.orEmpty())
+    }
+
+    /** Parse artifact markers; callers must establish their provenance first. */
+    fun resultFiles(result: String): List<File> = result.lineSequence().map(String::trim)
+        .filter { it.startsWith("MEDIA_FILE:") }.map { File(it.removePrefix("MEDIA_FILE:").trim()) }
+        .filter { it.isAbsolute && it.isFile && it.length() > 0 }.distinctBy { it.absolutePath }.take(20).toList()
+
+    fun contentUri(context: Context, file: File): Uri {
         require(file.isFile && file.length() > 0) { "The saved file is missing or empty: ${file.name}" }
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+    }
+
+    fun open(context: Context, file: File): Result<String> = runCatching {
+        val uri = contentUri(context, file)
         val mime = mimeFor(file)
         val intent = viewIntent(uri, mime)
         // Media belongs in a compatible player/gallery. Do not force video and

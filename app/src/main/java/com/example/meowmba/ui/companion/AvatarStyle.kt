@@ -7,6 +7,16 @@ package com.example.meowmba.ui.companion
  * keeps the same pose inputs but renders the Meow OS particle sphere instead.
  */
 enum class AvatarStyle(val key: String, val label: String, val description: String) {
+    LUMEN(
+        key = "lumen",
+        label = "Lumen",
+        description = "One expressive companion with animal forms, playful scenes and a changing wardrobe.",
+    ),
+    LUMEN_CAT(
+        key = "lumen_cat",
+        label = "Lumen Cat",
+        description = "Living glass eyes, velvet ears and floating whiskers. The same attentive motion, in a cat.",
+    ),
     PEARL(
         key = "pearl",
         label = "Pearl",
@@ -31,6 +41,8 @@ enum class AvatarStyle(val key: String, val label: String, val description: Stri
         label = "Classic",
         description = "The original look: soft glowing capsules with rounded pupils.",
     );
+
+    val isLumen: Boolean get() = this == LUMEN || this == LUMEN_CAT
 
     companion object {
         val DEFAULT = NEO

@@ -26,7 +26,7 @@ class GlassesTakePhotoTool(
         displayName = "Take photo with glasses",
         description = "Capture a photo through the connected Ray-Ban Meta glasses and show it " +
             "on screen. Fails honestly when the glasses are not connected — tell the user to " +
-            "connect them on the Hardware page instead of faking a photo.",
+            "connect them on the LLM page instead of faking a photo.",
         inputSchema = emptyMap(),
         riskLevel = RiskLevel.SAFE,
         environments = setOf(ToolEnvironment.PHONE)
@@ -53,12 +53,12 @@ class GlassesTakePhotoTool(
         if (!glasses.isRealDevice.value || !glasses.isStreaming.value ||
             System.currentTimeMillis() - MetaGlassesController.lastFrameAtMs.value > 12_000L) {
             return@withContext ToolResult.Failure(
-                "No fresh camera frame from real glasses. Reconnect them on the Hardware page and try again."
+                "No fresh camera frame from real glasses. Reconnect them on the LLM page and try again."
             )
         }
         if (frame == null) {
             return@withContext ToolResult.Failure(
-                "No camera frame from the glasses yet. Connect them on the Hardware page " +
+                "No camera frame from the glasses yet. Connect them on the LLM page " +
                     "(Setup glasses → Connect) and approve camera permission in Meta AI."
             )
         }

@@ -121,3 +121,35 @@ class PairingTest(unittest.TestCase):
         self.assertEqual(self.responses[-1][0],409); self.assertEqual(self.saved,[])
 
 if __name__=='__main__': unittest.main()
+
+
+class LogicRPCTest(unittest.TestCase):
+    def setUp(self):
+        self.handler=bridge.BridgeHandler.__new__(bridge.BridgeHandler)
+        self.handler.server=SimpleNamespace(cfg={'gui_enabled':True,'logic_enabled':True})
+        self.handler._workspace_roots=lambda: ['/tmp/logic-test-outputs']
+        self.responses=[]
+        self.handler._send=lambda code,body:self.responses.append((code,body))
+
+    def test_disabled_logic_rejects_before_native_call(self):
+        self.handler.server.cfg['logic_enabled']=False
+        with patch.object(bridge._logic,'inspect',side_effect=AssertionError('No native call')):
+            self.handler._rpc_logic('logic_inspect',{})
+        self.assertEqual(self.responses[-1][0],403)
+
+    def test_phone_writable_helper_location_is_rejected(self):
+        self.handler._workspace_roots=lambda: ['/']
+        with patch.object(bridge._logic,'inspect',side_effect=AssertionError('No native call')):
+            self.handler._rpc_logic('logic_inspect',{})
+        self.assertEqual(self.responses[-1][0],403)
+
+    def test_inspection_does_not_accept_script_arguments(self):
+        with patch.object(bridge._logic,'inspect',side_effect=AssertionError('No native call')):
+            self.handler._rpc_logic('logic_inspect',{'script':'arbitrary'})
+        self.assertEqual(self.responses[-1][0],409)
+
+    def test_audio_cannot_read_outside_workspace(self):
+        self.handler._resolve_in_workspace=lambda path:(None,'outside the workspace')
+        with patch.object(bridge,'verify_wave',side_effect=AssertionError('No decoder call')):
+            self.handler._rpc_logic('logic_verify_audio',{'path':'/private/file.wav'})
+        self.assertEqual(self.responses[-1][0],409)

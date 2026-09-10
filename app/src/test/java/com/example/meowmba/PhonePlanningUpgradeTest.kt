@@ -72,6 +72,21 @@ class PhonePlanningUpgradeTest {
         }
     }
     @Test fun launchOnlyStillUsesFastRoute() { assertEquals("phone.launch_app", AgentRouter.route("open facebook")!!.toolId) }
+    @Test fun socialDraftRequestsKeepTheFullGoalWithoutGrantingPublishPermission() {
+        for (goal in listOf("make a post on linked it about the app for promotion", "Meow, draft a post on LinkedIn", "can you write a post for reddit", "please create a post on Instagram about cats")) {
+            val intent = AgentRouter.route(goal)!!
+            assertEquals(goal, "phone.run_goal", intent.toolId)
+            assertEquals(goal, intent.args["goal"])
+            assertFalse(PhoneGoalLimits.maySubmit(goal))
+        }
+        assertNull(AgentRouter.route("I saw a post on LinkedIn"))
+        assertNull(AgentRouter.route("do not make a post on LinkedIn"))
+    }
+    @Test fun linkedItAliasRequiresAnInstalledLinkedInApp() {
+        val linkedIn = InstalledApps.Entry("LinkedIn", "com.linkedin.android")
+        assertEquals(linkedIn, InstalledApps.match(apps + linkedIn, "linked it"))
+        assertNull(InstalledApps.match(apps, "linked it"))
+    }
     @Test fun pronounUsesContextPlannerNotAnAppNamedIt() { assertNull(AgentRouter.route("open it")) }
     @Test fun repairsSpeechAgainstRealInventory() {
         for (name in listOf("fact book", "face book", "the facebook app", "facebok", "faceboook")) assertEquals(name, "Facebook", InstalledApps.match(apps, name)?.label)

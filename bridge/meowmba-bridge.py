@@ -62,11 +62,15 @@ import sys
 import threading
 import time
 from desktop_ui import DesktopUI
+from desktop_capabilities import logic_pro_status
+from logic_control import LogicController
+from logic_workflow import LogicWorkflow
+from audio_verify import verify_wave
 from blender_scene import validate as validate_scene
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-VERSION = "0.7.0"
+VERSION = "0.9.0"
 _desktop_ui = DesktopUI()
 _blender_lock = threading.Lock()
 CONFIG_DIR = Path.home() / ".meowmba-bridge"
@@ -75,6 +79,8 @@ KEY_PATH = CONFIG_DIR / "key.pem"
 PAIRED_PATH = CONFIG_DIR / "paired.json"
 CONFIG_PATH = CONFIG_DIR / "config.json"
 LOG_PATH = CONFIG_DIR / "bridge.log"
+_logic = LogicController(CONFIG_DIR / 'logic_receipts')
+_logic_workflow = LogicWorkflow(_logic)
 
 DEFAULT_PORT = 8765
 DISCOVERY_PORT = 8766
@@ -159,22 +165,22 @@ def _ensure_cert() -> None:
     try:
         subprocess.run(
             [
-                "openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes",
+                ("/usr/bin/openssl" if sys.platform == "darwin" else "openssl"), "req", "-x509", "-newkey", "rsa:2048", "-nodes",
                 "-keyout", str(KEY_PATH), "-out", str(CERT_PATH),
                 "-days", "3650", "-subj", "/CN=meowmba-bridge",
                 "-addext", f"subjectAltName=DNS:localhost,DNS:{socket.gethostname()},IP:127.0.0.1,IP:{ip}",
             ],
-            check=True, capture_output=True,
+            check=True, capture_output=True, timeout=20,
         )
-    except (OSError, subprocess.CalledProcessError) as e:
+    except (OSError, subprocess.SubprocessError) as e:
         sys.exit(f"error: failed to generate self-signed certificate with openssl: {e}")
     os.chmod(KEY_PATH, 0o600)
 
 
 def _cert_fingerprint() -> str:
     der = subprocess.run(
-        ["openssl", "x509", "-in", str(CERT_PATH), "-outform", "DER"],
-        check=True, capture_output=True,
+        [("/usr/bin/openssl" if sys.platform == "darwin" else "openssl"), "x509", "-in", str(CERT_PATH), "-outform", "DER"],
+        check=True, capture_output=True, timeout=5,
     ).stdout
     return hashlib.sha256(der).hexdigest()
 
@@ -384,6 +390,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 "workspace_roots": self.server.cfg.get("workspace_roots", []),
                 "paired_phone": pairing.get("phone_name"),
                 "capabilities": {"ui": bool(self.server.cfg.get("gui_enabled")) and sys.platform == "darwin", "blender_scene": bool(self.server.cfg.get("blender_enabled"))},
+                "logic_pro": logic_pro_status(gui_enabled=bool(self.server.cfg.get("gui_enabled")), logic_enabled=bool(self.server.cfg.get("logic_enabled"))),
             })
         elif method == "list_files":
             self._rpc_list_files(data.get("params") or {})
@@ -421,10 +428,47 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 self._send(409,{"error":str(ex)[:600]})
         elif method == "blender_scene":
             self._rpc_blender_scene(data.get("params") or {}, pairing)
+        elif method in ('logic_inspect', 'logic_edit', 'logic_receipt', 'logic_verify_audio', 'logic_screen', 'logic_act', 'logic_cancel'):
+            self._rpc_logic(method, data.get('params') or {})
         else:
             self._send(400, {"error": f"unknown method '{method}'"})
 
     # -- workspace file tools (P6b, read-only) --------------------------------
+
+    def _rpc_logic(self, method, params):
+        if method != 'logic_cancel' and (not self.server.cfg.get('logic_enabled') or not self.server.cfg.get('gui_enabled')):
+            self._send(403, {'error': 'Enable logic_enabled and gui_enabled in the Mac helper after choosing a working project copy.'}); return
+        protected = [CONFIG_DIR.resolve(), Path(__file__).resolve().parent,
+                     Path('/opt/homebrew/opt/libebur128/lib/libebur128.dylib').resolve(),
+                     Path('/usr/local/opt/libebur128/lib/libebur128.dylib').resolve()]
+        if any(p == Path(r) or Path(r) in p.parents for p in protected for r in self._workspace_roots()):
+            self._send(403, {'error': 'The helper and its receipts must be outside all phone-writable workspace roots.'}); return
+        try:
+            if not isinstance(params, dict): raise ValueError('Logic parameters must be an object')
+            if method == 'logic_verify_audio':
+                if set(params) != {'path'}: raise ValueError('Provide the path to a WAV bounce')
+                path, error = self._resolve_in_workspace(params['path'])
+                if error: raise ValueError(error)
+                if not str(path).lower().endswith('.wav'): raise ValueError('Export the bounce as a WAV file first')
+                result = verify_wave(path)
+            elif method == 'logic_inspect':
+                if params: raise ValueError('Logic inspection takes no parameters')
+                result = _logic.inspect()
+            elif method == 'logic_edit': result = _logic.edit(params)
+            elif method == 'logic_screen':
+                if set(params) != {'query', 'offset'}: raise ValueError('Provide query and offset')
+                result = _logic_workflow.screen(**params)
+            elif method == 'logic_act': result = _logic_workflow.act(params, self._workspace_roots())
+            elif method == 'logic_cancel':
+                if set(params) != {'operation_id'}: raise ValueError('Provide an operation_id')
+                result = _logic.cancel(params['operation_id'])
+            else:
+                if set(params) != {'operation_id'}: raise ValueError('Provide an operation_id')
+                result = _logic.receipt(params['operation_id']) or {'state': 'not_found'}
+            _log(f'{method}: paired phone; project and parameter contents omitted')
+            self._send(200, result)
+        except Exception as ex:
+            self._send(409, {'error': str(ex)[:600]})
 
     def _rpc_blender_scene(self, params, pairing):
         if not self.server.cfg.get("blender_enabled"):

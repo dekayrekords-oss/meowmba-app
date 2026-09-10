@@ -188,8 +188,9 @@ class OmniRoute(
         }
         var lastError: String? = null
         for (route in plan) {
-            val response = runCatching { route.provider.generate(prompt) }
-                .getOrElse { ModelResponse.Error(it.message ?: it.javaClass.simpleName) }
+            val response = try { route.provider.generate(prompt) }
+                catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+                catch (error: Exception) { ModelResponse.Error(error.message ?: error.javaClass.simpleName) }
             when (response) {
                 is ModelResponse.Error -> lastError = "${route.label}: ${response.message}"
                 else -> {
@@ -235,6 +236,9 @@ class OmniRoute(
                     val pump = launch {
                         try {
                             route.provider.generateStreaming(prompt).collect { inbox.send(it) }
+                        } catch (cancelled: CancellationException) {
+                            inbox.close(cancelled)
+                            throw cancelled
                         } finally {
                             inbox.close()
                         }
@@ -260,9 +264,11 @@ class OmniRoute(
                                 }
                             }
                         }
-                        val first = withTimeoutOrNull(firstTokenTimeoutMs.coerceAtLeast(1L)) {
-                            inbox.receiveCatching().getOrNull()
+                        val received = withTimeoutOrNull(firstTokenTimeoutMs.coerceAtLeast(1L)) {
+                            inbox.receiveCatching()
                         }
+                        received?.exceptionOrNull()?.let { throw it }
+                        val first = received?.getOrNull()
                         if (first == null) {
                             lastError = "${route.label}: no tokens in ${firstTokenTimeoutMs}ms"
                             log(lastError!!)
@@ -277,6 +283,7 @@ class OmniRoute(
                 }
             }.exceptionOrNull()
 
+            if (failure is CancellationException) throw failure
             if (produced) return@flow
             if (failure != null && failure !is CancellationException) {
                 lastError = "${route.label}: ${failure.message ?: failure.javaClass.simpleName}"

@@ -12,12 +12,17 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 
 internal fun allowAvatarWork(started: Boolean, interactive: Boolean, thermalStatus: Int): Boolean =
-    started && interactive && thermalStatus < PowerManager.THERMAL_STATUS_SEVERE
+    started && interactive && thermalStatus < PowerManager.THERMAL_STATUS_MODERATE
 
 /** Stop decorative work when invisible or thermally throttled. Uses Android's
  * thermal severity rather than inventing a battery-temperature threshold. */
 @Composable
-internal fun rememberAvatarWorkAllowed(): Boolean {
+internal fun rememberAvatarWorkAllowed(): Boolean = rememberAvatarWorkStatus().allowed
+
+internal data class AvatarWorkStatus(val allowed: Boolean, val cooling: Boolean)
+
+@Composable
+internal fun rememberAvatarWorkStatus(): AvatarWorkStatus {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val power = remember(context) { context.getSystemService(PowerManager::class.java) }
@@ -47,5 +52,6 @@ internal fun rememberAvatarWorkAllowed(): Boolean {
             power.removeThermalStatusListener(listener)
         }
     }
-    return allowAvatarWork(started, interactive, thermal)
+    return AvatarWorkStatus(allowAvatarWork(started, interactive, thermal),
+        started && interactive && thermal >= PowerManager.THERMAL_STATUS_MODERATE)
 }

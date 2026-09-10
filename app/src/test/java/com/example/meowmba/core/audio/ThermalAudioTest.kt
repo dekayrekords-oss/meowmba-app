@@ -66,7 +66,7 @@ class ThermalAudioTest {
             delay(100)
             concurrent--
             "Result ${it[0]}"
-        }, deliver = { results.add(it) })
+        }, deliver = { text, _ -> results.add(text) })
         repeat(4) { assertTrue(queue.offer("Streaming", shortArrayOf((it + 1).toShort()))) }
         advanceUntilIdle()
         assertEquals(1, peak)
@@ -82,7 +82,7 @@ class ThermalAudioTest {
             // Native decode cannot stop halfway through a JNI call.
             withContext(NonCancellable) { delay(1000) }
             "Hello"
-        }, deliver = { results.add(it) })
+        }, deliver = { text, _ -> results.add(text) })
         repeat(3) { queue.offer("Streaming", shortArrayOf(1)) }
         runCurrent()
         queue.close()
@@ -95,7 +95,7 @@ class ThermalAudioTest {
     @Test fun `overload is bounded and failed refinement can recover without wedging worker`() = runTest {
         val results = mutableListOf<String>()
         val queue = SpeechFinalizer(this, refine = { throw IllegalStateException("unavailable") },
-            deliver = { results.add(it) }, capacity = 2)
+            deliver = { text, _ -> results.add(text) }, capacity = 2)
         assertTrue(queue.offer("First request", shortArrayOf(1)))
         assertTrue(queue.offer("Second request", shortArrayOf(2)))
         assertFalse(queue.offer("Overflow", shortArrayOf(3)))
@@ -107,7 +107,7 @@ class ThermalAudioTest {
     @Test fun `exact hardware mute skips inference but quiet audio still reaches refiner`() = runTest {
         var decodes = 0
         val results = mutableListOf<String>()
-        val queue = SpeechFinalizer(this, refine = { decodes++; "Quiet speech" }, deliver = { results.add(it) })
+        val queue = SpeechFinalizer(this, refine = { decodes++; "Quiet speech" }, deliver = { text, _ -> results.add(text) })
         queue.offer("And", ShortArray(16000))
         queue.offer("Quiet speech", shortArrayOf(0, 1, 0, -1))
         advanceUntilIdle()

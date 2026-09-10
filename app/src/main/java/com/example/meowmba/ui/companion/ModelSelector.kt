@@ -103,6 +103,9 @@ val modelProviders = listOf(
     "On-device (Local)",
     "OpenRouter (Cloud)",
     "OpenAI (Cloud)",
+    "Claude (Cloud)",
+    "OpenCode Zen (Cloud)",
+    "Custom API (Cloud)",
 )
 
 fun availableModelProviders(context: android.content.Context?): List<String> = modelProviders

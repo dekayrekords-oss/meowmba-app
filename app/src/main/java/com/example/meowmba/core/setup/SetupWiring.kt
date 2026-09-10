@@ -135,12 +135,17 @@ object SetupWiring {
         val p = brainProvider(id) ?: return false
         return when (p.path) {
             Path.LOCAL -> s.getEndpoint("local")?.let { path ->
-                java.io.File(path).isFile && (path.endsWith(".task") || path.endsWith(".litertlm")) &&
-                    s.getPreference("planner_verified_local") == path
+                java.io.File(path).let { it.isFile && it.length() > 0 && com.example.meowmba.core.agent.LocalChatModel.supports(it) } &&
+                    (s.getPreference("planner_verified_local") == path ||
+                        s.getPreference("chat_verified_local") == localStamp(java.io.File(path)))
             } == true
-            else -> !s.getApiKey(id).isNullOrBlank() && s.getPreference("planner_verified_$id") == PlannerReadiness.cloudStamp(s.getModelName(id), s.getApiKey(id))
+            else -> !s.getApiKey(id).isNullOrBlank() && PlannerReadiness.cloudStamp(s.getModelName(id), s.getApiKey(id)).let { stamp ->
+                s.getPreference("planner_verified_$id") == stamp || s.getPreference("chat_verified_$id") == stamp
+            }
         }
     }
+
+    fun localStamp(file: java.io.File): String = "${file.absolutePath}:${file.length()}:${file.lastModified()}"
 
     // ── TTS (speech out) ───────────────────────────────────────────────────
 

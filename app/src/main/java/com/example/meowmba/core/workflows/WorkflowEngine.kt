@@ -64,6 +64,17 @@ class WorkflowEngine(
                     val tool = registry.byId(decision.tool) ?: return block(id, "Tool unavailable: ${decision.tool}")
                     if (decision.tool !in agent.tools) return block(id, "${agent.name} is not allowed to use ${decision.tool}")
                     if (!tool.definition.requiredPermissions.all(hasPermission)) return block(id, "Required phone permission is missing")
+                    // A repeated successful mutation is not new progress. Stop
+                    // before another approval card or external dispatch; the
+                    // previous action's saved evidence is already available.
+                    // A read may repeat after other successful work changed the
+                    // state (e.g. read -> write -> verify), but not in a loop.
+                    val observed = run.steps.drop(frame.startedAtStep).filter {
+                        it.agentId == agent.id && it.status == "SUCCEEDED" && it.tool != "agent.result"
+                    }
+                    val repeated = observed.filter { it.tool == decision.tool && it.args == decision.args }
+                    if (repeated.isNotEmpty() && (tool.definition.riskLevel != RiskLevel.SAFE || observed.lastOrNull() in repeated))
+                        return block(id, "Stopped a repeated ${decision.tool} action. Its previous result is saved; review it before starting another job.")
                     require(decision.args.values.sumOf { it.length } <= 100_000) { "Arguments too large" }
                     try { (tool as? WorkflowArgumentValidator)?.validateArguments(decision.args) }
                     catch (e: Exception) {

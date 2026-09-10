@@ -15,7 +15,7 @@ object LocalVoiceRuntime {
     val lastError = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
     private var model: OfflineTts? = null
     @Synchronized fun generate(context: Context, text: String, voice: LocalVoice,
-        callback: ((FloatArray) -> Int)? = null): GeneratedAudio {
+        speed: Float = 1f, callback: ((FloatArray) -> Int)? = null): GeneratedAudio {
         check(LocalVoicePack(context).ready()) { "Download the local voice pack first" }
         val tts = model ?: run {
             val root = LocalVoicePack(context).directory.path
@@ -26,8 +26,8 @@ object LocalVoiceRuntime {
                 ), numThreads = 4), maxNumSentences = 1, silenceScale = 0.15f
             )).also { model = it }
         }
-        return if (callback == null) tts.generate(text, voice.speaker, 1f)
-            else tts.generateWithCallback(text, voice.speaker, 1f, callback)
+        return if (callback == null) tts.generate(text, voice.speaker, speed)
+            else tts.generateWithCallback(text, voice.speaker, speed, callback)
     }
 }
 
@@ -43,18 +43,20 @@ class LocalNeuralSpeech(private val context: Context,
     @Volatile private var startedEpoch = -1
     fun isSpeaking() = pending.get() > 0
 
-    fun enqueue(text: String, flush: Boolean, previewVoice: LocalVoice? = null) {
+    fun enqueue(text: String, flush: Boolean, previewVoice: LocalVoice? = null, rate: Float = 1f, onStarted: (() -> Unit)? = null) {
         if (text.isBlank()) return
         if (flush) stop()
+        val speed = VoiceExpression(rate = rate).bounded().rate
         val turn = epoch.get()
         val voice = previewVoice ?: LocalVoices.selected(context)
         pending.incrementAndGet()
         worker.execute {
             var player: AudioTrack? = null
             var written = 0L
+            var reportedOutput = false
             try {
                 if (turn != epoch.get()) return@execute
-                LocalVoiceRuntime.generate(context, text, voice) { samples ->
+                LocalVoiceRuntime.generate(context, text, voice, speed = speed) { samples ->
                     if (turn != epoch.get()) return@generate 0
                     if (player == null) {
                         player = AudioTrack.Builder()
@@ -75,6 +77,10 @@ class LocalNeuralSpeech(private val context: Context,
                         check(n > 0) { "Local voice playback failed ($n)" }
                         offset += n
                         written += n
+                        if (!reportedOutput) {
+                            reportedOutput = true
+                            main.post { if (epoch.get() == turn) onStarted?.invoke() }
+                        }
                     }
                     if (turn == epoch.get()) 1 else 0
                 }

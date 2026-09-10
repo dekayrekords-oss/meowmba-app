@@ -167,7 +167,7 @@ class ModelRoutingViewModelTest {
         vm.showProviderError("connection refused")
 
         assertEquals(InteractionState.OFFLINE, vm.uiState.value.interactionState)
-        assertEquals("connection refused", vm.uiState.value.errorMessage)
+        assertTrue(vm.uiState.value.errorMessage?.contains("connection refused") == true)
         assertTrue(vm.uiState.value.captionText?.contains("connection refused") == true)
 
         advanceUntilIdle()

@@ -31,6 +31,7 @@ fun ChatOverlay(
     messages: List<ChatUiMessage> = emptyList(),
     title: String = "Conversation",
     onLeaveProject: (() -> Unit)? = null,
+    onProjectOverview: (() -> Unit)? = null,
     listening: Boolean = false,
     listenPartial: String? = null,
     onMicClick: () -> Unit = {},
@@ -38,6 +39,7 @@ fun ChatOverlay(
     onCallClick: () -> Unit = {},
     liveReply: String? = null,
     thinking: Boolean = false,
+    recognitionIssue: String? = null,
     conversationKey: String = "inbox",
     modifier: Modifier = Modifier,
 ) {
@@ -87,7 +89,10 @@ fun ChatOverlay(
                         }
                         IconButton(onClick = { collapse() }) { Icon(Icons.Default.KeyboardArrowDown, "Collapse chat") }
                     }
-                    if (onLeaveProject != null) TextButton(onClick = onLeaveProject) { Text("Back to inbox") }
+                    if (onLeaveProject != null) Row(Modifier.fillMaxWidth()) {
+                        onProjectOverview?.let { open -> TextButton(onClick = open, modifier = Modifier.weight(1f)) { Text("Plan & files") } }
+                        TextButton(onClick = onLeaveProject) { Text("Back to inbox") }
+                    }
                     if (callActive) Text("Voice call active", style = MaterialTheme.typography.labelMedium)
                     if (history) {
                         LazyColumn(Modifier.weight(1f, fill = false).fillMaxWidth(), state = historyState, reverseLayout = true) {
@@ -108,6 +113,8 @@ fun ChatOverlay(
                         }
                         if (thinking) Text("Meow is thinking…", style = MaterialTheme.typography.labelMedium)
                     }
+                    recognitionIssue?.let { Text(it, style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error, maxLines = 3) }
                     if (listening && !listenPartial.isNullOrBlank()) Text(listenPartial,
                         maxLines = 2, style = MaterialTheme.typography.bodySmall)
                     Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {

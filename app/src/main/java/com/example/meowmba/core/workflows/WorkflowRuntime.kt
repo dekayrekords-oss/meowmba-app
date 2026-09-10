@@ -35,7 +35,7 @@ class WorkflowRuntime private constructor(context: Context) {
         val create: () -> ModelProvider
         if (agent.provider == "openrouter") {
             check(agent.cloudConsent) { "Cloud access is not approved for this agent" }
-            val apiKey = storage.getApiKey("openrouter")?.takeIf { it.isNotBlank() } ?: error("Connect OpenRouter in Your agent team")
+            val apiKey = storage.getApiKey("openrouter")?.takeIf { it.isNotBlank() } ?: error("Connect OpenRouter in Business mode")
             val model = agent.model.ifBlank { storage.getModelName("openrouter") ?: "openrouter/free" }
             key = "openrouter:$model:$apiKey"
             create = { RemoteModelProvider("OpenRouter", "https://openrouter.ai/api", apiKey, model) }
@@ -96,6 +96,10 @@ class WorkflowRuntime private constructor(context: Context) {
     }
     fun ensureSchedules() {
         val manager = WorkManager.getInstance(context)
+        // A pause prevents scheduleDue from allocating new runs. Keep the
+        // periodic worker registered: cancelling it here could interrupt an
+        // already-approved action executing in that worker. An idle wake does
+        // not load a model; existing jobs retain their normal stop controls.
         if (store.state.value.agents.any { it.enabled && it.intervalMinutes >= 15 }) {
             manager.enqueueUniquePeriodicWork("business-schedules", ExistingPeriodicWorkPolicy.KEEP,
                 PeriodicWorkRequestBuilder<BusinessWorker>(15, TimeUnit.MINUTES)

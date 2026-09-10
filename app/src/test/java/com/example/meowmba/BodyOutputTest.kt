@@ -148,4 +148,19 @@ class BodyOutputTest {
 
         assertEquals(listOf(0.3f), writes)
     }
+
+    @Test
+    fun `ble neck accepts a settled target with small camera jitter`() {
+        var now = 1_000L
+        val writes = mutableListOf<Float>()
+        val out = LooiBleBodyOutput(null, { true }, { writes += it }, { now })
+        out.neck(0f)
+        now += 300
+        out.neck(0.20f)
+        now += 60
+        out.neck(0.205f)
+        now += 70
+        out.neck(0.198f)
+        assertEquals(listOf(0f, 0.198f), writes)
+    }
 }

@@ -56,7 +56,8 @@ class UtteranceCapture(
      */
     private val finishEarlyWhen: (String) -> Boolean = { false },
     /** Injectable clock; tests drive time instead of sleeping through it. */
-    private val now: () -> Long = { System.currentTimeMillis() },
+    private val now: () -> Long = { System.nanoTime() / 1_000_000L },
+    private val reuseSession: Boolean = false,
 ) {
 
     private val segments = mutableListOf<String>()
@@ -73,6 +74,11 @@ class UtteranceCapture(
     private var lastVoiceAt = 0L
     private var restarts = 0
     private var finished = false
+    private var heardFinalEnginePreview = false
+    private var finishingInput = false
+    private var submitAt: Long? = null
+    private var reusePending = false
+    private var sessionGeneration = 0L
 
     private var watchdog: Job? = null
     private var partialJob: Job? = null
@@ -92,6 +98,10 @@ class UtteranceCapture(
         lastVoiceAt = startedAt
         restarts = 0
         finished = false
+        heardFinalEnginePreview = false
+        finishingInput = false
+        submitAt = null
+        reusePending = reuseSession
 
         // Partials are the only evidence that someone is still talking *during* a
         // session. Without them the pause timer would only ever update once a session
@@ -99,7 +109,15 @@ class UtteranceCapture(
         partialJob?.cancel()
         partialJob = scope.launch {
             engine.partialResults.collect { partial ->
-                if (finished || partial.isBlank()) return@collect
+                if (finished) return@collect
+                if (partial.isBlank()) {
+                    // Endpointed local recognizers retract unstable previews
+                    // and clear them while refining. Don't leave the old words
+                    // on screen, and don't mistake that clear for no speech.
+                    if (engine.deliversFinalResults) _live.value = segments.joinToString(" ")
+                    return@collect
+                }
+                if (engine.deliversFinalResults) heardFinalEnginePreview = true
                 lastVoiceAt = now()
                 _live.value = (segments + partial).joinToString(" ")
             }
@@ -107,11 +125,22 @@ class UtteranceCapture(
 
         watchdog?.cancel()
         watchdog = scope.launch {
+            var finalizingAt: Long? = null
             while (isActive && !finished) {
                 delay(TICK_MS)
                 val quiet = now() - lastVoiceAt
                 val elapsed = now() - startedAt
+                if (engine.finalizationPending) {
+                    if (finalizingAt == null) finalizingAt = now()
+                } else finalizingAt = null
                 when {
+                    submitAt?.let { now() - it >= MAX_FINALIZATION_MS } == true ||
+                        finalizingAt?.let { now() - it >= MAX_FINALIZATION_MS } == true ->
+                        fail(SpeechRecognizer.ERROR_SPEECH_TIMEOUT)
+                    engine.finalizationPending -> Unit
+                    // A recorder that accepted submit owns finalization until its
+                    // callback or the deadline above. Never execute its draft.
+                    finishingInput -> Unit
                     // Said something (final or still sitting in a partial), then
                     // stopped. Partials are the only record AiAi keeps on a hang
                     // — if we wait for a segment here the words are discarded.
@@ -136,20 +165,50 @@ class UtteranceCapture(
         finished = true
         watchdog?.cancel()
         partialJob?.cancel()
-        engine.stopListening()
+        sessionGeneration++
+        runCatching { engine.stopListening() }
+    }
+
+    /** A second mic tap means submit recorded speech; cancellation remains separate. */
+    fun finishNow() {
+        if (finished) return
+        if (finishingInput) { cancel(); onError?.invoke(SpeechRecognizer.ERROR_NO_MATCH); return }
+        finishingInput = true
+        submitAt = now()
+        try {
+            if (!engine.finishInput()) finish()
+        } catch (e: SecurityException) {
+            fail(SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS)
+        } catch (e: Exception) {
+            fail(SpeechRecognizer.ERROR_AUDIO)
+        }
     }
 
     private fun listen() {
-        engine.startListening(
-            onResult = { text -> onSessionResult(text) },
-            onError = { code -> onSessionError(code) },
-        )
+        val generation = ++sessionGeneration
+        val result: (String) -> Unit = { if (generation == sessionGeneration && !finished) onSessionResult(it) }
+        val error: (Int) -> Unit = { if (generation == sessionGeneration && !finished) onSessionError(it) }
+        try {
+            if (reusePending) {
+                reusePending = false
+                engine.swapCallbacks(onResult = result, onError = error)
+            } else engine.startListening(onResult = result, onError = error)
+        } catch (e: SecurityException) {
+            fail(SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS)
+        } catch (e: Exception) {
+            fail(SpeechRecognizer.ERROR_AUDIO)
+        }
     }
 
     private fun onSessionResult(text: String) {
         if (finished) return
         bankAudioSegment()
         val trimmed = text.trim()
+        if (trimmed.isEmpty() && engine.continuousCapture && !finishingInput) return
+        if (finishingInput && trimmed.isEmpty()) {
+            fail(SpeechRecognizer.ERROR_NO_MATCH)
+            return
+        }
         if (trimmed.isNotEmpty() && trimmed != segments.lastOrNull()) {
             segments += trimmed
             lastVoiceAt = now()
@@ -238,7 +297,7 @@ class UtteranceCapture(
         .coerceIn(250L, silenceToFinishMs)
 
     private fun hasSpeech(): Boolean =
-        segments.isNotEmpty() || _live.value.isNotBlank()
+        segments.isNotEmpty() || _live.value.isNotBlank() || heardFinalEnginePreview
 
     /**
      * Promote the in-progress partial into [segments] so a hang or empty
@@ -263,7 +322,8 @@ class UtteranceCapture(
         finished = true
         watchdog?.cancel()
         partialJob?.cancel()
-        engine.stopListening()
+        sessionGeneration++
+        runCatching { engine.stopListening() }
         bankLivePartial()
         bankAudioSegment()
         val text = segments.joinToString(" ").trim()
@@ -288,7 +348,8 @@ class UtteranceCapture(
         finished = true
         watchdog?.cancel()
         partialJob?.cancel()
-        engine.stopListening()
+        sessionGeneration++
+        runCatching { engine.stopListening() }
         onError?.invoke(code)
     }
 
@@ -305,6 +366,7 @@ class UtteranceCapture(
 
         /** Tapping the mic and saying nothing should give up reasonably quickly. */
         const val INITIAL_SILENCE_MS = 8_000L
+        const val MAX_FINALIZATION_MS = 20_000L
 
         private const val TICK_MS = 200L
 

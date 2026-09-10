@@ -26,8 +26,10 @@ internal fun rememberSceneClock(paused: Boolean): SceneClock {
     LaunchedEffect(active) {
         if (!active) return@LaunchedEffect
         var previous = 0L
+        val cadence = AvatarFrameCadence()
         while (true) {
             withFrameNanos { now ->
+                if (!cadence.admit(now)) return@withFrameNanos
                 if (previous != 0L) clock.advance(now - previous)
                 previous = now
             }

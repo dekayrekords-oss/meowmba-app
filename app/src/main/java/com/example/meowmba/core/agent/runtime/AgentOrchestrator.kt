@@ -72,7 +72,9 @@ class AgentOrchestrator(
 
     // ── Submission ──────────────────────────────────────────────────────────
 
-    fun submit(agentId: String, toolId: String, args: Map<String, String>, title: String): SubmitResult {
+    fun submit(agentId: String, toolId: String, args: Map<String, String>, title: String,
+        projectId: Long? = com.example.meowmba.core.work.ProjectExecutionContext.projectId,
+        conversationId: Long? = com.example.meowmba.core.work.ProjectExecutionContext.conversationId): SubmitResult {
         val agent = AgentRegistry.byId(agentId)
             ?: return SubmitResult.Rejected("Unknown agent '$agentId'")
         if (!agent.available) {
@@ -86,11 +88,13 @@ class AgentOrchestrator(
 
         // A desktop goal reserves one slot for its approved child action.
         // A second parent waiting on approval would otherwise occupy that slot.
-        if (toolId == "desktop.run_goal" && _tasks.value.any { it.toolId == toolId && !it.isTerminal }) {
+        val desktopGoals = setOf("desktop.run_goal", "logic.run_goal")
+        if (toolId in desktopGoals && _tasks.value.any { it.toolId in desktopGoals && !it.isTerminal }) {
             return SubmitResult.Rejected("Another desktop goal is active. Stop or finish it first.")
         }
 
-        val task = AgentTask(agentId = agentId, toolId = toolId, title = title, args = args)
+        val task = AgentTask(agentId = agentId, toolId = toolId, title = title, args = args,
+            projectId = projectId, conversationId = conversationId)
         _tasks.value = listOf(task) + _tasks.value
 
         val running = runningCount(agentId)
@@ -134,7 +138,7 @@ class AgentOrchestrator(
         // Reserve the slot before dispatch: multiple submits can happen before
         // the dispatcher runs the first coroutine (and otherwise exceed the limit).
         updateTask(task.id) { it.copy(status = TaskStatus.RUNNING, startedAt = System.currentTimeMillis()) }
-        jobs[task.id] = scope.launch {
+        jobs[task.id] = scope.launch(com.example.meowmba.core.work.ProjectExecutionContext.element(task.projectId, task.conversationId)) {
             try {
                 runTask(task)
             } finally {
@@ -156,7 +160,7 @@ class AgentOrchestrator(
         if (tool.definition.confirmationPolicy == ConfirmationPolicy.ALWAYS) {
             updateTask(task.id) { it.copy(status = TaskStatus.WAITING_APPROVAL) }
             val argsSummary = task.args.entries.joinToString("\n") {
-                val limit = if (task.toolId == "desktop.control" && it.key in setOf("value", "text")) 8000 else if (it.key == "goal") 3000 else 160
+                val limit = if (task.toolId in setOf("logic.edit", "logic.act")) 1000 else if (task.toolId == "project.plan") 8000 else if (task.toolId == "desktop.control" && it.key in setOf("value", "text")) 8000 else if (it.key == "goal") 3000 else 160
                 "${it.key}=${it.value.take(limit)}${if (it.value.length > limit) " … (truncated; review before approving)" else ""}"
             }
             val request = ApprovalRequest(
@@ -164,7 +168,8 @@ class AgentOrchestrator(
                 toolId = task.toolId,
                 title = task.title,
                 riskLevel = tool.definition.riskLevel,
-                detail = "${tool.definition.description}\n$argsSummary"
+                detail = (task.projectId?.let { "Project #$it · Files/projects/project-$it\nThis approval stays with that project even if another is open.\n\n" } ?: "") +
+                    "${tool.definition.description}\n$argsSummary"
             )
             val decision = kotlinx.coroutines.CompletableDeferred<Boolean>()
             approvals[task.id] = decision

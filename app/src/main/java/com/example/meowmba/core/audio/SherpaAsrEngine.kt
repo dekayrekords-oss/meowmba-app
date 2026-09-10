@@ -53,6 +53,10 @@ class SherpaAsrEngine(
     private val bluetoothSco: Boolean = false,
 ) : SpeechEngine, SpeechAudioCapture {
     override val deliversFinalResults = true
+    override val continuousCapture = true
+    override val finalizationPending get() = finalizer?.hasPending == true
+    /** A cloud refiner needs the original audio even when local words are poor. */
+    @Volatile var forwardEndpointAudio = false
 
     /** True when a Bluetooth SCO audio device is connected right now. */
     fun bluetoothHeadsetConnected(): Boolean {
@@ -85,8 +89,17 @@ class SherpaAsrEngine(
 
     @Volatile
     private var running = false
+    @Volatile private var finishRequested = false
+
+    override fun finishInput(): Boolean {
+        if (!running) return false
+        if (finalizationPending) return true
+        finishRequested = true
+        return true
+    }
 
     @Volatile
+    /** Audio of the last delivered final, never a newer endpoint waiting in the queue. */
     var lastHeardPcm: ShortArray = ShortArray(0)
         private set
 
@@ -102,8 +115,9 @@ class SherpaAsrEngine(
      *
      * This is the whole point of the Whisper backend: the streaming zipformer
      * is fast but measurably mishears, and Whisper is a batch model that
-     * cannot stream. Hybrid = live feedback stays instant, the answered text
-     * is the accurate one. Null (the default) keeps today's behaviour exactly.
+     * cannot stream. Hybrid = the live preview remains provisional; the
+     * finished local pass supplies the answer text, not guaranteed ground truth.
+     * Null keeps streaming-only finalization.
      */
     @Volatile
     var whisperRefiner: WhisperAsrEngine? = null
@@ -153,6 +167,7 @@ class SherpaAsrEngine(
     private fun start() {
         if (running || captureJob?.isActive == true) return
         running = true
+        finishRequested = false
         _isListening.value = true
         // A cancelled AudioRecord.read/native decode may still be returning.
         // Wait for its finally/release before starting another stream. Checking
@@ -231,7 +246,7 @@ class SherpaAsrEngine(
                     am.isBluetoothScoOn = true
                     am.setCommunicationDevice(scoDevice)
                     scoStarted = true
-                    Log.i(TAG, "Bluetooth SCO on '${scoDevice.productName}' for glasses mic")
+                    Log.i(TAG, "Bluetooth SCO routing requested for glasses mic")
                 }.onFailure { Log.w(TAG, "SCO start failed", it) }
             } else {
                 Log.w(TAG, "bluetoothSco requested but no SCO device connected — using built-in path")
@@ -240,7 +255,7 @@ class SherpaAsrEngine(
 
         val minBuf = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL, ENCODING)
         if (minBuf <= 0) {
-            running = false
+            withContext(Dispatchers.Main.immediate) { onError?.invoke(android.speech.SpeechRecognizer.ERROR_AUDIO) }
             return
         }
         val record = try {
@@ -274,31 +289,47 @@ class SherpaAsrEngine(
             } else null
         }
         if (effectiveRecord == null) {
-            running = false
-            _isListening.value = false
+            withContext(Dispatchers.Main.immediate) { onError?.invoke(android.speech.SpeechRecognizer.ERROR_AUDIO) }
             return
         }
 
         var stream: OnlineStream? = null
-        val uttered = PcmRingBuffer(SAMPLE_RATE * 20)
+        // The endpoint can run 30s. A 20s ring silently dropped the first ten
+        // seconds of a long utterance before the final Whisper pass saw it.
+        val uttered = PcmRingBuffer(AsrCaptureBounds.PCM_CAPACITY)
+        lastHeardPcm = ShortArray(0)
         val sessionFinalizer = SpeechFinalizer(
             CoroutineScope(scope.coroutineContext + Dispatchers.Default),
             refine = { audio -> whisperRefiner?.transcribe(audio) },
-            deliver = { text ->
+            deliver = { text, audio ->
                 withContext(Dispatchers.Main.immediate) {
                     if (running) {
-                        Log.i(TAG, "final ASR: \"$text\"")
+                        // Publish this final's audio immediately before its
+                        // callback. Capture must not replace it at enqueue time
+                        // while an earlier utterance is still being refined.
+                        lastHeardPcm = audio
+                        Log.i(TAG, "ASR final delivered characters=${text.length}")
                         runCatching { onResult?.invoke(text) }
                     }
+                }
+            },
+            discard = {
+                withContext(Dispatchers.Main.immediate) {
+                    if (running) { lastHeardPcm = ShortArray(0); onResult?.invoke("") }
                 }
             },
         )
         finalizer = sessionFinalizer
         try {
             effectiveRecord.startRecording()
+            check(effectiveRecord.recordingState == AudioRecord.RECORDSTATE_RECORDING) { "Microphone did not start" }
+            Log.i(TAG, "ASR capture rate=${effectiveRecord.sampleRate} channels=${effectiveRecord.channelCount} " +
+                "source=${effectiveRecord.audioSource} routeType=${effectiveRecord.routedDevice?.type ?: -1} " +
+                "bufferFrames=${effectiveRecord.bufferSizeInFrames} whisper=${whisperRefiner != null}")
             val s = rec.createStream()
             if (s.ptr == 0L) {
                 Log.w(TAG, "createStream failed")
+                withContext(Dispatchers.Main.immediate) { onError?.invoke(android.speech.SpeechRecognizer.ERROR_CLIENT) }
                 return
             }
             stream = s
@@ -306,18 +337,28 @@ class SherpaAsrEngine(
             val pcm = ShortArray(CHUNK_SAMPLES)
             val fullFrame = FloatArray(CHUNK_SAMPLES * if (scoRate8k) 2 else 1)
             val signalGate = DigitalSilenceGate()
+            val preview = StreamingTranscriptPreview()
+            var decodeNanos = 0L
+            var hadHypothesis = false
 
             while (running && currentCoroutineContext().isActive) {
                 val read = effectiveRecord.read(pcm, 0, pcm.size)
                 currentCoroutineContext().ensureActive()
-                if (read <= 0) continue
-                if (!signalGate.shouldDecode(pcm, read)) continue
+                if (read < 0) {
+                    Log.w(TAG, "ASR AudioRecord read failed code=$read")
+                    withContext(Dispatchers.Main.immediate) {
+                        if (running) onError?.invoke(android.speech.SpeechRecognizer.ERROR_AUDIO)
+                    }
+                    break
+                }
+                if (read == 0) continue
+                if (!signalGate.shouldDecode(pcm, read) && !finishRequested) continue
                 // Store at the rate advertised to Whisper and audio consumers.
                 // Previously 8k SCO was incorrectly sent to Whisper as 16k.
                 uttered.append(pcm, read, repeatEach = if (scoRate8k) 2 else 1)
 
-                // Sherpa wants 16kHz. An 8kHz SCO link is linearly upsampled
-                // 2x — cheap and adequate for recognition.
+                // Sherpa wants 16kHz. Repeat samples from an 8kHz SCO link 2x
+                // to preserve timebase; this does not add missing bandwidth.
                 val frame: FloatArray
                 if (scoRate8k) {
                     frame = if (read == pcm.size) fullFrame else FloatArray(read * 2)
@@ -332,22 +373,39 @@ class SherpaAsrEngine(
                 }
                 s.acceptWaveform(frame, SAMPLE_RATE)
 
-                while (rec.isReady(s)) rec.decode(s)
-                val text = SpokenText.polish(rec.getResult(s).text)
-                if (text.isNotEmpty() && text != _partialResults.value) {
-                    _partialResults.value = text
+                val forcedEndpoint = finishRequested
+                if (forcedEndpoint) {
+                    finishRequested = false
+                    // Flush decoder look-ahead without permanently closing the
+                    // shared continuous stream's feature extractor.
+                    s.acceptWaveform(FloatArray(SAMPLE_RATE / 2), SAMPLE_RATE)
                 }
 
-                if (rec.isEndpoint(s)) {
+                val decodeStarted = System.nanoTime()
+                while (rec.isReady(s)) rec.decode(s)
+                currentCoroutineContext().ensureActive()
+                decodeNanos += System.nanoTime() - decodeStarted
+                val text = SpokenText.polish(rec.getResult(s).text)
+                if (text.isNotBlank()) hadHypothesis = true
+                val stablePreview = preview.update(text, System.nanoTime() / 1_000_000L)
+                if (stablePreview != _partialResults.value) {
+                    _partialResults.value = stablePreview
+                }
+
+                if (forcedEndpoint || rec.isEndpoint(s)) {
                     rec.reset(s)
                     signalGate.reset()
-                    if (text.isNotBlank()) {
+                    preview.reset()
+                    if (text.isNotBlank() || forcedEndpoint || (forwardEndpointAudio && hadHypothesis)) {
                         val pcm = uttered.snapshot()
-                        lastHeardPcm = pcm
                         uttered.clear()
-                        Log.i(TAG, "always-on ASR: \"$text\"")
-                        Log.d(TAG, "ASR endpoint samples=${pcm.size} digitalSilence=${pcm.all { it == 0.toShort() }}")
-                        if (!sessionFinalizer.offer(text, pcm) && running) {
+                        Log.i(TAG, "ASR endpoint ${AsrPcmSummary.from(pcm, SAMPLE_RATE)} " +
+                            "decodeMs=${decodeNanos / 1_000_000L} characters=${text.length}")
+                        if (forwardEndpointAudio || (forcedEndpoint && text.isBlank() && whisperRefiner == null)) {
+                            withContext(Dispatchers.Main.immediate) {
+                                if (running) { lastHeardPcm = pcm; onResult?.invoke(text) }
+                            }
+                        } else if (!sessionFinalizer.offer(text, pcm) && running) {
                             Log.w(TAG, "ASR refinement queue full")
                             withContext(Dispatchers.Main.immediate) {
                                 onError?.invoke(android.speech.SpeechRecognizer.ERROR_RECOGNIZER_BUSY)
@@ -355,14 +413,24 @@ class SherpaAsrEngine(
                         }
                     } else {
                         uttered.clear()
+                        withContext(Dispatchers.Main.immediate) {
+                            if (running && !finalizationPending) { lastHeardPcm = ShortArray(0); onResult?.invoke("") }
+                        }
                     }
+                    decodeNanos = 0L
+                    hadHypothesis = false
                     _partialResults.value = ""
                 }
             }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            if (running) Log.w(TAG, "ASR capture loop failed", e)
+            if (running) {
+                Log.w(TAG, "ASR capture loop failed", e)
+                withContext(Dispatchers.Main.immediate) {
+                    onError?.invoke(android.speech.SpeechRecognizer.ERROR_AUDIO)
+                }
+            }
         } finally {
             sessionFinalizer.close()
             if (finalizer === sessionFinalizer) finalizer = null
@@ -464,11 +532,10 @@ class SherpaAsrEngine(
                     // Trailing silence before a turn ends. 2.4s made every
                     // always-on reply feel ~2.5s late — the endpoint fired long
                     // after the last word and the model only started then.
-                    // 1.6s still clears a natural breath; the ViewModel's
-                    // partial-stability commit (900ms + looksFinished) usually
-                    // wins the race anyway.
+                    // Keep a natural breath; local final results, never a
+                    // provisional preview, own the completed utterance.
                     rule2 = EndpointRule(true, 1.6f, 0.0f),
-                    rule3 = EndpointRule(false, 0.0f, 30.0f),
+                    rule3 = EndpointRule(false, 0.0f, AsrCaptureBounds.MAX_ENDPOINT_SECONDS.toFloat()),
                 ),
                 enableEndpoint = true,
                 decodingMethod = "modified_beam_search",
@@ -479,7 +546,7 @@ class SherpaAsrEngine(
 
     companion object {
         private const val TAG = "SherpaAsr"
-        private const val SAMPLE_RATE = 16_000
+        private const val SAMPLE_RATE = AsrCaptureBounds.SAMPLE_RATE
         private const val CHANNEL = AudioFormat.CHANNEL_IN_MONO
         private const val ENCODING = AudioFormat.ENCODING_PCM_16BIT
         private const val CHUNK_SAMPLES = SAMPLE_RATE / 10

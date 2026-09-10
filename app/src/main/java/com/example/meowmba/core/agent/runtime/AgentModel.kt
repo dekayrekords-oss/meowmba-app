@@ -51,7 +51,10 @@ data class AgentTask(
     val startedAt: Long? = null,
     val completedAt: Long? = null,
     val result: String? = null,
-    val log: List<String> = emptyList()
+    val log: List<String> = emptyList(),
+    /** Captured at submission; changing projects never reassigns in-flight work. */
+    val projectId: Long? = null,
+    val conversationId: Long? = null,
 ) {
     val isTerminal: Boolean
         get() = status == TaskStatus.COMPLETED || status == TaskStatus.FAILED ||
@@ -77,6 +80,8 @@ object AgentRegistry {
                 "brain.models", "brain.select_model",
                 "business.agents", "business.start", "business.jobs", "business.open",
                 "avatar.animate",
+                "avatar.invent",
+                "avatar.form",
                 "avatar.describe_animation",
                 "vault.note.list",
                 "vault.note.read",
@@ -100,7 +105,7 @@ object AgentRegistry {
         AgentDefinition(
             id = "project", name = "Builder",
             purpose = "Creates and organizes project folders and manifests.",
-            allowedTools = setOf("project.create", "file.write", "file.read", "file.list", "file.search", "file.move")
+            allowedTools = setOf("project.create", "project.overview", "project.plan", "file.write", "file.read", "file.list", "file.search", "file.move")
         ),
         AgentDefinition(
             id = "coding", name = "Forge",
@@ -139,7 +144,7 @@ object AgentRegistry {
         AgentDefinition(
             id = "computer", name = "Bridge",
             purpose = "Controls paired computers through the desktop bridge.",
-            allowedTools = setOf("desktop.write_file", "desktop.run_build", "desktop.run_script", "desktop.control", "desktop.run_goal", "desktop.blender_scene")
+            allowedTools = setOf("desktop.write_file", "desktop.run_build", "desktop.run_script", "desktop.control", "desktop.run_goal", "desktop.blender_scene", "logic.inspect", "logic.edit", "logic.receipt", "logic.verify_audio", "logic.screen", "logic.act", "logic.cancel", "logic.run_goal")
         ),
         AgentDefinition(
             id = "phone", name = "Paws",
@@ -151,6 +156,7 @@ object AgentRegistry {
                 "phone.compose_sms", "phone.dial_call", "phone.media_control", "phone.set_brightness",
                 "phone.cleanup",
                 "phone.bluetooth_devices", "phone.bluetooth_setup",
+                "nav.find_places", "nav.navigate", "nav.save_place", "nav.list_saved_places",
             )
         ),
         AgentDefinition(

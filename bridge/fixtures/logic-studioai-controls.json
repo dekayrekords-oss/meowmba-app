@@ -1,0 +1,1961 @@
+{
+  "pid": 7,
+  "frontmost": true,
+  "nodes": [
+    {
+      "id": "0",
+      "role": "AXWindow",
+      "title": "Audio 1",
+      "settable": false,
+      "actions": [
+        "AXRaise"
+      ]
+    },
+    {
+      "id": "1",
+      "role": "AXWindow",
+      "title": "Untitled - Tracks",
+      "document": "file:///fixtures/Working%20Copy.logicx/",
+      "settable": false,
+      "actions": [
+        "AXRaise"
+      ]
+    },
+    {
+      "id": "0.0",
+      "role": "AXButton",
+      "title": "",
+      "description": "close",
+      "enabled": true,
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "0.1",
+      "role": "AXButton",
+      "title": "",
+      "description": "toolbar",
+      "enabled": true,
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "0.2",
+      "role": "AXCheckBox",
+      "title": "",
+      "description": "link",
+      "value": 0.0,
+      "enabled": true,
+      "settable": false,
+      "actions": [
+        "AXShowMenu",
+        "AXPress"
+      ]
+    },
+    {
+      "id": "0.3",
+      "role": "AXMenuButton",
+      "title": "Controls",
+      "description": "view",
+      "enabled": true,
+      "settable": false,
+      "actions": [
+        "AXShowMenu",
+        "AXPress"
+      ]
+    },
+    {
+      "id": "0.4",
+      "role": "AXCheckBox",
+      "title": " ",
+      "description": "bypass",
+      "value": 1.0,
+      "enabled": true,
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "0.5",
+      "role": "AXCheckBox",
+      "title": "Compare",
+      "description": "compare",
+      "value": 0.0,
+      "enabled": false,
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "0.6",
+      "role": "AXGroup",
+      "enabled": true,
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "0.7",
+      "role": "AXPopUpButton",
+      "value": "Manual",
+      "enabled": true,
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "0.8",
+      "role": "AXStaticText",
+      "value": "StudioAI",
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9",
+      "role": "AXScrollArea",
+      "settable": false,
+      "actions": [
+        "AXScrollLeftByPage",
+        "AXScrollRightByPage",
+        "AXScrollUpByPage",
+        "AXScrollDownByPage"
+      ]
+    },
+    {
+      "id": "0.10",
+      "role": "AXStaticText",
+      "value": "Audio 1",
+      "enabled": true,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.6.0",
+      "role": "AXButton",
+      "description": "previous",
+      "enabled": true,
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "0.6.1",
+      "role": "AXButton",
+      "description": "next",
+      "enabled": true,
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "0.9.0",
+      "role": "AXTable",
+      "enabled": true,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.1",
+      "role": "AXScrollBar",
+      "value": 0.0,
+      "enabled": true,
+      "settable": true,
+      "actions": []
+    },
+    {
+      "id": "1.5.4",
+      "role": "AXCheckBox",
+      "title": "Record",
+      "value": 0.0,
+      "enabled": true,
+      "settable": false,
+      "actions": [
+        "AXPress",
+        "AXShowMenu"
+      ]
+    },
+    {
+      "id": "1.5.5",
+      "role": "AXCheckBox",
+      "title": "Play",
+      "value": 0.0,
+      "enabled": true,
+      "settable": false,
+      "actions": [
+        "AXPress",
+        "AXShowMenu"
+      ]
+    },
+    {
+      "id": "0.9.0.0",
+      "role": "AXRow",
+      "selected": true,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.1",
+      "role": "AXRow",
+      "selected": false,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.2",
+      "role": "AXRow",
+      "selected": false,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.3",
+      "role": "AXRow",
+      "selected": false,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.4",
+      "role": "AXRow",
+      "selected": false,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.5",
+      "role": "AXRow",
+      "selected": false,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.6",
+      "role": "AXRow",
+      "selected": false,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.7",
+      "role": "AXRow",
+      "selected": false,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.8",
+      "role": "AXRow",
+      "selected": false,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.9",
+      "role": "AXRow",
+      "selected": false,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.10",
+      "role": "AXRow",
+      "selected": false,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.11",
+      "role": "AXRow",
+      "selected": false,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.12",
+      "role": "AXRow",
+      "selected": false,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.13",
+      "role": "AXRow",
+      "selected": false,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.14",
+      "role": "AXRow",
+      "selected": false,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.15",
+      "role": "AXRow",
+      "selected": false,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.16",
+      "role": "AXRow",
+      "selected": false,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.17",
+      "role": "AXColumn",
+      "selected": false,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.1.0",
+      "role": "AXValueIndicator",
+      "value": 0.0,
+      "settable": true,
+      "actions": []
+    },
+    {
+      "id": "0.9.1.1",
+      "role": "AXButton",
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "0.9.1.2",
+      "role": "AXButton",
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "0.9.1.3",
+      "role": "AXButton",
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "0.9.1.4",
+      "role": "AXButton",
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "1.8.1.0",
+      "role": "AXLayoutItem",
+      "description": "Audio 1",
+      "settable": false,
+      "actions": [
+        "AXShowMenu"
+      ]
+    },
+    {
+      "id": "0.9.0.0.0",
+      "role": "AXCell",
+      "enabled": true,
+      "selected": true,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.1.0",
+      "role": "AXCell",
+      "enabled": true,
+      "selected": false,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.2.0",
+      "role": "AXCell",
+      "enabled": true,
+      "selected": false,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.3.0",
+      "role": "AXCell",
+      "enabled": true,
+      "selected": false,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.4.0",
+      "role": "AXCell",
+      "enabled": true,
+      "selected": false,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.5.0",
+      "role": "AXCell",
+      "enabled": true,
+      "selected": false,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.6.0",
+      "role": "AXCell",
+      "enabled": true,
+      "selected": false,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.7.0",
+      "role": "AXCell",
+      "enabled": true,
+      "selected": false,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.8.0",
+      "role": "AXCell",
+      "enabled": true,
+      "selected": false,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.9.0",
+      "role": "AXCell",
+      "enabled": true,
+      "selected": false,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.10.0",
+      "role": "AXCell",
+      "enabled": true,
+      "selected": false,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.11.0",
+      "role": "AXCell",
+      "enabled": true,
+      "selected": false,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.12.0",
+      "role": "AXCell",
+      "enabled": true,
+      "selected": false,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.13.0",
+      "role": "AXCell",
+      "enabled": true,
+      "selected": false,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.14.0",
+      "role": "AXCell",
+      "enabled": true,
+      "selected": false,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.15.0",
+      "role": "AXCell",
+      "enabled": true,
+      "selected": false,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.16.0",
+      "role": "AXCell",
+      "enabled": true,
+      "selected": false,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "1.8.1.0.0",
+      "role": "AXTextField",
+      "description": "name",
+      "value": "Audio 1",
+      "enabled": true,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "1.8.1.0.1",
+      "role": "AXButton",
+      "description": "mute",
+      "value": "off",
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "1.8.1.0.2",
+      "role": "AXButton",
+      "description": "solo",
+      "value": "off",
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "1.8.1.0.3",
+      "role": "AXButton",
+      "description": "record",
+      "value": "off",
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "1.8.1.0.4",
+      "role": "AXButton",
+      "description": "monitoring",
+      "value": "off",
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "1.8.1.0.5",
+      "role": "AXSlider",
+      "description": "volume fader",
+      "value": 173.0,
+      "min": 0.0,
+      "max": 233.0,
+      "display": "0.0 dB",
+      "settable": true,
+      "actions": [
+        "AXIncrement",
+        "AXDecrement"
+      ]
+    },
+    {
+      "id": "1.8.1.0.6",
+      "role": "AXTextField",
+      "title": "volume fader level, 0.0 dB",
+      "description": "volume fader level",
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "1.8.1.0.7",
+      "role": "AXButton",
+      "title": "peak level meter",
+      "description": "peak level meter",
+      "value": "signal clipping off",
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "1.8.1.0.8",
+      "role": "AXSlider",
+      "description": "pan",
+      "value": 0.0,
+      "min": -64.0,
+      "max": 63.0,
+      "display": "0",
+      "settable": true,
+      "actions": [
+        "AXIncrement",
+        "AXDecrement"
+      ]
+    },
+    {
+      "id": "1.8.1.0.9",
+      "role": "AXGroup",
+      "description": "Read, automation enabled",
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "1.8.1.0.10",
+      "role": "AXPopUpButton",
+      "title": "group",
+      "description": "group",
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "1.8.1.0.11",
+      "role": "AXButton",
+      "description": "Stereo Output",
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "1.8.1.0.12",
+      "role": "AXButton",
+      "description": "send button",
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "1.8.1.0.13",
+      "role": "AXButton",
+      "description": "audio plug-in",
+      "settable": false,
+      "actions": [
+        "AXPress",
+        "Name:Open plug-in menu with legacy plug-ins\nTarget:0x0\nSelector:(null)"
+      ]
+    },
+    {
+      "id": "1.8.1.0.14",
+      "role": "AXButton",
+      "description": "insert bar",
+      "settable": false,
+      "actions": [
+        "AXPress",
+        "Name:Open plug-in menu with legacy plug-ins\nTarget:0x0\nSelector:(null)"
+      ]
+    },
+    {
+      "id": "1.8.1.0.15",
+      "role": "AXGroup",
+      "description": "StudioAI",
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "1.8.1.0.16",
+      "role": "AXButton",
+      "description": "insert bar",
+      "settable": false,
+      "actions": [
+        "AXPress",
+        "Name:Open plug-in menu with legacy plug-ins\nTarget:0x0\nSelector:(null)"
+      ]
+    },
+    {
+      "id": "1.8.1.0.17",
+      "role": "AXGroup",
+      "description": "Channel EQ",
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "1.8.1.0.18",
+      "role": "AXButton",
+      "description": "channel mode",
+      "value": "Mono",
+      "settable": false,
+      "actions": [
+        "AXShowMenu",
+        "AXPress"
+      ]
+    },
+    {
+      "id": "1.8.1.0.19",
+      "role": "AXButton",
+      "description": "Input 1",
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "1.8.1.0.20",
+      "role": "AXButton",
+      "description": "EQ",
+      "value": "on",
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "1.8.1.0.21",
+      "role": "AXButton",
+      "description": "gain reduction meter",
+      "value": "off",
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "1.8.1.0.22",
+      "role": "AXButton",
+      "description": "setting",
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "1.8.1.0.23",
+      "role": "AXSlider",
+      "description": "input gain",
+      "value": 0.0,
+      "min": -12.0,
+      "max": 12.0,
+      "display": "0",
+      "settable": true,
+      "actions": [
+        "AXIncrement",
+        "AXDecrement"
+      ]
+    },
+    {
+      "id": "0.9.0.0.0.0",
+      "role": "AXStaticText",
+      "value": "01 Mode:",
+      "enabled": true,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.0.0.1",
+      "role": "AXGroup",
+      "value": "0",
+      "enabled": true,
+      "settable": false,
+      "actions": [
+        "AXShowMenu"
+      ]
+    },
+    {
+      "id": "0.9.0.0.0.2",
+      "role": "AXSlider",
+      "value": 0.0,
+      "enabled": true,
+      "min": 0.0,
+      "max": 2.0,
+      "settable": true,
+      "actions": [
+        "AXIncrement",
+        "AXDecrement"
+      ]
+    },
+    {
+      "id": "0.9.0.1.0.0",
+      "role": "AXStaticText",
+      "value": "02 Intensity:",
+      "enabled": true,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.1.0.1",
+      "role": "AXGroup",
+      "value": "0.8000 %",
+      "enabled": true,
+      "settable": false,
+      "actions": [
+        "AXShowMenu"
+      ]
+    },
+    {
+      "id": "0.9.0.1.0.2",
+      "role": "AXSlider",
+      "value": 80.0,
+      "enabled": true,
+      "min": 0.0,
+      "max": 10000.0,
+      "settable": true,
+      "actions": [
+        "AXIncrement",
+        "AXDecrement"
+      ]
+    },
+    {
+      "id": "0.9.0.2.0.0",
+      "role": "AXStaticText",
+      "value": "03 Denoise:",
+      "enabled": true,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.2.0.1",
+      "role": "AXGroup",
+      "value": "0.3500 %",
+      "enabled": true,
+      "settable": false,
+      "actions": [
+        "AXShowMenu"
+      ]
+    },
+    {
+      "id": "0.9.0.2.0.2",
+      "role": "AXSlider",
+      "value": 35.0,
+      "enabled": true,
+      "min": 0.0,
+      "max": 10000.0,
+      "settable": true,
+      "actions": [
+        "AXIncrement",
+        "AXDecrement"
+      ]
+    },
+    {
+      "id": "0.9.0.3.0.0",
+      "role": "AXStaticText",
+      "value": "04 De-Esser:",
+      "enabled": true,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.3.0.1",
+      "role": "AXGroup",
+      "value": "0.3000 %",
+      "enabled": true,
+      "settable": false,
+      "actions": [
+        "AXShowMenu"
+      ]
+    },
+    {
+      "id": "0.9.0.3.0.2",
+      "role": "AXSlider",
+      "value": 30.0,
+      "enabled": true,
+      "min": 0.0,
+      "max": 10000.0,
+      "settable": true,
+      "actions": [
+        "AXIncrement",
+        "AXDecrement"
+      ]
+    },
+    {
+      "id": "0.9.0.4.0.0",
+      "role": "AXStaticText",
+      "value": "05 EQ Match:",
+      "enabled": true,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.4.0.1",
+      "role": "AXGroup",
+      "value": "0.7000 %",
+      "enabled": true,
+      "settable": false,
+      "actions": [
+        "AXShowMenu"
+      ]
+    },
+    {
+      "id": "0.9.0.4.0.2",
+      "role": "AXSlider",
+      "value": 70.0,
+      "enabled": true,
+      "min": 0.0,
+      "max": 10000.0,
+      "settable": true,
+      "actions": [
+        "AXIncrement",
+        "AXDecrement"
+      ]
+    },
+    {
+      "id": "0.9.0.5.0.0",
+      "role": "AXStaticText",
+      "value": "06 Compress:",
+      "enabled": true,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.5.0.1",
+      "role": "AXGroup",
+      "value": "0.4500 %",
+      "enabled": true,
+      "settable": false,
+      "actions": [
+        "AXShowMenu"
+      ]
+    },
+    {
+      "id": "0.9.0.5.0.2",
+      "role": "AXSlider",
+      "value": 45.0,
+      "enabled": true,
+      "min": 0.0,
+      "max": 10000.0,
+      "settable": true,
+      "actions": [
+        "AXIncrement",
+        "AXDecrement"
+      ]
+    },
+    {
+      "id": "0.9.0.6.0.0",
+      "role": "AXStaticText",
+      "value": "07 Warmth:",
+      "enabled": true,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.6.0.1",
+      "role": "AXGroup",
+      "value": "0.2500 %",
+      "enabled": true,
+      "settable": false,
+      "actions": [
+        "AXShowMenu"
+      ]
+    },
+    {
+      "id": "0.9.0.6.0.2",
+      "role": "AXSlider",
+      "value": 25.0,
+      "enabled": true,
+      "min": 0.0,
+      "max": 10000.0,
+      "settable": true,
+      "actions": [
+        "AXIncrement",
+        "AXDecrement"
+      ]
+    },
+    {
+      "id": "0.9.0.7.0.0",
+      "role": "AXStaticText",
+      "value": "08 Timing Fix:",
+      "enabled": true,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.7.0.1",
+      "role": "AXGroup",
+      "value": "0.0000 %",
+      "enabled": true,
+      "settable": false,
+      "actions": [
+        "AXShowMenu"
+      ]
+    },
+    {
+      "id": "0.9.0.7.0.2",
+      "role": "AXSlider",
+      "value": 0.0,
+      "enabled": true,
+      "min": 0.0,
+      "max": 10000.0,
+      "settable": true,
+      "actions": [
+        "AXIncrement",
+        "AXDecrement"
+      ]
+    },
+    {
+      "id": "0.9.0.8.0.0",
+      "role": "AXStaticText",
+      "value": "09 Tempo BPM:",
+      "enabled": true,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.8.0.1",
+      "role": "AXGroup",
+      "value": "120.00 times",
+      "enabled": true,
+      "settable": false,
+      "actions": [
+        "AXShowMenu"
+      ]
+    },
+    {
+      "id": "0.9.0.8.0.2",
+      "role": "AXSlider",
+      "value": 8000.0,
+      "enabled": true,
+      "min": 0.0,
+      "max": 20000.0,
+      "settable": true,
+      "actions": [
+        "AXIncrement",
+        "AXDecrement"
+      ]
+    },
+    {
+      "id": "0.9.0.9.0.0",
+      "role": "AXStaticText",
+      "value": "10 Grid Division:",
+      "enabled": true,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.9.0.1",
+      "role": "AXGroup",
+      "value": "1",
+      "enabled": true,
+      "settable": false,
+      "actions": [
+        "AXShowMenu"
+      ]
+    },
+    {
+      "id": "0.9.0.9.0.2",
+      "role": "AXSlider",
+      "value": 1.0,
+      "enabled": true,
+      "min": 0.0,
+      "max": 2.0,
+      "settable": true,
+      "actions": [
+        "AXIncrement",
+        "AXDecrement"
+      ]
+    },
+    {
+      "id": "0.9.0.10.0.0",
+      "role": "AXStaticText",
+      "value": "11 Pitch Correct:",
+      "enabled": true,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.10.0.1",
+      "role": "AXGroup",
+      "value": "0.0000 %",
+      "enabled": true,
+      "settable": false,
+      "actions": [
+        "AXShowMenu"
+      ]
+    },
+    {
+      "id": "0.9.0.10.0.2",
+      "role": "AXSlider",
+      "value": 0.0,
+      "enabled": true,
+      "min": 0.0,
+      "max": 10000.0,
+      "settable": true,
+      "actions": [
+        "AXIncrement",
+        "AXDecrement"
+      ]
+    },
+    {
+      "id": "0.9.0.11.0.0",
+      "role": "AXStaticText",
+      "value": "12 Key Root:",
+      "enabled": true,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.11.0.1",
+      "role": "AXGroup",
+      "value": "0.0",
+      "enabled": true,
+      "settable": false,
+      "actions": [
+        "AXShowMenu"
+      ]
+    },
+    {
+      "id": "0.9.0.11.0.2",
+      "role": "AXSlider",
+      "value": 0.0,
+      "enabled": true,
+      "min": 0.0,
+      "max": 11.0,
+      "settable": true,
+      "actions": [
+        "AXIncrement",
+        "AXDecrement"
+      ]
+    },
+    {
+      "id": "0.9.0.12.0.0",
+      "role": "AXStaticText",
+      "value": "13 Scale Type:",
+      "enabled": true,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.12.0.1",
+      "role": "AXGroup",
+      "value": "0",
+      "enabled": true,
+      "settable": false,
+      "actions": [
+        "AXShowMenu"
+      ]
+    },
+    {
+      "id": "0.9.0.12.0.2",
+      "role": "AXSlider",
+      "value": 0.0,
+      "enabled": true,
+      "min": 0.0,
+      "max": 1.0,
+      "settable": true,
+      "actions": [
+        "AXIncrement",
+        "AXDecrement"
+      ]
+    },
+    {
+      "id": "0.9.0.13.0.0",
+      "role": "AXStaticText",
+      "value": "14 Target LUFS:",
+      "enabled": true,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.13.0.1",
+      "role": "AXGroup",
+      "value": "-14.000 dB",
+      "enabled": true,
+      "settable": false,
+      "actions": [
+        "AXShowMenu"
+      ]
+    },
+    {
+      "id": "0.9.0.13.0.2",
+      "role": "AXSlider",
+      "value": 10000.0,
+      "enabled": true,
+      "min": 0.0,
+      "max": 16000.0,
+      "settable": true,
+      "actions": [
+        "AXIncrement",
+        "AXDecrement"
+      ]
+    },
+    {
+      "id": "0.9.0.14.0.0",
+      "role": "AXStaticText",
+      "value": "15 Auto Gain:",
+      "enabled": true,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.14.0.1",
+      "role": "AXCheckBox",
+      "title": "",
+      "value": 1.0,
+      "enabled": true,
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "0.9.0.15.0.0",
+      "role": "AXStaticText",
+      "value": "16 Stereo Width:",
+      "enabled": true,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.15.0.1",
+      "role": "AXGroup",
+      "value": "1.1000 %",
+      "enabled": true,
+      "settable": false,
+      "actions": [
+        "AXShowMenu"
+      ]
+    },
+    {
+      "id": "0.9.0.15.0.2",
+      "role": "AXSlider",
+      "value": 110.0,
+      "enabled": true,
+      "min": 0.0,
+      "max": 20000.0,
+      "settable": true,
+      "actions": [
+        "AXIncrement",
+        "AXDecrement"
+      ]
+    },
+    {
+      "id": "0.9.0.16.0.0",
+      "role": "AXStaticText",
+      "value": "17 Output Trim dB:",
+      "enabled": true,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.16.0.1",
+      "role": "AXGroup",
+      "value": "+0.0000 dB",
+      "enabled": true,
+      "settable": false,
+      "actions": [
+        "AXShowMenu"
+      ]
+    },
+    {
+      "id": "0.9.0.16.0.2",
+      "role": "AXSlider",
+      "value": 24000.0,
+      "enabled": true,
+      "min": 0.0,
+      "max": 36000.0,
+      "settable": true,
+      "actions": [
+        "AXIncrement",
+        "AXDecrement"
+      ]
+    },
+    {
+      "id": "1.8.1.0.5.0",
+      "role": "AXValueIndicator",
+      "description": "fader knob",
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "1.8.1.0.8.0",
+      "role": "AXStaticText",
+      "description": "knob readout",
+      "value": "",
+      "enabled": true,
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "1.8.1.0.9.0",
+      "role": "AXCheckBox",
+      "description": "automation",
+      "value": true,
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "1.8.1.0.9.1",
+      "role": "AXButton",
+      "description": "list",
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "1.8.1.0.15.0",
+      "role": "AXCheckBox",
+      "description": "bypass",
+      "value": false,
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "1.8.1.0.15.1",
+      "role": "AXButton",
+      "description": "open",
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "1.8.1.0.15.2",
+      "role": "AXButton",
+      "description": "list",
+      "settable": false,
+      "actions": [
+        "AXPress",
+        "Name:Open plug-in menu with legacy plug-ins\nTarget:0x0\nSelector:(null)"
+      ]
+    },
+    {
+      "id": "1.8.1.0.17.0",
+      "role": "AXCheckBox",
+      "description": "bypass",
+      "value": false,
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "1.8.1.0.17.1",
+      "role": "AXButton",
+      "description": "open",
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "1.8.1.0.17.2",
+      "role": "AXButton",
+      "description": "list",
+      "settable": false,
+      "actions": [
+        "AXPress",
+        "Name:Open plug-in menu with legacy plug-ins\nTarget:0x0\nSelector:(null)"
+      ]
+    },
+    {
+      "id": "0.9.0.0.0.1.0",
+      "role": "AXSlider",
+      "value": 0.0,
+      "enabled": true,
+      "min": 0.0,
+      "max": 2.0,
+      "display": "0",
+      "settable": true,
+      "actions": [
+        "AXIncrement",
+        "AXDecrement"
+      ]
+    },
+    {
+      "id": "0.9.0.0.0.2.0",
+      "role": "AXValueIndicator",
+      "value": 0.0,
+      "settable": true,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.1.0.1.0",
+      "role": "AXSlider",
+      "value": 80.0,
+      "enabled": true,
+      "min": 0.0,
+      "max": 10000.0,
+      "display": "0.8000 %",
+      "settable": true,
+      "actions": [
+        "AXIncrement",
+        "AXDecrement"
+      ]
+    },
+    {
+      "id": "0.9.0.1.0.2.0",
+      "role": "AXValueIndicator",
+      "value": 80.0,
+      "settable": true,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.2.0.1.0",
+      "role": "AXSlider",
+      "value": 35.0,
+      "enabled": true,
+      "min": 0.0,
+      "max": 10000.0,
+      "display": "0.3500 %",
+      "settable": true,
+      "actions": [
+        "AXIncrement",
+        "AXDecrement"
+      ]
+    },
+    {
+      "id": "0.9.0.2.0.2.0",
+      "role": "AXValueIndicator",
+      "value": 35.0,
+      "settable": true,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.3.0.1.0",
+      "role": "AXSlider",
+      "value": 30.0,
+      "enabled": true,
+      "min": 0.0,
+      "max": 10000.0,
+      "display": "0.3000 %",
+      "settable": true,
+      "actions": [
+        "AXIncrement",
+        "AXDecrement"
+      ]
+    },
+    {
+      "id": "0.9.0.3.0.2.0",
+      "role": "AXValueIndicator",
+      "value": 30.0,
+      "settable": true,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.4.0.1.0",
+      "role": "AXSlider",
+      "value": 70.0,
+      "enabled": true,
+      "min": 0.0,
+      "max": 10000.0,
+      "display": "0.7000 %",
+      "settable": true,
+      "actions": [
+        "AXIncrement",
+        "AXDecrement"
+      ]
+    },
+    {
+      "id": "0.9.0.4.0.2.0",
+      "role": "AXValueIndicator",
+      "value": 70.0,
+      "settable": true,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.5.0.1.0",
+      "role": "AXSlider",
+      "value": 45.0,
+      "enabled": true,
+      "min": 0.0,
+      "max": 10000.0,
+      "display": "0.4500 %",
+      "settable": true,
+      "actions": [
+        "AXIncrement",
+        "AXDecrement"
+      ]
+    },
+    {
+      "id": "0.9.0.5.0.2.0",
+      "role": "AXValueIndicator",
+      "value": 45.0,
+      "settable": true,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.6.0.1.0",
+      "role": "AXSlider",
+      "value": 25.0,
+      "enabled": true,
+      "min": 0.0,
+      "max": 10000.0,
+      "display": "0.2500 %",
+      "settable": true,
+      "actions": [
+        "AXIncrement",
+        "AXDecrement"
+      ]
+    },
+    {
+      "id": "0.9.0.6.0.2.0",
+      "role": "AXValueIndicator",
+      "value": 25.0,
+      "settable": true,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.7.0.1.0",
+      "role": "AXSlider",
+      "value": 0.0,
+      "enabled": true,
+      "min": 0.0,
+      "max": 10000.0,
+      "display": "0.0000 %",
+      "settable": true,
+      "actions": [
+        "AXIncrement",
+        "AXDecrement"
+      ]
+    },
+    {
+      "id": "0.9.0.7.0.2.0",
+      "role": "AXValueIndicator",
+      "value": 0.0,
+      "settable": true,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.8.0.1.0",
+      "role": "AXSlider",
+      "value": 8000.0,
+      "enabled": true,
+      "min": 0.0,
+      "max": 20000.0,
+      "display": "120.00 times",
+      "settable": true,
+      "actions": [
+        "AXIncrement",
+        "AXDecrement"
+      ]
+    },
+    {
+      "id": "0.9.0.8.0.2.0",
+      "role": "AXValueIndicator",
+      "value": 8000.0,
+      "settable": true,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.9.0.1.0",
+      "role": "AXSlider",
+      "value": 1.0,
+      "enabled": true,
+      "min": 0.0,
+      "max": 2.0,
+      "display": "1",
+      "settable": true,
+      "actions": [
+        "AXIncrement",
+        "AXDecrement"
+      ]
+    },
+    {
+      "id": "0.9.0.9.0.2.0",
+      "role": "AXValueIndicator",
+      "value": 1.0,
+      "settable": true,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.10.0.1.0",
+      "role": "AXSlider",
+      "value": 0.0,
+      "enabled": true,
+      "min": 0.0,
+      "max": 10000.0,
+      "display": "0.0000 %",
+      "settable": true,
+      "actions": [
+        "AXIncrement",
+        "AXDecrement"
+      ]
+    },
+    {
+      "id": "0.9.0.10.0.2.0",
+      "role": "AXValueIndicator",
+      "value": 0.0,
+      "settable": true,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.11.0.1.0",
+      "role": "AXSlider",
+      "value": 0.0,
+      "enabled": true,
+      "min": 0.0,
+      "max": 11.0,
+      "display": "0.0",
+      "settable": true,
+      "actions": [
+        "AXIncrement",
+        "AXDecrement"
+      ]
+    },
+    {
+      "id": "0.9.0.11.0.2.0",
+      "role": "AXValueIndicator",
+      "value": 0.0,
+      "settable": true,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.12.0.1.0",
+      "role": "AXSlider",
+      "value": 0.0,
+      "enabled": true,
+      "min": 0.0,
+      "max": 1.0,
+      "display": "0",
+      "settable": true,
+      "actions": [
+        "AXIncrement",
+        "AXDecrement"
+      ]
+    },
+    {
+      "id": "0.9.0.12.0.2.0",
+      "role": "AXValueIndicator",
+      "value": 0.0,
+      "settable": true,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.13.0.1.0",
+      "role": "AXSlider",
+      "value": 10000.0,
+      "enabled": true,
+      "min": 0.0,
+      "max": 16000.0,
+      "display": "-14.000 dB",
+      "settable": true,
+      "actions": [
+        "AXIncrement",
+        "AXDecrement"
+      ]
+    },
+    {
+      "id": "0.9.0.13.0.2.0",
+      "role": "AXValueIndicator",
+      "value": 10000.0,
+      "settable": true,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.15.0.1.0",
+      "role": "AXSlider",
+      "value": 110.0,
+      "enabled": true,
+      "min": 0.0,
+      "max": 20000.0,
+      "display": "1.1000 %",
+      "settable": true,
+      "actions": [
+        "AXIncrement",
+        "AXDecrement"
+      ]
+    },
+    {
+      "id": "0.9.0.15.0.2.0",
+      "role": "AXValueIndicator",
+      "value": 110.0,
+      "settable": true,
+      "actions": []
+    },
+    {
+      "id": "0.9.0.16.0.1.0",
+      "role": "AXSlider",
+      "value": 24000.0,
+      "enabled": true,
+      "min": 0.0,
+      "max": 36000.0,
+      "display": "+0.0000 dB",
+      "settable": true,
+      "actions": [
+        "AXIncrement",
+        "AXDecrement"
+      ]
+    },
+    {
+      "id": "0.9.0.16.0.2.0",
+      "role": "AXValueIndicator",
+      "value": 24000.0,
+      "settable": true,
+      "actions": []
+    },
+    {
+      "id": "1.7.1.0.1.0.0",
+      "role": "AXGroup",
+      "description": "Tracks header",
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "1.7.1.0.1.0.0.0",
+      "role": "AXLayoutItem",
+      "description": "Track 1 “Audio 1”",
+      "selected": true,
+      "settable": false,
+      "actions": [
+        "AXShowMenu"
+      ]
+    },
+    {
+      "id": "1.7.1.0.1.0.0.1",
+      "role": "AXLayoutItem",
+      "description": "Track 2 “Audio 2”",
+      "selected": false,
+      "settable": false,
+      "actions": [
+        "AXShowMenu"
+      ]
+    },
+    {
+      "id": "1.7.1.0.1.0.0.0.0",
+      "role": "AXRadioButton",
+      "description": "Has Focus",
+      "value": 1.0,
+      "enabled": true,
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "1.7.1.0.1.0.0.0.1",
+      "role": "AXSplitter",
+      "description": "Individual Track Zoom",
+      "value": 0.0,
+      "enabled": true,
+      "min": -50.0,
+      "max": 50.0,
+      "settable": true,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "1.7.1.0.1.0.0.0.2",
+      "role": "AXCheckBox",
+      "description": "Mute",
+      "value": 0.0,
+      "enabled": true,
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "1.7.1.0.1.0.0.0.3",
+      "role": "AXCheckBox",
+      "description": "Solo",
+      "value": 0.0,
+      "enabled": true,
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "1.7.1.0.1.0.0.0.4",
+      "role": "AXCheckBox",
+      "description": "Record Enable",
+      "value": 0.0,
+      "enabled": true,
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "1.7.1.0.1.0.0.0.5",
+      "role": "AXCheckBox",
+      "description": "Input Monitoring",
+      "value": 0.0,
+      "enabled": true,
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "1.7.1.0.1.0.0.0.6",
+      "role": "AXSlider",
+      "description": "",
+      "value": 64.0,
+      "enabled": true,
+      "min": 0.0,
+      "max": 127.0,
+      "settable": true,
+      "actions": [
+        "AXDecrement",
+        "AXIncrement"
+      ]
+    },
+    {
+      "id": "1.7.1.0.1.0.0.0.7",
+      "role": "AXSlider",
+      "description": "Volume",
+      "value": 173.0,
+      "enabled": true,
+      "min": 0.0,
+      "max": 233.0,
+      "settable": true,
+      "actions": [
+        "AXDecrement",
+        "AXIncrement"
+      ]
+    },
+    {
+      "id": "1.7.1.0.1.0.0.0.8",
+      "role": "AXTextField",
+      "description": "Audio 1",
+      "enabled": true,
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "1.7.1.0.1.0.0.1.0",
+      "role": "AXRadioButton",
+      "description": "Has Focus",
+      "value": 0.0,
+      "enabled": true,
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "1.7.1.0.1.0.0.1.1",
+      "role": "AXSplitter",
+      "description": "Individual Track Zoom",
+      "value": 0.0,
+      "enabled": true,
+      "min": -50.0,
+      "max": 50.0,
+      "settable": true,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "1.7.1.0.1.0.0.1.2",
+      "role": "AXCheckBox",
+      "description": "Mute",
+      "value": 0.0,
+      "enabled": true,
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "1.7.1.0.1.0.0.1.3",
+      "role": "AXCheckBox",
+      "description": "Solo",
+      "value": 0.0,
+      "enabled": true,
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "1.7.1.0.1.0.0.1.4",
+      "role": "AXCheckBox",
+      "description": "Record Enable",
+      "value": 0.0,
+      "enabled": true,
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "1.7.1.0.1.0.0.1.5",
+      "role": "AXCheckBox",
+      "description": "Input Monitoring",
+      "value": 0.0,
+      "enabled": true,
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "1.7.1.0.1.0.0.1.6",
+      "role": "AXSlider",
+      "description": "",
+      "value": 63.0,
+      "enabled": true,
+      "min": 0.0,
+      "max": 127.0,
+      "settable": true,
+      "actions": [
+        "AXDecrement",
+        "AXIncrement"
+      ]
+    },
+    {
+      "id": "1.7.1.0.1.0.0.1.7",
+      "role": "AXSlider",
+      "description": "Volume",
+      "value": 173.0,
+      "enabled": true,
+      "min": 0.0,
+      "max": 233.0,
+      "settable": true,
+      "actions": [
+        "AXDecrement",
+        "AXIncrement"
+      ]
+    },
+    {
+      "id": "1.7.1.0.1.0.0.1.8",
+      "role": "AXTextField",
+      "description": "Audio 2",
+      "enabled": true,
+      "settable": false,
+      "actions": [
+        "AXPress"
+      ]
+    },
+    {
+      "id": "1.7.1.0.1.0.0.0.6.0",
+      "role": "AXValueIndicator",
+      "description": "0 Pan",
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "1.7.1.0.1.0.0.0.7.0",
+      "role": "AXValueIndicator",
+      "description": "Volume",
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "1.7.1.0.1.0.0.1.6.0",
+      "role": "AXValueIndicator",
+      "description": "1 of 64, Left Channel Pan",
+      "settable": false,
+      "actions": []
+    },
+    {
+      "id": "1.7.1.0.1.0.0.1.7.0",
+      "role": "AXValueIndicator",
+      "description": "Volume",
+      "settable": false,
+      "actions": []
+    }
+  ]
+}

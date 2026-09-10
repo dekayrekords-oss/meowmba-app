@@ -20,6 +20,22 @@ import org.junit.Test
  */
 class OmniRouteTest {
 
+    @Test fun cancelledNativeRouteNeverStartsAnotherProvider() = runTest {
+        val cancelled = object : ModelProvider {
+            override val name = "Cancelled native"
+            override suspend fun generate(prompt: String): ModelResponse = throw kotlinx.coroutines.CancellationException("Superseded")
+            override fun generateStreaming(prompt: String): Flow<ModelResponse> = flow { throw kotlinx.coroutines.CancellationException("Superseded") }
+        }
+        val fallback = FakeProvider("Must not start")
+        val router = OmniRoute(listOf(
+            OmniRoute.Route("native", "Native", cancelled, setOf(RouteTag.CHAT), 0),
+            OmniRoute.Route("other", "Other", fallback, setOf(RouteTag.CHAT), 1),
+        ), log = {})
+        assertTrue(runCatching { router.generate("hello") }.exceptionOrNull() is kotlinx.coroutines.CancellationException)
+        assertTrue(runCatching { router.generateStreaming("hello").toList() }.exceptionOrNull() is kotlinx.coroutines.CancellationException)
+        assertEquals(0, fallback.calls)
+    }
+
     private class FakeProvider(
         override val name: String,
         private val reply: String? = "ok",

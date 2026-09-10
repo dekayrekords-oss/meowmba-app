@@ -3,6 +3,7 @@ package com.example.meowmba
 import com.example.meowmba.core.robot.BodyCue
 import com.example.meowmba.core.robot.BodyOutput
 import com.example.meowmba.core.robot.BodyScheduler
+import com.example.meowmba.core.robot.BodySafety
 import com.example.meowmba.core.robot.BodyVerb
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancelChildren
@@ -213,5 +214,71 @@ class BodySchedulerTest {
         BodyScheduler(TestScope(testScheduler + kotlinx.coroutines.test.UnconfinedTestDispatcher(testScheduler)), out).play(emptyList())
         advanceUntilIdle()
         assertTrue(out.calls.isEmpty())
+    }
+
+    @Test fun `superseding a moving clip brakes before the next clip starts`() = runTest {
+        val out = Recorder()
+        val scheduler = BodyScheduler(this, out)
+        scheduler.play(listOf(BodyCue(0, BodyVerb.Drive(0.5f)), BodyCue(5000, BodyVerb.Brake)))
+        runCurrent()
+        scheduler.play(listOf(BodyCue(0, BodyVerb.Neck(0.1f)), BodyCue(50, BodyVerb.Brake)))
+        advanceUntilIdle()
+        assertEquals(listOf("drive:0.5", "brake", "neck:0.1", "brake"), out.calls)
+    }
+
+    @Test fun `scope cancellation brakes and closes the motion window`() = runTest {
+        val out = Recorder()
+        var ends = 0
+        val child = TestScope(testScheduler)
+        val scheduler = BodyScheduler(child, out, onMotionWindowEnd = { ends++ })
+        scheduler.play(listOf(BodyCue(0, BodyVerb.Drive(0.5f)), BodyCue(5000, BodyVerb.Brake)))
+        runCurrent()
+        child.coroutineContext.cancelChildren()
+        runCurrent()
+        assertEquals(listOf("drive:0.5", "brake"), out.calls)
+        assertEquals(1, ends)
+    }
+
+    @Test fun `preconnect and queued old connection clips never reach a newly attached body`() = runTest {
+        val gate = BodySafety { testScheduler.currentTime }
+        val scheduler = BodyScheduler(this, gate)
+        val cues = listOf(BodyCue(100, BodyVerb.Neck(0.2f)), BodyCue(500, BodyVerb.Brake))
+        scheduler.play(cues)
+        val first = Recorder()
+        gate.attach(first)
+        advanceUntilIdle()
+        assertTrue(first.calls.isEmpty())
+        scheduler.play(cues)
+        val second = Recorder()
+        gate.attach(second)
+        advanceUntilIdle()
+        assertTrue(second.calls.isEmpty())
+        scheduler.play(cues)
+        advanceUntilIdle()
+        assertEquals(listOf("neck:0.2", "brake"), second.calls)
+    }
+
+    @Test fun `rejected desk drive does not create clean motion evidence`() = runTest {
+        val gate = BodySafety { testScheduler.currentTime }
+        gate.attach(Recorder())
+        var starts = 0
+        val scheduler = BodyScheduler(this, gate, onMotionWindowStart = { starts++ })
+        scheduler.play(listOf(BodyCue(0, BodyVerb.Drive(0.5f)), BodyCue(2000, BodyVerb.Brake)))
+        advanceUntilIdle()
+        assertEquals(0, starts)
+    }
+
+    @Test fun `level drive stays exclusive until an actual brake cue`() = runTest {
+        val out = Recorder()
+        val scheduler = BodyScheduler(this, out)
+        scheduler.play(listOf(
+            BodyCue(0, BodyVerb.Drive(0.5f)),
+            BodyCue(500, BodyVerb.Turn(25, 3, 1)),
+            BodyCue(600, BodyVerb.Brake),
+            BodyCue(700, BodyVerb.Turn(25, 3, -1)),
+            BodyCue(800, BodyVerb.Brake),
+        ))
+        advanceUntilIdle()
+        assertEquals(listOf("drive:0.5", "brake", "turn:-1", "brake"), out.calls)
     }
 }

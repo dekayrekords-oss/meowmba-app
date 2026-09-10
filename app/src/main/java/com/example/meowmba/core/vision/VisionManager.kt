@@ -39,6 +39,8 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.collections.ArrayDeque
 import kotlin.coroutines.resume
@@ -83,6 +85,8 @@ data class FaceTrack(
     /** Face-box offset for keep-in-frame. Gaze [offsetX]/[offsetY] may be a hand. */
     val frameX: Float = offsetX,
     val frameY: Float = offsetY,
+    /** Monotonic frame-receipt time, not publication time; -1 means no freshness evidence. */
+    val observedAtElapsedMs: Long = -1L,
 )
 
 /**
@@ -304,7 +308,6 @@ internal fun remapEulerToDisplay(
  * back as Result.failure with a human-readable reason — the companion
  * says what happened instead of pretending.
  */
-private const val FOLLOW_SKIP_N = 4
 
 class VisionManager(
     private val context: Context,
@@ -323,19 +326,27 @@ class VisionManager(
     private var lastFollow = FollowSource.FACE
     private var gazeSettled = false
     private var lastRealFaceAtMs = 0L
-    private var analyzeSkip = 0
     private var pendingHandCue = SocialCue.NONE
     private var pendingHandHits = 0
     private var boundSelector: CameraSelector? = null
-    private var _useFrontCamera = false
-    private var _faceTrackingEnabled = false
+    @Volatile private var _useFrontCamera = false
+    @Volatile private var _faceTrackingEnabled = false
     private var lastCoverState = false
     private var displayListener: DisplayManager.DisplayListener? = null
     private val frameInFlight = AtomicBoolean(false)
+    private val workBudget = VisionWorkBudget()
+    private val powerManager = context.getSystemService(android.os.PowerManager::class.java)
+    @Volatile private var thermalPaused = false
+    private var thermalStatus = 0
+    private var lastThermalReadMs = 0L
     // NEVER analyze on the main thread — ML Kit + ImageProxy on main = UI jank.
-    private val analysisExecutor = Executors.newSingleThreadExecutor { r ->
+    private val analysisExecutor = Executors.newSingleThreadScheduledExecutor { r ->
         Thread(r, "meow-face-track").apply { isDaemon = true }
     }
+    private val trackingSession = AttentionFreshness.Session()
+    private val attentionTarget = StableAttentionTarget()
+    private var freshnessWatchdog: ScheduledFuture<*>? = null
+    private var lastDetectionAtElapsedMs = -1L
 
     // Smoothed gaze (EMA) + short hold so lost-face frames do not null the stream.
     private var smoothOffX = 0f
@@ -351,16 +362,14 @@ class VisionManager(
     private var hasSmooth = false
     private var lastLogMs = 0L
     private var lastPublishAtMs = 0L
-    private var lastTalkerId: Int? = null
-    private var lastTalkerAtMs = 0L
     @Volatile
     private var speechLikely = false
-    private var lastSeenFaces: List<SeenFace> = emptyList()
+    @Volatile private var lastSeenFaces: List<SeenFace> = emptyList()
 
     private val _faceTrack = MutableStateFlow<FaceTrack?>(null)
     private val _sceneLuma = MutableStateFlow<Int?>(null)
 
-    /** Latest face-track result; null when no face is in frame. */
+    /** Latest attention target; missing faces may hold visual gaze briefly with hasFace=false. */
     val faceTrack: StateFlow<FaceTrack?> = _faceTrack.asStateFlow()
 
     /** Mean luma of the analysis frame, 0..255. For the auto headlight. */
@@ -377,6 +386,7 @@ class VisionManager(
         speechLikely = on
     }
 
+    @Synchronized
     fun setUseFrontCamera(useFront: Boolean) {
         // Face tracking pins the front camera — don't let a stray call fight it.
         if (_faceTrackingEnabled && !useFront) return
@@ -395,7 +405,7 @@ class VisionManager(
      * few times a second — it does not need accurate classification, pose, or
      * every frame. Continuous full-rate ACCURATE face + pose is this app's
      * biggest heat hog (measured: it is what "cooked the Fold"), so following
-     * drops to 1-in-[FOLLOW_SKIP_N] frames, skips pose entirely, and uses the
+     * uses the shared time/thermal budget, skips pose entirely, and uses the
      * FAST detector. Asking to be seen ("can you see me", eye tap) switches
      * the full pipeline back on.
      */
@@ -415,7 +425,7 @@ class VisionManager(
                 .build()
         } else {
             FaceDetectorOptions.Builder()
-                .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
+                .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
                 .setContourMode(FaceDetectorOptions.CONTOUR_MODE_NONE)
                 .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_NONE)
                 .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_ALL)
@@ -425,30 +435,39 @@ class VisionManager(
         }
 
     /** Turn body-follow mode on/off. Safe to call while tracking is live. */
+    @Synchronized
     fun setFollowOnly(on: Boolean) {
         if (followOnly == on) return
         followOnly = on
+        if (!_faceTrackingEnabled) return
+        trackingSession.invalidate()
+        clearAttention()
+        faceDetector?.close()
         faceDetector = FaceDetection.getClient(detectorOptions(on))
-        android.util.Log.i("MeowVision", "followOnly=$on (1 in ${if (on) FOLLOW_SKIP_N else 1} frames, pose=${!on})")
+        android.util.Log.i("MeowVision", "followOnly=$on (time/thermal budget, pose=${!on})")
     }
 
     /**
      * Start or stop continuous face tracking. When enabled the front camera is
-     * used and each frame's largest face is published to [faceTrack].
+     * used and a stable visual target is published to [faceTrack].
      * @return true if tracking is actually running (permission + bound), false if
      * disabled or blocked on missing CAMERA permission.
      */
+    @Synchronized
     fun setFaceTrackingEnabled(enabled: Boolean): Boolean {
         android.util.Log.i("VM", "setFaceTrackingEnabled($enabled) cur=$_faceTrackingEnabled perm=${hasPermission()}")
+        if (enabled && !hasPermission()) {
+            if (_faceTrackingEnabled) setFaceTrackingEnabled(false)
+            return false
+        }
         if (enabled == _faceTrackingEnabled) {
             return _faceTrackingEnabled && hasPermission()
         }
-        if (enabled && !hasPermission()) {
-            // Do not sticky-enable without permission — caller will re-request.
-            _faceTrackingEnabled = false
-            return false
-        }
         _faceTrackingEnabled = enabled
+        if (enabled) trackingSession.start() else trackingSession.stop()
+        freshnessWatchdog?.cancel(false)
+        freshnessWatchdog = null
+        clearAttention()
         if (enabled) {
             _useFrontCamera = true
             // Keep a capture use-case warm so "look"/"see me" does not fight a
@@ -481,7 +500,7 @@ class VisionManager(
                 .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
                 .build()
             analysis.setAnalyzer(analysisExecutor) { proxy ->
-                analyzeFrame(proxy)
+                analyzeFrame(proxy, analysis)
             }
             imageAnalysis = analysis
         } else {
@@ -491,25 +510,6 @@ class VisionManager(
             faceDetector = null
             poseDetector?.close()
             poseDetector = null
-            recentWristX.clear()
-            prevLuma = null
-            lastMotionOff = null
-            lastMotionAtMs = 0L
-            motionHits = 0
-            lastFollow = FollowSource.FACE
-            gazeSettled = false
-            lastRealFaceAtMs = 0L
-            analyzeSkip = 0
-            pendingHandCue = SocialCue.NONE
-            pendingHandHits = 0
-            _faceTrack.value = null
-            hasSmooth = false
-            hasFrameSmooth = false
-            // keep executor alive for re-enable; process teardown reclaims it
-            smoothOffX = 0f
-            smoothOffY = 0f
-            smoothFrameX = 0f
-            smoothFrameY = 0f
             unregisterDisplayListener()
         }
         unbind()
@@ -522,7 +522,69 @@ class VisionManager(
         // bindPreviewAsync() on every fold and rotation — phantom camera
         // rebinds for a feature the user had switched off.
         if (_faceTrackingEnabled) registerDisplayListener()
+        if (_faceTrackingEnabled) {
+            freshnessWatchdog = analysisExecutor.scheduleWithFixedDelay(
+                { synchronized(this) { expireAttention(android.os.SystemClock.elapsedRealtime()) } },
+                AttentionFreshness.WATCHDOG_PERIOD_MS,
+                AttentionFreshness.WATCHDOG_PERIOD_MS,
+                TimeUnit.MILLISECONDS,
+            )
+        }
         return _faceTrackingEnabled
+    }
+
+    /** Called under the manager lock: privacy-off and watchdog expiry cannot race a callback. */
+    private fun clearAttention() {
+        recentWristX.clear()
+        prevLuma = null
+        lastMotionOff = null
+        lastMotionAtMs = 0L
+        motionHits = 0
+        lastFollow = FollowSource.FACE
+        gazeSettled = false
+        lastRealFaceAtMs = 0L
+        lastFaceAtMs = 0L
+        lastDetectionAtElapsedMs = -1L
+        lastPublishAtMs = 0L
+        pendingHandCue = SocialCue.NONE
+        pendingHandHits = 0
+        hasSmooth = false
+        hasFrameSmooth = false
+        smoothOffX = 0f
+        smoothOffY = 0f
+        smoothFrameX = 0f
+        smoothFrameY = 0f
+        smoothYaw = 0f
+        smoothPitch = 0f
+        smoothRoll = 0f
+        smoothScale = 1f
+        attentionTarget.reset()
+        lastSeenFaces = emptyList()
+        _faceTrack.value = null
+        _sceneLuma.value = null
+    }
+
+    private fun expireAttention(nowMs: Long) {
+        if (!trackingSession.active) return
+        // Skipping inference leaves CameraX/ISP capturing at full rate. Release
+        // the automatic camera while hot; this existing watchdog also resumes
+        // it after cooling without changing the user's camera preference.
+        if (nowMs - lastThermalReadMs >= 1_000L) {
+            thermalStatus = powerManager?.currentThermalStatus ?: 0
+            lastThermalReadMs = nowMs
+        }
+        val pause = thermalStatus >= android.os.PowerManager.THERMAL_STATUS_MODERATE
+        if (pause != thermalPaused) {
+            thermalPaused = pause
+            if (pause) unbind() else bindPreviewAsync()
+            android.util.Log.i("MeowVision", "automatic camera thermal pause=$pause")
+        }
+        if (thermalPaused) return
+        val track = _faceTrack.value
+        val staleTrack = track != null && !AttentionFreshness.isFresh(track.observedAtElapsedMs, nowMs)
+        val stalledCamera = lastDetectionAtElapsedMs >= 0L &&
+            !AttentionFreshness.isFresh(lastDetectionAtElapsedMs, nowMs)
+        if (staleTrack || stalledCamera) clearAttention()
     }
 
     /**
@@ -540,10 +602,13 @@ class VisionManager(
      * setTargetRotation is explicitly safe to call on a bound use case, so this
      * is a per-frame no-op once the values agree.
      */
+    @Synchronized
     private fun syncAnalysisRotation() {
         val analysis = imageAnalysis ?: return
         val rotation = currentDisplayRotation() ?: return
         if (analysis.targetRotation != rotation) {
+            trackingSession.invalidate()
+            clearAttention()
             analysis.targetRotation = rotation
             android.util.Log.i("VM", "analysis targetRotation -> $rotation")
         }
@@ -636,20 +701,24 @@ class VisionManager(
         displayListener = null
     }
 
-    private fun analyzeFrame(proxy: ImageProxy) {
+    @Synchronized
+    private fun analyzeFrame(proxy: ImageProxy, analysis: ImageAnalysis) {
         val detector = faceDetector
         val mediaImage = proxy.image
-        if (detector == null || mediaImage == null) {
+        if (!trackingSession.active || imageAnalysis !== analysis || detector == null || mediaImage == null) {
             proxy.close()
             return
         }
-        // Face lock: 1 in 3. Hunting a hand: 1 in 2. Pose is the heat hog
-        // and we ignore it while a face is locked, so do not run it then.
-        analyzeSkip++
+        // The old skip counter admitted every normal-mode camera frame: device
+        // logs showed ~30 face inferences/sec even with no face and a hot phone.
+        val nowMs = android.os.SystemClock.elapsedRealtime()
+        if (nowMs - lastThermalReadMs >= 1000L) {
+            thermalStatus = powerManager?.currentThermalStatus ?: 0
+            lastThermalReadMs = nowMs
+        }
         val faceLockHot = lastRealFaceAtMs != 0L &&
-            System.currentTimeMillis() - lastRealFaceAtMs < 900L
-        val skipN = if (followOnly) FOLLOW_SKIP_N else 1
-        if (analyzeSkip % skipN != 0) {
+            nowMs - lastRealFaceAtMs < 900L
+        if (!workBudget.admit(nowMs, faceLockHot, thermalStatus)) {
             proxy.close()
             return
         }
@@ -658,16 +727,27 @@ class VisionManager(
             return
         }
         syncAnalysisRotation()
+        val generation = trackingSession.generation
+        val observedAtElapsedMs = android.os.SystemClock.elapsedRealtime()
         val displayDeg = displayRotationDegrees()
         val cameraRot = proxy.imageInfo.rotationDegrees
-        val input = InputImage.fromMediaImage(mediaImage, cameraRot)
-        val faceTask = detector.process(input)
+        val targetRot = analysis.targetRotation
+        val input: InputImage
+        val faceTask: com.google.android.gms.tasks.Task<List<Face>>
+        try {
+            input = InputImage.fromMediaImage(mediaImage, cameraRot)
+            faceTask = detector.process(input)
+        } catch (e: Exception) {
+            frameInFlight.set(false)
+            proxy.close()
+            android.util.Log.w("MeowVision", "face processing could not start", e)
+            return
+        }
         // Following a body needs no skeleton: pose is the single most
         // expensive thing in this pipeline and follow mode never reads it.
-        val poseTask = if (followOnly) {
-            null
-        } else if (analyzeSkip % (if (faceLockHot) 4 else 3) == 0) {
-            poseDetector?.process(input)
+        val poseTask = if (workBudget.admitPose(nowMs, faceLockHot, thermalStatus, followOnly)) {
+            // A pose failure must not close the image while the face task still reads it.
+            runCatching { poseDetector?.process(input) }.getOrNull()
         } else {
             null
         }
@@ -680,7 +760,14 @@ class VisionManager(
                     emptyList()
                 }
                 val pose = if (poseTask?.isSuccessful == true) poseTask.result else null
-                publishDetections(proxy, faces, pose, cameraRot, displayDeg)
+                synchronized(this) {
+                    if (imageAnalysis === analysis && targetRot == analysis.targetRotation &&
+                        displayDeg == displayRotationDegrees() &&
+                        trackingSession.accepts(generation, observedAtElapsedMs, android.os.SystemClock.elapsedRealtime())
+                    ) {
+                        publishDetections(proxy, faces, pose, cameraRot, displayDeg, targetRot, observedAtElapsedMs)
+                    }
+                }
             } finally {
                 frameInFlight.set(false)
                 proxy.close()
@@ -694,9 +781,11 @@ class VisionManager(
         pose: Pose?,
         cameraRot: Int,
         displayDeg: Int,
+        targetRot: Int,
+        observedAtElapsedMs: Long,
     ) {
-        val now = System.currentTimeMillis()
-        val targetRot = imageAnalysis?.targetRotation ?: android.view.Surface.ROTATION_0
+        val now = observedAtElapsedMs
+        lastDetectionAtElapsedMs = observedAtElapsedMs
         if (now - lastLogMs >= 2000L) {
             val (dw, dh) = rotatedFrameSize(proxy.width, proxy.height, cameraRot)
             android.util.Log.i(
@@ -709,7 +798,7 @@ class VisionManager(
             )
         }
         val (uprightW, _) = rotatedFrameSize(proxy.width, proxy.height, cameraRot)
-        val seen = faces.mapNotNull { f ->
+        val detections = faces.mapNotNull { f ->
             val off = faceOffsetOnDisplay(
                 boxCenterX = f.boundingBox.exactCenterX(),
                 boxCenterY = f.boundingBox.exactCenterY(),
@@ -730,30 +819,29 @@ class VisionManager(
                 ),
                 mouthOpen = mouthOpenOf(f),
                 area = (f.boundingBox.width() * f.boundingBox.height()).toFloat(),
-            )
-        }.sortedByDescending { it.area }.take(3)
+            ) to f
+        }.sortedByDescending { it.first.area }.take(3)
+        val seen = detections.map { it.first }
         lastSeenFaces = seen
-        val pick = TalkerPicker.pick(
-            faces = seen,
-            speechLikely = speechLikely,
-            lastId = lastTalkerId,
-            nowMs = now,
-            lastAtMs = lastTalkerAtMs,
-        )
-        if (pick.face != null && pick.reason != TalkerPick.Reason.HOLD) {
-            lastTalkerId = pick.face.trackingId
-            if (pick.reason == TalkerPick.Reason.MOUTH) lastTalkerAtMs = now
+        val pick = attentionTarget.select(seen, speechLikely, now)
+        // Pair the exact detection, including unknown (-1) IDs; never silently select a different box.
+        val face = pick.face?.let { selected -> detections.firstOrNull { it.first === selected }?.second }
+        if (pick.changed) {
+            hasSmooth = false
+            hasFrameSmooth = false
+            gazeSettled = false
         }
-        val face = pick.face?.let { s ->
-            faces.firstOrNull { it.trackingId == s.trackingId }
-        } ?: faces.maxByOrNull { it.boundingBox.width() * it.boundingBox.height() }
         if (face != null) lastRealFaceAtMs = now
         // Drop hasFace immediately so the base halts. Holding hasFace=true
         // with the last edge offset is what kept the robot spinning.
         if (face == null) {
             val last = _faceTrack.value
             if (last != null && last.hasFace) {
-                _faceTrack.value = last.copy(hasFace = false)
+                _faceTrack.value = last.copy(
+                    hasFace = false,
+                    faceCount = faces.size,
+                    cue = SocialCue.NONE,
+                )
             }
             if (hasSmooth && lastRealFaceAtMs != 0L && now - lastRealFaceAtMs < 180L) {
                 return
@@ -899,13 +987,15 @@ class VisionManager(
         val a = when {
             follow != lastFollow -> 0.78f
             follow == FollowSource.HAND -> handSmoothingAlpha(hasSmooth)
-            else -> faceSmoothingAlpha(hasSmooth)
+            else -> FaceAttentionSmoothing.alpha(now - lastFaceAtMs,
+                kotlin.math.hypot(rawX - smoothOffX, rawY - smoothOffY), hasSmooth)
         }
         lastFollow = follow
-        smoothOffX = smoothFaceOffset(smoothOffX, rawX, a)
-        smoothOffY = smoothFaceOffset(smoothOffY, rawY, a)
+        smoothOffX = if (hasSmooth) smoothFaceOffset(smoothOffX, rawX, a) else rawX
+        smoothOffY = if (hasSmooth) smoothFaceOffset(smoothOffY, rawY, a) else rawY
         if (faceOff != null) {
-            val fa = faceSmoothingAlpha(hasFrameSmooth)
+            val fa = FaceAttentionSmoothing.alpha(now - lastFaceAtMs,
+                kotlin.math.hypot(faceOff.first - smoothFrameX, faceOff.second - smoothFrameY), hasFrameSmooth)
             smoothFrameX = if (hasFrameSmooth) {
                 smoothFaceOffset(smoothFrameX, faceOff.first, fa)
             } else {
@@ -935,7 +1025,9 @@ class VisionManager(
         smoothYaw = 0f
         smoothPitch = 0f
         smoothRoll = 0f
-        if (!gazeSettled) {
+        if (!hasSmooth) {
+            smoothScale = rawScale
+        } else if (!gazeSettled) {
             smoothScale = smoothFaceOffset(smoothScale, rawScale, a)
         }
         hasSmooth = true
@@ -960,6 +1052,7 @@ class VisionManager(
                 mouthOpen = face?.let { mouthOpenOf(it) } ?: 0f,
                 frameX = if (hasFrameSmooth) smoothFrameX.coerceIn(-1f, 1f) else pubX,
                 frameY = if (hasFrameSmooth) smoothFrameY.coerceIn(-1f, 1f) else pubY,
+                observedAtElapsedMs = observedAtElapsedMs,
             )
             if (now - lastLogMs >= 2000L) {
                 lastLogMs = now
@@ -1117,8 +1210,11 @@ class VisionManager(
             {
                 try {
                     val provider = future.get()
-                    val selector = resolveSelector(provider)
+                    thermalStatus = powerManager?.currentThermalStatus ?: 0
+                    thermalPaused = thermalStatus >= android.os.PowerManager.THERMAL_STATUS_MODERATE
                     provider.unbindAll()
+                    if (thermalPaused) { clearAttention(); return@addListener }
+                    val selector = resolveSelector(provider)
                     val useCases = mutableListOf<androidx.camera.core.UseCase>()
                     preview?.let { p -> p.surfaceProvider?.let { useCases.add(p) } }
                     imageCapture?.let { useCases.add(it) }
@@ -1136,6 +1232,9 @@ class VisionManager(
     }
 
     private suspend fun bindIfNeeded(): ImageCapture {
+        if ((powerManager?.currentThermalStatus ?: 0) >= android.os.PowerManager.THERMAL_STATUS_MODERATE) {
+            throw ImageCaptureException(ImageCapture.ERROR_UNKNOWN, "Camera paused while the phone cools", null)
+        }
         imageCapture?.let { return it }
         val provider = withTimeoutOrNull(10_000) {
             suspendCancellableCoroutine<ProcessCameraProvider> { cont ->
@@ -1244,7 +1343,10 @@ class VisionManager(
         }
     }
 
+    @Synchronized
     private fun unbind() {
+        trackingSession.invalidate()
+        clearAttention()
         imageCapture = null
         boundSelector = null
         // Never block the calling (main) thread on the provider future — a stale

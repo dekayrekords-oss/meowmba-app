@@ -3,6 +3,8 @@ package com.example.meowmba.core.agent.tools
 import com.example.meowmba.ui.companion.CustomAnimationSpec
 import com.example.meowmba.ui.companion.CustomAnimationStore
 import com.example.meowmba.ui.companion.CustomAnimations
+import com.example.meowmba.ui.companion.AvatarPerformanceCatalog
+import com.example.meowmba.ui.companion.PerformanceRotation
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -18,8 +20,10 @@ import org.json.JSONObject
  */
 class AvatarAnimateTool(
     private val store: CustomAnimationStore?,
+    private val choosePerformance: (() -> CustomAnimationSpec?)? = null,
     private val onPlay: (CustomAnimationSpec) -> Unit,
 ) : Tool {
+    private val rotation = PerformanceRotation()
     override val definition = ToolDefinition(
         id = "avatar.animate",
         displayName = "Animate the avatar",
@@ -29,7 +33,9 @@ class AvatarAnimateTool(
                 "expressions. ALWAYS use this — never a media/image/video tool — when the user " +
                 "asks you to do a trick, dance, gesture, or to animate yourself/the cat/it " +
                 "(\"lick your paw\", \"show me an animation of you...\", \"do something cute\"). " +
-                "Media tools only make FILES; this is the only tool that moves the face.\n\n"
+                "For a NEW activity such as fishing that needs props, use avatar.invent; the on-device AI will compose it. " +
+                "Media tools only make FILES. For a persistent animal appearance, use avatar.form and its supported forms instead. " +
+                "Mouse chasing, reading a book and wearing a cowboy/wizard/beret hat are authored avatar scenes; replay their built-in names instead of inventing prop keyframes.\n\n"
             )
             append(
                 "FIELDS per keyframe: at (ms, required), eye_open (0.0-1.6; 1.0 normal, " +
@@ -123,6 +129,8 @@ class AvatarAnimateTool(
                 "Built-ins (play by name): " +
                 CustomAnimations.BUILT_INS.keys.joinToString(", ") + "."
             )
+            append(" Original companion performances: " + AvatarPerformanceCatalog.names().joinToString(", ") +
+                ". Use name=surprise me for a varied playful performance. Weather and feeling props are make-believe, never sensor readings or proof that a task succeeded.")
         },
         inputSchema = mapOf(
             "name" to "string",
@@ -142,7 +150,10 @@ class AvatarAnimateTool(
         // Replay: no frames means "play the clip with this name" — built-ins
         // first, then whatever the companion saved earlier.
         if (framesJson == null) {
-            val clip = CustomAnimations.builtIn(name) ?: store?.load(name)
+            val surprise = name.trim().equals("surprise me", ignoreCase = true)
+            val clip = (if (surprise) choosePerformance?.invoke() ?: rotation.pick(
+                AvatarPerformanceCatalog.entries.filter { it.category in setOf("Joy", "Affection", "Play") })?.spec else null)
+                ?: store?.load(name) ?: AvatarPerformanceCatalog.resolve(name)?.spec ?: CustomAnimations.builtIn(name)
                 ?: return ToolResult.Failure(
                     "No animation called \"$name\". Built-ins: " +
                         CustomAnimations.BUILT_INS.keys.joinToString(", ") +

@@ -3,13 +3,10 @@ package com.example.meowmba.core.robot
 import java.util.UUID
 
 /**
- * BLE protocol for the TangibleFuture LOOI robot — the exact setup used by the
- * Memba 2 droid section (reverse-engineered by the sooperchargeforbots project).
- *
- * LOOI accepts 17-byte command frames on characteristic fe00. Frames carry a
- * rolling sequence byte — the robot silently drops any frame whose SEQ does
- * not increment. Commands behave like animation-script frames ("Script
- * Mode"): each frame carries its own duration in ticks (~20ms each).
+ * Historical reverse-engineered templates, retained for offline inspection only.
+ * Packet lengths, direction, duration, sensor meanings and stop behavior are NOT
+ * validated for the user's firmware. LooiBleLink has no actuator write path.
+ * A zero speed argument does not make the encoded script a verified stop.
  */
 object LooiBleProtocol {
 
@@ -18,11 +15,11 @@ object LooiBleProtocol {
         UUID.fromString("0000$short-0000-1000-8000-00805f9b34fb")
 
     val CHAR_COMMAND: UUID = uuid16("fe00")       // 17-byte script frames (turn/anim)
-    val CHAR_MOTOR_BOOST: UUID = uuid16("ff02")   // hardware brake/stop: write 0x00
-    val CHAR_MOTOR_SLOW: UUID = uuid16("fed0")    // precision FORWARD drive; 0x00 stops
+    val CHAR_MOTOR_BOOST: UUID = uuid16("ff02")   // historical mapping; stop semantics unverified
+    val CHAR_MOTOR_SLOW: UUID = uuid16("fed0")    // historical mapping; payload size/semantics unverified
     val CHAR_NECK: UUID = uuid16("fed1")          // neck position byte
     val CHAR_HEADLIGHT: UUID = uuid16("fed2")     // 0x00 off / 0x03 on
-    val CHAR_SENSORS: UUID = uuid16("fed9")       // notify: touch/cliff; TOF/status partial
+    val CHAR_SENSORS: UUID = uuid16("fed9")       // telemetry; meanings unverified
 
     val CCCD: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
@@ -94,7 +91,7 @@ object LooiBleProtocol {
         return out
     }
 
-    /** Rolling 00-FF sequence counter; the robot drops non-incrementing frames. */
+    /** Historical rolling 00-FF sequence counter; firmware behavior unverified. */
     class SequenceCounter(start: Int = 0) {
         private var seq = start and 0xFF
         fun next(): Int {
@@ -105,19 +102,9 @@ object LooiBleProtocol {
     }
 
     /**
-     * Motion vocabulary derived from the sniffed known-good rotation packet
-     * (00 07 00 FF 05 00 00 00 00 64 02 0A 96 02 14 00 02). The mask/param
-     * bytes select the drive subsystem — opcode 0x07 without them just makes
-     * the motors twitch (verified on the real robot). value = speed 0-100,
-     * ticks ~ 20ms each.
-     */
-    /**
-     * 17-byte Script-Mode turn.
-     *
-     * Golden packet uses [value] = +speed (1–100) for the verified LEFT spin.
-     * subOp 0x01 was tried as RIGHT and still spun left on this robot.
-     * RIGHT therefore keeps the same mask/opcode and sends two's-complement
-     * speed (256-N) — the unused sibling of the signed magnitude byte.
+     * Historical 17-byte rotation candidate. Direction and duration are unverified.
+     * Even speedPercent=0 retains nonzero rotation opcode/masks/parameters and
+     * must never be interpreted as a safe stop or sent to hardware.
      */
     fun rotateFrame(speedPercent: Int, ticks: Int, right: Boolean = false): Frame {
         val mag = speedPercent.coerceIn(0, 100)
@@ -134,12 +121,8 @@ object LooiBleProtocol {
     }
 
     /**
-     * Captured tread scripts from this exact LOOI (Memba live session).
-     * The 17-byte 0x07 rotateFrame only spins one way on this robot; these
-     * 20-byte writes are what actually turn left vs right. First byte is SEQ.
-     *
-     * Left is the reverse-engineered capture. Right inverts its signed motion
-     * bytes (0xEB/-21 → 0x15/+21, 0xF5/-11 → 0x0B/+11).
+     * Historical capture and inferred inverse retained as data, not a validated
+     * left/right implementation. Neither may be transmitted by the app.
      */
     private val CAPTURED_TURN_LEFT_TAIL = byteArrayOf(
         0x02, 0x64, 0x00, 0x02, 0x64, 0x1E, 0x03,
@@ -158,12 +141,8 @@ object LooiBleProtocol {
     }
 
     /**
-     * Which left/right encoding this base actually obeys.
-     *
-     * The two encodings disagree in the field notes (see the KDoc above), and
-     * on the user's base RIGHT moved while LEFT did nothing — so direction is
-     * a runtime setting, not a constant. [LEGACY] is what shipped last and is
-     * the default: never silently change how a working motion is encoded.
+     * Historical preference IDs for compatibility only. None enables physical
+     * control or bypasses quarantine; all direction interpretations are unverified.
      */
     enum class TurnEncoding(val id: String) {
         /** 17-byte 0x07: positive value = LEFT, two's complement = RIGHT. */

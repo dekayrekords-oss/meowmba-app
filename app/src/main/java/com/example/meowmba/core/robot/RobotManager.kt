@@ -12,7 +12,9 @@ import kotlinx.coroutines.flow.asStateFlow
  * [LooiMotorController]; if the base is unreachable we fall back to simulated
  * and say so in [status] rather than pretending.
  */
-class RobotManager {
+class RobotManager(
+    private val createBleLink: (android.content.Context) -> LooiBleLink = { LooiBleLink(it.applicationContext) },
+) {
 
     /** Minimum gap between two follow-turn pulses. */
     private val turnPeriodMs: Long get() = TURN_PERIOD_MS
@@ -22,12 +24,25 @@ class RobotManager {
 
     @Volatile private var controller: MotorController = SimulatedMotorController()
     private var transport: RobotTransport? = null
-    private var bleLink: LooiBleLink? = null
+    @Volatile private var bleLink: LooiBleLink? = null
+    private val connectionLock = Any()
+    private var pendingLink: LooiBleLink? = null
+    private var connectionEpoch = 0L
+    /** Capture before dispatching background work; disconnect invalidates even unstarted work. */
+    fun connectionToken(): Long = synchronized(connectionLock) { connectionEpoch }
 
-    private var body: BodyOutput = SimulatedBodyOutput()
+    private val bodySafety = BodySafety { monotonicMs() }
 
-    /** The base's own verb vocabulary. Simulated until a BLE link comes up. */
-    val bodyOutput: BodyOutput get() = body
+    /** Stable shared gate; obtaining it before BLE connects does not capture a simulator. */
+    val bodyOutput: BodyOutput get() = bodySafety
+    val bodyMotionBlockedReason: String? get() = bodySafety.blockedReason
+
+    fun setBodyPaused(paused: Boolean) = bodySafety.setPaused(paused)
+    fun setBodyProfile(profile: BodyProfile) = bodySafety.setProfile(profile)
+    fun onBodySensor(event: SensorEvent) = bodySafety.onSensor(event)
+    fun stopBodyMotion() = bodySafety.stop()
+    /** Only wire to an explicit user resume; routine connection refresh is not consent. */
+    fun resumeBodyMotion() = bodySafety.resume()
 
     /** Raw fed9 frames when a BLE link exists; null otherwise. */
     val sensorFrames: kotlinx.coroutines.flow.SharedFlow<ByteArray>?
@@ -37,23 +52,25 @@ class RobotManager {
     val active: MotorController get() = controller
 
     /** Drop any connection and return to the honest simulated body. */
-    fun useSimulated() {
+    fun useSimulated() = synchronized(connectionLock) {
+        connectionEpoch++
+        bodySafety.attach(null)
+        pendingLink?.close()
+        pendingLink = null
         transport?.close()
         transport = null
         bleLink?.close()
         bleLink = null
         controller = SimulatedMotorController()
-        body = SimulatedBodyOutput()
-        _status.value = "simulated (no body)"
+        _status.value = "Disconnected · simulated (no body). If the base keeps moving, switch it off."
     }
 
     /**
      * Try to bring up a LOOI base at [host]:[port]. Returns true when the body
      * is live; on failure falls back to simulated and reports it in [status].
      */
-    fun connectLooi(host: String, port: Int): Boolean =
-        bringUp(TcpRobotTransport(host, port), "LOOI body @ $host:$port",
-            "LOOI unreachable ($host:$port) - simulated")
+    fun connectLooi(host: String, port: Int, expectedEpoch: Long = connectionToken()): Boolean =
+        rejectLegacyConnection(expectedEpoch)
 
     /**
      * Auto-discovery: the first bonded (paired) device whose name looks like a LOOI
@@ -79,6 +96,10 @@ class RobotManager {
      * list. The scan runs up to [scanMs] and is stopped before returning.
      */
     fun discoverAllBases(scanMs: Long = 7_000): List<Pair<String, String>> {
+        if (!RobotBaseControlPolicy.CONTROL_AVAILABLE) {
+            _status.value = RobotBaseControlPolicy.UNAVAILABLE_MESSAGE
+            return emptyList()
+        }
         // address -> name, or null when the device never told us one.
         val out = LinkedHashMap<String, String?>()
         var scanRan = false
@@ -240,81 +261,84 @@ class RobotManager {
     }
 
     /** Bring up a LOOI base over classic Bluetooth (RFCOMM/SPP) to a paired device. */
-    fun connectBluetooth(address: String): Boolean =
-        bringUp(BluetoothRobotTransport(address), "LOOI body (BT) @ $address",
-            "LOOI BT unreachable ($address) - simulated")
+    fun connectBluetooth(address: String): Boolean = rejectLegacyConnection(connectionToken())
+
+    private fun rejectLegacyConnection(expectedEpoch: Long): Boolean = synchronized(connectionLock) {
+        if (expectedEpoch != connectionEpoch) return false
+        useSimulated()
+        _status.value = "Robot unreachable: this legacy transport has no verified motor protocol. Use Bluetooth LE."
+        false
+    }
 
     /**
-     * Connect a LOOI base over BLE using the exact Memba 2 droid setup:
-     * already-connected GATT attach -> BLE scan -> known-MAC fallback ->
-     * connectGatt -> service discovery -> serial CCCD/read init -> keep-alive.
+     * Connect the selected base, or explicitly discover a named base over BLE.
+     * No saved-address, hardcoded-address, or legacy-transport fallback.
      * Pass a saved MAC in [address] to skip straight to that device, or blank
      * for full auto discovery. Blocking; call from a background thread.
      */
-    fun connectLooiBle(context: android.content.Context, address: String = ""): Boolean {
-        // Idempotent: if a healthy live link already exists, keep it. Repeated
-        // refreshRobot()/onResume calls must not reconnect and drop the GATT.
-        if (bleLink?.state == LooiBleLink.LinkState.READY) {
-            _status.value = "LOOI body (BLE)" + if (address.isBlank()) "" else " @ $address"
-            return true
-        }
-        var link = LooiBleLink(context.applicationContext)
-        link.onStateChange = { st, detail -> _status.value = "LOOI BLE: ${st.name.lowercase()} $detail".trim() }
-        var ok = if (address.isBlank()) link.connectAuto() else link.connectBlocking(address)
-        if (!ok && address.isNotBlank()) {
-            // Saved address failed (stale/wrong MAC). Fall back to the full
-            // auto policy: attach-if-connected -> scan -> known-MAC connect.
-            link.close()
-            link = LooiBleLink(context.applicationContext)
-            link.onStateChange = { st, detail -> _status.value = "LOOI BLE: ${st.name.lowercase()} $detail".trim() }
-            ok = link.connectAuto()
-        }
-        return if (ok) {
-            transport?.close()
-            transport = null
+    fun connectLooiBle(context: android.content.Context, address: String = "", expectedEpoch: Long = connectionToken()): Boolean {
+        val link: LooiBleLink
+        synchronized(connectionLock) {
+            if (expectedEpoch != connectionEpoch) return false
+            if (bleLink?.connected == true && (address.isBlank() || address.equals(bleLink?.connectedAddress, true))) return true
+            if (pendingLink != null) return false
+            bodySafety.attach(null)
             bleLink?.close()
-            bleLink = link
-            body = LooiBleBodyOutput(link)
-            controller = SimulatedMotorController()
-            // Report the address we are ACTUALLY attached to, not the one that
-            // was requested. Those differ whenever the requested MAC fails and
-            // the auto/known-MAC fallback succeeds — which is exactly what
-            // happened when a stale saved value pointed at a Bluetooth speaker:
-            // the link was correctly attached to the real base while Settings
-            // displayed the speaker's address, so a working robot looked broken.
-            val connectedTo = link.connectedAddress ?: address
-            _status.value =
-                "LOOI body (BLE)" + if (connectedTo.isBlank()) "" else " @ $connectedTo"
-            link.turnEncoding = turnEncoding
-            applyHeadlight(lightMode == HeadlightPolicy.Mode.FORCE_ON, force = true)
-            true
-        } else {
-            link.close()
-            transport?.close()
-            transport = null
             bleLink = null
-            controller = SimulatedMotorController()
-            body = SimulatedBodyOutput()
-            _status.value = "LOOI BLE unreachable - simulated"
-            false
+            link = createBleLink(context)
+            pendingLink = link
+            val candidate = link
+            candidate.onStateChange = { st, detail ->
+                synchronized(connectionLock) {
+                    if (expectedEpoch == connectionEpoch && st == candidate.state &&
+                        (pendingLink === candidate || bleLink === candidate)) {
+                        if (bleLink === candidate && st != LooiBleLink.LinkState.READY) bodySafety.attach(null)
+                        _status.value = "Robot Bluetooth: ${st.name.lowercase()} $detail".trim()
+                    }
+                }
+            }
+            candidate.onSensorEvent = { event ->
+                synchronized(connectionLock) {
+                    if (expectedEpoch == connectionEpoch && bleLink === candidate) bodySafety.onSensor(event)
+                }
+            }
+            _status.value = "Connecting to robot base…"
+        }
+        // A selected device never silently falls back to a different radio or protocol.
+        val ok = runCatching {
+            if (address.isBlank()) link.connectAuto() else link.connectBlocking(address)
+        }.getOrDefault(false)
+        return synchronized(connectionLock) {
+            if (expectedEpoch != connectionEpoch || pendingLink !== link) {
+                link.close()
+                return false
+            }
+            pendingLink = null
+            if (ok && link.connected) {
+                transport?.close()
+                transport = null
+                bleLink = link
+                bodySafety.attach(LooiBleBodyOutput(link)) { link.connected }
+                // Initial sensor reads/notifications can precede the UI subscription.
+                link.lastSensorEvent?.let(bodySafety::onSensor)
+                controller = SimulatedMotorController()
+                val connectedTo = link.connectedAddress ?: address
+                _status.value = "Robot base connected (BLE)" + if (connectedTo.isBlank()) "" else " @ $connectedTo"
+                link.turnEncoding = turnEncoding
+                true
+            } else {
+                link.close()
+                transport?.close()
+                transport = null
+                bleLink = null
+                controller = SimulatedMotorController()
+                bodySafety.attach(null)
+                _status.value = if (!RobotBaseControlPolicy.CONTROL_AVAILABLE) RobotBaseControlPolicy.UNAVAILABLE_MESSAGE
+                    else "Robot base not connected. Check power and select the correct base, then Connect again."
+                false
+            }
         }
     }
-
-    private fun bringUp(t: RobotTransport, okLabel: String, failLabel: String): Boolean =
-        if (t.connect()) {
-            transport?.close()
-            transport = t
-            controller = LooiMotorController(t)
-            _status.value = okLabel
-            true
-        } else {
-            t.close()
-            transport?.close()
-            transport = null
-            controller = SimulatedMotorController()
-            _status.value = failLabel
-            false
-        }
 
     /** True when a real LOOI body is attached over BLE and ready for commands. */
     val hasLiveBody: Boolean get() = bleLink?.connected == true
@@ -335,7 +359,11 @@ class RobotManager {
      * Keep the person in the camera frame. Call on every face-track sample
      * (including nulls) so the base keeps turning while they stay off-center.
      */
-    fun keepPersonInFrame(offsetX: Float?, offsetY: Float?, scale: Float?, nowMs: Long = System.currentTimeMillis()) {
+    fun keepPersonInFrame(offsetX: Float?, offsetY: Float?, scale: Float?, nowMs: Long = monotonicMs()) {
+        if (offsetX == null || offsetY == null || !offsetX.isFinite() || !offsetY.isFinite() || scale?.isFinite() == false) {
+            stopPersonFollowing()
+            return
+        }
         val live = offsetX != null && offsetY != null
         if (live) {
             lastFaceAtMs = nowMs
@@ -365,14 +393,18 @@ class RobotManager {
         applyNeck(cmd.neckPitch, nowMs) { pitch ->
             val link = bleLink?.takeIf { c -> c.connected }
             if (link != null) {
-                body.perform(BodyVerb.Neck(pitch))
-            } else {
+                bodySafety.follow(BodyVerb.Neck(pitch))
+            } else if (controller is SimulatedMotorController) {
                 controller.setServo(FaceMotorMap.SERVO_HEAD_TILT, 90f + pitch * 90f)
             }
         }
         val link = bleLink?.takeIf { it.connected }
         if (cmd.turning) {
             if (link != null) {
+                if (!bodySafety.rotationAllowed) {
+                    wasTurning = false
+                    return
+                }
                 // One pulse per period: the frames carry their own duration,
                 // and stacking them inside 400ms is what made the base lurch.
                 if (nowMs - lastTurnAtMs >= turnPeriodMs) {
@@ -382,10 +414,9 @@ class RobotManager {
                         "follow turn speed=${cmd.turnSpeed} ticks=${cmd.turnTicks} " +
                             "searching=${cmd.searching} x=${if (live) offsetX else lastFaceX}",
                     )
-                    link.turnPulse(cmd.turnSpeed, cmd.turnTicks)
-                    wasTurning = true
+                    wasTurning = bodySafety.follow(BodyVerb.Turn(kotlin.math.abs(cmd.turnSpeed), cmd.turnTicks, if (cmd.turnSpeed < 0) -1 else 1))
                 }
-            } else {
+            } else if (controller is SimulatedMotorController) {
                 pose[FaceMotorMap.SERVO_HEAD_PAN]?.let {
                     controller.setServo(FaceMotorMap.SERVO_HEAD_PAN, it)
                 }
@@ -394,20 +425,15 @@ class RobotManager {
         } else if (wasTurning) {
             // Not turning any more (re-centered, resting between sweeps, or the
             // search budget ran out): brake so nothing coasts.
-            haltBase()
+            bodySafety.follow(BodyVerb.Brake)
             wasTurning = false
         }
     }
 
     /**
-     * Which left/right encoding the base responds to.
-     *
-     * Two encodings exist for this robot and the docs disagree about which one
-     * is live: the 17-byte 0x07 template (positive value = LEFT, two's
-     * complement = RIGHT) and the captured 20-byte tread scripts. On the user's
-     * base, RIGHT moved and LEFT did nothing, so the mapping is a runtime
-     * choice rather than a guess baked in — flip it from adb and watch the
-     * robot instead of shipping a rebuild per hypothesis.
+     * Retain the historical preference for compatibility, not motion authority.
+     * None of these contradictory encodings can enable wheel control. Do not
+     * calibrate by changing this preference and trying movement on a desk.
      */
     fun setTurnEncoding(encoding: LooiBleProtocol.TurnEncoding) {
         turnEncoding = encoding
@@ -440,17 +466,19 @@ class RobotManager {
      * Hold the body still for [ms] — a hand on the screen outranks following.
      * Called on every touch; the follow loop resumes on its own afterwards.
      */
-    fun pauseFollow(ms: Long = TOUCH_PAUSE_MS, nowMs: Long = System.currentTimeMillis()) {
+    fun pauseFollow(ms: Long = TOUCH_PAUSE_MS, nowMs: Long = monotonicMs()) {
         followPausedUntilMs = maxOf(followPausedUntilMs, nowMs + ms)
+        bodySafety.touch(ms, nowMs)
     }
 
     /** True while the base is deliberately holding still after a touch. */
-    fun isFollowingPaused(nowMs: Long = System.currentTimeMillis()): Boolean =
+    fun isFollowingPaused(nowMs: Long = monotonicMs()): Boolean =
         nowMs < followPausedUntilMs
 
     private fun applyNeck(target: Float, nowMs: Long, apply: (pitch: Float) -> Unit) {
         val want = target.coerceIn(-NECK_RANGE, NECK_RANGE)
-        if (want != neckTarget) {
+        if (!want.isFinite()) return
+        if (kotlin.math.abs(want - neckTarget) > NECK_TARGET_TOLERANCE) {
             neckTarget = want
             neckTargetSinceMs = nowMs
         }
@@ -467,8 +495,25 @@ class RobotManager {
         apply(want)
     }
 
+    /** A missing face is no longer authority to search or keep a stale camera lock. */
+    fun stopPersonFollowing() {
+        frameTracker.reset()
+        wasTurning = false
+        lastFaceAtMs = 0L
+        lastFaceX = 0f
+        lastFaceY = 0f
+        lastFaceScale = 1f
+        lastTurnAtMs = 0L
+        neckTarget = 0f
+        neckTargetSinceMs = 0L
+        lastNeckMoveAtMs = 0L
+        lastNeckPitch = Float.NaN
+        bodySafety.stopFollowing()
+    }
+
     /** Stop everything the follow loop started and forget the lock. */
     fun haltMotion() {
+        bodySafety.brake()
         frameTracker.reset()
         wasTurning = false
         lastFaceAtMs = 0L
@@ -482,7 +527,6 @@ class RobotManager {
     /** Abort an in-flight turn script so a lost lock cannot coast into a spin. */
     private fun haltBase() {
         val link = bleLink?.takeIf { it.connected } ?: return
-        link.turnPulse(0, 1)
         link.stopAll()
     }
 
@@ -577,77 +621,124 @@ class RobotManager {
      * happened, or null when there is no live body — the caller reports that
      * honestly rather than pretending the robot moved.
      *
-     * Blocking (the movements have real durations); call off the main thread.
+     * Cancellable: each step rechecks its lease, and cancellation brakes in finally.
      */
-    fun perform(motion: Motion, intensity: Float = 1f): String? {
-        val link = bleLink?.takeIf { it.connected } ?: return null
+    suspend fun perform(motion: Motion, intensity: Float = 1f): String? {
+        if (motion == Motion.STOP) {
+            bodySafety.stop()
+            return if (hasLiveBody) RobotBaseControlPolicy.STOP_MESSAGE else null
+        }
+        if (!hasLiveBody) return null
+        if (!intensity.isFinite()) return "Robot stayed still: intensity must be finite."
+        if (motion in setOf(Motion.LEFT, Motion.RIGHT, Motion.SPIN, Motion.SHAKE_HEAD, Motion.WIGGLE) && !bodySafety.rotationAllowed) {
+            return "Robot stayed still: wheel direction, duration and safety sensors are not verified for this base. Visual expressions remain available."
+        }
+        if ((motion == Motion.FORWARD || motion == Motion.BACK) && !bodySafety.translationAllowed) {
+            return "Robot stayed still: forward travel is disabled while the surface is unverified (desk profile)."
+        }
+        val session = bodySafety.beginExplicitMotion()
+            ?: return "Robot stayed still: ${bodySafety.blockedReason ?: "another movement owns the body."}"
         val k = intensity.coerceIn(0.2f, 1f)
-        return when (motion) {
-            Motion.FORWARD -> { link.driveSpeed(0.55f * k); Thread.sleep(900); link.stopAll(); "Moved forward." }
+        fun send(verb: BodyVerb) {
+            if (!session.submit(verb)) throw MotionInterrupted()
+        }
+        suspend fun hold(ms: Long) {
+            kotlinx.coroutines.delay(ms)
+            if (!session.isValid) throw MotionInterrupted()
+        }
+        fun turn(speed: Int, ticks: Int) = send(BodyVerb.Turn(kotlin.math.abs(speed), ticks, if (speed < 0) -1 else 1))
+        suspend fun neck(pitch: Float) {
+            if (!session.holdNeckPose(pitch)) throw MotionInterrupted()
+        }
+        fun brake() = send(BodyVerb.Brake)
+        return try { when (motion) {
+            Motion.FORWARD -> { send(BodyVerb.Drive(0.55f * k)); hold(900); brake(); "Moved forward." }
             Motion.BACK -> {
                 // The verified drive channel (fed0) is forward-only, so backing
                 // up is a half turn, a short drive, and a half turn back —
                 // reported honestly rather than silently doing nothing.
-                link.turnPulse(60, 18); Thread.sleep(700)
-                link.driveSpeed(0.5f * k); Thread.sleep(700); link.stopAll()
-                link.turnPulse(-60, 18); Thread.sleep(700); link.stopAll()
+                turn(60, 18); hold(700)
+                send(BodyVerb.Drive(0.5f * k)); hold(700); brake()
+                turn(-60, 18); hold(700); brake()
                 "Backed up (turned around, moved, turned back)."
             }
-            Motion.LEFT -> { link.turnPulse((-60 * k).toInt(), 10); Thread.sleep(600); link.stopAll(); "Turned left." }
-            Motion.RIGHT -> { link.turnPulse((60 * k).toInt(), 10); Thread.sleep(600); link.stopAll(); "Turned right." }
-            Motion.SPIN -> { link.turnPulse((80 * k).toInt(), 42); Thread.sleep(2600); link.stopAll(); "Spun around." }
-            Motion.STOP -> { link.stopAll(); "Stopped." }
+            Motion.LEFT -> { turn((-60 * k).toInt(), 10); hold(600); brake(); "Turned left." }
+            Motion.RIGHT -> { turn((60 * k).toInt(), 10); hold(600); brake(); "Turned right." }
+            Motion.SPIN -> { turn((80 * k).toInt(), 42); hold(2600); brake(); "Spun around." }
+            Motion.STOP -> "Stopped."
             // Neck pitch is -1 = up, 0 = center, +1 = down (LooiBleLink). These
             // three had it inverted — "look up" tilted the head down.
-            Motion.LOOK_UP -> { link.setNeckPitch(-1f); "Looked up." }
-            Motion.LOOK_DOWN -> { link.setNeckPitch(1f); "Looked down." }
-            Motion.LOOK_CENTER -> { link.setNeckPitch(0f); "Head centered." }
+            Motion.LOOK_UP -> { neck(-1f); "Looked up." }
+            Motion.LOOK_DOWN -> { neck(1f); "Looked down." }
+            Motion.LOOK_CENTER -> { neck(0f); "Head centered." }
             Motion.NOD -> {
                 // Straddle center now that the sign convention is known:
                 // -1 up / 0 center / +1 down. Both steps used to be positive
                 // (both "down"), so a yes was a downward twitch.
                 repeat(2) {
-                    link.setNeckPitch(-0.15f); Thread.sleep(320)
-                    link.setNeckPitch(0.35f); Thread.sleep(320)
+                    neck(-0.15f)
+                    neck(0.35f)
                 }
-                link.setNeckPitch(0f); "Nodded."
+                neck(0f); "Nodded."
             }
             Motion.SHAKE_HEAD -> {
                 repeat(2) {
-                    link.turnPulse(-45, 4); Thread.sleep(300)
-                    link.turnPulse(45, 4); Thread.sleep(300)
+                    turn(-45, 4); hold(300)
+                    turn(45, 4); hold(300)
                 }
-                link.stopAll(); "Shook my head."
+                brake(); "Shook my head."
             }
             Motion.WIGGLE -> {
                 repeat(3) {
-                    link.turnPulse(55, 5); Thread.sleep(240)
-                    link.turnPulse(-55, 5); Thread.sleep(240)
+                    turn(55, 5); hold(240)
+                    turn(-55, 5); hold(240)
                 }
-                link.stopAll(); "Wiggled."
+                brake(); "Wiggled."
             }
             Motion.HEADLIGHT_ON -> {
                 lightMode = HeadlightPolicy.Mode.FORCE_ON
-                applyHeadlight(true, force = true)
+                send(BodyVerb.Light(true))
+                lightOn = true
                 "Headlight on."
             }
             Motion.HEADLIGHT_OFF -> {
                 lightMode = HeadlightPolicy.Mode.FORCE_OFF
-                applyHeadlight(false, force = true)
+                send(BodyVerb.Light(false))
+                lightOn = false
                 "Headlight off."
             }
+        } } catch (_: MotionInterrupted) {
+            "Robot movement interrupted: ${bodySafety.blockedReason ?: "another movement took priority."}"
+        } finally {
+            session.finish()
         }
     }
 
-    fun close() {
-        transport?.close()
-        transport = null
-        bleLink?.close()
-        bleLink = null
-        body = SimulatedBodyOutput()
-    }
+    private class MotionInterrupted : RuntimeException()
+
+    fun close() = useSimulated()
 
     companion object {
+        private fun monotonicMs(): Long = System.nanoTime() / 1_000_000L
+        /** Narrow immediate-stop path; ordinary words such as stopwatch cannot latch it. */
+        fun isBodyStopCommand(text: String): Boolean {
+            var command = text.lowercase(java.util.Locale.ROOT)
+                .replace(Regex("[^a-z0-9']+"), " ").trim()
+            val prefixes = listOf("can you please ", "could you please ", "would you please ",
+                "please ", "can you ", "could you ", "would you ")
+            prefixes.firstOrNull { command.startsWith(it) }?.let { command = command.removePrefix(it) }
+            repeat(2) {
+                command = command.removeSuffix(" please").removeSuffix(" right now").removeSuffix(" now")
+            }
+            return command in BODY_STOP_COMMANDS
+        }
+
+        private val BODY_STOP_COMMANDS = setOf(
+            "stop", "halt", "stay", "freeze", "whoa", "stop moving", "hold still",
+            "stop robot", "stop the robot", "stop your body", "stop the body",
+            "stop the base", "stop your motors", "stop the motors", "stop body motion",
+        )
+
         /** Minimum gap between two follow-turn pulses. */
         const val TURN_PERIOD_MS = 400L
 
@@ -662,6 +753,7 @@ class RobotManager {
 
         /** Ignore neck changes smaller than this (pitch, -1..1). */
         const val NECK_STEP = 0.10f
+        const val NECK_TARGET_TOLERANCE = 0.025f
 
         /**
          * Neck travel cap. The servo goes to ±1; the screen the user is trying

@@ -83,8 +83,15 @@ android {
         // versionCode 20 (1.3.16), so an install at 20 would not register as an
         // upgrade and preserving app data would be a coin flip. 21 > 20 makes it
         // a genuine in-place upgrade that keeps the Room database and models.
-        versionCode = 44
-        versionName = "1.3.40"
+        // 81 > 80 so the accessibility-event fix installs as a genuine in-place
+        // upgrade that keeps the Room database and selected models.
+        // 82 > 81 so the adaptive driving-GPS-cadence fix installs the same way.
+        // 83 > 82 so the idle MicButton glow fix installs the same way.
+        // 84 > 83 so the continuous-drive (nervous system) behaviour installs as
+        // a genuine in-place upgrade, and so it is distinguishable on-device from
+        // the 83 thermal build when testing.
+        versionCode = 84
+        versionName = "1.3.80"
 
         buildConfigField("boolean", "HAS_MWDAT_SDK", hasMwdat.toString())
         manifestPlaceholders["mwdat_application_id"] = mwdatApplicationId

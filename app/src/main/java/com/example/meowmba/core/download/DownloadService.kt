@@ -42,7 +42,7 @@ class DownloadService : Service() {
         @Volatile
         var pendingHfToken: String? = null
 
-        fun start(
+        @Synchronized fun start(
             context: Context,
             url: String,
             fileName: String,
@@ -50,7 +50,14 @@ class DownloadService : Service() {
             hfToken: String?,
             modelsDir: File
         ) {
+            if (mutableStatus.value.active) {
+                check(mutableStatus.value.fileName == fileName) { "Another model is downloading. Let it finish, then retry." }
+                return
+            }
             pendingHfToken = hfToken
+            // Publish synchronously; two taps before onStartCommand must not
+            // queue duplicate downloads or overwrite another request's token.
+            mutableStatus.value = Status(fileName, active = true)
             val intent = Intent(context, DownloadService::class.java).apply {
                 action = ACTION_DOWNLOAD
                 putExtra(EXTRA_URL, url)
@@ -58,7 +65,12 @@ class DownloadService : Service() {
                 putExtra(EXTRA_FILE_ID, fileId)
                 putExtra(EXTRA_MODELS_DIR, modelsDir.absolutePath)
             }
-            ContextCompat.startForegroundService(context, intent)
+            try { ContextCompat.startForegroundService(context, intent) }
+            catch (e: Exception) {
+                pendingHfToken = null
+                mutableStatus.value = Status(fileName, error = e.message ?: "Download could not start")
+                throw e
+            }
         }
     }
 
@@ -114,8 +126,11 @@ class DownloadService : Service() {
                     }
                 }
 
+                check(partFile.length() > 0) { "Download produced an empty file; please retry" }
                 if (dest.exists()) dest.delete()
                 check(partFile.renameTo(dest)) { "Could not finalize download" }
+                com.example.meowmba.core.security.SecureStorageManager(this@DownloadService)
+                    .savePreference("model_downloaded_at:$fileName", System.currentTimeMillis().toString())
                 mutableStatus.value = Status(fileName, received = dest.length(), total = dest.length())
 
                 withContext(Dispatchers.Main) {

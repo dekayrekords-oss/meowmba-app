@@ -23,14 +23,14 @@ import kotlinx.coroutines.withContext
 @Composable
 internal fun BusinessAgentsLauncher() {
     var open by remember { mutableStateOf(false) }
-    Button(onClick = { open = true }, modifier = Modifier.fillMaxWidth()) { Text("Create & run business agents") }
+    Button(onClick = { open = true }, modifier = Modifier.fillMaxWidth()) { Text("Business mode") }
     if (open) Dialog(onDismissRequest = { open = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         BusinessAgentsScreen { open = false }
     }
 }
 
 @Composable
-internal fun BusinessAgentsScreen(onClose: () -> Unit) {
+internal fun BusinessAgentsScreen(onOpenFiles: (() -> Unit)? = null, onOpenBugReports: (() -> Unit)? = null, onClose: () -> Unit) {
     val context = LocalContext.current
     val loaded = remember { runCatching { WorkflowRuntime.get(context) } }
     val runtime = loaded.getOrNull()
@@ -53,11 +53,13 @@ internal fun BusinessAgentsScreen(onClose: () -> Unit) {
     val notifyPermission = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
     ) { granted -> if (!granted) error = "Notifications are off. Check Job history here for approvals and results." }
-    fun change(action: () -> Unit) { scope.launch { try { withContext(Dispatchers.IO) { action() } } catch (e: Exception) { error = e.message } } }
+    fun change(action: () -> Unit) { scope.launch { try { withContext(Dispatchers.IO) { action() } }
+        catch (e: CancellationException) { throw e }
+        catch (e: Exception) { error = e.message } } }
     Surface(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Your agent team", style = MaterialTheme.typography.headlineSmall)
+                Text("Business mode", style = MaterialTheme.typography.headlineSmall)
                 TextButton(onClick = onClose) { Text("Close") }
             }
             Text("Agents share one execution slot to limit heat. Jobs and approvals are saved on this phone. Files are in Files → business.")
@@ -65,6 +67,17 @@ internal fun BusinessAgentsScreen(onClose: () -> Unit) {
             if (android.os.Build.VERSION.SDK_INT >= 33 && androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED)
                 TextButton(onClick = { notifyPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS) }) { Text("Enable job and approval notifications") }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            BusinessModeOverview(BusinessReadiness.from(snapshot),
+                onConfigureBrief = {
+                    // Opens the existing editor. It grants nothing and creates
+                    // no job or recurring schedule until the user saves it.
+                    editing = WorkflowStarterCatalog.all.first { it.id == "daily-brief" }.agent()
+                    create = true
+                },
+                onSchedulesPaused = { paused -> change {
+                    runtime.store.change { it.copy(schedulesPaused = paused) }
+                    runtime.ensureSchedules()
+                } }, onOpenFiles = onOpenFiles, onOpenBugReports = onOpenBugReports)
             Button(onClick = { editing = null; create = true }, modifier = Modifier.fillMaxWidth()) { Text("Create agent") }
             OutlinedButton(onClick = { starters = true }, modifier = Modifier.fillMaxWidth()) { Text("Browse 30 workflow starters") }
             Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(12.dp)) {

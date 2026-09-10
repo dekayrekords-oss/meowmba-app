@@ -302,7 +302,8 @@ class MainActivity : ComponentActivity() {
                 ) {
                     CompanionScreen(
                         viewModel = viewModel,
-                        secureStorage = secureStorage
+                        secureStorage = secureStorage,
+                        onboardingVisible = wizardVisible,
                     )
                     // Onboarding wizard: full-screen overlay above everything.
                     if (wizardVisible) {
@@ -376,7 +377,8 @@ class MainActivity : ComponentActivity() {
         // LISTENING: right after opening an app the state is still SPEAKING the
         // acknowledgement, and gating on LISTENING dropped the follow-up unheard.
         val awaitingReply = companionViewModel?.isConversationLive() == true
-        if (awaitingReply && micGranted) {
+        val micEnabled = com.example.meowmba.core.audio.MicrophonePrivacy.isEnabled(secureStorage)
+        if (awaitingReply && micGranted && micEnabled) {
             // Mid-conversation background hop: the in-app recognizer goes deaf the
             // moment we lose the foreground, so hand the turn to the mic-exempt
             // foreground service instead of letting the follow-up die unheard.
@@ -392,7 +394,7 @@ class MainActivity : ComponentActivity() {
             startFollowUpNow()
         } else {
             companionViewModel?.releaseWakeMicForBackground()
-            if (wakeOn && backgroundOn && micGranted) {
+            if (wakeOn && backgroundOn && micGranted && micEnabled) {
                 // See the follow-up branch: synchronous onPause start so the mic FGS
                 // is created while the activity is still eligible, not after it stops.
                 startWakeStandbyNow()
@@ -403,6 +405,7 @@ class MainActivity : ComponentActivity() {
     /** Follow-up hand-off: the app just went to the background mid-conversation. */
     private fun startFollowUpNow() {
         if (isFinishing || isChangingConfigurations) return
+        if (!com.example.meowmba.core.audio.MicrophonePrivacy.isEnabled(secureStorage)) return
         val micGranted = ContextCompat.checkSelfPermission(
             this, Manifest.permission.RECORD_AUDIO
         ) == PackageManager.PERMISSION_GRANTED
@@ -414,6 +417,7 @@ class MainActivity : ComponentActivity() {
     /** Background wake standby, started while the activity is still eligible. */
     private fun startWakeStandbyNow() {
         if (isFinishing || isChangingConfigurations) return
+        if (!com.example.meowmba.core.audio.MicrophonePrivacy.isEnabled(secureStorage)) return
         val wakeOn = secureStorage.getBooleanPreference("wake_word_enabled", false)
         val backgroundOn = secureStorage.getBooleanPreference(WakeWordService.PREF_KEY, false)
         val micGranted = ContextCompat.checkSelfPermission(

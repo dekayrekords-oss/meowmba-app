@@ -27,7 +27,7 @@ import com.example.meowmba.core.audio.AsrBackend
 import com.example.meowmba.core.audio.AsrBackendStatus
 
 /**
- * Hardware → Voice Recognition.
+ * LLM → Voice Recognition.
  *
  * Picks which speech-to-text engine hears the user. Styling deliberately
  * mirrors [ModelManagerScreen] (same dark palette, monospace title, card
@@ -112,6 +112,7 @@ fun VoiceModelScreen(
                 fontSize = 12.sp,
             )
 
+            state.voiceRecognitionStatus?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Spacer(Modifier.height(20.dp))
 
             statuses.forEach { status ->
@@ -167,9 +168,10 @@ fun VoiceModelScreen(
                         }
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            "Recorded speech is uploaded to OpenRouter and transcribed by " +
-                                "${state.asrCloudModel}. Wake-word detection stays on-device — " +
-                                "only the utterance after it is sent.",
+                            if (state.asrBackend == AsrBackend.OPENAI_CLOUD)
+                                "Recorded turns are sent to OpenAI's ${com.example.meowmba.core.audio.OpenAiAsrEngine.MODEL}. An OpenAI API key and paid API usage are required. In always-on mode, captured speech can be sent without a wake phrase."
+                            else "Recorded turns are sent to OpenRouter and transcribed by ${state.asrCloudModel}. " +
+                                "In always-on mode, captured speech can be sent without a wake phrase.",
                             // Deliberately NOT onSurfaceVariant: this card's container is a
                             // fixed dark amber, so a themed (near-black in Light mode) text
                             // colour measured ~1.9:1 against it — unreadable, on a privacy
@@ -280,7 +282,7 @@ private fun VoiceBackendCard(
                         )
                         Spacer(Modifier.width(3.dp))
                         Text(
-                            "IN USE",
+                            "SELECTED",
                             color = Color.Black,
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Bold,

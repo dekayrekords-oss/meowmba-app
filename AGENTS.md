@@ -61,6 +61,18 @@ lockouts bite after a few failed password logins — always use the key.
 
 ## Build & test
 
+### Existing Play release signing and upload path
+
+The absence of `keystore.properties` on the Mac does not mean the upload key is
+missing. The existing signing configuration is on SSH host `meow` at
+`/home/claude/meowmba-app/keystore.properties`. Use it through
+`-PreleaseSigningProperties=...` in an isolated release checkout on that host;
+do not print or copy its secrets into the repository. The matching upload
+certificate and successful build procedure are recorded in
+`docs/store/SIGNED_RELEASE_1.3.40.md` and `SIGNED_RELEASE_1.3.20.md`.
+The existing Play app is `com.meow.meowmba`, closed-testing Alpha. Inspect the
+signed-in Play Console browser before assuming that upload access is missing.
+
 ```bash
 ./gradlew :app:assembleDebug
 ./gradlew :app:testDebugUnitTest            # 320 unit tests, ~1 min
