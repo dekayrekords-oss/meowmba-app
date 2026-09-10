@@ -108,6 +108,12 @@ class NervousSystem(
         val social: Float = 6_000f,
         val curiosity: Float = 3_000f,
         val caution: Float = 2_500f,
+        /**
+         * How long an affective colouring lingers. Long enough to carry a spoken
+         * reply, short enough that the character is not left stuck feeling one
+         * thing for minutes.
+         */
+        val valence: Float = 12_000f,
     )
 
     /**
@@ -120,8 +126,17 @@ class NervousSystem(
     private var drives: DriveVector = initial.clamped()
     private var intentApproach: Float? = null
 
+    /**
+     * Affective colouring, -1..1, reported by [noteAffect].
+     *
+     * Deliberately NOT part of [setIntent]. The drive tick re-issues intent every
+     * 200 ms, so anything stored there is erased within one tick — valence would
+     * never survive long enough to be seen. As a decaying impulse it also behaves
+     * correctly: a proud reply lifts the character and then fades, rather than
+     * holding a feeling indefinitely.
+     */
     @Volatile
-    private var intentValence: Float = 0f
+    private var valenceImpulse: Float = 0f
 
     /** Current orientation, written by the reasoning layer. */
     var socialTarget: SocialTarget = SocialTarget.NONE
@@ -130,16 +145,16 @@ class NervousSystem(
     /**
      * The reasoning layer's half of the loop: high-level state, not animation.
      * [approach] null means "no instruction" and the drive relaxes to baseline.
+     *
+     * Carries no valence on purpose — see [valenceImpulse].
      */
     @Synchronized
     fun setIntent(
         target: SocialTarget,
         approach: Float? = null,
-        valenceBias: Float = 0f,
     ) {
         socialTarget = target
         intentApproach = approach?.takeIf { it.isFinite() }?.clamp01()
-        intentValence = valenceBias.takeIf { it.isFinite() }?.coerceIn(-1f, 1f) ?: 0f
     }
 
     /** Drop the LLM's instruction; the character falls back to its own baseline. */
@@ -147,7 +162,20 @@ class NervousSystem(
     fun clearIntent() {
         socialTarget = SocialTarget.NONE
         intentApproach = null
-        intentValence = 0f
+    }
+
+    /**
+     * The character's own reply carries an affective colouring — an apology, a
+     * success, a warm greeting — and so does being praised or comforted.
+     *
+     * Additive and clamped, so repeated warmth compounds a little without running
+     * away, and it relaxes back to neutral over [Tau.valence]. Non-finite input
+     * is ignored rather than poisoning the drives.
+     */
+    @Synchronized
+    fun noteAffect(valence: Float) {
+        if (!valence.isFinite()) return
+        valenceImpulse = (valenceImpulse + valence.coerceIn(-1f, 1f)).coerceIn(-1f, 1f)
     }
 
     /**
@@ -225,6 +253,8 @@ class NervousSystem(
         val drain = dt / energyDrainMs * arousal
         val recover = dt / energyRecoverMs * (1f - arousal)
         drives = drives.copy(energy = (drives.energy - drain + recover).clamp01())
+        // Feelings fade on their own; nothing has to remember to clear them.
+        valenceImpulse = relax(valenceImpulse, 0f, tau.valence, dt)
     }
 
     /** Current drives. Safe to read every frame; returns a snapshot. */
@@ -242,7 +272,7 @@ class NervousSystem(
     fun bias(): BehaviorBias {
         val d = drives
         val arousal = rawArousal(d)
-        val valence = ((d.social - 0.5f) * 1.2f + (0.5f - d.caution) * 0.8f + intentValence)
+        val valence = ((d.social - 0.5f) * 1.2f + (0.5f - d.caution) * 0.8f + valenceImpulse)
             .coerceIn(-1f, 1f)
         // Caution and low energy both quiet the character down.
         val vitality = ((1f - d.caution) * 0.6f + d.energy * 0.4f).coerceIn(0f, 1f)

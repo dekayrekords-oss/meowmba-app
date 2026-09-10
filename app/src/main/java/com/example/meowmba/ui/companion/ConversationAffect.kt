@@ -35,6 +35,34 @@ internal object ConversationAffect {
         }
     }
 
+    /**
+     * Affective colouring of an emotion, -1..1, for the continuous drive layer.
+     *
+     * Deliberately shallow. This biases a simulation, it does not set a mood:
+     * a failed operation should take the edge off rather than plunge the
+     * companion into gloom, and praise should warm it rather than force a grin.
+     * The `when` is exhaustive, so a new emotion fails to compile until it is
+     * given a valence here.
+     */
+    fun valence(emotion: CompanionEmotion): Float = when (emotion) {
+        CompanionEmotion.AFFECTIONATE -> 0.8f
+        CompanionEmotion.HAPPY -> 0.7f
+        CompanionEmotion.PROUD -> 0.6f
+        CompanionEmotion.PLAYFUL -> 0.5f
+        CompanionEmotion.RELIEVED -> 0.4f
+        CompanionEmotion.UNDERSTANDING -> 0.2f
+        CompanionEmotion.CURIOUS -> 0.15f
+        CompanionEmotion.DETERMINED -> 0.1f
+        CompanionEmotion.ATTENTIVE -> 0.05f
+        CompanionEmotion.IDLE -> 0f
+        CompanionEmotion.ALERT -> 0f
+        CompanionEmotion.SLEEPY -> -0.05f
+        CompanionEmotion.SURPRISED -> -0.1f
+        CompanionEmotion.CONFUSED -> -0.35f
+        CompanionEmotion.APOLOGETIC -> -0.5f
+        CompanionEmotion.CONCERNED -> -0.6f
+    }
+
     fun reply(text: String, current: CompanionEmotion): CompanionEmotion {
         val words = text.trim().lowercase(Locale.ROOT).take(240)
         return when {

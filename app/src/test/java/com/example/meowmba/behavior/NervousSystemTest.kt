@@ -75,7 +75,7 @@ class NervousSystemTest {
     @Test
     fun `reasoning layer intent sets target and eases approach toward it`() {
         val n = nervous(drives = DriveVector(approach = 0.1f))
-        n.setIntent(SocialTarget.USER, approach = 0.9f, valenceBias = 0.5f)
+        n.setIntent(SocialTarget.USER, approach = 0.9f)
         assertEquals(SocialTarget.USER, n.socialTarget)
         repeat(400) { n.tick(50) } // 20s ~ 5 time constants
         val approach = n.snapshot().approach
@@ -170,6 +170,68 @@ class NervousSystemTest {
         assertEquals(resting.followGain, NervousSystem.REST_BIAS.followGain, 1e-5f)
         assertEquals(resting.earGain, NervousSystem.REST_BIAS.earGain, 1e-5f)
         assertEquals(resting.blinkRateScale, NervousSystem.REST_BIAS.blinkRateScale, 1e-5f)
+    }
+
+    @Test
+    fun `being touched raises social and settles the character`() {
+        val before = nervous()
+        val n = nervous()
+        n.onStimulus(Stimulus.TOUCH, 1f)
+        assertTrue(n.snapshot().social > before.snapshot().social)
+        // A petted animal settles rather than springs around, so the small
+        // caution rise is the intended reading, not a bug.
+        assertTrue("touch should quiet the character", n.bias().glanceGain < before.bias().glanceGain)
+    }
+
+    @Test
+    fun `affect lifts valence and then fades back to neutral`() {
+        val n = nervous()
+        val neutral = n.bias().valence
+        n.noteAffect(0.9f)
+        val lifted = n.bias().valence
+        assertTrue("affect should lift valence, was $lifted", lifted > neutral + 0.5f)
+
+        repeat(600) { n.tick(200) } // 2 min, ~10 time constants
+        val settled = n.bias().valence
+        assertEquals("valence should settle back to neutral", neutral, settled, 0.02f)
+    }
+
+    @Test
+    fun `affect survives the drive tick re-issuing intent`() {
+        // Regression: valence used to be a field on setIntent, and the 5 Hz drive
+        // tick calls setIntent with no valence every 200 ms. A reply's affect was
+        // therefore erased within one tick and never reached the renderer at all.
+        val n = nervous()
+        n.noteAffect(0.8f)
+        val lifted = n.bias().valence
+        repeat(5) {
+            n.setIntent(SocialTarget.USER, approach = 0.65f) // exactly what the tick does
+            n.tick(200)
+        }
+        val survived = n.bias().valence
+        assertTrue(
+            "valence must outlive a re-issued intent: $lifted -> $survived",
+            survived > lifted - 0.15f,
+        )
+    }
+
+    @Test
+    fun `non finite affect is ignored`() {
+        val n = nervous()
+        val before = n.bias().valence
+        n.noteAffect(Float.NaN)
+        n.noteAffect(Float.POSITIVE_INFINITY)
+        n.noteAffect(Float.NEGATIVE_INFINITY)
+        assertEquals(before, n.bias().valence, 1e-5f)
+    }
+
+    @Test
+    fun `repeated warmth compounds but stays bounded`() {
+        val n = nervous()
+        repeat(20) { n.noteAffect(0.5f) }
+        val v = n.bias().valence
+        assertTrue("valence must stay in range, was $v", v in -1f..1f)
+        assertTrue("valence must stay finite, was $v", v.isFinite())
     }
 
     @Test

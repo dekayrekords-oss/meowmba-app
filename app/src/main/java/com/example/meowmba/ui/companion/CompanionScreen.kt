@@ -1182,6 +1182,7 @@ private fun AvatarMotionHost(
             motionLurch = motionLurch,
             motionObservedAtMs = motionSampleTime,
             nervousBias = viewModel::nervousBiasNow,
+            onPet = viewModel::onAvatarPetted,
             motionScreenLean = motionTilt,
             displayRotation = displayRotation,
             shakeCount = shakeCount,

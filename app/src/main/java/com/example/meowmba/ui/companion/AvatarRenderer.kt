@@ -162,6 +162,8 @@ fun AvatarRenderer(
     onSwipeDown: () -> Unit = {},
     onSwipeLeft: () -> Unit = {},
     onSwipeRight: () -> Unit = {},
+    /** Stroking the avatar. Reported outward so the drive layer feels it too. */
+    onPet: () -> Unit = {},
     paused: Boolean = false,
     faceGazeX: Float? = null,
     faceGazeY: Float? = null,
@@ -583,8 +585,13 @@ fun AvatarRenderer(
 
     // ── Petting: stroking the cat makes it purr ────────────────────────────
     var lastPetAt by remember { mutableLongStateOf(0L) }
+    val petCallback by rememberUpdatedState(onPet)
     LaunchedEffect(lastPetAt) {
         if (lastPetAt != 0L) {
+            // Reported outward, not just consumed by the local `petted` pose:
+            // being stroked is a real social event and should move the drives,
+            // not merely swap one authored pose for another.
+            petCallback()
             delay(2600)
             lastPetAt = 0L
         }

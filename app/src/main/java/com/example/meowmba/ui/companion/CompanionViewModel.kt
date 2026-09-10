@@ -810,12 +810,40 @@ class CompanionViewModel(
      * The reasoning layer's half: high-level state, never animation. Call with
      * the target the character should orient toward and how much it should want
      * to close distance; the drives handle easing and recovery on their own.
+     *
+     * Carries no valence. Valence is an impulse that decays (see [noteReplyAffect])
+     * because this intent is re-issued every tick and would erase it.
      */
     fun setNervousIntent(
         target: com.example.meowmba.core.behavior.SocialTarget,
         approach: Float? = null,
-        valenceBias: Float = 0f,
-    ) = nervousSystem.setIntent(target, approach, valenceBias)
+    ) = nervousSystem.setIntent(target, approach)
+
+    /**
+     * A spoken reply carries its own affect — an apology, a success, a warm
+     * greeting — and that is the one honest source of "how the companion feels
+     * right now". Routes it into the drive layer as a decaying valence impulse
+     * and returns the emotion for the UI, so both stay in step.
+     */
+    private fun noteReplyAffect(text: String): CompanionEmotion {
+        val emotion = ConversationAffect.reply(text, _uiState.value.emotion)
+        nervousSystem.noteAffect(ConversationAffect.valence(emotion))
+        return emotion
+    }
+
+    /**
+     * The user stroked the avatar. This is genuine contact, unlike the avatar zone
+     * clicks, which are a control mapping and say nothing about touch.
+     *
+     * Petting is affectionate rather than merely tactile, so it lifts valence too:
+     * the rendered pose already reads as contented, and the drives should agree.
+     * The small caution rise from TOUCH is right here — a petted cat settles
+     * rather than springs around.
+     */
+    fun onAvatarPetted() {
+        nervousSystem.onStimulus(com.example.meowmba.core.behavior.Stimulus.TOUCH)
+        nervousSystem.noteAffect(ConversationAffect.valence(CompanionEmotion.AFFECTIONATE))
+    }
 
     /** Phase G2: motor API. [RobotManager] swaps simulated <-> a live LOOI body. */
     private val robotManager = com.example.meowmba.core.robot.RobotManager()
@@ -6555,7 +6583,7 @@ class CompanionViewModel(
         if (handedOffToBackground) return
         prepareReplyExpression(text)
         _uiState.value = _uiState.value.copy(
-            captionText = text, emotion = ConversationAffect.reply(text, _uiState.value.emotion))
+            captionText = text, emotion = noteReplyAffect(text))
         if (_uiState.value.isMuted) {
             resetState()
             return
@@ -6577,7 +6605,7 @@ class CompanionViewModel(
             _uiState.value = _uiState.value.copy(
                 interactionState = InteractionState.SPEAKING,
                 captionText = "",
-                emotion = ConversationAffect.reply(text, _uiState.value.emotion),
+                emotion = noteReplyAffect(text),
             )
 
             val words = text.split(" ")
