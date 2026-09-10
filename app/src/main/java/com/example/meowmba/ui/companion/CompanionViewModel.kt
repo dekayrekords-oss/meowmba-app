@@ -12,6 +12,7 @@ import com.example.meowmba.core.agent.LocalModelOption
 import com.example.meowmba.core.agent.MediaPipeProvider
 import com.example.meowmba.core.agent.ModelCatalog
 import com.example.meowmba.core.download.DownloadService
+import com.example.meowmba.core.thermal.ThermalGovernor
 import com.example.meowmba.core.agent.ModelDownloader
 import com.example.meowmba.core.agent.ModelProvider
 import com.example.meowmba.core.agent.ModelResponse
@@ -715,6 +716,7 @@ class CompanionViewModel(
     private var wakeAckPending = false
     private var wakeAckListenJob: Job? = null
     /** True once the app has handed off to the background (set on pause, cleared on resume). */
+    @Volatile
     private var appInBackground = false
 
     /**
@@ -1226,11 +1228,20 @@ class CompanionViewModel(
         // No engine means nothing to recover. Headless/model-only instances
         // must not keep a real-time microphone watchdog (or a later Main dispatch) alive.
         if (speechService != null) viewModelScope.launch(Dispatchers.Default) {
+            var watchdogTicks = 0
             while (true) {
                 // 30s, skipped in background: the old 10s tick woke the CPU
                 // forever even with the screen off, and the background service
                 // owns the mic there anyway so a restart would be futile.
                 kotlinx.coroutines.delay(30_000)
+                watchdogTicks++
+                // Ranked cost of every instrumented loop. Perfetto could only
+                // name one of seven busy DefaultDispatch workers — the rest
+                // unwound to no symbol at all — so the loops report themselves.
+                com.example.meowmba.core.diagnostics.LoopTelemetry.dump()
+                // Stacks are bulky; every fifth tick is enough to catch a worker
+                // that nobody thought to instrument.
+                if (watchdogTicks % 5 == 0) com.example.meowmba.core.diagnostics.ThreadDump.log()
                 withContext(Dispatchers.Main.immediate) {
                     if (!appInBackground && !handedOffToBackground) {
                         val s = _uiState.value
@@ -1483,6 +1494,14 @@ class CompanionViewModel(
             while (true) {
                 delay(200)
                 val now = System.currentTimeMillis()
+                // Backgrounded: nothing is on screen to animate and nothing can
+                // observe the drives, so do not spend a scheduler thread on it.
+                // (Advance [last] first — on resume the drives must ease from
+                // now, not integrate the whole time we were away.)
+                if (appInBackground) {
+                    last = now
+                    continue
+                }
                 // The reasoning layer's half, sampled rather than threaded
                 // through the ~27 sites that set interactionState: a single
                 // derivation here is equivalent, and because the drives *ease*
@@ -1498,7 +1517,9 @@ class CompanionViewModel(
                         )
                     else -> nervousSystem.clearIntent()
                 }
-                nervousSystem.tick(now - last)
+                com.example.meowmba.core.diagnostics.LoopTelemetry.measure("drives.tick") {
+                    nervousSystem.tick(now - last)
+                }
                 last = now
             }
         }
@@ -4209,6 +4230,10 @@ class CompanionViewModel(
         val ctx = secureStorage?.context ?: return
         ttsManager?.stop()
         com.example.meowmba.core.audio.LocalVoices.useSystem(ctx)
+        // Switching to system TTS means the local graph is inactive; free its
+        // 300 MB. Safe against an in-flight synthesis: generate() and unload()
+        // are both @Synchronized on the same monitor.
+        com.example.meowmba.core.audio.LocalVoiceRuntime.unload()
         refreshLocalVoices()
     }
 
@@ -4216,6 +4241,14 @@ class CompanionViewModel(
 
     private fun startAlwaysOnListening() {
         if (alwaysOnStartJob?.isActive == true) return
+        // The 30s wedge watchdog calls this whenever listening is not active.
+        // Without this guard a hot device would be reported as "wedged" and
+        // retried every 30s while the governor is deliberately holding the mic
+        // down. Refusing here is free; SherpaAsrEngine.start() also refuses.
+        if (!ThermalGovernor.allowAlwaysOnMic()) {
+            fuLog("always-on mic held down by thermal status ${ThermalGovernor.currentStatus()}")
+            return
+        }
         val request = ++alwaysOnStartGeneration
         val job = viewModelScope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY) {
             try {
@@ -4588,6 +4621,10 @@ class CompanionViewModel(
         openAiAsrEngine?.stopListening()
         speechService?.stopListening()
         sherpaAsrEngine?.stop()
+        // A second SherpaAsrEngine with its own capture loop. Leaving it out
+        // meant an engine switch stopped the old engine's callbacks but not its
+        // decoder, so two capture loops held the mic and decoded at once.
+        glassesAsrEngine?.stop()
     }
 
     /** Opens the always-on mic once the turn is idle (never on top of a live turn). */

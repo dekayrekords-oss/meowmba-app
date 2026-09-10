@@ -12,16 +12,11 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ThermalAudioTest {
-    @Test fun `digital silence gate preserves quiet input and endpoint tail`() {
-        val gate = DigitalSilenceGate()
-        assertFalse(gate.shouldDecode(ShortArray(1600), 1600))
-        assertFalse(gate.shouldDecode(shortArrayOf(0, 0, 5), 2))
-        assertTrue(gate.shouldDecode(shortArrayOf(0, 1), 2))
-        repeat(32) { assertTrue(gate.shouldDecode(ShortArray(1600), 1600)) }
-        gate.reset()
-        assertFalse(gate.shouldDecode(ShortArray(1600), 1600))
-        assertTrue(gate.shouldDecode(shortArrayOf(-1), 1))
-    }
+    // The digital-zero gate this file used to test was replaced by
+    // SpeechEnergyGate, which has its own test file. Its old "stays open on
+    // silence forever" assertion was the sustained-CPU bug, not a behaviour
+    // worth keeping: the endpoint tail is preserved by a 1.8 s hangover that
+    // still outlasts sherpa's 1.6 s endpoint rule.
 
     @Test fun `annotation only finals cannot trigger chat or restore streaming hallucination`() {
         for (noise in listOf("(buzzing)", "[Music]", "[BLANK_AUDIO]", "(silence)", "(Breathing).", "[music] (applause)")) {

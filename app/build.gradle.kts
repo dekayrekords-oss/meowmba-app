@@ -90,8 +90,11 @@ android {
         // 84 > 83 so the continuous-drive (nervous system) behaviour installs as
         // a genuine in-place upgrade, and so it is distinguishable on-device from
         // the 83 thermal build when testing.
-        versionCode = 84
-        versionName = "1.3.80"
+        // 85 > 84 so the affect/valence + pet wiring installs as a genuine
+        // in-place upgrade, and so it is distinguishable on-device from 84 (which
+        // has the drives but not the reply affect or the touch sense).
+        versionCode = 85
+        versionName = "1.3.81"
 
         buildConfigField("boolean", "HAS_MWDAT_SDK", hasMwdat.toString())
         manifestPlaceholders["mwdat_application_id"] = mwdatApplicationId

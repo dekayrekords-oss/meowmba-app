@@ -16,6 +16,8 @@ import com.k2fsa.sherpa.onnx.OnlineRecognizerConfig
 import com.k2fsa.sherpa.onnx.OnlineStream
 import com.k2fsa.sherpa.onnx.OnlineTransducerModelConfig
 import com.k2fsa.sherpa.onnx.getFeatureConfig
+import com.example.meowmba.core.diagnostics.LoopTelemetry
+import com.example.meowmba.core.thermal.ThermalGovernor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
@@ -74,6 +76,9 @@ class SherpaAsrEngine(
 
     private val _isListening = MutableStateFlow(false)
     override val isListening = _isListening.asStateFlow()
+
+    /** True while the thermal governor is refusing to run the microphone. */
+    val thermalSuspended: Boolean get() = !ThermalGovernor.allowAlwaysOnMic()
 
     private val _partialResults = MutableStateFlow("")
     override val partialResults = _partialResults.asStateFlow()
@@ -164,8 +169,23 @@ class SherpaAsrEngine(
         }
     }
 
+    /**
+     * Only one capture loop may exist. The test and the launch have to be a
+     * single step: two callers racing through a volatile read both see "not
+     * running", both start a loop, and the mic ends up with two recognizers
+     * decoding it — which is how seven DefaultDispatch workers ended up in
+     * `captureLoop` at once.
+     */
+    @Synchronized
     private fun start() {
         if (running || captureJob?.isActive == true) return
+        if (!ThermalGovernor.allowAlwaysOnMic()) {
+            // No onError on purpose. An error callback invites the caller to
+            // retry, and retrying a device at THERMAL_STATUS_SEVERE is exactly
+            // the restart loop that turns "warm" into "too hot to hold".
+            Log.w(TAG, "ASR start refused: thermal status ${ThermalGovernor.currentStatus()}")
+            return
+        }
         running = true
         finishRequested = false
         _isListening.value = true
@@ -336,7 +356,12 @@ class SherpaAsrEngine(
             Log.i(TAG, "always-on ASR listening")
             val pcm = ShortArray(CHUNK_SAMPLES)
             val fullFrame = FloatArray(CHUNK_SAMPLES * if (scoRate8k) 2 else 1)
-            val signalGate = DigitalSilenceGate()
+            val signalGate = SpeechEnergyGate(SAMPLE_RATE).also {
+                it.setThresholdScale(ThermalGovernor.asrGateScale())
+            }
+            val preRoll = PcmRingBuffer(PRE_ROLL_SAMPLES)
+            var gateOpen = false
+            var thermalCheck = 0
             val preview = StreamingTranscriptPreview()
             var decodeNanos = 0L
             var hadHypothesis = false
@@ -352,26 +377,45 @@ class SherpaAsrEngine(
                     break
                 }
                 if (read == 0) continue
-                if (!signalGate.shouldDecode(pcm, read) && !finishRequested) continue
+                LoopTelemetry.hit("asr.chunk")
+                if (++thermalCheck >= THERMAL_CHECK_CHUNKS) {
+                    thermalCheck = 0
+                    if (!ThermalGovernor.allowAlwaysOnMic()) {
+                        Log.w(TAG, "thermal status ${ThermalGovernor.currentStatus()}: releasing microphone")
+                        break
+                    }
+                    // Only between utterances. Raising the floor under somebody
+                    // who is already talking would clip the rest of their turn.
+                    if (!gateOpen) signalGate.setThresholdScale(ThermalGovernor.asrGateScale())
+                }
+                val open = signalGate.shouldDecode(pcm, read) || finishRequested
+                if (!open) {
+                    // Only quiet is buffered: it is what precedes the next
+                    // rising edge, the same lead-in trick VadGate uses in front
+                    // of the keyword spotter. Without the replay below an energy
+                    // gate silently eats the first word of every utterance.
+                    preRoll.append(pcm, read, repeatEach = 1)
+                    gateOpen = false
+                    LoopTelemetry.hit("asr.gate_skip")
+                    continue
+                }
+                LoopTelemetry.hit("asr.decoding_chunk")
+                if (!gateOpen) {
+                    gateOpen = true
+                    val lead = preRoll.snapshot()
+                    if (lead.isNotEmpty()) {
+                        uttered.append(lead, lead.size, repeatEach = if (scoRate8k) 2 else 1)
+                        s.acceptWaveform(buildAsrFrame(lead, lead.size, scoRate8k, fullFrame), SAMPLE_RATE)
+                    }
+                    preRoll.clear()
+                }
                 // Store at the rate advertised to Whisper and audio consumers.
                 // Previously 8k SCO was incorrectly sent to Whisper as 16k.
                 uttered.append(pcm, read, repeatEach = if (scoRate8k) 2 else 1)
 
                 // Sherpa wants 16kHz. Repeat samples from an 8kHz SCO link 2x
                 // to preserve timebase; this does not add missing bandwidth.
-                val frame: FloatArray
-                if (scoRate8k) {
-                    frame = if (read == pcm.size) fullFrame else FloatArray(read * 2)
-                    for (i in 0 until read) {
-                        val v = pcm[i] / PCM16_FULL_SCALE
-                        frame[2 * i] = v
-                        frame[2 * i + 1] = v
-                    }
-                } else {
-                    frame = if (read == pcm.size) fullFrame else FloatArray(read)
-                    for (i in 0 until read) frame[i] = pcm[i] / PCM16_FULL_SCALE
-                }
-                s.acceptWaveform(frame, SAMPLE_RATE)
+                s.acceptWaveform(buildAsrFrame(pcm, read, scoRate8k, fullFrame), SAMPLE_RATE)
 
                 val forcedEndpoint = finishRequested
                 if (forcedEndpoint) {
@@ -382,7 +426,9 @@ class SherpaAsrEngine(
                 }
 
                 val decodeStarted = System.nanoTime()
-                while (rec.isReady(s)) rec.decode(s)
+                LoopTelemetry.measure("asr.decode") {
+                    while (rec.isReady(s)) rec.decode(s)
+                }
                 currentCoroutineContext().ensureActive()
                 decodeNanos += System.nanoTime() - decodeStarted
                 val text = SpokenText.polish(rec.getResult(s).text)
@@ -395,6 +441,8 @@ class SherpaAsrEngine(
                 if (forcedEndpoint || rec.isEndpoint(s)) {
                     rec.reset(s)
                     signalGate.reset()
+                    preRoll.clear()
+                    gateOpen = false
                     preview.reset()
                     if (text.isNotBlank() || forcedEndpoint || (forwardEndpointAudio && hadHypothesis)) {
                         val pcm = uttered.snapshot()
@@ -504,6 +552,34 @@ class SherpaAsrEngine(
         }
     }
 
+    /**
+     * PCM16 to a normalised float frame for sherpa, upsampling 2x when the mic
+     * came up on an 8kHz SCO link.
+     *
+     * [reuse] is the per-loop scratch buffer; it is only handed back when the
+     * frame is exactly one full chunk, which is the common case, so the steady
+     * state allocates nothing.
+     */
+    private fun buildAsrFrame(
+        src: ShortArray,
+        count: Int,
+        scoRate8k: Boolean,
+        reuse: FloatArray,
+    ): FloatArray {
+        val want = count * if (scoRate8k) 2 else 1
+        val frame = if (want == reuse.size) reuse else FloatArray(want)
+        if (scoRate8k) {
+            for (i in 0 until count) {
+                val v = src[i] / PCM16_FULL_SCALE
+                frame[2 * i] = v
+                frame[2 * i + 1] = v
+            }
+        } else {
+            for (i in 0 until count) frame[i] = src[i] / PCM16_FULL_SCALE
+        }
+        return frame
+    }
+
     private fun buildRecognizer(): OnlineRecognizer {
         val store = VoiceModelStore(context)
         val pack = store.resolvedAsr()
@@ -551,5 +627,12 @@ class SherpaAsrEngine(
         private const val ENCODING = AudioFormat.ENCODING_PCM_16BIT
         private const val CHUNK_SAMPLES = SAMPLE_RATE / 10
         private const val PCM16_FULL_SCALE = 32_768.0f
+        /**
+         * Raw audio kept so a rising gate edge can replay what it cost to detect.
+         * 500 ms comfortably covers the onset an energy threshold sleeps through.
+         */
+        private const val PRE_ROLL_SAMPLES = SAMPLE_RATE / 2
+        /** Thermal is re-read once a second, not once per 100 ms chunk. */
+        private const val THERMAL_CHECK_CHUNKS = 10
     }
 }

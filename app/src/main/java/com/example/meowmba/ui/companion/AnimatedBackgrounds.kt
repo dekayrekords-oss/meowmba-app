@@ -32,7 +32,9 @@ import kotlin.random.Random
  */
 @Composable
 fun AnimatedBackground(animation: BackgroundAnimation, modifier: Modifier = Modifier, paused: Boolean = false) {
-    val sceneClock = rememberSceneClock(paused)
+    // Ambient particles and washes run on multi-second cycles; 15 FPS is
+    // indistinguishable from 31 and costs less than half the redraws.
+    val sceneClock = rememberSceneClock(paused, interacting = false)
     // Read inside Canvas, never in composition. Both layers share one clock.
     val clock by remember(sceneClock) { derivedStateOf { sceneClock.phase(BG_CYCLE_MS) } }
     val slow by remember(sceneClock) { derivedStateOf { sceneClock.phase(BG_SLOW_MS) } }

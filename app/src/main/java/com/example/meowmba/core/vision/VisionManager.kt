@@ -20,6 +20,7 @@ import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
+import com.example.meowmba.core.thermal.ThermalGovernor
 import com.google.mlkit.vision.common.InputImage
 import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.vision.face.Face
@@ -335,7 +336,6 @@ class VisionManager(
     private var displayListener: DisplayManager.DisplayListener? = null
     private val frameInFlight = AtomicBoolean(false)
     private val workBudget = VisionWorkBudget()
-    private val powerManager = context.getSystemService(android.os.PowerManager::class.java)
     @Volatile private var thermalPaused = false
     private var thermalStatus = 0
     private var lastThermalReadMs = 0L
@@ -347,6 +347,13 @@ class VisionManager(
     private val attentionTarget = StableAttentionTarget()
     private var freshnessWatchdog: ScheduledFuture<*>? = null
     private var lastDetectionAtElapsedMs = -1L
+    /**
+     * Set once by [close]. Every mutator checks it: a manager whose executor has
+     * been shut down must refuse to start camera work again rather than throwing
+     * RejectedExecutionException out of a lifecycle callback.
+     */
+    @Volatile
+    private var closed = false
 
     // Smoothed gaze (EMA) + short hold so lost-face frames do not null the stream.
     private var smoothOffX = 0f
@@ -437,6 +444,7 @@ class VisionManager(
     /** Turn body-follow mode on/off. Safe to call while tracking is live. */
     @Synchronized
     fun setFollowOnly(on: Boolean) {
+        if (closed) return
         if (followOnly == on) return
         followOnly = on
         if (!_faceTrackingEnabled) return
@@ -455,6 +463,7 @@ class VisionManager(
      */
     @Synchronized
     fun setFaceTrackingEnabled(enabled: Boolean): Boolean {
+        if (closed) return false
         android.util.Log.i("VM", "setFaceTrackingEnabled($enabled) cur=$_faceTrackingEnabled perm=${hasPermission()}")
         if (enabled && !hasPermission()) {
             if (_faceTrackingEnabled) setFaceTrackingEnabled(false)
@@ -533,6 +542,44 @@ class VisionManager(
         return _faceTrackingEnabled
     }
 
+    /**
+     * Release everything this manager owns. Call from the host Activity's
+     * teardown — without it the `meow-face-track` executor thread and its 10 Hz
+     * freshness watchdog outlive the Activity: nothing shut the executor down,
+     * and the watchdog is only cancelled when the user switches tracking off, so
+     * a recreate with tracking still on left a live thread plus a scheduled task
+     * behind, one set per recreate.
+     *
+     * Idempotent. After this call the instance is dead: [setFaceTrackingEnabled],
+     * [setFollowOnly], [setUseFrontCamera], [setPreviewSurface] and the internal
+     * bind all refuse to restart camera work.
+     */
+    @Synchronized
+    fun close() {
+        if (closed) return
+        closed = true
+        _faceTrackingEnabled = false
+        trackingSession.stop()
+        freshnessWatchdog?.cancel(true)
+        freshnessWatchdog = null
+        imageAnalysis?.clearAnalyzer()
+        imageAnalysis = null
+        faceDetector?.close()
+        faceDetector = null
+        poseDetector?.close()
+        poseDetector = null
+        stopOrientationTracking()
+        unregisterDisplayListener()
+        // Last, and never awaited: unbind() clears attention, drops the capture
+        // use case and queues unbindAll on the main thread. A lifecycle callback
+        // must not block on the camera provider.
+        unbind()
+        preview?.setSurfaceProvider(null)
+        preview = null
+        analysisExecutor.shutdownNow()
+        android.util.Log.i("VM", "closed: camera unbound, analysis executor shut down")
+    }
+
     /** Called under the manager lock: privacy-off and watchdog expiry cannot race a callback. */
     private fun clearAttention() {
         recentWristX.clear()
@@ -570,7 +617,7 @@ class VisionManager(
         // the automatic camera while hot; this existing watchdog also resumes
         // it after cooling without changing the user's camera preference.
         if (nowMs - lastThermalReadMs >= 1_000L) {
-            thermalStatus = powerManager?.currentThermalStatus ?: 0
+            thermalStatus = ThermalGovernor.currentStatus()
             lastThermalReadMs = nowMs
         }
         val pause = thermalStatus >= android.os.PowerManager.THERMAL_STATUS_MODERATE
@@ -713,7 +760,7 @@ class VisionManager(
         // logs showed ~30 face inferences/sec even with no face and a hot phone.
         val nowMs = android.os.SystemClock.elapsedRealtime()
         if (nowMs - lastThermalReadMs >= 1000L) {
-            thermalStatus = powerManager?.currentThermalStatus ?: 0
+            thermalStatus = ThermalGovernor.currentStatus()
             lastThermalReadMs = nowMs
         }
         val faceLockHot = lastRealFaceAtMs != 0L &&
@@ -1205,12 +1252,15 @@ class VisionManager(
      * bind via the CameraX provider listener.
      */
     private fun bindPreviewAsync() {
+        // Also the guard for the thermal-pause resume path in expireAttention():
+        // once closed, nothing may rebind a camera, even from a stale watchdog.
+        if (closed) return
         val future = ProcessCameraProvider.getInstance(context)
         future.addListener(
             {
                 try {
                     val provider = future.get()
-                    thermalStatus = powerManager?.currentThermalStatus ?: 0
+                    thermalStatus = ThermalGovernor.currentStatus()
                     thermalPaused = thermalStatus >= android.os.PowerManager.THERMAL_STATUS_MODERATE
                     provider.unbindAll()
                     if (thermalPaused) { clearAttention(); return@addListener }
@@ -1232,7 +1282,7 @@ class VisionManager(
     }
 
     private suspend fun bindIfNeeded(): ImageCapture {
-        if ((powerManager?.currentThermalStatus ?: 0) >= android.os.PowerManager.THERMAL_STATUS_MODERATE) {
+        if (ThermalGovernor.currentStatus() >= android.os.PowerManager.THERMAL_STATUS_MODERATE) {
             throw ImageCaptureException(ImageCapture.ERROR_UNKNOWN, "Camera paused while the phone cools", null)
         }
         imageCapture?.let { return it }

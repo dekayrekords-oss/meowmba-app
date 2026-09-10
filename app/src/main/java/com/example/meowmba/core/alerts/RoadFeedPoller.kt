@@ -3,6 +3,7 @@ package com.example.meowmba.core.alerts
 import android.content.Context
 import android.util.Log
 import com.example.meowmba.core.nav.CurrentLocation
+import com.example.meowmba.core.thermal.ThermalGovernor
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
@@ -22,6 +23,14 @@ object RoadFeedPoller {
     const val WAZE_REFRESH_MS = 45_000L
     const val SEEN_TTL_MS = 8 * 60_000L
     const val OSM_TTL_MS = 5 * 60_000L
+
+    /**
+     * Each tick costs a location fix plus up to two network round trips. Five
+     * seconds is right for a cool device in a car; on a hot one it is wasted
+     * heat, so the governor stretches it. Stays 1x (and therefore keeps every
+     * existing timing assertion in RoadFeedPollerTest true) while cool.
+     */
+    internal fun pollIntervalMs(): Long = POLL_MS * ThermalGovernor.pollIntervalScale()
 
     suspend fun run(
         context: Context,
@@ -61,7 +70,7 @@ object RoadFeedPoller {
 
         while (isActive) {
             if (!enabled()) {
-                delay(POLL_MS)
+                delay(pollIntervalMs())
                 continue
             }
             try {
@@ -72,7 +81,7 @@ object RoadFeedPoller {
                 if (!enabled()) continue
                 if (fix == null || !RoadReportPolicy.usableFix(fix, nowMs())) {
                     status("Road reports paused: waiting for a fresh, precise location. Check location permission and GPS.")
-                    delay(POLL_MS)
+                    delay(pollIntervalMs())
                     continue
                 }
                 val now = nowMs()
@@ -117,7 +126,7 @@ object RoadFeedPoller {
                 Log.w("RoadFeed", "tick failed: ${e.javaClass.simpleName}")
                 status("Road reports unavailable: ${e.javaClass.simpleName}.")
             }
-            delay(POLL_MS)
+            delay(pollIntervalMs())
         }
     }
 

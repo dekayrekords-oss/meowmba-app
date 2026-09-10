@@ -77,7 +77,8 @@ fun WeatherScene(
     moonPhase: Float = rememberMoonPhase(),
     paused: Boolean = false,
 ) {
-    val sceneClock = rememberSceneClock(paused)
+    // Weather is ambient drift on multi-second cycles: 15 FPS, not 31.
+    val sceneClock = rememberSceneClock(paused, interacting = false)
     val clock by remember(sceneClock) { derivedStateOf { sceneClock.phase(CYCLE_MS) } }
     // Independent slower clock for gusts and lightning, so neither locks to the particle
     // period and repeats visibly.

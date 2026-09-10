@@ -14,6 +14,29 @@ import java.util.concurrent.atomic.AtomicInteger
 object LocalVoiceRuntime {
     val lastError = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
     private var model: OfflineTts? = null
+
+    /** True once the Kokoro graph is resident. Diagnostics and tests only. */
+    @Synchronized
+    fun isLoaded(): Boolean = model != null
+
+    /**
+     * Frees the resident Kokoro graph (300 MB+ of ONNX weights) and its native
+     * session. Loading is lazy, so the next [generate] simply pays for it again.
+     *
+     * Deliberately NOT wired to backgrounding, idling or thermal tier. This app
+     * is the home screen, so pause/resume happens every time the user opens
+     * anything: unloading on each pause and reloading on each resume would
+     * re-parse a 300 MB graph over and over, and that load spike is far more
+     * heat than leaving the model resident. It is wired only to the explicit
+     * "use system voice" switch, where the user has said they are done with it.
+     */
+    @Synchronized
+    fun unload() {
+        val tts = model ?: return
+        model = null
+        runCatching { tts.release() }
+    }
+
     @Synchronized fun generate(context: Context, text: String, voice: LocalVoice,
         speed: Float = 1f, callback: ((FloatArray) -> Int)? = null): GeneratedAudio {
         check(LocalVoicePack(context).ready()) { "Download the local voice pack first" }

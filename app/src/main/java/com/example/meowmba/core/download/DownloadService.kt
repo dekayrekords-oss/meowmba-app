@@ -165,9 +165,58 @@ class DownloadService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
-        job?.cancel()
-        scope.cancel()
+        // A cleanup failure must not kill the process.
+        //
+        // Cancelling a Ktor request while its response body is still open makes
+        // the engine close the underlying stream from a coroutine completion
+        // handler (io.ktor.client.engine.UtilsKt.attachToUserJob). The Ktor
+        // Android engine is HttpURLConnection-backed, so that close lands in the
+        // platform's com.android.okhttp, which on some Samsung builds throws
+        // IllegalStateException("Unbalanced enter/exit") from an R8-outlined
+        // synthetic (com.android.okhttp.Cache$2).
+        //
+        // kotlinx.coroutines wraps anything a completion handler throws in
+        // CompletionHandlerException and rethrows it on the thread that called
+        // cancel(). This runs on main, so an uncaught handler throwable escapes
+        // to the Looper and kills the app — observed ~3 min apart on an
+        // AOT-compiled build (pids 525 and 2089, 2026-09-10).
+        //
+        // Only that one platform failure is swallowed; anything else still
+        // propagates, so this cannot mask a real bug in our own code. The root
+        // cause is in platform okhttp, not here; the real fix is moving the
+        // model download off the HttpURLConnection-backed Ktor engine.
+        try {
+            job?.cancel()
+            scope.cancel()
+        } catch (t: Throwable) {
+            if (isPlatformOkHttpCleanupFailure(t)) {
+                android.util.Log.w(
+                    "DownloadService",
+                    "Swallowed platform okhttp cleanup failure while cancelling a download",
+                    t,
+                )
+            } else {
+                throw t
+            }
+        }
         super.onDestroy()
+    }
+
+    /**
+     * True when [t], or anything it wraps, is the platform okhttp
+     * `Unbalanced enter/exit` failure. Matched on the message rather than the
+     * wrapping type because kotlinx.coroutines' `CompletionHandlerException` is
+     * an internal API we must not reference.
+     */
+    private fun isPlatformOkHttpCleanupFailure(t: Throwable): Boolean {
+        var cursor: Throwable? = t
+        var hops = 0
+        while (cursor != null && hops++ < 16) {
+            if (cursor is IllegalStateException && cursor.message == "Unbalanced enter/exit") return true
+            val next = cursor.cause
+            cursor = if (next === cursor) null else next
+        }
+        return false
     }
 
     private fun createChannel() {

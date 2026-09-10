@@ -285,11 +285,15 @@ fun AvatarRenderer(
         val cadence = AvatarFrameCadence()
         while (true) {
             withFrameNanos { now ->
-                if (!cadence.admit(now)) return@withFrameNanos
-                timings?.framePresented(now)
                 val clip = latestAnimation
                 val expression = latestComposed
-                val id = if (clip != null || expression != null) latestPerformanceSequence else null
+                // Only a performed clip or a live expression needs ~31 FPS.
+                // Idle breathing and swaying are seconds-long cycles that look
+                // the same at 15, so they no longer pay for the extra redraws.
+                val performing = clip != null || expression != null
+                if (!cadence.admit(now, performing)) return@withFrameNanos
+                timings?.framePresented(now)
+                val id = if (performing) latestPerformanceSequence else null
                 val tick = frameClock.step(now, id)
                 clockSec = tick.seconds
                 animTHolder[0] = tick.performanceMillis

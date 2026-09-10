@@ -504,6 +504,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        // VisionManager owns a single-thread executor plus a 10 Hz watchdog that
+        // nothing cancelled while tracking was on, so without this every Activity
+        // recreate leaks a live thread and a scheduled wakeup. CameraX is unbound
+        // asynchronously; we never block here on the provider.
+        if (::visionManager.isInitialized) visionManager.close()
         speechService.destroy()
         ttsManager.shutdown()
     }

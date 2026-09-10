@@ -19,17 +19,22 @@ internal class SceneClock {
     fun phase(periodMs: Int): Float = ((elapsedMs % periodMs) / periodMs).toFloat()
 }
 
+/**
+ * [interacting] = a clip is performing or a face is being tracked. Ambient
+ * scenes (weather, backgrounds) pass false: their cycles are seconds long and
+ * 15 FPS is indistinguishable, so running them at 31 was pure heat.
+ */
 @Composable
-internal fun rememberSceneClock(paused: Boolean): SceneClock {
+internal fun rememberSceneClock(paused: Boolean, interacting: Boolean = true): SceneClock {
     val clock = remember { SceneClock() }
     val active = rememberAvatarWorkAllowed() && !paused
-    LaunchedEffect(active) {
+    LaunchedEffect(active, interacting) {
         if (!active) return@LaunchedEffect
         var previous = 0L
         val cadence = AvatarFrameCadence()
         while (true) {
             withFrameNanos { now ->
-                if (!cadence.admit(now)) return@withFrameNanos
+                if (!cadence.admit(now, interacting)) return@withFrameNanos
                 if (previous != 0L) clock.advance(now - previous)
                 previous = now
             }
