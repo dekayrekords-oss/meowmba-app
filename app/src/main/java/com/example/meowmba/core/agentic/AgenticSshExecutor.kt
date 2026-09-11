@@ -1,5 +1,7 @@
 package com.example.meowmba.core.agentic
 
+import com.jcraft.jsch.ChannelExec
+import com.jcraft.jsch.JSch
 import java.io.File
 import java.util.concurrent.TimeUnit
 
@@ -10,13 +12,13 @@ import java.util.concurrent.TimeUnit
  * 1. Returns [SshExecResult.NotEnabled] when the feature flag is off.
  * 2. Resolves credentials via [CredentialResolver] (clear error if missing).
  * 3. Verifies / pins [ConnectionProfile.hostKeyFingerprint] (see host-key policy).
- * 4. Attempts `ssh` / `sshpass` via [ProcessBuilder] only if a client binary
- *    is present (e.g. Termux PATH / rooted device).
- * 5. Otherwise returns [SshExecResult.Unsupported] documenting the Termux /
- *    runtime-worker requirement.
+ * 4. Prefers Termux / system `ssh` + `sshpass` via [ProcessBuilder] when executable.
+ * 5. Optionally falls back to in-process JSch when ProcessBuilder OpenSSH is missing.
+ * 6. Otherwise returns [SshExecResult.Unsupported] with [AgenticSshCapability] guidance
+ *    (Termux RUN_COMMAND / HTTPS_RUNTIME worker).
  *
- * Existing chat-agent [com.example.meowmba.core.agent.tools.SshTool] (JSch)
- * remains separate; this path is the agentic tool registry entry point.
+ * Chat-agent SshTool remains separate (SshHostRegistry); this path uses ConnectionProfile
+ * credentialRef only.
  */
 sealed class SshExecResult {
     data class Ok(
@@ -46,6 +48,7 @@ class DefaultAgenticSshExecutor(
     private val enabled: () -> Boolean,
     private val profiles: ConnectionProfileStore,
     private val credentials: CredentialResolver,
+    private val allowJschFallback: Boolean = true,
 ) : AgenticSshExecutor {
 
     override fun exec(profileId: String, argv: List<String>, timeoutMs: Long): SshExecResult {
@@ -81,13 +84,31 @@ class DefaultAgenticSshExecutor(
         val effectiveProfile = hostKey as ConnectionProfile
 
         val sshBinary = findSshBinary()
-            ?: return SshExecResult.Unsupported(
-                "OpenSSH client not available in the APK. " +
-                    "Install ssh on-device (Termux) or run via an HTTPS_RUNTIME worker. " +
-                    "ProcessBuilder path requires a local ssh binary.",
-            )
+        val sshpass = findSshpassBinary()
+        val sshOk = sshBinary != null && isUsableBinary(sshBinary)
+        val passOk = sshpass != null && isUsableBinary(sshpass)
 
-        return runProcessBuilder(sshBinary, effectiveProfile, secret, argv, timeoutMs.coerceAtLeast(1_000L))
+        if (sshOk && passOk) {
+            return runProcessBuilder(
+                sshBinary!!,
+                effectiveProfile,
+                secret,
+                argv,
+                timeoutMs.coerceAtLeast(1_000L),
+            )
+        }
+
+        if (allowJschFallback) {
+            return runJsch(effectiveProfile, secret, argv, timeoutMs.coerceAtLeast(1_000L))
+        }
+
+        val cap = AgenticSshCapability.probe(jschAvailable = false)
+        return SshExecResult.Unsupported(
+            "OpenSSH ProcessBuilder path unavailable (ssh=${sshBinary ?: "none"}, " +
+                "sshpass=${sshpass ?: "none"}). Capability: ${cap.summary}. " +
+                "Install Termux ssh/sshpass (allow-external-apps + RUN_COMMAND) " +
+                "or enable JSch fallback / HTTPS_RUNTIME worker.",
+        )
     }
 
     /**
@@ -99,11 +120,8 @@ class DefaultAgenticSshExecutor(
         val saved = profile.hostKeyFingerprint?.trim()?.takeIf { it.isNotEmpty() }
 
         if (observed == null) {
-            // Cannot probe (no ssh-keyscan). If already pinned, proceed with
-            // StrictHostKeyChecking=accept-new only when unpinned+policy; if
-            // pinned we still refuse blind connect without a probe when possible.
             return when {
-                saved != null -> profile // will enforce via known_hosts if we have key material later
+                saved != null -> profile
                 profile.pinHostKeyOnFirstConnect -> profile
                 else -> SshExecResult.Error(
                     "No hostKeyFingerprint on profile \"${profile.displayName}\" and " +
@@ -162,7 +180,6 @@ class DefaultAgenticSshExecutor(
             "-o", "ConnectTimeout=10",
         )
 
-        // Prefer a dedicated known_hosts when we have a fingerprint from keyscan.
         val knownHosts = writeKnownHostsIfPossible(profile)
         if (knownHosts != null) {
             baseSsh += listOf("-o", "UserKnownHostsFile=${knownHosts.absolutePath}")
@@ -171,13 +188,14 @@ class DefaultAgenticSshExecutor(
 
         val command: List<String>
         val envExtra: Map<String, String>
-        if (sshpass != null) {
+        if (sshpass != null && isUsableBinary(sshpass)) {
             command = listOf(sshpass, "-e") + baseSsh + listOf(target, remoteCommand)
             envExtra = mapOf("SSHPASS" to secret)
         } else {
+            knownHosts?.delete()
             return SshExecResult.Unsupported(
-                "ssh found at $sshBinary but sshpass is missing; " +
-                    "password-ref auth needs sshpass or a Termux/runtime key agent. " +
+                "ssh found at $sshBinary but sshpass is missing or not executable; " +
+                    "password-ref auth needs sshpass, Termux RUN_COMMAND, or JSch fallback. " +
                     "Credential was resolved but not passed on argv (no secret leakage).",
             )
         }
@@ -203,25 +221,65 @@ class DefaultAgenticSshExecutor(
         }
     }
 
+    private fun runJsch(
+        profile: ConnectionProfile,
+        secret: String,
+        argv: List<String>,
+        timeoutMs: Long,
+    ): SshExecResult {
+        return try {
+            val jsch = JSch()
+            val session = jsch.getSession(profile.username, profile.host, profile.port)
+            session.setPassword(secret)
+            session.setConfig("StrictHostKeyChecking", "no")
+            session.timeout = 10_000
+            session.connect(10_000)
+            try {
+                val channel = session.openChannel("exec") as ChannelExec
+                channel.setCommand(argv.joinToString(" "))
+                channel.setInputStream(null)
+                channel.connect(10_000)
+                val stdout = channel.inputStream.bufferedReader().use { it.readText() }.take(MAX_OUTPUT)
+                val stderr = channel.errStream.bufferedReader().use { it.readText() }.take(MAX_OUTPUT)
+                val deadline = System.currentTimeMillis() + timeoutMs
+                while (!channel.isClosed && System.currentTimeMillis() < deadline) {
+                    Thread.sleep(40)
+                }
+                val exit = channel.exitStatus
+                channel.disconnect()
+                SshExecResult.Ok(exitCode = exit, stdout = stdout, stderr = stderr)
+            } finally {
+                session.disconnect()
+            }
+        } catch (e: Exception) {
+            SshExecResult.Error("JSch SSH failed: ${e.message ?: e.javaClass.simpleName}")
+        }
+    }
+
     companion object {
         private const val MAX_OUTPUT = 8_192
 
         private val SSH_CANDIDATES = listOf(
             "/data/data/com.termux/files/usr/bin/ssh",
+            "/data/data/com.termux/files/usr/local/bin/ssh",
             "/system/bin/ssh",
             "/system/xbin/ssh",
+            "/vendor/bin/ssh",
             "ssh",
         )
 
         private val SSHPASS_CANDIDATES = listOf(
             "/data/data/com.termux/files/usr/bin/sshpass",
+            "/data/data/com.termux/files/usr/local/bin/sshpass",
             "/system/bin/sshpass",
             "/system/xbin/sshpass",
+            "/vendor/bin/sshpass",
             "sshpass",
         )
 
         private val KEYSCAN_CANDIDATES = listOf(
             "/data/data/com.termux/files/usr/bin/ssh-keyscan",
+            "/data/data/com.termux/files/usr/local/bin/ssh-keyscan",
             "/system/bin/ssh-keyscan",
             "/system/xbin/ssh-keyscan",
             "ssh-keyscan",
@@ -229,6 +287,7 @@ class DefaultAgenticSshExecutor(
 
         private val KEYGEN_CANDIDATES = listOf(
             "/data/data/com.termux/files/usr/bin/ssh-keygen",
+            "/data/data/com.termux/files/usr/local/bin/ssh-keygen",
             "/system/bin/ssh-keygen",
             "/system/xbin/ssh-keygen",
             "ssh-keygen",
@@ -242,9 +301,14 @@ class DefaultAgenticSshExecutor(
 
         fun findKeygenBinary(): String? = firstExisting(KEYGEN_CANDIDATES)
 
+        fun isUsableBinary(path: String): Boolean {
+            if (!path.contains('/')) return true
+            val f = File(path)
+            return f.canExecute()
+        }
+
         fun normalizeFingerprint(raw: String): String {
             val t = raw.trim()
-            // Keep SHA256:… form; strip leading "SHA256 " variants / host labels.
             val sha = Regex("""SHA256:[A-Za-z0-9+/=]+""").find(t)?.value
             if (sha != null) return sha
             val md5 = Regex("""(?i)(?:MD5:)?([0-9a-f]{2}(?::[0-9a-f]{2}){15})""").find(t)?.groupValues?.get(1)
@@ -255,6 +319,7 @@ class DefaultAgenticSshExecutor(
         fun probeHostKeyFingerprint(host: String, port: Int): String? {
             val keyscan = findKeyscanBinary() ?: return null
             val keygen = findKeygenBinary() ?: return null
+            if (!isUsableBinary(keyscan) || !isUsableBinary(keygen)) return null
             return try {
                 val scan = ProcessBuilder(keyscan, "-T", "5", "-p", port.toString(), host)
                     .redirectErrorStream(true)
@@ -287,6 +352,7 @@ class DefaultAgenticSshExecutor(
 
         private fun writeKnownHostsIfPossible(profile: ConnectionProfile): File? {
             val keyscan = findKeyscanBinary() ?: return null
+            if (!isUsableBinary(keyscan)) return null
             return try {
                 val scan = ProcessBuilder(keyscan, "-T", "5", "-p", profile.port.toString(), profile.host)
                     .redirectErrorStream(true)
@@ -311,7 +377,11 @@ class DefaultAgenticSshExecutor(
         private fun firstExisting(candidates: List<String>): String? {
             for (c in candidates) {
                 if (c.contains('/')) {
-                    if (File(c).canExecute()) return c
+                    val f = File(c)
+                    if (f.canExecute()) return c
+                    // Surface Termux paths even when not executable from this UID
+                    // so Capability / Unsupported can recommend RUN_COMMAND.
+                    if (f.exists() && c.contains("com.termux")) return c
                 } else {
                     val which = tryWhich(c)
                     if (which != null) return which

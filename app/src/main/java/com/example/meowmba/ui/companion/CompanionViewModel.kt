@@ -2425,6 +2425,64 @@ class CompanionViewModel(
         SecureStorageCredentialResolver.saveCredential(storage, credentialRef, secret)
     }
 
+    fun listAgenticOpenGoals(): List<com.example.meowmba.core.agentic.AgenticGoal> {
+        val storage = secureStorage ?: return emptyList()
+        if (!FeatureFlags.from(storage.context).agenticRuntimeV1) return emptyList()
+        return AgenticRuntime.from(storage.context).listOpenGoals()
+    }
+
+    fun createAgenticGoal(title: String) {
+        val storage = secureStorage ?: return
+        if (!FeatureFlags.from(storage.context).agenticRuntimeV1) return
+        AgenticRuntime.from(storage.context).createGoal(title)
+        refreshAgenticPresenceHint()
+    }
+
+    fun tickAgenticGoal(goalId: String) {
+        val storage = secureStorage ?: return
+        if (!FeatureFlags.from(storage.context).agenticRuntimeV1) return
+        AgenticRuntime.from(storage.context).tick(goalId)
+        refreshAgenticPresenceHint()
+    }
+
+    fun tickOpenAgenticGoals() {
+        val storage = secureStorage ?: return
+        if (!FeatureFlags.from(storage.context).agenticRuntimeV1) return
+        AgenticRuntime.from(storage.context).tickOpenGoals()
+        refreshAgenticPresenceHint()
+    }
+
+    fun agenticModelConfigSnapshot(): com.example.meowmba.core.agentic.AgenticModelConfig.Snapshot {
+        val storage = secureStorage ?: return com.example.meowmba.core.agentic.AgenticModelConfig.Snapshot(
+            baseUrl = "",
+            apiKeyRef = "",
+            modelName = com.example.meowmba.core.agentic.AgenticModelConfig.DEFAULT_MODEL,
+            configured = false,
+        )
+        return com.example.meowmba.core.agentic.AgenticModelConfig.read(storage)
+    }
+
+    fun agenticSshCapabilitySummary(): String {
+        val storage = secureStorage ?: return "no storage"
+        if (!FeatureFlags.from(storage.context).agenticRuntimeV1) return "agentic flag OFF"
+        return AgenticRuntime.from(storage.context).sshCapability().summary
+    }
+
+    fun saveAgenticModelConfig(
+        baseUrl: String,
+        apiKeyRef: String,
+        apiKeySecret: String,
+        modelName: String,
+    ) {
+        val storage = secureStorage ?: return
+        com.example.meowmba.core.agentic.AgenticModelConfig.save(storage, baseUrl, apiKeyRef, modelName)
+        if (apiKeyRef.isNotBlank() && apiKeySecret.isNotBlank()) {
+            SecureStorageCredentialResolver.saveCredential(storage, apiKeyRef, apiKeySecret)
+        }
+        AgenticRuntime.invalidate()
+        refreshAgenticPresenceHint()
+    }
+
     override fun onCleared() {
         cancelProjectExecution(rearm = false)
         robotConnectJob?.cancel()

@@ -191,7 +191,7 @@ Status: **scaffolding compiled**. Default remains **OFF**. Heuristic / stub plan
 | Piece | Location |
 |-------|----------|
 | `AgenticBudgets`, expanded `GoalStatus` (`RUNNING` / `BLOCKED` / `WAITING_APPROVAL`), `ProposedToolCall` | `core/agentic/AgenticModels.kt` |
-| `ModelAdapter` / `StubModelAdapter` | `core/agentic/ModelAdapter.kt` |
+| `ModelAdapter` / `Stub` / `HttpOpenAiCompatible` / `AgenticModelConfig` | `core/agentic/ModelAdapter.kt` |
 | `AgenticPlanner` / `HeuristicAgenticPlanner` (`AgentLoop` alias) | `core/agentic/AgenticPlanner.kt` |
 | Store: `getGoal` / `updateGoal` / budgets on insert | `core/agentic/AgenticGoalStore.kt` |
 | `AgenticRuntime.tick(goalId)` / `step(goalId)` | `core/agentic/AgenticRuntime.kt` |
@@ -227,11 +227,11 @@ Mapping: `WAITING_APPROVAL`→ALERT, `BLOCKED`→CONCERNED, `RUNNING`→DETERMIN
 
 ## Phase 7 — Memory notes
 
-Status: **stub + docs**. Existing `MemoryCore` / `MemoryRepository` / recall path **untouched**.
+Status: **SharedPreferences persistence** (`PrefsAgenticMemoryIndex`). Existing `MemoryCore` / `MemoryRepository` / recall path **untouched**.
 
 | Piece | Location |
 |-------|----------|
-| `AgenticMemoryIndex` / `NoOp` / `InMemory` | `core/agentic/AgenticMemoryIndex.kt` |
+| `AgenticMemoryIndex` / `NoOp` / `InMemory` / `Prefs` | `core/agentic/AgenticMemoryIndex.kt` |
 | Runtime helpers | `AgenticRuntime.noteMemory` / `recallMemory` |
 
 ### Git / second-brain (later)
@@ -263,13 +263,13 @@ Optional: when `lumen_reflex_v2` is ON, gaze / head-follow springs in `AvatarRen
 - [x] No FlyWire data/assets/imports
 - [x] No opencode
 - [x] Room migration for goals/tasks/events (v9→v10: agentic_goals / agentic_events / agentic_connection_profiles)
-- [ ] Real `ModelAdapter` (HTTP/on-device LLM)
+- [x] Real `ModelAdapter` (HTTP OpenAI-compatible; stub fallback)
 - [x] Settings UI for Lumen reflex / agentic flag toggles (Neural / Lumen)
 - [x] Settings UI for profiles / credential refs (Neural / Lumen → AgenticProfilesSection)
 - [x] Host-key verification / known_hosts (fingerprint on ConnectionProfile; TOFU pin policy)
 - [x] Production approval UX for `WAITING_APPROVAL` (Companion approve/reject dialog)
 - [x] Persist agentic goals across process death (RoomAgenticGoalStore)
-- [ ] Termux / HTTPS_RUNTIME worker packaging
+- [x] Termux discovery + Capability probe + JSch fallback (HTTPS_RUNTIME worker packaging still later)
 
 ### Failure matrix
 
@@ -327,13 +327,13 @@ Done (behind `lumen_reflex_v2` / `agentic_runtime_v1`, defaults **OFF**, no FlyW
 
 ### Still open — Agentic runtime → production
 - ~~**Room persistence + migration**~~ — done (`MeowmbaDatabase` v10 + `RoomAgenticGoalStore`).
-- **Real `ModelAdapter`** (HTTP / on-device LLM) — still `StubModelAdapter` + heuristic planner.
+- ~~**Real `ModelAdapter`**~~ — `HttpOpenAiCompatibleModelAdapter` via SecureStorage refs; stub if unset.
 - ~~**Settings UI** for connection profiles / `agentic_cred_<ref>` secrets~~ — done (`AgenticProfilesSection`).
-- **Termux `ssh` / `sshpass` packaging** (or HTTPS_RUNTIME worker) on device.
+- ~~**Termux path**~~ — improved binary discovery + `AgenticSshCapability` + JSch fallback; RUN_COMMAND documented; HTTPS_RUNTIME worker later.
 - ~~**Host-key verification / known_hosts**~~ — done (probe + pin / mismatch reject).
 - ~~**Production approval UX** for `WAITING_APPROVAL`~~ — Companion approve/reject dialog.
-- **Scheduler / tool loop** invoking `sshExec` from open goals in main UX (not just `tick`/`step` API).
-- **AgenticMemoryIndex** beyond in-memory stub (Git/vault second-brain later).
+- ~~**Scheduler / tool loop**~~ — Agentic / Tasks section: create goal, tick / tick-open, approval.
+- ~~**AgenticMemoryIndex**~~ — `PrefsAgenticMemoryIndex` (SharedPreferences by project/goal); Git/vault later.
 - **Bridging agentic `sshExec` ↔ JSch `SshTool`** (optional).
 
 ### Files touched (Phases 5–8)

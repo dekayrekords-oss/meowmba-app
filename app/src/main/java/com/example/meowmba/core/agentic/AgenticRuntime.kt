@@ -73,6 +73,23 @@ class AgenticRuntime private constructor(
         return store.listOpenGoals().filter { it.status == GoalStatus.WAITING_APPROVAL }
     }
 
+    /** Tick every open/running goal once (skips waiting_approval without grant). */
+    fun tickOpenGoals(): List<AgenticGoal> {
+        if (!enabled) return emptyList()
+        return store.listOpenGoals().mapNotNull { g ->
+            when (g.status) {
+                GoalStatus.OPEN, GoalStatus.RUNNING -> tick(g.id)
+                GoalStatus.WAITING_APPROVAL -> if (g.approvalGranted) tick(g.id) else g
+                else -> g
+            }
+        }
+    }
+
+    fun sshCapability(): AgenticSshCapability = AgenticSshCapability.probe(jschAvailable = true)
+
+    fun modelConfigSnapshot(storage: SecureStorageManager): AgenticModelConfig.Snapshot =
+        AgenticModelConfig.read(storage)
+
     /**
      * Approve a goal waiting on side-effecting ssh_exec. Sets [AgenticGoal.approvalGranted]
      * and moves status to [GoalStatus.RUNNING]. Returns null when flag OFF / not found.
@@ -182,7 +199,16 @@ class AgenticRuntime private constructor(
         val toolsList = listTools()
         val profiles = profileStore.list()
         val events = store.listEvents(goalId)
-        val proposal = planner.propose(goal, toolsList, profiles, events)
+        // Light memory → planner context (synthetic events; never secrets).
+        val memoryEvents = memoryIndex.recall(goalId, limit = 5).mapIndexed { idx, note ->
+            AgenticEvent(
+                id = "mem-$idx",
+                goalId = goalId,
+                type = "memory",
+                detail = note.take(120),
+            )
+        }
+        val proposal = planner.propose(goal, toolsList, profiles, events + memoryEvents)
 
         val modelText = (planner as? HeuristicAgenticPlanner)?.lastModelText.orEmpty()
         store.appendEvent(
@@ -333,19 +359,26 @@ class AgenticRuntime private constructor(
                 enabled = { flags.agenticRuntimeV1 },
                 profiles = profiles,
                 credentials = credentials,
+                allowJschFallback = true,
             )
+            val modelAdapter = AgenticModelConfig.resolveAdapter(storage, credentials)
             return AgenticRuntime(
                 flags = flags,
                 store = goalStore,
                 profileStore = profiles,
                 sshExecutor = executor,
-                planner = HeuristicAgenticPlanner(StubModelAdapter()),
-                memoryIndex = InMemoryAgenticMemoryIndex(),
+                planner = HeuristicAgenticPlanner(modelAdapter),
+                memoryIndex = PrefsAgenticMemoryIndex(app),
             )
         }
 
-        fun resetForTests() {
+        /** Drop singleton so the next [from] rebuilds (e.g. after model config change). */
+        fun invalidate() {
             synchronized(this) { INSTANCE = null }
+        }
+
+        fun resetForTests() {
+            invalidate()
         }
     }
 }

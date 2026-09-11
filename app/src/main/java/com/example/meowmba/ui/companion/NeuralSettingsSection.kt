@@ -18,6 +18,8 @@ import androidx.compose.ui.unit.dp
 import com.example.meowmba.core.neural.NeuralDiagnostics
 import com.example.meowmba.core.neural.NeuralMode
 import com.example.meowmba.core.neural.NeuralSubstrate
+import com.example.meowmba.core.agentic.AgenticGoal
+import com.example.meowmba.core.agentic.AgenticModelConfig
 import com.example.meowmba.core.agentic.ConnectionProfile
 
 /**
@@ -47,6 +49,21 @@ fun NeuralSettingsSection(
     onSaveConnectionProfile: (ConnectionProfile) -> Unit = {},
     onDeleteConnectionProfile: (String) -> Unit = {},
     onSaveAgenticCredential: (String, String) -> Unit = { _, _ -> },
+    agenticGoals: List<AgenticGoal> = emptyList(),
+    agenticModelConfig: AgenticModelConfig.Snapshot = AgenticModelConfig.Snapshot(
+        baseUrl = "",
+        apiKeyRef = "",
+        modelName = AgenticModelConfig.DEFAULT_MODEL,
+        configured = false,
+    ),
+    sshCapabilitySummary: String = "not probed",
+    onCreateAgenticGoal: (String) -> Unit = {},
+    onTickAgenticGoal: (String) -> Unit = {},
+    onTickOpenAgenticGoals: () -> Unit = {},
+    onApproveAgenticGoal: (String) -> Unit = {},
+    onRejectAgenticGoal: (String) -> Unit = {},
+    onRefreshAgenticTasks: () -> Unit = {},
+    onSaveAgenticModelConfig: (String, String, String, String) -> Unit = { _, _, _, _ -> },
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth().padding(vertical = 8.dp)) {
@@ -63,7 +80,7 @@ fun NeuralSettingsSection(
         }
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
             Checkbox(checked = agenticRuntimeV1, onCheckedChange = onAgenticRuntimeV1Change)
-            Text("Enable agentic runtime v1 (presence + stubs)")
+            Text("Enable agentic runtime v1 (tasks + SSH + model)")
         }
         if (lumenReflexV2) {
             Text(
@@ -86,6 +103,19 @@ fun NeuralSettingsSection(
 
 
         if (agenticRuntimeV1) {
+            Spacer(Modifier.height(16.dp))
+            AgenticTasksSection(
+                goals = agenticGoals,
+                modelConfig = agenticModelConfig,
+                sshCapabilitySummary = sshCapabilitySummary,
+                onCreateGoal = onCreateAgenticGoal,
+                onTickGoal = onTickAgenticGoal,
+                onTickOpenGoals = onTickOpenAgenticGoals,
+                onApproveGoal = onApproveAgenticGoal,
+                onRejectGoal = onRejectAgenticGoal,
+                onRefresh = onRefreshAgenticTasks,
+                onSaveModelConfig = onSaveAgenticModelConfig,
+            )
             Spacer(Modifier.height(16.dp))
             AgenticProfilesSection(
                 profiles = connectionProfiles,
