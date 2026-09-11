@@ -2331,11 +2331,15 @@ class CompanionViewModel(
             kotlin.math.abs(_motionLean.value) + kotlin.math.abs(_motionLurch.value),
             kotlin.math.abs(state.driveLateralG) + kotlin.math.abs(state.driveLongitudinalG),
         )
-        val thermalCaution = try {
-            ThermalGovernor.currentStatus() >= android.os.PowerManager.THERMAL_STATUS_MODERATE
+        // Behavioral caution still tracks MODERATE+; the on-screen reflex chip
+        // only mentions heat at SEVERE+ so LIGHT/MODERATE flicker never looks like overheating.
+        val thermalStatus = try {
+            ThermalGovernor.currentStatus()
         } catch (_: Throwable) {
-            false
+            android.os.PowerManager.THERMAL_STATUS_NONE
         }
+        val thermalCaution = thermalStatus >= android.os.PowerManager.THERMAL_STATUS_MODERATE
+        val thermalChip = thermalStatus >= android.os.PowerManager.THERMAL_STATUS_SEVERE
         val speaking = state.interactionState == InteractionState.SPEAKING || _mouthEnergy.value > 0.02f
         val resting = (state.interactionState == InteractionState.IDLE ||
             state.interactionState == InteractionState.MUTED ||
@@ -2368,7 +2372,7 @@ class CompanionViewModel(
                 if (track?.followSource == com.example.meowmba.core.vision.FollowSource.HAND) add("hand")
                 if (affection) add("pet")
                 if (loud) add("loud")
-                if (thermalCaution) add("warm")
+                if (thermalChip) add("hot")
                 if (motionMag > 0.35f) add("motion")
             }
             val summary = parts.takeIf { it.isNotEmpty() }?.joinToString(" · ")?.let { "Reflex: $it" }

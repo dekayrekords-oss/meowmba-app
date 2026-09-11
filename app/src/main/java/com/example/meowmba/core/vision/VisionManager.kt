@@ -1283,7 +1283,7 @@ class VisionManager(
 
     private suspend fun bindIfNeeded(): ImageCapture {
         if (ThermalGovernor.currentStatus() >= android.os.PowerManager.THERMAL_STATUS_MODERATE) {
-            throw ImageCaptureException(ImageCapture.ERROR_UNKNOWN, "Camera paused while the phone cools", null)
+            throw ImageCaptureException(ImageCapture.ERROR_UNKNOWN, "Camera paused while cooling", null)
         }
         imageCapture?.let { return it }
         val provider = withTimeoutOrNull(10_000) {

@@ -1100,11 +1100,14 @@ fun CompanionScreen(
         // card rendered underneath the open conversation sheet, so a task
         // waiting on approval was invisible and silently timed out.
         // Tool approval card: a risky action is blocked until you decide
-        if (avatarWorkStatus.cooling && faceModeActive(uiState.copy(isChatExpanded = false))) {
+        // Thermal banner: NONE/LIGHT never warn; MODERATE needs hold (AvatarWorkPolicy);
+        // copy is mild at MODERATE and only stronger at SEVERE+.
+        thermalUiBannerText(avatarWorkStatus.warning)?.takeIf {
+            faceModeActive(uiState.copy(isChatExpanded = false))
+        }?.let { banner ->
             Surface(Modifier.align(Alignment.TopCenter).safeDrawingPadding().padding(16.dp),
                 shape = MaterialTheme.shapes.medium) {
-                Text("Animation and camera paused while the phone cools. They resume automatically.",
-                    modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.bodySmall)
+                Text(banner, modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.bodySmall)
             }
         }
         // Above chat and settings, but below approvals and onboarding.

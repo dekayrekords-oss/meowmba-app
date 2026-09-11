@@ -114,7 +114,9 @@ fun NeuralSettingsSection(
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("Avatar FPS", style = MaterialTheme.typography.titleSmall)
             Text(
-                "Target ${avatarFpsTarget.coerceIn(15, 60)} FPS when the device is cool. Default 30.",
+                "Target ${avatarFpsTarget.coerceIn(15, 60)} FPS when cool (default 30). " +
+                    "Light thermal quietly halves FPS; sustained warmer states pause avatar work " +
+                    "with a mild banner — never an overheating alarm for light load.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
