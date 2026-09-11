@@ -141,6 +141,11 @@ android {
                 storePassword = "android"
                 keyAlias = "androiddebugkey"
                 keyPassword = "android"
+                // Samsung / Android 16 sideload: keep v1 + v2 + v3. AGP defaulted
+                // debug to v2-only which some PackageInstaller paths reject.
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
             }
         }
     }
@@ -218,7 +223,7 @@ androidComponents {
         // Phone already has preview 1.3.81 (85); bump debug-only so in-place
         // upgrade is allowed without changing release defaultConfig (85).
         variant.outputs.forEach { output ->
-            output.versionCode.set(86)
+            output.versionCode.set(87)
         }
     }
 }

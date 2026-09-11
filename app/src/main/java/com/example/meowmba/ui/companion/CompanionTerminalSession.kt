@@ -40,8 +40,9 @@ enum class CompanionTerminalStatus {
  * Persistent interactive shell for the companion Terminal tab.
  *
  * Remote: JSch [Session] + [ChannelShell] with PTY (stderr merges via PTY).
- * Local: piped [ProcessBuilder] shell (no `-c`) with app [filesDir]/Termux HOME cwd
- * and a PATH that includes `/system/bin` (avoids permission-denied `ls` on `/`).
+ * Local: piped [ProcessBuilder] shell (no `-c`) with app [filesDir]/Termux HOME cwd,
+ * exported PATH (`/system/bin:/system/xbin:/vendor/bin:/product/bin`), and
+ * [LocalShellBuiltins] so `ls`/`pwd` always work in the sandbox.
  *
  * Agentic one-shot [ChannelExec] stays on [DefaultAgenticSshExecutor] —
  * this class is session-oriented only. Never logs credential material.
@@ -79,6 +80,11 @@ class CompanionTerminalSession(
     private var stderrJob: Job? = null
     private val closed = AtomicBoolean(true)
 
+    /** True while the backend is the piped local shell (not JSch PTY). */
+    private val isLocalSession = AtomicBoolean(false)
+    /** App sandbox cwd used for local builtins (ls/pwd). */
+    @Volatile private var localCwd: File? = null
+
     private var ptyCols: Int = 80
     private var ptyRows: Int = 24
 
@@ -90,6 +96,8 @@ class CompanionTerminalSession(
         _statusDetail.value = null
         _connectedTargetId.value = targetId
         _needsLocalEcho.value = false
+        isLocalSession.set(false)
+        localCwd = null
         emitSafe("Connecting…\n")
 
         val result = runCatching {
@@ -137,6 +145,27 @@ class CompanionTerminalSession(
     }
 
     fun sendLine(line: String) {
+        val raw = if (line.endsWith("\n")) line.dropLast(1) else line
+        // Local sandbox: Java builtins for ls/pwd, else rewrite to absolute/toybox.
+        if (isLocalSession.get()) {
+            val cwd = localCwd ?: storage.context.filesDir
+            val builtin = LocalShellBuiltins.tryBuiltin(raw, cwd)
+            if (builtin != null) {
+                if (_needsLocalEcho.value) {
+                    emitSafe(if (line.endsWith("\n")) line else "$line\n")
+                }
+                emitSafe(builtin)
+                return
+            }
+            val resolved = LocalShellBuiltins.resolveSimpleCommand(raw)
+            val payload = if (resolved.endsWith("\n")) resolved else "$resolved\n"
+            if (_needsLocalEcho.value) {
+                // Echo what the user typed, not the rewritten absolute path.
+                emitSafe(if (line.endsWith("\n")) line else "$line\n")
+            }
+            stdin(payload.toByteArray(Charsets.UTF_8))
+            return
+        }
         val payload = if (line.endsWith("\n")) line else "$line\n"
         if (_needsLocalEcho.value) {
             emitSafe(payload)
@@ -179,6 +208,8 @@ class CompanionTerminalSession(
         jschSession = null
         runCatching { localProcess?.destroyForcibly() }
         localProcess = null
+        isLocalSession.set(false)
+        localCwd = null
         _needsLocalEcho.value = false
         _connectedTargetId.value = null
         if (emitStatus) {
@@ -193,20 +224,31 @@ class CompanionTerminalSession(
     private fun openLocal() {
         val shell = findLocalShell()
             ?: error("no local shell found (/system/bin/sh or Termux)")
-        val cwd = resolveLocalCwd(storage, shell)
+        val cwd = resolveLocalCwd(storage, shell) ?: storage.context.filesDir
+        cwd.mkdirs()
         val pb = ProcessBuilder(shell)
         pb.redirectErrorStream(false) // read stderr separately so errors surface
-        if (cwd != null) pb.directory(cwd)
+        pb.directory(cwd)
         val env = pb.environment()
         env["TERM"] = "xterm-256color"
-        env["HOME"] = (cwd ?: storage.context.filesDir).absolutePath
-        env["PATH"] = mergePath(env["PATH"])
+        env["HOME"] = cwd.absolutePath
+        env["PATH"] = LocalShellBuiltins.mergePreferredPath(env["PATH"])
         env.putIfAbsent("PS1", "\\$ ")
         val proc = pb.start()
         localProcess = proc
         stdin = proc.outputStream
+        isLocalSession.set(true)
+        localCwd = cwd
         _needsLocalEcho.value = true
-        emitSafe("[local cwd ${cwd?.absolutePath ?: "(default)"}]\n")
+        // One-line banner: cwd + sandbox hint (SSH path for real meow machine).
+        emitSafe(LocalShellBuiltins.bannerLine(cwd))
+        // Also export PATH/HOME and cd inside the shell — ProcessBuilder env is
+        // not always honored by Android's /system/bin/sh applets.
+        val boot = LocalShellBuiltins.connectExports(cwd)
+        runCatching {
+            proc.outputStream.write(boot.toByteArray(Charsets.UTF_8))
+            proc.outputStream.flush()
+        }
         startReader(proc.inputStream, label = null) {
             if (!proc.isAlive) {
                 emitSafe("\n[local shell exited ${proc.exitValue()}]\n")
@@ -377,16 +419,6 @@ class CompanionTerminalSession(
     }
 
     companion object {
-        private val ANDROID_PATH_PREFIX = listOf(
-            "/data/data/com.termux/files/usr/bin",
-            "/data/data/com.termux/files/usr/bin/applets",
-            "/system/bin",
-            "/system/xbin",
-            "/vendor/bin",
-            "/bin",
-            "/usr/bin",
-        )
-
         private fun findLocalShell(): String? {
             val candidates = listOf(
                 "/data/data/com.termux/files/usr/bin/bash",
@@ -424,12 +456,8 @@ class CompanionTerminalSession(
             return null
         }
 
-        internal fun mergePath(existing: String?): String {
-            val parts = LinkedHashSet<String>()
-            ANDROID_PATH_PREFIX.forEach { parts.add(it) }
-            existing?.split(':')?.map { it.trim() }?.filter { it.isNotEmpty() }?.forEach { parts.add(it) }
-            return parts.joinToString(":")
-        }
+        internal fun mergePath(existing: String?): String =
+            LocalShellBuiltins.mergePreferredPath(existing)
 
         /** POSIX single-quote escape for a remote cd path / argv element. */
         internal fun shellSingleQuote(raw: String): String =

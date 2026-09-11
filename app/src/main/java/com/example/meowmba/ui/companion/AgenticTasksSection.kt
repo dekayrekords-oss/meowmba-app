@@ -1,10 +1,9 @@
 package com.example.meowmba.ui.companion
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
@@ -50,21 +49,22 @@ fun AgenticTasksSection(
     var status by remember { mutableStateOf<String?>(null) }
     var refreshNonce by remember { mutableIntStateOf(0) }
 
-    Column(modifier = modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-        Text("Agentic / Tasks", style = MaterialTheme.typography.titleMedium)
+    Column(
+        modifier = modifier.fillMaxWidth().padding(vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text("Tasks", style = MaterialTheme.typography.titleSmall)
         Text(
-            "Create a goal and run the planner tick loop. Side-effecting SSH waits for approval. " +
-                "HTTP model is optional (SecureStorage refs); falls back to stub when unset.",
-            style = MaterialTheme.typography.bodySmall,
-        )
-        Spacer(Modifier.height(8.dp))
-
-        Text(
-            "SSH path: $sshCapabilitySummary",
+            "Title → Create → Tick (one planner step) → Approve if SSH needs it.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Spacer(Modifier.height(8.dp))
+
+        Text(
+            sshCapabilitySummary,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
 
         OutlinedTextField(
             value = title,
@@ -73,8 +73,11 @@ fun AgenticTasksSection(
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
-        Spacer(Modifier.height(6.dp))
-        Row(modifier = Modifier.fillMaxWidth()) {
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
             Button(
                 onClick = {
                     val t = title.trim()
@@ -88,8 +91,7 @@ fun AgenticTasksSection(
                     refreshNonce++
                     onRefresh()
                 },
-            ) { Text("Create goal") }
-            Spacer(Modifier.padding(horizontal = 6.dp))
+            ) { Text("Create") }
             OutlinedButton(
                 onClick = {
                     onTickOpenGoals()
@@ -97,105 +99,105 @@ fun AgenticTasksSection(
                     refreshNonce++
                     onRefresh()
                 },
-            ) { Text("Tick open") }
-            Spacer(Modifier.padding(horizontal = 6.dp))
+            ) { Text("Tick") }
             OutlinedButton(onClick = { refreshNonce++; onRefresh() }) { Text("Refresh") }
         }
 
-        Spacer(Modifier.height(10.dp))
         if (goals.isEmpty()) {
             Text("No open goals.", style = MaterialTheme.typography.bodySmall)
         } else {
-            goals.forEach { g ->
-                Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                    Text(
-                        "${g.title.take(60)}  [${g.status}]  steps=${g.budgets.stepsUsed}/${g.budgets.maxSteps}",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Row {
-                        OutlinedButton(onClick = {
-                            onTickGoal(g.id)
-                            status = "Ticked ${g.id.take(8)}"
-                            onRefresh()
-                        }) { Text("Tick") }
-                        if (g.status == GoalStatus.WAITING_APPROVAL) {
-                            Spacer(Modifier.padding(horizontal = 4.dp))
-                            Button(onClick = {
-                                onApproveGoal(g.id)
-                                onRefresh()
-                            }) { Text("Approve") }
-                            Spacer(Modifier.padding(horizontal = 4.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                goals.forEach { g ->
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            "${g.title.take(60)}  [${g.status}]  " +
+                                "steps=${g.budgets.stepsUsed}/${g.budgets.maxSteps}",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedButton(onClick = {
-                                onRejectGoal(g.id)
+                                onTickGoal(g.id)
+                                status = "Ticked ${g.id.take(8)}"
                                 onRefresh()
-                            }) { Text("Reject") }
+                            }) { Text("Tick") }
+                            if (g.status == GoalStatus.WAITING_APPROVAL) {
+                                Button(onClick = {
+                                    onApproveGoal(g.id)
+                                    onRefresh()
+                                }) { Text("Approve") }
+                                OutlinedButton(onClick = {
+                                    onRejectGoal(g.id)
+                                    onRefresh()
+                                }) { Text("Reject") }
+                            }
                         }
                     }
                 }
             }
         }
 
-        Spacer(Modifier.height(16.dp))
-        Text("Model adapter (OpenAI-compatible)", style = MaterialTheme.typography.titleSmall)
-        Text(
-            "Base URL + credential ref. API key is stored under agentic_cred_<ref>. " +
-                "Unset → StubModelAdapter.",
-            style = MaterialTheme.typography.bodySmall,
-        )
-        OutlinedTextField(
-            value = baseUrl,
-            onValueChange = { baseUrl = it },
-            label = { Text("Base URL (e.g. https://api.openai.com)") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-        )
-        OutlinedTextField(
-            value = apiKeyRef,
-            onValueChange = { apiKeyRef = it },
-            label = { Text("API key credential ref") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-        )
-        OutlinedTextField(
-            value = apiKeySecret,
-            onValueChange = { apiKeySecret = it },
-            label = { Text("API key (write-only)") },
-            singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-        )
-        OutlinedTextField(
-            value = modelName,
-            onValueChange = { modelName = it },
-            label = { Text("Model name") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-        )
-        Spacer(Modifier.height(6.dp))
-        Button(
-            onClick = {
-                onSaveModelConfig(baseUrl.trim(), apiKeyRef.trim(), apiKeySecret, modelName.trim())
-                apiKeySecret = ""
-                status = if (baseUrl.isNotBlank() && apiKeyRef.isNotBlank()) {
-                    "Saved HTTP model config (ref=$apiKeyRef)"
-                } else {
-                    "Cleared / incomplete — using stub"
-                }
-                onRefresh()
-            },
-        ) { Text("Save model config") }
-        Text(
-            if (modelConfig.configured) "Active: HTTP (${modelConfig.modelName})"
-            else "Active: StubModelAdapter",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp),
-        )
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Model", style = MaterialTheme.typography.titleSmall)
+            Text(
+                "Optional OpenAI-compatible URL + key ref. Empty = stub.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OutlinedTextField(
+                value = baseUrl,
+                onValueChange = { baseUrl = it },
+                label = { Text("Base URL") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                value = apiKeyRef,
+                onValueChange = { apiKeyRef = it },
+                label = { Text("API key credential ref") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                value = apiKeySecret,
+                onValueChange = { apiKeySecret = it },
+                label = { Text("API key (write-only)") },
+                singleLine = true,
+                visualTransformation = PasswordVisualTransformation(),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                value = modelName,
+                onValueChange = { modelName = it },
+                label = { Text("Model name") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Button(
+                onClick = {
+                    onSaveModelConfig(baseUrl.trim(), apiKeyRef.trim(), apiKeySecret, modelName.trim())
+                    apiKeySecret = ""
+                    status = if (baseUrl.isNotBlank() && apiKeyRef.isNotBlank()) {
+                        "Saved HTTP model config (ref=$apiKeyRef)"
+                    } else {
+                        "Cleared / incomplete — using stub"
+                    }
+                    onRefresh()
+                },
+            ) { Text("Save model") }
+            Text(
+                if (modelConfig.configured) "Active: HTTP (${modelConfig.modelName})"
+                else "Active: stub",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
 
         status?.let {
-            Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp))
+            Text(it, style = MaterialTheme.typography.bodySmall)
         }
-        // refreshNonce kept to force recomposition after actions when parent reloads lists
         @Suppress("UNUSED_VARIABLE")
         val _nonce = refreshNonce
     }

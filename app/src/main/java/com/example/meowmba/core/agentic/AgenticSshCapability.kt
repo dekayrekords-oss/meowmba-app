@@ -45,14 +45,15 @@ data class AgenticSshCapability(
                 prefixExists -> "termux_run_command"
                 else -> "unsupported"
             }
+            // Human-readable for Settings UI (avoid jammed tokens).
+            val jschLabel = if (jschAvailable) "yes" else "no"
+            val termuxLabel = if (prefixExists) "yes" else "no"
             val summary = buildString {
-                append("path=").append(path)
-                append(" termuxPrefix=").append(prefixExists)
-                append(" ssh=").append(ssh ?: "none")
-                append(" sshpass=").append(sshpass ?: "none")
-                append(" jsch=").append(jschAvailable)
-                if (prefixExists && !sshExec) {
-                    append(" hint=enable Termux allow-external-apps + RUN_COMMAND or use JSch")
+                append("SSH: JSch ").append(jschLabel)
+                append(" · Termux ").append(termuxLabel)
+                if (sshExec) append(" · ssh binary ready")
+                if (prefixExists && !sshExec && !jschAvailable) {
+                    append(" · enable Termux allow-external-apps or use JSch")
                 }
             }
             return AgenticSshCapability(

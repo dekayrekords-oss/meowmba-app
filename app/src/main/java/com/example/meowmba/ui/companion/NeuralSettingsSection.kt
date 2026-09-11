@@ -1,5 +1,6 @@
 package com.example.meowmba.ui.companion
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,14 +14,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.example.meowmba.core.neural.NeuralDiagnostics
-import com.example.meowmba.core.neural.NeuralMode
-import com.example.meowmba.core.neural.NeuralSubstrate
 import com.example.meowmba.core.agentic.AgenticGoal
 import com.example.meowmba.core.agentic.AgenticModelConfig
 import com.example.meowmba.core.agentic.ConnectionProfile
+import com.example.meowmba.core.neural.NeuralDiagnostics
+import com.example.meowmba.core.neural.NeuralMode
+import com.example.meowmba.core.neural.NeuralSubstrate
 
 /**
  * Neural controller + Lumen nervous-system settings.
@@ -68,65 +70,98 @@ fun NeuralSettingsSection(
     onSaveAgenticModelConfig: (String, String, String, String) -> Unit = { _, _, _, _ -> },
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-        Text("Lumen nervous system", style = MaterialTheme.typography.titleMedium)
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text("Lumen / Neural", style = MaterialTheme.typography.titleMedium)
         Text(
-            "Optional reflex layer that modulates Lumen from vision, speech, touch and motion. " +
-                "Defaults off; enabling wires end-to-end without FlyWire data.",
-            style = MaterialTheme.typography.bodySmall,
-        )
-        Spacer(Modifier.height(8.dp))
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-            Checkbox(checked = lumenReflexV2, onCheckedChange = onLumenReflexV2Change)
-            Text("Enable Lumen reflex v2")
-        }
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-            Checkbox(checked = agenticRuntimeV1, onCheckedChange = onAgenticRuntimeV1Change)
-            Text("Enable agentic runtime v1 (tasks + SSH + model)")
-        }
-        if (lumenReflexV2) {
-            Text(
-                "Reflex gain ${(reflexGain * 100).toInt()}%",
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(top = 8.dp),
-            )
-            Slider(
-                value = reflexGain.coerceIn(0.25f, 1.5f),
-                onValueChange = { onReflexGainChange(it.coerceIn(0.25f, 1.5f)) },
-                valueRange = 0.25f..1.5f,
-            )
-            Text(
-                "Gain scales how strongly sensory drives push curiosity / social / caution. " +
-                    "Action competition hysteresis is unchanged.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-
-
-        Spacer(Modifier.height(12.dp))
-        Text(
-            "Avatar FPS: ${avatarFpsTarget.coerceIn(15, 60)}",
-            style = MaterialTheme.typography.titleSmall,
-        )
-        Text(
-            "Decorative animation rate when the device is cool (15–60). Default 30 keeps heat down after the ~60fps spike; " +
-                "THERMAL_STATUS_LIGHT halves this, and MODERATE+ still pauses avatar work. " +
-                "Idle ~${avatarFpsTarget.coerceIn(15, 60) / 2} FPS.",
+            "Optional reflex and agentic layers for the avatar. Defaults stay off until you enable them.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Slider(
-            value = avatarFpsTarget.coerceIn(15, 60).toFloat(),
-            onValueChange = { onAvatarFpsTargetChange(it.toInt().coerceIn(15, 60)) },
-            valueRange = 15f..60f,
-            // 46 discrete values (15..60) ⇒ steps = count - 2
-            steps = 44,
-            modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
-        )
+
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("How to use", style = MaterialTheme.typography.titleSmall)
+            Text(
+                "• Avatar FPS — 15–60 (default 30). Lower values reduce heat.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Text(
+                "• Lumen reflex + gain — live avatar attention from vision, speech, touch, motion.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Text(
+                "• Agentic — tasks, SSH profiles, and optional model adapter.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Text(
+                "• Tasks — title → Create → Tick (one planner step) → Approve if SSH needs it.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Text(
+                "• Model — optional OpenAI-compatible URL + key ref; empty uses the stub.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Text(
+                "• Terminal is separate: Chat → Terminal → pick an SSH profile for a real machine.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Avatar FPS", style = MaterialTheme.typography.titleSmall)
+            Text(
+                "Target ${avatarFpsTarget.coerceIn(15, 60)} FPS when the device is cool. Default 30.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Slider(
+                value = avatarFpsTarget.coerceIn(15, 60).toFloat(),
+                onValueChange = { onAvatarFpsTargetChange(it.toInt().coerceIn(15, 60)) },
+                valueRange = 15f..60f,
+                steps = 44,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Lumen reflex", style = MaterialTheme.typography.titleSmall)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Checkbox(checked = lumenReflexV2, onCheckedChange = onLumenReflexV2Change)
+                Text("Enable Lumen reflex")
+            }
+            if (lumenReflexV2) {
+                Text(
+                    "Gain ${(reflexGain * 100).toInt()}% — how strongly senses push curiosity / social / caution.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Slider(
+                    value = reflexGain.coerceIn(0.25f, 1.5f),
+                    onValueChange = { onReflexGainChange(it.coerceIn(0.25f, 1.5f)) },
+                    valueRange = 0.25f..1.5f,
+                )
+            }
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Agentic runtime", style = MaterialTheme.typography.titleSmall)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Checkbox(checked = agenticRuntimeV1, onCheckedChange = onAgenticRuntimeV1Change)
+                Text("Enable agentic (tasks / SSH / model)")
+            }
+        }
 
         if (agenticRuntimeV1) {
-            Spacer(Modifier.height(16.dp))
             AgenticTasksSection(
                 goals = agenticGoals,
                 modelConfig = agenticModelConfig,
@@ -139,7 +174,6 @@ fun NeuralSettingsSection(
                 onRefresh = onRefreshAgenticTasks,
                 onSaveModelConfig = onSaveAgenticModelConfig,
             )
-            Spacer(Modifier.height(16.dp))
             AgenticProfilesSection(
                 profiles = connectionProfiles,
                 onSaveProfile = onSaveConnectionProfile,
@@ -149,43 +183,48 @@ fun NeuralSettingsSection(
         }
 
         if (showNeuralCoreControls) {
-            Spacer(Modifier.height(16.dp))
-            Text("Neural controller", style = MaterialTheme.typography.titleMedium)
-            Text(
-                "Shadow mode compares the neural layer without changing avatar behaviour.",
-                style = MaterialTheme.typography.bodySmall,
-            )
-            NeuralChoiceRow(
-                label = "Mode",
-                choices = NeuralMode.entries.toList(),
-                selected = mode,
-                onSelected = onModeChanged,
-            )
-            NeuralChoiceRow(
-                label = "Substrate",
-                choices = NeuralSubstrate.entries.toList(),
-                selected = substrate,
-                onSelected = onSubstrateChanged,
-            )
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                Checkbox(checked = traceConsent, onCheckedChange = onTraceConsentChanged)
-                Text("Allow feature-only neural traces")
-            }
-            diagnostics?.let {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Neural controller", style = MaterialTheme.typography.titleSmall)
                 Text(
-                    "Core: ${it.substrate.name.lowercase()}  " +
-                        "steps ${it.steps}  p95 ${it.p95StepMicros}µs  " +
-                        "fallback ${it.fallback.name.lowercase()}",
+                    "Shadow mode compares the neural layer without changing avatar behaviour.",
                     style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Text(
-                    "Shadow divergence ${"%.3f".format(it.divergenceMean)} · " +
-                        "action ${it.currentAction.name.lowercase()}",
-                    style = MaterialTheme.typography.bodySmall,
+                NeuralChoiceRow(
+                    label = "Mode",
+                    choices = NeuralMode.entries.toList(),
+                    selected = mode,
+                    onSelected = onModeChanged,
                 )
-            }
-            Button(onClick = onReset, modifier = Modifier.padding(top = 4.dp)) {
-                Text("Reset neural state")
+                NeuralChoiceRow(
+                    label = "Substrate",
+                    choices = NeuralSubstrate.entries.toList(),
+                    selected = substrate,
+                    onSelected = onSubstrateChanged,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(checked = traceConsent, onCheckedChange = onTraceConsentChanged)
+                    Text("Allow feature-only neural traces")
+                }
+                diagnostics?.let {
+                    Text(
+                        "Core: ${it.substrate.name.lowercase()}  " +
+                            "steps ${it.steps}  p95 ${it.p95StepMicros}µs  " +
+                            "fallback ${it.fallback.name.lowercase()}",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Text(
+                        "Shadow divergence ${"%.3f".format(it.divergenceMean)} · " +
+                            "action ${it.currentAction.name.lowercase()}",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                Button(onClick = onReset) {
+                    Text("Reset neural state")
+                }
             }
         }
     }
@@ -198,7 +237,7 @@ private fun <T : Enum<T>> NeuralChoiceRow(
     selected: T,
     onSelected: (T) -> Unit,
 ) {
-    Row(modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) {
+    Row(modifier = Modifier.fillMaxWidth().padding(top = 2.dp)) {
         Text(label, modifier = Modifier.width(72.dp), style = MaterialTheme.typography.bodyMedium)
         choices.forEach { choice ->
             Button(
