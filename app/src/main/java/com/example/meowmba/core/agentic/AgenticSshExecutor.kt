@@ -176,8 +176,10 @@ class DefaultAgenticSshExecutor(
         timeoutMs: Long,
     ): SshExecResult {
         val sshpass = findSshpassBinary()
-        val remoteCommand = argv.joinToString(" ")
+        // Never argv.joinToString — that smashes spaces inside -lc scripts.
+        // Prefer: ssh host bash -lc <script> as separate ProcessBuilder tokens.
         val target = "${profile.username}@${profile.host}"
+        val fullScript = buildFullRemoteScript(profile.workspaceRoot, argv)
 
         val strictMode = if (profile.hostKeyFingerprint.isNullOrBlank()) {
             "accept-new"
@@ -202,7 +204,7 @@ class DefaultAgenticSshExecutor(
         val command: List<String>
         val envExtra: Map<String, String>
         if (sshpass != null && isUsableBinary(sshpass)) {
-            command = listOf(sshpass, "-e") + baseSsh + listOf(target, remoteCommand)
+            command = listOf(sshpass, "-e") + baseSsh + listOf(target, "bash", "-lc", fullScript)
             envExtra = mapOf("SSHPASS" to secret)
         } else {
             knownHosts?.delete()
@@ -249,7 +251,7 @@ class DefaultAgenticSshExecutor(
             session.connect(10_000)
             try {
                 val channel = session.openChannel("exec") as ChannelExec
-                channel.setCommand(argv.joinToString(" "))
+                channel.setCommand(buildRemoteExecCommand(profile.workspaceRoot, argv))
                 channel.setInputStream(null)
                 channel.connect(10_000)
                 val stdout = channel.inputStream.bufferedReader().use { it.readText() }.take(MAX_OUTPUT)
@@ -270,6 +272,50 @@ class DefaultAgenticSshExecutor(
     }
 
     companion object {
+        /** POSIX single-quote; keeps spaces inside bash -lc scripts intact. */
+        fun shellSingleQuote(raw: String): String =
+            "'" + raw.replace("'", "'\"'\"'") + "'"
+
+        /**
+         * Turn argv into a shell script body.
+         * If already `bash|sh -lc|-c <script>`, use the script alone (do not re-join).
+         */
+        fun remoteScriptFromArgv(argv: List<String>): String {
+            if (argv.isEmpty()) return "true"
+            if (argv.size >= 3) {
+                val a0 = argv[0].substringAfterLast('/')
+                val a1 = argv[1]
+                if ((a0 == "bash" || a0 == "sh") && (a1 == "-lc" || a1 == "-c")) {
+                    return argv[2]
+                }
+            }
+            return argv.joinToString(" ") { shellSingleQuote(it) }
+        }
+
+        /** cd home/workspace then the script body (ProcessBuilder bash -lc arg). */
+        fun buildFullRemoteScript(workspaceRoot: String?, argv: List<String>): String {
+            val script = remoteScriptFromArgv(argv)
+            val landing = workspaceRoot?.trim()?.takeIf { it.isNotEmpty() }
+            val cd = if (landing != null) {
+                "cd " + shellSingleQuote(landing) + " 2>/dev/null || cd \"\$HOME\" 2>/dev/null || true; "
+            } else {
+                "cd \"\$HOME\" 2>/dev/null || true; "
+            }
+            return cd + script
+        }
+
+        /** ChannelExec: cd home/workspace then bash -lc '<script>'. */
+        fun buildRemoteExecCommand(workspaceRoot: String?, argv: List<String>): String {
+            val script = remoteScriptFromArgv(argv)
+            val landing = workspaceRoot?.trim()?.takeIf { it.isNotEmpty() }
+            val cd = if (landing != null) {
+                "cd " + shellSingleQuote(landing) + " 2>/dev/null || cd \"\$HOME\" 2>/dev/null || true; "
+            } else {
+                "cd \"\$HOME\" 2>/dev/null || true; "
+            }
+            return cd + "bash -lc " + shellSingleQuote(script)
+        }
+
         private const val MAX_OUTPUT = 8_192
 
         private val SSH_CANDIDATES = listOf(

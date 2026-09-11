@@ -44,6 +44,17 @@ fun ChatOverlay(
     recognitionIssue: String? = null,
     conversationKey: String = "inbox",
     terminalTargets: List<CompanionTerminalTarget> = listOf(CompanionTerminalTarget.Local),
+    terminalStatus: CompanionTerminalStatus = CompanionTerminalStatus.Disconnected,
+    terminalStatusDetail: String? = null,
+    terminalScrollback: String = "",
+    terminalConnectedTargetId: String? = null,
+    onTerminalConnect: ((String) -> Unit)? = null,
+    onTerminalDisconnect: (() -> Unit)? = null,
+    onTerminalSendLine: ((String) -> Unit)? = null,
+    onTerminalInterrupt: (() -> Unit)? = null,
+    onTerminalClear: (() -> Unit)? = null,
+    onTerminalResize: ((Int, Int) -> Unit)? = null,
+    /** Kept for one-shot fallbacks / tests; interactive session preferred. */
     onRunTerminalCommand: (suspend (String, String) -> String)? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -117,10 +128,19 @@ fun ChatOverlay(
                             text = { Text("Terminal") },
                         )
                     }
-                    if (currentPane == CompanionChatPane.Terminal && onRunTerminalCommand != null) {
+                    if (currentPane == CompanionChatPane.Terminal && onTerminalConnect != null) {
                         CompanionTerminalPanel(
                             targets = targetsOrLocal(terminalTargets),
-                            onRunCommand = onRunTerminalCommand,
+                            status = terminalStatus,
+                            statusDetail = terminalStatusDetail,
+                            scrollback = terminalScrollback,
+                            connectedTargetId = terminalConnectedTargetId,
+                            onConnect = onTerminalConnect,
+                            onDisconnect = onTerminalDisconnect ?: {},
+                            onSendLine = onTerminalSendLine ?: {},
+                            onInterrupt = onTerminalInterrupt ?: {},
+                            onClear = onTerminalClear ?: {},
+                            onResize = onTerminalResize ?: { _, _ -> },
                             modifier = Modifier.weight(1f, fill = true).fillMaxWidth(),
                         )
                     } else {

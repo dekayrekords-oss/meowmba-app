@@ -221,6 +221,23 @@ class CompanionViewModel(
     private val noteVault: VaultRepository? = null,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(CompanionState())
+
+    // --- Companion interactive terminal (persistent shell / ChannelShell) ---
+    private val terminalSessionLock = Any()
+    private var companionTerminalSession: CompanionTerminalSession? = null
+    private var companionTerminalCollectorJob: kotlinx.coroutines.Job? = null
+    private val _companionTerminalStatus =
+        MutableStateFlow(CompanionTerminalStatus.Disconnected)
+    val companionTerminalStatus = _companionTerminalStatus.asStateFlow()
+    private val _companionTerminalStatusDetail = MutableStateFlow<String?>(null)
+    val companionTerminalStatusDetail = _companionTerminalStatusDetail.asStateFlow()
+    private val _companionTerminalScrollback = MutableStateFlow(
+        "Meow terminal — pick a target, Connect, then type.\n",
+    )
+    val companionTerminalScrollback = _companionTerminalScrollback.asStateFlow()
+    private val _companionTerminalConnectedTargetId = MutableStateFlow<String?>(null)
+    val companionTerminalConnectedTargetId = _companionTerminalConnectedTargetId.asStateFlow()
+
     private val _mouthEnergy = kotlinx.coroutines.flow.MutableStateFlow(0f)
     val mouthEnergy: kotlinx.coroutines.flow.StateFlow<Float> = _mouthEnergy.asStateFlow()
     private var microphonePermissionBlocked = false
@@ -2495,10 +2512,85 @@ class CompanionViewModel(
         }
     }
 
+    private fun ensureCompanionTerminalSession(): CompanionTerminalSession? {
+        val storage = secureStorage ?: return null
+        synchronized(terminalSessionLock) {
+            companionTerminalSession?.let { return it }
+            val session = CompanionTerminalSession(storage, viewModelScope)
+            companionTerminalSession = session
+            companionTerminalCollectorJob?.cancel()
+            companionTerminalCollectorJob = viewModelScope.launch {
+                launch {
+                    session.status.collect { st ->
+                        _companionTerminalStatus.value = st
+                    }
+                }
+                launch {
+                    session.statusDetail.collect { d ->
+                        _companionTerminalStatusDetail.value = d
+                    }
+                }
+                launch {
+                    session.connectedTargetId.collect { id ->
+                        _companionTerminalConnectedTargetId.value = id
+                    }
+                }
+                session.output.collect { chunk ->
+                    appendCompanionTerminalOutput(chunk)
+                }
+            }
+            return session
+        }
+    }
+
+    private fun appendCompanionTerminalOutput(chunk: String) {
+        if (chunk.isEmpty()) return
+        val cur = _companionTerminalScrollback.value
+        val next = cur + chunk
+        // Cap scrollback ~200k chars to bound memory.
+        _companionTerminalScrollback.value =
+            if (next.length > 200_000) next.takeLast(160_000) else next
+    }
+
+    fun connectCompanionTerminal(targetId: String) {
+        val session = ensureCompanionTerminalSession() ?: run {
+            _companionTerminalStatus.value = CompanionTerminalStatus.Error
+            _companionTerminalStatusDetail.value = "secure storage unavailable"
+            appendCompanionTerminalOutput("error: secure storage unavailable\n")
+            return
+        }
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            session.connect(targetId)
+        }
+    }
+
+    fun disconnectCompanionTerminal() {
+        val session = companionTerminalSession ?: return
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            session.disconnect()
+        }
+    }
+
+    fun sendCompanionTerminalLine(line: String) {
+        companionTerminalSession?.sendLine(line)
+    }
+
+    fun interruptCompanionTerminal() {
+        companionTerminalSession?.interrupt()
+    }
+
+    fun resizeCompanionTerminal(cols: Int, rows: Int) {
+        companionTerminalSession?.resize(cols, rows)
+    }
+
+    fun clearCompanionTerminalScrollback() {
+        _companionTerminalScrollback.value = "scrollback cleared\n"
+    }
+
     /**
-     * Interactive terminal exec (user-initiated). Never logs secrets.
-     * Local uses /system/bin/sh (or Termux sh when present); SSH uses
-     * DefaultAgenticSshExecutor / JSch with the selected ConnectionProfile.
+     * One-shot terminal exec (agentic-style ChannelExec / ProcessBuilder -c).
+     * Prefer [connectCompanionTerminal] for the interactive Terminal tab.
+     * Never logs secrets.
      */
     suspend fun runCompanionTerminalCommand(
         targetId: String,
@@ -2511,7 +2603,7 @@ class CompanionViewModel(
             ?: return@withContext "error: secure storage unavailable"
         when {
             targetId.isBlank() || targetId == CompanionTerminalTarget.LOCAL_ID ->
-                CompanionTerminalLocalShell.exec(trimmed, timeoutMs)
+                CompanionTerminalLocalShell.exec(trimmed, timeoutMs, storage)
             targetId.startsWith(CompanionTerminalTarget.LEGACY_PREFIX) -> {
                 val name = targetId.removePrefix(CompanionTerminalTarget.LEGACY_PREFIX)
                 CompanionTerminalLocalShell.execViaLegacyHost(storage, name, trimmed, timeoutMs)
@@ -2565,6 +2657,10 @@ class CompanionViewModel(
     }
 
     override fun onCleared() {
+        companionTerminalCollectorJob?.cancel()
+        companionTerminalCollectorJob = null
+        runCatching { companionTerminalSession?.disconnectAsync() }
+        companionTerminalSession = null
         cancelProjectExecution(rearm = false)
         robotConnectJob?.cancel()
         robotManager.setBodyPaused(true)

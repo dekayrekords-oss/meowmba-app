@@ -14,7 +14,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -27,44 +26,61 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.launch
 
 /**
  * Interactive shell session UI for the companion chat Terminal tab.
- * Monospace scrollback + prompt + history; runs via [onRunCommand].
+ *
+ * Scrollback is ViewModel-held ([scrollback]); this panel does not own the session.
+ * Connect opens a persistent PTY/shell; Send writes a line + newline to stdin.
  */
 @Composable
 fun CompanionTerminalPanel(
     targets: List<CompanionTerminalTarget>,
-    onRunCommand: suspend (targetId: String, command: String) -> String,
+    status: CompanionTerminalStatus,
+    statusDetail: String?,
+    scrollback: String,
+    connectedTargetId: String?,
+    onConnect: (targetId: String) -> Unit,
+    onDisconnect: () -> Unit,
+    onSendLine: (line: String) -> Unit,
+    onInterrupt: () -> Unit,
+    onClear: () -> Unit,
+    onResize: (cols: Int, rows: Int) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
 ) {
-    val scope = rememberCoroutineScope()
     val scroll = rememberScrollState()
-    val lines = remember { mutableStateListOf("Meow terminal ready. Pick a target, type a command, Enter.") }
     var draft by rememberSaveable { mutableStateOf("") }
-    var busy by remember { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
     var selectedId by rememberSaveable {
         mutableStateOf(targets.firstOrNull()?.id ?: CompanionTerminalTarget.LOCAL_ID)
     }
     val history = remember { mutableStateListOf<String>() }
     var historyIndex by remember { mutableStateOf(-1) }
+    val density = LocalDensity.current
+
+    // Keep picker in sync with an already-connected session.
+    LaunchedEffect(connectedTargetId) {
+        val id = connectedTargetId
+        if (!id.isNullOrBlank()) selectedId = id
+    }
 
     val selected = targets.firstOrNull { it.id == selectedId } ?: CompanionTerminalTarget.Local
     val promptHost = when (selected) {
@@ -78,26 +94,34 @@ fun CompanionTerminalPanel(
         is CompanionTerminalTarget.LegacyHost -> selected.name
     }
 
-    fun appendLine(text: String) {
-        text.split('\n').forEach { lines.add(it) }
-        while (lines.size > 2_000) lines.removeAt(0)
+    val connected = status == CompanionTerminalStatus.Connected
+    val connecting = status == CompanionTerminalStatus.Connecting
+    val statusLabel = when (status) {
+        CompanionTerminalStatus.Disconnected -> "disconnected"
+        CompanionTerminalStatus.Connecting -> "connecting…"
+        CompanionTerminalStatus.Connected -> "connected"
+        CompanionTerminalStatus.Error -> "error"
+    }
+    val statusColor = when (status) {
+        CompanionTerminalStatus.Disconnected -> Color(0xFF8B949E)
+        CompanionTerminalStatus.Connecting -> Color(0xFFD29922)
+        CompanionTerminalStatus.Connected -> Color(0xFF3FB950)
+        CompanionTerminalStatus.Error -> Color(0xFFF85149)
+    }
+
+    LaunchedEffect(scrollback) {
+        scroll.animateScrollTo(scroll.maxValue)
     }
 
     fun submit() {
-        val cmd = draft.trim()
-        if (cmd.isEmpty() || busy) return
-        appendLine("$promptUser@$promptHost$ $cmd")
+        val cmd = draft
+        if (cmd.isEmpty() && !connected) return
+        if (!connected) return
+        val line = cmd.trimEnd('\n')
         draft = ""
         historyIndex = -1
-        if (history.lastOrNull() != cmd) history.add(cmd)
-        busy = true
-        scope.launch {
-            val result = runCatching { onRunCommand(selected.id, cmd) }
-                .getOrElse { e -> "error: ${e.message ?: e.javaClass.simpleName}" }
-            appendLine(result.ifBlank { "(no output)" })
-            busy = false
-            scroll.animateScrollTo(scroll.maxValue)
-        }
+        if (line.isNotEmpty() && history.lastOrNull() != line) history.add(line)
+        onSendLine(line)
     }
 
     Column(
@@ -107,7 +131,10 @@ fun CompanionTerminalPanel(
             .padding(8.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = { menuOpen = true }) {
+            TextButton(
+                onClick = { menuOpen = true },
+                enabled = !connected && !connecting,
+            ) {
                 Text(selected.label, color = Color(0xFF58A6FF), fontSize = 12.sp)
             }
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
@@ -117,13 +144,33 @@ fun CompanionTerminalPanel(
                         onClick = {
                             selectedId = t.id
                             menuOpen = false
-                            appendLine("[switched to ${t.label}]")
                         },
                     )
                 }
             }
+            Text(
+                statusLabel,
+                style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = statusColor),
+                modifier = Modifier.padding(start = 4.dp),
+            )
+            if (!statusDetail.isNullOrBlank() && status == CompanionTerminalStatus.Error) {
+                Text(
+                    " · ${statusDetail.take(48)}",
+                    style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = Color(0xFFF85149)),
+                    maxLines = 1,
+                )
+            }
             Spacer(Modifier.weight(1f))
-            TextButton(onClick = { lines.clear(); lines.add("scrollback cleared") }) {
+            if (connected || connecting) {
+                TextButton(onClick = onDisconnect) {
+                    Text("Disconnect", fontSize = 12.sp, color = Color(0xFFF85149))
+                }
+            } else {
+                TextButton(onClick = { onConnect(selected.id) }) {
+                    Text("Connect", fontSize = 12.sp, color = Color(0xFF3FB950))
+                }
+            }
+            TextButton(onClick = onClear) {
                 Text("Clear", fontSize = 12.sp, color = Color(0xFF8B949E))
             }
         }
@@ -135,19 +182,27 @@ fun CompanionTerminalPanel(
                     .fillMaxWidth()
                     .verticalScroll(scroll)
                     .horizontalScroll(rememberScrollState())
-                    .padding(vertical = 4.dp),
+                    .padding(vertical = 4.dp)
+                    .onSizeChanged { size ->
+                        val cols = with(density) {
+                            (size.width.toDp().value / 7.2f).toInt().coerceIn(40, 200)
+                        }
+                        val rows = with(density) {
+                            (size.height.toDp().value / 14f).toInt().coerceIn(10, 80)
+                        }
+                        onResize(cols, rows)
+                    },
             ) {
-                lines.forEach { line ->
-                    Text(
-                        line,
-                        style = TextStyle(
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 12.sp,
-                            color = Color(0xFFC9D1D9),
-                            lineHeight = 16.sp,
-                        ),
-                    )
-                }
+                // Render as a single monospace block so mid-line PTY chunks stay intact.
+                Text(
+                    scrollback.ifEmpty { "Meow terminal — pick a target, Connect, then type.\n" },
+                    style = TextStyle(
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 12.sp,
+                        color = Color(0xFFC9D1D9),
+                        lineHeight = 16.sp,
+                    ),
+                )
             }
         }
 
@@ -158,14 +213,17 @@ fun CompanionTerminalPanel(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Text(
-                "$promptUser@$promptHost$",
-                style = TextStyle(
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 12.sp,
-                    color = Color(0xFF3FB950),
-                ),
-            )
+            // Visual hint only — real PS1 streams from the shell when connected.
+            if (!connected) {
+                Text(
+                    "$promptUser@$promptHost$",
+                    style = TextStyle(
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 12.sp,
+                        color = Color(0xFF484F58),
+                    ),
+                )
+            }
             BasicTextField(
                 value = draft,
                 onValueChange = { draft = it },
@@ -179,27 +237,28 @@ fun CompanionTerminalPanel(
                 ),
                 cursorBrush = SolidColor(Color(0xFF58A6FF)),
                 singleLine = true,
-                enabled = !busy,
+                enabled = connected,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(onSend = { submit() }),
             )
-            IconButton(enabled = !busy && draft.isNotBlank(), onClick = { submit() }) {
+            TextButton(
+                onClick = onInterrupt,
+                enabled = connected,
+            ) {
+                Text(
+                    "Ctrl-C",
+                    fontSize = 11.sp,
+                    color = if (connected) Color(0xFFD29922) else Color(0xFF484F58),
+                )
+            }
+            IconButton(enabled = connected && draft.isNotEmpty(), onClick = { submit() }) {
                 Icon(
                     Icons.AutoMirrored.Filled.Send,
-                    contentDescription = "Run command",
-                    tint = if (!busy && draft.isNotBlank()) Color(0xFF58A6FF) else Color(0xFF484F58),
+                    contentDescription = "Send to stdin",
+                    tint = if (connected && draft.isNotEmpty()) Color(0xFF58A6FF) else Color(0xFF484F58),
                 )
             }
         }
-        if (busy) {
-            Text(
-                "running…",
-                style = MaterialTheme.typography.labelSmall,
-                color = Color(0xFF8B949E),
-                modifier = Modifier.padding(top = 2.dp),
-            )
-        }
-        // Up-arrow history via long-press on prompt would be nice; expose last cmd buttons.
         if (history.isNotEmpty()) {
             Row(Modifier.padding(top = 2.dp)) {
                 TextButton(

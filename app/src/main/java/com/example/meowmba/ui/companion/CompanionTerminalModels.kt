@@ -34,18 +34,25 @@ sealed class CompanionTerminalTarget {
     }
 }
 
-/** Local / Termux / legacy-host shell helpers for the companion Terminal tab. */
+/** Local / Termux / legacy-host one-shot helpers (agentic-style). Prefer [CompanionTerminalSession] for the UI tab. */
 internal object CompanionTerminalLocalShell {
     private const val MAX_OUTPUT = 64_000
 
-    fun exec(command: String, timeoutMs: Long): String {
+    fun exec(command: String, timeoutMs: Long, storage: SecureStorageManager? = null): String {
         val shell = findLocalShell()
             ?: return "error: no local shell found (/system/bin/sh or Termux)"
         return try {
             val pb = ProcessBuilder(shell, "-c", command)
-            pb.redirectErrorStream(true)
-            val home = System.getenv("HOME")
-            if (!home.isNullOrBlank()) pb.directory(File(home))
+            pb.redirectErrorStream(true) // show stderr in the captured stream
+            val cwd = if (storage != null) {
+                CompanionTerminalSession.resolveLocalCwd(storage, shell)
+            } else {
+                fallbackCwd(shell)
+            }
+            if (cwd != null) pb.directory(cwd)
+            val env = pb.environment()
+            env["PATH"] = CompanionTerminalSession.mergePath(env["PATH"])
+            if (cwd != null) env["HOME"] = cwd.absolutePath
             val proc = pb.start()
             val finished = proc.waitFor(timeoutMs.coerceAtLeast(1_000L), TimeUnit.MILLISECONDS)
             if (!finished) {
@@ -76,7 +83,8 @@ internal object CompanionTerminalLocalShell {
             session.connect(10_000)
             try {
                 val channel = session.openChannel("exec") as ChannelExec
-                channel.setCommand(command)
+                // Land in home; do not smash a multi-word command — caller passes one shell string.
+                channel.setCommand("cd \"\$HOME\" 2>/dev/null; $command")
                 channel.setInputStream(null)
                 channel.connect(10_000)
                 val stdout = channel.inputStream.bufferedReader().use { it.readText() }.take(MAX_OUTPUT)
@@ -115,5 +123,15 @@ internal object CompanionTerminalLocalShell {
             val f = File(path)
             f.exists() && f.canExecute()
         }
+    }
+
+    private fun fallbackCwd(shellPath: String): File? {
+        if (shellPath.contains("com.termux")) {
+            val home = File("/data/data/com.termux/files/home")
+            if (home.isDirectory) return home
+        }
+        val home = System.getenv("HOME")?.let { File(it) }
+        if (home != null && home.isDirectory && home.canRead()) return home
+        return null
     }
 }

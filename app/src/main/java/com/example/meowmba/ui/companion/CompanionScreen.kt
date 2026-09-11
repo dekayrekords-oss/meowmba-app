@@ -62,6 +62,10 @@ fun CompanionScreen(
     onboardingVisible: Boolean = false,
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val terminalUiStatus by viewModel.companionTerminalStatus.collectAsState()
+    val terminalUiStatusDetail by viewModel.companionTerminalStatusDetail.collectAsState()
+    val terminalUiScrollback by viewModel.companionTerminalScrollback.collectAsState()
+    val terminalUiConnectedTargetId by viewModel.companionTerminalConnectedTargetId.collectAsState()
     val showOnboarding by viewModel.showOnboarding.collectAsState()
     // Pinned apps + drawer folders are used by both the base surfaces and the
     // shared overlay layer, so they live at the screen root.
@@ -1065,6 +1069,16 @@ fun CompanionScreen(
             callActive = uiState.callMode,
             onCallClick = { viewModel.toggleCallMode() },
             terminalTargets = viewModel.listCompanionTerminalTargets(),
+            terminalStatus = terminalUiStatus,
+            terminalStatusDetail = terminalUiStatusDetail,
+            terminalScrollback = terminalUiScrollback,
+            terminalConnectedTargetId = terminalUiConnectedTargetId,
+            onTerminalConnect = viewModel::connectCompanionTerminal,
+            onTerminalDisconnect = viewModel::disconnectCompanionTerminal,
+            onTerminalSendLine = viewModel::sendCompanionTerminalLine,
+            onTerminalInterrupt = viewModel::interruptCompanionTerminal,
+            onTerminalClear = viewModel::clearCompanionTerminalScrollback,
+            onTerminalResize = viewModel::resizeCompanionTerminal,
             onRunTerminalCommand = { targetId, command ->
                 viewModel.runCompanionTerminalCommand(targetId, command)
             },
