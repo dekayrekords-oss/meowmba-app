@@ -7,6 +7,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.platform.LocalContext
+import com.example.meowmba.core.config.FeatureFlags
+import com.example.meowmba.core.thermal.ThermalGovernor
 
 /** One display-rate clock, consumed in draw only. Pausing preserves the phase. */
 internal class SceneClock {
@@ -22,20 +25,29 @@ internal class SceneClock {
 /**
  * [interacting] = a clip is performing or a face is being tracked. Ambient
  * scenes (weather, backgrounds) pass false: their cycles are seconds long and
- * use the idle cadence (~30 FPS). Active paths admit ~60 FPS when cool;
+ * use the idle cadence (~half of Avatar FPS target). Active paths admit the
+ * user Avatar FPS target when cool (default ~30); LIGHT thermal halves FPS;
  * AvatarWorkPolicy still stops work at THERMAL_STATUS_MODERATE+.
  */
 @Composable
 internal fun rememberSceneClock(paused: Boolean, interacting: Boolean = true): SceneClock {
     val clock = remember { SceneClock() }
+    val context = LocalContext.current
+    val fpsTarget = FeatureFlags.from(context).avatarFpsTarget
     val active = rememberAvatarWorkAllowed() && !paused
-    LaunchedEffect(active, interacting) {
+    LaunchedEffect(active, interacting, fpsTarget) {
         if (!active) return@LaunchedEffect
         var previous = 0L
         val cadence = AvatarFrameCadence()
         while (true) {
             withFrameNanos { now ->
-                if (!cadence.admit(now, interacting)) return@withFrameNanos
+                if (!cadence.admit(
+                        now,
+                        interacting,
+                        fpsTarget = fpsTarget,
+                        thermalStatus = ThermalGovernor.currentStatus(),
+                    )
+                ) return@withFrameNanos
                 if (previous != 0L) clock.advance(now - previous)
                 previous = now
             }

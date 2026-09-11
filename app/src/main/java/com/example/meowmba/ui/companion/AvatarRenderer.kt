@@ -44,6 +44,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import com.example.meowmba.core.config.FeatureFlags
+import com.example.meowmba.core.thermal.ThermalGovernor
 import com.example.meowmba.core.lumen.ReflexSensoryFeed
 import com.example.meowmba.ui.companion.lumen.LumenReflexBridge
 import androidx.compose.ui.semantics.contentDescription
@@ -263,11 +264,12 @@ fun AvatarRenderer(
     val lumenPainter = remember { LumenPainter() }
     val lumenContext = LocalContext.current
     val lumenReflexV2 = remember(lumenContext) { FeatureFlags.from(lumenContext).lumenReflexV2 }
+    val avatarFpsTarget = FeatureFlags.from(lumenContext).avatarFpsTarget
     val lumenReflexBridge = remember { LumenReflexBridge() }
     val lumenLastFrame = remember { arrayOf(LumenFrame()) }
     val privacyColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
     val orbOrientation = rememberOrbOrientation(useSignalOrb && !paused)
-    // Single ambient clock (seconds). Advanced at ~60 fps and only while visible.
+    // Single ambient clock (seconds). Advanced at Avatar FPS target and only while visible.
     // Reading this in the Canvas draw lambda invalidates draw only — not a
     // full-composition thrash of 9 rememberInfiniteTransition states @ vsync.
     var clockSec by remember { mutableFloatStateOf(0f) }
@@ -282,7 +284,7 @@ fun AvatarRenderer(
     val latestComposed by rememberUpdatedState(composed)
     val latestPerformanceSequence by rememberUpdatedState(state.avatarPerformanceSequence)
     val latestFaceRadius by rememberUpdatedState(faceRadiusPx)
-    LaunchedEffect(paused, timings, displayRefreshRate) {
+    LaunchedEffect(paused, timings, displayRefreshRate, avatarFpsTarget) {
         timings?.setFrameCadence(displayRefreshRate?.takeIf { it.isFinite() && it > 0f }?.let { (1_000_000_000.0 / it).toLong() })
         if (paused) {
             timings?.pauseFrames()
@@ -298,11 +300,17 @@ fun AvatarRenderer(
             withFrameNanos { now ->
                 val clip = latestAnimation
                 val expression = latestComposed
-                // Performed clips / live expressions admit at ~60 FPS when cool.
-                // Idle breathing/sway use the lower idle cadence; thermal MODERATE+
-                // still pauses via AvatarWorkPolicy (animationsPaused).
+                // Performed clips / live expressions admit at Avatar FPS target when cool
+                // (default ~30). Idle uses half; LIGHT halves further; MODERATE+ pauses
+                // via AvatarWorkPolicy and cadence refuse.
                 val performing = clip != null || expression != null
-                if (!cadence.admit(now, performing)) return@withFrameNanos
+                if (!cadence.admit(
+                        now,
+                        performing,
+                        fpsTarget = avatarFpsTarget,
+                        thermalStatus = ThermalGovernor.currentStatus(),
+                    )
+                ) return@withFrameNanos
                 timings?.framePresented(now)
                 val id = if (performing) latestPerformanceSequence else null
                 val tick = frameClock.step(now, id)
@@ -315,7 +323,7 @@ fun AvatarRenderer(
                     runningExpression = expression
                 }
                 // The actor, custom clip and ambient face share this draw owner.
-                // Elapsed time remains continuous while redraws are capped at ~60 Hz when cool.
+                // Elapsed time remains continuous while redraws are capped at Avatar FPS when cool.
                 shotHolder[0] = if (expression != null)
                     motionEngine.update(tick.dt, latestFaceRadius.coerceIn(80f, 800f)) else null
                 drawEpoch++
@@ -550,13 +558,18 @@ fun AvatarRenderer(
     // the head makes — tracking a face, an idle weight shift, a performance.
     val earTrail = remember { Trailing(stiffness = 88f, bounce = 0.28f) }
     var earLag by remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(paused) {
+    LaunchedEffect(paused, avatarFpsTarget) {
         if (paused) return@LaunchedEffect
         var last = 0L
         val cadence = AvatarFrameCadence()
         while (true) {
             withFrameNanos { now ->
-                if (!cadence.admit(now)) return@withFrameNanos
+                if (!cadence.admit(
+                        now,
+                        fpsTarget = avatarFpsTarget,
+                        thermalStatus = ThermalGovernor.currentStatus(),
+                    )
+                ) return@withFrameNanos
                 val dt = if (last == 0L) 0.016f
                 else ((now - last) / 1_000_000_000f).coerceIn(1e-4f, 1f / 30f)
                 last = now

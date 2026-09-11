@@ -854,6 +854,8 @@ fun CompanionScreen(
                 onSaveAgenticModelConfig = viewModel::saveAgenticModelConfig,
                 lumenReflexGain = uiState.lumenReflexGain,
                 onLumenReflexGainChange = viewModel::setLumenReflexGain,
+                avatarFpsTarget = uiState.avatarFpsTarget,
+                onAvatarFpsTargetChange = viewModel::setAvatarFpsTarget,
                 onClose = { viewModel.toggleSettings() }
             )
         }
@@ -1062,6 +1064,10 @@ fun CompanionScreen(
             onMicClick = { viewModel.onChatMicClick() },
             callActive = uiState.callMode,
             onCallClick = { viewModel.toggleCallMode() },
+            terminalTargets = viewModel.listCompanionTerminalTargets(),
+            onRunTerminalCommand = { targetId, command ->
+                viewModel.runCompanionTerminalCommand(targetId, command)
+            },
             modifier = Modifier.align(Alignment.BottomCenter)
         )
 

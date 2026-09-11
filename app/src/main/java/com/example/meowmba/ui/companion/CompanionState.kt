@@ -416,6 +416,8 @@ data class CompanionState(
     val lumenReflexV2Enabled: Boolean = false,
     val agenticRuntimeV1Enabled: Boolean = false,
     val lumenReflexGain: Float = 1f,
+    /** Avatar ACTIVE FPS target when cool (15/30/45/60). Default 30. */
+    val avatarFpsTarget: Int = 30,
     /** Goal waiting on side-effecting ssh_exec approval (agentic_runtime_v1). */
     val agenticPendingApprovalGoalId: String? = null,
     val agenticPendingApprovalTitle: String? = null,

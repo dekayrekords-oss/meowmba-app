@@ -44,6 +44,8 @@ fun NeuralSettingsSection(
     onAgenticRuntimeV1Change: (Boolean) -> Unit = {},
     reflexGain: Float = 1f,
     onReflexGainChange: (Float) -> Unit = {},
+    avatarFpsTarget: Int = 30,
+    onAvatarFpsTargetChange: (Int) -> Unit = {},
     showNeuralCoreControls: Boolean = false,
     connectionProfiles: List<ConnectionProfile> = emptyList(),
     onSaveConnectionProfile: (ConnectionProfile) -> Unit = {},
@@ -101,6 +103,31 @@ fun NeuralSettingsSection(
             )
         }
 
+
+        Spacer(Modifier.height(12.dp))
+        Text("Avatar FPS", style = MaterialTheme.typography.titleSmall)
+        Text(
+            "Decorative animation rate when the device is cool. Default 30 keeps heat down after the ~60fps spike; " +
+                "THERMAL_STATUS_LIGHT halves this, and MODERATE+ still pauses avatar work.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) {
+            listOf(15, 30, 45, 60).forEach { fps ->
+                Button(
+                    onClick = { onAvatarFpsTargetChange(fps) },
+                    enabled = fps != avatarFpsTarget,
+                    modifier = Modifier.padding(end = 4.dp),
+                ) {
+                    Text("${fps}")
+                }
+            }
+        }
+        Text(
+            "Active target ${avatarFpsTarget} FPS (idle ~${avatarFpsTarget / 2})",
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(top = 4.dp),
+        )
 
         if (agenticRuntimeV1) {
             Spacer(Modifier.height(16.dp))

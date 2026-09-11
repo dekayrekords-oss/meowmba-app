@@ -148,6 +148,8 @@ fun SettingsScreen(
     onSaveAgenticModelConfig: (String, String, String, String) -> Unit = { _, _, _, _ -> },
     lumenReflexGain: Float = 1f,
     onLumenReflexGainChange: (Float) -> Unit = {},
+    avatarFpsTarget: Int = 30,
+    onAvatarFpsTargetChange: (Int) -> Unit = {},
     onSaved: () -> Unit = {},
     onClose: () -> Unit
 ) {
@@ -248,6 +250,8 @@ fun SettingsScreen(
                     onSaveAgenticModelConfig = onSaveAgenticModelConfig,
                     reflexGain = lumenReflexGain,
                     onReflexGainChange = onLumenReflexGainChange,
+                    avatarFpsTarget = avatarFpsTarget,
+                    onAvatarFpsTargetChange = onAvatarFpsTargetChange,
                 )
             }
             if (page == "Help & feedback") BetaHelpCard()

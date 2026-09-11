@@ -367,3 +367,21 @@ Done (behind `lumen_reflex_v2` / `agentic_runtime_v1`, defaults **OFF**, no FlyW
 ## Terminal-clone plan
 
 Condensed computer/terminal-clone setups (Termux / SSH host / HTTPS_RUNTIME), `ssh_exec` loop, and journals: [`TERMINAL_CLONE_AGENTIC.md`](./TERMINAL_CLONE_AGENTIC.md).
+
+## Thermal / Avatar FPS (heat fix)
+
+### Root cause
+Commit that raised decorative **ACTIVE** cadence to ~60 FPS (`AvatarFrameCadence.ACTIVE_INTERVAL_NS = 16ms`) made idle/breathing/Lumen redraws peg high-refresh OLEDs. `THERMAL_STATUS_LIGHT` did not reduce admit rate — only `MODERATE+` paused via `AvatarWorkPolicy`, so heat climbed under normal interactive use.
+
+### Fix
+- Default ACTIVE target is **30 FPS**; idle is ~half of the user target.
+- Settings → **Neural / Lumen** → **Avatar FPS** presets **15 / 30 / 45 / 60** persist as `avatar_fps_target` via `FeatureFlags` / `SecureStorage`.
+- `THERMAL_STATUS_LIGHT` halves effective FPS; `MODERATE+` still pauses decorative work (`AvatarWorkPolicy`) and `AvatarFrameCadence.admit` refuses frames.
+- Wired through `AvatarRenderer`, `SceneClock`, and `AvatarFrameCadence`.
+
+### Companion Terminal tab
+- Chat overlay now has **Chat | Terminal** tabs.
+- Terminal is an interactive monospace shell (prompt, scrollback, history Prev/Next) via `CompanionTerminalPanel`.
+- Targets: Local shell (Termux/`/system/bin/sh`) + agentic `ConnectionProfile` SSH (`DefaultAgenticSshExecutor` / JSch) + legacy `SshHostRegistry` hosts.
+- How-to: open chat → **Terminal** tab → pick target → type command → Send. Add SSH profiles under Settings → Neural / Lumen when agentic runtime is enabled.
+

@@ -2232,12 +2232,14 @@ class CompanionViewModel(
         val s = _uiState.value
         if (s.lumenReflexV2Enabled != flags.lumenReflexV2 ||
             s.agenticRuntimeV1Enabled != flags.agenticRuntimeV1 ||
-            kotlin.math.abs(s.lumenReflexGain - flags.lumenReflexGain) > 0.001f
+            kotlin.math.abs(s.lumenReflexGain - flags.lumenReflexGain) > 0.001f ||
+            s.avatarFpsTarget != flags.avatarFpsTarget
         ) {
             _uiState.value = s.copy(
                 lumenReflexV2Enabled = flags.lumenReflexV2,
                 agenticRuntimeV1Enabled = flags.agenticRuntimeV1,
                 lumenReflexGain = flags.lumenReflexGain,
+                avatarFpsTarget = flags.avatarFpsTarget,
                 reflexSummary = if (flags.lumenReflexV2) s.reflexSummary else null,
             )
         }
@@ -2266,6 +2268,12 @@ class CompanionViewModel(
     fun setLumenReflexGain(gain: Float) {
         val storage = secureStorage ?: return
         FeatureFlags.from(storage.context).setLumenReflexGain(gain)
+        refreshLumenFlagMirrors()
+    }
+
+    fun setAvatarFpsTarget(fps: Int) {
+        val storage = secureStorage ?: return
+        FeatureFlags.from(storage.context).setAvatarFpsTarget(fps)
         refreshLumenFlagMirrors()
     }
 
@@ -2466,6 +2474,78 @@ class CompanionViewModel(
         val storage = secureStorage ?: return "no storage"
         if (!FeatureFlags.from(storage.context).agenticRuntimeV1) return "agentic flag OFF"
         return AgenticRuntime.from(storage.context).sshCapability().summary
+    }
+
+    /** Targets for the companion Terminal tab (local + SSH connection profiles). */
+    fun listCompanionTerminalTargets(): List<CompanionTerminalTarget> {
+        val storage = secureStorage ?: return listOf(CompanionTerminalTarget.Local)
+        val profiles = runCatching {
+            val db = com.example.meowmba.core.database.MeowmbaDatabase.getDatabase(storage.context)
+            com.example.meowmba.core.agentic.RoomConnectionProfileStore(db.connectionProfileDao()).list()
+                .filter { it.type == com.example.meowmba.core.agentic.ConnectionProfileType.SSH }
+        }.getOrDefault(emptyList())
+        val hosts = runCatching {
+            com.example.meowmba.core.ssh.SshHostRegistry(storage).list()
+        }.getOrDefault(emptyList())
+        return buildList {
+            add(CompanionTerminalTarget.Local)
+            profiles.forEach { add(CompanionTerminalTarget.AgenticProfile(it)) }
+            hosts.forEach { add(CompanionTerminalTarget.LegacyHost(it.name)) }
+        }
+    }
+
+    /**
+     * Interactive terminal exec (user-initiated). Never logs secrets.
+     * Local uses /system/bin/sh (or Termux sh when present); SSH uses
+     * DefaultAgenticSshExecutor / JSch with the selected ConnectionProfile.
+     */
+    suspend fun runCompanionTerminalCommand(
+        targetId: String,
+        command: String,
+        timeoutMs: Long = 60_000L,
+    ): String = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val trimmed = command.trim()
+        if (trimmed.isEmpty()) return@withContext ""
+        val storage = secureStorage
+            ?: return@withContext "error: secure storage unavailable"
+        when {
+            targetId.isBlank() || targetId == CompanionTerminalTarget.LOCAL_ID ->
+                CompanionTerminalLocalShell.exec(trimmed, timeoutMs)
+            targetId.startsWith(CompanionTerminalTarget.LEGACY_PREFIX) -> {
+                val name = targetId.removePrefix(CompanionTerminalTarget.LEGACY_PREFIX)
+                CompanionTerminalLocalShell.execViaLegacyHost(storage, name, trimmed, timeoutMs)
+            }
+            else -> {
+                val db = com.example.meowmba.core.database.MeowmbaDatabase.getDatabase(storage.context)
+                val profiles = com.example.meowmba.core.agentic.RoomConnectionProfileStore(db.connectionProfileDao())
+                val credentials = com.example.meowmba.core.agentic.SecureStorageCredentialResolver(storage)
+                val executor = com.example.meowmba.core.agentic.DefaultAgenticSshExecutor(
+                    enabled = { true },
+                    profiles = profiles,
+                    credentials = credentials,
+                    allowJschFallback = true,
+                )
+                when (val result = executor.exec(targetId, listOf("bash", "-lc", trimmed), timeoutMs)) {
+                    is com.example.meowmba.core.agentic.SshExecResult.Ok -> {
+                        buildString {
+                            if (result.stdout.isNotEmpty()) append(result.stdout)
+                            if (result.stderr.isNotEmpty()) {
+                                if (isNotEmpty()) append('\n')
+                                append(result.stderr)
+                            }
+                            if (isEmpty()) append("(exit ${result.exitCode})")
+                            else if (result.exitCode != 0) append("\n[exit ${result.exitCode}]")
+                        }
+                    }
+                    is com.example.meowmba.core.agentic.SshExecResult.NotEnabled ->
+                        result.message
+                    is com.example.meowmba.core.agentic.SshExecResult.Unsupported ->
+                        result.message
+                    is com.example.meowmba.core.agentic.SshExecResult.Error ->
+                        result.message
+                }
+            }
+        }
     }
 
     fun saveAgenticModelConfig(
