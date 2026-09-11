@@ -143,6 +143,8 @@ import com.example.meowmba.core.security.CleartextPolicy
 import com.example.meowmba.core.agent.tools.ToolResult
 import kotlinx.coroutines.withTimeout
 import com.example.meowmba.core.security.SecureStorageManager
+import com.example.meowmba.core.config.ComputerPowerState
+import com.example.meowmba.core.config.ComputerPowerStore
 import com.example.meowmba.core.config.FeatureFlags
 import com.example.meowmba.core.agentic.AgenticRuntime
 import com.example.meowmba.core.agentic.ConnectionProfile
@@ -232,11 +234,12 @@ class CompanionViewModel(
     private val _companionTerminalStatusDetail = MutableStateFlow<String?>(null)
     val companionTerminalStatusDetail = _companionTerminalStatusDetail.asStateFlow()
     private val _companionTerminalScrollback = MutableStateFlow(
-        "Meow terminal — pick a target, Connect, then type.\n",
+        "Meow terminal — pick Computer or SSH, then Connect.\n",
     )
     val companionTerminalScrollback = _companionTerminalScrollback.asStateFlow()
     private val _companionTerminalConnectedTargetId = MutableStateFlow<String?>(null)
     val companionTerminalConnectedTargetId = _companionTerminalConnectedTargetId.asStateFlow()
+    private var computerIdleWatchJob: Job? = null
 
     private val _mouthEnergy = kotlinx.coroutines.flow.MutableStateFlow(0f)
     val mouthEnergy: kotlinx.coroutines.flow.StateFlow<Float> = _mouthEnergy.asStateFlow()
@@ -1173,6 +1176,8 @@ class CompanionViewModel(
         // Soft hint only — never drives SSH from Lumen frame loop.
         refreshAgenticPresenceHint()
         refreshLumenFlagMirrors()
+        refreshComputerPowerMirror()
+        syncComputerIdleWatch()
         // Any weather fetch — including the agent's tool call — surfaces the card and moves
         // the cat's expression to match the sky.
         weatherRepository?.let { repo ->
@@ -2260,6 +2265,127 @@ class CompanionViewModel(
                 reflexSummary = if (flags.lumenReflexV2) s.reflexSummary else null,
             )
         }
+        refreshComputerPowerMirror()
+    }
+
+    private fun computerStore(): ComputerPowerStore? {
+        val storage = secureStorage ?: return null
+        return ComputerPowerStore(storage)
+    }
+
+    private fun refreshComputerPowerMirror() {
+        val store = computerStore() ?: return
+        val s = _uiState.value
+        if (s.computerPowerState != store.state || s.computerIdleMinutes != store.idleMinutes) {
+            _uiState.value = s.copy(
+                computerPowerState = store.state,
+                computerIdleMinutes = store.idleMinutes,
+            )
+        }
+    }
+
+    /**
+     * Computer Off | Idle | On.
+     * Off kills the guest and cancels idle ticks (no Termux/PRoot held).
+     * Idle disconnects the PTY and stops guest processes; disk/state stay.
+     * On from Idle/Off reconnects (no reinstall).
+     */
+    fun setComputerPowerState(state: ComputerPowerState) {
+        val storage = secureStorage ?: return
+        val store = ComputerPowerStore(storage)
+        val prev = store.state
+        if (prev == state && state != ComputerPowerState.On) {
+            refreshComputerPowerMirror()
+            return
+        }
+        store.setState(state)
+        refreshComputerPowerMirror()
+        when (state) {
+            ComputerPowerState.Off -> {
+                viewModelScope.launch(Dispatchers.IO) {
+                    val session = companionTerminalSession
+                    if (session != null && (
+                            session.isComputerGuest() ||
+                                session.connectedTargetId.value == CompanionTerminalTarget.LOCAL_ID
+                            )
+                    ) {
+                        session.disconnect()
+                    }
+                    appendCompanionTerminalOutput(
+                        "[Computer off — no CPU. Guest disk kept; Turn On to wake.]\n",
+                    )
+                }
+                syncComputerIdleWatch()
+            }
+            ComputerPowerState.Idle -> {
+                viewModelScope.launch(Dispatchers.IO) {
+                    val session = companionTerminalSession
+                    if (session != null && (
+                            session.isComputerGuest() ||
+                                session.connectedTargetId.value == CompanionTerminalTarget.LOCAL_ID
+                            )
+                    ) {
+                        session.disconnect()
+                    }
+                    appendCompanionTerminalOutput(
+                        "[Computer idle — asleep. Disk kept. Turn On or Wake to reconnect.]\n",
+                    )
+                }
+                syncComputerIdleWatch()
+            }
+            ComputerPowerState.On -> {
+                appendCompanionTerminalOutput("[Computer on — starting guest.]\n")
+                syncComputerIdleWatch()
+                connectCompanionTerminal(CompanionTerminalTarget.LOCAL_ID)
+            }
+        }
+    }
+
+    fun setComputerIdleMinutes(minutes: Int) {
+        val store = computerStore() ?: return
+        store.setIdleMinutes(minutes)
+        refreshComputerPowerMirror()
+        syncComputerIdleWatch()
+    }
+
+    /**
+     * Cheap inactivity watch — only while Computer is On. Off = no ticks.
+     * Uses last stdin/stdout time on the Computer guest session.
+     */
+    private fun syncComputerIdleWatch() {
+        computerIdleWatchJob?.cancel()
+        computerIdleWatchJob = null
+        val storage = secureStorage ?: return
+        val store = ComputerPowerStore(storage)
+        if (store.state != ComputerPowerState.On) return
+        computerIdleWatchJob = viewModelScope.launch(Dispatchers.IO) {
+            while (isActive) {
+                delay(15_000)
+                val live = ComputerPowerStore(storage)
+                if (live.state != ComputerPowerState.On) break
+                val session = companionTerminalSession ?: continue
+                if (!session.isComputerGuest() &&
+                    session.connectedTargetId.value != CompanionTerminalTarget.LOCAL_ID
+                ) {
+                    continue
+                }
+                if (session.status.value != CompanionTerminalStatus.Connected) continue
+                val limitMs = live.idleMinutes.coerceIn(
+                    ComputerPowerStore.MIN_IDLE,
+                    ComputerPowerStore.MAX_IDLE,
+                ) * 60_000L
+                val idleFor = android.os.SystemClock.elapsedRealtime() - session.lastIoElapsedMs
+                if (idleFor >= limitMs) {
+                    live.setState(ComputerPowerState.Idle)
+                    refreshComputerPowerMirror()
+                    session.disconnect()
+                    appendCompanionTerminalOutput(
+                        "[Computer idle — unused ${live.idleMinutes} min. Guest asleep.]\n",
+                    )
+                    break
+                }
+            }
+        }
     }
 
     fun setLumenReflexV2(enabled: Boolean) {
@@ -2563,6 +2689,16 @@ class CompanionViewModel(
             appendCompanionTerminalOutput("error: secure storage unavailable\n")
             return
         }
+        val local = targetId.isBlank() || targetId == CompanionTerminalTarget.LOCAL_ID
+        if (local) {
+            val store = computerStore()
+            if (store != null && store.state != ComputerPowerState.On) {
+                store.setState(ComputerPowerState.On)
+                refreshComputerPowerMirror()
+                appendCompanionTerminalOutput("[Computer on — reconnecting guest.]\n")
+            }
+            syncComputerIdleWatch()
+        }
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             session.connect(targetId)
         }
@@ -2661,6 +2797,8 @@ class CompanionViewModel(
     }
 
     override fun onCleared() {
+        computerIdleWatchJob?.cancel()
+        computerIdleWatchJob = null
         companionTerminalCollectorJob?.cancel()
         companionTerminalCollectorJob = null
         runCatching { companionTerminalSession?.disconnectAsync() }

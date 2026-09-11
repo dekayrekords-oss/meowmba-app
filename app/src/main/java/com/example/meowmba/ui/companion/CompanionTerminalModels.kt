@@ -14,19 +14,14 @@ sealed class CompanionTerminalTarget {
     abstract val label: String
 
     /**
-     * Local Linux target — Termux when executable, else app sandbox.
-     * Labels: "Termux Linux" vs "Local sandbox" (SSH profiles are separate).
+     * Computer — Linux guest (Termux/PRoot when executable, else app sandbox).
+     * User-facing label is always **Computer**. SSH profiles stay separate.
      */
     data class Local(
         val kind: LocalLinuxKind = LocalLinuxKind.LOCAL_SANDBOX,
     ) : CompanionTerminalTarget() {
         override val id: String = LOCAL_ID
-        override val label: String = when (kind) {
-            LocalLinuxKind.TERMUX_LINUX -> "Termux Linux"
-            LocalLinuxKind.TERMUX_RUN_COMMAND,
-            LocalLinuxKind.LOCAL_SANDBOX,
-            -> "Local sandbox"
-        }
+        override val label: String = "Computer"
     }
 
     data class AgenticProfile(val profile: ConnectionProfile) : CompanionTerminalTarget() {
@@ -45,7 +40,7 @@ sealed class CompanionTerminalTarget {
     }
 }
 
-/** Local / Termux / legacy-host one-shot helpers (agentic-style). Prefer [CompanionTerminalSession] for the UI tab. */
+/** Computer / Termux / legacy-host one-shot helpers (agentic-style). Prefer [CompanionTerminalSession] for the UI tab. */
 internal object CompanionTerminalLocalShell {
     private const val MAX_OUTPUT = 64_000
 
@@ -75,7 +70,7 @@ internal object CompanionTerminalLocalShell {
             val finished = proc.waitFor(timeoutMs.coerceAtLeast(1_000L), TimeUnit.MILLISECONDS)
             if (!finished) {
                 proc.destroyForcibly()
-                return "error: local shell timed out after ${timeoutMs}ms"
+                return "error: Computer shell timed out after ${timeoutMs}ms"
             }
             val out = proc.inputStream.bufferedReader().use { it.readText() }.take(MAX_OUTPUT)
             if (out.isNotEmpty()) out else "(exit ${proc.exitValue()})"

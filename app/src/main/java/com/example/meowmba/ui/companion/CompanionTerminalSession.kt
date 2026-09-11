@@ -40,10 +40,11 @@ enum class CompanionTerminalStatus {
  * Persistent interactive shell for the companion Terminal tab.
  *
  * Remote: JSch [Session] + [ChannelShell] with PTY (stderr merges via PTY).
- * Local Linux (see [LocalLinuxSupport]): prefer Termux bash/sh when executable,
+ * Computer (see [LocalLinuxSupport]): prefer Termux bash/sh when executable,
  * else sandbox `/system/bin/sh` with PATH + [LocalShellBuiltins] for `ls`/`pwd`.
- * Clear UI when Termux is missing or SELinux blocks exec. No root / Magisk /
- * SELinux bypass — SSH profiles reach a full machine (meow).
+ * Clear UI when Termux is missing or SELinux blocks exec. No phone root / Magisk /
+ * SELinux bypass — guest root is PRoot only. SSH profiles reach a full machine (meow).
+ * Last stdin/stdout time drives Computer Idle timeout ([noteIoActivity]).
  *
  * Agentic one-shot [ChannelExec] stays on [DefaultAgenticSshExecutor] —
  * this class is session-oriented only. Never logs credential material.
@@ -85,6 +86,17 @@ class CompanionTerminalSession(
     private val isLocalSession = AtomicBoolean(false)
     /** App sandbox cwd used for local builtins (ls/pwd). */
     @Volatile private var localCwd: File? = null
+
+    /** ElapsedRealtime of last Computer stdin or stdout (Idle timeout). */
+    @Volatile var lastIoElapsedMs: Long = android.os.SystemClock.elapsedRealtime()
+        private set
+
+    fun noteIoActivity() {
+        lastIoElapsedMs = android.os.SystemClock.elapsedRealtime()
+    }
+
+    /** True while the backend is the Computer guest (Termux/PRoot/sandbox), not JSch. */
+    fun isComputerGuest(): Boolean = isLocalSession.get()
 
     private var ptyCols: Int = 80
     private var ptyRows: Int = 24
@@ -135,6 +147,7 @@ class CompanionTerminalSession(
         if (bytes.isEmpty()) return
         if (_status.value != CompanionTerminalStatus.Connected) return
         val stream = stdin ?: return
+        noteIoActivity()
         scope.launch(Dispatchers.IO) {
             runCatching {
                 stream.write(bytes)
@@ -147,7 +160,7 @@ class CompanionTerminalSession(
 
     fun sendLine(line: String) {
         val raw = if (line.endsWith("\n")) line.dropLast(1) else line
-        // Local sandbox: Java builtins for ls/pwd, else rewrite to absolute/toybox.
+        // Computer sandbox: Java builtins for ls/pwd, else rewrite to absolute/toybox.
         if (isLocalSession.get()) {
             val cwd = localCwd ?: storage.context.filesDir
             val builtin = LocalShellBuiltins.tryBuiltin(raw, cwd)
@@ -227,7 +240,7 @@ class CompanionTerminalSession(
         val shell = probe.shellPath
             ?: LocalLinuxSupport.findPreferredShell()
             ?: error(
-                "no local shell found (/system/bin/sh or Termux). " +
+                "no Computer shell found (/system/bin/sh or Termux). " +
                     LocalLinuxSupport.INSTALL_TERMUX_MSG,
             )
         val cwd = LocalLinuxSupport.resolveCwd(storage.context.filesDir, shell, probe.kind)
@@ -249,7 +262,7 @@ class CompanionTerminalSession(
             val sandbox = LocalLinuxSupport.findSandboxShell()
             if (sandbox == null || sandbox == shell) {
                 error(
-                    "cannot start local shell (${e.message ?: e.javaClass.simpleName}). " +
+                    "cannot start Computer shell (${e.message ?: e.javaClass.simpleName}). " +
                         LocalLinuxSupport.INSTALL_TERMUX_MSG,
                 )
             }
@@ -273,7 +286,8 @@ class CompanionTerminalSession(
         isLocalSession.set(true)
         localCwd = cwd
         _needsLocalEcho.value = true
-        // Banner: Termux Linux vs Local sandbox (honest limits).
+        // Banner: Computer · Termux vs Computer · sandbox (honest limits).
+        noteIoActivity()
         emitSafe(LocalShellBuiltins.bannerLine(cwd, probe))
         probe.installHint?.let { hint ->
             emitSafe("$hint\n")
@@ -291,7 +305,7 @@ class CompanionTerminalSession(
         }
         startReader(proc.inputStream, label = null) {
             if (!proc.isAlive) {
-                emitSafe("\n[local shell exited ${proc.exitValue()}]\n")
+                emitSafe("\n[Computer shell exited ${proc.exitValue()}]\n")
                 scope.launch(Dispatchers.IO) {
                     mutex.withLock { disconnectLocked(emitStatus = true) }
                 }
@@ -455,6 +469,7 @@ class CompanionTerminalSession(
 
     private fun emitSafe(text: String) {
         if (text.isEmpty()) return
+        if (isLocalSession.get()) noteIoActivity()
         _output.tryEmit(text)
     }
 

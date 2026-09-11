@@ -418,6 +418,10 @@ data class CompanionState(
     val lumenReflexGain: Float = 1f,
     /** Avatar ACTIVE FPS target when cool (15/30/45/60). Default 30. */
     val avatarFpsTarget: Int = 30,
+    /** Computer guest power: Off / Idle / On. Default Idle (asleep, cheap). */
+    val computerPowerState: com.example.meowmba.core.config.ComputerPowerState =
+        com.example.meowmba.core.config.ComputerPowerState.Idle,
+    val computerIdleMinutes: Int = 5,
     /** Goal waiting on side-effecting ssh_exec approval (agentic_runtime_v1). */
     val agenticPendingApprovalGoalId: String? = null,
     val agenticPendingApprovalTitle: String? = null,

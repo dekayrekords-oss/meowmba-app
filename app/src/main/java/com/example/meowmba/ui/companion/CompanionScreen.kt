@@ -860,6 +860,10 @@ fun CompanionScreen(
                 onLumenReflexGainChange = viewModel::setLumenReflexGain,
                 avatarFpsTarget = uiState.avatarFpsTarget,
                 onAvatarFpsTargetChange = viewModel::setAvatarFpsTarget,
+                computerPower = uiState.computerPowerState,
+                onComputerPowerChange = viewModel::setComputerPowerState,
+                computerIdleMinutes = uiState.computerIdleMinutes,
+                onComputerIdleMinutesChange = viewModel::setComputerIdleMinutes,
                 onClose = { viewModel.toggleSettings() }
             )
         }
@@ -1082,6 +1086,8 @@ fun CompanionScreen(
             onRunTerminalCommand = { targetId, command ->
                 viewModel.runCompanionTerminalCommand(targetId, command)
             },
+            computerPower = uiState.computerPowerState,
+            onComputerPower = viewModel::setComputerPowerState,
             modifier = Modifier.align(Alignment.BottomCenter)
         )
 

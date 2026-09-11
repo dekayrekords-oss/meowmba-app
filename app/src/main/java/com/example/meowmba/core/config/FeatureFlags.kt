@@ -8,6 +8,8 @@ import com.example.meowmba.core.security.SecureStorageManager
  * Defaults OFF. Values persist via [SecureStorageManager] boolean prefs.
  *
  * Keys match the product flag names: `lumen_reflex_v2`, `agentic_runtime_v1`.
+ * Computer Off/Idle/On lives on [ComputerPowerStore] (not a feature flag) so
+ * Off can skip Computer background ticks without touching these keys.
  */
 class FeatureFlags(private val storage: SecureStorageManager) {
 

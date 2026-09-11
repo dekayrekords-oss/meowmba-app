@@ -6,7 +6,7 @@ import com.example.meowmba.core.agentic.AgenticSshCapability
 import java.io.File
 
 /**
- * Legitimate local Linux paths for the companion Terminal and agentic [local_shell].
+ * Legitimate Computer (Linux guest) paths for the companion Terminal and agentic [local_shell].
  *
  * Preference order (no Magisk / SELinux bypass / phone root / other-app private data):
  * 1. Termux bash/sh when executable from this UID — userspace Linux. Prefer a
@@ -55,7 +55,10 @@ object LocalLinuxSupport {
 
     /** Clear UI copy when the user expects apt/ls and only has sandbox sh. */
     const val INSTALL_TERMUX_MSG =
-        "Install Termux for a real local Linux; sandbox sh cannot do ls/apt"
+        "Install Termux for a real Computer guest; sandbox sh cannot do ls/apt"
+
+    const val COMPUTER_COPY =
+        "Computer is a Linux guest (root inside only). It can SSH out. Off = no CPU. Idle = asleep."
 
     /**
      * Documented bootstrap for micro Linux + outbound SSH from the guest.
@@ -116,11 +119,11 @@ object LocalLinuxSupport {
                 termuxInstalled = installed || prefixVisible,
                 termuxPrefixVisible = prefixVisible,
                 termuxExecutable = true,
-                label = "Termux Linux",
+                label = "Computer",
                 bannerHint =
-                    "Termux userspace Linux — use proot-distro / proot -0 for root-in-guest " +
-                        "(not phone root). Install openssh client in guest to ssh out to meow. " +
-                        "App SSH profiles also work.",
+                    "Computer · Termux — Linux guest (root inside only). It can SSH out. " +
+                        "Off = no CPU. Idle = asleep. Guest root != phone root. " +
+                        "proot-distro / proot -0 for root-in-guest; openssh-client to ssh to meow.",
                 installHint = BOOTSTRAP_HINT,
             )
             installed || prefixVisible -> LocalLinuxProbe(
@@ -129,11 +132,11 @@ object LocalLinuxSupport {
                 termuxInstalled = true,
                 termuxPrefixVisible = prefixVisible,
                 termuxExecutable = false,
-                label = "Local sandbox",
+                label = "Computer",
                 bannerHint =
-                    "Termux is installed but its binaries are not executable from this app (SELinux). " +
-                        "Enable Termux allow-external-apps for RUN_COMMAND one-shots; " +
-                        "interactive shell stays sandbox. $INSTALL_TERMUX_MSG",
+                    "Computer · sandbox — Termux is installed but not executable from this app (SELinux). " +
+                        "Enable allow-external-apps for RUN_COMMAND; interactive shell stays sandbox. " +
+                        COMPUTER_COPY + " $INSTALL_TERMUX_MSG",
                 installHint =
                     "Enable Termux allow-external-apps for RUN_COMMAND. " + BOOTSTRAP_HINT +
                         " Or use an app SSH profile for meow.",
@@ -144,11 +147,11 @@ object LocalLinuxSupport {
                 termuxInstalled = false,
                 termuxPrefixVisible = false,
                 termuxExecutable = false,
-                label = "Local sandbox",
+                label = "Computer",
                 bannerHint =
-                    "Local APK cannot leave the Android sandbox. $INSTALL_TERMUX_MSG. " +
-                        "For userspace micro Linux + guest root + ssh client: install Termux, " +
-                        "then proot-distro. App SSH profiles still reach meow.",
+                    "Computer · sandbox — APK cannot leave the Android sandbox. $INSTALL_TERMUX_MSG. " +
+                        COMPUTER_COPY +
+                        " Install Termux + proot-distro for a fuller guest. App SSH profiles still reach meow.",
                 installHint = INSTALL_TERMUX_MSG + " — " + BOOTSTRAP_HINT,
             )
         }

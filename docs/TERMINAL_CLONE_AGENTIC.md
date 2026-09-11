@@ -82,7 +82,7 @@ Settings → Neural / Lumen (flag ON):
 - Integration checklist: [`INTEGRATION_LUMEN_AGENTIC.md`](./INTEGRATION_LUMEN_AGENTIC.md)
 - Code: `app/src/main/java/com/example/meowmba/core/agentic/`
 
-- [`LOCAL_LINUX.md`](./LOCAL_LINUX.md) — Local sandbox vs Termux Linux vs SSH (honest limits)
+- [`LOCAL_LINUX.md`](./LOCAL_LINUX.md) — Computer (Linux guest) vs SSH (honest limits; Off/Idle/On)
 
 ## HTTPS_RUNTIME worker client (on-device)
 

@@ -407,6 +407,6 @@ Commit that raised decorative **ACTIVE** cadence to ~60 FPS (`AvatarFrameCadence
 ### Companion Terminal tab
 - Chat overlay now has **Chat | Terminal** tabs.
 - Terminal is an interactive monospace shell (prompt, scrollback, history Prev/Next) via `CompanionTerminalPanel`.
-- Targets: Local shell (Termux/`/system/bin/sh`) + agentic `ConnectionProfile` SSH (`DefaultAgenticSshExecutor` / JSch) + legacy `SshHostRegistry` hosts.
+- Targets: Computer (Termux/`/system/bin/sh` Linux guest) + agentic `ConnectionProfile` SSH (`DefaultAgenticSshExecutor` / JSch) + legacy `SshHostRegistry` hosts.
 - How-to: open chat → **Terminal** tab → pick target → type command → Send. Add SSH profiles under Settings → Neural / Lumen when agentic runtime is enabled.
 

@@ -64,6 +64,9 @@ fun CompanionTerminalPanel(
     onInterrupt: () -> Unit,
     onClear: () -> Unit,
     onResize: (cols: Int, rows: Int) -> Unit = { _, _ -> },
+    computerPower: com.example.meowmba.core.config.ComputerPowerState =
+        com.example.meowmba.core.config.ComputerPowerState.Idle,
+    onComputerPower: (com.example.meowmba.core.config.ComputerPowerState) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val scroll = rememberScrollState()
@@ -84,10 +87,7 @@ fun CompanionTerminalPanel(
 
     val selected = targets.firstOrNull { it.id == selectedId } ?: CompanionTerminalTarget.Local()
     val promptHost = when (selected) {
-        is CompanionTerminalTarget.Local -> when (selected.kind) {
-            LocalLinuxKind.TERMUX_LINUX -> "termux"
-            else -> "sandbox"
-        }
+        is CompanionTerminalTarget.Local -> "computer"
         is CompanionTerminalTarget.AgenticProfile -> selected.profile.host
         is CompanionTerminalTarget.LegacyHost -> selected.name
     }
@@ -99,11 +99,17 @@ fun CompanionTerminalPanel(
 
     val connected = status == CompanionTerminalStatus.Connected
     val connecting = status == CompanionTerminalStatus.Connecting
-    val statusLabel = when (status) {
-        CompanionTerminalStatus.Disconnected -> "disconnected"
-        CompanionTerminalStatus.Connecting -> "connecting…"
-        CompanionTerminalStatus.Connected -> "connected"
-        CompanionTerminalStatus.Error -> "error"
+    val computerSelected = selected is CompanionTerminalTarget.Local
+    val statusLabel = when {
+        computerSelected && computerPower == com.example.meowmba.core.config.ComputerPowerState.Off &&
+            !connected && !connecting -> "off"
+        computerSelected && computerPower == com.example.meowmba.core.config.ComputerPowerState.Idle &&
+            !connected && !connecting -> "idle"
+        status == CompanionTerminalStatus.Disconnected -> "disconnected"
+        status == CompanionTerminalStatus.Connecting -> "connecting…"
+        status == CompanionTerminalStatus.Connected -> "connected"
+        status == CompanionTerminalStatus.Error -> "error"
+        else -> "disconnected"
     }
     val statusColor = when (status) {
         CompanionTerminalStatus.Disconnected -> Color(0xFF8B949E)
@@ -163,6 +169,30 @@ fun CompanionTerminalPanel(
                     maxLines = 1,
                 )
             }
+            if (computerSelected) {
+                val onColor = if (computerPower == com.example.meowmba.core.config.ComputerPowerState.On) {
+                    Color(0xFF3FB950)
+                } else {
+                    Color(0xFF8B949E)
+                }
+                val offColor = if (computerPower == com.example.meowmba.core.config.ComputerPowerState.Off) {
+                    Color(0xFFF85149)
+                } else {
+                    Color(0xFF8B949E)
+                }
+                TextButton(
+                    onClick = { onComputerPower(com.example.meowmba.core.config.ComputerPowerState.On) },
+                    enabled = computerPower != com.example.meowmba.core.config.ComputerPowerState.On || !connected,
+                ) {
+                    Text("On", fontSize = 12.sp, color = onColor)
+                }
+                TextButton(
+                    onClick = { onComputerPower(com.example.meowmba.core.config.ComputerPowerState.Off) },
+                    enabled = computerPower != com.example.meowmba.core.config.ComputerPowerState.Off,
+                ) {
+                    Text("Off", fontSize = 12.sp, color = offColor)
+                }
+            }
             Spacer(Modifier.weight(1f))
             if (connected || connecting) {
                 TextButton(onClick = onDisconnect) {
@@ -170,7 +200,17 @@ fun CompanionTerminalPanel(
                 }
             } else {
                 TextButton(onClick = { onConnect(selected.id) }) {
-                    Text("Connect", fontSize = 12.sp, color = Color(0xFF3FB950))
+                    Text(
+                        if (computerSelected &&
+                            computerPower != com.example.meowmba.core.config.ComputerPowerState.On
+                        ) {
+                            "Wake"
+                        } else {
+                            "Connect"
+                        },
+                        fontSize = 12.sp,
+                        color = Color(0xFF3FB950),
+                    )
                 }
             }
             TextButton(onClick = onClear) {
@@ -198,7 +238,7 @@ fun CompanionTerminalPanel(
             ) {
                 // Render as a single monospace block so mid-line PTY chunks stay intact.
                 Text(
-                    scrollback.ifEmpty { "Meow terminal — pick a target, Connect, then type.\n" },
+                    scrollback.ifEmpty { "Meow terminal — pick Computer or SSH, then Connect.\n" + com.example.meowmba.core.config.ComputerPowerStore.COPY + "\n" },
                     style = TextStyle(
                         fontFamily = FontFamily.Monospace,
                         fontSize = 12.sp,

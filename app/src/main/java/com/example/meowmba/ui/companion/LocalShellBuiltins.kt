@@ -3,7 +3,7 @@ package com.example.meowmba.ui.companion
 import java.io.File
 
 /**
- * Local (app-sandbox) shell helpers for [CompanionTerminalSession].
+ * Computer (app-sandbox / Termux guest) shell helpers for [CompanionTerminalSession].
  *
  * Android's piped `/system/bin/sh` often has an empty or SELinux-hostile PATH,
  * so plain `ls` fails with "inaccessible or not found". We:
@@ -52,14 +52,14 @@ internal object LocalShellBuiltins {
 
     fun bannerLine(cwd: File, probe: LocalLinuxProbe? = null): String {
         val kindLabel = when (probe?.kind) {
-            LocalLinuxKind.TERMUX_LINUX -> "Termux Linux"
-            LocalLinuxKind.TERMUX_RUN_COMMAND -> "Local sandbox (Termux not exec-able)"
-            LocalLinuxKind.LOCAL_SANDBOX, null -> "Local sandbox"
+            LocalLinuxKind.TERMUX_LINUX -> "Computer · Termux"
+            LocalLinuxKind.TERMUX_RUN_COMMAND -> "Computer · sandbox (Termux not exec-able)"
+            LocalLinuxKind.LOCAL_SANDBOX, null -> "Computer · sandbox"
         }
         val hint = probe?.bannerHint
-            ?: ("Local APK cannot leave the Android sandbox. " +
+            ?: (LocalLinuxSupport.COMPUTER_COPY + " " +
                 LocalLinuxSupport.INSTALL_TERMUX_MSG +
-                ". SSH profile = full machine (meow).")
+                " SSH profile = full machine (meow).")
         return "cwd ${cwd.absolutePath} — $kindLabel — $hint\n"
     }
 

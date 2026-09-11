@@ -56,6 +56,9 @@ fun ChatOverlay(
     onTerminalResize: ((Int, Int) -> Unit)? = null,
     /** Kept for one-shot fallbacks / tests; interactive session preferred. */
     onRunTerminalCommand: (suspend (String, String) -> String)? = null,
+    computerPower: com.example.meowmba.core.config.ComputerPowerState =
+        com.example.meowmba.core.config.ComputerPowerState.Idle,
+    onComputerPower: (com.example.meowmba.core.config.ComputerPowerState) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     // Retain separate drafts for projects as well as across panel collapse.
@@ -141,6 +144,8 @@ fun ChatOverlay(
                             onInterrupt = onTerminalInterrupt ?: {},
                             onClear = onTerminalClear ?: {},
                             onResize = onTerminalResize ?: { _, _ -> },
+                            computerPower = computerPower,
+                            onComputerPower = onComputerPower,
                             modifier = Modifier.weight(1f, fill = true).fillMaxWidth(),
                         )
                     } else {

@@ -150,6 +150,11 @@ fun SettingsScreen(
     onLumenReflexGainChange: (Float) -> Unit = {},
     avatarFpsTarget: Int = 30,
     onAvatarFpsTargetChange: (Int) -> Unit = {},
+    computerPower: com.example.meowmba.core.config.ComputerPowerState =
+        com.example.meowmba.core.config.ComputerPowerState.Idle,
+    onComputerPowerChange: (com.example.meowmba.core.config.ComputerPowerState) -> Unit = {},
+    computerIdleMinutes: Int = 5,
+    onComputerIdleMinutesChange: (Int) -> Unit = {},
     onSaved: () -> Unit = {},
     onClose: () -> Unit
 ) {
@@ -252,6 +257,10 @@ fun SettingsScreen(
                     onReflexGainChange = onLumenReflexGainChange,
                     avatarFpsTarget = avatarFpsTarget,
                     onAvatarFpsTargetChange = onAvatarFpsTargetChange,
+                    computerPower = computerPower,
+                    onComputerPowerChange = onComputerPowerChange,
+                    computerIdleMinutes = computerIdleMinutes,
+                    onComputerIdleMinutesChange = onComputerIdleMinutesChange,
                 )
             }
             if (page == "Help & feedback") BetaHelpCard()
@@ -1554,7 +1563,7 @@ private val SETTINGS_CATEGORIES = listOf(
     SettingsCategory("Music & video", "Media-generation services", Icons.Default.Movie),
     SettingsCategory("Phone & device", "App control, access and device behavior", Icons.Default.PhoneAndroid),
     SettingsCategory("Appearance", "Dark/light mode, themes and avatars", Icons.Default.Palette),
-    SettingsCategory("Neural / Lumen", "Lumen reflex and nervous-system toggles", Icons.Default.Bolt),
+    SettingsCategory("Neural / Lumen", "Lumen reflex, Computer power, nervous-system toggles", Icons.Default.Bolt),
     SettingsCategory("Connections & memory", "Desktop bridge, servers and shared memory", Icons.Default.Link),
     SettingsCategory("Driving", "Drive mode and emergency contact", Icons.Default.DirectionsCar),
     SettingsCategory("Help & feedback", "Beta help, testing and support", Icons.Default.HelpOutline),

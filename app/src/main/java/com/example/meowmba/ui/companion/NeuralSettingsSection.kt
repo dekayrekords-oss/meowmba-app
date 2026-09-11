@@ -48,6 +48,11 @@ fun NeuralSettingsSection(
     onReflexGainChange: (Float) -> Unit = {},
     avatarFpsTarget: Int = 30,
     onAvatarFpsTargetChange: (Int) -> Unit = {},
+    computerPower: com.example.meowmba.core.config.ComputerPowerState =
+        com.example.meowmba.core.config.ComputerPowerState.Idle,
+    onComputerPowerChange: (com.example.meowmba.core.config.ComputerPowerState) -> Unit = {},
+    computerIdleMinutes: Int = 5,
+    onComputerIdleMinutesChange: (Int) -> Unit = {},
     showNeuralCoreControls: Boolean = false,
     connectionProfiles: List<ConnectionProfile> = emptyList(),
     onSaveConnectionProfile: (ConnectionProfile) -> Unit = {},
@@ -106,11 +111,13 @@ fun NeuralSettingsSection(
                 style = MaterialTheme.typography.bodySmall,
             )
             Text(
-                "• Terminal is separate: Chat → Terminal → Local sandbox / Termux Linux / SSH.",
+                "• Terminal is separate: Chat → Terminal → Computer / SSH.",
                 style = MaterialTheme.typography.bodySmall,
             )
             Text(
-                "• Local Linux — APK stays sandboxed. Termux + proot-distro = userspace micro Linux with root-in-guest (not phone root); install openssh-client in the guest to ssh out to meow. App SSH profiles also reach a full machine.",
+                "• " + com.example.meowmba.core.config.ComputerPowerStore.COPY +
+                    " Termux + proot-distro = userspace guest (root inside only, not phone root). " +
+                    "openssh-client in the guest SSHes out. App SSH profiles also reach a full machine.",
                 style = MaterialTheme.typography.bodySmall,
             )
         }
@@ -129,6 +136,43 @@ fun NeuralSettingsSection(
                 onValueChange = { onAvatarFpsTargetChange(it.toInt().coerceIn(15, 60)) },
                 valueRange = 15f..60f,
                 steps = 44,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Computer", style = MaterialTheme.typography.titleSmall)
+            Text(
+                com.example.meowmba.core.config.ComputerPowerStore.COPY,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                "Power ${computerPower.name.lowercase()} — On keeps the guest; Idle sleeps it after " +
+                    "${computerIdleMinutes.coerceIn(1, 30)} min unused; Off holds no Termux/PRoot.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                com.example.meowmba.core.config.ComputerPowerState.entries.forEach { st ->
+                    Button(
+                        onClick = { onComputerPowerChange(st) },
+                        enabled = st != computerPower,
+                        modifier = Modifier.padding(end = 4.dp),
+                    ) {
+                        Text(st.name)
+                    }
+                }
+            }
+            Text(
+                "Idle after ${computerIdleMinutes.coerceIn(1, 30)} minutes unused (1–30).",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Slider(
+                value = computerIdleMinutes.coerceIn(1, 30).toFloat(),
+                onValueChange = { onComputerIdleMinutesChange(it.toInt().coerceIn(1, 30)) },
+                valueRange = 1f..30f,
+                steps = 28,
                 modifier = Modifier.fillMaxWidth(),
             )
         }

@@ -1,73 +1,70 @@
-# Local Linux (Termux / PRoot guest / sandbox / SSH)
+# Computer (Linux guest — Termux / PRoot / sandbox / SSH)
 
-Honest limits for Meowmba’s companion Terminal and agentic `local_shell`.
+Honest limits for Meowmba’s companion Terminal **Computer** target and agentic `local_shell`.
 
-## Goal (what “full headless micro Linux” means here)
+**Computer is a Linux guest (root inside only). It can SSH out. Off = no CPU. Idle = asleep.**
 
-Users want a **Grok-like** local loop against a **userspace Linux guest** that:
+## Power: Off | Idle | On
+
+| State | What happens | CPU |
+|-------|----------------|-----|
+| **On** | Start/keep the guest session (Termux/PRoot if available, else sandbox `sh`). Terminal **Connect** / **Wake** works. Inactivity timer runs. | Guest processes |
+| **Idle** | After N minutes unused (default **5**, setting **1–30**): disconnect PTY, stop guest processes, **keep disk/state**. UI shows Idle. Cheap. | Asleep |
+| **Off** | User toggle (Terminal header **Off** or Settings → Neural / Lumen → Computer). Kill session. **No background ticks** for Computer. No Termux/PRoot held by the app. Disk/state kept — Turn **On** reconnects (no reinstall). | None |
+
+Inactivity is last **stdin or stdout** time on the Computer guest. SSH profiles are separate and are not killed by Computer Idle/Off.
+
+Turning **On** from Idle or Off reconnects the guest. Do **not** implement Android / phone root.
+
+## How to switch power
+
+1. **Terminal header** (Chat → Terminal, Computer selected): **On** / **Off**. Status shows `on` / `idle` / `off`. **Wake** or **Connect** turns On and opens the guest.
+2. **Settings → Neural / Lumen → Computer**: Off / Idle / On buttons + idle-minutes slider (1–30).
+
+## Goal (userspace micro Linux)
 
 - Runs as **root inside the guest** (PRoot / `proot-distro` / `proot -0` / fakeroot)
-- Can **`ssh` out** to external hosts (meow, etc.) via an OpenSSH **client** in that guest
+- Can **`ssh` out** via an OpenSSH **client** in that guest
 - Does **not** require Android/device root, Magisk, or SELinux bypass
 
-**Root-in-sandbox (guest) ≠ phone root.** The guest’s UID mapping is userspace emulation; the phone stays unrooted. Outbound `ssh` from the guest uses the **network**, same as any app.
+**Guest root ≠ phone root.** Outbound `ssh` uses the network. App ConnectionProfile SSH is additional.
 
-The Android app can **also** open a [ConnectionProfile] SSH session directly (JSch) — guest `ssh` is **additional**, not a replacement.
+## What Computer can do
 
-## What Local can do
-
-| Mode | Label | How | What you get |
-|------|-------|-----|--------------|
-| **Termux Linux** | **Termux Linux** | Termux `bash`/`sh` executable from Meowmba UID | Userspace Linux. Prefer **proot-distro** (or `proot -0`) for a distro rootfs with **root-in-guest** + `apt`. |
-| **Local sandbox** | **Local sandbox** | App `/system/bin/sh` + Java `ls`/`pwd` builtins | App sandbox only. No real `apt`. UI: *Install Termux for a real local Linux; sandbox sh cannot do ls/apt*. |
-| **SSH (app)** | **SSH · …** | ConnectionProfile / legacy host via JSch | Full remote machine from the APK (meow). |
-| **SSH (guest)** | (inside Termux/proot) | `openssh` / `openssh-client` in Termux or proot guest | Guest runs `ssh user@host` over the network. |
+| Mode | Picker label | How | What you get |
+|------|----------------|-----|--------------|
+| **Termux guest** | **Computer** | Termux `bash`/`sh` executable from Meowmba UID | Userspace Linux. Prefer **proot-distro** for root-in-guest + `apt`. |
+| **Sandbox** | **Computer** | App `/system/bin/sh` + Java `ls`/`pwd` | App sandbox only. No real `apt`. |
+| **SSH (app)** | **SSH · …** | ConnectionProfile / legacy host via JSch | Full remote machine (meow). |
+| **SSH (guest)** | (inside Termux/proot) | `openssh-client` in the guest | Guest runs `ssh user@host` over the network. |
 
 ## Preference order (legitimate only)
 
-1. **Termux bash/sh** when present and executable.
-2. **Persistent piped Termux shell** for the interactive Terminal tab.
-3. Inside Termux: **PRoot guest as root-in-guest** — `proot-distro login <distro>`, or `proot -0 -r <rootfs> /bin/bash`, or fakeroot where appropriate.
-4. **OpenSSH client** in Termux (`pkg install openssh`) and/or in the guest (`apt install openssh-client`) so the guest can ssh to meow.
-5. Termux **`RUN_COMMAND`** when binaries exist but are not executable from Meowmba UID (allow-external-apps).
-6. Fallback **sandbox sh** + builtins.
+1. Termux bash/sh when executable.
+2. Persistent piped Termux shell for the Terminal tab (Computer On).
+3. PRoot guest as root-in-guest — `proot-distro login`, `proot -0`, or fakeroot.
+4. OpenSSH client in Termux / guest so the guest can ssh to meow.
+5. Termux `RUN_COMMAND` when binaries exist but are not executable from this UID.
+6. Fallback sandbox sh + builtins.
 
 ## Bootstrap (paste in Termux)
 
 ```sh
 pkg install -y proot proot-distro openssh
-proot-distro install ubuntu   # or debian, etc.
+proot-distro install ubuntu
 proot-distro login ubuntu     # root-in-guest — NOT phone root
-# inside guest:
 apt update && apt install -y openssh-client
-ssh user@meow-host            # outbound over the network
+ssh user@meow-host
 ```
 
-App-side SSH: Settings → Neural / Lumen → Agentic connection profiles (or Terminal → **SSH · …**).
+## What Computer will not do
 
-## What Local cannot / will not do
-
-- Android / device root, Magisk, SELinux bypass, or sandbox escape  
-- Read other apps’ private data  
-- Claim guest root is phone root  
-- Leave the APK sandbox without Termux/PRoot or an SSH profile  
-
-## Grok-like agentic loop
-
-With `agentic_runtime_v1` ON:
-
-- `local_shell` → Termux first (then RUN_COMMAND, then sandbox) — operator can drive proot/apt/ssh **inside** that shell  
-- `ssh_exec` → app ConnectionProfile SSH / HTTPS_RUNTIME (full remote machine)
-
-Do **not** drive shells from the Lumen avatar frame loop.
-
-## Settings copy (Neural / Lumen)
-
-- Local APK cannot leave the Android sandbox  
-- Termux + PRoot / proot-distro = userspace micro Linux with **root-in-guest** (not phone root)  
-- Install **openssh-client** in the guest to ssh out; app SSH profiles also reach a full machine (meow)
+- Android / device root, Magisk, SELinux bypass, or sandbox escape
+- Read other apps’ private data
+- Claim guest root is phone root
+- Hold Termux/PRoot while **Off**
 
 ## Related
 
-- [`TERMINAL_CLONE_AGENTIC.md`](./TERMINAL_CLONE_AGENTIC.md) — SSH / Termux capability probe  
-- [`INTEGRATION_LUMEN_AGENTIC.md`](./INTEGRATION_LUMEN_AGENTIC.md) — agentic runtime integration  
+- [`TERMINAL_CLONE_AGENTIC.md`](./TERMINAL_CLONE_AGENTIC.md)
+- [`INTEGRATION_LUMEN_AGENTIC.md`](./INTEGRATION_LUMEN_AGENTIC.md)
