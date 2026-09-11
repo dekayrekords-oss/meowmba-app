@@ -82,9 +82,12 @@ fun CompanionTerminalPanel(
         if (!id.isNullOrBlank()) selectedId = id
     }
 
-    val selected = targets.firstOrNull { it.id == selectedId } ?: CompanionTerminalTarget.Local
+    val selected = targets.firstOrNull { it.id == selectedId } ?: CompanionTerminalTarget.Local()
     val promptHost = when (selected) {
-        is CompanionTerminalTarget.Local -> "local"
+        is CompanionTerminalTarget.Local -> when (selected.kind) {
+            LocalLinuxKind.TERMUX_LINUX -> "termux"
+            else -> "sandbox"
+        }
         is CompanionTerminalTarget.AgenticProfile -> selected.profile.host
         is CompanionTerminalTarget.LegacyHost -> selected.name
     }

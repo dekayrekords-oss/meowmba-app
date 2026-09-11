@@ -106,7 +106,11 @@ fun NeuralSettingsSection(
                 style = MaterialTheme.typography.bodySmall,
             )
             Text(
-                "• Terminal is separate: Chat → Terminal → pick an SSH profile for a real machine.",
+                "• Terminal is separate: Chat → Terminal → Local sandbox / Termux Linux / SSH.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Text(
+                "• Local Linux — APK stays sandboxed. Termux + proot-distro = userspace micro Linux with root-in-guest (not phone root); install openssh-client in the guest to ssh out to meow. App SSH profiles also reach a full machine.",
                 style = MaterialTheme.typography.bodySmall,
             )
         }

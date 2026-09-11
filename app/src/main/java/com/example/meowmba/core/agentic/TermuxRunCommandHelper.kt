@@ -10,17 +10,18 @@ import java.util.concurrent.TimeUnit
 /**
  * Termux integration helper for agentic local / SSH shell paths.
  *
- * Preference order (mirrors [AgenticSshCapability]):
- * 1. Direct [ProcessBuilder] against Termux / system binaries when executable
- *    from this UID (best — synchronous stdout/stderr).
+ * Preference order (mirrors [AgenticSshCapability] / [LocalLinuxSupport]):
+ * 1. Direct [ProcessBuilder] against **Termux** bash/sh when executable
+ *    from this UID (best — synchronous stdout/stderr). Operator may then use
+ *    proot-distro / `proot -0` for **root-in-guest** and `openssh` /
+ *    `openssh-client` to ssh out to meow (network). Guest root ≠ phone root.
  * 2. Termux `com.termux.RUN_COMMAND` Intent → `RunCommandService` when Termux
- *    is installed and **Allow external apps** is enabled. This path is
- *    fire-and-forget from Meowmba's perspective (Termux runs the command
- *    asynchronously); we still attempt best-effort sync capture via a short
- *    ProcessBuilder `sh -c` when a Termux `sh` binary path is visible.
- * 3. Documented hard limits when neither works.
+ *    is installed and **Allow external apps** is enabled (fire-and-forget).
+ * 3. Sandbox `/system/bin/sh` with an honest stderr note (no apt).
+ * 4. Unsupported — install Termux or use an SSH / HTTPS_RUNTIME profile.
  *
- * Do **not** invoke from the Lumen frame / avatar loop.
+ * App [ConnectionProfile] SSH remains available in parallel with guest ssh.
+ * Do **not** invoke from the Lumen frame / avatar loop. No Magisk / SELinux bypass.
  */
 object TermuxRunCommandHelper {
     const val TERMUX_PACKAGE = AgenticSshCapability.TERMUX_PACKAGE
@@ -53,7 +54,14 @@ object TermuxRunCommandHelper {
             false
         }
         val prefix = File(AgenticSshCapability.TERMUX_BIN).isDirectory
-        val sh = firstExisting(
+        val sh = firstExecutable(
+            listOf(
+                "${AgenticSshCapability.TERMUX_BIN}/bash",
+                "${AgenticSshCapability.TERMUX_BIN}/sh",
+                "/system/bin/sh",
+                "/bin/sh",
+            ),
+        ) ?: firstExisting(
             listOf(
                 "${AgenticSshCapability.TERMUX_BIN}/bash",
                 "${AgenticSshCapability.TERMUX_BIN}/sh",
@@ -61,7 +69,8 @@ object TermuxRunCommandHelper {
                 "/bin/sh",
             ),
         )
-        val bash = firstExisting(listOf("${AgenticSshCapability.TERMUX_BIN}/bash"))
+        val bash = firstExecutable(listOf("${AgenticSshCapability.TERMUX_BIN}/bash"))
+            ?: firstExisting(listOf("${AgenticSshCapability.TERMUX_BIN}/bash"))
         val ssh = DefaultAgenticSshExecutor.findSshBinary()
         val sshpass = DefaultAgenticSshExecutor.findSshpassBinary()
         val pbOk = sh != null && File(sh).canExecute()
@@ -103,14 +112,21 @@ object TermuxRunCommandHelper {
         if (trimmed.isEmpty()) return SshExecResult.Error("empty script")
         val p = probe(context)
 
-        // 1) Direct ProcessBuilder when shell is executable.
-        if (p.processBuilderUsable && p.shBinary != null) {
-            return runProcessBuilder(p.shBinary, listOf("-c", trimmed), timeoutMs, workDir)
+        // 1) Prefer Termux bash/sh when executable from this UID.
+        val termuxShell = firstExecutable(
+            listOf(
+                "${AgenticSshCapability.TERMUX_BIN}/bash",
+                "${AgenticSshCapability.TERMUX_BIN}/sh",
+            ),
+        )
+        if (termuxShell != null) {
+            val cwd = workDir ?: "/data/data/com.termux/files/home"
+            return runProcessBuilder(termuxShell, listOf("-c", trimmed), timeoutMs, cwd)
         }
 
-        // 2) Fire Termux RUN_COMMAND Intent (async) + best-effort note.
+        // 2) Termux RUN_COMMAND when installed but binaries not ProcessBuilder-executable.
         if (p.runCommandLikely) {
-            val path = p.bashBinary ?: p.shBinary ?: "${AgenticSshCapability.TERMUX_BIN}/bash"
+            val path = p.bashBinary ?: "${AgenticSshCapability.TERMUX_BIN}/bash"
             val sent = runCatching {
                 dispatchRunCommand(
                     context = context,
@@ -126,25 +142,34 @@ object TermuxRunCommandHelper {
                 )
             }
             if (!sent) {
-                return SshExecResult.Unsupported(
-                    "Termux installed but RUN_COMMAND Intent was not accepted. " +
-                        "Enable allow-external-apps in ~/.termux/termux.properties and grant " +
-                        "Meowmba permission to start Termux services. Probe: ${p.summary}",
+                // Fall through to sandbox sh below when Intent was rejected.
+            } else {
+                return SshExecResult.Ok(
+                    exitCode = 0,
+                    stdout = "(dispatched via Termux RUN_COMMAND; stdout not captured in-APK)",
+                    stderr = "path=termux_run_command executable=$path",
                 )
             }
-            // Intent path cannot capture stdout into the APK process reliably
-            // without Termux:API / PendingIntent result plumbing (not shipped).
-            return SshExecResult.Ok(
-                exitCode = 0,
-                stdout = "(dispatched via Termux RUN_COMMAND; stdout not captured in-APK)",
-                stderr = "path=termux_run_command executable=$path",
-            )
+        }
+
+        // 3) Sandbox /system/bin/sh — honest limits (no apt / full Linux).
+        val sandbox = firstExecutable(listOf("/system/bin/sh", "/bin/sh"))
+        if (sandbox != null) {
+            val result = runProcessBuilder(sandbox, listOf("-c", trimmed), timeoutMs, workDir)
+            return when (result) {
+                is SshExecResult.Ok -> SshExecResult.Ok(
+                    exitCode = result.exitCode,
+                    stdout = result.stdout,
+                    stderr = (result.stderr + "\n[local_shell=sandbox] Install Termux for a real local Linux; sandbox sh cannot do ls/apt").trim(),
+                )
+                else -> result
+            }
         }
 
         return SshExecResult.Unsupported(
             "No local/Termux shell available. ${p.summary}. " +
-                "Install Termux + openssh/sshpass, enable allow-external-apps, " +
-                "or use an SSH / HTTPS_RUNTIME connection profile.",
+                "Install Termux for a real local Linux; sandbox sh cannot do ls/apt. " +
+                "Or use an SSH / HTTPS_RUNTIME connection profile for a full machine.",
         )
     }
 
@@ -226,6 +251,14 @@ object TermuxRunCommandHelper {
         for (c in candidates) {
             val f = File(c)
             if (f.exists()) return c
+        }
+        return null
+    }
+
+    private fun firstExecutable(candidates: List<String>): String? {
+        for (c in candidates) {
+            val f = File(c)
+            if (f.exists() && f.canExecute()) return c
         }
         return null
     }

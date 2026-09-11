@@ -43,7 +43,7 @@ fun ChatOverlay(
     thinking: Boolean = false,
     recognitionIssue: String? = null,
     conversationKey: String = "inbox",
-    terminalTargets: List<CompanionTerminalTarget> = listOf(CompanionTerminalTarget.Local),
+    terminalTargets: List<CompanionTerminalTarget> = listOf(CompanionTerminalTarget.Local()),
     terminalStatus: CompanionTerminalStatus = CompanionTerminalStatus.Disconnected,
     terminalStatusDetail: String? = null,
     terminalScrollback: String = "",
@@ -197,7 +197,7 @@ fun ChatOverlay(
 }
 
 private fun targetsOrLocal(targets: List<CompanionTerminalTarget>): List<CompanionTerminalTarget> =
-    if (targets.isEmpty()) listOf(CompanionTerminalTarget.Local) else targets
+    if (targets.isEmpty()) listOf(CompanionTerminalTarget.Local()) else targets
 
 @Composable
 fun ChatMessage(sender: String, message: String, isCompanion: Boolean, onDelete: (() -> Unit)? = null) {

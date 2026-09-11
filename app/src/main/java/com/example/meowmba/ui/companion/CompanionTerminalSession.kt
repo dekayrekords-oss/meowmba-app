@@ -40,9 +40,10 @@ enum class CompanionTerminalStatus {
  * Persistent interactive shell for the companion Terminal tab.
  *
  * Remote: JSch [Session] + [ChannelShell] with PTY (stderr merges via PTY).
- * Local: piped [ProcessBuilder] shell (no `-c`) with app [filesDir]/Termux HOME cwd,
- * exported PATH (`/system/bin:/system/xbin:/vendor/bin:/product/bin`), and
- * [LocalShellBuiltins] so `ls`/`pwd` always work in the sandbox.
+ * Local Linux (see [LocalLinuxSupport]): prefer Termux bash/sh when executable,
+ * else sandbox `/system/bin/sh` with PATH + [LocalShellBuiltins] for `ls`/`pwd`.
+ * Clear UI when Termux is missing or SELinux blocks exec. No root / Magisk /
+ * SELinux bypass — SSH profiles reach a full machine (meow).
  *
  * Agentic one-shot [ChannelExec] stays on [DefaultAgenticSshExecutor] —
  * this class is session-oriented only. Never logs credential material.
@@ -222,9 +223,16 @@ class CompanionTerminalSession(
     }
 
     private fun openLocal() {
-        val shell = findLocalShell()
-            ?: error("no local shell found (/system/bin/sh or Termux)")
-        val cwd = resolveLocalCwd(storage, shell) ?: storage.context.filesDir
+        val probe = LocalLinuxSupport.probe(storage.context)
+        val shell = probe.shellPath
+            ?: LocalLinuxSupport.findPreferredShell()
+            ?: error(
+                "no local shell found (/system/bin/sh or Termux). " +
+                    LocalLinuxSupport.INSTALL_TERMUX_MSG,
+            )
+        val cwd = LocalLinuxSupport.resolveCwd(storage.context.filesDir, shell, probe.kind)
+            ?: resolveLocalCwd(storage, shell)
+            ?: storage.context.filesDir
         cwd.mkdirs()
         val pb = ProcessBuilder(shell)
         pb.redirectErrorStream(false) // read stderr separately so errors surface
@@ -234,14 +242,46 @@ class CompanionTerminalSession(
         env["HOME"] = cwd.absolutePath
         env["PATH"] = LocalShellBuiltins.mergePreferredPath(env["PATH"])
         env.putIfAbsent("PS1", "\\$ ")
-        val proc = pb.start()
+        val proc = try {
+            pb.start()
+        } catch (e: Exception) {
+            // SELinux / execute denied on Termux binary — fall back to sandbox sh.
+            val sandbox = LocalLinuxSupport.findSandboxShell()
+            if (sandbox == null || sandbox == shell) {
+                error(
+                    "cannot start local shell (${e.message ?: e.javaClass.simpleName}). " +
+                        LocalLinuxSupport.INSTALL_TERMUX_MSG,
+                )
+            }
+            emitSafe(
+                "Termux exec blocked (${e.message ?: e.javaClass.simpleName}); " +
+                    "falling back to sandbox sh. " +
+                    LocalLinuxSupport.INSTALL_TERMUX_MSG + "\n",
+            )
+            val fb = ProcessBuilder(sandbox)
+            fb.redirectErrorStream(false)
+            fb.directory(cwd)
+            val env2 = fb.environment()
+            env2["TERM"] = "xterm-256color"
+            env2["HOME"] = cwd.absolutePath
+            env2["PATH"] = LocalShellBuiltins.mergePreferredPath(env2["PATH"])
+            env2.putIfAbsent("PS1", "\\$ ")
+            fb.start()
+        }
         localProcess = proc
         stdin = proc.outputStream
         isLocalSession.set(true)
         localCwd = cwd
         _needsLocalEcho.value = true
-        // One-line banner: cwd + sandbox hint (SSH path for real meow machine).
-        emitSafe(LocalShellBuiltins.bannerLine(cwd))
+        // Banner: Termux Linux vs Local sandbox (honest limits).
+        emitSafe(LocalShellBuiltins.bannerLine(cwd, probe))
+        probe.installHint?.let { hint ->
+            emitSafe("$hint\n")
+        }
+        if (probe.kind == LocalLinuxKind.TERMUX_LINUX) {
+            emitSafe(LocalLinuxSupport.PROOT_LOGIN_HINT + "\n")
+            emitSafe("Paste to bootstrap: " + LocalLinuxSupport.TERMUX_BOOTSTRAP_CMD + "\n")
+        }
         // Also export PATH/HOME and cd inside the shell — ProcessBuilder env is
         // not always honored by Android's /system/bin/sh applets.
         val boot = LocalShellBuiltins.connectExports(cwd)
@@ -419,35 +459,20 @@ class CompanionTerminalSession(
     }
 
     companion object {
-        private fun findLocalShell(): String? {
-            val candidates = listOf(
-                "/data/data/com.termux/files/usr/bin/bash",
-                "/data/data/com.termux/files/usr/bin/sh",
-                "/system/bin/sh",
-                "/bin/sh",
-            )
-            return candidates.firstOrNull { path ->
-                val f = File(path)
-                f.exists() && f.canExecute()
-            }
-        }
+        private fun findLocalShell(): String? =
+            LocalLinuxSupport.findPreferredShell()
 
         /**
          * Prefer Termux HOME when using a Termux shell; otherwise the app [filesDir]
          * (readable). Never start in `/` — `ls` there is permission-denied on Android.
          */
         internal fun resolveLocalCwd(storage: SecureStorageManager, shellPath: String): File? {
-            if (shellPath.contains("com.termux")) {
-                val termuxHome = File("/data/data/com.termux/files/home")
-                if (termuxHome.isDirectory) return termuxHome
-                val termuxUsr = File("/data/data/com.termux/files/usr")
-                if (termuxUsr.isDirectory) return termuxUsr
+            val kind = if (shellPath.contains("com.termux")) {
+                LocalLinuxKind.TERMUX_LINUX
+            } else {
+                LocalLinuxKind.LOCAL_SANDBOX
             }
-            val files = storage.context.filesDir
-            if (files != null) {
-                files.mkdirs()
-                if (files.isDirectory && files.canRead()) return files
-            }
+            LocalLinuxSupport.resolveCwd(storage.context.filesDir, shellPath, kind)?.let { return it }
             val noBackup = storage.context.noBackupFilesDir
             if (noBackup != null) {
                 noBackup.mkdirs()

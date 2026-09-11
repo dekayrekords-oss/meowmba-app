@@ -35,7 +35,7 @@ class AgenticRuntime private constructor(
     init {
         tools["sshExec"] = "Execute argv on a ConnectionProfile (SSH) via AgenticSshExecutor"
         tools["ssh_exec"] = "Alias for sshExec (planner-facing name)"
-        tools["local_shell"] = "Run argv locally via Termux/system sh (ProcessBuilder or RUN_COMMAND)"
+        tools["local_shell"] = "Run argv locally: prefer Termux bash/sh, else RUN_COMMAND, else sandbox sh"
         tools["https_runtime"] = "Run argv on an HTTPS_RUNTIME worker profile"
         tools["noop"] = "No-op / wait / budget stop"
     }

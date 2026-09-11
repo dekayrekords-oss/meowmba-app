@@ -13,14 +13,25 @@ sealed class CompanionTerminalTarget {
     abstract val id: String
     abstract val label: String
 
-    data object Local : CompanionTerminalTarget() {
+    /**
+     * Local Linux target — Termux when executable, else app sandbox.
+     * Labels: "Termux Linux" vs "Local sandbox" (SSH profiles are separate).
+     */
+    data class Local(
+        val kind: LocalLinuxKind = LocalLinuxKind.LOCAL_SANDBOX,
+    ) : CompanionTerminalTarget() {
         override val id: String = LOCAL_ID
-        override val label: String = "Local shell"
+        override val label: String = when (kind) {
+            LocalLinuxKind.TERMUX_LINUX -> "Termux Linux"
+            LocalLinuxKind.TERMUX_RUN_COMMAND,
+            LocalLinuxKind.LOCAL_SANDBOX,
+            -> "Local sandbox"
+        }
     }
 
     data class AgenticProfile(val profile: ConnectionProfile) : CompanionTerminalTarget() {
         override val id: String = profile.id
-        override val label: String = "${profile.displayName} (${profile.username}@${profile.host})"
+        override val label: String = "SSH · ${profile.displayName} (${profile.username}@${profile.host})"
     }
 
     data class LegacyHost(val name: String) : CompanionTerminalTarget() {
@@ -39,13 +50,20 @@ internal object CompanionTerminalLocalShell {
     private const val MAX_OUTPUT = 64_000
 
     fun exec(command: String, timeoutMs: Long, storage: SecureStorageManager? = null): String {
-        val shell = findLocalShell()
-            ?: return "error: no local shell found (/system/bin/sh or Termux)"
+        val shell = LocalLinuxSupport.findPreferredShell()
+            ?: return "error: no local shell found (/system/bin/sh or Termux). " +
+                LocalLinuxSupport.INSTALL_TERMUX_MSG
         return try {
             val pb = ProcessBuilder(shell, "-c", command)
             pb.redirectErrorStream(true) // show stderr in the captured stream
+            val kind = if (shell.contains("com.termux")) {
+                LocalLinuxKind.TERMUX_LINUX
+            } else {
+                LocalLinuxKind.LOCAL_SANDBOX
+            }
             val cwd = if (storage != null) {
-                CompanionTerminalSession.resolveLocalCwd(storage, shell)
+                LocalLinuxSupport.resolveCwd(storage.context.filesDir, shell, kind)
+                    ?: CompanionTerminalSession.resolveLocalCwd(storage, shell)
             } else {
                 fallbackCwd(shell)
             }
@@ -112,22 +130,9 @@ internal object CompanionTerminalLocalShell {
         }
     }
 
-    private fun findLocalShell(): String? {
-        val candidates = listOf(
-            "/data/data/com.termux/files/usr/bin/bash",
-            "/data/data/com.termux/files/usr/bin/sh",
-            "/system/bin/sh",
-            "/bin/sh",
-        )
-        return candidates.firstOrNull { path ->
-            val f = File(path)
-            f.exists() && f.canExecute()
-        }
-    }
-
     private fun fallbackCwd(shellPath: String): File? {
         if (shellPath.contains("com.termux")) {
-            val home = File("/data/data/com.termux/files/home")
+            val home = File(LocalLinuxSupport.TERMUX_HOME)
             if (home.isDirectory) return home
         }
         val home = System.getenv("HOME")?.let { File(it) }

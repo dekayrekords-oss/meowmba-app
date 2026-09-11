@@ -50,8 +50,18 @@ internal object LocalShellBuiltins {
         }
     }
 
-    fun bannerLine(cwd: File): String =
-        "cwd ${cwd.absolutePath} — Local is app sandbox — use SSH profile for meow\n"
+    fun bannerLine(cwd: File, probe: LocalLinuxProbe? = null): String {
+        val kindLabel = when (probe?.kind) {
+            LocalLinuxKind.TERMUX_LINUX -> "Termux Linux"
+            LocalLinuxKind.TERMUX_RUN_COMMAND -> "Local sandbox (Termux not exec-able)"
+            LocalLinuxKind.LOCAL_SANDBOX, null -> "Local sandbox"
+        }
+        val hint = probe?.bannerHint
+            ?: ("Local APK cannot leave the Android sandbox. " +
+                LocalLinuxSupport.INSTALL_TERMUX_MSG +
+                ". SSH profile = full machine (meow).")
+        return "cwd ${cwd.absolutePath} — $kindLabel — $hint\n"
+    }
 
     /**
      * Handle `ls` / `pwd` entirely in-process when the toybox/system binary is

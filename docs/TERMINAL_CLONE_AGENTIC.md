@@ -82,6 +82,8 @@ Settings → Neural / Lumen (flag ON):
 - Integration checklist: [`INTEGRATION_LUMEN_AGENTIC.md`](./INTEGRATION_LUMEN_AGENTIC.md)
 - Code: `app/src/main/java/com/example/meowmba/core/agentic/`
 
+- [`LOCAL_LINUX.md`](./LOCAL_LINUX.md) — Local sandbox vs Termux Linux vs SSH (honest limits)
+
 ## HTTPS_RUNTIME worker client (on-device)
 
 `HttpsRuntimeClient` talks to an operator-hosted worker. The worker is **not**

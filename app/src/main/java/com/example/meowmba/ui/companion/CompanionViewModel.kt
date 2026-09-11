@@ -2500,7 +2500,7 @@ class CompanionViewModel(
 
     /** Targets for the companion Terminal tab (local + SSH connection profiles). */
     fun listCompanionTerminalTargets(): List<CompanionTerminalTarget> {
-        val storage = secureStorage ?: return listOf(CompanionTerminalTarget.Local)
+        val storage = secureStorage ?: return listOf(LocalLinuxSupport.terminalTarget(null))
         val profiles = runCatching {
             val db = com.example.meowmba.core.database.MeowmbaDatabase.getDatabase(storage.context)
             com.example.meowmba.core.agentic.RoomConnectionProfileStore(db.connectionProfileDao()).list()
@@ -2510,7 +2510,7 @@ class CompanionViewModel(
             com.example.meowmba.core.ssh.SshHostRegistry(storage).list()
         }.getOrDefault(emptyList())
         return buildList {
-            add(CompanionTerminalTarget.Local)
+            add(LocalLinuxSupport.terminalTarget(storage.context))
             profiles.forEach { add(CompanionTerminalTarget.AgenticProfile(it)) }
             hosts.forEach { add(CompanionTerminalTarget.LegacyHost(it.name)) }
         }
