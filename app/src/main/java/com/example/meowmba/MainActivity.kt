@@ -316,6 +316,20 @@ class MainActivity : ComponentActivity() {
                                 needsOnboarding = false
                                 if (showOnboarding) viewModel.toggleSetupWizard()
                             },
+                            onOpenChat = {
+                                com.example.meowmba.core.setup.SetupWiring.markOnboardingDone(this@MainActivity)
+                                viewModel.reloadSetupConfiguration()
+                                needsOnboarding = false
+                                if (showOnboarding) viewModel.toggleSetupWizard()
+                                viewModel.openChat()
+                            },
+                            onOpenTerminal = {
+                                com.example.meowmba.core.setup.SetupWiring.markOnboardingDone(this@MainActivity)
+                                viewModel.reloadSetupConfiguration()
+                                needsOnboarding = false
+                                if (showOnboarding) viewModel.toggleSetupWizard()
+                                viewModel.openCompanionTerminalFromOnboarding()
+                            },
                             modifier = Modifier.fillMaxSize(),
                         )
                     }

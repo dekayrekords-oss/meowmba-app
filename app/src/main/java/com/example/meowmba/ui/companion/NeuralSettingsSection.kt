@@ -20,6 +20,8 @@ import androidx.compose.ui.unit.dp
 import com.example.meowmba.core.agentic.AgenticGoal
 import com.example.meowmba.core.agentic.AgenticModelConfig
 import com.example.meowmba.core.agentic.ConnectionProfile
+import com.example.meowmba.core.computer.ComputerSetupStatus
+import com.example.meowmba.core.config.ComputerPowerState
 import com.example.meowmba.core.neural.NeuralDiagnostics
 import com.example.meowmba.core.neural.NeuralMode
 import com.example.meowmba.core.neural.NeuralSubstrate
@@ -73,6 +75,22 @@ fun NeuralSettingsSection(
     onRejectAgenticGoal: (String) -> Unit = {},
     onRefreshAgenticTasks: () -> Unit = {},
     onSaveAgenticModelConfig: (String, String, String, String) -> Unit = { _, _, _, _ -> },
+    // Your Computer (phone-first; optional server)
+    computerPhoneProbeSummary: String = "Checking this phone…",
+    computerPhoneReady: Boolean = false,
+    computerSetupStatus: ComputerSetupStatus = ComputerSetupStatus.NotSetUp,
+    computerStatusDetail: String = "",
+    computerInstallLog: String = "",
+    computerPowerState: ComputerPowerState = ComputerPowerState.Idle,
+    computerVncUrl: String? = null,
+    computerSavedProfile: ConnectionProfile? = null,
+    computerShowInstallPrompt: Boolean = false,
+    onComputerSaveProfile: (ConnectionProfile, String) -> Unit = { _, _ -> },
+    onComputerTestConnection: (ConnectionProfile, String) -> Unit = { _, _ -> },
+    onComputerInstall: (ConnectionProfile, String) -> Unit = { _, _ -> },
+    onComputerOpenTerminal: () -> Unit = {},
+    onComputerOpenDesktop: (String) -> Unit = {},
+    onComputerConfirmInstallPrompt: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -86,6 +104,25 @@ fun NeuralSettingsSection(
             "Optional reflex and agentic layers for the avatar. Defaults stay off until you enable them.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        YourComputerSettingsSection(
+            phoneProbeSummary = computerPhoneProbeSummary,
+            phoneReady = computerPhoneReady,
+            status = computerSetupStatus,
+            statusDetail = computerStatusDetail,
+            installLog = computerInstallLog,
+            computerPower = computerPowerState,
+            vncUrl = computerVncUrl,
+            savedComputerProfile = computerSavedProfile,
+            showInstallPrompt = computerShowInstallPrompt,
+            onSaveComputerProfile = onComputerSaveProfile,
+            onTestConnection = onComputerTestConnection,
+            onInstallComputer = onComputerInstall,
+            onOpenTerminal = onComputerOpenTerminal,
+            onOpenDesktop = onComputerOpenDesktop,
+            onPowerChange = onComputerPowerChange,
+            onConfirmInstallPrompt = onComputerConfirmInstallPrompt,
         )
 
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {

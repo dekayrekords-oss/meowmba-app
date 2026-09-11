@@ -1212,6 +1212,16 @@ fun CompanionScreen(
                     com.example.meowmba.core.setup.SetupWiring.markOnboardingDone(ctx)
                     viewModel.toggleSetupWizard()
                 },
+                onEnablePermissions = { },
+                onOpenChat = {
+                    com.example.meowmba.core.setup.SetupWiring.markOnboardingDone(ctx)
+                    viewModel.finishOnboarding()
+                    viewModel.openChat()
+                },
+                onOpenTerminal = {
+                    com.example.meowmba.core.setup.SetupWiring.markOnboardingDone(ctx)
+                    viewModel.openCompanionTerminalFromOnboarding()
+                },
                 modifier = Modifier.fillMaxSize(),
             )
         }

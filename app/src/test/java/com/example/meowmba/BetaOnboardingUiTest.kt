@@ -35,12 +35,12 @@ class BetaOnboardingUiTest {
         compose.setContent { MaterialTheme {
             SetupWizardRoute(onFinished = { finished = true }, onEnablePermissions = { permissions++ })
         } }
-        compose.onNodeWithText("Welcome to Meow").assertExists()
-        compose.onNodeWithText("Step 1 of 5").assertExists()
+        compose.onNodeWithText("Hi.").assertExists()
+        compose.onNodeWithText("Let’s go").assertExists()
         compose.onNodeWithText("API key").assertDoesNotExist()
         compose.onNodeWithText("OpenAI (GPT)").assertDoesNotExist()
         render("onboarding-light")
-        compose.onNodeWithText("Skip setup").assertIsDisplayed().assertIsEnabled().performClick()
+        compose.onNodeWithText("Skip").assertIsDisplayed().assertIsEnabled().performClick()
         assertTrue(finished)
         assertEquals(0, permissions)
     }
@@ -49,10 +49,10 @@ class BetaOnboardingUiTest {
         var finished = false
         compose.setContent { MaterialTheme { SetupWizardRoute(onFinished = { finished = true }) } }
         compose.onNodeWithText("AI ready · Continue").performScrollTo().assertIsNotEnabled()
-        compose.onNodeWithText("Skip setup").assertIsDisplayed().assertIsEnabled()
+        compose.onNodeWithText("Skip").assertIsDisplayed().assertIsEnabled()
         compose.onNodeWithText("Finish later in Settings → Start setup", substring = true).assertIsDisplayed()
         render("onboarding-skip-scrolled")
-        compose.onNodeWithText("Skip setup").performClick()
+        compose.onNodeWithText("Skip").performClick()
         assertTrue(finished)
     }
 
@@ -72,13 +72,13 @@ class BetaOnboardingUiTest {
         compose.setContent { MaterialTheme {
             SetupWizardRoute(onFinished = { finished = true }, onEnablePermissions = { permissions++ })
         } }
-        listOf("AI ready · Continue", "Set up later", "Use text for now", "Continue to permissions & connections").forEachIndexed { index, action ->
-            compose.onNodeWithText("Step ${index + 1} of 5").assertExists()
-            compose.onNodeWithText("Skip setup").assertIsDisplayed().assertIsEnabled()
+        listOf("Let’s go", "I already have it", "Next", "I did that").forEachIndexed { index, action ->
+            compose.onNodeWithText("Skip").assertExists()
+            compose.onNodeWithText("Skip").assertIsDisplayed().assertIsEnabled()
             compose.onNodeWithText(action).performScrollTo().performClick()
         }
-        compose.onNodeWithText("Step 5 of 5").assertExists()
-        compose.onNodeWithText("Skip setup").assertIsDisplayed().assertIsEnabled().performClick()
+        compose.onNodeWithText("Have a computer on the internet?").assertExists()
+        compose.onNodeWithText("Skip").assertIsDisplayed().assertIsEnabled().performClick()
         assertTrue(finished)
         assertEquals(0, permissions)
     }
