@@ -65,6 +65,14 @@ object AgenticToolCallParser {
                         reason = "parsed local_shell from prose",
                     ),
                 )
+            "tool=computer_exec" in lower || "computer_exec" in lower && "tool=" in lower ->
+                return listOf(
+                    ProposedToolCall(
+                        tool = "computer_exec",
+                        argv = listOf("uname", "-a"),
+                        reason = "parsed computer_exec from prose",
+                    ),
+                )
         }
         return emptyList()
     }

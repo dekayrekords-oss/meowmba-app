@@ -147,7 +147,11 @@ import com.example.meowmba.core.config.ComputerPowerState
 import com.example.meowmba.core.config.ComputerPowerStore
 import com.example.meowmba.core.config.FeatureFlags
 import com.example.meowmba.core.agentic.AgenticRuntime
+import com.example.meowmba.core.agentic.ComputerExecHost
+import com.example.meowmba.core.agentic.ComputerExecResult
+import com.example.meowmba.core.agentic.ComputerGuestPolicy
 import com.example.meowmba.core.agentic.ConnectionProfile
+import com.example.meowmba.core.agentic.HeuristicAgenticPlanner
 import com.example.meowmba.core.agentic.SecureStorageCredentialResolver
 import com.example.meowmba.core.agentic.GoalStatus
 import java.io.File
@@ -1178,6 +1182,7 @@ class CompanionViewModel(
         refreshLumenFlagMirrors()
         refreshComputerPowerMirror()
         syncComputerIdleWatch()
+        bindAgenticComputerHost()
         // Any weather fetch — including the agent's tool call — surfaces the card and moves
         // the cat's expression to match the sky.
         weatherRepository?.let { repo ->
@@ -2407,6 +2412,7 @@ class CompanionViewModel(
         runCatching { com.example.meowmba.core.agentic.AgenticScheduler.ensureScheduled(storage.context) }
         refreshLumenFlagMirrors()
         refreshAgenticPresenceHint()
+        bindAgenticComputerHost()
     }
 
     fun setLumenReflexGain(gain: Float) {
@@ -2682,6 +2688,286 @@ class CompanionViewModel(
             if (next.length > 200_000) next.takeLast(160_000) else next
     }
 
+    /**
+     * Register [ComputerExecHost] so [AgenticRuntime.tick] can drive Computer.
+     * No-op when agentic flag OFF. Clears host on OFF.
+     */
+    private fun bindAgenticComputerHost() {
+        val storage = secureStorage ?: return
+        val runtime = AgenticRuntime.from(storage.context)
+        if (!runtime.enabled) {
+            runtime.computerHost = null
+            return
+        }
+        runtime.computerHost = ComputerExecHost { command, timeoutMs ->
+            runComputerExecBlocking(command, timeoutMs)
+        }
+    }
+
+    /**
+     * Wake Computer from Idle/Off, run via Terminal session stdin when possible,
+     * else one-shot local shell. Mirror output into Terminal scrollback.
+     * Destructive patterns return [ComputerExecResult.needsApproval].
+     */
+    private fun runComputerExecBlocking(command: String, timeoutMs: Long): ComputerExecResult {
+        val trimmed = command.trim()
+        if (trimmed.isEmpty()) {
+            return ComputerExecResult(ok = false, output = "error: empty command")
+        }
+        if (ComputerGuestPolicy.requiresConfirm(trimmed)) {
+            return ComputerExecResult(
+                ok = false,
+                output = "needs approval: destructive Computer command",
+                needsApproval = true,
+            )
+        }
+        return try {
+            kotlinx.coroutines.runBlocking {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    ensureComputerAwakeForAgentic()
+                    val sessionReady = awaitComputerSessionConnected(8_000L)
+                    val beforeLen = _companionTerminalScrollback.value.length
+                    if (sessionReady) {
+                        appendCompanionTerminalOutput("\n[agentic] $ $trimmed\n")
+                        sendCompanionTerminalLine(trimmed)
+                        val captured = awaitScrollbackDelta(beforeLen, timeoutMs.coerceIn(3_000L, 60_000L))
+                        val out = captured.ifBlank { "(no output)" }.take(16_000)
+                        ComputerExecResult(ok = true, output = out)
+                    } else {
+                        val storage = secureStorage
+                            ?: return@withContext ComputerExecResult(
+                                ok = false,
+                                output = "error: secure storage unavailable",
+                            )
+                        val oneShot = CompanionTerminalLocalShell.exec(
+                            trimmed,
+                            timeoutMs.coerceIn(3_000L, 60_000L),
+                            storage,
+                        )
+                        appendCompanionTerminalOutput("\n[agentic one-shot] $ $trimmed\n$oneShot\n")
+                        ComputerExecResult(
+                            ok = !oneShot.startsWith("error:"),
+                            output = oneShot.take(16_000),
+                        )
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            ComputerExecResult(
+                ok = false,
+                output = "error: ${e.message ?: e.javaClass.simpleName}",
+            )
+        }
+    }
+
+    private fun ensureComputerAwakeForAgentic() {
+        val store = computerStore() ?: return
+        if (store.state != ComputerPowerState.On) {
+            store.setState(ComputerPowerState.On)
+            refreshComputerPowerMirror()
+            appendCompanionTerminalOutput("[Computer on — agentic wake.]\n")
+            connectCompanionTerminal(CompanionTerminalTarget.LOCAL_ID)
+            syncComputerIdleWatch()
+        } else {
+            val session = ensureCompanionTerminalSession()
+            val connectedLocal =
+                session != null &&
+                    session.status.value == CompanionTerminalStatus.Connected &&
+                    session.connectedTargetId.value == CompanionTerminalTarget.LOCAL_ID
+            if (!connectedLocal) {
+                connectCompanionTerminal(CompanionTerminalTarget.LOCAL_ID)
+            }
+            syncComputerIdleWatch()
+        }
+    }
+
+    private suspend fun awaitComputerSessionConnected(timeoutMs: Long): Boolean {
+        val deadline = android.os.SystemClock.elapsedRealtime() + timeoutMs
+        while (android.os.SystemClock.elapsedRealtime() < deadline) {
+            val session = companionTerminalSession
+            if (
+                session != null &&
+                session.status.value == CompanionTerminalStatus.Connected &&
+                (
+                    session.connectedTargetId.value == CompanionTerminalTarget.LOCAL_ID ||
+                        session.isComputerGuest()
+                    )
+            ) {
+                return true
+            }
+            kotlinx.coroutines.delay(150)
+        }
+        return false
+    }
+
+    private suspend fun awaitScrollbackDelta(beforeLen: Int, timeoutMs: Long): String {
+        val deadline = android.os.SystemClock.elapsedRealtime() + timeoutMs
+        var lastLen = beforeLen
+        var lastChange = android.os.SystemClock.elapsedRealtime()
+        while (android.os.SystemClock.elapsedRealtime() < deadline) {
+            kotlinx.coroutines.delay(200)
+            val cur = _companionTerminalScrollback.value
+            if (cur.length > lastLen) {
+                lastLen = cur.length
+                lastChange = android.os.SystemClock.elapsedRealtime()
+            } else if (
+                cur.length > beforeLen &&
+                android.os.SystemClock.elapsedRealtime() - lastChange > 900L
+            ) {
+                break
+            }
+        }
+        val cur = _companionTerminalScrollback.value
+        return if (cur.length > beforeLen) cur.substring(beforeLen) else ""
+    }
+
+    /**
+     * Chat → Computer when Agentic is ON.
+     * Explicit "Run on Computer: …" always. Stub model: shell-looking lines.
+     * Configured model: create goal + tick (planner may call computer_exec).
+     */
+    private fun maybeHandleAgenticComputerChat(text: String): Boolean {
+        val storage = secureStorage ?: return false
+        val flags = FeatureFlags.from(storage.context)
+        if (!flags.agenticRuntimeV1) return false
+        bindAgenticComputerHost()
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) return false
+
+        val explicit = Regex("(?i)^(?:run on computer[:\\s]+|computer:\\s*)(.+)$").find(trimmed)
+        val shellish = HeuristicAgenticPlanner.looksLikeShellCommand(trimmed)
+        val modelConfigured = com.example.meowmba.core.agentic.AgenticModelConfig.read(storage).configured
+
+        when {
+            explicit != null -> {
+                val cmd = explicit.groupValues[1].trim()
+                runComputerFromChat(cmd, userText = trimmed)
+                return true
+            }
+            !modelConfigured && shellish -> {
+                runComputerFromChat(trimmed, userText = trimmed)
+                return true
+            }
+            modelConfigured && shellish -> {
+                runAgenticComputerTickFromChat(trimmed)
+                return true
+            }
+            else -> return false
+        }
+    }
+
+    private fun runComputerFromChat(command: String, userText: String) {
+        followUpJob?.cancel()
+        _uiState.value = _uiState.value.copy(
+            interactionState = InteractionState.THINKING,
+            captionText = "Computer: $command",
+            emotion = CompanionEmotion.DETERMINED,
+        )
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            persistTurn(com.example.meowmba.core.database.MessageRole.USER, userText)
+            val result = runComputerExecBlocking(command, 45_000L)
+            val body = if (result.needsApproval) {
+                "Computer needs approval for a destructive command. " +
+                    "Create/approve an agentic goal, or avoid rm -rf style cmds."
+            } else {
+                "Computer:\n${result.output.take(3500)}"
+            }
+            persistTurn(com.example.meowmba.core.database.MessageRole.ASSISTANT, body)
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                _uiState.value = _uiState.value.copy(
+                    interactionState = InteractionState.IDLE,
+                    captionText = body.take(240),
+                    emotion = if (result.ok) CompanionEmotion.PROUD else CompanionEmotion.CONCERNED,
+                )
+                publishChat()
+                refreshAgenticPresenceHint()
+            }
+            // Short spoken ack — full output stays in chat + Terminal.
+            speak(
+                when {
+                    result.needsApproval -> "That Computer command needs approval."
+                    result.ok -> "Done on Computer. Output is in chat and the Terminal."
+                    else -> "Computer command failed. Check chat for details."
+                },
+            )
+        }
+    }
+
+    private fun runAgenticComputerTickFromChat(text: String) {
+        followUpJob?.cancel()
+        _uiState.value = _uiState.value.copy(
+            interactionState = InteractionState.THINKING,
+            captionText = text,
+            emotion = CompanionEmotion.DETERMINED,
+        )
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            persistTurn(com.example.meowmba.core.database.MessageRole.USER, text)
+            val storage = secureStorage ?: return@launch
+            val runtime = AgenticRuntime.from(storage.context)
+            bindAgenticComputerHost()
+            val goal = runtime.createGoal(text) ?: run {
+                runComputerFromChat(
+                    HeuristicAgenticPlanner.shellArgvFromTitle(text)
+                        .let { argv ->
+                            if (argv.size >= 3 && argv[0] == "sh" && argv[1] == "-c") {
+                                argv.drop(2).joinToString(" ")
+                            } else {
+                                argv.joinToString(" ")
+                            }
+                        },
+                    userText = text,
+                )
+                return@launch
+            }
+            val updated = runtime.tick(goal.id)
+            val events = runtime.listEvents(goal.id)
+            val toolOut = events.lastOrNull {
+                it.type == "computer_exec" || it.type == "local_shell" || it.type == "ssh_exec"
+            }?.detail.orEmpty()
+            val awaiting = updated?.status == GoalStatus.WAITING_APPROVAL
+            val body = when {
+                awaiting ->
+                    "Agentic waiting for approval on '${goal.title.take(60)}'. " +
+                        "Approve in Settings → Neural / Lumen → Agentic."
+                toolOut.isNotBlank() -> "Computer / agentic:\n${toolOut.take(3500)}"
+                else ->
+                    "Agentic tick: status=${updated?.status ?: "?"} " +
+                        "(no tool output yet — try Tick again in Agentic tasks)."
+            }
+            persistTurn(com.example.meowmba.core.database.MessageRole.ASSISTANT, body)
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                _uiState.value = _uiState.value.copy(
+                    interactionState = InteractionState.IDLE,
+                    captionText = body.take(240),
+                )
+                publishChat()
+                refreshAgenticPresenceHint()
+            }
+            speak(
+                when {
+                    awaiting -> "Waiting for your approval on that agentic step."
+                    toolOut.isNotBlank() -> "Ran that on Computer. Output is in chat and the Terminal."
+                    else -> "Agentic took a step. Check Agentic tasks if you need another tick."
+                },
+            )
+        }
+    }
+
+    /** Explicit action: run the last typed / given line on Computer (Agentic ON). */
+    fun runOnComputer(command: String) {
+        val storage = secureStorage ?: return
+        if (!FeatureFlags.from(storage.context).agenticRuntimeV1) {
+            speak("Turn on Agentic in Settings → Neural / Lumen to run chat on Computer.")
+            return
+        }
+        val cmd = command.trim()
+        if (cmd.isEmpty()) {
+            speak("Nothing to run on Computer.")
+            return
+        }
+        runComputerFromChat(cmd, userText = "Run on Computer: $cmd")
+    }
+
     fun connectCompanionTerminal(targetId: String) {
         val session = ensureCompanionTerminalSession() ?: run {
             _companionTerminalStatus.value = CompanionTerminalStatus.Error
@@ -2797,6 +3083,7 @@ class CompanionViewModel(
     }
 
     override fun onCleared() {
+        runCatching { secureStorage?.let { AgenticRuntime.from(it.context).computerHost = null } }
         computerIdleWatchJob?.cancel()
         computerIdleWatchJob = null
         companionTerminalCollectorJob?.cancel()
@@ -6034,6 +6321,8 @@ class CompanionViewModel(
         placeRequestJob?.cancel()
         placeRequestJob = null
         if (!_uiState.value.isNoting && handleBugReport(text, fromVoice)) return
+        // Agentic Computer path (chat/voice): shell-like or "Run on Computer".
+        if (!_uiState.value.isNoting && !_uiState.value.callMode && maybeHandleAgenticComputerChat(text)) return
         // An accepted human turn owns attention immediately, before routing or a model.
         resetMouthEnergy()
         stopAvatarPerformance()
@@ -7847,7 +8136,10 @@ class CompanionViewModel(
     /** Text input from the chat workspace, routed through the same pipeline as speech. */
     fun onUserTextSubmitted(text: String) {
         if (text.isBlank()) return
-        processUserSpeech(text.trim(), fromVoice = false)
+        val trimmed = text.trim()
+        // Agentic + Computer: shell-like / "Run on Computer" before normal LLM path.
+        if (maybeHandleAgenticComputerChat(trimmed)) return
+        processUserSpeech(trimmed, fromVoice = false)
     }
 
     /**

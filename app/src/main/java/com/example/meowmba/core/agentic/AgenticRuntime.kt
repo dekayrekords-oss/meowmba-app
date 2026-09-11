@@ -29,6 +29,14 @@ class AgenticRuntime private constructor(
 ) {
     private val tools = ConcurrentHashMap<String, String>()
 
+    /**
+     * Optional host that can wake Computer and drive CompanionTerminalSession.
+     * Set by CompanionViewModel when agentic is ON. Null → computer_exec falls
+     * back to [TermuxRunCommandHelper] one-shot.
+     */
+    @Volatile
+    var computerHost: ComputerExecHost? = null
+
     val enabled: Boolean
         get() = flags.agenticRuntimeV1
 
@@ -36,6 +44,8 @@ class AgenticRuntime private constructor(
         tools["sshExec"] = "Execute argv on a ConnectionProfile (SSH) via AgenticSshExecutor"
         tools["ssh_exec"] = "Alias for sshExec (planner-facing name)"
         tools["local_shell"] = "Run argv locally: prefer Termux bash/sh, else RUN_COMMAND, else sandbox sh"
+        tools["computer_exec"] =
+            "Wake Computer guest if needed; run command via Terminal session or one-shot local shell; return recent output"
         tools["https_runtime"] = "Run argv on an HTTPS_RUNTIME worker profile"
         tools["noop"] = "No-op / wait / budget stop"
     }
@@ -335,6 +345,73 @@ class AgenticRuntime private constructor(
                 }
                 memoryIndex.note(goalId, "local_shell result=${result::class.simpleName}")
             }
+            "computer_exec", "computerexec" -> {
+                val argv = proposal.argv.ifEmpty { listOf("uname", "-a") }
+                val script = if (argv.size >= 2 && argv[0] == "sh" && argv[1] == "-c") {
+                    argv.drop(2).joinToString(" ")
+                } else {
+                    argv.joinToString(" ")
+                }
+                if (ComputerGuestPolicy.requiresConfirm(script) && !approvalGranted) {
+                    store.appendEvent(
+                        goalId,
+                        type = "awaiting_approval",
+                        detail = "computer_exec destructive argv=${argv.take(6).joinToString(" ")}",
+                    )
+                    return store.updateGoal(
+                        goal.copy(
+                            status = GoalStatus.WAITING_APPROVAL,
+                            budgets = budgets,
+                            approvalGranted = false,
+                        ),
+                    )
+                }
+                if (approvalGranted && ComputerGuestPolicy.requiresConfirm(script)) {
+                    approvalGranted = false
+                }
+                val host = computerHost
+                val detail: String
+                if (host != null) {
+                    val result = host.computerExec(script, timeoutMs = 45_000L)
+                    if (result.needsApproval && !approvalGranted) {
+                        store.appendEvent(
+                            goalId,
+                            type = "awaiting_approval",
+                            detail = "computer_exec host requested approval",
+                        )
+                        return store.updateGoal(
+                            goal.copy(
+                                status = GoalStatus.WAITING_APPROVAL,
+                                budgets = budgets,
+                                approvalGranted = false,
+                            ),
+                        )
+                    }
+                    detail = buildString {
+                        append(if (result.ok) "ok" else "err")
+                        result.exitCode?.let { append(" exit=$it") }
+                        append(' ')
+                        append(result.output.take(400))
+                    }
+                    status = if (result.ok) GoalStatus.RUNNING else GoalStatus.BLOCKED
+                    memoryIndex.note(goalId, "computer_exec ok=${result.ok}")
+                } else {
+                    val result = TermuxRunCommandHelper.execSh(appContext, script)
+                    detail = when (result) {
+                        is SshExecResult.Ok ->
+                            "ok(fallback) exit=${result.exitCode} ${result.stdout.take(200)}"
+                        is SshExecResult.Unsupported -> "unsupported: ${result.message.take(160)}"
+                        is SshExecResult.Error -> "error: ${result.message.take(160)}"
+                        is SshExecResult.NotEnabled -> "not_enabled"
+                    }
+                    status = when (result) {
+                        is SshExecResult.Ok -> GoalStatus.RUNNING
+                        else -> GoalStatus.BLOCKED
+                    }
+                    memoryIndex.note(goalId, "computer_exec fallback=${result::class.simpleName}")
+                }
+                store.appendEvent(goalId, type = "computer_exec", detail = detail.take(500))
+            }
             else -> {
                 store.appendEvent(
                     goalId,
@@ -459,7 +536,10 @@ class AgenticRuntime private constructor(
 
         /** Drop singleton so the next [from] rebuilds (e.g. after model config change). */
         fun invalidate() {
-            synchronized(this) { INSTANCE = null }
+            synchronized(this) {
+                INSTANCE?.computerHost = null
+                INSTANCE = null
+            }
         }
 
         fun resetForTests() {

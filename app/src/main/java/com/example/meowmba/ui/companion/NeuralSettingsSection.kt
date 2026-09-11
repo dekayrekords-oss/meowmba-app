@@ -111,6 +111,10 @@ fun NeuralSettingsSection(
                 style = MaterialTheme.typography.bodySmall,
             )
             Text(
+                "• Chat can use Computer when Agentic is on.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Text(
                 "• Terminal is separate: Chat → Terminal → Computer / SSH.",
                 style = MaterialTheme.typography.bodySmall,
             )

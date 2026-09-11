@@ -76,7 +76,9 @@ class HeuristicAgenticPlanner(
                     profileId = parsed.profileId ?: fallbackProfileId,
                     argv = parsed.argv.ifEmpty {
                         when (normalized) {
-                            "ssh_exec", "sshexec", "https_runtime", "local_shell" ->
+                            "ssh_exec", "sshexec", "https_runtime", "local_shell",
+                            "computer_exec", "computerexec",
+                            ->
                                 listOf("uname", "-a")
                             else -> emptyList()
                         }
@@ -88,22 +90,38 @@ class HeuristicAgenticPlanner(
 
         val hasSshTool = "ssh_exec" in toolNames || "sshexec" in toolNames
         val hasLocal = "local_shell" in toolNames
+        val hasComputer = "computer_exec" in toolNames || "computerexec" in toolNames
         val hasHttps = "https_runtime" in toolNames
+        val shellishTitle = looksLikeShellCommand(goal.title)
 
         return when {
-            hasSshTool && sshProfile != null && goal.budgets.sshExecsRemaining() > 0 ->
+            hasComputer && shellishTitle ->
+                ProposedToolCall(
+                    tool = "computer_exec",
+                    argv = shellArgvFromTitle(goal.title),
+                    reason = "heuristic: shell-like goal → computer_exec",
+                )
+            hasSshTool && sshProfile != null && goal.budgets.sshExecsRemaining() > 0 &&
+                !shellishTitle ->
                 ProposedToolCall(
                     tool = "ssh_exec",
                     profileId = sshProfile.id,
                     argv = listOf("uname", "-a"),
                     reason = "heuristic: probe SSH profile=${sshProfile.id}",
                 )
-            hasHttps && httpsProfile != null && goal.budgets.sshExecsRemaining() > 0 ->
+            hasHttps && httpsProfile != null && goal.budgets.sshExecsRemaining() > 0 &&
+                !shellishTitle ->
                 ProposedToolCall(
                     tool = "https_runtime",
                     profileId = httpsProfile.id,
                     argv = listOf("uname", "-a"),
                     reason = "heuristic: probe HTTPS_RUNTIME profile=${httpsProfile.id}",
+                )
+            hasComputer ->
+                ProposedToolCall(
+                    tool = "computer_exec",
+                    argv = listOf("uname", "-a"),
+                    reason = "heuristic: computer_exec probe",
                 )
             hasLocal ->
                 ProposedToolCall(
@@ -119,6 +137,37 @@ class HeuristicAgenticPlanner(
         }
     }
 
+    companion object {
+        private val SHELL_FIRST = setOf(
+            "ls", "pwd", "cd", "cat", "head", "tail", "echo", "uname", "whoami",
+            "id", "df", "free", "ps", "top", "git", "ssh", "scp", "curl", "wget",
+            "python", "python3", "pip", "npm", "node", "java", "javac", "mkdir",
+            "touch", "cp", "mv", "rm", "chmod", "chown", "grep", "find", "which",
+            "env", "export", "apt", "pkg", "proot", "termux", "bash", "sh",
+        )
+
+        fun looksLikeShellCommand(text: String): Boolean {
+            val t = text.trim()
+            if (t.isEmpty()) return false
+            val lower = t.lowercase()
+            if (lower.startsWith("run on computer")) return true
+            if (lower.startsWith("computer:")) return true
+            if (lower.startsWith("$") || lower.startsWith("#")) return true
+            val first = t.split(Regex("\\s+")).firstOrNull()?.substringAfterLast('/')?.lowercase()
+                ?: return false
+            return first in SHELL_FIRST
+        }
+
+        fun shellArgvFromTitle(title: String): List<String> {
+            var t = title.trim()
+            val m = Regex("(?i)^(?:run on computer[:\\s]+|computer:\\s*)(.+)$").find(t)
+            if (m != null) t = m.groupValues[1].trim()
+            if (t.startsWith("$")) t = t.drop(1).trim()
+            if (t.isEmpty()) return listOf("uname", "-a")
+            return listOf("sh", "-c", t)
+        }
+    }
+
     private fun buildPrompt(
         goal: AgenticGoal,
         tools: List<String>,
@@ -130,6 +179,8 @@ class HeuristicAgenticPlanner(
         append("""{"tool":"ssh_exec","profileId":"<id>","argv":["uname","-a"],"reason":"..."}""")
         append('\n')
         append("""{"tool":"local_shell","argv":["uname","-a"]}""")
+        append('\n')
+        append("""{"tool":"computer_exec","argv":["ls","-la"]}""")
         append('\n')
         append("""{"tool":"https_runtime","profileId":"<id>","argv":["uname","-a"]}""")
         append('\n')

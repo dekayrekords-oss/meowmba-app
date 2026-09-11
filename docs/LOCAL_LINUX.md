@@ -29,6 +29,16 @@ Turning **On** from Idle or Off reconnects the guest. Do **not** implement Andro
 
 **Guest root ≠ phone root.** Outbound `ssh` uses the network. App ConnectionProfile SSH is additional.
 
+## Chat → Computer (Agentic ON)
+
+When **Settings → Neural / Lumen → Agentic** is enabled:
+
+- Chat can use Computer when Agentic is on.
+- Type a shell-looking line (`ls`, `git status`, `uname -a`, …) or `Run on Computer: <cmd>`.
+- Planner tool `computer_exec` wakes Computer from Idle/Off, runs via the Terminal session (or one-shot), and shows output in **chat** and **Terminal** scrollback.
+- Destructive patterns (`rm -rf`, …) need Agentic approval; remote `ssh_exec` still uses WAITING_APPROVAL for side effects.
+- Idle timeout still applies after agentic use. No Android root. No FlyWire.
+
 ## What Computer can do
 
 | Mode | Picker label | How | What you get |
