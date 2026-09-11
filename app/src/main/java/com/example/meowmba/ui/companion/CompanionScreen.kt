@@ -610,6 +610,21 @@ fun CompanionScreen(
             }
         }
 
+        // Lumen / agentic presence chip — only when flags warrant and hint is non-null.
+        val presenceHint = uiState.agenticPresenceHint
+            ?: uiState.reflexSummary?.takeIf { uiState.lumenReflexV2Enabled }
+        if (presenceHint != null &&
+            (uiState.agenticRuntimeV1Enabled || uiState.lumenReflexV2Enabled)
+        ) {
+            PresenceHintChip(
+                hint = presenceHint,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .safeDrawingPadding()
+                    .padding(top = 8.dp),
+            )
+        }
+
         // What the agents are doing. Above the avatar, below the full-screen menus, and
         // translucent — handing work to an agent should not take you out of the room.
         AgentActivityPanel(
@@ -794,6 +809,12 @@ fun CompanionScreen(
                 onVideoServerUrlChange = { viewModel.setVideoServerUrl(it) },
                 onBackgroundListeningChange = { viewModel.setBackgroundListeningEnabled(it) },
                 onUsbAutoBridgeChange = { viewModel.setUsbAutoBridge(it) },
+                lumenReflexV2 = uiState.lumenReflexV2Enabled,
+                onLumenReflexV2Change = viewModel::setLumenReflexV2,
+                agenticRuntimeV1 = uiState.agenticRuntimeV1Enabled,
+                onAgenticRuntimeV1Change = viewModel::setAgenticRuntimeV1,
+                lumenReflexGain = uiState.lumenReflexGain,
+                onLumenReflexGainChange = viewModel::setLumenReflexGain,
                 onClose = { viewModel.toggleSettings() }
             )
         }
@@ -1187,6 +1208,9 @@ private fun AvatarMotionHost(
             displayRotation = displayRotation,
             shakeCount = shakeCount,
             chaseHard = chaseHard,
+            reflexFeed = { viewModel.reflexSensory.value },
+            reflexGain = uiState.lumenReflexGain,
+            onReflexSummary = viewModel::onReflexSummary,
         )
     }
 }

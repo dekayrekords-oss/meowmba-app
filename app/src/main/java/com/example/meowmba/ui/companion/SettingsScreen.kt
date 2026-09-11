@@ -121,6 +121,12 @@ fun SettingsScreen(
     onVideoServerUrlChange: (String) -> Unit = {},
     onBackgroundListeningChange: (Boolean) -> Unit = {},
     onUsbAutoBridgeChange: ((Boolean) -> Unit)? = null,
+    lumenReflexV2: Boolean = false,
+    onLumenReflexV2Change: (Boolean) -> Unit = {},
+    agenticRuntimeV1: Boolean = false,
+    onAgenticRuntimeV1Change: (Boolean) -> Unit = {},
+    lumenReflexGain: Float = 1f,
+    onLumenReflexGainChange: (Float) -> Unit = {},
     onSaved: () -> Unit = {},
     onClose: () -> Unit
 ) {
@@ -198,6 +204,16 @@ fun SettingsScreen(
                 SettingsCategoryCard(category) { page = category.title }
                 Spacer(Modifier.height(10.dp))
             }
+            }
+            if (page == "Neural / Lumen") {
+                NeuralSettingsSection(
+                    lumenReflexV2 = lumenReflexV2,
+                    onLumenReflexV2Change = onLumenReflexV2Change,
+                    agenticRuntimeV1 = agenticRuntimeV1,
+                    onAgenticRuntimeV1Change = onAgenticRuntimeV1Change,
+                    reflexGain = lumenReflexGain,
+                    onReflexGainChange = onLumenReflexGainChange,
+                )
             }
             if (page == "Help & feedback") BetaHelpCard()
             if (page == "Voice & behavior") {
@@ -1499,6 +1515,7 @@ private val SETTINGS_CATEGORIES = listOf(
     SettingsCategory("Music & video", "Media-generation services", Icons.Default.Movie),
     SettingsCategory("Phone & device", "App control, access and device behavior", Icons.Default.PhoneAndroid),
     SettingsCategory("Appearance", "Dark/light mode, themes and avatars", Icons.Default.Palette),
+    SettingsCategory("Neural / Lumen", "Lumen reflex and nervous-system toggles", Icons.Default.Bolt),
     SettingsCategory("Connections & memory", "Desktop bridge, servers and shared memory", Icons.Default.Link),
     SettingsCategory("Driving", "Drive mode and emergency contact", Icons.Default.DirectionsCar),
     SettingsCategory("Help & feedback", "Beta help, testing and support", Icons.Default.HelpOutline),

@@ -44,6 +44,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import com.example.meowmba.core.config.FeatureFlags
+import com.example.meowmba.core.lumen.ReflexSensoryFeed
 import com.example.meowmba.ui.companion.lumen.LumenReflexBridge
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -206,6 +207,10 @@ fun AvatarRenderer(
      * Defaults to the resting bias, which is a no-op.
      */
     nervousBias: () -> BehaviorBias = { REST_BIAS },
+    /** Rich vision/social/speech/touch/motion feed for Lumen reflex v2 (read during draw). */
+    reflexFeed: () -> ReflexSensoryFeed = { ReflexSensoryFeed() },
+    reflexGain: Float = 1f,
+    onReflexSummary: ((String?) -> Unit)? = null,
     modifier: Modifier = Modifier,
     timings: com.example.meowmba.core.diagnostics.InteractionTimings? = null,
     displayRefreshRate: Float? = null,
@@ -874,7 +879,16 @@ fun AvatarRenderer(
                 tailWag = effectivePose.tailWag,
                 bias = nervousBias(),
             ), lumenPerformance, progress), customAnim, animTHolder[0].toFloat())
-            val gatedLumenInput = if (lumenReflexV2) lumenReflexBridge.modulate(composedLumenInput, tSec) else composedLumenInput
+            val gatedLumenInput = if (lumenReflexV2) {
+                val modulated = lumenReflexBridge.modulate(
+                    composedLumenInput,
+                    tSec,
+                    feed = reflexFeed(),
+                    gain = reflexGain,
+                )
+                onReflexSummary?.invoke(lumenReflexBridge.summaryLabel())
+                modulated
+            } else composedLumenInput
             val frame = lumenRig.step(tSec, gatedLumenInput)
             lumenLastFrame[0] = frame
             lumenPainter.draw(this, frame, Color(state.avatarEyeColor), Color(state.avatarGlowColor),

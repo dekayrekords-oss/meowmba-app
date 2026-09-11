@@ -271,6 +271,19 @@ class CompanionViewModel(
         com.example.meowmba.core.vision.SocialCue.NONE
     private var lastSocialCueAtMs: Long = 0L
 
+    /** Rich sensory snapshot for Lumen reflex v2 (read on the draw path). */
+    private val _reflexSensory = MutableStateFlow(
+        com.example.meowmba.core.lumen.ReflexSensoryFeed()
+    )
+    val reflexSensory =
+        _reflexSensory.asStateFlow()
+    private var speechLikelyLocal = false
+    private var affectionUntilElapsedMs = 0L
+    private var emotionPulseUntilElapsedMs = 0L
+    private var lastAffectEmotion: CompanionEmotion? = null
+    private var lastEmotionArousal = 0f
+    private var lastReflexSummaryEmitMs = 0L
+
     fun getVisionManager(): com.example.meowmba.core.vision.VisionManager? = visionManager
 
     /** Named GPS places ("remember this as my mailbox"). */
@@ -831,7 +844,18 @@ class CompanionViewModel(
      */
     private fun noteReplyAffect(text: String): CompanionEmotion {
         val emotion = ConversationAffect.reply(text, _uiState.value.emotion)
-        nervousSystem.noteAffect(ConversationAffect.valence(emotion))
+        val arousal = ConversationAffect.valence(emotion)
+        nervousSystem.noteAffect(arousal)
+        val changed = lastAffectEmotion != null && lastAffectEmotion != emotion
+        lastAffectEmotion = emotion
+        lastEmotionArousal = arousal
+        if (changed) {
+            emotionPulseUntilElapsedMs = android.os.SystemClock.elapsedRealtime() + 2_400L
+        }
+        publishReflexSensory(
+            track = visionManager?.faceTrack?.value,
+            nowElapsedMs = android.os.SystemClock.elapsedRealtime(),
+        )
         return emotion
     }
 
@@ -847,6 +871,11 @@ class CompanionViewModel(
     fun onAvatarPetted() {
         nervousSystem.onStimulus(com.example.meowmba.core.behavior.Stimulus.TOUCH)
         nervousSystem.noteAffect(ConversationAffect.valence(CompanionEmotion.AFFECTIONATE))
+        affectionUntilElapsedMs = android.os.SystemClock.elapsedRealtime() + 1_800L
+        publishReflexSensory(
+            track = visionManager?.faceTrack?.value,
+            nowElapsedMs = android.os.SystemClock.elapsedRealtime(),
+        )
     }
 
     /** Phase G2: motor API. [RobotManager] swaps simulated <-> a live LOOI body. */
@@ -1050,6 +1079,7 @@ class CompanionViewModel(
                 applySocialCue(track?.takeIf { inView })
                 noteFacePresence(inView, nowFace)
                 _chaseHard.value = track?.followSource == com.example.meowmba.core.vision.FollowSource.HAND
+                publishReflexSensory(track = track, nowElapsedMs = nowFace)
             }
         }
         viewModelScope.launch {
@@ -1122,6 +1152,7 @@ class CompanionViewModel(
         // Phase 6 (agentic ↔ Lumen presence): optional, flag-gated, minimal.
         // Soft hint only — never drives SSH from Lumen frame loop.
         refreshAgenticPresenceHint()
+        refreshLumenFlagMirrors()
         // Any weather fetch — including the agent's tool call — surfaces the card and moves
         // the cat's expression to match the sky.
         weatherRepository?.let { repo ->
@@ -1938,6 +1969,12 @@ class CompanionViewModel(
                         s.isDriving, s.speedMph,
                         fix?.first, fix?.second,
                     )
+                    if (_uiState.value.lumenReflexV2Enabled) {
+                        publishReflexSensory(
+                            track = visionManager?.faceTrack?.value,
+                            nowElapsedMs = android.os.SystemClock.elapsedRealtime(),
+                        )
+                    }
                 }
             }
             viewModelScope.launch {
@@ -2184,6 +2221,137 @@ class CompanionViewModel(
         // (reclaimWakeMicForForeground) — arming here too double-opened STT.
     }
 
+
+
+    private fun refreshLumenFlagMirrors() {
+        val storage = secureStorage ?: return
+        val flags = FeatureFlags.from(storage.context)
+        val s = _uiState.value
+        if (s.lumenReflexV2Enabled != flags.lumenReflexV2 ||
+            s.agenticRuntimeV1Enabled != flags.agenticRuntimeV1 ||
+            kotlin.math.abs(s.lumenReflexGain - flags.lumenReflexGain) > 0.001f
+        ) {
+            _uiState.value = s.copy(
+                lumenReflexV2Enabled = flags.lumenReflexV2,
+                agenticRuntimeV1Enabled = flags.agenticRuntimeV1,
+                lumenReflexGain = flags.lumenReflexGain,
+                reflexSummary = if (flags.lumenReflexV2) s.reflexSummary else null,
+            )
+        }
+    }
+
+    fun setLumenReflexV2(enabled: Boolean) {
+        val storage = secureStorage ?: return
+        FeatureFlags.from(storage.context).setLumenReflexV2(enabled)
+        refreshLumenFlagMirrors()
+        if (!enabled) {
+            _uiState.value = _uiState.value.copy(reflexSummary = null)
+        }
+        publishReflexSensory(
+            track = visionManager?.faceTrack?.value,
+            nowElapsedMs = android.os.SystemClock.elapsedRealtime(),
+        )
+    }
+
+    fun setAgenticRuntimeV1(enabled: Boolean) {
+        val storage = secureStorage ?: return
+        FeatureFlags.from(storage.context).setAgenticRuntimeV1(enabled)
+        refreshLumenFlagMirrors()
+        refreshAgenticPresenceHint()
+    }
+
+    fun setLumenReflexGain(gain: Float) {
+        val storage = secureStorage ?: return
+        FeatureFlags.from(storage.context).setLumenReflexGain(gain)
+        refreshLumenFlagMirrors()
+    }
+
+    fun onReflexSummary(label: String?) {
+        if (!_uiState.value.lumenReflexV2Enabled) return
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (label == _uiState.value.reflexSummary) return
+        if (now - lastReflexSummaryEmitMs < 250L && label != null) return
+        lastReflexSummaryEmitMs = now
+        _uiState.value = _uiState.value.copy(reflexSummary = label)
+    }
+
+    /**
+     * Publish VisionManager / SocialCues / AttentionFreshness / FollowSource /
+     * speechLikely / tracking plus pet, speech energy, reply-affect and drive IMU
+     * into the reflex sensory feed consumed by [LumenReflexBridge].
+     */
+    private fun publishReflexSensory(
+        track: com.example.meowmba.core.vision.FaceTrack?,
+        nowElapsedMs: Long,
+    ) {
+        val state = _uiState.value
+        val fresh = track != null &&
+            com.example.meowmba.core.vision.AttentionFreshness.isFresh(
+                track.observedAtElapsedMs, nowElapsedMs,
+            )
+        val hasFace = fresh && track?.hasFace == true
+        val stale = track != null && !fresh && state.isCameraEnabled
+        val cueActive = hasFace && track!!.cue != com.example.meowmba.core.vision.SocialCue.NONE &&
+            track.cue != com.example.meowmba.core.vision.SocialCue.BLINK
+        val speechEnergy = maxOf(_mouthEnergy.value, track?.mouthOpen ?: 0f)
+        val loud = speechEnergy >= 0.78f && (speechLikelyLocal || state.interactionState == InteractionState.LISTENING)
+        val affection = nowElapsedMs < affectionUntilElapsedMs
+        val emotionChanged = nowElapsedMs < emotionPulseUntilElapsedMs
+        val motionMag = maxOf(
+            state.driveGForce,
+            kotlin.math.abs(_motionLean.value) + kotlin.math.abs(_motionLurch.value),
+            kotlin.math.abs(state.driveLateralG) + kotlin.math.abs(state.driveLongitudinalG),
+        )
+        val thermalCaution = try {
+            ThermalGovernor.currentStatus() >= android.os.PowerManager.THERMAL_STATUS_MODERATE
+        } catch (_: Throwable) {
+            false
+        }
+        val speaking = state.interactionState == InteractionState.SPEAKING || _mouthEnergy.value > 0.02f
+        val resting = (state.interactionState == InteractionState.IDLE ||
+            state.interactionState == InteractionState.MUTED ||
+            state.interactionState == InteractionState.OFFLINE) && !speaking
+        _reflexSensory.value = com.example.meowmba.core.lumen.ReflexSensoryFeed(
+            cameraEnabled = state.isCameraEnabled,
+            hasFace = hasFace,
+            trackingId = track?.trackingId ?: -1,
+            followHand = track?.followSource == com.example.meowmba.core.vision.FollowSource.HAND,
+            speechLikely = speechLikelyLocal,
+            attentionFresh = fresh && hasFace,
+            attentionStale = stale || (state.isCameraEnabled && !hasFace && state.userInView),
+            socialCueActive = cueActive,
+            mouthOpen = track?.mouthOpen ?: 0f,
+            affectionPulse = affection,
+            speechEnergy = speechEnergy.coerceIn(0f, 1f),
+            loudSound = loud,
+            emotionChanged = emotionChanged,
+            emotionArousal = if (emotionChanged) lastEmotionArousal else lastEmotionArousal * 0.35f,
+            motionMagnitude = motionMag.coerceAtLeast(0f),
+            thermalCaution = thermalCaution,
+            speaking = speaking,
+            resting = resting,
+        )
+        // Coarse on-screen summary from sensory (bridge may refine via onReflexSummary).
+        if (state.lumenReflexV2Enabled) {
+            val parts = buildList {
+                if (hasFace) add("face")
+                if (speechLikelyLocal) add("talk")
+                if (track?.followSource == com.example.meowmba.core.vision.FollowSource.HAND) add("hand")
+                if (affection) add("pet")
+                if (loud) add("loud")
+                if (thermalCaution) add("warm")
+                if (motionMag > 0.35f) add("motion")
+            }
+            val summary = parts.takeIf { it.isNotEmpty() }?.joinToString(" · ")?.let { "Reflex: $it" }
+            if (summary != state.reflexSummary && state.agenticPresenceHint == null) {
+                // Prefer agentic hint when present; otherwise keep sensory summary warm.
+                if (nowElapsedMs - lastReflexSummaryEmitMs >= 400L) {
+                    lastReflexSummaryEmitMs = nowElapsedMs
+                    _uiState.value = state.copy(reflexSummary = summary)
+                }
+            }
+        }
+    }
 
     /**
      * Phase 6 optional: map open agentic goals → presence hint.
@@ -8524,6 +8692,7 @@ class CompanionViewModel(
         val listening = _uiState.value.interactionState == InteractionState.LISTENING ||
             speechService?.isListening?.value == true ||
             lastAlwaysOnPartial.isNotBlank()
+        speechLikelyLocal = listening
         visionManager?.setSpeechLikely(listening)
     }
 

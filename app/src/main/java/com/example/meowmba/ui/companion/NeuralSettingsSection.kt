@@ -4,11 +4,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -18,62 +20,104 @@ import com.example.meowmba.core.neural.NeuralMode
 import com.example.meowmba.core.neural.NeuralSubstrate
 
 /**
- * Small, deliberately explicit settings block for the neural controller.
+ * Neural controller + Lumen nervous-system settings.
  *
- * It is unmounted until the integration step wires its callbacks to
- * `NeuralModeStore` and `NeuralBehaviorController`; keeping the section
- * callback-driven makes it safe to preview and easy to use from the existing
- * settings state without adding a second source of truth.
+ * Lumen reflex / agentic runtime toggles are wired to [com.example.meowmba.core.config.FeatureFlags]
+ * (defaults OFF). Neural mode/substrate callbacks remain optional until that layer is mounted.
  */
 @Composable
 fun NeuralSettingsSection(
-    mode: NeuralMode,
-    substrate: NeuralSubstrate,
-    traceConsent: Boolean,
-    diagnostics: NeuralDiagnostics?,
-    onModeChanged: (NeuralMode) -> Unit,
-    onSubstrateChanged: (NeuralSubstrate) -> Unit,
-    onTraceConsentChanged: (Boolean) -> Unit,
-    onReset: () -> Unit,
+    mode: NeuralMode = NeuralMode.SHADOW,
+    substrate: NeuralSubstrate = NeuralSubstrate.RATE,
+    traceConsent: Boolean = false,
+    diagnostics: NeuralDiagnostics? = null,
+    onModeChanged: (NeuralMode) -> Unit = {},
+    onSubstrateChanged: (NeuralSubstrate) -> Unit = {},
+    onTraceConsentChanged: (Boolean) -> Unit = {},
+    onReset: () -> Unit = {},
+    lumenReflexV2: Boolean = false,
+    onLumenReflexV2Change: (Boolean) -> Unit = {},
+    agenticRuntimeV1: Boolean = false,
+    onAgenticRuntimeV1Change: (Boolean) -> Unit = {},
+    reflexGain: Float = 1f,
+    onReflexGainChange: (Float) -> Unit = {},
+    showNeuralCoreControls: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-        Text("Neural controller", style = MaterialTheme.typography.titleMedium)
+        Text("Lumen nervous system", style = MaterialTheme.typography.titleMedium)
         Text(
-            "Shadow mode compares the neural layer without changing avatar behaviour.",
+            "Optional reflex layer that modulates Lumen from vision, speech, touch and motion. " +
+                "Defaults off; enabling wires end-to-end without FlyWire data.",
             style = MaterialTheme.typography.bodySmall,
         )
-        NeuralChoiceRow(
-            label = "Mode",
-            choices = NeuralMode.entries.toList(),
-            selected = mode,
-            onSelected = onModeChanged,
-        )
-        NeuralChoiceRow(
-            label = "Substrate",
-            choices = NeuralSubstrate.entries.toList(),
-            selected = substrate,
-            onSelected = onSubstrateChanged,
-        )
+        Spacer(Modifier.height(8.dp))
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-            Checkbox(checked = traceConsent, onCheckedChange = onTraceConsentChanged)
-            Text("Allow feature-only neural traces")
+            Checkbox(checked = lumenReflexV2, onCheckedChange = onLumenReflexV2Change)
+            Text("Enable Lumen reflex v2")
         }
-        diagnostics?.let {
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Checkbox(checked = agenticRuntimeV1, onCheckedChange = onAgenticRuntimeV1Change)
+            Text("Enable agentic runtime v1 (presence + stubs)")
+        }
+        if (lumenReflexV2) {
             Text(
-                "Core: ${it.substrate.name.lowercase()}  " +
-                    "steps ${it.steps}  p95 ${it.p95StepMicros}µs  " +
-                    "fallback ${it.fallback.name.lowercase()}",
+                "Reflex gain ${(reflexGain * 100).toInt()}%",
                 style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            Slider(
+                value = reflexGain.coerceIn(0.25f, 1.5f),
+                onValueChange = { onReflexGainChange(it.coerceIn(0.25f, 1.5f)) },
+                valueRange = 0.25f..1.5f,
             )
             Text(
-                "Shadow divergence ${"%.3f".format(it.divergenceMean)} · " +
-                    "action ${it.currentAction.name.lowercase()}",
+                "Gain scales how strongly sensory drives push curiosity / social / caution. " +
+                    "Action competition hysteresis is unchanged.",
                 style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Button(onClick = onReset, modifier = Modifier.padding(top = 4.dp)) {
-            Text("Reset neural state")
+
+        if (showNeuralCoreControls) {
+            Spacer(Modifier.height(16.dp))
+            Text("Neural controller", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Shadow mode compares the neural layer without changing avatar behaviour.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            NeuralChoiceRow(
+                label = "Mode",
+                choices = NeuralMode.entries.toList(),
+                selected = mode,
+                onSelected = onModeChanged,
+            )
+            NeuralChoiceRow(
+                label = "Substrate",
+                choices = NeuralSubstrate.entries.toList(),
+                selected = substrate,
+                onSelected = onSubstrateChanged,
+            )
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Checkbox(checked = traceConsent, onCheckedChange = onTraceConsentChanged)
+                Text("Allow feature-only neural traces")
+            }
+            diagnostics?.let {
+                Text(
+                    "Core: ${it.substrate.name.lowercase()}  " +
+                        "steps ${it.steps}  p95 ${it.p95StepMicros}µs  " +
+                        "fallback ${it.fallback.name.lowercase()}",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Text(
+                    "Shadow divergence ${"%.3f".format(it.divergenceMean)} · " +
+                        "action ${it.currentAction.name.lowercase()}",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            Button(onClick = onReset, modifier = Modifier.padding(top = 4.dp)) {
+                Text("Reset neural state")
+            }
         }
     }
 }

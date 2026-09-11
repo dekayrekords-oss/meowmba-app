@@ -12,7 +12,7 @@ Status: scaffolding only. **No FlyWire data or assets.** Feature flags default *
 
 - Not a FlyWire / connectome import.
 - Not an always-on agent loop.
-- Not a settings UI overhaul (debug/adb toggles only for now).
+- Settings UI: Neural / Lumen section toggles `lumen_reflex_v2` (default OFF) plus reflex gain; agentic flag toggle included. Agentic production UX still later.
 
 ## Existing types this builds on
 
@@ -264,6 +264,7 @@ Optional: when `lumen_reflex_v2` is ON, gaze / head-follow springs in `AvatarRen
 - [x] No opencode
 - [ ] Room migration for goals/tasks/events
 - [ ] Real `ModelAdapter` (HTTP/on-device LLM)
+- [x] Settings UI for Lumen reflex / agentic flag toggles (Neural / Lumen)
 - [ ] Settings UI for profiles / credential refs
 - [ ] Host-key verification / known_hosts
 - [ ] Production approval UX for `WAITING_APPROVAL`
@@ -311,20 +312,20 @@ Force-stop and relaunch after toggling. Programmatic: `FeatureFlags.from(context
 | Credentials | SecureStorage ref lookup | Settings UI + keystore-backed secrets |
 | `AgenticMemoryIndex` | In-memory notes | Git / vault second-brain |
 | Presence | Hint string on CompanionState | Optional emotion rehearsal + approval card |
-| Lumen reflex | Local dynamics | Vision / SocialCues feed (still no FlyWire) |
+| Lumen reflex | Rich `ReflexSensoryFeed` + ActionCompetition (flag OFF default) | Optional tuning / more VAD when mic RMS is exposed |
 
-## Still missing (synapse / production agentic)
+## Lumen synapse status (this pass)
 
-Relative to the VOICE_LOCATION_HEAT nervous-system proposal and the Phase 8 production agentic list. Scaffolding exists behind flags; these are **not** done:
+Done (behind `lumen_reflex_v2` / `agentic_runtime_v1`, defaults **OFF**, no FlyWire):
 
-### Lumen / nervous (“synapse”)
-- **Full curiosity / fatigue / caution / socialAttention wiring to vision** — `ReflexDynamics` still uses coarse camera/gaze/speaking/resting booleans from `LumenInput`, not a rich `SocialCues` / VisionProvider feature feed (freshness, looming, hand motion, petting, VAD, interruption).
-- **NeuralSettingsSection / Settings UI** for reflex or neural layer (debug/adb toggles only today).
-- **Presence UI visible** — `CompanionState.agenticPresenceHint` is populated when `agentic_runtime_v1` is on, but there is **no on-screen presence chip/banner** in Companion UI yet.
-- **Reply-affect / touch / loud-sound / general-motion → drives** beyond the current LumenInput path (see MEOW_NEURAL_MASTER_PLAN gaps).
-- **No FlyWire / connectome** (intentional; keep it that way unless licensing is explicit).
+### Lumen / nervous (“synapse”) — DONE
+- [x] **Rich feed into ReflexState** — `ReflexSensoryFeed` from VisionManager / FaceTrack / SocialCues / AttentionFreshness / FollowSource / speechLikely / trackingId, published each vision tick from `CompanionViewModel` into `LumenReflexBridge.modulate`. Curiosity rises on novel targets + loss-of-track recovery; socialAttention on face lock + talker; fatigue on continuous tracking time; caution on stale/loss/thermal. `ActionCompetition` still uses those drives with hysteresis.
+- [x] **Settings UI** — Settings category **Neural / Lumen** uses `NeuralSettingsSection` to toggle `lumen_reflex_v2`, `agentic_runtime_v1`, and reflex gain slider (0.25–1.5).
+- [x] **Presence UI** — `PresenceHintChip` shows `agenticPresenceHint` and/or `reflexSummary` when non-null and flags warrant.
+- [x] **Extra drives** — pet/affection pulse, speech energy / loud (mouthEnergy + mouthOpen), reply-affect/emotion arousal, drive IMU / drive-G mapped into `ReflexSensoryFeed`.
+- [x] **No FlyWire / connectome** (intentional; keep it that way unless licensing is explicit).
 
-### Agentic runtime → production
+### Still open — Agentic runtime → production
 - **Room persistence + migration** for goals/tasks/events (`MeowmbaDatabase` not bumped; store is in-memory → lost on process death).
 - **Real `ModelAdapter`** (HTTP / on-device LLM) — still `StubModelAdapter` + heuristic planner.
 - **Settings UI** for connection profiles / `agentic_cred_<ref>` secrets.
@@ -347,3 +348,17 @@ Relative to the VOICE_LOCATION_HEAT nervous-system proposal and the Phase 8 prod
 - `ui/companion/CompanionState.kt`
 - `ui/companion/CompanionViewModel.kt`
 - `docs/INTEGRATION_LUMEN_AGENTIC.md` (this file)
+
+
+### Files touched (synapse pass)
+
+- `core/lumen/ReflexState.kt` (`ReflexSensoryFeed` + rich `ReflexDynamics`)
+- `core/lumen/ActionCompetition.kt` (unchanged hysteresis consumer)
+- `core/config/FeatureFlags.kt` (reflex gain pref)
+- `ui/companion/lumen/LumenReflexBridge.kt` (rich feed + temporal novelty/loss)
+- `ui/companion/CompanionViewModel.kt` (publish sensory each tick; flag setters)
+- `ui/companion/CompanionState.kt` (`reflexSummary`, flag mirrors)
+- `ui/companion/AvatarRenderer.kt` (feed into modulate)
+- `ui/companion/NeuralSettingsSection.kt` / `SettingsScreen.kt` (Neural / Lumen page)
+- `ui/companion/PresenceHintChip.kt` / `CompanionScreen.kt` (chip + wiring)
+- `docs/INTEGRATION_LUMEN_AGENTIC.md`
