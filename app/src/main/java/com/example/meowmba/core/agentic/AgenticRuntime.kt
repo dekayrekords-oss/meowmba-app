@@ -2,16 +2,17 @@ package com.example.meowmba.core.agentic
 
 import android.content.Context
 import com.example.meowmba.core.config.FeatureFlags
+import com.example.meowmba.core.database.MeowmbaDatabase
 import com.example.meowmba.core.security.SecureStorageManager
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Agentic runtime v1 facade (Phases 3–5).
+ * Agentic runtime v1 facade (Phases 3–8 production scaffolding).
  *
  * When [FeatureFlags.agenticRuntimeV1] is OFF (default), all methods are
  * no-ops / empty / [SshExecResult.NotEnabled] — callers must not change main UX.
- * When ON, uses in-memory goal store + SecureStorage-backed connection profiles,
- * an [AgenticSshExecutor], and a model-driven [AgenticPlanner] loop via [tick].
+ * When ON, uses Room-backed goal/profile stores, an [AgenticSshExecutor], and a
+ * model-driven [AgenticPlanner] loop via [tick].
  *
  * No FlyWire. Secrets never enter event detail / prompts — only credential refs.
  * No opencode. Do not drive SSH from the Lumen frame loop.
@@ -30,7 +31,6 @@ class AgenticRuntime private constructor(
         get() = flags.agenticRuntimeV1
 
     init {
-        // Built-in Phase-4/5 tool ids; description only — execution via [sshExec].
         tools["sshExec"] = "Execute argv on a ConnectionProfile (SSH) via AgenticSshExecutor"
         tools["ssh_exec"] = "Alias for sshExec (planner-facing name)"
         tools["noop"] = "No-op / wait / budget stop"
@@ -68,6 +68,34 @@ class AgenticRuntime private constructor(
         return store.listEvents(goalId)
     }
 
+    fun listWaitingApproval(): List<AgenticGoal> {
+        if (!enabled) return emptyList()
+        return store.listOpenGoals().filter { it.status == GoalStatus.WAITING_APPROVAL }
+    }
+
+    /**
+     * Approve a goal waiting on side-effecting ssh_exec. Sets [AgenticGoal.approvalGranted]
+     * and moves status to [GoalStatus.RUNNING]. Returns null when flag OFF / not found.
+     */
+    fun approveGoal(goalId: String): AgenticGoal? {
+        if (!enabled) return null
+        val goal = store.getGoal(goalId) ?: return null
+        store.appendEvent(goalId, type = "approved", detail = "user approved pending ssh_exec")
+        return store.updateGoal(
+            goal.copy(status = GoalStatus.RUNNING, approvalGranted = true),
+        )
+    }
+
+    /** Reject a waiting goal → [GoalStatus.CANCELLED]. */
+    fun rejectGoal(goalId: String): AgenticGoal? {
+        if (!enabled) return null
+        val goal = store.getGoal(goalId) ?: return null
+        store.appendEvent(goalId, type = "rejected", detail = "user rejected pending ssh_exec")
+        return store.updateGoal(
+            goal.copy(status = GoalStatus.CANCELLED, approvalGranted = false),
+        )
+    }
+
     // --- Phase 4: connection profiles + tool registry + sshExec ---
 
     fun listConnectionProfiles(): List<ConnectionProfile> {
@@ -83,7 +111,6 @@ class AgenticRuntime private constructor(
     fun saveConnectionProfile(profile: ConnectionProfile): ConnectionProfile? {
         if (!enabled) return null
         val saved = profileStore.save(profile)
-        // Event detail uses refs / display names only — never secrets.
         store.listOpenGoals().firstOrNull()?.let { g ->
             store.appendEvent(
                 g.id,
@@ -99,7 +126,6 @@ class AgenticRuntime private constructor(
         return profileStore.delete(id)
     }
 
-    /** Register a tool name → short description. Returns false when flag OFF. */
     fun registerTool(name: String, description: String): Boolean {
         if (!enabled) return false
         val key = name.trim()
@@ -118,10 +144,6 @@ class AgenticRuntime private constructor(
         return tools[name]
     }
 
-    /**
-     * Run argv against a saved SSH [ConnectionProfile].
-     * Appends a sanitized event when [goalId] is provided (no secrets).
-     */
     fun sshExec(
         profileId: String,
         argv: List<String>,
@@ -147,15 +169,13 @@ class AgenticRuntime private constructor(
 
     // --- Phase 5: model-driven agent loop ---
 
-    /**
-     * One planner step for [goalId]. Flag OFF → null (no-op).
-     * Loads goal, calls planner, records model_attempt, may invoke ssh_exec,
-     * appends events, updates status / budgets.
-     */
     fun tick(goalId: String): AgenticGoal? {
         if (!enabled) return null
         val goal = store.getGoal(goalId) ?: return null
         if (goal.status == GoalStatus.DONE || goal.status == GoalStatus.CANCELLED) {
+            return goal
+        }
+        if (goal.status == GoalStatus.WAITING_APPROVAL && !goal.approvalGranted) {
             return goal
         }
 
@@ -173,6 +193,7 @@ class AgenticRuntime private constructor(
 
         var budgets = goal.budgets.copy(stepsUsed = goal.budgets.stepsUsed + 1)
         var status = if (goal.status == GoalStatus.OPEN) GoalStatus.RUNNING else goal.status
+        var approvalGranted = goal.approvalGranted
 
         if (proposal.isNoop) {
             store.appendEvent(goalId, type = "noop", detail = proposal.reason.take(200))
@@ -180,7 +201,9 @@ class AgenticRuntime private constructor(
                 status = GoalStatus.BLOCKED
                 store.appendEvent(goalId, type = "budget_exhausted", detail = "steps/tools budget hit")
             }
-            return store.updateGoal(goal.copy(status = status, budgets = budgets))
+            return store.updateGoal(
+                goal.copy(status = status, budgets = budgets, approvalGranted = approvalGranted),
+            )
         }
 
         budgets = budgets.copy(toolCallsUsed = budgets.toolCallsUsed + 1)
@@ -190,18 +213,44 @@ class AgenticRuntime private constructor(
             if (budgets.sshExecsRemaining() <= 0) {
                 store.appendEvent(goalId, type = "ssh_exec_skipped", detail = "ssh budget exhausted")
                 status = GoalStatus.BLOCKED
-                return store.updateGoal(goal.copy(status = status, budgets = budgets))
+                return store.updateGoal(
+                    goal.copy(status = status, budgets = budgets, approvalGranted = false),
+                )
             }
             val profileId = proposal.profileId
             if (profileId.isNullOrBlank()) {
                 store.appendEvent(goalId, type = "ssh_exec_skipped", detail = "missing profileId")
                 status = GoalStatus.BLOCKED
-                return store.updateGoal(goal.copy(status = status, budgets = budgets))
+                return store.updateGoal(
+                    goal.copy(status = status, budgets = budgets, approvalGranted = false),
+                )
             }
+
+            val argv = proposal.argv.ifEmpty { listOf("uname", "-a") }
+            if (AgenticSshPolicy.requiresApproval(argv) && !approvalGranted) {
+                store.appendEvent(
+                    goalId,
+                    type = "awaiting_approval",
+                    detail = "ssh_exec profile=$profileId argv=${argv.take(6).joinToString(" ")}",
+                )
+                return store.updateGoal(
+                    goal.copy(
+                        status = GoalStatus.WAITING_APPROVAL,
+                        budgets = budgets,
+                        approvalGranted = false,
+                    ),
+                )
+            }
+
+            // Consume one-shot approval if used for a side-effecting call.
+            if (approvalGranted && AgenticSshPolicy.isSideEffecting(argv)) {
+                approvalGranted = false
+            }
+
             budgets = budgets.copy(sshExecsUsed = budgets.sshExecsUsed + 1)
             val result = sshExec(
                 profileId = profileId,
-                argv = proposal.argv.ifEmpty { listOf("uname", "-a") },
+                argv = argv,
                 goalId = goalId,
             )
             status = when (result) {
@@ -210,7 +259,6 @@ class AgenticRuntime private constructor(
                 is SshExecResult.Error -> GoalStatus.BLOCKED
                 is SshExecResult.NotEnabled -> GoalStatus.BLOCKED
             }
-            // Optional memory note (sanitized) — does not touch MemoryCore.
             memoryIndex.note(
                 goalId,
                 "ssh_exec profile=$profileId result=${result::class.simpleName}",
@@ -229,13 +277,12 @@ class AgenticRuntime private constructor(
             store.appendEvent(goalId, type = "budget_exhausted", detail = "steps/tools budget hit")
         }
 
-        return store.updateGoal(goal.copy(status = status, budgets = budgets))
+        return store.updateGoal(
+            goal.copy(status = status, budgets = budgets, approvalGranted = approvalGranted),
+        )
     }
 
-    /** Alias for [tick] — one planner/tool step. */
     fun step(goalId: String): AgenticGoal? = tick(goalId)
-
-    // --- Phase 7 memory index (optional) ---
 
     fun noteMemory(goalId: String, text: String): Boolean {
         if (!enabled) return false
@@ -261,10 +308,26 @@ class AgenticRuntime private constructor(
         private fun build(app: Context): AgenticRuntime {
             val flags = FeatureFlags.from(app)
             val storage = SecureStorageManager(app)
-            // Always wire SecureStorage-backed stores; public API still returns
-            // empty / NotEnabled while the flag is OFF. After adb toggle +
-            // process restart, persistence is already in place.
-            val profiles: ConnectionProfileStore = SecureConnectionProfileStore(storage)
+            val db = MeowmbaDatabase.getDatabase(app)
+
+            // Room-backed stores when flag ON path is used; Empty kept for
+            // design/tests. Public API still no-ops while the flag is OFF.
+            // Always wire Room so data survives process death after flag toggle.
+            val goalStore: AgenticGoalStore = RoomAgenticGoalStore(
+                db.agenticGoalDao(),
+                db.agenticEventDao(),
+            )
+            val profiles: ConnectionProfileStore = RoomConnectionProfileStore(
+                db.connectionProfileDao(),
+            )
+            // Migrate any SecureStorage JSON profiles into Room once (best-effort).
+            runCatching {
+                val legacy = SecureConnectionProfileStore(storage).list()
+                if (legacy.isNotEmpty() && profiles.list().isEmpty()) {
+                    legacy.forEach { profiles.save(it) }
+                }
+            }
+
             val credentials: CredentialResolver = SecureStorageCredentialResolver(storage)
             val executor = DefaultAgenticSshExecutor(
                 enabled = { flags.agenticRuntimeV1 },
@@ -273,7 +336,7 @@ class AgenticRuntime private constructor(
             )
             return AgenticRuntime(
                 flags = flags,
-                store = InMemoryAgenticGoalStore(),
+                store = goalStore,
                 profileStore = profiles,
                 sshExecutor = executor,
                 planner = HeuristicAgenticPlanner(StubModelAdapter()),
@@ -281,7 +344,6 @@ class AgenticRuntime private constructor(
             )
         }
 
-        /** Test / debug helper to replace the process singleton. */
         fun resetForTests() {
             synchronized(this) { INSTANCE = null }
         }

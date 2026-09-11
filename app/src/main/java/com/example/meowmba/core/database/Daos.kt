@@ -154,3 +154,46 @@ interface ProjectDao {
     @Query("SELECT name FROM projects")
     suspend fun names(): List<String>
 }
+
+@Dao
+interface AgenticGoalDao {
+    @Query("SELECT * FROM agentic_goals WHERE id = :id LIMIT 1")
+    suspend fun getById(id: String): AgenticGoalEntity?
+
+    @Query("SELECT * FROM agentic_goals WHERE status IN (:statuses) ORDER BY createdAt ASC")
+    suspend fun listByStatuses(statuses: List<String>): List<AgenticGoalEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(goal: AgenticGoalEntity)
+
+    @Query("DELETE FROM agentic_goals WHERE id = :id")
+    suspend fun deleteById(id: String)
+}
+
+@Dao
+interface AgenticEventDao {
+    @Query("SELECT * FROM agentic_events WHERE goalId = :goalId ORDER BY timestamp ASC")
+    suspend fun listForGoal(goalId: String): List<AgenticEventEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(event: AgenticEventEntity)
+
+    @Query("DELETE FROM agentic_events WHERE goalId = :goalId")
+    suspend fun deleteForGoal(goalId: String)
+}
+
+@Dao
+interface ConnectionProfileDao {
+    @Query("SELECT * FROM agentic_connection_profiles ORDER BY displayName ASC")
+    suspend fun listAll(): List<ConnectionProfileEntity>
+
+    @Query("SELECT * FROM agentic_connection_profiles WHERE id = :id LIMIT 1")
+    suspend fun getById(id: String): ConnectionProfileEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(profile: ConnectionProfileEntity)
+
+    @Query("DELETE FROM agentic_connection_profiles WHERE id = :id")
+    suspend fun deleteById(id: String): Int
+}
+

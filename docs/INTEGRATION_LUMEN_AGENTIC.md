@@ -92,7 +92,7 @@ Status: **compiling stubs only**. Default remains **OFF**. Not wired into main c
 | DAO-shaped in-memory store | `core/agentic/AgenticGoalStore.kt` (`AgenticGoalStore`, `InMemoryAgenticGoalStore`) |
 | Facade | `core/agentic/AgenticRuntime.kt` — `createGoal`, `appendEvent`, `listOpenGoals` |
 
-Existing Room (`MeowmbaDatabase` v9, `core/database/`) is **not** bumped yet; entities are shaped for a later Room migration. Reuse pattern: same package style as `AuditEntryEntity` / `AuditDao`, store is the lightweight equivalent for now.
+Room is now **v10** with `agentic_goals` / `agentic_events` / `agentic_connection_profiles` and `MIGRATION_9_10`. Runtime uses `RoomAgenticGoalStore` / `RoomConnectionProfileStore` (Empty/InMemory retained for tests).
 
 ### Behavior
 
@@ -262,13 +262,13 @@ Optional: when `lumen_reflex_v2` is ON, gaze / head-follow springs in `AvatarRen
 - [x] Agentic memory index stub; MemoryCore unchanged
 - [x] No FlyWire data/assets/imports
 - [x] No opencode
-- [ ] Room migration for goals/tasks/events
+- [x] Room migration for goals/tasks/events (v9→v10: agentic_goals / agentic_events / agentic_connection_profiles)
 - [ ] Real `ModelAdapter` (HTTP/on-device LLM)
 - [x] Settings UI for Lumen reflex / agentic flag toggles (Neural / Lumen)
-- [ ] Settings UI for profiles / credential refs
-- [ ] Host-key verification / known_hosts
-- [ ] Production approval UX for `WAITING_APPROVAL`
-- [ ] Persist agentic goals across process death
+- [x] Settings UI for profiles / credential refs (Neural / Lumen → AgenticProfilesSection)
+- [x] Host-key verification / known_hosts (fingerprint on ConnectionProfile; TOFU pin policy)
+- [x] Production approval UX for `WAITING_APPROVAL` (Companion approve/reject dialog)
+- [x] Persist agentic goals across process death (RoomAgenticGoalStore)
 - [ ] Termux / HTTPS_RUNTIME worker packaging
 
 ### Failure matrix
@@ -326,12 +326,12 @@ Done (behind `lumen_reflex_v2` / `agentic_runtime_v1`, defaults **OFF**, no FlyW
 - [x] **No FlyWire / connectome** (intentional; keep it that way unless licensing is explicit).
 
 ### Still open — Agentic runtime → production
-- **Room persistence + migration** for goals/tasks/events (`MeowmbaDatabase` not bumped; store is in-memory → lost on process death).
+- ~~**Room persistence + migration**~~ — done (`MeowmbaDatabase` v10 + `RoomAgenticGoalStore`).
 - **Real `ModelAdapter`** (HTTP / on-device LLM) — still `StubModelAdapter` + heuristic planner.
-- **Settings UI** for connection profiles / `agentic_cred_<ref>` secrets.
+- ~~**Settings UI** for connection profiles / `agentic_cred_<ref>` secrets~~ — done (`AgenticProfilesSection`).
 - **Termux `ssh` / `sshpass` packaging** (or HTTPS_RUNTIME worker) on device.
-- **Host-key verification / known_hosts** against `hostKeyFingerprint`.
-- **Production approval UX** for `WAITING_APPROVAL` (orchestrator card / user-visible gate).
+- ~~**Host-key verification / known_hosts**~~ — done (probe + pin / mismatch reject).
+- ~~**Production approval UX** for `WAITING_APPROVAL`~~ — Companion approve/reject dialog.
 - **Scheduler / tool loop** invoking `sshExec` from open goals in main UX (not just `tick`/`step` API).
 - **AgenticMemoryIndex** beyond in-memory stub (Git/vault second-brain later).
 - **Bridging agentic `sshExec` ↔ JSch `SshTool`** (optional).
@@ -362,3 +362,8 @@ Done (behind `lumen_reflex_v2` / `agentic_runtime_v1`, defaults **OFF**, no FlyW
 - `ui/companion/NeuralSettingsSection.kt` / `SettingsScreen.kt` (Neural / Lumen page)
 - `ui/companion/PresenceHintChip.kt` / `CompanionScreen.kt` (chip + wiring)
 - `docs/INTEGRATION_LUMEN_AGENTIC.md`
+
+
+## Terminal-clone plan
+
+Condensed computer/terminal-clone setups (Termux / SSH host / HTTPS_RUNTIME), `ssh_exec` loop, and journals: [`TERMINAL_CLONE_AGENTIC.md`](./TERMINAL_CLONE_AGENTIC.md).

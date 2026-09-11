@@ -145,6 +145,9 @@ import kotlinx.coroutines.withTimeout
 import com.example.meowmba.core.security.SecureStorageManager
 import com.example.meowmba.core.config.FeatureFlags
 import com.example.meowmba.core.agentic.AgenticRuntime
+import com.example.meowmba.core.agentic.ConnectionProfile
+import com.example.meowmba.core.agentic.SecureStorageCredentialResolver
+import com.example.meowmba.core.agentic.GoalStatus
 import java.io.File
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -2362,15 +2365,64 @@ class CompanionViewModel(
         val storage = secureStorage ?: return
         val flags = FeatureFlags.from(storage.context)
         if (!flags.agenticRuntimeV1) {
-            if (_uiState.value.agenticPresenceHint != null) {
-                _uiState.value = _uiState.value.copy(agenticPresenceHint = null)
+            if (_uiState.value.agenticPresenceHint != null ||
+                _uiState.value.agenticPendingApprovalGoalId != null
+            ) {
+                _uiState.value = _uiState.value.copy(
+                    agenticPresenceHint = null,
+                    agenticPendingApprovalGoalId = null,
+                    agenticPendingApprovalTitle = null,
+                )
             }
             return
         }
-        val presence = CompanionAgenticHooks.fromRuntime(AgenticRuntime.from(storage.context))
+        val runtime = AgenticRuntime.from(storage.context)
+        val presence = CompanionAgenticHooks.fromRuntime(runtime)
+        val waiting = runtime.listWaitingApproval().firstOrNull()
         _uiState.value = _uiState.value.copy(
             agenticPresenceHint = presence.hint.ifBlank { null },
+            agenticPendingApprovalGoalId = waiting?.id,
+            agenticPendingApprovalTitle = waiting?.title,
         )
+    }
+
+    fun approveAgenticGoal(goalId: String) {
+        val storage = secureStorage ?: return
+        val runtime = AgenticRuntime.from(storage.context)
+        runtime.approveGoal(goalId)
+        runtime.tick(goalId)
+        refreshAgenticPresenceHint()
+    }
+
+    fun rejectAgenticGoal(goalId: String) {
+        val storage = secureStorage ?: return
+        AgenticRuntime.from(storage.context).rejectGoal(goalId)
+        refreshAgenticPresenceHint()
+    }
+
+    fun listAgenticConnectionProfiles(): List<ConnectionProfile> {
+        val storage = secureStorage ?: return emptyList()
+        if (!FeatureFlags.from(storage.context).agenticRuntimeV1) return emptyList()
+        return AgenticRuntime.from(storage.context).listConnectionProfiles()
+    }
+
+    fun saveAgenticConnectionProfile(profile: ConnectionProfile) {
+        val storage = secureStorage ?: return
+        if (!FeatureFlags.from(storage.context).agenticRuntimeV1) return
+        AgenticRuntime.from(storage.context).saveConnectionProfile(profile)
+        refreshAgenticPresenceHint()
+    }
+
+    fun deleteAgenticConnectionProfile(id: String) {
+        val storage = secureStorage ?: return
+        if (!FeatureFlags.from(storage.context).agenticRuntimeV1) return
+        AgenticRuntime.from(storage.context).deleteConnectionProfile(id)
+    }
+
+    fun saveAgenticCredential(credentialRef: String, secret: String) {
+        val storage = secureStorage ?: return
+        // Never log [secret].
+        SecureStorageCredentialResolver.saveCredential(storage, credentialRef, secret)
     }
 
     override fun onCleared() {

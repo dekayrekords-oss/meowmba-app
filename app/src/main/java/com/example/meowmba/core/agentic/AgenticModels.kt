@@ -1,12 +1,9 @@
 package com.example.meowmba.core.agentic
 
 /**
- * Lightweight goal / task / event records for agentic runtime v1 stubs.
- * Shaped like future Room entities; persistence is in-memory for this phase
- * (see [InMemoryAgenticGoalStore]). No secrets in [detail] / [payload].
- *
- * Phase 5 adds budget counters and expanded [GoalStatus] values used by the
- * model-driven agent loop scaffold and Lumen presence mapping.
+ * Lightweight goal / task / event records for agentic runtime v1.
+ * Persisted via Room when `agentic_runtime_v1` wiring is active
+ * (see [RoomAgenticGoalStore]). No secrets in [detail] / payloads.
  */
 enum class GoalStatus {
     OPEN,
@@ -49,6 +46,8 @@ data class AgenticGoal(
     val title: String,
     val status: GoalStatus = GoalStatus.OPEN,
     val budgets: AgenticBudgets = AgenticBudgets(),
+    /** One-shot approval for the next side-effecting ssh_exec. */
+    val approvalGranted: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = createdAt,
 )

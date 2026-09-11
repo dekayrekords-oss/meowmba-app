@@ -724,6 +724,31 @@ fun CompanionScreen(
             )
         }
 
+
+        val pendingApprovalId = uiState.agenticPendingApprovalGoalId
+        if (pendingApprovalId != null && uiState.agenticRuntimeV1Enabled) {
+            AlertDialog(
+                onDismissRequest = { viewModel.rejectAgenticGoal(pendingApprovalId) },
+                title = { Text("Approve agentic SSH?") },
+                text = {
+                    Text(
+                        "Goal '" + (uiState.agenticPendingApprovalTitle ?: pendingApprovalId).take(80) +
+                            "' wants to run a side-effecting ssh_exec. Approve or reject."
+                    )
+                },
+                confirmButton = {
+                    Button(onClick = { viewModel.approveAgenticGoal(pendingApprovalId) }) {
+                        Text("Approve")
+                    }
+                },
+                dismissButton = {
+                    OutlinedButton(onClick = { viewModel.rejectAgenticGoal(pendingApprovalId) }) {
+                        Text("Reject")
+                    }
+                },
+            )
+        }
+
         if (uiState.showSettings && secureStorage != null) {
             SettingsScreen(
                 secureStorage = secureStorage,
@@ -813,6 +838,10 @@ fun CompanionScreen(
                 onLumenReflexV2Change = viewModel::setLumenReflexV2,
                 agenticRuntimeV1 = uiState.agenticRuntimeV1Enabled,
                 onAgenticRuntimeV1Change = viewModel::setAgenticRuntimeV1,
+                connectionProfiles = viewModel.listAgenticConnectionProfiles(),
+                onSaveConnectionProfile = viewModel::saveAgenticConnectionProfile,
+                onDeleteConnectionProfile = viewModel::deleteAgenticConnectionProfile,
+                onSaveAgenticCredential = viewModel::saveAgenticCredential,
                 lumenReflexGain = uiState.lumenReflexGain,
                 onLumenReflexGainChange = viewModel::setLumenReflexGain,
                 onClose = { viewModel.toggleSettings() }

@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import com.example.meowmba.core.neural.NeuralDiagnostics
 import com.example.meowmba.core.neural.NeuralMode
 import com.example.meowmba.core.neural.NeuralSubstrate
+import com.example.meowmba.core.agentic.ConnectionProfile
 
 /**
  * Neural controller + Lumen nervous-system settings.
@@ -42,6 +43,10 @@ fun NeuralSettingsSection(
     reflexGain: Float = 1f,
     onReflexGainChange: (Float) -> Unit = {},
     showNeuralCoreControls: Boolean = false,
+    connectionProfiles: List<ConnectionProfile> = emptyList(),
+    onSaveConnectionProfile: (ConnectionProfile) -> Unit = {},
+    onDeleteConnectionProfile: (String) -> Unit = {},
+    onSaveAgenticCredential: (String, String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth().padding(vertical = 8.dp)) {
@@ -76,6 +81,17 @@ fun NeuralSettingsSection(
                     "Action competition hysteresis is unchanged.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+
+        if (agenticRuntimeV1) {
+            Spacer(Modifier.height(16.dp))
+            AgenticProfilesSection(
+                profiles = connectionProfiles,
+                onSaveProfile = onSaveConnectionProfile,
+                onDeleteProfile = onDeleteConnectionProfile,
+                onSaveCredential = onSaveAgenticCredential,
             )
         }
 

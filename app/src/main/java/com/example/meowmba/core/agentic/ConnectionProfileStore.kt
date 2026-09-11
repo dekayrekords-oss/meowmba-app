@@ -48,7 +48,8 @@ class InMemoryConnectionProfileStore : ConnectionProfileStore {
 }
 
 /**
- * Encrypted SharedPreferences persistence (same pattern as [com.example.meowmba.core.ssh.SshHostRegistry]).
+ * Encrypted SharedPreferences persistence (legacy / fallback).
+ * Prefer [RoomConnectionProfileStore] when Room is available.
  * Stores metadata + [ConnectionProfile.credentialRef] only — no password fields.
  */
 class SecureConnectionProfileStore(
@@ -92,6 +93,7 @@ class SecureConnectionProfileStore(
                 .put("port", p.port)
                 .put("username", p.username)
                 .put("credentialRef", p.credentialRef)
+                .put("pinHostKeyOnFirstConnect", p.pinHostKeyOnFirstConnect)
             if (p.hostKeyFingerprint != null) o.put("hostKeyFingerprint", p.hostKeyFingerprint)
             if (p.workspaceRoot != null) o.put("workspaceRoot", p.workspaceRoot)
             arr.put(o)
@@ -113,6 +115,7 @@ class SecureConnectionProfileStore(
             credentialRef = o.optString("credentialRef", ""),
             hostKeyFingerprint = optionalString(o, "hostKeyFingerprint"),
             workspaceRoot = optionalString(o, "workspaceRoot"),
+            pinHostKeyOnFirstConnect = o.optBoolean("pinHostKeyOnFirstConnect", true),
         )
     }.getOrNull()
 

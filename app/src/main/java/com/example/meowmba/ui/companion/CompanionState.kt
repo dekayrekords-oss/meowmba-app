@@ -416,6 +416,9 @@ data class CompanionState(
     val lumenReflexV2Enabled: Boolean = false,
     val agenticRuntimeV1Enabled: Boolean = false,
     val lumenReflexGain: Float = 1f,
+    /** Goal waiting on side-effecting ssh_exec approval (agentic_runtime_v1). */
+    val agenticPendingApprovalGoalId: String? = null,
+    val agenticPendingApprovalTitle: String? = null,
 )
 
 /**

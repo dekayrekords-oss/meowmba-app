@@ -4,9 +4,8 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * DAO-shaped store for agentic goals / events (Phase 3+ stub).
- * In-memory only — Room wiring deferred so we do not bump
- * [com.example.meowmba.core.database.MeowmbaDatabase] yet.
+ * DAO-shaped store for agentic goals / events.
+ * Production path: [RoomAgenticGoalStore]. In-memory kept for tests.
  */
 interface AgenticGoalStore {
     fun insertGoal(title: String, budgets: AgenticBudgets = AgenticBudgets()): AgenticGoal
@@ -24,7 +23,7 @@ private val OPENISH: Set<GoalStatus> = setOf(
     GoalStatus.WAITING_APPROVAL,
 )
 
-/** Process-local concurrent store used when `agentic_runtime_v1` is ON. */
+/** Process-local concurrent store (tests / fallback). */
 class InMemoryAgenticGoalStore : AgenticGoalStore {
     private val goals = ConcurrentHashMap<String, AgenticGoal>()
     private val events = ConcurrentHashMap<String, MutableList<AgenticEvent>>()

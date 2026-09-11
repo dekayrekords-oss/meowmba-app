@@ -9,6 +9,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.example.meowmba.core.media.ImageService
 import com.example.meowmba.core.media.ImageServiceSettings
+import com.example.meowmba.core.agentic.ConnectionProfile
 import com.example.meowmba.ui.onboarding.ImageGenerationSetup
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
@@ -125,6 +126,10 @@ fun SettingsScreen(
     onLumenReflexV2Change: (Boolean) -> Unit = {},
     agenticRuntimeV1: Boolean = false,
     onAgenticRuntimeV1Change: (Boolean) -> Unit = {},
+    connectionProfiles: List<ConnectionProfile> = emptyList(),
+    onSaveConnectionProfile: (ConnectionProfile) -> Unit = {},
+    onDeleteConnectionProfile: (String) -> Unit = {},
+    onSaveAgenticCredential: (String, String) -> Unit = { _, _ -> },
     lumenReflexGain: Float = 1f,
     onLumenReflexGainChange: (Float) -> Unit = {},
     onSaved: () -> Unit = {},
@@ -211,6 +216,10 @@ fun SettingsScreen(
                     onLumenReflexV2Change = onLumenReflexV2Change,
                     agenticRuntimeV1 = agenticRuntimeV1,
                     onAgenticRuntimeV1Change = onAgenticRuntimeV1Change,
+                    connectionProfiles = connectionProfiles,
+                    onSaveConnectionProfile = onSaveConnectionProfile,
+                    onDeleteConnectionProfile = onDeleteConnectionProfile,
+                    onSaveAgenticCredential = onSaveAgenticCredential,
                     reflexGain = lumenReflexGain,
                     onReflexGainChange = onLumenReflexGainChange,
                 )

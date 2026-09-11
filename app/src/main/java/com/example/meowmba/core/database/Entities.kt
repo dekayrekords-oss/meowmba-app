@@ -1,6 +1,7 @@
 package com.example.meowmba.core.database
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.Fts4
 import androidx.room.PrimaryKey
 
@@ -153,3 +154,55 @@ data class AuditEntryEntity(
     val action: String,
     val detail: String
 )
+
+/** Agentic runtime goal row (string id; mirrors [com.example.meowmba.core.agentic.AgenticGoal]). */
+@Entity(tableName = "agentic_goals")
+data class AgenticGoalEntity(
+    @PrimaryKey val id: String,
+    val title: String,
+    val status: String,
+    val maxSteps: Int = 8,
+    val maxToolCalls: Int = 4,
+    val maxSshExecs: Int = 2,
+    val stepsUsed: Int = 0,
+    val toolCallsUsed: Int = 0,
+    val sshExecsUsed: Int = 0,
+    /** One-shot: user approved the next side-effecting ssh_exec. */
+    val approvalGranted: Boolean = false,
+    val createdAt: Long,
+    val updatedAt: Long,
+)
+
+/** Agentic runtime event row — never store secrets in [detail]. */
+@Entity(
+    tableName = "agentic_events",
+    indices = [Index(value = ["goalId"])],
+)
+data class AgenticEventEntity(
+    @PrimaryKey val id: String,
+    val goalId: String,
+    val taskId: String? = null,
+    val type: String,
+    val detail: String = "",
+    val timestamp: Long,
+)
+
+/**
+ * Agentic connection profile metadata. Secrets live in SecureStorage under
+ * `agentic_cred_<credentialRef>` — never in this table.
+ */
+@Entity(tableName = "agentic_connection_profiles")
+data class ConnectionProfileEntity(
+    @PrimaryKey val id: String,
+    val displayName: String,
+    val type: String,
+    val host: String,
+    val port: Int = 22,
+    val username: String,
+    val credentialRef: String,
+    val hostKeyFingerprint: String? = null,
+    val workspaceRoot: String? = null,
+    /** When true, first successful probe may pin hostKeyFingerprint (TOFU). */
+    val pinHostKeyOnFirstConnect: Boolean = true,
+)
+
