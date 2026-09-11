@@ -11244,6 +11244,20 @@ SAFE if the scene looks like a normal road, car interior, sidewalk, or room, or 
         fun looksLikeShowInBrowser(normalized: String): Boolean =
             SpeechIntents.looksLikeShowInBrowser(normalized)
     }
+
+    fun finishOnboarding() {
+        _showOnboarding.value = false
+    }
+
+    fun openCompanionTerminalFromOnboarding() {
+        finishOnboarding()
+        runCatching { openChat() }
+        runCatching {
+            val local = CompanionTerminalTarget.LOCAL_ID
+            connectCompanionTerminal(local)
+        }
+    }
+
 }
 
 /**
