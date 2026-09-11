@@ -61,6 +61,16 @@ class AvatarFrameCadenceTest {
         assertEquals(60, admitted)
     }
 
+    @Test fun `user 42 fps target spaces admits at one over forty-two seconds`() {
+        val c = AvatarFrameCadence()
+        val intervalNs = (1_000_000_000.0 / 42).toLong()
+        assertTrue(c.admit(0L, fpsTarget = 42))
+        assertFalse(c.admit(intervalNs - 1, fpsTarget = 42))
+        assertTrue(c.admit(intervalNs, fpsTarget = 42))
+        assertFalse(c.admit(intervalNs + intervalNs / 2, fpsTarget = 42))
+        assertTrue(c.admit(intervalNs * 2, fpsTarget = 42))
+    }
+
     @Test fun `LIGHT thermal halves effective active fps`() {
         val c = AvatarFrameCadence()
         var admitted = 0

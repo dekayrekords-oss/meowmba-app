@@ -35,7 +35,7 @@ class FeatureFlags(private val storage: SecureStorageManager) {
     }
 
     /**
-     * User Avatar ACTIVE FPS target when thermally cool (15 / 30 / 45 / 60).
+     * User Avatar ACTIVE FPS target when thermally cool (15–60 inclusive, 1 FPS steps).
      * Default 30 — safer mid after ~60fps overheating. Wired into AvatarFrameCadence.
      */
     val avatarFpsTarget: Int
@@ -43,13 +43,7 @@ class FeatureFlags(private val storage: SecureStorageManager) {
             ?.coerceIn(15, 60) ?: 30
 
     fun setAvatarFpsTarget(fps: Int) {
-        val snapped = when {
-            fps <= 22 -> 15
-            fps <= 37 -> 30
-            fps <= 52 -> 45
-            else -> 60
-        }
-        storage.savePreference(KEY_AVATAR_FPS_TARGET, snapped.toString())
+        storage.savePreference(KEY_AVATAR_FPS_TARGET, fps.coerceIn(15, 60).toString())
     }
 
     companion object {

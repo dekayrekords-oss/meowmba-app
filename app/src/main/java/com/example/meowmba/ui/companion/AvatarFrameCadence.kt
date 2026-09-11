@@ -14,7 +14,7 @@ import android.os.PowerManager
  * phones that meant continuous GPU/CPU work even when "just breathing", and
  * THERMAL_STATUS_LIGHT never reduced the admit rate — only MODERATE+ paused
  * via [AvatarWorkPolicy]. Default ACTIVE is now ~30 FPS; user Avatar FPS
- * target (15/30/45/60) selects the cool ACTIVE rate; LIGHT halves effective
+ * target (15–60) selects the cool ACTIVE rate; LIGHT halves effective
  * FPS; MODERATE+ refuses admits here as belt-and-suspenders (policy still pauses).
  */
 internal class AvatarFrameCadence {
@@ -22,7 +22,7 @@ internal class AvatarFrameCadence {
 
     /**
      * [active] = something is actually performing or being tracked.
-     * [fpsTarget] = user ACTIVE target FPS when cool (15/30/45/60; default 30).
+     * [fpsTarget] = user ACTIVE target FPS when cool (15–60 inclusive; default 30).
      * [thermalStatus] = [PowerManager] thermal severity.
      */
     fun admit(
@@ -53,6 +53,5 @@ internal class AvatarFrameCadence {
         const val ACTIVE_INTERVAL_NS = 33_000_000L
         /** ~15 FPS ambient at default target. */
         const val IDLE_INTERVAL_NS = 66_000_000L
-        val FPS_PRESETS = intArrayOf(15, 30, 45, 60)
     }
 }
