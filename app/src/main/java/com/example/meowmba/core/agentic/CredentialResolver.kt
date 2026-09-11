@@ -31,6 +31,11 @@ class SecureStorageCredentialResolver(
         return storage.getPreference(prefKey(ref))?.takeIf { it.isNotEmpty() }
     }
 
+    /** Persist a credential for [credentialRef]. Never log [secret]. */
+    fun store(credentialRef: String, secret: String) {
+        saveCredential(storage, credentialRef, secret)
+    }
+
     companion object {
         fun prefKey(credentialRef: String): String = "agentic_cred_$credentialRef"
 

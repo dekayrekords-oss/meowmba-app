@@ -81,3 +81,55 @@ Settings → Neural / Lumen (flag ON):
 
 - Integration checklist: [`INTEGRATION_LUMEN_AGENTIC.md`](./INTEGRATION_LUMEN_AGENTIC.md)
 - Code: `app/src/main/java/com/example/meowmba/core/agentic/`
+
+## HTTPS_RUNTIME worker client (on-device)
+
+`HttpsRuntimeClient` talks to an operator-hosted worker. The worker is **not**
+shipped inside the APK.
+
+### Stub protocol
+
+| Method | Path | Body / response |
+|--------|------|-----------------|
+| GET | `/health` | → `{ "ok": true }` |
+| POST | `/v1/jobs` | `{ "argv": ["uname","-a"], "cwd"?: "...", "timeoutMs"?: N }` → `{ "jobId": "..." }` |
+| GET | `/v1/jobs/{id}` | → `{ "status": "queued\|running\|succeeded\|failed", "exitCode"?: N }` |
+| GET | `/v1/jobs/{id}/logs` | → `{ "stdout": "...", "stderr": "..." }` |
+
+Auth: optional Bearer from profile `credentialRef`. Profile `host` may be a full
+URL (`https://worker:8443`) or host+port (default port 8443 / https).
+
+`DefaultAgenticSshExecutor.exec` routes `ConnectionProfileType.HTTPS_RUNTIME`
+through this client (health → start → poll → logs).
+
+## Termux RUN_COMMAND
+
+`TermuxRunCommandHelper`:
+1. Prefers ProcessBuilder when Termux/system `sh` is executable from the app UID
+2. Else dispatches `com.termux.RUN_COMMAND` → `com.termux.app.RunCommandService`
+   (requires **Allow external apps**; stdout not captured in-APK — platform limit)
+3. Used by planner tool `local_shell`
+
+## Background scheduler
+
+`AgenticScheduler` / `AgenticTickWorker` — WorkManager unique periodic work
+`agentic-runtime-tick` (15 min), battery-not-low, skips on thermal MODERATE+ /
+power-save. Registered from `MeowmbaApp` / `MainActivity.recover` / flag toggle.
+Force-stop suspends WorkManager until next app open (Android hard limit).
+
+## Model-parsed tool calls
+
+`AgenticToolCallParser` + `HttpOpenAiCompatibleModelAdapter` surface OpenAI
+`tool_calls` / compact JSON into `ProposedToolCall`. Registry: `ssh_exec`,
+`local_shell`, `https_runtime`, `noop`.
+
+## Git / vault-lite memory
+
+`FileBackedAgenticMemoryIndex` under `files/agentic-memory/` (jsonl + JSON
+export/import). Full git inside APK is intentionally out of scope.
+
+## Bridge ↔ SshHostRegistry
+
+`AgenticSshBridge.importLegacyHost` / `exportToLegacyRegistry` —
+`AgenticRuntime.importLegacySshHost` / `exportProfileToLegacyRegistry`.
+

@@ -65,9 +65,22 @@ class DefaultAgenticSshExecutor(
         val profile = profiles.get(profileId)
             ?: return SshExecResult.Error("Unknown connection profile \"$profileId\"")
 
+        if (profile.type == ConnectionProfileType.HTTPS_RUNTIME) {
+            val token = credentials.resolve(profile.credentialRef)
+            val client = HttpsRuntimeClient(
+                baseUrl = HttpsRuntimeClient.baseUrlFor(profile),
+                bearerToken = token,
+            )
+            return client.runArgv(
+                argv = argv,
+                cwd = profile.workspaceRoot,
+                overallTimeoutMs = timeoutMs.coerceAtLeast(1_000L),
+            )
+        }
+
         if (profile.type != ConnectionProfileType.SSH) {
             return SshExecResult.Error(
-                "Profile \"${profile.displayName}\" is ${profile.type}; sshExec requires SSH",
+                "Profile \"${profile.displayName}\" is ${profile.type}; sshExec requires SSH or HTTPS_RUNTIME",
             )
         }
 

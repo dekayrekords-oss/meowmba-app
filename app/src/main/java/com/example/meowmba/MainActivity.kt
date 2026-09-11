@@ -105,6 +105,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             runCatching { com.example.meowmba.core.workflows.WorkflowRuntime.get(applicationContext).recover() }
+            runCatching { com.example.meowmba.core.agentic.AgenticScheduler.recover(applicationContext) }
                 .onFailure { android.util.Log.w("BusinessAgents", "Saved workflows could not be resumed; data was preserved") }
         }
         enableEdgeToEdge()

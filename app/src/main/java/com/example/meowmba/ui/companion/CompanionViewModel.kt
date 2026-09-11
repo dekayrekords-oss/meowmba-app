@@ -2261,6 +2261,7 @@ class CompanionViewModel(
     fun setAgenticRuntimeV1(enabled: Boolean) {
         val storage = secureStorage ?: return
         FeatureFlags.from(storage.context).setAgenticRuntimeV1(enabled)
+        runCatching { com.example.meowmba.core.agentic.AgenticScheduler.ensureScheduled(storage.context) }
         refreshLumenFlagMirrors()
         refreshAgenticPresenceHint()
     }

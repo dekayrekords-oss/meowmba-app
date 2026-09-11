@@ -177,8 +177,15 @@ class HttpOpenAiCompatibleModelAdapter(
                 val choices = root.optJSONArray("choices") ?: return null
                 if (choices.length() == 0) return null
                 val msg = choices.getJSONObject(0).optJSONObject("message")
-                msg?.optString("content")?.trim()?.takeIf { it.isNotEmpty() }
+                val content = msg?.optString("content")?.trim()?.takeIf { it.isNotEmpty() }
                     ?: choices.getJSONObject(0).optString("text")?.trim()?.takeIf { it.isNotEmpty() }
+                if (!content.isNullOrEmpty()) return content
+                // Surface tool_calls so AgenticToolCallParser can consume them.
+                val toolCalls = msg?.optJSONArray("tool_calls")
+                if (toolCalls != null && toolCalls.length() > 0) {
+                    return JSONObject().put("tool_calls", toolCalls).toString()
+                }
+                null
             } catch (_: Exception) {
                 null
             }

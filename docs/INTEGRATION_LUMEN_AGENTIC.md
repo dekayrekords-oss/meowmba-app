@@ -325,16 +325,41 @@ Done (behind `lumen_reflex_v2` / `agentic_runtime_v1`, defaults **OFF**, no FlyW
 - [x] **Extra drives** — pet/affection pulse, speech energy / loud (mouthEnergy + mouthOpen), reply-affect/emotion arousal, drive IMU / drive-G mapped into `ReflexSensoryFeed`.
 - [x] **No FlyWire / connectome** (intentional; keep it that way unless licensing is explicit).
 
+## Phase 9 — Production-ready agentic finish (on-device)
+
+Status: **implemented behind `agentic_runtime_v1` (default OFF)**. No FlyWire. No opencode.
+
+### Completion checklist (Phase 9)
+
+- [x] HTTPS_RUNTIME worker client (`HttpsRuntimeClient`: health / start job / poll / logs)
+- [x] Stub server protocol documented in `TERMINAL_CLONE_AGENTIC.md` (worker not packaged in APK)
+- [x] Model-parsed tool calls (`AgenticToolCallParser` + HTTP adapter `tool_calls` surfacing)
+- [x] Tool registry expanded: `ssh_exec`, `local_shell`, `https_runtime`, `noop`
+- [x] Termux RUN_COMMAND helper (`TermuxRunCommandHelper`) + ProcessBuilder `sh -c` path
+- [x] Background scheduler (`AgenticScheduler` / WorkManager, budgets + thermal gates)
+- [x] File-backed vault-lite memory (`FileBackedAgenticMemoryIndex` export/import)
+- [x] Bridge agentic sshExec ↔ `SshHostRegistry` / `SshTool` (`AgenticSshBridge`)
+- [x] Docs checklists updated; hard limits noted below
+
+### Honest on-APK hard limits
+
+| Limit | Why |
+|-------|-----|
+| HTTPS_RUNTIME **worker binary** not inside APK | Separate trusted-host process; phone holds HTTP client only |
+| Termux RUN_COMMAND stdout not captured in-APK | Fire-and-forget Intent; full capture needs Termux:API / PendingIntent plumbing not shipped |
+| WorkManager not 24/7 after force-stop | Android suspends work until next user-started process |
+| Full git second-brain | Too heavy / unreliable in APK — file-backed notes + export instead |
+| OpenSSH not bundled | Use Termux binaries, JSch fallback, or HTTPS_RUNTIME worker |
+
 ### Still open — Agentic runtime → production
-- ~~**Room persistence + migration**~~ — done (`MeowmbaDatabase` v10 + `RoomAgenticGoalStore`).
-- ~~**Real `ModelAdapter`**~~ — `HttpOpenAiCompatibleModelAdapter` via SecureStorage refs; stub if unset.
-- ~~**Settings UI** for connection profiles / `agentic_cred_<ref>` secrets~~ — done (`AgenticProfilesSection`).
-- ~~**Termux path**~~ — improved binary discovery + `AgenticSshCapability` + JSch fallback; RUN_COMMAND documented; HTTPS_RUNTIME worker later.
-- ~~**Host-key verification / known_hosts**~~ — done (probe + pin / mismatch reject).
-- ~~**Production approval UX** for `WAITING_APPROVAL`~~ — Companion approve/reject dialog.
-- ~~**Scheduler / tool loop**~~ — Agentic / Tasks section: create goal, tick / tick-open, approval.
-- ~~**AgenticMemoryIndex**~~ — `PrefsAgenticMemoryIndex` (SharedPreferences by project/goal); Git/vault later.
-- **Bridging agentic `sshExec` ↔ JSch `SshTool`** (optional).
+- ~~**Bridging agentic `sshExec` ↔ JSch `SshTool`**~~ — done (`AgenticSshBridge`)
+- ~~**HTTPS_RUNTIME worker client**~~ — done (client in APK; host worker external)
+- ~~**Model-parsed tool calls**~~ — done
+- ~~**Termux RUN_COMMAND**~~ — done (helper + docs; stdout capture limited)
+- ~~**Background scheduler**~~ — done (WorkManager)
+- ~~**Git/vault-lite memory**~~ — done (file-backed MVP; not full git)
+
+
 
 ### Files touched (Phases 5–8)
 

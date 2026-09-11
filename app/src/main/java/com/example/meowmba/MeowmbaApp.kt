@@ -1,6 +1,7 @@
 package com.example.meowmba
 
 import android.app.Application
+import com.example.meowmba.core.agentic.AgenticScheduler
 import com.example.meowmba.core.thermal.ThermalGovernor
 
 /**
@@ -17,5 +18,7 @@ class MeowmbaApp : Application() {
     override fun onCreate() {
         super.onCreate()
         ThermalGovernor.install(this)
+        // Periodic agentic ticks when flag ON (no-op / cancelled when OFF).
+        runCatching { AgenticScheduler.recover(this) }
     }
 }

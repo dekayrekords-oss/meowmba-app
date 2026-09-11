@@ -1,11 +1,11 @@
 package com.example.meowmba.core.agentic
 
 /**
- * Phase 5 model-driven (or heuristic) planner.
+ * Phase 5+ model-driven (or heuristic) planner.
  *
  * Given a goal id context + available tools, proposes the next [ProposedToolCall].
- * Default [HeuristicAgenticPlanner] calls [ModelAdapter.complete] for a model
- * attempt event payload, then heuristically picks `ssh_exec` or `noop`.
+ * [HeuristicAgenticPlanner] calls [ModelAdapter.complete], then prefers
+ * [AgenticToolCallParser] JSON / tool_calls output; falls back to heuristics.
  */
 interface AgenticPlanner {
     fun propose(
@@ -17,12 +17,11 @@ interface AgenticPlanner {
 }
 
 /**
- * Stub / heuristic planner:
- * 1. Asks [ModelAdapter] for a canned plan (records happen in runtime).
- * 2. If budgets exhausted → noop.
- * 3. If an SSH profile exists and ssh_exec/sshExec is registered → propose
- *    a benign `uname -a` probe (no secrets).
- * 4. Else → noop.
+ * Model-aware planner:
+ * 1. Asks [ModelAdapter] for a plan (HTTP or stub).
+ * 2. Parses JSON tool_calls / function-call style via [AgenticToolCallParser].
+ * 3. Falls back to heuristic ssh_exec / local_shell / noop when parse empty.
+ * 4. Respects budgets and waiting/blocked statuses.
  */
 class HeuristicAgenticPlanner(
     private val model: ModelAdapter = StubModelAdapter(),
@@ -58,22 +57,65 @@ class HeuristicAgenticPlanner(
             return ProposedToolCall(tool = "noop", reason = "goal already ${goal.status}")
         }
 
-        val toolNames = tools.map { it.lowercase() }.toSet()
-        val hasSshTool = "ssh_exec" in toolNames || "sshexec" in toolNames
+        val toolNames = tools.map { it.lowercase().replace('-', '_') }.toSet()
         val sshProfile = profiles.firstOrNull { it.type == ConnectionProfileType.SSH }
+        val httpsProfile = profiles.firstOrNull { it.type == ConnectionProfileType.HTTPS_RUNTIME }
+        val fallbackProfileId = sshProfile?.id ?: httpsProfile?.id
 
-        return if (hasSshTool && sshProfile != null && goal.budgets.sshExecsRemaining() > 0) {
-            ProposedToolCall(
-                tool = "ssh_exec",
-                profileId = sshProfile.id,
-                argv = listOf("uname", "-a"),
-                reason = "heuristic: probe host via profile=${sshProfile.id} (model stub)",
-            )
-        } else {
-            ProposedToolCall(
-                tool = "noop",
-                reason = "heuristic: no SSH profile or ssh tool; model=${lastModelText.take(80)}",
-            )
+        val parsed = AgenticToolCallParser.parseFirst(lastModelText, fallbackProfileId)
+        if (parsed != null) {
+            val normalized = parsed.tool.lowercase().replace('-', '_')
+            if (normalized == "noop" || normalized in toolNames ||
+                normalized == "sshexec" && "ssh_exec" in toolNames
+            ) {
+                return parsed.copy(
+                    tool = when (normalized) {
+                        "sshexec" -> "ssh_exec"
+                        else -> parsed.tool
+                    },
+                    profileId = parsed.profileId ?: fallbackProfileId,
+                    argv = parsed.argv.ifEmpty {
+                        when (normalized) {
+                            "ssh_exec", "sshexec", "https_runtime", "local_shell" ->
+                                listOf("uname", "-a")
+                            else -> emptyList()
+                        }
+                    },
+                    reason = "model-parsed: ${parsed.reason}".take(160),
+                )
+            }
+        }
+
+        val hasSshTool = "ssh_exec" in toolNames || "sshexec" in toolNames
+        val hasLocal = "local_shell" in toolNames
+        val hasHttps = "https_runtime" in toolNames
+
+        return when {
+            hasSshTool && sshProfile != null && goal.budgets.sshExecsRemaining() > 0 ->
+                ProposedToolCall(
+                    tool = "ssh_exec",
+                    profileId = sshProfile.id,
+                    argv = listOf("uname", "-a"),
+                    reason = "heuristic: probe SSH profile=${sshProfile.id}",
+                )
+            hasHttps && httpsProfile != null && goal.budgets.sshExecsRemaining() > 0 ->
+                ProposedToolCall(
+                    tool = "https_runtime",
+                    profileId = httpsProfile.id,
+                    argv = listOf("uname", "-a"),
+                    reason = "heuristic: probe HTTPS_RUNTIME profile=${httpsProfile.id}",
+                )
+            hasLocal ->
+                ProposedToolCall(
+                    tool = "local_shell",
+                    argv = listOf("uname", "-a"),
+                    reason = "heuristic: local_shell probe",
+                )
+            else ->
+                ProposedToolCall(
+                    tool = "noop",
+                    reason = "heuristic: no usable tool/profile; model=${lastModelText.take(80)}",
+                )
         }
     }
 
@@ -83,6 +125,17 @@ class HeuristicAgenticPlanner(
         profiles: List<ConnectionProfile>,
         recentEvents: List<AgenticEvent>,
     ): String = buildString {
+        append("You are the Meowmba agentic planner. Reply with JSON only.\n")
+        append("Preferred shapes:\n")
+        append("""{"tool":"ssh_exec","profileId":"<id>","argv":["uname","-a"],"reason":"..."}""")
+        append('\n')
+        append("""{"tool":"local_shell","argv":["uname","-a"]}""")
+        append('\n')
+        append("""{"tool":"https_runtime","profileId":"<id>","argv":["uname","-a"]}""")
+        append('\n')
+        append("""{"tool":"noop","reason":"..."}""")
+        append('\n')
+        append("OpenAI tool_calls function-call JSON is also accepted. No secrets.\n")
         append("goal id=").append(goal.id).append(" title=").append(goal.title).append('\n')
         append("status=").append(goal.status).append('\n')
         append("budgets steps=")
@@ -92,7 +145,6 @@ class HeuristicAgenticPlanner(
             .append(" ssh=").append(goal.budgets.sshExecsUsed).append('/')
             .append(goal.budgets.maxSshExecs).append('\n')
         append("tools=").append(tools.joinToString(",")).append('\n')
-        // Profile ids / hosts / types only — never credential material.
         append("profiles=")
         append(
             profiles.joinToString(";") { p ->
@@ -107,7 +159,6 @@ class HeuristicAgenticPlanner(
             },
         )
         append('\n')
-        append("Propose next tool (ssh_exec or noop). No secrets.\n")
     }
 }
 

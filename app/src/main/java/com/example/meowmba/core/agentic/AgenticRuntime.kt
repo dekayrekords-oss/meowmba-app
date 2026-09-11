@@ -18,12 +18,14 @@ import java.util.concurrent.ConcurrentHashMap
  * No opencode. Do not drive SSH from the Lumen frame loop.
  */
 class AgenticRuntime private constructor(
+    private val appContext: Context,
     private val flags: FeatureFlags,
     private val store: AgenticGoalStore,
     private val profileStore: ConnectionProfileStore,
     private val sshExecutor: AgenticSshExecutor,
     private val planner: AgenticPlanner,
     private val memoryIndex: AgenticMemoryIndex,
+    private val credentials: CredentialResolver,
 ) {
     private val tools = ConcurrentHashMap<String, String>()
 
@@ -33,6 +35,8 @@ class AgenticRuntime private constructor(
     init {
         tools["sshExec"] = "Execute argv on a ConnectionProfile (SSH) via AgenticSshExecutor"
         tools["ssh_exec"] = "Alias for sshExec (planner-facing name)"
+        tools["local_shell"] = "Run argv locally via Termux/system sh (ProcessBuilder or RUN_COMMAND)"
+        tools["https_runtime"] = "Run argv on an HTTPS_RUNTIME worker profile"
         tools["noop"] = "No-op / wait / budget stop"
     }
 
@@ -235,67 +239,110 @@ class AgenticRuntime private constructor(
         budgets = budgets.copy(toolCallsUsed = budgets.toolCallsUsed + 1)
 
         val toolKey = proposal.tool.lowercase().replace('-', '_')
-        if (toolKey == "ssh_exec" || toolKey == "sshexec") {
-            if (budgets.sshExecsRemaining() <= 0) {
-                store.appendEvent(goalId, type = "ssh_exec_skipped", detail = "ssh budget exhausted")
-                status = GoalStatus.BLOCKED
-                return store.updateGoal(
-                    goal.copy(status = status, budgets = budgets, approvalGranted = false),
-                )
-            }
-            val profileId = proposal.profileId
-            if (profileId.isNullOrBlank()) {
-                store.appendEvent(goalId, type = "ssh_exec_skipped", detail = "missing profileId")
-                status = GoalStatus.BLOCKED
-                return store.updateGoal(
-                    goal.copy(status = status, budgets = budgets, approvalGranted = false),
-                )
-            }
+        when (toolKey) {
+            "ssh_exec", "sshexec", "https_runtime" -> {
+                if (budgets.sshExecsRemaining() <= 0) {
+                    store.appendEvent(goalId, type = "ssh_exec_skipped", detail = "ssh budget exhausted")
+                    status = GoalStatus.BLOCKED
+                    return store.updateGoal(
+                        goal.copy(status = status, budgets = budgets, approvalGranted = false),
+                    )
+                }
+                val profileId = proposal.profileId
+                if (profileId.isNullOrBlank()) {
+                    store.appendEvent(goalId, type = "ssh_exec_skipped", detail = "missing profileId")
+                    status = GoalStatus.BLOCKED
+                    return store.updateGoal(
+                        goal.copy(status = status, budgets = budgets, approvalGranted = false),
+                    )
+                }
 
-            val argv = proposal.argv.ifEmpty { listOf("uname", "-a") }
-            if (AgenticSshPolicy.requiresApproval(argv) && !approvalGranted) {
+                val argv = proposal.argv.ifEmpty { listOf("uname", "-a") }
+                if (AgenticSshPolicy.requiresApproval(argv) && !approvalGranted) {
+                    store.appendEvent(
+                        goalId,
+                        type = "awaiting_approval",
+                        detail = "$toolKey profile=$profileId argv=${argv.take(6).joinToString(" ")}",
+                    )
+                    return store.updateGoal(
+                        goal.copy(
+                            status = GoalStatus.WAITING_APPROVAL,
+                            budgets = budgets,
+                            approvalGranted = false,
+                        ),
+                    )
+                }
+
+                if (approvalGranted && AgenticSshPolicy.isSideEffecting(argv)) {
+                    approvalGranted = false
+                }
+
+                budgets = budgets.copy(sshExecsUsed = budgets.sshExecsUsed + 1)
+                val result = sshExec(
+                    profileId = profileId,
+                    argv = argv,
+                    goalId = goalId,
+                )
+                status = when (result) {
+                    is SshExecResult.Ok -> GoalStatus.RUNNING
+                    is SshExecResult.Unsupported -> GoalStatus.BLOCKED
+                    is SshExecResult.Error -> GoalStatus.BLOCKED
+                    is SshExecResult.NotEnabled -> GoalStatus.BLOCKED
+                }
+                memoryIndex.note(
+                    goalId,
+                    "$toolKey profile=$profileId result=${result::class.simpleName}",
+                )
+            }
+            "local_shell" -> {
+                val argv = proposal.argv.ifEmpty { listOf("uname", "-a") }
+                if (AgenticSshPolicy.requiresApproval(argv) && !approvalGranted) {
+                    store.appendEvent(
+                        goalId,
+                        type = "awaiting_approval",
+                        detail = "local_shell argv=${argv.take(6).joinToString(" ")}",
+                    )
+                    return store.updateGoal(
+                        goal.copy(
+                            status = GoalStatus.WAITING_APPROVAL,
+                            budgets = budgets,
+                            approvalGranted = false,
+                        ),
+                    )
+                }
+                if (approvalGranted && AgenticSshPolicy.isSideEffecting(argv)) {
+                    approvalGranted = false
+                }
+                val script = if (argv.size >= 2 && argv[0] == "sh" && argv[1] == "-c") {
+                    argv.drop(2).joinToString(" ")
+                } else {
+                    argv.joinToString(" ")
+                }
+                val result = TermuxRunCommandHelper.execSh(appContext, script)
                 store.appendEvent(
                     goalId,
-                    type = "awaiting_approval",
-                    detail = "ssh_exec profile=$profileId argv=${argv.take(6).joinToString(" ")}",
+                    type = "local_shell",
+                    detail = when (result) {
+                        is SshExecResult.Ok -> "ok exit=${result.exitCode}"
+                        is SshExecResult.Unsupported -> "unsupported: ${result.message.take(160)}"
+                        is SshExecResult.Error -> "error: ${result.message.take(160)}"
+                        is SshExecResult.NotEnabled -> "not_enabled"
+                    },
                 )
-                return store.updateGoal(
-                    goal.copy(
-                        status = GoalStatus.WAITING_APPROVAL,
-                        budgets = budgets,
-                        approvalGranted = false,
-                    ),
+                status = when (result) {
+                    is SshExecResult.Ok -> GoalStatus.RUNNING
+                    else -> GoalStatus.BLOCKED
+                }
+                memoryIndex.note(goalId, "local_shell result=${result::class.simpleName}")
+            }
+            else -> {
+                store.appendEvent(
+                    goalId,
+                    type = "unknown_tool",
+                    detail = "tool=${proposal.tool.take(64)}",
                 )
+                status = GoalStatus.BLOCKED
             }
-
-            // Consume one-shot approval if used for a side-effecting call.
-            if (approvalGranted && AgenticSshPolicy.isSideEffecting(argv)) {
-                approvalGranted = false
-            }
-
-            budgets = budgets.copy(sshExecsUsed = budgets.sshExecsUsed + 1)
-            val result = sshExec(
-                profileId = profileId,
-                argv = argv,
-                goalId = goalId,
-            )
-            status = when (result) {
-                is SshExecResult.Ok -> GoalStatus.RUNNING
-                is SshExecResult.Unsupported -> GoalStatus.BLOCKED
-                is SshExecResult.Error -> GoalStatus.BLOCKED
-                is SshExecResult.NotEnabled -> GoalStatus.BLOCKED
-            }
-            memoryIndex.note(
-                goalId,
-                "ssh_exec profile=$profileId result=${result::class.simpleName}",
-            )
-        } else {
-            store.appendEvent(
-                goalId,
-                type = "unknown_tool",
-                detail = "tool=${proposal.tool.take(64)}",
-            )
-            status = GoalStatus.BLOCKED
         }
 
         if (budgets.exhausted()) {
@@ -318,6 +365,42 @@ class AgenticRuntime private constructor(
     fun recallMemory(goalId: String, limit: Int = 5): List<String> {
         if (!enabled) return emptyList()
         return memoryIndex.recall(goalId, limit)
+    }
+
+    /** Export file-backed project notes (second-brain MVP). Null when flag OFF. */
+    fun exportMemoryNotes(): java.io.File? {
+        if (!enabled) return null
+        val fb = memoryIndex as? FileBackedAgenticMemoryIndex ?: return null
+        return fb.exportAll()
+    }
+
+    fun importMemoryNotes(file: java.io.File): Int {
+        if (!enabled) return 0
+        val fb = memoryIndex as? FileBackedAgenticMemoryIndex ?: return 0
+        return fb.importAll(file)
+    }
+
+    fun termuxProbeSummary(): String =
+        TermuxRunCommandHelper.probe(appContext).summary
+
+    /**
+     * Import a legacy [com.example.meowmba.core.ssh.SshHostRegistry] host into
+     * an agentic ConnectionProfile (credentialRef only).
+     */
+    fun importLegacySshHost(hostName: String): ConnectionProfile? {
+        if (!enabled) return null
+        val storage = SecureStorageManager(appContext)
+        val creds = credentials as? SecureStorageCredentialResolver
+            ?: SecureStorageCredentialResolver(storage)
+        return AgenticSshBridge.importLegacyHost(storage, profileStore, creds, hostName)
+    }
+
+    /** Export an agentic SSH profile into the legacy SshHostRegistry for SshTool. */
+    fun exportProfileToLegacyRegistry(profileId: String): Boolean {
+        if (!enabled) return false
+        val profile = profileStore.get(profileId) ?: return false
+        val storage = SecureStorageManager(appContext)
+        return AgenticSshBridge.exportToLegacyRegistry(storage, profile, credentials)
     }
 
     companion object {
@@ -363,12 +446,14 @@ class AgenticRuntime private constructor(
             )
             val modelAdapter = AgenticModelConfig.resolveAdapter(storage, credentials)
             return AgenticRuntime(
+                appContext = app,
                 flags = flags,
                 store = goalStore,
                 profileStore = profiles,
                 sshExecutor = executor,
                 planner = HeuristicAgenticPlanner(modelAdapter),
-                memoryIndex = PrefsAgenticMemoryIndex(app),
+                memoryIndex = FileBackedAgenticMemoryIndex(app),
+                credentials = credentials,
             )
         }
 

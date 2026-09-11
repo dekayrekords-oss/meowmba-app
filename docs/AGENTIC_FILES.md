@@ -72,3 +72,14 @@ idling timeout is not counted as a passing interaction test.
 
 Android storage reference:
 https://developer.android.com/training/data-storage/shared/documents-files
+
+## Phase 9 additions
+
+| File | Role |
+|------|------|
+| `HttpsRuntimeClient.kt` | HTTP client for HTTPS_RUNTIME profiles |
+| `AgenticToolCallParser.kt` | Parse tool_calls / JSON → ProposedToolCall |
+| `TermuxRunCommandHelper.kt` | ProcessBuilder + RUN_COMMAND Intent |
+| `AgenticScheduler.kt` | WorkManager periodic tick |
+| `FileBackedAgenticMemory.kt` | filesDir notes + export/import |
+| `AgenticSshBridge.kt` | Bridge ↔ SshHostRegistry |
