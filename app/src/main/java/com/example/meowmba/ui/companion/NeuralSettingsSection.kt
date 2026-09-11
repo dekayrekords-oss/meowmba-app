@@ -112,7 +112,7 @@ fun NeuralSettingsSection(
             status = computerSetupStatus,
             statusDetail = computerStatusDetail,
             installLog = computerInstallLog,
-            computerPower = computerPowerState,
+            computerPower = computerPower,
             vncUrl = computerVncUrl,
             savedComputerProfile = computerSavedProfile,
             showInstallPrompt = computerShowInstallPrompt,

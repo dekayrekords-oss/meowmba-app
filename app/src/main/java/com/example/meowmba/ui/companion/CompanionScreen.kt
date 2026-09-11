@@ -856,6 +856,27 @@ fun CompanionScreen(
                 onRejectAgenticGoal = viewModel::rejectAgenticGoal,
                 onRefreshAgenticTasks = viewModel::refreshAgenticPresenceHint,
                 onSaveAgenticModelConfig = viewModel::saveAgenticModelConfig,
+
+
+                computerPhoneProbeSummary = uiState.computerPhoneProbeSummary,
+                computerPhoneReady = uiState.computerPhoneReady,
+                computerSetupStatus = uiState.computerSetupStatus,
+                computerStatusDetail = uiState.computerStatusDetail,
+                computerInstallLog = uiState.computerInstallLog,
+                computerPowerState = uiState.computerPowerState,
+                computerVncUrl = uiState.computerVncUrl,
+                computerSavedProfile = viewModel.computerSavedProfileOrNull(),
+                computerShowInstallPrompt = uiState.computerShowInstallPrompt,
+                onComputerSaveProfile = viewModel::saveComputerProfile,
+                onComputerTestConnection = viewModel::testComputerConnection,
+                onComputerInstall = viewModel::installComputerOnServer,
+                onComputerOpenTerminal = {
+                    viewModel.connectCompanionTerminal(
+                        com.example.meowmba.ui.companion.CompanionTerminalTarget.LOCAL_ID
+                    )
+                },
+                onComputerOpenDesktop = viewModel::openComputerDesktopUrl,
+                onComputerConfirmInstallPrompt = viewModel::confirmComputerInstallPrompt,
                 lumenReflexGain = uiState.lumenReflexGain,
                 onLumenReflexGainChange = viewModel::setLumenReflexGain,
                 avatarFpsTarget = uiState.avatarFpsTarget,
@@ -1205,21 +1226,16 @@ fun CompanionScreen(
 
         // Setup wizard: full-screen overlay for first-launch or re-open from Settings.
         // Drawn AFTER everything else so it covers the entire companion surface.
-        val ctx = LocalContext.current
         if (showOnboarding) {
             com.example.meowmba.ui.onboarding.SetupWizardRoute(
-                onFinished = {
-                    com.example.meowmba.core.setup.SetupWiring.markOnboardingDone(ctx)
-                    viewModel.toggleSetupWizard()
-                },
-                onEnablePermissions = { },
+                onFinished = { viewModel.finishOnboarding() },
+                onEnablePermissions = { viewModel.requestOnboardingPermissions() },
                 onOpenChat = {
-                    com.example.meowmba.core.setup.SetupWiring.markOnboardingDone(ctx)
                     viewModel.finishOnboarding()
                     viewModel.openChat()
                 },
                 onOpenTerminal = {
-                    com.example.meowmba.core.setup.SetupWiring.markOnboardingDone(ctx)
+                    viewModel.finishOnboarding()
                     viewModel.openCompanionTerminalFromOnboarding()
                 },
                 modifier = Modifier.fillMaxSize(),

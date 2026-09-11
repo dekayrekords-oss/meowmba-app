@@ -135,3 +135,4 @@ export/import). Full git inside APK is intentionally out of scope.
 `AgenticSshBridge.importLegacyHost` / `exportToLegacyRegistry` —
 `AgenticRuntime.importLegacySshHost` / `exportProfileToLegacyRegistry`.
 
+- [`YOUR_COMPUTER.md`](./YOUR_COMPUTER.md) — phone-first Computer + optional server

@@ -422,6 +422,15 @@ data class CompanionState(
     val computerPowerState: com.example.meowmba.core.config.ComputerPowerState =
         com.example.meowmba.core.config.ComputerPowerState.Idle,
     val computerIdleMinutes: Int = 5,
+    val computerSetupStatus: com.example.meowmba.core.computer.ComputerSetupStatus =
+        com.example.meowmba.core.computer.ComputerSetupStatus.NotSetUp,
+    val computerStatusDetail: String = "",
+    val computerInstallLog: String = "",
+    val computerPhoneProbeSummary: String = "Checking this phone…",
+    val computerPhoneReady: Boolean = false,
+    val computerVncUrl: String? = null,
+    val computerShowInstallPrompt: Boolean = false,
+    val computerSavedProfileId: String? = null,
     /** Goal waiting on side-effecting ssh_exec approval (agentic_runtime_v1). */
     val agenticPendingApprovalGoalId: String? = null,
     val agenticPendingApprovalTitle: String? = null,

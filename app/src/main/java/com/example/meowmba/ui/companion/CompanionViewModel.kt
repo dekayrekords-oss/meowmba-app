@@ -11059,6 +11059,175 @@ class CompanionViewModel(
         updateVoiceListeningMode()
     }
 
+
+    fun computerSavedProfileOrNull(): com.example.meowmba.core.agentic.ConnectionProfile? {
+        val storage = secureStorage ?: return null
+        val id = storage.getPreference(com.example.meowmba.core.computer.ComputerProfileMarks.PREF_PROFILE_ID)
+            ?.takeIf { it.isNotBlank() } ?: return null
+        return runCatching { listAgenticConnectionProfiles().firstOrNull { it.id == id } }.getOrNull()
+    }
+
+    fun refreshComputerPhoneProbe() {
+        val ctx = secureStorage?.context ?: return
+        val (summary, ready) = com.example.meowmba.ui.companion.YourComputerViewModelHooks.phoneProbeSummary(ctx)
+        val s = _uiState.value
+        _uiState.value = s.copy(
+            computerPhoneProbeSummary = summary,
+            computerPhoneReady = ready,
+            computerSetupStatus = when {
+                ready -> com.example.meowmba.core.computer.ComputerSetupStatus.Ready
+                s.computerSetupStatus == com.example.meowmba.core.computer.ComputerSetupStatus.Installing ->
+                    s.computerSetupStatus
+                computerSavedProfileOrNull() != null ->
+                    com.example.meowmba.core.computer.ComputerSetupStatus.Connected
+                else -> com.example.meowmba.core.computer.ComputerSetupStatus.NotSetUp
+            },
+        )
+    }
+
+    fun saveComputerProfile(profile: com.example.meowmba.core.agentic.ConnectionProfile, secret: String) {
+        val storage = secureStorage ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            val store = runCatching {
+                val db = com.example.meowmba.core.database.MeowmbaDatabase.getDatabase(storage.context)
+                com.example.meowmba.core.agentic.RoomConnectionProfileStore(db.connectionProfileDao())
+            }.getOrNull()
+            if (store == null) {
+                withContext(Dispatchers.Main) {
+                    _uiState.value = _uiState.value.copy(
+                        computerSetupStatus = com.example.meowmba.core.computer.ComputerSetupStatus.Error,
+                        computerStatusDetail = "Connection profile store unavailable.",
+                    )
+                }
+                return@launch
+            }
+            val creds = com.example.meowmba.core.agentic.SecureStorageCredentialResolver(storage)
+            val saved = com.example.meowmba.ui.companion.YourComputerViewModelHooks.saveProfile(
+                store, storage, creds, profile, secret,
+            )
+            withContext(Dispatchers.Main) {
+                _uiState.value = _uiState.value.copy(
+                    computerStatusDetail = "Saved Computer profile ${saved.displayName}.",
+                    computerSetupStatus = com.example.meowmba.core.computer.ComputerSetupStatus.Connected,
+                    computerShowInstallPrompt = saved.type ==
+                        com.example.meowmba.core.agentic.ConnectionProfileType.SSH,
+                )
+            }
+        }
+    }
+
+    fun testComputerConnection(profile: com.example.meowmba.core.agentic.ConnectionProfile, secret: String) {
+        val storage = secureStorage ?: return
+        if (secret.isNotEmpty()) {
+            com.example.meowmba.core.agentic.SecureStorageCredentialResolver.saveCredential(
+                storage, profile.credentialRef, secret,
+            )
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            val creds = com.example.meowmba.core.agentic.SecureStorageCredentialResolver(storage)
+            val result = com.example.meowmba.ui.companion.YourComputerViewModelHooks.testOrInstall(
+                storage.context, creds, profile, install = false, onLog = {},
+            )
+            withContext(Dispatchers.Main) {
+                result.fold(
+                    onSuccess = {
+                        _uiState.value = _uiState.value.copy(
+                            computerSetupStatus = com.example.meowmba.core.computer.ComputerSetupStatus.Connected,
+                            computerStatusDetail = it,
+                            computerShowInstallPrompt = true,
+                        )
+                    },
+                    onFailure = {
+                        _uiState.value = _uiState.value.copy(
+                            computerSetupStatus = com.example.meowmba.core.computer.ComputerSetupStatus.Error,
+                            computerStatusDetail = it.message ?: "Test failed",
+                        )
+                    },
+                )
+            }
+        }
+    }
+
+    fun installComputerOnServer(profile: com.example.meowmba.core.agentic.ConnectionProfile, secret: String) {
+        val storage = secureStorage ?: return
+        if (secret.isNotEmpty()) {
+            com.example.meowmba.core.agentic.SecureStorageCredentialResolver.saveCredential(
+                storage, profile.credentialRef, secret,
+            )
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            withContext(Dispatchers.Main) {
+                _uiState.value = _uiState.value.copy(
+                    computerSetupStatus = com.example.meowmba.core.computer.ComputerSetupStatus.Installing,
+                    computerInstallLog = "",
+                    computerStatusDetail = "Installing…",
+                    computerShowInstallPrompt = false,
+                )
+            }
+            val creds = com.example.meowmba.core.agentic.SecureStorageCredentialResolver(storage)
+            val result = com.example.meowmba.ui.companion.YourComputerViewModelHooks.testOrInstall(
+                storage.context,
+                creds,
+                profile,
+                install = true,
+                onLog = { chunk ->
+                    kotlinx.coroutines.runBlocking(Dispatchers.Main) {
+                        _uiState.value = _uiState.value.copy(
+                            computerInstallLog = (_uiState.value.computerInstallLog + chunk).takeLast(60_000),
+                        )
+                    }
+                },
+            )
+            withContext(Dispatchers.Main) {
+                result.fold(
+                    onSuccess = {
+                        com.example.meowmba.core.computer.ComputerProfileMarks.mark(storage, profile.id)
+                        _uiState.value = _uiState.value.copy(
+                            computerSetupStatus = com.example.meowmba.core.computer.ComputerSetupStatus.Ready,
+                            computerStatusDetail = it,
+                        )
+                    },
+                    onFailure = {
+                        _uiState.value = _uiState.value.copy(
+                            computerSetupStatus = com.example.meowmba.core.computer.ComputerSetupStatus.Error,
+                            computerStatusDetail = it.message ?: "Install failed",
+                        )
+                    },
+                )
+            }
+        }
+    }
+
+    fun confirmComputerInstallPrompt() {
+        val p = computerSavedProfileOrNull() ?: return
+        installComputerOnServer(p, "")
+    }
+
+    fun openComputerDesktopUrl(url: String) {
+        _uiState.value = _uiState.value.copy(computerVncUrl = url, computerStatusDetail = "Desktop: $url")
+    }
+
+
+    fun finishOnboarding() {
+        secureStorage?.context?.let { ctx ->
+            runCatching { com.example.meowmba.core.setup.SetupWiring.markOnboardingDone(ctx) }
+        }
+        _showOnboarding.value = false
+    }
+
+    fun openCompanionTerminalFromOnboarding() {
+        finishOnboarding()
+        runCatching { openChat() }
+        runCatching {
+            val local = CompanionTerminalTarget.LOCAL_ID
+            connectCompanionTerminal(local)
+        }
+    }
+
+    fun requestOnboardingPermissions() {
+        // Host Activity may collect the mic permission. Wizard already moved on.
+    }
+
     companion object {
         private const val KEY_COMPANION_NAME = "companion_name"
         private const val KEY_OWNER_SPEAKER = "owner_speaker_name"
@@ -11244,20 +11413,6 @@ SAFE if the scene looks like a normal road, car interior, sidewalk, or room, or 
         fun looksLikeShowInBrowser(normalized: String): Boolean =
             SpeechIntents.looksLikeShowInBrowser(normalized)
     }
-
-    fun finishOnboarding() {
-        _showOnboarding.value = false
-    }
-
-    fun openCompanionTerminalFromOnboarding() {
-        finishOnboarding()
-        runCatching { openChat() }
-        runCatching {
-            val local = CompanionTerminalTarget.LOCAL_ID
-            connectCompanionTerminal(local)
-        }
-    }
-
 }
 
 /**

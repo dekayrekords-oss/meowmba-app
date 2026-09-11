@@ -78,3 +78,5 @@ ssh user@meow-host
 
 - [`TERMINAL_CLONE_AGENTIC.md`](./TERMINAL_CLONE_AGENTIC.md)
 - [`INTEGRATION_LUMEN_AGENTIC.md`](./INTEGRATION_LUMEN_AGENTIC.md)
+
+- [`YOUR_COMPUTER.md`](./YOUR_COMPUTER.md) — phone-first Computer + optional server
