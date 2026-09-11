@@ -143,6 +143,8 @@ import com.example.meowmba.core.security.CleartextPolicy
 import com.example.meowmba.core.agent.tools.ToolResult
 import kotlinx.coroutines.withTimeout
 import com.example.meowmba.core.security.SecureStorageManager
+import com.example.meowmba.core.config.FeatureFlags
+import com.example.meowmba.core.agentic.AgenticRuntime
 import java.io.File
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -1117,6 +1119,9 @@ class CompanionViewModel(
                 ),
             )
         }
+        // Phase 6 (agentic ↔ Lumen presence): optional, flag-gated, minimal.
+        // Soft hint only — never drives SSH from Lumen frame loop.
+        refreshAgenticPresenceHint()
         // Any weather fetch — including the agent's tool call — surfaces the card and moves
         // the cat's expression to match the sky.
         weatherRepository?.let { repo ->
@@ -2177,6 +2182,27 @@ class CompanionViewModel(
         updateProvider(_uiState.value.selectedModel)
         // Listening is armed by MainActivity after the VM is assigned
         // (reclaimWakeMicForForeground) — arming here too double-opened STT.
+    }
+
+
+    /**
+     * Phase 6 optional: map open agentic goals → presence hint.
+     * No-op when [FeatureFlags.agenticRuntimeV1] is OFF.
+     * Does **not** drive SSH and must not be called from the Lumen frame loop.
+     */
+    fun refreshAgenticPresenceHint() {
+        val storage = secureStorage ?: return
+        val flags = FeatureFlags.from(storage.context)
+        if (!flags.agenticRuntimeV1) {
+            if (_uiState.value.agenticPresenceHint != null) {
+                _uiState.value = _uiState.value.copy(agenticPresenceHint = null)
+            }
+            return
+        }
+        val presence = CompanionAgenticHooks.fromRuntime(AgenticRuntime.from(storage.context))
+        _uiState.value = _uiState.value.copy(
+            agenticPresenceHint = presence.hint.ifBlank { null },
+        )
     }
 
     override fun onCleared() {

@@ -402,6 +402,11 @@ data class CompanionState(
     val mcpServerPort: Int = 0,
     /** Phone LAN address shown so Android Studio can paste it as the httpUrl. */
     val mcpServerAddress: String = "",
+    /**
+     * Phase 6 optional: soft agentic presence hint when agentic_runtime_v1 is ON.
+     * Empty when flag OFF. Does not drive SSH or Lumen frame loop.
+     */
+    val agenticPresenceHint: String? = null,
 )
 
 /**

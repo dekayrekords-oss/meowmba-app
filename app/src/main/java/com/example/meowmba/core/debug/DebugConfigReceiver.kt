@@ -47,5 +47,19 @@ class DebugConfigReceiver : BroadcastReceiver() {
         intent.getStringExtra("looi_turn")?.takeIf { it.isNotBlank() }?.let { mode ->
             storage.savePreference("looi_turn_encoding", mode.trim().lowercase())
         }
+        // Feature flags (Phase 0-2 Lumen/agentic scaffolding). Defaults remain OFF
+        // unless explicitly set; see core/config/FeatureFlags.kt.
+        if (intent.hasExtra("lumen_reflex_v2")) {
+            storage.saveBooleanPreference(
+                com.example.meowmba.core.config.FeatureFlags.KEY_LUMEN_REFLEX_V2,
+                intent.getBooleanExtra("lumen_reflex_v2", false),
+            )
+        }
+        if (intent.hasExtra("agentic_runtime_v1")) {
+            storage.saveBooleanPreference(
+                com.example.meowmba.core.config.FeatureFlags.KEY_AGENTIC_RUNTIME_V1,
+                intent.getBooleanExtra("agentic_runtime_v1", false),
+            )
+        }
     }
 }

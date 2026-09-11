@@ -41,7 +41,10 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import com.example.meowmba.core.config.FeatureFlags
+import com.example.meowmba.ui.companion.lumen.LumenReflexBridge
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import kotlinx.coroutines.delay
@@ -253,6 +256,9 @@ fun AvatarRenderer(
     val useLumen = state.avatarStyle.isLumen || customAnim?.props?.isNotEmpty() == true
     val lumenRig = remember { LumenRig() }
     val lumenPainter = remember { LumenPainter() }
+    val lumenContext = LocalContext.current
+    val lumenReflexV2 = remember(lumenContext) { FeatureFlags.from(lumenContext).lumenReflexV2 }
+    val lumenReflexBridge = remember { LumenReflexBridge() }
     val lumenLastFrame = remember { arrayOf(LumenFrame()) }
     val privacyColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
     val orbOrientation = rememberOrbOrientation(useSignalOrb && !paused)
@@ -834,7 +840,7 @@ fun AvatarRenderer(
         if (useLumen) {
             val progress = if (customAnim != null) animTHolder[0].toFloat() / customAnim.durationMs.coerceAtLeast(1) else 0f
             val isCat = state.avatarStyle == AvatarStyle.LUMEN_CAT
-            val frame = lumenRig.step(tSec, lumenInventedSceneInput(lumenPerformanceInput(LumenInput(
+            val composedLumenInput = lumenInventedSceneInput(lumenPerformanceInput(LumenInput(
                 gazeX = faceGazeX, gazeY = faceGazeY,
                 cameraEnabled = state.isCameraEnabled,
                 emotion = state.emotion, interaction = state.interactionState,
@@ -861,7 +867,9 @@ fun AvatarRenderer(
                 whiskerFlutter = effectivePose.whiskerFlutter,
                 tailWag = effectivePose.tailWag,
                 bias = nervousBias(),
-            ), lumenPerformance, progress), customAnim, animTHolder[0].toFloat()))
+            ), lumenPerformance, progress), customAnim, animTHolder[0].toFloat())
+            val gatedLumenInput = if (lumenReflexV2) lumenReflexBridge.modulate(composedLumenInput, tSec) else composedLumenInput
+            val frame = lumenRig.step(tSec, gatedLumenInput)
             lumenLastFrame[0] = frame
             lumenPainter.draw(this, frame, Color(state.avatarEyeColor), Color(state.avatarGlowColor),
                 cameraOff = !state.isCameraEnabled, micOff = !state.isMicEnabled,
