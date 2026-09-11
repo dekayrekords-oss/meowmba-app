@@ -242,6 +242,14 @@ A future second-brain can:
 2. Keep companion `MemoryCore` (`VectorCodec`, `RecallEngine`, `PromptBuilder`) as the chat recall path — do **not** merge namespaces without an explicit migration.
 3. Index only sanitized goal notes (ids, statuses, tool names) — never SSH passwords / credential material.
 
+## Avatar frame cadence (~60 FPS when cool)
+
+`AvatarFrameCadence` default **active** admit interval is **16 ms (~60 FPS)**; **idle/decorative** ambient is **33 ms (~30 FPS)**. Previously active was ~32 ms (~30 FPS) and idle ~66 ms (~15 FPS).
+
+Thermal path is unchanged: `AvatarWorkPolicy.allowAvatarWork` returns false at `THERMAL_STATUS_MODERATE`+, which sets `animationsPaused` and stops decorative redraw / scene clocks. Cadence never overrides that throttle.
+
+Optional: when `lumen_reflex_v2` is ON, gaze / head-follow springs in `AvatarRenderer` use slightly higher stiffness (and a shorter idle settle tween). Flag-off keeps the prior spring values.
+
 ## Phase 8 — Hardening checklist
 
 ### Completion checklist
@@ -304,6 +312,28 @@ Force-stop and relaunch after toggling. Programmatic: `FeatureFlags.from(context
 | `AgenticMemoryIndex` | In-memory notes | Git / vault second-brain |
 | Presence | Hint string on CompanionState | Optional emotion rehearsal + approval card |
 | Lumen reflex | Local dynamics | Vision / SocialCues feed (still no FlyWire) |
+
+## Still missing (synapse / production agentic)
+
+Relative to the VOICE_LOCATION_HEAT nervous-system proposal and the Phase 8 production agentic list. Scaffolding exists behind flags; these are **not** done:
+
+### Lumen / nervous (“synapse”)
+- **Full curiosity / fatigue / caution / socialAttention wiring to vision** — `ReflexDynamics` still uses coarse camera/gaze/speaking/resting booleans from `LumenInput`, not a rich `SocialCues` / VisionProvider feature feed (freshness, looming, hand motion, petting, VAD, interruption).
+- **NeuralSettingsSection / Settings UI** for reflex or neural layer (debug/adb toggles only today).
+- **Presence UI visible** — `CompanionState.agenticPresenceHint` is populated when `agentic_runtime_v1` is on, but there is **no on-screen presence chip/banner** in Companion UI yet.
+- **Reply-affect / touch / loud-sound / general-motion → drives** beyond the current LumenInput path (see MEOW_NEURAL_MASTER_PLAN gaps).
+- **No FlyWire / connectome** (intentional; keep it that way unless licensing is explicit).
+
+### Agentic runtime → production
+- **Room persistence + migration** for goals/tasks/events (`MeowmbaDatabase` not bumped; store is in-memory → lost on process death).
+- **Real `ModelAdapter`** (HTTP / on-device LLM) — still `StubModelAdapter` + heuristic planner.
+- **Settings UI** for connection profiles / `agentic_cred_<ref>` secrets.
+- **Termux `ssh` / `sshpass` packaging** (or HTTPS_RUNTIME worker) on device.
+- **Host-key verification / known_hosts** against `hostKeyFingerprint`.
+- **Production approval UX** for `WAITING_APPROVAL` (orchestrator card / user-visible gate).
+- **Scheduler / tool loop** invoking `sshExec` from open goals in main UX (not just `tick`/`step` API).
+- **AgenticMemoryIndex** beyond in-memory stub (Git/vault second-brain later).
+- **Bridging agentic `sshExec` ↔ JSch `SshTool`** (optional).
 
 ### Files touched (Phases 5–8)
 

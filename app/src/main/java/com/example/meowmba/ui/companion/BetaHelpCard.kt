@@ -58,6 +58,11 @@ fun BetaHelpCard() {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "Hide beta help & feedback" else "Beta help & feedback") }
             if (expanded) {
+                Text(
+                    "App: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 Text("Your first five minutes", style = MaterialTheme.typography.titleSmall)
                 Text("1. Tap the background to see tiles.\n2. Open Chat and try ‘Open Chrome’.\n3. Open Files and import a non-sensitive test photo.\n4. Try voice after its download finishes.\n5. Tell us what was confusing or did not work.", style = MaterialTheme.typography.bodyMedium)
                 Text("Downloads stuck? Keep Wi-Fi on, check free storage, then retry in Hardware or Voice recognition. App taps not working? Check Android Accessibility settings. You can still use text and app-opening commands without Accessibility.", style = MaterialTheme.typography.bodySmall)

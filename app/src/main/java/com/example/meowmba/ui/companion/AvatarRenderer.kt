@@ -293,9 +293,9 @@ fun AvatarRenderer(
             withFrameNanos { now ->
                 val clip = latestAnimation
                 val expression = latestComposed
-                // Only a performed clip or a live expression needs ~31 FPS.
-                // Idle breathing and swaying are seconds-long cycles that look
-                // the same at 15, so they no longer pay for the extra redraws.
+                // Performed clips / live expressions admit at ~60 FPS when cool.
+                // Idle breathing/sway use the lower idle cadence; thermal MODERATE+
+                // still pauses via AvatarWorkPolicy (animationsPaused).
                 val performing = clip != null || expression != null
                 if (!cadence.admit(now, performing)) return@withFrameNanos
                 timings?.framePresented(now)
@@ -310,7 +310,7 @@ fun AvatarRenderer(
                     runningExpression = expression
                 }
                 // The actor, custom clip and ambient face share this draw owner.
-                // Elapsed time remains continuous while redraws are capped at ~30 Hz.
+                // Elapsed time remains continuous while redraws are capped at ~60 Hz when cool.
                 shotHolder[0] = if (expression != null)
                     motionEngine.update(tick.dt, latestFaceRadius.coerceIn(80f, 800f)) else null
                 drawEpoch++
@@ -500,18 +500,20 @@ fun AvatarRenderer(
     // the next — short tweens restarting every publish looked like dropped frames.
     // StiffnessMedium (not MediumLow) so the head actually tracks the user's
     // motion instead of floating behind it with a visible chase delay.
+    // lumen_reflex_v2 may prefer a slightly snappier gaze spring; flag-off
+    // keeps the historical stiffness / settle times unchanged.
     val gazeSpec = if (trackingNow && chaseHard) {
         spring<Float>(
             dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = 180f,
+            stiffness = if (lumenReflexV2) 210f else 180f,
         )
     } else if (trackingNow) {
         spring<Float>(
             dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = 120f,
+            stiffness = if (lumenReflexV2) 150f else 120f,
         )
     } else {
-        tween(500)
+        tween(if (lumenReflexV2) 380 else 500)
     }
     val gazeX by animateFloatAsState(screenGazeX, gazeSpec, label = "gazeX")
     val gazeY by animateFloatAsState(screenGazeY, gazeSpec, label = "gazeY")
@@ -520,7 +522,11 @@ fun AvatarRenderer(
     // EMA + this spring is the jitter filter.
     val headFollowSpec = spring<Float>(
         dampingRatio = 0.90f,
-        stiffness = if (chaseHard) Spring.StiffnessHigh else Spring.StiffnessMedium,
+        stiffness = when {
+            chaseHard -> Spring.StiffnessHigh
+            lumenReflexV2 -> 2200f // between Medium (1500) and High; flag-off stays Medium
+            else -> Spring.StiffnessMedium
+        },
     )
     val headFollowX by animateFloatAsState(screenGazeX, headFollowSpec, label = "headFollowX")
     val headFollowY by animateFloatAsState(screenGazeY, headFollowSpec, label = "headFollowY")
