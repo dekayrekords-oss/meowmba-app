@@ -49,7 +49,12 @@ import com.example.meowmba.core.background.BackgroundKind
 import com.example.meowmba.core.background.BackgroundSelection
 import com.example.meowmba.core.computer.TermuxComputerLinks
 import com.example.meowmba.core.security.SecureStorageManager
+import com.example.meowmba.core.setup.GitHubProjectSetup
 import com.example.meowmba.core.setup.SetupWiring
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import androidx.compose.runtime.rememberCoroutineScope
 import com.example.meowmba.ui.companion.AvatarStyle
 
 /**
@@ -70,6 +75,7 @@ private enum class FirstRunPage {
     OpenCode,
     Mic,
     ApiKey,
+    GitHub,
     Avatar,
     Background,
     OptionalServer,
@@ -88,6 +94,8 @@ fun SetupWizardRoute(
     onStartOpenCode: () -> Unit = {},
     onAvatarPicked: (AvatarStyle) -> Unit = {},
     onBackgroundPicked: (BackgroundSelection) -> Unit = {},
+    /** Persist GitHub connector token the same way Connections does. */
+    onGitHubTokenSaved: (String) -> Unit = {},
 ) {
     val context = LocalContext.current
     var page by rememberSaveable { mutableStateOf(FirstRunPage.Hi.name) }
@@ -102,6 +110,12 @@ fun SetupWizardRoute(
     var user by rememberSaveable { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var apiKey by remember { mutableStateOf(storage.getApiKey("opencode").orEmpty()) }
+    var githubToken by remember { mutableStateOf(storage.getApiKey(GitHubProjectSetup.STORAGE_KEY).orEmpty()) }
+    var githubRepoName by rememberSaveable { mutableStateOf("meowmba-projects") }
+    var githubLinkUrl by rememberSaveable { mutableStateOf("") }
+    var githubStatus by rememberSaveable { mutableStateOf("") }
+    var githubBusy by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     var avatarChoice by rememberSaveable { mutableStateOf(AvatarStyle.DEFAULT.key) }
     var backgroundChoice by rememberSaveable {
         mutableStateOf(BackgroundAnimation.AURORA.id)
@@ -125,7 +139,8 @@ fun SetupWizardRoute(
             FirstRunPage.OpenCode -> go(FirstRunPage.IDidThat)
             FirstRunPage.Mic -> go(FirstRunPage.OpenCode)
             FirstRunPage.ApiKey -> go(FirstRunPage.Mic)
-            FirstRunPage.Avatar -> go(FirstRunPage.ApiKey)
+            FirstRunPage.GitHub -> go(FirstRunPage.ApiKey)
+            FirstRunPage.Avatar -> go(FirstRunPage.GitHub)
             FirstRunPage.Background -> go(FirstRunPage.Avatar)
             FirstRunPage.OptionalServer -> go(FirstRunPage.Background)
             FirstRunPage.ServerFields -> go(FirstRunPage.OptionalServer)
@@ -276,10 +291,56 @@ fun SetupWizardRoute(
                         },
                         onSaveAndKeepGoing = {
                             saveOpenCodeKey(storage, apiKey)
-                            go(FirstRunPage.Avatar)
+                            go(FirstRunPage.GitHub)
                         },
                         onSkipDone = { go(FirstRunPage.Done) },
-                        onSkipKeepGoing = { go(FirstRunPage.Avatar) },
+                        onSkipKeepGoing = { go(FirstRunPage.GitHub) },
+                    )
+                    FirstRunPage.GitHub -> GitHubPage(
+                        token = githubToken,
+                        onToken = { githubToken = it },
+                        repoName = githubRepoName,
+                        onRepoName = { githubRepoName = it },
+                        linkUrl = githubLinkUrl,
+                        onLinkUrl = { githubLinkUrl = it },
+                        status = githubStatus,
+                        busy = githubBusy,
+                        onGetToken = { openUrl(context, GitHubProjectSetup.NEW_TOKEN_CLASSIC) },
+                        onCreate = {
+                            if (githubBusy) return@GitHubPage
+                            githubBusy = true
+                            githubStatus = "Making a private repo…"
+                            val tok = githubToken
+                            val name = githubRepoName
+                            scope.launch {
+                                val result = withContext(Dispatchers.IO) {
+                                    if (tok.isNotBlank()) GitHubProjectSetup.saveToken(storage, tok)
+                                    GitHubProjectSetup.createPrivateRepo(storage, name, tok)
+                                }
+                                githubBusy = false
+                                githubStatus = result.message
+                                if (result.ok) {
+                                    val saved = tok.trim().ifBlank {
+                                        storage.getApiKey(GitHubProjectSetup.STORAGE_KEY).orEmpty()
+                                    }
+                                    if (saved.isNotBlank()) onGitHubTokenSaved(saved)
+                                    go(FirstRunPage.Avatar)
+                                }
+                            }
+                        },
+                        onLink = {
+                            if (githubToken.isNotBlank()) {
+                                GitHubProjectSetup.saveToken(storage, githubToken)
+                                onGitHubTokenSaved(githubToken.trim())
+                            }
+                            val result = GitHubProjectSetup.saveLinkedRepo(storage, githubLinkUrl)
+                            githubStatus = result.message
+                            if (result.ok) go(FirstRunPage.Avatar)
+                        },
+                        onSkip = {
+                            GitHubProjectSetup.markSkipped(storage)
+                            go(FirstRunPage.Avatar)
+                        },
                     )
                     FirstRunPage.Avatar -> AvatarPickPage(
                         selectedKey = avatarChoice,
@@ -420,6 +481,95 @@ private fun OpenCodePage(
     }
 }
 
+
+@Composable
+private fun GitHubPage(
+    token: String,
+    onToken: (String) -> Unit,
+    repoName: String,
+    onRepoName: (String) -> Unit,
+    linkUrl: String,
+    onLinkUrl: (String) -> Unit,
+    status: String,
+    busy: Boolean,
+    onGetToken: () -> Unit,
+    onCreate: () -> Unit,
+    onLink: () -> Unit,
+    onSkip: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState()),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Text(
+            "GitHub for projects",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            "Optional. Make a private repo, or link one you already have. OpenCode and Computer can use it later. You can skip.",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        KidPrimaryButton("Get a GitHub token", onGetToken)
+        OutlinedTextField(
+            value = token,
+            onValueChange = onToken,
+            label = { Text("Paste token here") },
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !busy,
+        )
+        Text(
+            "Need repo + private boxes checked when GitHub makes the token.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        OutlinedTextField(
+            value = repoName,
+            onValueChange = onRepoName,
+            label = { Text("New private repo name") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !busy,
+        )
+        KidPrimaryButton(
+            if (busy) "Working…" else "Create private repo",
+            onClick = onCreate,
+        )
+        Text("— or —", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        OutlinedTextField(
+            value = linkUrl,
+            onValueChange = onLinkUrl,
+            label = { Text("Link existing repo (owner/name or URL)") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !busy,
+        )
+        OutlinedButton(
+            onClick = onLink,
+            enabled = !busy,
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+        ) { Text("Link this repo", style = MaterialTheme.typography.titleMedium) }
+        TextButton(onClick = onSkip, enabled = !busy) { Text("Skip for now") }
+        if (status.isNotBlank()) {
+            Text(
+                status,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+                textAlign = TextAlign.Center,
+            )
+        }
+    }
+}
+
 @Composable
 private fun ApiKeyPage(
     apiKey: String,
@@ -472,7 +622,7 @@ private fun ApiKeyPage(
             )
         }
         Text(
-            "Done stops here. Keep going picks a face and a background.",
+            "Done stops here. Keep going can add GitHub, then a face and a background.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,

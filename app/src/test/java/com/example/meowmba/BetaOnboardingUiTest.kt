@@ -50,5 +50,8 @@ class BetaOnboardingUiTest {
         compose.onNodeWithText("Get a free key").assertExists()
         compose.onNodeWithText("Start using Meow", substring = true).assertExists()
         compose.onNodeWithText("Keep going", substring = true).assertExists()
+        compose.onNodeWithText("Keep going", substring = true).performClick()
+        compose.onNodeWithText("GitHub for projects").assertExists()
+        compose.onNodeWithText("Skip for now").assertExists()
     }
 }

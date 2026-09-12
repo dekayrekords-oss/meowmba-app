@@ -352,6 +352,12 @@ class MainActivity : ComponentActivity() {
                             onBackgroundPicked = { selection ->
                                 viewModel.setBackground(selection)
                             },
+                            onGitHubTokenSaved = { token ->
+                                viewModel.saveServiceKey(
+                                    com.example.meowmba.core.setup.GitHubProjectSetup.STORAGE_KEY,
+                                    token,
+                                )
+                            },
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
