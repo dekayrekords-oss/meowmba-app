@@ -143,7 +143,7 @@ class LumenMotionTest {
     @Test fun styleAndFormKeysRestoreWithoutChangingDefault() {
         assertEquals(AvatarStyle.LUMEN, AvatarStyle.fromKey("lumen"))
         assertEquals(AvatarAnimal.NONE, AvatarAnimal.fromKey(null))
-        assertEquals(AvatarStyle.NEO, AvatarStyle.DEFAULT)
+        assertEquals(AvatarStyle.LUMEN, AvatarStyle.DEFAULT)
     }
 
     @Test fun authoredClosedEyesAndEarChannelsRemainAvailable() {

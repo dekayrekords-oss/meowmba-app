@@ -146,6 +146,21 @@ fun YourComputerSettingsSection(
                 OutlinedButton(onClick = { openUrl(TermuxComputerLinks.TERMUX_GITHUB_RELEASES) }) {
                     Text("GitHub releases")
                 }
+                OutlinedButton(onClick = { openUrl(TermuxComputerLinks.TERMUX_NETBIRD) }) {
+                    Text(TermuxComputerLinks.BUTTON_NETBIRD)
+                }
+                OutlinedButton(onClick = {
+                    val launch = context.packageManager
+                        .getLaunchIntentForPackage(TermuxComputerLinks.TERMUX_PACKAGE)
+                        ?.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    if (launch != null) {
+                        runCatching { context.startActivity(launch) }
+                    } else {
+                        openUrl(TermuxComputerLinks.TERMUX_FDROID)
+                    }
+                }) {
+                    Text(TermuxComputerLinks.BUTTON_OPEN_TERMUX)
+                }
             }
             TextButton(onClick = { openUrl(TermuxComputerLinks.TERMUX_FDROID) }) {
                 Text(TermuxComputerLinks.BUTTON_SETUP_GUIDE + " (F-Droid page)")

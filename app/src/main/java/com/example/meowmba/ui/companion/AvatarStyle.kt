@@ -45,7 +45,7 @@ enum class AvatarStyle(val key: String, val label: String, val description: Stri
     val isLumen: Boolean get() = this == LUMEN || this == LUMEN_CAT
 
     companion object {
-        val DEFAULT = NEO
+        val DEFAULT = LUMEN // first-run / picker default: catalog "Lumen" (no "Lumen 2" entry)
 
         /** Unknown or missing keys fall back rather than crashing on stale prefs. */
         fun fromKey(key: String?): AvatarStyle =

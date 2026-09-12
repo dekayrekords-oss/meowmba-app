@@ -65,6 +65,8 @@
              entirely: bindService fails and getLaunchIntentForPackage returns null, which
              looks exactly like "the inventory app is not installed". -->
         <package android:name="com.meow.inventory" />
+        <!-- Termux: needed so setup can detect install + launch during onboarding. -->
+        <package android:name="com.termux" />
         <intent>
             <action android:name="com.meow.inventory.action.INVENTORY_BRIDGE" />
         </intent>

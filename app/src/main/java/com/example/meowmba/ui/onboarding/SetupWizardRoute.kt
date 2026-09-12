@@ -148,15 +148,25 @@ fun SetupWizardRoute(
                         primary = "Let’s go",
                         onPrimary = { go(FirstRunPage.GetTermux) },
                     )
-                    FirstRunPage.GetTermux -> KidPage(
-                        title = "Your Computer is this phone.",
-                        body = "First, get a free app called Termux. Use the big button — not the Play Store.",
-                        primary = TermuxComputerLinks.BUTTON_GET_TERMUX,
-                        onPrimary = { openUrl(context, TermuxComputerLinks.TERMUX_FDROID) },
-                        secondary = TermuxComputerLinks.BUTTON_GITHUB_DOWNLOAD,
-                        onSecondary = { openUrl(context, TermuxComputerLinks.TERMUX_GITHUB_RELEASES) },
-                        tertiary = "I already have it",
-                        onTertiary = { go(FirstRunPage.CopyCommands) },
+                    FirstRunPage.GetTermux -> GetTermuxPage(
+                        termuxOk = termuxOk,
+                        onRefresh = { termuxOk = termuxInstalled(context) },
+                        onGetFdroid = { openUrl(context, TermuxComputerLinks.TERMUX_FDROID) },
+                        onGetGithub = { openUrl(context, TermuxComputerLinks.TERMUX_GITHUB_RELEASES) },
+                        onGetNetBird = { openUrl(context, TermuxComputerLinks.TERMUX_NETBIRD) },
+                        onOpenTermux = {
+                            termuxOk = termuxInstalled(context)
+                            if (!openTermux(context)) {
+                                // Not installed yet — send them to the app list so they can finish install.
+                                openAppLauncher(context)
+                            }
+                        },
+                        onInstalled = {
+                            termuxOk = termuxInstalled(context)
+                            openTermux(context) // best-effort; still continue
+                            go(FirstRunPage.CopyCommands)
+                        },
+                        onShowApps = { openAppLauncher(context) },
                     )
                     FirstRunPage.CopyCommands -> CopyCommandsPage(
                         copied = copied,
@@ -164,20 +174,31 @@ fun SetupWizardRoute(
                             copyText(context, TermuxComputerLinks.BOOTSTRAP_COMMANDS)
                             copied = true
                         },
+                        onOpenTermux = {
+                            termuxOk = termuxInstalled(context)
+                            if (!openTermux(context)) openAppLauncher(context)
+                        },
                         onNext = { go(FirstRunPage.IDidThat) },
                     )
                     FirstRunPage.IDidThat -> KidPage(
-                        title = if (termuxOk) "Termux is on this phone." else "Come back when you’re done.",
+                        title = if (termuxOk) "Termux is on this phone." else "Almost done.",
                         body = if (termuxOk) {
-                            "Nice. We found Termux."
+                            "Nice. We found Termux. You can open it again if you need to."
                         } else {
-                            "Tap the button after you paste those words in Termux. We will trust you if we cannot see it."
+                            "Open Termux, paste the words, then come back. Or open your apps if you still need to install it."
                         },
                         primary = "I did that",
                         onPrimary = {
                             termuxOk = termuxInstalled(context)
                             go(FirstRunPage.Mic)
                         },
+                        secondary = TermuxComputerLinks.BUTTON_OPEN_TERMUX,
+                        onSecondary = {
+                            termuxOk = termuxInstalled(context)
+                            if (!openTermux(context)) openAppLauncher(context)
+                        },
+                        tertiary = TermuxComputerLinks.BUTTON_SHOW_APPS,
+                        onTertiary = { openAppLauncher(context) },
                     )
                     FirstRunPage.Mic -> KidPage(
                         title = "Can we use the mic?",
@@ -234,9 +255,69 @@ fun SetupWizardRoute(
 }
 
 @Composable
+private fun GetTermuxPage(
+    termuxOk: Boolean,
+    onRefresh: () -> Unit,
+    onGetFdroid: () -> Unit,
+    onGetGithub: () -> Unit,
+    onGetNetBird: () -> Unit,
+    onOpenTermux: () -> Unit,
+    onInstalled: () -> Unit,
+    onShowApps: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState()),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Text(
+            "Your Computer is this phone.",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            if (termuxOk) {
+                "Termux is ready. Tap Open Termux, then come back."
+            } else {
+                "First, get a free app called Termux. Use a big button — not the Play Store. After you install it, open it from here."
+            },
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        KidPrimaryButton(TermuxComputerLinks.BUTTON_GET_TERMUX, onGetFdroid)
+        OutlinedButton(
+            onClick = onGetGithub,
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+        ) { Text(TermuxComputerLinks.BUTTON_GITHUB_DOWNLOAD, style = MaterialTheme.typography.titleMedium) }
+        OutlinedButton(
+            onClick = onGetNetBird,
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+        ) { Text(TermuxComputerLinks.BUTTON_NETBIRD, style = MaterialTheme.typography.titleMedium) }
+        KidPrimaryButton(TermuxComputerLinks.BUTTON_OPEN_TERMUX) {
+            onRefresh()
+            onOpenTermux()
+        }
+        OutlinedButton(
+            onClick = onInstalled,
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+        ) { Text(TermuxComputerLinks.BUTTON_I_INSTALLED, style = MaterialTheme.typography.titleMedium) }
+        TextButton(onClick = onShowApps) { Text(TermuxComputerLinks.BUTTON_SHOW_APPS) }
+        TextButton(onClick = {
+            onRefresh()
+            onInstalled()
+        }) { Text("I already have it") }
+    }
+}
+
+@Composable
 private fun CopyCommandsPage(
     copied: Boolean,
     onCopy: () -> Unit,
+    onOpenTermux: () -> Unit,
     onNext: () -> Unit,
 ) {
     Column(
@@ -268,6 +349,7 @@ private fun CopyCommandsPage(
             textAlign = TextAlign.Start,
             modifier = Modifier.fillMaxWidth(),
         )
+        KidPrimaryButton(TermuxComputerLinks.BUTTON_OPEN_TERMUX, onOpenTermux)
         KidPrimaryButton(if (copied) "Copied!" else "Copy", onCopy)
         TextButton(onClick = onNext) { Text("Next") }
     }
@@ -392,6 +474,36 @@ private fun openUrl(context: Context, url: String) {
     }
 }
 
+/** Launch Termux if installed. Returns true when a launch intent was fired. */
+private fun openTermux(context: Context): Boolean {
+    val launch = context.packageManager
+        .getLaunchIntentForPackage(TermuxComputerLinks.TERMUX_PACKAGE)
+        ?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    if (launch != null) {
+        runCatching { context.startActivity(launch) }
+        return true
+    }
+    // Fallback explicit main activity for some Termux builds.
+    val explicit = Intent(Intent.ACTION_MAIN).apply {
+        setPackage(TermuxComputerLinks.TERMUX_PACKAGE)
+        addCategory(Intent.CATEGORY_LAUNCHER)
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    return runCatching {
+        context.startActivity(explicit)
+        true
+    }.getOrDefault(false)
+}
+
+/** Leave setup for the home/app list so the user is never trapped. */
+private fun openAppLauncher(context: Context) {
+    val home = Intent(Intent.ACTION_MAIN).apply {
+        addCategory(Intent.CATEGORY_HOME)
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+    }
+    runCatching { context.startActivity(home) }
+}
+
 private fun copyText(context: Context, text: String) {
     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
     clipboard?.setPrimaryClip(ClipData.newPlainText("setup", text))
@@ -399,7 +511,7 @@ private fun copyText(context: Context, text: String) {
 
 private fun termuxInstalled(context: Context): Boolean {
     return runCatching {
-        context.packageManager.getPackageInfo("com.termux", 0)
+        context.packageManager.getPackageInfo(TermuxComputerLinks.TERMUX_PACKAGE, 0)
         true
     }.getOrDefault(false)
 }

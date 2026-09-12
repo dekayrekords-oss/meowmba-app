@@ -11,12 +11,19 @@ package com.example.meowmba.core.computer
 object TermuxComputerLinks {
     const val TERMUX_FDROID = "https://f-droid.org/packages/com.termux/"
     const val TERMUX_GITHUB_RELEASES = "https://github.com/termux/termux-app/releases"
+    /** Local NetBird sideload mirror on meow (same LAN / VPN as the phone). */
+    const val TERMUX_NETBIRD = "http://100.77.97.236:8765/termux.apk"
+    const val TERMUX_PACKAGE = "com.termux"
     /** In-app / docs deep path label — not a Play Store URI. */
     const val SETUP_GUIDE_DOC = "docs/YOUR_COMPUTER.md"
 
     const val BUTTON_INSTALL_TERMUX = "Install Termux"
     const val BUTTON_GET_TERMUX = "Get Termux"
     const val BUTTON_GITHUB_DOWNLOAD = "GitHub download"
+    const val BUTTON_NETBIRD = "NetBird"
+    const val BUTTON_OPEN_TERMUX = "Open Termux"
+    const val BUTTON_SHOW_APPS = "Show my apps"
+    const val BUTTON_I_INSTALLED = "I installed it"
 
     /** Paste in Termux. Keep as two lines so a child can copy once. */
     const val BOOTSTRAP_COMMANDS =

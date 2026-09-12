@@ -58,7 +58,7 @@ class LumenPerformanceIntegrationTest {
         assertTrue(avatarAnimationChoices(names, "Weather", "").all { AvatarPerformanceCatalog.resolve(it)?.category == "Weather" })
         assertTrue(avatarAnimationChoices(names, "New", "no matching animation").isEmpty())
         assertEquals(AvatarStyle.LUMEN_CAT, AvatarStyle.fromKey("lumen_cat"))
-        assertEquals(AvatarStyle.NEO, AvatarStyle.DEFAULT)
+        assertEquals(AvatarStyle.LUMEN, AvatarStyle.DEFAULT)
     }
 
     @Test fun envelopeWinkAndHideAreBoundedAndLeaveNoTemporaryChannels() {
