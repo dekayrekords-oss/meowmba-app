@@ -66,6 +66,7 @@ fun CompanionScreen(
     val terminalUiStatusDetail by viewModel.companionTerminalStatusDetail.collectAsState()
     val terminalUiScrollback by viewModel.companionTerminalScrollback.collectAsState()
     val terminalUiConnectedTargetId by viewModel.companionTerminalConnectedTargetId.collectAsState()
+    val terminalPaneRequest by viewModel.companionTerminalPaneRequest.collectAsState()
     val showOnboarding by viewModel.showOnboarding.collectAsState()
     // Pinned apps + drawer folders are used by both the base surfaces and the
     // shared overlay layer, so they live at the screen root.
@@ -1109,6 +1110,7 @@ fun CompanionScreen(
             },
             computerPower = uiState.computerPowerState,
             onComputerPower = viewModel::setComputerPowerState,
+            terminalPaneRequest = terminalPaneRequest,
             modifier = Modifier.align(Alignment.BottomCenter)
         )
 

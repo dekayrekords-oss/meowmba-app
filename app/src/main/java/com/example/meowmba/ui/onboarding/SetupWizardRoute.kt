@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
@@ -27,6 +29,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,9 +44,13 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.meowmba.core.background.BackgroundAnimation
+import com.example.meowmba.core.background.BackgroundKind
+import com.example.meowmba.core.background.BackgroundSelection
 import com.example.meowmba.core.computer.TermuxComputerLinks
 import com.example.meowmba.core.security.SecureStorageManager
 import com.example.meowmba.core.setup.SetupWiring
+import com.example.meowmba.ui.companion.AvatarStyle
 
 /**
  * First-run and Settings → Start setup walkthrough.
@@ -51,15 +58,20 @@ import com.example.meowmba.core.setup.SetupWiring
  * Shown by [com.example.meowmba.MainActivity] when
  * [SetupWiring.needsOnboarding] is true, or on demand from Settings.
  *
- * One idea per screen. Large type. Kid-friendly words. Computer (phone) first.
- * Brain / image / Neural / keys stay in Settings — not here.
+ * One idea per screen. Large type. Kid-friendly words. Computer (phone) first,
+ * then OpenCode in the in-app Terminal, then an AI key (with a clear stop),
+ * then optional avatar + background. Neural / AgentBrain / connectors stay hidden.
  */
 private enum class FirstRunPage {
     Hi,
     GetTermux,
     CopyCommands,
     IDidThat,
+    OpenCode,
     Mic,
+    ApiKey,
+    Avatar,
+    Background,
     OptionalServer,
     ServerFields,
     Done,
@@ -72,6 +84,10 @@ fun SetupWizardRoute(
     onEnablePermissions: () -> Unit = {},
     onOpenChat: () -> Unit = onFinished,
     onOpenTerminal: () -> Unit = onFinished,
+    /** Connect Computer PTY and auto-install/launch OpenCode (may peek Terminal). */
+    onStartOpenCode: () -> Unit = {},
+    onAvatarPicked: (AvatarStyle) -> Unit = {},
+    onBackgroundPicked: (BackgroundSelection) -> Unit = {},
 ) {
     val context = LocalContext.current
     var page by rememberSaveable { mutableStateOf(FirstRunPage.Hi.name) }
@@ -80,10 +96,16 @@ fun SetupWizardRoute(
     }
     var copied by rememberSaveable { mutableStateOf(false) }
     var termuxOk by remember { mutableStateOf(termuxInstalled(context)) }
+    var openCodeStarted by rememberSaveable { mutableStateOf(false) }
     val storage = remember { SecureStorageManager(context) }
     var host by rememberSaveable { mutableStateOf("") }
     var user by rememberSaveable { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var apiKey by remember { mutableStateOf(storage.getApiKey("opencode").orEmpty()) }
+    var avatarChoice by rememberSaveable { mutableStateOf(AvatarStyle.DEFAULT.key) }
+    var backgroundChoice by rememberSaveable {
+        mutableStateOf(BackgroundAnimation.AURORA.id)
+    }
 
     fun go(next: FirstRunPage) {
         page = next.name
@@ -100,10 +122,14 @@ fun SetupWizardRoute(
             FirstRunPage.GetTermux -> go(FirstRunPage.Hi)
             FirstRunPage.CopyCommands -> go(FirstRunPage.GetTermux)
             FirstRunPage.IDidThat -> go(FirstRunPage.CopyCommands)
-            FirstRunPage.Mic -> go(FirstRunPage.IDidThat)
-            FirstRunPage.OptionalServer -> go(FirstRunPage.Mic)
+            FirstRunPage.OpenCode -> go(FirstRunPage.IDidThat)
+            FirstRunPage.Mic -> go(FirstRunPage.OpenCode)
+            FirstRunPage.ApiKey -> go(FirstRunPage.Mic)
+            FirstRunPage.Avatar -> go(FirstRunPage.ApiKey)
+            FirstRunPage.Background -> go(FirstRunPage.Avatar)
+            FirstRunPage.OptionalServer -> go(FirstRunPage.Background)
             FirstRunPage.ServerFields -> go(FirstRunPage.OptionalServer)
-            FirstRunPage.Done -> go(FirstRunPage.OptionalServer)
+            FirstRunPage.Done -> go(FirstRunPage.ApiKey)
         }
     }
 
@@ -157,13 +183,12 @@ fun SetupWizardRoute(
                         onOpenTermux = {
                             termuxOk = termuxInstalled(context)
                             if (!openTermux(context)) {
-                                // Not installed yet — send them to the app list so they can finish install.
                                 openAppLauncher(context)
                             }
                         },
                         onInstalled = {
                             termuxOk = termuxInstalled(context)
-                            openTermux(context) // best-effort; still continue
+                            openTermux(context)
                             go(FirstRunPage.CopyCommands)
                         },
                         onShowApps = { openAppLauncher(context) },
@@ -183,14 +208,14 @@ fun SetupWizardRoute(
                     FirstRunPage.IDidThat -> KidPage(
                         title = if (termuxOk) "Termux is on this phone." else "Almost done.",
                         body = if (termuxOk) {
-                            "Nice. We found Termux. You can open it again if you need to."
+                            "Nice. We found Termux. Next we start OpenCode in Terminal."
                         } else {
                             "Open Termux, paste the words, then come back. Or open your apps if you still need to install it."
                         },
                         primary = "I did that",
                         onPrimary = {
                             termuxOk = termuxInstalled(context)
-                            go(FirstRunPage.Mic)
+                            go(FirstRunPage.OpenCode)
                         },
                         secondary = TermuxComputerLinks.BUTTON_OPEN_TERMUX,
                         onSecondary = {
@@ -200,16 +225,92 @@ fun SetupWizardRoute(
                         tertiary = TermuxComputerLinks.BUTTON_SHOW_APPS,
                         onTertiary = { openAppLauncher(context) },
                     )
+                    FirstRunPage.OpenCode -> {
+                        // Auto-start once when Computer/Termux is present. Never trap without Termux.
+                        LaunchedEffect(Unit) {
+                            termuxOk = termuxInstalled(context)
+                            if (termuxOk && !openCodeStarted) {
+                                openCodeStarted = true
+                                onStartOpenCode()
+                            }
+                        }
+                        OpenCodePage(
+                            termuxOk = termuxOk,
+                            alreadyStarted = openCodeStarted,
+                            onStartAgain = {
+                                termuxOk = termuxInstalled(context)
+                                if (termuxOk) {
+                                    openCodeStarted = true
+                                    onStartOpenCode()
+                                } else {
+                                    openAppLauncher(context)
+                                }
+                            },
+                            onOpenTermux = {
+                                termuxOk = termuxInstalled(context)
+                                if (!openTermux(context)) openAppLauncher(context)
+                            },
+                            onShowApps = { openAppLauncher(context) },
+                            onGetNetBird = { openUrl(context, TermuxComputerLinks.TERMUX_NETBIRD) },
+                            onNext = { go(FirstRunPage.Mic) },
+                        )
+                    }
                     FirstRunPage.Mic -> KidPage(
                         title = "Can we use the mic?",
                         body = "Then you can talk to your helper. You can say no.",
                         primary = "Allow",
                         onPrimary = {
                             onEnablePermissions()
-                            go(FirstRunPage.OptionalServer)
+                            go(FirstRunPage.ApiKey)
                         },
                         secondary = "Not now",
-                        onSecondary = { go(FirstRunPage.OptionalServer) },
+                        onSecondary = { go(FirstRunPage.ApiKey) },
+                    )
+                    FirstRunPage.ApiKey -> ApiKeyPage(
+                        apiKey = apiKey,
+                        onApiKey = { apiKey = it },
+                        onGetKey = { openUrl(context, TermuxComputerLinks.OPENCODE_ZEN_KEY_URL) },
+                        onSaveAndDone = {
+                            saveOpenCodeKey(storage, apiKey)
+                            go(FirstRunPage.Done)
+                        },
+                        onSaveAndKeepGoing = {
+                            saveOpenCodeKey(storage, apiKey)
+                            go(FirstRunPage.Avatar)
+                        },
+                        onSkipDone = { go(FirstRunPage.Done) },
+                        onSkipKeepGoing = { go(FirstRunPage.Avatar) },
+                    )
+                    FirstRunPage.Avatar -> AvatarPickPage(
+                        selectedKey = avatarChoice,
+                        onSelect = { style ->
+                            avatarChoice = style.key
+                            storage.savePreference("avatar_style", style.key)
+                            onAvatarPicked(style)
+                        },
+                        onNext = { go(FirstRunPage.Background) },
+                    )
+                    FirstRunPage.Background -> BackgroundPickPage(
+                        selectedId = backgroundChoice,
+                        onSelect = { anim ->
+                            backgroundChoice = anim.id
+                            val selection = BackgroundSelection(
+                                kind = BackgroundKind.ANIMATION,
+                                value = anim.id,
+                            )
+                            storage.savePreference("background_kind", selection.kind.name)
+                            storage.savePreference("background_value", selection.value)
+                            storage.savePreference("background_dim", selection.dimPercent.toString())
+                            onBackgroundPicked(selection)
+                        },
+                        onNone = {
+                            backgroundChoice = ""
+                            val selection = BackgroundSelection(kind = BackgroundKind.NONE)
+                            storage.savePreference("background_kind", selection.kind.name)
+                            storage.savePreference("background_value", "")
+                            onBackgroundPicked(selection)
+                        },
+                        onNext = { go(FirstRunPage.OptionalServer) },
                     )
                     FirstRunPage.OptionalServer -> KidPage(
                         title = "Have a computer on the internet?",
@@ -251,6 +352,245 @@ fun SetupWizardRoute(
                 }
             }
         }
+    }
+}
+
+private fun saveOpenCodeKey(storage: SecureStorageManager, raw: String) {
+    val key = raw.trim()
+    if (key.isEmpty()) return
+    // Same store Settings / CloudModelSettings use for OpenCode Zen.
+    storage.saveApiKey("opencode", key)
+    storage.saveModelName("opencode", "big-pickle")
+    storage.savePreference("brain_provider", "bigpickle")
+    storage.savePreference("default_brain", "bigpickle")
+    storage.savePreference("selected_model", "Omniroute (Local router)")
+}
+
+@Composable
+private fun OpenCodePage(
+    termuxOk: Boolean,
+    alreadyStarted: Boolean,
+    onStartAgain: () -> Unit,
+    onOpenTermux: () -> Unit,
+    onShowApps: () -> Unit,
+    onGetNetBird: () -> Unit,
+    onNext: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState()),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Text(
+            "OpenCode in Terminal",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            if (termuxOk) {
+                if (alreadyStarted) {
+                    "Terminal is installing OpenCode if needed, then starting it. You can peek, then continue."
+                } else {
+                    "We’ll open your in-app Terminal and run a short install, then start OpenCode."
+                }
+            } else {
+                "Termux isn’t ready yet. Get it first — you won’t get stuck. You can still continue for an AI key."
+            },
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        if (termuxOk) {
+            KidPrimaryButton(
+                if (alreadyStarted) "Show Terminal again" else "Start OpenCode",
+                onStartAgain,
+            )
+        } else {
+            KidPrimaryButton(TermuxComputerLinks.BUTTON_OPEN_TERMUX, onOpenTermux)
+            OutlinedButton(
+                onClick = onGetNetBird,
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+            ) { Text(TermuxComputerLinks.BUTTON_NETBIRD, style = MaterialTheme.typography.titleMedium) }
+            TextButton(onClick = onShowApps) { Text(TermuxComputerLinks.BUTTON_SHOW_APPS) }
+        }
+        KidPrimaryButton("Continue", onNext)
+    }
+}
+
+@Composable
+private fun ApiKeyPage(
+    apiKey: String,
+    onApiKey: (String) -> Unit,
+    onGetKey: () -> Unit,
+    onSaveAndDone: () -> Unit,
+    onSaveAndKeepGoing: () -> Unit,
+    onSkipDone: () -> Unit,
+    onSkipKeepGoing: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState()),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Text(
+            "AI needs a key",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            "Chat uses an OpenCode Zen key (same place as Settings). Tap Get a key, copy it, paste here.",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        KidPrimaryButton("Get a free key", onGetKey)
+        OutlinedTextField(
+            value = apiKey,
+            onValueChange = onApiKey,
+            label = { Text("Paste your key") },
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        KidPrimaryButton(
+            if (apiKey.isBlank()) "Start using Meow" else "Save key · Start using Meow",
+            onClick = if (apiKey.isBlank()) onSkipDone else onSaveAndDone,
+        )
+        OutlinedButton(
+            onClick = if (apiKey.isBlank()) onSkipKeepGoing else onSaveAndKeepGoing,
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+        ) {
+            Text(
+                if (apiKey.isBlank()) "Keep going" else "Save key · Keep going",
+                style = MaterialTheme.typography.titleMedium,
+            )
+        }
+        Text(
+            "Done stops here. Keep going picks a face and a background.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+@Composable
+private fun AvatarPickPage(
+    selectedKey: String,
+    onSelect: (AvatarStyle) -> Unit,
+    onNext: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState()),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(
+            "Pick a face",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            "Lumen is the default. You can change this later.",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        AvatarStyle.entries.forEach { style ->
+            val selected = style.key == selectedKey
+            OutlinedButton(
+                onClick = { onSelect(style) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .then(
+                        if (selected) {
+                            Modifier.border(
+                                2.dp,
+                                MaterialTheme.colorScheme.primary,
+                                RoundedCornerShape(12.dp),
+                            )
+                        } else {
+                            Modifier
+                        },
+                    ),
+            ) {
+                Text(
+                    if (selected) "✓ ${style.label}" else style.label,
+                    style = MaterialTheme.typography.titleMedium,
+                )
+            }
+        }
+        KidPrimaryButton("Next", onNext)
+    }
+}
+
+@Composable
+private fun BackgroundPickPage(
+    selectedId: String,
+    onSelect: (BackgroundAnimation) -> Unit,
+    onNone: () -> Unit,
+    onNext: () -> Unit,
+) {
+    // A short kid-friendly subset of the full BackgroundScreen catalog.
+    val choices = listOf(
+        BackgroundAnimation.AURORA,
+        BackgroundAnimation.STARFIELD,
+        BackgroundAnimation.NEBULA,
+        BackgroundAnimation.WOODLAND,
+        BackgroundAnimation.LAGOON,
+        BackgroundAnimation.CLEAR_SKY,
+    )
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState()),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(
+            "Pick a background",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            "What sits behind your helper. More choices live in Settings later.",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        OutlinedButton(
+            onClick = onNone,
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+        ) {
+            Text(
+                if (selectedId.isEmpty()) "✓ None" else "None",
+                style = MaterialTheme.typography.titleMedium,
+            )
+        }
+        choices.forEach { anim ->
+            val selected = anim.id == selectedId
+            OutlinedButton(
+                onClick = { onSelect(anim) },
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+            ) {
+                Text(
+                    if (selected) "✓ ${anim.label}" else anim.label,
+                    style = MaterialTheme.typography.titleMedium,
+                )
+            }
+        }
+        KidPrimaryButton("Next", onNext)
     }
 }
 
@@ -483,7 +823,6 @@ private fun openTermux(context: Context): Boolean {
         runCatching { context.startActivity(launch) }
         return true
     }
-    // Fallback explicit main activity for some Termux builds.
     val explicit = Intent(Intent.ACTION_MAIN).apply {
         setPackage(TermuxComputerLinks.TERMUX_PACKAGE)
         addCategory(Intent.CATEGORY_LAUNCHER)

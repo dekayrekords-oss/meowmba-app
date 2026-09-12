@@ -188,9 +188,18 @@ class MainActivity : ComponentActivity() {
                 var needsOnboarding by remember {
                     mutableStateOf(com.example.meowmba.core.setup.SetupWiring.needsOnboarding(this@MainActivity))
                 }
+                // Peek Terminal during setup without marking onboarding done.
+                var pauseWizardForTerminal by remember { mutableStateOf(false) }
                 // On-demand wizard opened from the Settings "Connect your AI" button.
                 val showOnboarding by viewModel.showOnboarding.collectAsState()
-                val wizardVisible = needsOnboarding || showOnboarding
+                val wizardVisible = (needsOnboarding || showOnboarding) && !pauseWizardForTerminal
+
+                // When the user closes Chat after an OpenCode peek, return to the wizard.
+                androidx.compose.runtime.LaunchedEffect(uiState.isChatExpanded, pauseWizardForTerminal) {
+                    if (pauseWizardForTerminal && !uiState.isChatExpanded) {
+                        pauseWizardForTerminal = false
+                    }
+                }
 
                 // Watch mode: launch the system MediaProjection consent when requested.
                 val watchConsent by viewModel.screenWatchConsentRequested.collectAsState()
@@ -314,12 +323,14 @@ class MainActivity : ComponentActivity() {
                                 com.example.meowmba.core.setup.SetupWiring.markOnboardingDone(this@MainActivity)
                                 viewModel.reloadSetupConfiguration()
                                 needsOnboarding = false
+                                pauseWizardForTerminal = false
                                 if (showOnboarding) viewModel.toggleSetupWizard()
                             },
                             onOpenChat = {
                                 com.example.meowmba.core.setup.SetupWiring.markOnboardingDone(this@MainActivity)
                                 viewModel.reloadSetupConfiguration()
                                 needsOnboarding = false
+                                pauseWizardForTerminal = false
                                 if (showOnboarding) viewModel.toggleSetupWizard()
                                 viewModel.openChat()
                             },
@@ -327,8 +338,19 @@ class MainActivity : ComponentActivity() {
                                 com.example.meowmba.core.setup.SetupWiring.markOnboardingDone(this@MainActivity)
                                 viewModel.reloadSetupConfiguration()
                                 needsOnboarding = false
+                                pauseWizardForTerminal = false
                                 if (showOnboarding) viewModel.toggleSetupWizard()
                                 viewModel.openCompanionTerminalFromOnboarding()
+                            },
+                            onStartOpenCode = {
+                                pauseWizardForTerminal = true
+                                viewModel.startOpenCodeInCompanionTerminal(finishWizard = false)
+                            },
+                            onAvatarPicked = { style ->
+                                viewModel.setAvatarStyle(style)
+                            },
+                            onBackgroundPicked = { selection ->
+                                viewModel.setBackground(selection)
                             },
                             modifier = Modifier.fillMaxSize(),
                         )

@@ -59,6 +59,8 @@ fun ChatOverlay(
     computerPower: com.example.meowmba.core.config.ComputerPowerState =
         com.example.meowmba.core.config.ComputerPowerState.Idle,
     onComputerPower: (com.example.meowmba.core.config.ComputerPowerState) -> Unit = {},
+    /** Non-zero bumps switch the overlay to the Terminal tab (setup / onboarding). */
+    terminalPaneRequest: Long = 0L,
     modifier: Modifier = Modifier,
 ) {
     // Retain separate drafts for projects as well as across panel collapse.
@@ -69,6 +71,9 @@ fun ChatOverlay(
     var history by rememberSaveable { mutableStateOf(false) }
     var pane by rememberSaveable { mutableStateOf(CompanionChatPane.Chat.name) }
     val currentPane = runCatching { CompanionChatPane.valueOf(pane) }.getOrDefault(CompanionChatPane.Chat)
+    LaunchedEffect(terminalPaneRequest) {
+        if (terminalPaneRequest > 0L) pane = CompanionChatPane.Terminal.name
+    }
     val historyState = rememberLazyListState()
     val replyState = rememberLazyListState()
     val keyboard = LocalSoftwareKeyboardController.current

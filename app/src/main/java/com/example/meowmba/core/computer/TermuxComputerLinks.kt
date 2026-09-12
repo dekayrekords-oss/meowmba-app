@@ -17,6 +17,9 @@ object TermuxComputerLinks {
     /** In-app / docs deep path label — not a Play Store URI. */
     const val SETUP_GUIDE_DOC = "docs/YOUR_COMPUTER.md"
 
+    /** OpenCode Zen key page — same destination Settings / CloudModelSettings use. */
+    const val OPENCODE_ZEN_KEY_URL = "https://opencode.ai/zen"
+
     const val BUTTON_INSTALL_TERMUX = "Install Termux"
     const val BUTTON_GET_TERMUX = "Get Termux"
     const val BUTTON_GITHUB_DOWNLOAD = "GitHub download"
@@ -30,6 +33,20 @@ object TermuxComputerLinks {
         "pkg update && pkg install proot proot-distro openssh tmux\n" +
             "proot-distro install debian"
     const val BUTTON_SETUP_GUIDE = "Setup guide"
+
+    /**
+     * Kid-simple OpenCode bootstrap for the in-app Computer Terminal (PTY).
+     * Installs only when `opencode` is missing, then launches it.
+     * Official installer: https://opencode.ai/install — PATH may already include
+     * ~/.opencode/bin on some guests; we still export it before launch.
+     */
+    const val OPENCODE_SETUP_COMMANDS =
+        "export PATH=\"\$HOME/.opencode/bin:\$PATH\"; " +
+            "if command -v opencode >/dev/null 2>&1; then echo \"OpenCode already installed.\"; " +
+            "else echo \"Installing OpenCode…\"; curl -fsSL https://opencode.ai/install | bash; " +
+            "export PATH=\"\$HOME/.opencode/bin:\$PATH\"; fi; " +
+            "command -v opencode >/dev/null 2>&1 && opencode || " +
+            "echo \"OpenCode not found yet. Open Termux, finish Computer setup, then try again.\""
 
     const val HOWTO_PHONE_SHORT =
         "Need a Linux workspace? Start on this phone with Termux (F-Droid or GitHub). " +

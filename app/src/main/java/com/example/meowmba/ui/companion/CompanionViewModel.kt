@@ -243,6 +243,10 @@ class CompanionViewModel(
     val companionTerminalScrollback = _companionTerminalScrollback.asStateFlow()
     private val _companionTerminalConnectedTargetId = MutableStateFlow<String?>(null)
     val companionTerminalConnectedTargetId = _companionTerminalConnectedTargetId.asStateFlow()
+
+    /** Bumped when setup/onboarding wants ChatOverlay on the Terminal tab. */
+    private val _companionTerminalPaneRequest = MutableStateFlow(0L)
+    val companionTerminalPaneRequest = _companionTerminalPaneRequest.asStateFlow()
     private var computerIdleWatchJob: Job? = null
 
     private val _mouthEnergy = kotlinx.coroutines.flow.MutableStateFlow(0f)
@@ -11218,9 +11222,44 @@ class CompanionViewModel(
     fun openCompanionTerminalFromOnboarding() {
         finishOnboarding()
         runCatching { openChat() }
-        runCatching {
-            val local = CompanionTerminalTarget.LOCAL_ID
-            connectCompanionTerminal(local)
+        _companionTerminalPaneRequest.value = _companionTerminalPaneRequest.value + 1L
+        runCatching { connectCompanionTerminal(CompanionTerminalTarget.LOCAL_ID) }
+    }
+
+    /**
+     * Open Chat → Terminal (Computer PTY), connect the local guest, then run the
+     * kid-simple OpenCode install+launch sequence via [sendCompanionTerminalLine].
+     * Does not mark onboarding done unless [finishWizard] is true.
+     */
+    fun startOpenCodeInCompanionTerminal(finishWizard: Boolean = false) {
+        if (finishWizard) finishOnboarding()
+        runCatching { openChat() }
+        _companionTerminalPaneRequest.value = _companionTerminalPaneRequest.value + 1L
+        val local = CompanionTerminalTarget.LOCAL_ID
+        connectCompanionTerminal(local)
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val deadline = android.os.SystemClock.elapsedRealtime() + 20_000L
+            while (android.os.SystemClock.elapsedRealtime() < deadline) {
+                val session = companionTerminalSession
+                val ready = session != null &&
+                    session.status.value == CompanionTerminalStatus.Connected &&
+                    (session.connectedTargetId.value == null ||
+                        session.connectedTargetId.value == CompanionTerminalTarget.LOCAL_ID ||
+                        session.connectedTargetId.value == local)
+                if (ready) break
+                kotlinx.coroutines.delay(250)
+            }
+            val session = companionTerminalSession
+            if (session == null || session.status.value != CompanionTerminalStatus.Connected) {
+                appendCompanionTerminalOutput(
+                    "[setup] Terminal not connected yet. Tap Connect on Computer, then try OpenCode again.\n",
+                )
+                return@launch
+            }
+            appendCompanionTerminalOutput("[setup] Starting OpenCode (install if needed)…\n")
+            sendCompanionTerminalLine(
+                com.example.meowmba.core.computer.TermuxComputerLinks.OPENCODE_SETUP_COMMANDS,
+            )
         }
     }
 
