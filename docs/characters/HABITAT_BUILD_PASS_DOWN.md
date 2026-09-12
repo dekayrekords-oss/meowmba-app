@@ -1,4 +1,4 @@
-# Meow teach-back: full fly habitat preview 97
+# Meow teach-back: full fly habitat preview 99
 
 User direction: preserve floating Lumen fruit-fly features and the separate commercial concept. Add a new whole-fly companion, optional care, ten interactive animated environments, shared neural controls and measured phone stabilization. The reference stock illustrations were not copied into APK assets.
 
@@ -77,3 +77,5 @@ Background lifecycle check: Android Settings foreground,15/15 samples with Meow 
 The thermal pause exposed a product bug in the new controls: Play was hidden along with animation. Preview99 separates a covered stage from a throttled stage. Play/care remains available while decorative motion is paused; queued world actions wait for resumed time, while care updates still work. Expanded controls explain that motion is resting. Modal screens still hide the panel. Existing animation/thermal gates are retained.
 
 Final99 APK SHA-256:794db431039d944e0888268051f73eee640cf7125ae3c99a4fb9a685789e63b4. The core source is unchanged from the66-test run; final care/world/work-policy checks and assembly were rerun. User-ready selection: Fly companion, Sunlit kitchen, NEURAL/RATE, care off, traces off. Confirm installation and contrast below.
+
+Final99 installed in place at2026-09-12 17:42:40 phone time; Android reports1.3.81/code99. Final18 care/world/work-policy tests passed, zero failures/errors/skips. The signed APK hash matches the reconstructed local file. On-phone visual inspection confirms readable pale text, care off persisted across updates, and Play/care available alongside the cooling banner at MODERATE. No data clearing. Sanitized measured results are in HABITAT_PHONE_RESULTS_2026-09-12.json; private PIP screenshots/raw phone captures remain ignored local evidence, not committed. The final app remains an experimental preview, not acceptance of all neural/biological/thermal roadmap gates.
