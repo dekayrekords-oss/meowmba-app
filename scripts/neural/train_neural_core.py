@@ -2,13 +2,14 @@
 """Small, dependency-free readout trainer for Meowmba neural traces.
 
 The Android controller owns feature extraction and recurrence. This tool fits
-only a bounded affine readout against recorded feature vectors, preserving the
+only a bounded affine readout against reconstructed recurrent states, preserving the
 checkpoint's recurrent core and its safety envelope. It intentionally uses the
 standard library so it works on a clean developer machine without silently
 installing numpy.
 """
 
 import argparse
+import copy
 import json
 import math
 from pathlib import Path
@@ -58,6 +59,10 @@ def _solve(matrix, vector):
 def affine_fit(inputs, targets, ridge=1e-3):
     if len(inputs) != len(targets) or not inputs:
         raise ValueError("inputs and targets must be non-empty and have equal length")
+    if not math.isfinite(ridge) or ridge <= 0:
+        raise ValueError("ridge must be finite and positive")
+    if any(not math.isfinite(v) for row in inputs + targets for v in row):
+        raise ValueError("regression values must be finite")
     width = len(inputs[0])
     output_width = len(targets[0])
     if any(len(row) != width for row in inputs):
@@ -85,20 +90,54 @@ def predict(row, model):
     return [sum(weight * value for weight, value in zip(channel, augmented)) for channel in model["weights"]]
 
 
-def fit_checkpoint(checkpoint, samples, ridge):
-    inputs = [sample["input"] for sample in samples]
-    targets = [sample["neuralReadout"] for sample in samples]
-    model = affine_fit(inputs, targets, ridge=ridge)
-    rate = checkpoint.get("rate")
-    if not rate:
+def replay_rate_states(checkpoint, samples):
+    """Reconstruct hidden states from reset using the Kotlin rate equations.
+
+    A trace must begin at a known reset (t=0 is allowed as an observation).
+    Double precision is used offline; Kotlin uses Float, so compare tolerances.
+    """
+    r = checkpoint.get("rate")
+    if not r or checkpoint.get("substrate") != "RATE":
         raise ValueError("trainer currently fits rate checkpoints only")
-    units = rate["units"]
-    if model["outputWidth"] != len(checkpoint["outputLayout"]):
-        raise ValueError("trace output width does not match checkpoint")
-    if model["inputWidth"] != len(checkpoint["inputLayout"]):
-        raise ValueError("trace input width does not match checkpoint")
-    rate["outputWeights"] = [value for channel in model["weights"] for value in channel[:-1]]
-    checkpoint["notes"] = checkpoint.get("notes", "") + " readout fitted by scripts/neural/train_neural_core.py"
+    n, width = r["units"], len(checkpoint["inputLayout"])
+    h, adapt, previous = [0.0] * n, [0.0] * n, 0.0
+    states = []
+    for sample in samples:
+        x, now = sample["input"], sample["tMs"]
+        if len(x) != width or not all(math.isfinite(v) for v in x):
+            raise ValueError("invalid input features")
+        if not math.isfinite(now) or now < previous or now - previous > 1000:
+            raise ValueError("trace must be ordered and start at reset, with gaps <= 1000ms")
+        dt = now - previous
+        previous = now
+        steps = max(1, math.ceil(dt / (min(r["tauMs"]) * .25)))
+        sub = dt / steps
+        for _ in range(steps):
+            drive = [r["bias"][i] - adapt[i]
+                + sum(r["inputWeights"][i * width + j] * x[j] for j in range(width))
+                + sum(r["recurrentWeights"][i * n + j] * h[j] for j in range(n)) for i in range(n)]
+            h = [max(-1., min(1., h[i] + sub / r["tauMs"][i] * (math.tanh(drive[i]) - h[i]))) for i in range(n)]
+            adapt = [adapt[i] + sub / r["adaptTauMs"][i] * (r["adaptGain"][i] * h[i] - adapt[i]) for i in range(n)]
+        states.append(h[:])
+    return states
+
+
+def fit_checkpoint(checkpoint, samples, ridge, target_field="neuralReadout"):
+    checkpoint = copy.deepcopy(checkpoint)
+    inputs = replay_rate_states(checkpoint, samples)
+    targets = [sample[target_field] for sample in samples]
+    if any(len(row) != len(checkpoint["outputLayout"]) or not all(math.isfinite(v) for v in row) for row in targets):
+        raise ValueError("invalid trace targets")
+    model = affine_fit(inputs, targets, ridge=ridge)
+    weights = [value for channel in model["weights"] for value in channel[:-1]]
+    baseline = [channel[-1] for channel in model["weights"]]
+    if any(not math.isfinite(v) or abs(v) > 32 for v in weights):
+        raise ValueError("fitted readout exceeds Kotlin output weight bound; increase ridge")
+    if any(not low <= b <= high for b, low, high in zip(baseline, checkpoint["outputMin"], checkpoint["outputMax"])):
+        raise ValueError("fitted baseline outside checkpoint bounds")
+    checkpoint["rate"]["outputWeights"] = weights
+    checkpoint["outputBaseline"] = baseline
+    checkpoint["notes"] = checkpoint.get("notes", "") + " hidden-state readout fitted offline; target=" + target_field
     return checkpoint
 
 
@@ -108,12 +147,18 @@ def main():
     parser.add_argument("--trace", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--ridge", type=float, default=1e-3)
+    parser.add_argument("--target-field", choices=["neuralReadout", "targetReadout"], default="neuralReadout")
+    parser.add_argument("--from-reset", action="store_true", help="confirm the trace starts at core reset; required")
     args = parser.parse_args()
+    if not args.from_reset:
+        parser.error("--from-reset is required; mid-session traces cannot reconstruct hidden state")
     checkpoint = load_checkpoint(args.checkpoint)
-    _, samples = load_trace(args.trace)
+    header, samples = load_trace(args.trace)
+    if header.get("inputLayout") != checkpoint["inputLayout"] or header.get("outputLayout") != checkpoint["outputLayout"]:
+        raise ValueError("trace layout names/order do not match checkpoint")
     if len(samples) < 2:
         raise ValueError("at least two trace samples are required")
-    save_checkpoint(args.output, fit_checkpoint(checkpoint, samples, args.ridge))
+    save_checkpoint(args.output, fit_checkpoint(checkpoint, samples, args.ridge, args.target_field))
 
 
 if __name__ == "__main__":

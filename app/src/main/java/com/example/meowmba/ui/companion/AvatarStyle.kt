@@ -12,6 +12,10 @@ enum class AvatarStyle(val key: String, val label: String, val description: Stri
         label = "Lumen",
         description = "One expressive companion with animal forms, playful scenes and a changing wardrobe.",
     ),
+    FULL_FLY(
+        key = "full_fly", label = "Fly companion",
+        description = "A whole animated fruit fly: explore, play, read and care for it optionally.",
+    ),
     LUMEN_CAT(
         key = "lumen_cat",
         label = "Lumen Cat",
@@ -42,7 +46,7 @@ enum class AvatarStyle(val key: String, val label: String, val description: Stri
         description = "The original look: soft glowing capsules with rounded pupils.",
     );
 
-    val isLumen: Boolean get() = this == LUMEN || this == LUMEN_CAT
+    val isLumen: Boolean get() = this == LUMEN || this == LUMEN_CAT || this == FULL_FLY
 
     companion object {
         val DEFAULT = LUMEN // first-run / picker default: catalog "Lumen" (no "Lumen 2" entry)

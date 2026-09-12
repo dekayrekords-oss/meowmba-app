@@ -6,6 +6,8 @@ from pathlib import Path
 
 from train_neural_core import (
     affine_fit,
+    fit_checkpoint,
+    replay_rate_states,
     load_checkpoint,
     load_trace,
     predict,
@@ -41,6 +43,33 @@ class TrainerTest(unittest.TestCase):
             header, samples = load_trace(path)
             self.assertEqual(header["inputLayout"], ["a"])
             self.assertEqual(len(samples), 1)
+
+    def fixture(self):
+        return {"version": 1, "substrate": "RATE", "inputLayout": ["touch"], "outputLayout": ["attention"],
+            "outputBaseline": [.2], "outputMin": [0.], "outputMax": [1.], "rate": {
+            "units": 2, "tauMs": [100., 400.], "adaptTauMs": [1000., 1000.], "adaptGain": [0., .1],
+            "bias": [0., 0.], "inputWeights": [1., .5], "recurrentWeights": [.2, -.1, .1, .3],
+            "outputWeights": [.3, .2]}}
+
+    def test_fit_uses_hidden_units_and_preserves_intercept(self):
+        checkpoint = self.fixture()
+        samples = [{"tMs": (i+1)*50, "input": [1. if (i//12)%2 else 0.]} for i in range(200)]
+        states = replay_rate_states(checkpoint, samples)
+        for sample, state in zip(samples, states):
+            sample["targetReadout"] = [.2 + .3 * state[0] + .2 * state[1]]
+        fitted = fit_checkpoint(checkpoint, samples, 1e-6, "targetReadout")
+        self.assertEqual(len(fitted["rate"]["outputWeights"]), 2)
+        self.assertAlmostEqual(fitted["outputBaseline"][0], .2, places=5)
+        self.assertAlmostEqual(fitted["rate"]["outputWeights"][0], .3, places=4)
+        self.assertEqual(checkpoint, self.fixture())
+
+    def test_replay_rejects_gaps_nonfinite_and_regression_bad_ridge(self):
+        for sample in [{"tMs": 5000, "input": [0.]}, {"tMs": 50, "input": [float("nan")]}, {"tMs": -1, "input": [0.]}]:
+            with self.assertRaises(ValueError):
+                replay_rate_states(self.fixture(), [sample])
+        for ridge in [0, -1, float("nan")]:
+            with self.assertRaises(ValueError):
+                affine_fit([[0.], [1.]], [[0.], [1.]], ridge)
 
 
 if __name__ == "__main__":

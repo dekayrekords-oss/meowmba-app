@@ -1,0 +1,271 @@
+package com.example.meowmba.ui.companion
+
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
+import com.example.meowmba.core.background.BackgroundAnimation
+import kotlin.math.PI
+import kotlin.math.floor
+import kotlin.math.sin
+
+/** Shared anchor for the interactive overlay. Scenery never paints its movable props. */
+const val PET_ENVIRONMENT_TABLE_Y = .78f
+
+/**
+ * Original vector scenery, shared by every avatar. One caller-owned SceneClock drives
+ * ambient details; this painter creates no timer, images, random state or network work.
+ * Loops have small fixed bounds. Center space and the common tabletop remain stationary,
+ * so contact physics does not need to chase a decorative animation.
+ */
+class PetEnvironmentBackgroundPainter {
+    private val path = Path()
+
+    fun draw(scope: DrawScope, animation: BackgroundAnimation, clock: Float, slow: Float) = with(scope) {
+        if (size.width <= 0 || size.height <= 0) return@with
+        val t = phase(clock)
+        val s = phase(slow)
+        val palette = when (animation) {
+            BackgroundAnimation.KITCHEN -> longArrayOf(0xFF334A48, 0xFF182B2A, 0xFFAA8663)
+            BackgroundAnimation.LIBRARY -> longArrayOf(0xFF302C3D, 0xFF191725, 0xFF76533D)
+            BackgroundAnimation.GREENHOUSE -> longArrayOf(0xFF294C45, 0xFF102F27, 0xFF64775A)
+            BackgroundAnimation.WORKSHOP -> longArrayOf(0xFF394451, 0xFF19232D, 0xFF967454)
+            BackgroundAnimation.POND -> longArrayOf(0xFF243C4A, 0xFF122B38, 0xFF566C63)
+            BackgroundAnimation.ORCHARD -> longArrayOf(0xFF4C4F38, 0xFF263929, 0xFF947052)
+            BackgroundAnimation.CAFE -> longArrayOf(0xFF45353C, 0xFF241E2C, 0xFF956650)
+            BackgroundAnimation.OBSERVATORY -> longArrayOf(0xFF182840, 0xFF0C1429, 0xFF4C5B76)
+            BackgroundAnimation.BEACH -> longArrayOf(0xFF295967, 0xFF173640, 0xFFAE8F62)
+            else -> longArrayOf(0xFF443850, 0xFF231E34, 0xFF826E76)
+        }
+        drawRect(Brush.verticalGradient(listOf(Color(palette[0]), Color(palette[1]))))
+        when (animation) {
+            BackgroundAnimation.KITCHEN -> {
+                window(.08f, .13f, .26f, .29f, Color(0xFF70958D), t)
+                repeat(5) { i -> line(.65f + i * .06f, .16f, .65f + i * .06f, .32f, 0xFF80938B, .004f) }
+                rect(.62f, .13f, .33f, .016f, 0xFFB8A288)
+                repeat(3) { i -> oval(.64f + i * .10f, .29f, .055f, .043f, 0xFF748781) }
+                plant(.13f, .66f, .20f, s)
+                // Steam belongs to a fixed kettle at the edge, separate from the water prop.
+                oval(.83f, .68f, .10f, .075f, 0xFF96ADA4)
+                line(.925f, .715f, .95f, .69f, 0xFF96ADA4, .012f)
+                steam(.875f, .665f, t)
+            }
+            BackgroundAnimation.LIBRARY -> {
+                repeat(3) { row ->
+                    val y = .16f + row * .17f
+                    repeat(7) { i -> rect(.015f + i * .025f, y, .018f, .11f - (i % 3) * .009f, if (i % 2 == 0) 0xFF706378 else 0xFF8C7661) }
+                    rect(0f, y + .12f, .20f, .018f, 0xFF49362D)
+                    repeat(5) { i -> rect(.85f + i * .03f, y, .022f, .105f, if (i % 2 == 0) 0xFF667C75 else 0xFF8F6265) }
+                    rect(.83f, y + .12f, .17f, .018f, 0xFF49362D)
+                }
+                oval(.08f, .045f, .84f, .075f, 0xFF494052)
+                candle(.87f, .70f, t)
+            }
+            BackgroundAnimation.GREENHOUSE -> {
+                repeat(5) { i -> line(i * .25f, 0f, i * .25f, .74f, 0xFF517268, .007f) }
+                line(0f, .13f, .5f, .015f, 0xFF6C8C7C, .009f)
+                line(.5f, .015f, 1f, .13f, 0xFF6C8C7C, .009f)
+                line(0f, .28f, 1f, .28f, 0xFF517268, .006f)
+                plant(.11f, .72f, .37f, s); plant(.87f, .72f, .30f, s + .2f)
+                repeat(8) { i ->
+                    val x = .02f + i * .135f
+                    oval(x, .055f + .012f * sin((t + i * .13f) * TAU), .009f, .016f, 0xFF9CBFB1)
+                }
+            }
+            BackgroundAnimation.WORKSHOP -> {
+                rect(.03f, .15f, .20f, .40f, 0xFF29313A)
+                repeat(4) { x -> repeat(6) { y -> dot(.055f + x * .047f, .18f + y * .059f, .003f, 0xFF657381) } }
+                line(.10f, .25f, .10f, .40f, 0xFFAE9474, .014f)
+                rect(.065f, .235f, .08f, .025f, 0xFF81919B)
+                gear(.87f, .23f, .085f, t, 0xFFAF9670)
+                gear(.94f, .36f, .055f, -t, 0xFF738995)
+                rect(.81f, .68f, .15f, .07f, 0xFF57697A)
+                repeat(4) { i -> dot(.835f + i * .032f, .708f, .007f, if (sin((t + i * .2f) * TAU) > 0f) 0xFFB5C89B else 0xFF5C7167) }
+            }
+            BackgroundAnimation.POND -> {
+                oval(.77f, .12f, .13f, .085f, 0xFFA8B8B3)
+                rect(0f, .60f, 1f, .18f, 0xFF244958)
+                repeat(7) { i ->
+                    val x = .07f + i * .145f
+                    line(x, .63f + i % 3 * .047f, x + .065f + .012f * sin((t + i * .14f) * TAU), .63f + i % 3 * .047f, 0xFF63828A, .002f)
+                }
+                reeds(.08f, s); reeds(.91f, s + .3f)
+                oval(.16f, .706f, .09f, .021f, 0xFF527D66)
+                petals(.205f, .697f, .016f, 0xFFC08D9C, s)
+                fireflies(t)
+            }
+            BackgroundAnimation.ORCHARD -> {
+                tree(.06f, s); tree(.92f, s + .25f)
+                oval(.37f, .09f, .15f, .052f, 0xFFAC9B73)
+                repeat(5) { i ->
+                    val x = .07f + i * .21f
+                    val y = .15f + .48f * phase(t + i * .19f)
+                    oval(x + .015f * sin((s + i) * TAU), y, .016f, .008f, 0xFFC1A073)
+                }
+                rect(.01f, .706f, .17f, .05f, 0xFF79563D)
+                repeat(4) { i -> dot(.035f + i * .035f, .70f, .015f, 0xFFBC8D64) }
+            }
+            BackgroundAnimation.CAFE -> {
+                window(.035f, .12f, .24f, .43f, Color(0xFF425A70), t)
+                repeat(11) { i ->
+                    val x = .055f + (i % 5) * .042f
+                    val y = .15f + phase(t + i * .137f) * .35f
+                    line(x, y, x - .006f, y + .027f, 0xFF8BA5B2, .002f)
+                }
+                line(.80f, 0f, .80f, .18f, 0xFFB3A087, .004f)
+                oval(.72f, .17f, .16f, .066f, 0xFFA58668)
+                rect(.79f, .34f, .17f, .21f, 0xFF302F32)
+                repeat(4) { i -> line(.81f, .38f + i * .035f, .92f - i % 2 * .025f, .38f + i * .035f, 0xFF958A80, .003f) }
+                candle(.87f, .70f, t)
+            }
+            BackgroundAnimation.OBSERVATORY -> {
+                repeat(28) { i ->
+                    val x = ((i * 37 % 97) + 1) / 100f
+                    val y = .055f + (i * 17 % 37) / 100f
+                    if (y < .26f || x < .22f || x > .78f)
+                        dot(x, y, .0015f + .001f * (1f + sin((t + i * .13f) * TAU)), 0xFFB5C4DC)
+                }
+                oval(.30f, .075f, .15f, .07f, 0xFF5B6694)
+                line(.76f, .70f, .84f, .58f, 0xFF8193AF, .008f)
+                line(.92f, .70f, .84f, .58f, 0xFF8193AF, .008f)
+                line(.78f, .60f, .92f, .49f, 0xFFB1A795, .038f)
+                line(.90f, .50f, .93f, .48f, 0xFF7385A5, .047f)
+                gear(.11f, .20f, .075f, s, 0xFF596B89)
+            }
+            BackgroundAnimation.BEACH -> {
+                oval(.75f, .13f, .13f, .075f, 0xFFE0BD83)
+                rect(0f, .47f, 1f, .31f, 0xFF2B6470)
+                repeat(6) { i ->
+                    val y = .51f + i * .04f
+                    wave(y, .005f, t + i * .13f, 0xFF6C9C9E)
+                }
+                line(.09f, .71f, .04f, .15f, 0xFF766F50, .022f)
+                repeat(5) { i -> line(.04f, .15f, -.11f + i * .065f, .20f + .065f * sin(i.toFloat()) + .008f * sin(s * TAU), 0xFF537D61, .023f) }
+                oval(.81f, .71f, .095f, .033f, 0xFFAD9C83)
+            }
+            else -> {
+                window(.70f, .13f, .23f, .28f, Color(0xFF404C76), t)
+                oval(.835f, .17f, .045f, .030f, 0xFFBEB5BD)
+                rect(.03f, .66f, .22f, .10f, 0xFF7D718A)
+                oval(.025f, .64f, .14f, .035f, 0xFFA99AAC)
+                line(.12f, .60f, .12f, .49f, 0xFFA39287, .006f)
+                oval(.06f, .45f, .12f, .064f, 0xFFC0A185)
+                repeat(9) { i ->
+                    val x = .07f + i * .108f
+                    val y = .075f + .035f * sin(i / 8f * PI.toFloat())
+                    if (i > 0) line(x - .108f, .075f + .035f * sin((i - 1) / 8f * PI.toFloat()), x, y, 0xFF6E6179, .002f)
+                    dot(x, y, .006f + .001f * sin((t + i * .12f) * TAU), 0xFFD0AE86)
+                }
+            }
+        }
+        // A quiet stage joins all ten rooms; props are drawn by the interactive overlay.
+        rect(0f, PET_ENVIRONMENT_TABLE_Y, 1f, .22f, palette[2])
+        rect(0f, PET_ENVIRONMENT_TABLE_Y + .012f, 1f, .013f, 0x55301F21)
+        repeat(5) { i -> line(0f, .84f + i * .036f, 1f, .84f + i * .036f, 0x22412B24, .0015f) }
+        line(.12f, .80f, .08f, 1f, 0x22412B24, .002f)
+        line(.88f, .80f, .92f, 1f, 0x22412B24, .002f)
+    }
+
+    private fun DrawScope.rect(x: Float, y: Float, w: Float, h: Float, color: Long) = drawRect(Color(color), p(x, y), Size(w * size.width, h * size.height))
+    private fun DrawScope.oval(x: Float, y: Float, w: Float, h: Float, color: Long) = drawOval(Color(color), p(x, y), Size(w * size.width, h * size.height))
+    private fun DrawScope.dot(x: Float, y: Float, r: Float, color: Long) = drawCircle(Color(color), r * size.minDimension, p(x, y))
+    private fun DrawScope.line(x: Float, y: Float, xx: Float, yy: Float, color: Long, width: Float) = drawLine(Color(color), p(x, y), p(xx, yy), width * size.minDimension, StrokeCap.Round)
+    private fun DrawScope.p(x: Float, y: Float) = Offset(x * size.width, y * size.height)
+
+    private fun DrawScope.window(x: Float, y: Float, w: Float, h: Float, sky: Color, t: Float) {
+        rect(x - .012f, y - .010f, w + .024f, h + .02f, 0xFF897F72)
+        drawRect(sky, p(x, y), Size(w * size.width, h * size.height))
+        oval(x + .02f + .015f * sin(t * TAU), y + .07f, w * .55f, h * .085f, 0x448DA8A8)
+        line(x + w / 2, y, x + w / 2, y + h, 0xFF897F72, .01f)
+        line(x, y + h * .52f, x + w, y + h * .52f, 0xFF897F72, .008f)
+        rect(x - .023f, y + h, w + .046f, .014f, 0xFFB4A28A)
+    }
+
+    private fun DrawScope.plant(x: Float, y: Float, h: Float, s: Float) {
+        val sway = .012f * sin(s * TAU)
+        line(x, y, x + sway, y - h, 0xFF789475, .006f)
+        repeat(5) { i ->
+            val yy = y - h * (.2f + i * .16f)
+            val side = if (i % 2 == 0) -1 else 1
+            oval(x + sway * i / 5 + if (side < 0) -.065f else 0f, yy - .035f, .065f, .034f, if (i % 2 == 0) 0xFF597E60 else 0xFF749369)
+        }
+        rect(x - .043f, y - .01f, .086f, .06f, 0xFF9A7763)
+        rect(x - .05f, y - .012f, .10f, .013f, 0xFFB39479)
+    }
+
+    private fun DrawScope.candle(x: Float, y: Float, t: Float) {
+        oval(x - .035f, y + .039f, .07f, .012f, 0xFFB39879)
+        rect(x - .016f, y - .013f, .032f, .055f, 0xFFCFB28D)
+        oval(x - .009f, y - .038f + .002f * sin(t * TAU * 3), .018f, .028f, 0xFFE4BE77)
+        steam(x, y - .05f, t)
+    }
+
+    private fun DrawScope.steam(x: Float, y: Float, t: Float) {
+        repeat(3) { i ->
+            val u = phase(t + i / 3f)
+            drawCircle(Color(0xFFCCD0BE).copy(alpha = (1 - u) * .22f), (.009f + u * .013f) * size.minDimension, p(x + sin(u * TAU) * .013f, y - u * .09f))
+        }
+    }
+
+    private fun DrawScope.gear(x: Float, y: Float, r: Float, t: Float, color: Long) {
+        drawCircle(Color(color), r * size.minDimension, p(x, y), style = Stroke(.012f * size.minDimension))
+        repeat(12) { i ->
+            val a = (t + i / 12f) * TAU
+            val xx = kotlin.math.cos(a); val yy = sin(a)
+            val c = p(x, y); val rr = r * size.minDimension
+            drawLine(Color(color), c + Offset(xx, yy) * rr * .78f, c + Offset(xx, yy) * rr * 1.15f, .013f * size.minDimension)
+        }
+        dot(x, y, .012f, color)
+    }
+
+    private fun DrawScope.reeds(x: Float, s: Float) {
+        repeat(5) { i ->
+            val xx = x + (i - 2) * .016f
+            val top = .54f + i % 3 * .032f
+            val sway = .012f * sin((s + i * .13f) * TAU)
+            line(xx, .77f, xx + sway, top, 0xFF60846D, .004f)
+            line(xx + sway, top, xx + sway, top - .035f, 0xFF9C987A, .009f)
+        }
+    }
+
+    private fun DrawScope.petals(x: Float, y: Float, r: Float, color: Long, s: Float) {
+        repeat(5) { i ->
+            val a = i / 5f * TAU
+            dot(x + kotlin.math.cos(a) * r, y + sin(a) * r * .5f + sin(s * TAU) * .002f, r * .8f, color)
+        }
+        dot(x, y, r * .45f, 0xFFD2B47A)
+    }
+
+    private fun DrawScope.tree(x: Float, s: Float) {
+        line(x, .77f, x, .18f, 0xFF786D4C, .037f)
+        repeat(4) { i ->
+            val yy = .17f + i * .09f
+            oval(x - .15f + .007f * sin((s + i * .1f) * TAU), yy, .30f, .13f, if (i % 2 == 0) 0xFF536C46 else 0xFF425F40)
+            dot(x + if (i % 2 == 0) .08f else -.035f, yy + .07f, .018f, 0xFFBE936B)
+        }
+    }
+
+    private fun DrawScope.fireflies(t: Float) {
+        repeat(8) { i ->
+            val x = if (i % 2 == 0) .1f else .88f
+            dot(x + .032f * sin((t + i * .17f) * TAU), .32f + i * .042f, .0025f + .001f * sin((t + i * .1f) * TAU), 0xFFBCCB8C)
+        }
+    }
+
+    private fun DrawScope.wave(y: Float, height: Float, t: Float, color: Long) {
+        path.reset()
+        repeat(33) { i ->
+            val x = i / 32f
+            val yy = y + sin((x * 2 + t) * TAU) * height
+            if (i == 0) path.moveTo(x * size.width, yy * size.height) else path.lineTo(x * size.width, yy * size.height)
+        }
+        drawPath(path, Color(color), style = Stroke(.002f * size.minDimension))
+    }
+
+    private fun phase(value: Float): Float = if (value.isFinite()) value - floor(value) else 0f
+    private companion object { const val TAU = (PI * 2).toFloat() }
+}

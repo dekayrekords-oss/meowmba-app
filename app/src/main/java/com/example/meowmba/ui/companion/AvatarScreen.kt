@@ -362,6 +362,7 @@ private fun AnimationRow(name: String, onClick: () -> Unit) {
 private fun EyePreview(style: AvatarStyle, modifier: Modifier = Modifier) {
     val eyeColor = Color(0xFF3FB950)
     val lumenPainter = remember { LumenPainter() }
+    val flyPainter = remember { FullFlyPainter() }
     Canvas(modifier = modifier) {
         val cx = size.width / 2f
         val cy = size.height / 2f
@@ -369,6 +370,7 @@ private fun EyePreview(style: AvatarStyle, modifier: Modifier = Modifier) {
         val eyeH = size.height * 0.62f
 
         when (style) {
+            AvatarStyle.FULL_FLY -> flyPainter.draw(this, LumenFrame(), FullFlyPose(scale = 1.6f))
             AvatarStyle.LUMEN, AvatarStyle.LUMEN_CAT -> lumenPainter.draw(this,
                 LumenFrame(cat = if (style == AvatarStyle.LUMEN_CAT) 1f else 0f), Color(0xFF4DBCB7), Color(0xFF4DBCB7),
                 catFeatures = style == AvatarStyle.LUMEN_CAT, featureColor = Color(0xFFE8D5B9))

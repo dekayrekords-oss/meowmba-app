@@ -38,6 +38,8 @@ enum class BackgroundAnimation(
     val label: String,
     /** Non-null when this is the weather scene pinned to one condition. */
     val condition: WeatherCondition? = null,
+    /** Room scenery with a shared tabletop at 78% of the scene height. */
+    val isPetEnvironment: Boolean = false,
 ) {
     AURORA("aurora", "Aurora"),
     STARFIELD("starfield", "Starfield"),
@@ -52,7 +54,17 @@ enum class BackgroundAnimation(
     SNOW("snow", "Snow", WeatherCondition.SNOW),
     FOG("fog", "Fog", WeatherCondition.FOG),
     DUST("dust", "Dust", WeatherCondition.DUST),
-    STORM("storm", "Storm", WeatherCondition.THUNDERSTORM);
+    STORM("storm", "Storm", WeatherCondition.THUNDERSTORM),
+    KITCHEN("kitchen", "Sunlit kitchen", isPetEnvironment = true),
+    LIBRARY("library", "Candlelit library", isPetEnvironment = true),
+    GREENHOUSE("greenhouse", "Glass greenhouse", isPetEnvironment = true),
+    WORKSHOP("workshop", "Clockwork workshop", isPetEnvironment = true),
+    POND("pond", "Lotus pond", isPetEnvironment = true),
+    ORCHARD("orchard", "Peach orchard", isPetEnvironment = true),
+    CAFE("cafe", "Rainy cafe", isPetEnvironment = true),
+    OBSERVATORY("observatory", "Star observatory", isPetEnvironment = true),
+    BEACH("beach", "Seaside deck", isPetEnvironment = true),
+    BEDROOM("bedroom", "Cozy bedroom", isPetEnvironment = true);
 
     companion object {
         fun byId(id: String?): BackgroundAnimation? = entries.firstOrNull { it.id == id }

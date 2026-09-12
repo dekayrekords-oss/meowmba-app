@@ -165,6 +165,16 @@ fun CompanionScreen(
             modifier = Modifier.matchParentSize(),
         )
 
+        if (!animationsPaused && (uiState.avatarStyle == AvatarStyle.FULL_FLY || uiState.background.animation?.isPetEnvironment == true)) {
+            PetCarePanel(
+                care = uiState.petCare, onCareChanged = viewModel::setPetCare,
+                onAction = viewModel::habitatAction, onFeedback = viewModel::petFeedback,
+                onLearningChanged = viewModel::setPetLearning, learningEnabled = uiState.petLearningEnabled,
+                onResetLearning = viewModel::resetPetLearning,
+                modifier = Modifier.align(Alignment.TopStart).safeDrawingPadding().padding(start = 12.dp, top = 64.dp),
+            )
+        }
+
         // 2. Controls layer — everything interactive respects the system bars
         //    (status bar, nav/gesture bar, display cutout) so it always fits.
 
@@ -839,6 +849,10 @@ fun CompanionScreen(
                 onVideoServerUrlChange = { viewModel.setVideoServerUrl(it) },
                 onBackgroundListeningChange = { viewModel.setBackgroundListeningEnabled(it) },
                 onUsbAutoBridgeChange = { viewModel.setUsbAutoBridge(it) },
+                neuralMode = uiState.neuralMode, neuralSubstrate = uiState.neuralSubstrate,
+                neuralTraceConsent = uiState.neuralTraceConsent, neuralDiagnostics = uiState.neuralDiagnostics,
+                onNeuralMode = viewModel::setNeuralMode, onNeuralSubstrate = viewModel::setNeuralSubstrate,
+                onNeuralTrace = viewModel::setNeuralTraceConsent, onNeuralReset = viewModel::resetNeuralController,
                 lumenReflexV2 = uiState.lumenReflexV2Enabled,
                 onLumenReflexV2Change = viewModel::setLumenReflexV2,
                 agenticRuntimeV1 = uiState.agenticRuntimeV1Enabled,
@@ -1300,6 +1314,7 @@ private fun AvatarMotionHost(
             motionObservedAtMs = motionSampleTime,
             nervousBias = viewModel::nervousBiasNow,
             onPet = viewModel::onAvatarPetted,
+            onHabitatAction = viewModel::habitatAction,
             motionScreenLean = motionTilt,
             displayRotation = displayRotation,
             shakeCount = shakeCount,

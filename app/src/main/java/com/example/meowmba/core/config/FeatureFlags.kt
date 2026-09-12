@@ -55,7 +55,18 @@ class FeatureFlags(private val storage: SecureStorageManager) {
         const val KEY_AVATAR_FPS_TARGET = "avatar_fps_target"
         private const val DEFAULT_OFF = false
 
-        fun from(context: Context): FeatureFlags =
-            FeatureFlags(SecureStorageManager(context.applicationContext))
+        @Volatile private var cached: Pair<Context, FeatureFlags>? = null
+
+        /** Reuse the application-owned encrypted store across recompositions.
+         * Recreating MasterKey/EncryptedSharedPreferences on every UI read caused
+         * needless keystore work. Values themselves remain live preference reads. */
+        fun from(context: Context): FeatureFlags {
+            val app = context.applicationContext ?: context
+            cached?.let { if (it.first === app) return it.second }
+            return synchronized(this) {
+                cached?.takeIf { it.first === app }?.second
+                    ?: FeatureFlags(SecureStorageManager(app)).also { cached = app to it }
+            }
+        }
     }
 }

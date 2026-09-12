@@ -122,6 +122,14 @@ fun SettingsScreen(
     onVideoServerUrlChange: (String) -> Unit = {},
     onBackgroundListeningChange: (Boolean) -> Unit = {},
     onUsbAutoBridgeChange: ((Boolean) -> Unit)? = null,
+    neuralMode: com.example.meowmba.core.neural.NeuralMode = com.example.meowmba.core.neural.NeuralMode.SHADOW,
+    neuralSubstrate: com.example.meowmba.core.neural.NeuralSubstrate = com.example.meowmba.core.neural.NeuralSubstrate.RATE,
+    neuralTraceConsent: Boolean = false,
+    neuralDiagnostics: com.example.meowmba.core.neural.NeuralDiagnostics? = null,
+    onNeuralMode: (com.example.meowmba.core.neural.NeuralMode) -> Unit = {},
+    onNeuralSubstrate: (com.example.meowmba.core.neural.NeuralSubstrate) -> Unit = {},
+    onNeuralTrace: (Boolean) -> Unit = {},
+    onNeuralReset: () -> Unit = {},
     lumenReflexV2: Boolean = false,
     onLumenReflexV2Change: (Boolean) -> Unit = {},
     agenticRuntimeV1: Boolean = false,
@@ -253,6 +261,10 @@ fun SettingsScreen(
             }
             if (page == "Neural / Lumen") {
                 NeuralSettingsSection(
+                    mode = neuralMode, substrate = neuralSubstrate, traceConsent = neuralTraceConsent,
+                    diagnostics = neuralDiagnostics, showNeuralCoreControls = true,
+                    onModeChanged = onNeuralMode, onSubstrateChanged = onNeuralSubstrate,
+                    onTraceConsentChanged = onNeuralTrace, onReset = onNeuralReset,
                     lumenReflexV2 = lumenReflexV2,
                     onLumenReflexV2Change = onLumenReflexV2Change,
                     agenticRuntimeV1 = agenticRuntimeV1,

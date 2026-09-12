@@ -377,6 +377,7 @@ class SherpaAsrEngine(
                     break
                 }
                 if (read == 0) continue
+                InputSoundLevel.publishPcm(pcm, read)
                 LoopTelemetry.hit("asr.chunk")
                 if (++thermalCheck >= THERMAL_CHECK_CHUNKS) {
                     thermalCheck = 0
@@ -480,6 +481,7 @@ class SherpaAsrEngine(
                 }
             }
         } finally {
+            InputSoundLevel.clear("sherpa_pcm")
             sessionFinalizer.close()
             if (finalizer === sessionFinalizer) finalizer = null
             runCatching { effectiveRecord.stop() }

@@ -38,6 +38,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -169,6 +170,7 @@ fun AvatarRenderer(
     onSwipeRight: () -> Unit = {},
     /** Stroking the avatar. Reported outward so the drive layer feels it too. */
     onPet: () -> Unit = {},
+    onHabitatAction: (HabitatAction) -> Unit = {},
     paused: Boolean = false,
     faceGazeX: Float? = null,
     faceGazeY: Float? = null,
@@ -262,6 +264,11 @@ fun AvatarRenderer(
     val useLumen = state.avatarStyle.isLumen || customAnim?.props?.isNotEmpty() == true
     val lumenRig = remember { LumenRig() }
     val lumenPainter = remember { LumenPainter() }
+    val fullFlyPainter = remember { FullFlyPainter() }
+    val habitatWorld = remember(state.background.value, state.avatarStyle) { PetHabitatWorld() }
+    val habitatEnabled = state.avatarStyle == AvatarStyle.FULL_FLY || state.background.animation?.isPetEnvironment == true
+    val latestHabitatAction by rememberUpdatedState(onHabitatAction)
+    val latestHabitatEnabled by rememberUpdatedState(habitatEnabled)
     val lumenContext = LocalContext.current
     val lumenReflexV2 = remember(lumenContext) { FeatureFlags.from(lumenContext).lumenReflexV2 }
     val avatarFpsTarget = FeatureFlags.from(lumenContext).avatarFpsTarget
@@ -673,6 +680,14 @@ fun AvatarRenderer(
                     .pointerInput(state.avatarStyle) {
                 detectTapGestures(
                     onTap = { offset ->
+                        if (latestHabitatEnabled) {
+                            val action = habitatWorld.actionAt(offset.x, offset.y, size.width.toFloat(), size.height.toFloat())
+                            if (action != null) { latestHabitatAction(action); return@detectTapGestures }
+                            if (state.avatarStyle.isLumen) {
+                                latestHabitatAction(HabitatAction.PLAY)
+                                return@detectTapGestures
+                            }
+                        }
                         touchGaze = normalizeGaze(offset, size.width, size.height)
                         // Aura Home has no ears/eyes: cat-face zones would map
                         // taps to invisible features. Its own zones keep every
@@ -873,6 +888,18 @@ fun AvatarRenderer(
         // pose/clock inputs as every other style — so switching faces
         // mid-animation stays seamless. (The Aura Home card in
         // AuraHomeAvatar.kt is parked — the face runs full-screen.)
+        val flyPose = if (habitatEnabled) {
+            val bias = nervousBias()
+            val care = state.petCare
+            val caredBias = if (care.careEnabled) bias.copy(
+                arousal = (bias.arousal * (.5f + .5f * care.energy)).coerceIn(0f, 1f),
+                restWeight = bias.restWeight + (1f - care.energy) * .5f,
+                valence = (bias.valence * .6f + (care.happiness - .5f) * .6f).coerceIn(-1f, 1f),
+            ) else bias
+            habitatWorld.step(tSec, state.habitatCommand, caredBias, w, h, state.petPlayPreference).also {
+                habitatWorld.drawProps(this, state.avatarStyle == AvatarStyle.FULL_FLY)
+            }
+        } else null
         if (useLumen) {
             val progress = if (customAnim != null) animTHolder[0].toFloat() / customAnim.durationMs.coerceAtLeast(1) else 0f
             val isCat = state.avatarStyle == AvatarStyle.LUMEN_CAT
@@ -918,11 +945,34 @@ fun AvatarRenderer(
             } else composedLumenInput
             val frame = lumenRig.step(tSec, gatedLumenInput)
             lumenLastFrame[0] = frame
+            if (state.avatarStyle == AvatarStyle.FULL_FLY && flyPose != null) {
+                fullFlyPainter.draw(this, frame, flyPose)
+                // Shared renderer keeps privacy marks fixed; hide only its face.
+                lumenPainter.draw(this, frame.copy(presence = 0f), Color(state.avatarEyeColor), Color(state.avatarGlowColor),
+                    cameraOff = !state.isCameraEnabled, micOff = !state.isMicEnabled,
+                    speakerOff = state.isMuted, statusColor = privacyColor)
+                return@Canvas
+            }
+            if (flyPose != null) {
+                val original = lumenCenter(w, h, frame)
+                val destination = Offset(flyPose.x * w, flyPose.y * h)
+                translate(destination.x - original.x, destination.y - original.y) {
+                    scale(.40f, .40f, original) {
+                        lumenPainter.draw(this, frame, Color(state.avatarEyeColor), Color(state.avatarGlowColor),
+                            featureColor = Color(state.avatarFeatureColor), performance = lumenPerformance,
+                            progress = progress, inventedScene = customAnim, inventedTimeMs = animTHolder[0].toFloat())
+                    }
+                }
+                lumenPainter.draw(this, frame.copy(presence = 0f), Color(state.avatarEyeColor), Color(state.avatarGlowColor),
+                    cameraOff = !state.isCameraEnabled, micOff = !state.isMicEnabled,
+                    speakerOff = state.isMuted, statusColor = privacyColor)
+            } else {
             lumenPainter.draw(this, frame, Color(state.avatarEyeColor), Color(state.avatarGlowColor),
                 cameraOff = !state.isCameraEnabled, micOff = !state.isMicEnabled,
                 speakerOff = state.isMuted, statusColor = privacyColor,
                 featureColor = Color(state.avatarFeatureColor),
                 performance = lumenPerformance, progress = progress, inventedScene = customAnim, inventedTimeMs = animTHolder[0].toFloat())
+            }
             return@Canvas
         } else if (useSignalOrb) {
             val R = ambR

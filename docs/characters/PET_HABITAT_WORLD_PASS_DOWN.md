@@ -1,0 +1,15 @@
+# Pet habitat world handoff to Meow
+
+`PetHabitatWorld` is a deterministic imperative simulation driven only by the active renderer timestamp. It uses capped 50 ms integration steps, freezes on equal/backward timestamps, ignores non-finite clock/viewport values, and consumes a command ID once. UI must increment command IDs for new actions. It reuses `BehaviorBias.arousal` as a bounded locomotion speed/exploration modifier and accepts bounded play preference. This is authored cartoon motion, not reconstructed fly motor circuitry.
+
+The fly explores bounded screen fractions, smoothly transitions flying/perching, approaches book/glass/ball before interacting, picks up and exclusively owns book/glass, and releases held items on a new activity. FEED places a temporary fruit cue. PLAY kicks the ball. NUDGE approaches then knocks the glass hard enough to leave the table. Released/knocked props integrate gravity, edge collision, bounce (ball), friction and settling. Fallen props remain fallen. Reading/drinking a fallen prop is supported through the same approach; it is a game abstraction rather than physical inverse kinematics. Objects are never implicitly reset.
+
+`drawProps(scope,fullFly)` paints a table and simple object affordances. Full fly held props are omitted because FullFlyPainter owns the hand-aligned object; other avatars get a held prop near screen center. `actionAt` returns an action for a finger-sized prop hit region. UI commands and persistent pet needs remain parent-owned.
+
+Five pure tests cover command deduplication/pause, time jumps, exclusive ownership/release settling, knock-off/no-respawn, bounded exploration and prop hit selection. Snapshot exposes immutable test diagnostics, not mutation. Tests authored, not run by worker: parent remains sole build owner. No installs, device operations, external models, or biological data were used.
+
+Future debugging: first check monotonically increasing active time and unique command IDs if the character appears stuck. Check object `held` and `onTable` ownership when drops fail. Keep original object positions after collision rather than recreating props during each Compose recomposition. Remember one PetHabitatWorld for the renderer lifetime.
+
+## Physical anchor correction
+
+Table/floor perching now derives the root center from the painter's foot bottom (.689 local units) and `.32*minDimension/height`, so the same rig meets the table in portrait and landscape. X clamp matches the painter; Y uses its asymmetric .88 top/.73 bottom extents. The right hand smoothly reaches down .529 units and extends horizontally up to .85 units for edge pickups before raising a held prop to the chest. Physics follows that actual hand plus .085 units to the held prop's bottom. This prevents grabbing a floor prop directly into a hovering hand. Shared non-fly props use the world object's true coordinates: parent must translate the legacy Lumen character to the world's center for coherent interaction. Six tests now include exact aspect-dependent perch and held-anchor checks.

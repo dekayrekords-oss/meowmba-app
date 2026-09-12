@@ -22,6 +22,28 @@ class DebugConfigReceiver : BroadcastReceiver() {
         if (!BuildConfig.DEBUG) return
 
         val storage = SecureStorageManager(context)
+        // Allowlisted visual/neural preview setup. No free-form preference writes.
+        intent.getStringExtra("avatar_style")?.let { value ->
+            com.example.meowmba.ui.companion.AvatarStyle.entries.firstOrNull { it.key == value }?.let {
+                storage.savePreference("avatar_style", it.key)
+            }
+        }
+        intent.getStringExtra("background_animation")?.let { value ->
+            com.example.meowmba.core.background.BackgroundAnimation.byId(value)?.let {
+                storage.savePreference("background_kind", "ANIMATION")
+                storage.savePreference("background_value", it.id)
+            }
+        }
+        intent.getStringExtra("neural_mode")?.let { value ->
+            com.example.meowmba.core.neural.NeuralMode.entries.firstOrNull { it.name == value }?.let {
+                storage.savePreference(com.example.meowmba.core.neural.NeuralModeStore.KEY_MODE, it.name)
+            }
+        }
+        intent.getStringExtra("neural_substrate")?.let { value ->
+            com.example.meowmba.core.neural.NeuralSubstrate.entries.firstOrNull { it.name == value }?.let {
+                storage.savePreference(com.example.meowmba.core.neural.NeuralModeStore.KEY_SUBSTRATE, it.name)
+            }
+        }
         if (intent.getBooleanExtra("wake_word", false)) {
             // Same key as CompanionViewModel.KEY_WAKE_WORD; the ViewModel reads
             // it at construction and arms the wake phrase on first resume.

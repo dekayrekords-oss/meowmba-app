@@ -1,5 +1,8 @@
 package com.example.meowmba.ui.companion
 
+import kotlinx.coroutines.flow.update
+import com.example.meowmba.core.neural.*
+import com.example.meowmba.core.behavior.PetCareState
 import androidx.compose.ui.geometry.Offset
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -821,7 +824,88 @@ class CompanionViewModel(
      * can be blended, which is what lets the reasoning layer influence behaviour
      * without ever animating anything.
      */
-    private val nervousSystem = com.example.meowmba.core.behavior.NervousSystem()
+    @Volatile private var neuralTraceRecorder: FeatureTraceRecorder? = null
+    private val nervousSystem = NeuralBehaviorController(
+        initialMode = secureStorage?.getPreference(NeuralModeStore.KEY_MODE)?.let {
+            runCatching { NeuralMode.valueOf(it) }.getOrNull()
+        } ?: NeuralMode.SHADOW,
+        initialSubstrate = secureStorage?.getPreference(NeuralModeStore.KEY_SUBSTRATE)?.let {
+            runCatching { NeuralSubstrate.valueOf(it) }.getOrNull()
+        } ?: NeuralSubstrate.RATE,
+        thermalTier = { com.example.meowmba.core.thermal.ThermalGovernor.currentTier().ordinal },
+        traceSink = { neuralTraceRecorder?.record(it) },
+    )
+    private val neuralFaceSense = com.example.meowmba.core.neural.senses.FaceSense()
+    private var lastNeuralSenseMs = 0L
+    private val petPreferences = AdaptivePreferenceModel.decode(secureStorage?.getPreference("pet_preferences_v1").orEmpty())
+    private var lastPetActivity = "explore"
+    private var lastPetCareSaveMs = 0L
+    private var lastNeuralDiagnosticsMs = 0L
+
+    fun setNeuralMode(mode: NeuralMode) {
+        nervousSystem.setMode(mode)
+        secureStorage?.savePreference(NeuralModeStore.KEY_MODE, mode.name)
+        _uiState.update { it.copy(neuralMode = mode, neuralDiagnostics = nervousSystem.diagnostics()) }
+    }
+    fun setNeuralSubstrate(substrate: NeuralSubstrate) {
+        setNeuralTraceConsent(false)
+        nervousSystem.setSubstrate(substrate)
+        secureStorage?.savePreference(NeuralModeStore.KEY_SUBSTRATE, substrate.name)
+        _uiState.update { it.copy(neuralSubstrate = substrate, neuralDiagnostics = nervousSystem.diagnostics()) }
+    }
+    fun resetNeuralController() {
+        nervousSystem.resetNeuralState()
+        _uiState.update { it.copy(neuralDiagnostics = nervousSystem.diagnostics()) }
+    }
+    fun setNeuralTraceConsent(enabled: Boolean) {
+        neuralTraceRecorder?.close(); neuralTraceRecorder = null
+        if (enabled) {
+            val dir = secureStorage?.context?.filesDir ?: return
+            // Start at reset so deterministic replay can reconstruct hidden state.
+            nervousSystem.resetNeuralState()
+            val checkpoint = if (nervousSystem.substrate == NeuralSubstrate.RATE) NeuralCheckpoint.default() else NeuralCheckpoint.defaultSpiking()
+            neuralTraceRecorder = FeatureTraceRecorder(java.io.File(dir, "neural/traces"),
+                FeatureTraceHeader(inputLayout = checkpoint.inputLayout, outputLayout = checkpoint.outputLayout,
+                    biasFields = DriveBias.FIELD_NAMES, checkpoint = checkpoint.name, startedAtEpochMs = System.currentTimeMillis()))
+        }
+        secureStorage?.saveBooleanPreference(NeuralModeStore.KEY_TRACE_CONSENT, enabled)
+        _uiState.update { it.copy(neuralTraceConsent = enabled) }
+    }
+    fun setPetCare(enabled: Boolean) {
+        val care = _uiState.value.petCare.withCare(enabled, System.currentTimeMillis())
+        secureStorage?.savePreference("pet_care_v1", care.encode())
+        _uiState.update { it.copy(petCare = care) }
+    }
+    fun habitatAction(action: HabitatAction) {
+        val now = System.currentTimeMillis()
+        val current = _uiState.value.petCare
+        val care = when (action) {
+            HabitatAction.FEED, HabitatAction.DRINK -> current.feed(now)
+            HabitatAction.PLAY, HabitatAction.READ -> current.play(now)
+            HabitatAction.REST -> current.rest(now)
+            else -> current.advance(now)
+        }
+        lastPetActivity = when (action) {
+            HabitatAction.FEED, HabitatAction.DRINK -> "feed"
+            HabitatAction.PLAY, HabitatAction.READ -> "play"
+            HabitatAction.REST -> "rest"
+            else -> "explore"
+        }
+        nervousSystem.onStimulus(com.example.meowmba.core.behavior.Stimulus.TOUCH, .3f)
+        if (action == HabitatAction.PLAY || action == HabitatAction.FEED) nervousSystem.noteAffect(.5f)
+        secureStorage?.savePreference("pet_care_v1", care.encode())
+        _uiState.update { it.copy(petCare = care, habitatCommand = HabitatCommand(it.habitatCommand.id + 1L, action)) }
+    }
+    fun petFeedback(positive: Boolean) {
+        petPreferences.reward(lastPetActivity, positive, System.currentTimeMillis())
+        persistPetPreferences()
+    }
+    fun setPetLearning(enabled: Boolean) { petPreferences.enabled = enabled; persistPetPreferences() }
+    fun resetPetLearning() { petPreferences.reset(); persistPetPreferences() }
+    private fun persistPetPreferences() {
+        secureStorage?.savePreference("pet_preferences_v1", petPreferences.encode())
+        _uiState.update { it.copy(petLearningEnabled = petPreferences.enabled, petPlayPreference = petPreferences.preference("play")) }
+    }
 
     /**
      * Read by the avatar's draw loop. Deliberately NOT a StateFlow: the drives
@@ -1155,6 +1239,11 @@ class CompanionViewModel(
                 backgroundListeningEnabled = storage.getBooleanPreference(KEY_BACKGROUND_LISTENING, false),
                 carModeEnabled = storage.getBooleanPreference(KEY_CAR_MODE, false),
                 avatarStyle = AvatarStyle.fromKey(storage.getPreference(KEY_AVATAR_STYLE)),
+                petCare = PetCareState.decode(storage.getPreference("pet_care_v1").orEmpty()).advance(System.currentTimeMillis()),
+                petLearningEnabled = petPreferences.enabled,
+                petPlayPreference = petPreferences.preference("play"),
+                neuralMode = nervousSystem.mode,
+                neuralSubstrate = nervousSystem.substrate,
                 avatarAnimal = AvatarAnimal.fromKey(storage.getPreference("avatar_animal")),
                 appTheme = AppTheme.fromKey(storage.getPreference("app_theme")),
                 appearanceMode = AppearanceMode.fromKey(storage.getPreference("appearance_mode")),
@@ -1560,10 +1649,10 @@ class CompanionViewModel(
         // it off the avatar's cadence and out of its thermal budget. 5 Hz is ample
         // against time constants of 2.5-6s.
         viewModelScope.launch(Dispatchers.Default) {
-            var last = System.currentTimeMillis()
+            var last = System.nanoTime() / 1_000_000L
             while (true) {
-                delay(200)
-                val now = System.currentTimeMillis()
+                delay(if (appInBackground) 1000 else 200)
+                val now = System.nanoTime() / 1_000_000L
                 // Backgrounded: nothing is on screen to animate and nothing can
                 // observe the drives, so do not spend a scheduler thread on it.
                 // (Advance [last] first — on resume the drives must ease from
@@ -1588,7 +1677,18 @@ class CompanionViewModel(
                     else -> nervousSystem.clearIntent()
                 }
                 com.example.meowmba.core.diagnostics.LoopTelemetry.measure("drives.tick") {
-                    nervousSystem.tick(now - last)
+                    nervousSystem.tick((now - last).coerceIn(0L, 250L))
+                    if (now - lastNeuralDiagnosticsMs >= 1000L) {
+                        lastNeuralDiagnosticsMs = now
+                        _uiState.update { it.copy(neuralDiagnostics = nervousSystem.diagnostics()) }
+                    }
+                    val wall = System.currentTimeMillis()
+                    if (wall - lastPetCareSaveMs >= 60_000L && _uiState.value.petCare.careEnabled) {
+                        lastPetCareSaveMs = wall
+                        val care = _uiState.value.petCare.advance(wall)
+                        secureStorage?.savePreference("pet_care_v1", care.encode())
+                        _uiState.update { it.copy(petCare = care) }
+                    }
                 }
                 last = now
             }
@@ -2259,7 +2359,7 @@ class CompanionViewModel(
 
     private fun refreshLumenFlagMirrors() {
         val storage = secureStorage ?: return
-        val flags = FeatureFlags.from(storage.context)
+        val flags = FeatureFlags(storage)
         val s = _uiState.value
         if (s.lumenReflexV2Enabled != flags.lumenReflexV2 ||
             s.agenticRuntimeV1Enabled != flags.agenticRuntimeV1 ||
@@ -2454,12 +2554,29 @@ class CompanionViewModel(
             com.example.meowmba.core.vision.AttentionFreshness.isFresh(
                 track.observedAtElapsedMs, nowElapsedMs,
             )
+        if (nowElapsedMs - lastNeuralSenseMs >= 100L && nervousSystem.mode != NeuralMode.LEGACY) {
+            lastNeuralSenseMs = nowElapsedMs
+            if (track != null && fresh && state.isCameraEnabled) {
+                neuralFaceSense.map(track, nowElapsedMs).forEach { e ->
+                    nervousSystem.onEvent(SensoryEvent(e.kind, e.source, e.values, e.confidence))
+                }
+            }
+            // Own TTS is never evidence that the user is speaking or praising us.
+            val inputSound = com.example.meowmba.core.audio.InputSoundLevel.snapshot(
+                com.example.meowmba.core.audio.InputSoundLevel.monotonicNowMs(),
+                suppressOwnSpeech = state.interactionState == InteractionState.SPEAKING || !state.isMicEnabled)
+            if (inputSound.fresh) nervousSystem.onEvent(SensoryEvent(SensoryKind.VOICE_ACTIVITY, SensorySource.VOICE,
+                floatArrayOf(inputSound.activity, inputSound.loudness)))
+        }
         val hasFace = fresh && track?.hasFace == true
         val stale = track != null && !fresh && state.isCameraEnabled
         val cueActive = hasFace && track!!.cue != com.example.meowmba.core.vision.SocialCue.NONE &&
             track.cue != com.example.meowmba.core.vision.SocialCue.BLINK
         val speechEnergy = maxOf(_mouthEnergy.value, track?.mouthOpen ?: 0f)
-        val loud = speechEnergy >= 0.78f && (speechLikelyLocal || state.interactionState == InteractionState.LISTENING)
+        val inputSound = com.example.meowmba.core.audio.InputSoundLevel.snapshot(
+            com.example.meowmba.core.audio.InputSoundLevel.monotonicNowMs(),
+            suppressOwnSpeech = state.interactionState == InteractionState.SPEAKING || !state.isMicEnabled)
+        val loud = inputSound.fresh && inputSound.loudness >= .78f
         val affection = nowElapsedMs < affectionUntilElapsedMs
         val emotionChanged = nowElapsedMs < emotionPulseUntilElapsedMs
         val motionMag = maxOf(
@@ -2467,6 +2584,10 @@ class CompanionViewModel(
             kotlin.math.abs(_motionLean.value) + kotlin.math.abs(_motionLurch.value),
             kotlin.math.abs(state.driveLateralG) + kotlin.math.abs(state.driveLongitudinalG),
         )
+        if (motionMag.isFinite() && nervousSystem.mode != NeuralMode.LEGACY) {
+            nervousSystem.onEvent(SensoryEvent(SensoryKind.DEVICE_MOTION, SensorySource.DEVICE_MOTION,
+                floatArrayOf(motionMag.coerceIn(0f, 1f))))
+        }
         // Behavioral caution still tracks MODERATE+; the on-screen reflex chip
         // only mentions heat at SEVERE+ so LIGHT/MODERATE flicker never looks like overheating.
         val thermalStatus = try {
@@ -2529,7 +2650,7 @@ class CompanionViewModel(
      */
     fun refreshAgenticPresenceHint() {
         val storage = secureStorage ?: return
-        val flags = FeatureFlags.from(storage.context)
+        val flags = FeatureFlags(storage)
         if (!flags.agenticRuntimeV1) {
             if (_uiState.value.agenticPresenceHint != null ||
                 _uiState.value.agenticPendingApprovalGoalId != null
@@ -2832,7 +2953,7 @@ class CompanionViewModel(
      */
     private fun maybeHandleAgenticComputerChat(text: String): Boolean {
         val storage = secureStorage ?: return false
-        val flags = FeatureFlags.from(storage.context)
+        val flags = FeatureFlags(storage)
         if (!flags.agenticRuntimeV1) return false
         bindAgenticComputerHost()
         val trimmed = text.trim()
@@ -3087,6 +3208,7 @@ class CompanionViewModel(
     }
 
     override fun onCleared() {
+        neuralTraceRecorder?.close(); neuralTraceRecorder = null
         runCatching { secureStorage?.let { AgenticRuntime.from(it.context).computerHost = null } }
         computerIdleWatchJob?.cancel()
         computerIdleWatchJob = null
@@ -9836,6 +9958,10 @@ class CompanionViewModel(
 
     /** Which face to draw. Persisted, so it survives a restart. */
     fun setAvatarStyle(style: AvatarStyle) {
+        if (style == AvatarStyle.FULL_FLY && _uiState.value.background.kind == com.example.meowmba.core.background.BackgroundKind.NONE) {
+            setBackground(com.example.meowmba.core.background.BackgroundSelection(
+                com.example.meowmba.core.background.BackgroundKind.ANIMATION, "kitchen", 15))
+        }
         _uiState.value = _uiState.value.copy(avatarStyle = style)
         secureStorage?.savePreference(KEY_AVATAR_STYLE, style.key)
     }
