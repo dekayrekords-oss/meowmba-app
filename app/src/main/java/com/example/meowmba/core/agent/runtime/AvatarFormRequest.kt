@@ -20,7 +20,7 @@ object AvatarFormRequest {
             "stop (?:being|acting like) (?:an animal|a cat|a dog|a squirrel|a raccoon|a racoon|" +
             "an owl|a duck|an australian shepherd(?: dog)?|an aussie|a shepherd|" +
             "a rabbit|a bunny(?: rabbit)?|a pig|a piglet|a piggy|an alien|an extraterrestrial|" +
-            "a robot|an android|a panda(?: bear)?|a giant panda)|" +
+            "a fruit fly|a fruit-fly|a fruitfly|a drosophila|a robot|an android|a panda(?: bear)?|a giant panda)|" +
             "(?:just |be )?eyes only)$",
     )
     private val command = Regex(

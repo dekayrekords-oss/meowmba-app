@@ -34,7 +34,7 @@ enum class AvatarAnimal(val key: String, val label: String) {
     AUSTRALIAN_SHEPHERD("australian_shepherd", "Australian shepherd"),
     OWL("owl", "Owl"), DUCK("duck", "Duck"),
     RABBIT("rabbit", "Rabbit"), PIG("pig", "Pig"), ALIEN("alien", "Alien"),
-    ROBOT("robot", "Robot"), PANDA("panda", "Panda");
+    ROBOT("robot", "Robot"), PANDA("panda", "Panda"), FRUIT_FLY("fruit_fly", "Fruit fly");
     companion object {
         fun fromKey(key: String?) = entries.firstOrNull { it.key == key } ?: NONE
         fun resolve(name: String): AvatarAnimal? = when (name.trim().lowercase(java.util.Locale.ROOT)) {
@@ -52,6 +52,7 @@ enum class AvatarAnimal(val key: String, val label: String) {
             "alien", "extraterrestrial" -> ALIEN
             "robot", "android", "robot face" -> ROBOT
             "panda", "panda bear", "giant panda" -> PANDA
+            "fruit_fly", "fruit fly", "fruit-fly", "fruitfly", "drosophila" -> FRUIT_FLY
             else -> null
         }
         fun performanceFor(name: String): AvatarAnimal? {
@@ -367,13 +368,13 @@ private data class LumenEnvelope(val x: Float, val top: Float, val bottom: Float
 private fun lumenEnvelope(frame: LumenFrame): LumenEnvelope {
     val costume = maxOf(frame.cat, frame.dog, frame.form.costume).coerceIn(0f, 1f)
     val halfWidth = (.41f + frame.dog * .12f + frame.form.eyeMask * .045f +
-        frame.form.pigSkin * .06f + frame.form.robotShell * .05f +
+        frame.form.pigSkin * .06f + frame.form.robotShell * .05f + frame.form.fruitFly * .20f +
         maxOf(frame.form.pandaFur, frame.form.rabbitFur) * .025f) * (1f + abs(frame.headX) * .10f)
     val top = maxOf(.27f + costume * .15f + frame.form.rabbitFur * .25f + frame.form.robotShell * .05f,
         .45f * frame.headwearWeight.coerceIn(0f, 1f))
     val bottom = .28f + maxOf(frame.form.bushyTail, frame.form.ringTail) * .10f +
         maxOf(frame.form.rabbitFur, frame.form.pigSkin, frame.form.alienSkin, frame.form.pandaFur) * .06f +
-        frame.form.robotShell * .025f
+        frame.form.robotShell * .025f + frame.form.fruitFly * .07f
     val angle = lumenRoll(frame) * Math.PI.toFloat() / 180f
     val c = abs(cos(angle)); val s = abs(sin(angle)); val stretch = lumenStretch(frame)
     return LumenEnvelope((halfWidth * c + maxOf(top, bottom) * s) / stretch,

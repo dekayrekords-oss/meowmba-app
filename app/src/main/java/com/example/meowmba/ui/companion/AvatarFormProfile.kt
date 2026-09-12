@@ -14,10 +14,11 @@ data class AvatarFormTraits(
     val shepherdCoat: Float = 0f, val owlFeathers: Float = 0f, val duckFeathers: Float = 0f,
     val rabbitFur: Float = 0f, val pigSkin: Float = 0f, val alienSkin: Float = 0f,
     val robotShell: Float = 0f, val pandaFur: Float = 0f,
+    val fruitFly: Float = 0f,
 ) {
     val costume: Float get() = (pointedEars + floppyEars + roundEars +
         shepherdCoat + owlFeathers + duckFeathers + rabbitFur + pigSkin +
-        alienSkin + robotShell + pandaFur).coerceIn(0f, 1f)
+        alienSkin + robotShell + pandaFur + fruitFly).coerceIn(0f, 1f)
 }
 
 object AvatarFormProfiles {
@@ -37,13 +38,14 @@ object AvatarFormProfiles {
         AvatarAnimal.ALIEN to AvatarFormTraits(alienSkin = 1f),
         AvatarAnimal.ROBOT to AvatarFormTraits(robotShell = 1f),
         AvatarAnimal.PANDA to AvatarFormTraits(pandaFur = 1f),
+        AvatarAnimal.FRUIT_FLY to AvatarFormTraits(fruitFly = 1f),
     )
     fun traits(animal: AvatarAnimal): AvatarFormTraits = profiles.getValue(animal)
 }
 
 /** Morphs anatomy with the same active clock as the eyes, preserving velocity. */
 internal class AvatarFormRig {
-    private val channels = Array(19) { LumenSpring() }
+    private val channels = Array(20) { LumenSpring() }
     fun step(target: AvatarFormTraits, dt: Float): AvatarFormTraits {
         fun channel(index: Int, v: Float) = channels[index].step(v.coerceIn(0f, 1f), dt, 7f).coerceIn(0f, 1f)
         return AvatarFormTraits(
@@ -55,6 +57,7 @@ internal class AvatarFormRig {
             channel(11, target.shepherdCoat), channel(12, target.owlFeathers), channel(13, target.duckFeathers),
             channel(14, target.rabbitFur), channel(15, target.pigSkin), channel(16, target.alienSkin),
             channel(17, target.robotShell), channel(18, target.pandaFur),
+            channel(19, target.fruitFly),
         )
     }
 }

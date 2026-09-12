@@ -88,7 +88,7 @@ class AvatarSpeciesRenderTest {
     }
 
     @Test fun nativeSpeciesContactSheetForVisualReview() {
-        val sheet = Bitmap.createBitmap(1920, 2100, Bitmap.Config.ARGB_8888)
+        val sheet = Bitmap.createBitmap(1920, ((species.size + 3) / 4) * 690 + 60, Bitmap.Config.ARGB_8888)
         val canvas = android.graphics.Canvas(sheet)
         canvas.drawColor(0xFF0B131B.toInt())
         val text = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFDBCDB6.toInt(); textSize = 25f }
@@ -101,13 +101,13 @@ class AvatarSpeciesRenderTest {
             output.outputStream().use { b.compress(Bitmap.CompressFormat.PNG, 100, it) }
             b.recycle()
         }
-        canvas.drawText("Native character designs / species eyes / scripted renderer preview", 24f, 2080f, text)
+        canvas.drawText("Native character designs / species eyes / scripted renderer preview", 24f, sheet.height - 20f, text)
         File("build/reports/avatar-species/contact.png").outputStream().use { sheet.compress(Bitmap.CompressFormat.PNG, 100, it) }
         sheet.recycle()
     }
 
     @Test fun newFormsRemainFloatingFeaturesWithoutOpaqueHeads() {
-        for (animal in listOf(AvatarAnimal.RABBIT, AvatarAnimal.PIG, AvatarAnimal.ALIEN, AvatarAnimal.ROBOT, AvatarAnimal.PANDA)) {
+        for (animal in listOf(AvatarAnimal.RABBIT, AvatarAnimal.PIG, AvatarAnimal.ALIEN, AvatarAnimal.ROBOT, AvatarAnimal.PANDA, AvatarAnimal.FRUIT_FLY)) {
             val f = settled(LumenInput(0f, 0f, true, animal = animal))
             val b = render(f, 480, 760)
             val center = lumenCenter(480f, 760f, f); val unit = lumenUnit(480f, 760f, f)
@@ -143,7 +143,7 @@ class AvatarSpeciesRenderTest {
 
     @Test fun newFloatingEyesStillBlinkAndExpressConcernAndJoy() {
         val expressions = listOf("Attentive", "Joy", "Concern", "Blink", "Curious")
-        val sheet = Bitmap.createBitmap(1600, 12 * 260, Bitmap.Config.ARGB_8888)
+        val sheet = Bitmap.createBitmap(1600, species.size * 260, Bitmap.Config.ARGB_8888)
         val c = android.graphics.Canvas(sheet).apply { drawColor(0xFF0B131B.toInt()) }
         val text = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFD2CEBFL.toInt(); textSize = 14f }
         for ((row, animal) in species.withIndex()) {

@@ -21,11 +21,11 @@ internal fun lumenEyeShape(f: AvatarFormTraits): LumenEyeShape = LumenEyeShape(
     width = 1f + f.pointedEars * .08f - f.floppyEars * .06f - f.bushyTail * .05f +
         f.eyeMask * .02f - f.shepherdCoat * .03f + f.owlFeathers * .09f -
         f.duckFeathers * .12f - f.rabbitFur * .12f - f.pigSkin * .15f +
-        f.alienSkin * .12f - f.robotShell * .03f - f.pandaFur * .08f,
+        f.alienSkin * .12f - f.robotShell * .03f - f.pandaFur * .08f + f.fruitFly * .10f,
     height = 1f - f.pointedEars * .27f - f.floppyEars * .04f + f.bushyTail * .10f -
         f.eyeMask * .20f - f.shepherdCoat * .08f - f.owlFeathers * .09f +
         f.duckFeathers * .04f + f.rabbitFur * .08f - f.pigSkin * .10f -
-        f.alienSkin * .13f - f.robotShell * .18f - f.pandaFur * .08f,
+        f.alienSkin * .13f - f.robotShell * .18f - f.pandaFur * .08f + f.fruitFly * .06f,
     almond = f.pointedEars * .83f + f.eyeMask * .36f + f.shepherdCoat * .17f + f.alienSkin * .85f,
     outerLift = f.pointedEars * 10f + f.eyeMask * 4f + f.shepherdCoat * 3f +
         f.duckFeathers * 3f + f.alienSkin * 23f - f.rabbitFur * 4f - f.pandaFur * 5f,
@@ -57,5 +57,6 @@ internal fun lumenIrisColor(f: AvatarFormTraits, selected: Color): Color {
     tint(0xFF73BADD, f.pigSkin)
     tint(0xFF66C4D4, f.robotShell)
     tint(0xFFA98D68, f.pandaFur)
+    tint(0xFFC72F46, f.fruitFly)
     return color
 }

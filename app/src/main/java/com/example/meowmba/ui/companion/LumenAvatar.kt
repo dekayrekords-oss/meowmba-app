@@ -30,6 +30,7 @@ class LumenPainter {
     private val animalParts = LumenAnimalParts()
     private val speciesParts = LumenSpeciesParts()
     private val characterParts = LumenCharacterParts()
+    private val flyParts = LumenFruitFlyParts()
     private val morphPaint = Paint()
     private var eyeMaterials: LumenEyeMaterials? = null
     private val irisDirections = Array(48) { i ->
@@ -65,6 +66,7 @@ class LumenPainter {
         rotate(lumenRoll(frame), center) {
             animalParts.tail(this, center, unit, frame, featureColor, glowColor)
             characterParts.backdrop(this, center, unit, frame, featureColor)
+            flyParts.backdrop(this, center, unit, frame)
             speciesParts.backdrop(this, center, unit, frame, featureColor, glowColor)
             for (side in intArrayOf(-1, 1)) {
                 val c = center + Offset(side * spread, abs(frame.headX) * side * unit * 0.009f)
@@ -83,6 +85,7 @@ class LumenPainter {
             animalParts.muzzle(this, center, unit, frame, featureColor, glowColor)
             speciesParts.beak(this, center, unit, frame, featureColor)
             characterParts.muzzle(this, center, unit, frame, featureColor)
+            flyParts.mouth(this, center, unit, frame)
             val muzzleAlpha = if (catFeatures) 1f else frame.form.shortMuzzle
             if (muzzleAlpha > 0.005f) {
                 // Only the brief morph needs a small offscreen layer. Stable
@@ -233,11 +236,12 @@ class LumenPainter {
                 drawRect(m.sclera, Offset(-rx, -ry * 1.5f), Size(rx * 2f, ry * 3f))
                 if (shape.dark > .005f) drawRect(Color(0xFF07161D).copy(alpha = shape.dark),
                     Offset(-rx, -ry * 1.5f), Size(rx * 2f, ry * 3f))
+                if (f.form.fruitFly > .005f) flyParts.compoundEye(this, rx, ry, f, color)
                 val iris = Offset(f.gazeX * rx * .28f, f.gazeY * ry * .22f + ry * .06f)
                 val irisR = rx * .86f * shape.irisScale
                 translate(iris.x, iris.y) {
-                    drawCircle(m.iris, irisR, Offset.Zero, alpha = 1f - shape.dark * .92f)
-                    drawCircle(Color(0xFF14333E).copy(alpha = .64f), irisR * .99f, Offset.Zero,
+                    drawCircle(m.iris, irisR, Offset.Zero, alpha = (1f - shape.dark * .92f) * (1f - f.form.fruitFly))
+                    drawCircle(Color(0xFF14333E).copy(alpha = .64f * (1f - f.form.fruitFly)), irisR * .99f, Offset.Zero,
                         style = Stroke(rx * .023f))
                     // Irregular long/short fibres are cached directions; nothing
                     // shimmers or rolls a random number at display refresh rate.
@@ -245,14 +249,14 @@ class LumenPainter {
                         val direction = irisDirections[i]
                         val root = .48f + (i % 5) * .024f
                         val tip = .89f + (i % 3) * .018f
-                        drawLine(lerp(color, Color.White, .42f).copy(alpha = (if (i % 3 == 0) .21f else .10f) * (1f - shape.dark)),
+                        drawLine(lerp(color, Color.White, .42f).copy(alpha = (if (i % 3 == 0) .21f else .10f) * (1f - shape.dark) * (1f - f.form.fruitFly)),
                             direction * (irisR * root), direction * (irisR * tip), rx * .009f, StrokeCap.Round)
                     }
-                    val pr = irisR * (.56f + (f.pupil - .5f) * .40f) * shape.pupilScale
+                    val pr = irisR * (.56f + (f.pupil - .5f) * .40f) * shape.pupilScale * (1f - .24f * f.form.fruitFly)
                     val slit = shape.pupilAspect + (1f - shape.pupilAspect) * (f.pupil - .5f).coerceAtLeast(0f) * .6f
                     val pupilHeight = pr * (1f + (1f - shape.pupilAspect) * .38f)
                     drawOval(m.pupil, Offset(-pr * slit, -pupilHeight), Size(pr * slit * 2f, pupilHeight * 2f))
-                    drawOval(color.copy(alpha = .13f * (1f - shape.dark)),
+                    drawOval(color.copy(alpha = .13f * (1f - shape.dark) * (1f - f.form.fruitFly)),
                         Offset(-pr * slit * 1.035f, -pupilHeight * 1.035f),
                         Size(pr * slit * 2.07f, pupilHeight * 2.07f), style = Stroke(rx * .015f))
                     if (shape.mechanical > .005f) drawCircle(color.copy(alpha = shape.mechanical * .7f),
