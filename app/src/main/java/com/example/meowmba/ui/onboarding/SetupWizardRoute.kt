@@ -271,8 +271,8 @@ fun SetupWizardRoute(
                         )
                     }
                     FirstRunPage.Mic -> KidPage(
-                        title = "Can we use the mic?",
-                        body = "Then you can talk to your helper. You can say no.",
+                        title = "Can we use the mic and camera?",
+                        body = "Talking needs the mic. Face-following needs the camera. You can say no.",
                         primary = "Allow",
                         onPrimary = {
                             onEnablePermissions()

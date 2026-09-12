@@ -425,21 +425,33 @@ fun AvatarRenderer(
     var heldRoll by remember { mutableStateOf(0f) }
     var heldScale by remember { mutableStateOf(1f) }
     LaunchedEffect(faceGazeX, faceGazeY, faceYawDeg, facePitchDeg, faceRollDeg, faceScale, state.isCameraEnabled) {
-        if (state.isCameraEnabled && faceGazeX != null && faceGazeY != null) {
+        if (!state.isCameraEnabled) {
+            heldFaceGaze = null
+            recentlyTracking = false
+            heldYaw = 0f
+            heldPitch = 0f
+            heldRoll = 0f
+            heldScale = 1f
+            return@LaunchedEffect
+        }
+        if (faceGazeX != null && faceGazeY != null) {
             heldFaceGaze = Offset(faceGazeX, faceGazeY)
             heldYaw = faceYawDeg ?: heldYaw
             heldPitch = facePitchDeg ?: heldPitch
             heldRoll = faceRollDeg ?: heldRoll
             heldScale = faceScale ?: heldScale
             recentlyTracking = true
-        } else {
-                heldFaceGaze = null
-                recentlyTracking = false
-                heldYaw = 0f
-                heldPitch = 0f
-                heldRoll = 0f
-                heldScale = 1f
+            return@LaunchedEffect
         }
+        // Brief detector gaps: keep the last gaze so Lumen/classic do not snap
+        // to idle wander while ML Kit blinks. Clear after a short grace.
+        delay(450)
+        heldFaceGaze = null
+        recentlyTracking = false
+        heldYaw = 0f
+        heldPitch = 0f
+        heldRoll = 0f
+        heldScale = 1f
     }
     val trackingNow = state.isCameraEnabled && (faceGazeX != null || heldFaceGaze != null || recentlyTracking)
 
@@ -864,8 +876,10 @@ fun AvatarRenderer(
         if (useLumen) {
             val progress = if (customAnim != null) animTHolder[0].toFloat() / customAnim.durationMs.coerceAtLeast(1) else 0f
             val isCat = state.avatarStyle == AvatarStyle.LUMEN_CAT
+            val lumenGazeX = faceGazeX ?: heldFaceGaze?.x
+            val lumenGazeY = faceGazeY ?: heldFaceGaze?.y
             val composedLumenInput = lumenInventedSceneInput(lumenPerformanceInput(LumenInput(
-                gazeX = faceGazeX, gazeY = faceGazeY,
+                gazeX = lumenGazeX, gazeY = lumenGazeY,
                 cameraEnabled = state.isCameraEnabled,
                 emotion = state.emotion, interaction = state.interactionState,
                 animal = state.performanceAnimal ?: if (isCat) AvatarAnimal.CAT else state.avatarAnimal,
@@ -1308,15 +1322,33 @@ internal fun lumenZoneAt(offset: Offset, w: Int, h: Int, frame: LumenFrame = Lum
     val point = Offset(delta.x * kotlin.math.cos(angle) - delta.y * kotlin.math.sin(angle),
         delta.x * kotlin.math.sin(angle) + delta.y * kotlin.math.cos(angle))
     val eyeShape = lumenEyeShape(frame.form)
+    // Generous hit targets: Lumen eyes are small glass lenses, and camera-off
+    // privacy makes them look even smaller. Missing an eye used to open tiles
+    // (BACKGROUND) so face tracking looked "broken" when the user tapped near
+    // an eye to turn the camera on.
     for (side in intArrayOf(-1, 1)) {
         val local = Offset((point.x - side * unit * .213f) / (1f + side * frame.headX * .1f),
             point.y - abs(frame.headX) * side * unit * .009f)
         val eyeAngle = -lumenEyeTilt(side, frame, eyeShape) * Math.PI.toFloat() / 180f
         val eyePoint = Offset(local.x * kotlin.math.cos(eyeAngle) - local.y * kotlin.math.sin(eyeAngle),
             local.x * kotlin.math.sin(eyeAngle) + local.y * kotlin.math.cos(eyeAngle))
-        val x = eyePoint.x / (unit * .17f * eyeShape.width)
-        val y = eyePoint.y / (unit * .21f * eyeShape.height)
+        val x = eyePoint.x / (unit * .28f * eyeShape.width.coerceAtLeast(0.75f))
+        val y = eyePoint.y / (unit * .32f * eyeShape.height.coerceAtLeast(0.75f))
         if (x * x + y * y <= 1f) return if (side < 0) AvatarZone.EYE_LEFT else AvatarZone.EYE_RIGHT
+    }
+    // Ears sit above the lenses — mic privacy toggle (classic parity).
+    for (side in intArrayOf(-1, 1)) {
+        val ear = Offset(side * unit * .30f, -unit * .34f)
+        val dx = (point.x - ear.x) / (unit * .20f)
+        val dy = (point.y - ear.y) / (unit * .22f)
+        if (dx * dx + dy * dy <= 1f) return if (side < 0) AvatarZone.EAR_LEFT else AvatarZone.EAR_RIGHT
+    }
+    // Mouth / forehead so mute + settings are reachable without opening tiles.
+    if (abs(point.x) < unit * .14f && abs(point.y - unit * .22f) < unit * .10f) {
+        return AvatarZone.MOUTH
+    }
+    if (abs(point.x) < unit * .16f && abs(point.y + unit * .28f) < unit * .12f) {
+        return AvatarZone.FOREHEAD
     }
     return AvatarZone.BACKGROUND
 }

@@ -7592,7 +7592,7 @@ class CompanionViewModel(
             return
         }
         if (!vm.hasPermission()) {
-            _uiState.value = _uiState.value.copy(cameraPermissionRequested = true)
+            askCameraPermission()
             speak("I need camera permission to see — allow it, then ask me again.")
             return
         }
@@ -8007,13 +8007,18 @@ class CompanionViewModel(
                 setMicEnabled(!_uiState.value.isMicEnabled)
             }
             AvatarZone.EYE_LEFT, AvatarZone.EYE_RIGHT -> {
-                val camOn = !_uiState.value.isCameraEnabled
-                _uiState.value = _uiState.value.copy(
-                    isCameraEnabled = camOn,
-                    isPreviewVisible = camOn,
-                )
-                secureStorage?.saveBooleanPreference(KEY_CAMERA_ENABLED, camOn)
-                if (camOn) ensureFaceTrackingOn() else visionManager?.setFaceTrackingEnabled(false)
+                if (_uiState.value.isCameraEnabled) {
+                    _uiState.value = _uiState.value.copy(
+                        isCameraEnabled = false,
+                        isPreviewVisible = false,
+                    )
+                    secureStorage?.saveBooleanPreference(KEY_CAMERA_ENABLED, false)
+                    visionManager?.setFaceTrackingEnabled(false)
+                } else {
+                    // Do not mark camera "on" until permission + bind succeed —
+                    // otherwise Lumen looks awake with no face follow.
+                    ensureFaceTrackingOn()
+                }
             }
             AvatarZone.MOUTH -> {
                 val muting = !_uiState.value.isMuted
@@ -8245,10 +8250,32 @@ class CompanionViewModel(
      * only consumer is "keep them in frame" — see [VisionManager.setFollowOnly].
      * Anything the user actually wants to be *seen* for runs at full quality.
      */
+
+    /** Rising-edge CAMERA ask so Compose LaunchedEffect always re-fires. */
+    private fun askCameraPermission() {
+        _uiState.value = _uiState.value.copy(cameraPermissionRequested = false)
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(16)
+            val vm = visionManager
+            if (vm == null || !vm.hasPermission()) {
+                _uiState.value = _uiState.value.copy(cameraPermissionRequested = true)
+            }
+        }
+    }
+
     fun ensureFaceTrackingOn(followOnly: Boolean = false) {
         visionManager?.setFollowOnly(followOnly)
+        val vm = visionManager ?: return
+        if (!vm.hasPermission()) {
+            // Keep privacy marks honest: camera stays off until Android grants it.
+            _uiState.value = _uiState.value.copy(
+                isCameraEnabled = false,
+                isPreviewVisible = false,
+            )
+            askCameraPermission()
+            return
+        }
         if (!_uiState.value.isCameraEnabled) {
-            // Privacy mark was off — re-enable camera for seeing the user.
             _uiState.value = _uiState.value.copy(isCameraEnabled = true)
             // Body-following is a session state, not a preference: persisting
             // it means a crash or a kill while the base is attached leaves the
@@ -8258,12 +8285,11 @@ class CompanionViewModel(
                 secureStorage?.saveBooleanPreference(KEY_CAMERA_ENABLED, true)
             }
         }
-        val vm = visionManager ?: return
-        if (!vm.hasPermission()) {
-            _uiState.value = _uiState.value.copy(cameraPermissionRequested = true)
-            return
-        }
-        _uiState.value = _uiState.value.copy(isFrontCamera = true, isCameraEnabled = true)
+        _uiState.value = _uiState.value.copy(
+            isFrontCamera = true,
+            isCameraEnabled = true,
+            isPreviewVisible = true,
+        )
         vm.setUseFrontCamera(true)
         val ok = vm.setFaceTrackingEnabled(true)
         android.util.Log.i("MeowVision", "ensureFaceTrackingOn ok=$ok perm=${vm.hasPermission()}")
@@ -8280,7 +8306,7 @@ class CompanionViewModel(
             return
         }
         if (!vm.hasPermission()) {
-            _uiState.value = _uiState.value.copy(cameraPermissionRequested = true)
+            askCameraPermission()
             speak("I need camera permission to see you — allow it, then ask me again.")
             return
         }
@@ -11264,7 +11290,19 @@ class CompanionViewModel(
     }
 
     fun requestOnboardingPermissions() {
-        // Host Activity may collect the mic permission. Wizard already moved on.
+        // Kid-simple first-run: ask for mic + camera in one rising-edge pulse so
+        // MainActivity launchers always fire (even if a prior ask was dismissed).
+        _uiState.value = _uiState.value.copy(
+            microphonePermissionRequested = false,
+            cameraPermissionRequested = false,
+        )
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(16)
+            _uiState.value = _uiState.value.copy(
+                microphonePermissionRequested = true,
+                cameraPermissionRequested = true,
+            )
+        }
     }
 
     companion object {
