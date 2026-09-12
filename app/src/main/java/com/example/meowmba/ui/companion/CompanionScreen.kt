@@ -96,8 +96,9 @@ fun CompanionScreen(
     // alive beside the browser.
     val avatarWorkStatus = rememberAvatarWorkStatus()
     val avatarWorkAllowed = avatarWorkStatus.allowed
-    val animationsPaused = !avatarWorkAllowed || !faceModeActive(uiState.copy(isChatExpanded = false)) ||
+    val habitatCovered = !faceModeActive(uiState.copy(isChatExpanded = false)) ||
         uiState.showConnectorsScreen || showOnboarding || onboardingVisible || (uiState.showBrowser && !splitBrowser)
+    val animationsPaused = !avatarWorkAllowed || habitatCovered
     // Report the real stage policy, including thermal/fold/onboarding changes.
     // Camera/body preferences must not cancel a visible acting performance.
     LaunchedEffect(viewModel, animationsPaused) {
@@ -165,9 +166,9 @@ fun CompanionScreen(
             modifier = Modifier.matchParentSize(),
         )
 
-        if (!animationsPaused && (uiState.avatarStyle == AvatarStyle.FULL_FLY || uiState.background.animation?.isPetEnvironment == true)) {
+        if (!habitatCovered && (uiState.avatarStyle == AvatarStyle.FULL_FLY || uiState.background.animation?.isPetEnvironment == true)) {
             PetCarePanel(
-                care = uiState.petCare, onCareChanged = viewModel::setPetCare,
+                care = uiState.petCare, motionPaused = !avatarWorkAllowed, onCareChanged = viewModel::setPetCare,
                 onAction = viewModel::habitatAction, onFeedback = viewModel::petFeedback,
                 onLearningChanged = viewModel::setPetLearning, learningEnabled = uiState.petLearningEnabled,
                 onResetLearning = viewModel::resetPetLearning,

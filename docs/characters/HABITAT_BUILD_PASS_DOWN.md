@@ -57,3 +57,23 @@ All 54 native-library/asset entries match the installed code94 APK byte-for-byte
 Planning and tools: one integration/build owner plus three bounded workers (environment/care, fly rig/world, neural evaluation/research), following AGENT_PLAN's division. Workers edited disjoint files; the owner wired shared state and performed all Gradle assembly. Used rg, Git, SSH/rsync, Python, Kotlin/JVM and native Canvas render tests, ADB package/CPU/thermal inspection, and primary research sources. Native render assets were used for this implementation; the earlier generated commercial concept remains separate. No supplied reference watermark/artwork was redistributed.
 
 Transfer troubleshooting: macOS rsync2.6.9 --inplace resent large unchanged sections after APK layout shifts. Replaced it with scripts/apk_delta.py: hash each compressed ZIP payload, reuse identical payloads from the pulled phone APK, transmit changed bytes plus original headers/central directory/signature bytes, then require both base and entire reconstructed APK SHA-256. This is not APK re-signing/recompression. It reuses397,121,198 bytes of the416,222,381-byte final APK and reduces transfer to5,114,768 bytes gzip. A synthetic ZIP round-trip passed; real reconstruction must match the server hash before adb install. Never install a partial or mismatched reconstructed file.
+
+## Phone follow-up and preview98
+
+Installed97 in place at2026-09-12 17:29:47 phone time. Exact server hash matched after lossless reconstruction. Full fly/kitchen visible; Play opens controls; care toggle displays meters; Read moves the fly to the book, grasps it and holds it visibly. Care was turned back off after the check. Phone PIP video obscured the upper-right Close button; avoid clicking through overlays. The panel also inherited dark text on a dark surface; preview98 sets explicit pale content on a dark green surface.
+
+97 shadow/rate foreground smoke:30/30 samples foreground, one PID, about35.15% of one CPU core over58 seconds, USB charging100%, battery33.6→34.0 C. A top snapshot attributes most measured work to the UI thread and RenderThread, not the sleeping coroutine workers. This included UI actions and unrelated PIP video, so it is not a matched thermal A/B. A second spiking sample was in Settings (avatar paused); exclude its19.15% CPU from animation comparisons.
+
+Live diagnostics in NEURAL mode: rate p95 computation537 microseconds, spiking1027 microseconds, both fallback none. These snapshots have different histories and do not measure input-to-visible-response latency, incremental CPU or learned quality. Return to rate for the final preview.
+
+Preview98 changes only care-panel contrast and debug version code. Assembly and signing verification passed; prior66 focused tests apply to the unchanged behavior/core. APK SHA-256 c2ae8656fb43c2c1f2c0b8ece1eb2be4d8c088e063bfbbe2c9cf9773c97789d6. Certificate remains b7850d5fb645df9f5d12525db1b10e457b0ee7f3aa50bbf4294ff31dae3379ff. Whole-file reconstructed hash matches. Further phone results follow.
+
+## Thermal follow-up and final preview99
+
+98 NEURAL/rate smoke:30/30 foreground samples,28.39% of one core, battery35.0→35.1 C, thermal status2 (MODERATE) at end. Decorative work correctly paused under existing AvatarWorkPolicy. This is not a full-speed animation benchmark or a claim that heat is fixed. CPU samples contain startup and thermal transitions; diagnose sustained foreground UI/perception cost with controlled inputs next.
+
+Background lifecycle check: Android Settings foreground,15/15 samples with Meow not foreground, same process, about0.107% of one core over28 seconds; battery35.0→34.9 C. Returned Meow to the front afterward. No app crash found in sampled AndroidRuntime logs. This supports background suspension over this short interval, not eight-hour stability.
+
+The thermal pause exposed a product bug in the new controls: Play was hidden along with animation. Preview99 separates a covered stage from a throttled stage. Play/care remains available while decorative motion is paused; queued world actions wait for resumed time, while care updates still work. Expanded controls explain that motion is resting. Modal screens still hide the panel. Existing animation/thermal gates are retained.
+
+Final99 APK SHA-256:794db431039d944e0888268051f73eee640cf7125ae3c99a4fb9a685789e63b4. The core source is unchanged from the66-test run; final care/world/work-policy checks and assembly were rerun. User-ready selection: Fly companion, Sunlit kitchen, NEURAL/RATE, care off, traces off. Confirm installation and contrast below.

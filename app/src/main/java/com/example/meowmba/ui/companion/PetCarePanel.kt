@@ -32,6 +32,7 @@ import kotlin.math.roundToInt
 @Composable
 fun PetCarePanel(
     care: PetCareState,
+    motionPaused: Boolean = false,
     onCareChanged: (Boolean) -> Unit,
     onAction: (HabitatAction) -> Unit,
     onFeedback: (Boolean) -> Unit,
@@ -49,7 +50,8 @@ fun PetCarePanel(
         modifier = modifier.widthIn(max = 300.dp).heightIn(max = 360.dp),
         shape = MaterialTheme.shapes.large,
         tonalElevation = 6.dp,
-        color = MaterialTheme.colorScheme.surface.copy(alpha = .97f),
+        color = androidx.compose.ui.graphics.Color(0xff20332f).copy(alpha = .97f),
+        contentColor = androidx.compose.ui.graphics.Color(0xfff0f5ef),
     ) {
         Column(
             Modifier.verticalScroll(rememberScrollState()).padding(12.dp),
@@ -58,6 +60,9 @@ fun PetCarePanel(
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Play & care", style = MaterialTheme.typography.titleMedium)
                 TextButton(onClick = { expanded = false }) { Text("Close") }
+            }
+            if (motionPaused) {
+                Text("Motion is resting while the phone settles. Care controls still work.", style = MaterialTheme.typography.bodySmall)
             }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Care mode")

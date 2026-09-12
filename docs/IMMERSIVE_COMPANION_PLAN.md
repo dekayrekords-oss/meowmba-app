@@ -1,6 +1,6 @@
 # Immersive companion — detailed revision plan
 
-## September 12: full fly habitat preview 97
+## September 12: full fly habitat preview 99
 
 Full-body fly option, ten shared animated environments, deterministic prop interactions, optional persisted care, bounded preferences and live shared neural controls are implemented. Final focused run:66 passed; full suite retains baseline failures. Biological FlyWire mapping and sustained phone performance gates remain open. See [HABITAT_BUILD_PASS_DOWN.md](characters/HABITAT_BUILD_PASS_DOWN.md) for exact build, installation evidence and limitations.
 
