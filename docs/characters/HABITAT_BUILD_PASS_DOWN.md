@@ -51,3 +51,9 @@ Final focused run after the clock/diagnostics correction: **66 passed**, zero fa
 
 Final APK SHA-256: `96047d47bf014a3b6aff44d251071a2fcdbfadd2041e182420b2485ef6dba8c1`.
 Verified certificate SHA-256: `b7850d5fb645df9f5d12525db1b10e457b0ee7f3aa50bbf4294ff31dae3379ff`, matching the previous installed preview. Debug package/version code: com.example.meowmba / 97. Release package remains separate.
+
+All 54 native-library/asset entries match the installed code94 APK byte-for-byte by SHA-256. Source commit ba14013 was pushed to canonical Android Git as codex/fly-habitat-built and synchronized into the isolated build worktree. Generated runtime folders remain untracked build inputs, not source changes.
+
+Planning and tools: one integration/build owner plus three bounded workers (environment/care, fly rig/world, neural evaluation/research), following AGENT_PLAN's division. Workers edited disjoint files; the owner wired shared state and performed all Gradle assembly. Used rg, Git, SSH/rsync, Python, Kotlin/JVM and native Canvas render tests, ADB package/CPU/thermal inspection, and primary research sources. Native render assets were used for this implementation; the earlier generated commercial concept remains separate. No supplied reference watermark/artwork was redistributed.
+
+Transfer troubleshooting: macOS rsync2.6.9 --inplace resent large unchanged sections after APK layout shifts. Replaced it with scripts/apk_delta.py: hash each compressed ZIP payload, reuse identical payloads from the pulled phone APK, transmit changed bytes plus original headers/central directory/signature bytes, then require both base and entire reconstructed APK SHA-256. This is not APK re-signing/recompression. It reuses397,121,198 bytes of the416,222,381-byte final APK and reduces transfer to5,114,768 bytes gzip. A synthetic ZIP round-trip passed; real reconstruction must match the server hash before adb install. Never install a partial or mismatched reconstructed file.
