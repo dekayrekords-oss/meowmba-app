@@ -147,7 +147,7 @@ fun CompanionScreen(
         } else {
         // 0. User-chosen background always draws when set. Live weather sky too.
         // Only the empty NEO desk stays see-through.
-        if (!isNeo || hasUserBg) {
+        if ((!isNeo || hasUserBg) && uiState.avatarStyle != AvatarStyle.FULL_FLY) {
             AppBackground(
                 selection = uiState.background,
                 weather = uiState.ambientWeather ?: uiState.weather,
@@ -1288,7 +1288,17 @@ private fun AvatarMotionHost(
     val mouthEnergy = viewModel.mouthEnergy.collectAsState()
     val facePose by viewModel.facePose.collectAsState()
     val chaseHard by viewModel.chaseHard.collectAsState()
+    val flyContext = androidx.compose.ui.platform.LocalContext.current
+    val flyView = remember(flyContext, uiState.avatarStyle) {
+        if (uiState.avatarStyle == AvatarStyle.FULL_FLY) Fly3DView(flyContext) else null
+    }
+    var flyError by remember { mutableStateOf<String?>(null) }
+    DisposableEffect(flyView) { onDispose { flyView?.dispose() } }
+    SideEffect { flyView?.setStageActive(!paused); flyView?.onFailure = { flyError = it } }
     Box(modifier = modifier) {
+        if (flyView != null) {
+            androidx.compose.ui.viewinterop.AndroidView(factory = { flyView }, modifier = Modifier.matchParentSize())
+        }
         AvatarRenderer(
             state = uiState,
             onZoneClick = { if (interactive) viewModel.onAvatarZoneClick(it) },
@@ -1316,6 +1326,7 @@ private fun AvatarMotionHost(
             nervousBias = viewModel::nervousBiasNow,
             onPet = viewModel::onAvatarPetted,
             onHabitatAction = viewModel::habitatAction,
+            onFly3DFrame = flyView?.let { gpu -> { frame: Fly3DFrame -> gpu.publish(frame) } },
             motionScreenLean = motionTilt,
             displayRotation = displayRotation,
             shakeCount = shakeCount,
@@ -1324,5 +1335,9 @@ private fun AvatarMotionHost(
             reflexGain = uiState.lumenReflexGain,
             onReflexSummary = viewModel::onReflexSummary,
         )
+        if (flyError != null) {
+            androidx.compose.material3.Text("3D graphics unavailable: $flyError", color=Color.White,
+                modifier=Modifier.align(Alignment.Center).background(Color(0xff20332f)).padding(16.dp))
+        }
     }
 }

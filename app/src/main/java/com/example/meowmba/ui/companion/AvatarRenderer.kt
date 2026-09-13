@@ -171,6 +171,7 @@ fun AvatarRenderer(
     /** Stroking the avatar. Reported outward so the drive layer feels it too. */
     onPet: () -> Unit = {},
     onHabitatAction: (HabitatAction) -> Unit = {},
+    onFly3DFrame: ((Fly3DFrame) -> Unit)? = null,
     paused: Boolean = false,
     faceGazeX: Float? = null,
     faceGazeY: Float? = null,
@@ -266,6 +267,8 @@ fun AvatarRenderer(
     val lumenPainter = remember { LumenPainter() }
     val fullFlyPainter = remember { FullFlyPainter() }
     val habitatWorld = remember(state.background.value, state.avatarStyle) { PetHabitatWorld() }
+    val fly3DWorld = remember(state.background.value, state.avatarStyle) { Fly3DWorld() }
+    val lastFly3DTime = remember(fly3DWorld) { floatArrayOf(Float.NaN) }
     val habitatEnabled = state.avatarStyle == AvatarStyle.FULL_FLY || state.background.animation?.isPetEnvironment == true
     val latestHabitatAction by rememberUpdatedState(onHabitatAction)
     val latestHabitatEnabled by rememberUpdatedState(habitatEnabled)
@@ -680,6 +683,11 @@ fun AvatarRenderer(
                     .pointerInput(state.avatarStyle) {
                 detectTapGestures(
                     onTap = { offset ->
+                        if (state.avatarStyle == AvatarStyle.FULL_FLY && onFly3DFrame != null) {
+                            fly3DWorld.tap(offset.x / size.width, offset.y / size.height)
+                            latestHabitatAction(HabitatAction.EXPLORE)
+                            return@detectTapGestures
+                        }
                         if (latestHabitatEnabled) {
                             val action = habitatWorld.actionAt(offset.x, offset.y, size.width.toFloat(), size.height.toFloat())
                             if (action != null) { latestHabitatAction(action); return@detectTapGestures }
@@ -888,7 +896,7 @@ fun AvatarRenderer(
         // pose/clock inputs as every other style — so switching faces
         // mid-animation stays seamless. (The Aura Home card in
         // AuraHomeAvatar.kt is parked — the face runs full-screen.)
-        val flyPose = if (habitatEnabled) {
+        val flyPose = if (habitatEnabled && !(state.avatarStyle == AvatarStyle.FULL_FLY && onFly3DFrame != null)) {
             val bias = nervousBias()
             val care = state.petCare
             val caredBias = if (care.careEnabled) bias.copy(
@@ -945,6 +953,29 @@ fun AvatarRenderer(
             } else composedLumenInput
             val frame = lumenRig.step(tSec, gatedLumenInput)
             lumenLastFrame[0] = frame
+            if (state.avatarStyle == AvatarStyle.FULL_FLY && onFly3DFrame != null) {
+                // Texture updates can invalidate Compose draw. Only the established clock
+                // may publish a GPU frame, preventing a draw/swap/invalidate feedback loop.
+                if (lastFly3DTime[0] != tSec) {
+                    lastFly3DTime[0] = tSec
+                    val bias = nervousBias()
+                    val care = state.petCare
+                    val adjusted = if (care.careEnabled) bias.copy(arousal = bias.arousal * (.5f + .5f * care.energy)) else bias
+                    val world = fly3DWorld.step(tSec, state.habitatCommand, adjusted, state.petPlayPreference,
+                        state.background.animation?.id ?: "kitchen")
+                    val p = world.pose
+                    val radians = (kotlin.math.PI / 180.0).toFloat()
+                    onFly3DFrame(Fly3DFrame(timeSeconds = world.elapsed, x=p.x,y=p.y,z=p.z,
+                        yaw=p.yaw*radians,pitch=p.pitch*radians,roll=p.roll*radians,
+                        flight=p.flight,walkPhase=p.walkPhase,gazeX=frame.gazeX,gazeY=frame.gazeY,
+                        blink=(1f-(frame.leftOpen+frame.rightOpen)*.5f).coerceIn(0f,1f),mouth=frame.mouthOpen,
+                        reach=p.reach,holding=p.holding,backgroundId=world.backgroundId,props=world.props,
+                        handX=p.handX,handY=p.handY,handZ=p.handZ,active=!paused))
+                }
+                lumenPainter.draw(this, frame.copy(presence=0f), Color(state.avatarEyeColor), Color(state.avatarGlowColor),
+                    cameraOff=!state.isCameraEnabled,micOff=!state.isMicEnabled,speakerOff=state.isMuted,statusColor=privacyColor)
+                return@Canvas
+            }
             if (state.avatarStyle == AvatarStyle.FULL_FLY && flyPose != null) {
                 fullFlyPainter.draw(this, frame, flyPose)
                 // Shared renderer keeps privacy marks fixed; hide only its face.
