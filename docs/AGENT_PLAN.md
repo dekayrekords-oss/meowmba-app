@@ -1,5 +1,15 @@
 # Agent execution plan — immersive companion revision
 
+## September 13: paused before build 110 for model switch
+
+The next request covers experimental BANC integration, larger/polished habitat
+props, 200% default/300% maximum avatar scale, landscape repair, bounded thermal
+adjustment, cartoon artwork and expressive touch-responsive fly motion. The user
+requested a pause to switch models before implementation. No new app changes or
+build were made. Resume from
+[BUILD_110_MODEL_HANDOFF.md](characters/BUILD_110_MODEL_HANDOFF.md), which records
+scope, entrypoints, evidence limits and deployment continuity for Meow.
+
 ## September 13: installed setup cleanup, build 109
 
 Neural settings now explain control modes, network types, reflex sensitivity,
