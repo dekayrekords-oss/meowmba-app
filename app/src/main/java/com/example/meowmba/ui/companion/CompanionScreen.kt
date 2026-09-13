@@ -168,7 +168,7 @@ fun CompanionScreen(
             modifier = Modifier.matchParentSize(),
         )
 
-        if (!habitatCovered && (uiState.avatarStyle.isLumen || uiState.habitatMode)) {
+        if (!habitatCovered) {
             PetCarePanel(
                 habitatMode = uiState.habitatMode, onTrick = viewModel::playCompanionTrick,
                 care = uiState.petCare, motionPaused = !avatarWorkAllowed, onCareChanged = viewModel::setPetCare,
@@ -1331,6 +1331,7 @@ private fun AvatarMotionHost(
             motionObservedAtMs = motionSampleTime,
             nervousBias = viewModel::nervousBiasNow,
             onPet = viewModel::onAvatarPetted,
+            onPlay = { viewModel.playCompanionTrick("peekaboo") },
             onHabitatAction = viewModel::habitatAction,
             onFly3DFrame = flyView?.let { gpu -> { frame: Fly3DFrame -> gpu.publish(frame) } },
             motionScreenLean = motionTilt,

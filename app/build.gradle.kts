@@ -223,7 +223,7 @@ androidComponents {
         // Phone already has preview 1.3.81 (85); bump debug-only so in-place
         // upgrade is allowed without changing release defaultConfig (85).
         variant.outputs.forEach { output ->
-            output.versionCode.set(104)
+            output.versionCode.set(105)
         }
     }
 }

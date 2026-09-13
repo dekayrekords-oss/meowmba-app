@@ -170,6 +170,7 @@ fun AvatarRenderer(
     onSwipeRight: () -> Unit = {},
     /** Stroking the avatar. Reported outward so the drive layer feels it too. */
     onPet: () -> Unit = {},
+    onPlay: () -> Unit = {},
     onHabitatAction: (HabitatAction) -> Unit = {},
     onFly3DFrame: ((Fly3DFrame) -> Unit)? = null,
     paused: Boolean = false,
@@ -644,6 +645,7 @@ fun AvatarRenderer(
     // ── Petting: stroking the cat makes it purr ────────────────────────────
     var lastPetAt by remember { mutableLongStateOf(0L) }
     val petCallback by rememberUpdatedState(onPet)
+    val playCallback by rememberUpdatedState(onPlay)
     LaunchedEffect(lastPetAt) {
         if (lastPetAt != 0L) {
             // Reported outward, not just consumed by the local `petted` pose:
@@ -685,71 +687,27 @@ fun AvatarRenderer(
                     .pointerInput(state.avatarStyle, state.habitatMode, state.avatarScale) {
                 detectTapGestures(
                     onTap = { offset ->
-                        if (state.avatarStyle == AvatarStyle.FULL_FLY) {
-                            touchGaze = normalizeGaze(offset, size.width, size.height)
-                            lastPetAt = System.currentTimeMillis()
-                            if (latestHabitatEnabled) {
+                        touchGaze = normalizeGaze(offset, size.width, size.height)
+                        lastPetAt = System.currentTimeMillis()
+                        if (latestHabitatEnabled) {
+                            if (state.avatarStyle == AvatarStyle.FULL_FLY) {
                                 fly3DWorld.tap(offset.x / size.width, offset.y / size.height)
                                 latestHabitatAction(HabitatAction.EXPLORE)
-                            }
-                            return@detectTapGestures
-                        }
-                        if (latestHabitatEnabled) {
-                            val action = habitatWorld.actionAt(offset.x, offset.y, size.width.toFloat(), size.height.toFloat())
-                            if (action != null) { latestHabitatAction(action); return@detectTapGestures }
-                            if (state.avatarStyle.isLumen) {
-                                latestHabitatAction(HabitatAction.PLAY)
-                                return@detectTapGestures
+                            } else {
+                                habitatWorld.actionAt(offset.x, offset.y, size.width.toFloat(), size.height.toFloat())
+                                    ?.let { latestHabitatAction(it) }
                             }
                         }
-                        touchGaze = normalizeGaze(offset, size.width, size.height)
-                        // Aura Home has no ears/eyes: cat-face zones would map
-                        // taps to invisible features. Its own zones keep every
-                        // tap predictable (core = mute, rings = menu).
-                        val hitOffset = avatarHitTransform[0].inverse(offset)
-                        val zone = if (state.avatarStyle == AvatarStyle.SIGNAL) {
-                            val w = size.width.toFloat()
-                            val h = size.height.toFloat()
-                            AuraHomeContent.auraZoneAt(
-                                tap = hitOffset,
-                                center = Offset(w / 2f, fitGodotFaceCenterY(w, h)),
-                                ringRadius = fitGodotFaceRadius(w, h) * 0.816f,
-                            )
-                        } else if (state.avatarStyle.isLumen) {
-                            lumenZoneAt(hitOffset, size.width, size.height, lumenLastFrame[0])
-                        } else {
-                            zoneAt(hitOffset, size.width, size.height)
-                        }
-                        onZoneClick(zone)
                     },
                     onDoubleTap = { offset ->
                         touchGaze = normalizeGaze(offset, size.width, size.height)
-                        lastPetAt = System.currentTimeMillis()
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                        if (latestHabitatEnabled) latestHabitatAction(HabitatAction.PLAY)
+                        playCallback()
                     },
                     onLongPress = { offset ->
-                        if (state.avatarStyle == AvatarStyle.FULL_FLY) {
-                            touchGaze = normalizeGaze(offset, size.width, size.height)
-                            lastPetAt = System.currentTimeMillis()
-                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                            return@detectTapGestures
-                        }
-                        // Long-press on the dome opens settings (mirrors the
-                        // cat's forehead shortcut); elsewhere keeps petting.
-                        if (state.avatarStyle == AvatarStyle.SIGNAL || state.avatarStyle.isLumen) {
-                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onZoneClick(AuraHomeContent.auraLongPressZone())
-                            return@detectTapGestures
-                        }
-                        val zone = zoneAt(avatarHitTransform[0].inverse(offset), size.width, size.height)
-                        if (zone == AvatarZone.FOREHEAD) {
-                            onZoneClick(AvatarZone.FOREHEAD)
-                        } else {
-                            // Long stroke anywhere else counts as a pet
-                            lastPetAt = System.currentTimeMillis()
-                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                        }
+                        touchGaze = normalizeGaze(offset, size.width, size.height)
+                        lastPetAt = System.currentTimeMillis()
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                     }
                 )
             }
@@ -769,6 +727,8 @@ fun AvatarRenderer(
                             // Long decisive horizontal swipe = launcher navigation.
                             // Shorter strokes stay petting.
                             if (totalX < 0) onSwipeLeft() else onSwipeRight()
+                        } else {
+                            lastPetAt = System.currentTimeMillis()
                         }
                     }
                 ) { change, dragAmount ->
@@ -776,10 +736,7 @@ fun AvatarRenderer(
                     totalX += dragAmount.x
                     totalY += dragAmount.y
                     touchGaze = normalizeGaze(change.position, size.width, size.height)
-                    // Horizontal-ish stroking on the face = petting
-                    if (abs(totalX) > abs(totalY) && abs(totalX) > 60f) {
-                        lastPetAt = System.currentTimeMillis()
-                    }
+                    // Emit one social event at stroke end; navigation never feeds learning.
                 }
             }
             }()
@@ -945,7 +902,7 @@ fun AvatarRenderer(
             val composedLumenInput = lumenInventedSceneInput(lumenPerformanceInput(LumenInput(
                 gazeX = lumenGazeX, gazeY = lumenGazeY,
                 // Touch is a local gaze target, not camera capture permission.
-                cameraEnabled = state.isCameraEnabled || (state.avatarStyle == AvatarStyle.FULL_FLY && touchGaze != null),
+                cameraEnabled = state.isCameraEnabled || touchGaze != null,
                 emotion = state.emotion, interaction = state.interactionState,
                 animal = state.performanceAnimal ?: if (isCat) AvatarAnimal.CAT else state.avatarAnimal,
                 openness = effectivePose.eyeOpen, pupil = if (playingClip) effectivePose.pupilSize else .5f,
@@ -1063,15 +1020,15 @@ fun AvatarRenderer(
                 domeRadius = R * 0.816f,
                 viewRotation = orbOrientation.value,
                 shakeCount = shakeCount,
-                forceLean = leanAnim,
-                forceLurch = lurchAnim,
+                forceLean = (leanAnim + (touchGaze?.x ?: 0f) * 0.35f).coerceIn(-1f, 1f),
+                forceLurch = (lurchAnim + (touchGaze?.y ?: 0f) * 0.35f).coerceIn(-1f, 1f),
                 thinking = state.interactionState == InteractionState.THINKING,
                 level = mouthEnergy?.value ?: if (
                     orbSpeaking ||
                     state.interactionState == InteractionState.LISTENING
                 ) talk else 0f,
                 clockSec = tSec,
-                ringColor = Color(effectivePose.glowColorHex),
+                ringColor = if (petted) Color(0xFFFFB9DF) else Color(effectivePose.glowColorHex),
                 alpha = faceAlpha * if (effectivePose.dimmed) 0.55f else 1f,
                 offline = state.interactionState == InteractionState.OFFLINE,
             )
