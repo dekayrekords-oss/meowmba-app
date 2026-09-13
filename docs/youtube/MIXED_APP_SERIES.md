@@ -39,3 +39,7 @@ Do not invent a bug just to fill an episode slot. Mix these with existing-projec
 Record the project name, repository, intended user, one-sentence purpose, current working milestone, proposed next feature, verification evidence, and episode links. Mark each entry as idea, prototype, working milestone, or released based on actual evidence. No complete cross-repository inventory has been performed in this task.
 
 The next production choice is one simple concept to build alongside an existing-app demo. The notebook is a suggested starting concept because its first useful path is small, not a commitment to implement it in this planning turn.
+
+## Meow server alongside app projects
+
+Include server operations in the rotation: running services, project organization, deployments, workload monitoring, and real incidents. See SERVER_MEOW_SERIES.md. Meow server is distinct from the Android companion app. Verify the current server setup before filming, and keep ideas/builds from other apps in the mix.

@@ -11,11 +11,11 @@ Drafts for real screen recordings; no footage or finished videos exist yet. Narr
 | 0–8s | A simple app sketch followed by a real working app | “We take everyday problems and turn them into apps. This channel shows how.” |
 | 8–18s | A spoken question and actual answer | “Some projects start small: one idea, one useful feature, and a first version.” |
 | 18–28s | Meow demo, then a second verified project or a clearly labeled concept sketch | “Others grow into bigger projects, like Meow Assistant and the other apps we’re making.” |
-| 28–40s | Save a test memory; open a test project | “We’ll mix app ideas, step-by-step builds, and demos you can see working.” |
+| 28–40s | A test project and a sanitized, verified server-status view | “We’ll mix app ideas, working builds, and a look at how we run Meow, our server.” |
 | 40–50s | Show a readable code diff and a verified test result | “And when something breaks, we’ll walk through the clues, the fix, and how we checked it.” |
 | 50–60s | End on a sketch becoming a working interface; avoid implying an unbuilt concept is finished | “Bring an idea and build along with us. We’ll share what works and what we learn.” |
 
-Description: “Simple ideas, real apps, and the process of making them. Follow our current and future projects through builds, demos, coding with AI, and real troubleshooting.” Add the recorded version and verified links before uploading.
+Description: “Simple ideas, real apps, and the server behind our work. Follow our current and future projects through builds, demos, coding with AI, managing Meow server, and real troubleshooting.” Add the recorded version and verified links before uploading.
 
 ## 01 — Your First Conversation with Meow (2–3 minutes)
 
