@@ -1,10 +1,14 @@
 # Music channel — initial planning draft
 
-Started 2026-09-13 at the owner's request. The music channel is separate from the app-building/Meow server/AIOS channel. Its name, URL, artist identity, musical direction, existing catalog, and emphasis are not yet confirmed. Do not assume that the Google login address establishes the channel or artist name. The owner has been asked whether to emphasize releases, making music, or both, and to share the existing channel name/link.
+Started 2026-09-13 at the owner's request. The music channel is separate from the app-building/Meow server/AIOS channel. Its name, URL, artist identity, musical direction, existing catalog, are not yet confirmed. The owner confirmed a combined focus: original releases and making music. Do not assume that the Google login address establishes the channel or artist name. The existing channel name/link is still needed.
 
 No channel creation, profile edits, music production, account linking, uploads, or release scheduling has occurred. This draft preserves options until the owner answers.
 
-## Content options
+## Confirmed direction: releases and making music
+
+Use a repeating cycle built around one real song: finished release → making-of episode → short musical excerpt → next song or session. Capture the process while making the track; publish only material that is ready. Keep both the music itself and the creative work visible.
+
+## Reference content options
 
 | Direction | Core videos | Supporting videos |
 |---|---|---|
@@ -14,7 +18,7 @@ No channel creation, profile edits, music production, account linking, uploads, 
 
 For a combined channel, one song can produce a small connected set: the finished track, its making-of episode, and a short excerpt. This is an efficient production option, not a claim that an unreleased song or footage is already available.
 
-## Proposed playlists to select after the direction is confirmed
+## Planned playlists
 
 - Music — finished recordings and performances.
 - From Idea to Song — writing and arranging a track.
@@ -27,7 +31,7 @@ Keep artist names and track titles consistent. Decide artist versus label brandi
 
 ## First production cycle
 
-1. Identify the channel and choose its emphasis.
+1. Identify the channel; the combined release/creative-process emphasis is confirmed.
 2. Select one existing owned track or a new song the owner wants to develop; record its actual stage.
 3. Inventory the source session, usable audio, artwork, and footage. The owner can choose the files; none have been located in this planning task.
 4. Choose one concrete outcome: publish-ready track video, making-of episode, or both.
@@ -63,7 +67,6 @@ Record artist, working/final title, musical direction, source session, current s
 ## Open decisions
 
 - Existing channel name and URL.
-- Releases, making music, or both.
 - Artist/label identity and musical direction.
 - First track or session to feature.
 - Available production time and desired cadence after the first cycle is measured.
