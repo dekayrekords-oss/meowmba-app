@@ -33,6 +33,8 @@ import com.google.mlkit.vision.pose.PoseDetection
 import com.google.mlkit.vision.pose.PoseDetector
 import com.google.mlkit.vision.pose.PoseLandmark
 import com.google.mlkit.vision.pose.defaults.PoseDetectorOptions
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -314,6 +316,7 @@ class VisionManager(
     private val context: Context,
     private val lifecycleOwner: LifecycleOwner
 ) {
+    private val captureGate = CameraCaptureGate()
     private var imageCapture: ImageCapture? = null
     private var preview: Preview? = null
     private var imageAnalysis: ImageAnalysis? = null
@@ -388,6 +391,32 @@ class VisionManager(
     /** Faces from the last published frame (screen space). */
     val lastFaces: List<SeenFace> get() = lastSeenFaces
 
+    /** App-level camera OFF is a hard stop, distinct from temporarily pausing
+     * analysis while a preview is visible. Enabling grants permission to existing
+     * explicit callers; it does not open the camera by itself.
+     */
+    @Synchronized
+    fun setCaptureEnabled(enabled: Boolean) {
+        if (closed) return
+        captureGate.setEnabled(enabled)
+        if (enabled) return
+        _faceTrackingEnabled = false
+        trackingSession.stop()
+        freshnessWatchdog?.cancel(false)
+        freshnessWatchdog = null
+        imageAnalysis?.clearAnalyzer()
+        imageAnalysis = null
+        faceDetector?.close()
+        faceDetector = null
+        poseDetector?.close()
+        poseDetector = null
+        preview?.setSurfaceProvider(null)
+        preview = null
+        stopOrientationTracking()
+        unregisterDisplayListener()
+        unbind()
+    }
+
     /** Audio path says someone is speaking — prefer the open mouth. */
     fun setSpeechLikely(on: Boolean) {
         speechLikely = on
@@ -395,6 +424,7 @@ class VisionManager(
 
     @Synchronized
     fun setUseFrontCamera(useFront: Boolean) {
+        if (closed) return
         // Face tracking pins the front camera — don't let a stray call fight it.
         if (_faceTrackingEnabled && !useFront) return
         if (useFront == _useFrontCamera) return
@@ -463,7 +493,7 @@ class VisionManager(
      */
     @Synchronized
     fun setFaceTrackingEnabled(enabled: Boolean): Boolean {
-        if (closed) return false
+        if (closed || (enabled && captureGate.captureToken() == null)) return false
         android.util.Log.i("VM", "setFaceTrackingEnabled($enabled) cur=$_faceTrackingEnabled perm=${hasPermission()}")
         if (enabled && !hasPermission()) {
             if (_faceTrackingEnabled) setFaceTrackingEnabled(false)
@@ -558,6 +588,7 @@ class VisionManager(
     fun close() {
         if (closed) return
         closed = true
+        captureGate.setEnabled(false)
         _faceTrackingEnabled = false
         trackingSession.stop()
         freshnessWatchdog?.cancel(true)
@@ -1206,8 +1237,11 @@ class VisionManager(
      * eagerly with the surface provider so that it is ready whenever the
      * camera is bound (on first capture or immediately if already bound).
      */
+    @Synchronized
     fun setPreviewSurface(provider: Preview.SurfaceProvider?) {
+        if (closed) return
         if (provider != null) {
+            if (captureGate.captureToken() == null) return
             val p = preview ?: Preview.Builder().build().also { preview = it }
             p.setSurfaceProvider(provider)
             bindPreviewAsync()
@@ -1223,23 +1257,31 @@ class VisionManager(
      * Prefers the back camera, falls back to front.
      */
     suspend fun captureJpeg(maxDimension: Int = 896): Result<ByteArray> {
+        val token = captureGate.captureToken()
+            ?: return Result.failure(Exception("Camera is switched off"))
+        if (closed) return Result.failure(Exception("Camera is closed"))
         if (!hasPermission()) {
             return Result.failure(Exception("Camera permission not granted"))
         }
         val capture = try {
-            bindIfNeeded()
+            bindIfNeeded(token)
         } catch (e: Exception) {
             return Result.failure(Exception("camera unavailable: ${e.message}"))
         }
         return try {
-            val jpeg = takePicture(capture)
-            Result.success(downscaleToJpeg(jpeg, maxDimension))
+            val jpeg = takePicture(capture, token)
+            val output = downscaleToJpeg(jpeg, maxDimension)
+            check(captureGate.acceptsCapture(token)) { "Camera was switched off during capture" }
+            Result.success(output)
         } catch (e: Exception) {
             // One rebind retry: a stale session after suspend is the usual cause
             try {
+                check(captureGate.acceptsCapture(token)) { "Camera was switched off during capture" }
                 unbind()
-                val fresh = bindIfNeeded()
-                Result.success(downscaleToJpeg(takePicture(fresh), maxDimension))
+                val fresh = bindIfNeeded(token)
+                val output = downscaleToJpeg(takePicture(fresh, token), maxDimension)
+                check(captureGate.acceptsCapture(token)) { "Camera was switched off during capture" }
+                Result.success(output)
             } catch (e2: Exception) {
                 Result.failure(Exception("capture failed: ${e2.message ?: e.message}"))
             }
@@ -1251,41 +1293,47 @@ class VisionManager(
      * the main thread asynchronously. Safe to call from any thread — queues the
      * bind via the CameraX provider listener.
      */
+    @Synchronized
     private fun bindPreviewAsync() {
-        // Also the guard for the thermal-pause resume path in expireAttention():
-        // once closed, nothing may rebind a camera, even from a stale watchdog.
         if (closed) return
+        val binding = captureGate.nextBinding() ?: return
         val future = ProcessCameraProvider.getInstance(context)
         future.addListener(
             {
-                try {
-                    val provider = future.get()
-                    thermalStatus = ThermalGovernor.currentStatus()
-                    thermalPaused = thermalStatus >= android.os.PowerManager.THERMAL_STATUS_MODERATE
-                    provider.unbindAll()
-                    if (thermalPaused) { clearAttention(); return@addListener }
-                    val selector = resolveSelector(provider)
-                    val useCases = mutableListOf<androidx.camera.core.UseCase>()
-                    preview?.let { p -> p.surfaceProvider?.let { useCases.add(p) } }
-                    imageCapture?.let { useCases.add(it) }
-                    imageAnalysis?.let { useCases.add(it) }
-                    if (useCases.isNotEmpty()) {
-                        provider.bindToLifecycle(lifecycleOwner, selector, *useCases.toTypedArray())
-                        boundSelector = selector
+                synchronized(this) {
+                    if (closed || !captureGate.acceptsBinding(binding) || !hasPermission()) return@synchronized
+                    try {
+                        val provider = future.get()
+                        thermalStatus = ThermalGovernor.currentStatus()
+                        thermalPaused = thermalStatus >= android.os.PowerManager.THERMAL_STATUS_MODERATE
+                        provider.unbindAll()
+                        if (thermalPaused) { clearAttention(); return@synchronized }
+                        val selector = resolveSelector(provider)
+                        val useCases = mutableListOf<androidx.camera.core.UseCase>()
+                        preview?.let { p -> p.surfaceProvider?.let { useCases.add(p) } }
+                        imageCapture?.let { useCases.add(it) }
+                        imageAnalysis?.let { useCases.add(it) }
+                        // Under the manager lock: OFF cannot interleave check and bind.
+                        if (useCases.isNotEmpty() && captureGate.acceptsBinding(binding)) {
+                            provider.bindToLifecycle(lifecycleOwner, selector, *useCases.toTypedArray())
+                            boundSelector = selector
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.w("VisionManager", "bindPreviewAsync failed: ${e.message}", e)
                     }
-                } catch (e: Exception) {
-                    android.util.Log.w("VisionManager", "bindPreviewAsync failed: ${e.message}", e)
                 }
             },
             ContextCompat.getMainExecutor(context)
         )
     }
 
-    private suspend fun bindIfNeeded(): ImageCapture {
+    private suspend fun bindIfNeeded(token: Long): ImageCapture {
+        check(!closed && captureGate.acceptsCapture(token)) { "Camera is switched off" }
         if (ThermalGovernor.currentStatus() >= android.os.PowerManager.THERMAL_STATUS_MODERATE) {
             throw ImageCaptureException(ImageCapture.ERROR_UNKNOWN, "Camera paused while cooling", null)
         }
-        imageCapture?.let { return it }
+        synchronized(this) { imageCapture?.let { return it } }
+        val binding = captureGate.nextBinding() ?: error("Camera is switched off")
         val provider = withTimeoutOrNull(10_000) {
             suspendCancellableCoroutine<ProcessCameraProvider> { cont ->
                 val future = ProcessCameraProvider.getInstance(context)
@@ -1297,18 +1345,27 @@ class VisionManager(
         } ?: throw ImageCaptureException(
             ImageCapture.ERROR_UNKNOWN, "camera provider unavailable after 10s", null,
         )
-        val capture = ImageCapture.Builder()
-            .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
-            .build()
-        val selector = resolveSelector(provider)
-        provider.unbindAll()
-        val useCases = mutableListOf<androidx.camera.core.UseCase>(capture)
-        preview?.let { p -> p.surfaceProvider?.let { useCases.add(p) } }
-        imageAnalysis?.let { useCases.add(it) }
-        provider.bindToLifecycle(lifecycleOwner, selector, *useCases.toTypedArray())
-        imageCapture = capture
-        boundSelector = selector
-        return capture
+        return withContext(Dispatchers.Main.immediate) {
+            synchronized(this@VisionManager) {
+                check(!closed && captureGate.acceptsCapture(token) && captureGate.acceptsBinding(binding)) {
+                    "Camera capture was cancelled or replaced"
+                }
+                check(hasPermission()) { "Camera permission not granted" }
+                check(ThermalGovernor.currentStatus() < android.os.PowerManager.THERMAL_STATUS_MODERATE) { "Camera paused while cooling" }
+                val capture = ImageCapture.Builder()
+                    .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                    .build()
+                val selector = resolveSelector(provider)
+                provider.unbindAll()
+                val useCases = mutableListOf<androidx.camera.core.UseCase>(capture)
+                preview?.let { p -> p.surfaceProvider?.let { useCases.add(p) } }
+                imageAnalysis?.let { useCases.add(it) }
+                provider.bindToLifecycle(lifecycleOwner, selector, *useCases.toTypedArray())
+                imageCapture = capture
+                boundSelector = selector
+                capture
+            }
+        }
     }
 
     private fun resolveSelector(provider: ProcessCameraProvider): CameraSelector {
@@ -1395,6 +1452,7 @@ class VisionManager(
 
     @Synchronized
     private fun unbind() {
+        val binding = captureGate.invalidateBindings()
         trackingSession.invalidate()
         clearAttention()
         imageCapture = null
@@ -1404,39 +1462,48 @@ class VisionManager(
         // unbind via the provider's listener instead.
         val future = ProcessCameraProvider.getInstance(context)
         future.addListener(
-            { runCatching { future.get().unbindAll() } },
+            { synchronized(this) {
+                // A later bind performs its own unbind; this stale callback must
+                // not tear down that newer explicitly enabled session.
+                if (captureGate.currentBinding(binding)) runCatching { future.get().unbindAll() }
+            } },
             ContextCompat.getMainExecutor(context)
         )
     }
 
-    private suspend fun takePicture(capture: ImageCapture): ByteArray {
+    private suspend fun takePicture(capture: ImageCapture, token: Long): ByteArray {
+        check(!closed && captureGate.acceptsCapture(token)) { "Camera is switched off" }
         // The capture must never hang the caller: if the camera session stalls
         // (stale after suspend, folded cover, sensor busy) fail loudly instead of
         // leaving the crash-alert coroutine blocked forever.
         val jpeg = withTimeoutOrNull(10_000) {
             suspendCancellableCoroutine<ByteArray> { cont ->
-                capture.takePicture(
-                    ContextCompat.getMainExecutor(context),
-                    object : ImageCapture.OnImageCapturedCallback() {
-                        override fun onCaptureSuccess(image: ImageProxy) {
-                            try {
-                                val buffer = image.planes[0].buffer
-                                val bytes = ByteArray(buffer.remaining())
-                                buffer.get(bytes)
-                                val rotation = image.imageInfo.rotationDegrees
-                                image.close()
-                                cont.resume(rotateJpeg(bytes, rotation))
-                            } catch (e: Exception) {
-                                image.close()
-                                cont.resumeWith(Result.failure(e))
+                synchronized(this@VisionManager) {
+                    check(!closed && captureGate.acceptsCapture(token)) { "Camera is switched off" }
+                    capture.takePicture(
+                        ContextCompat.getMainExecutor(context),
+                        object : ImageCapture.OnImageCapturedCallback() {
+                            override fun onCaptureSuccess(image: ImageProxy) {
+                                try {
+                                    check(captureGate.acceptsCapture(token)) { "Camera was switched off during capture" }
+                                    val buffer = image.planes[0].buffer
+                                    val bytes = ByteArray(buffer.remaining())
+                                    buffer.get(bytes)
+                                    val rotation = image.imageInfo.rotationDegrees
+                                    image.close()
+                                    cont.resume(rotateJpeg(bytes, rotation))
+                                } catch (e: Exception) {
+                                    image.close()
+                                    cont.resumeWith(Result.failure(e))
+                                }
+                            }
+
+                            override fun onError(exception: ImageCaptureException) {
+                                cont.resumeWith(Result.failure(exception))
                             }
                         }
-
-                        override fun onError(exception: ImageCaptureException) {
-                            cont.resumeWith(Result.failure(exception))
-                        }
-                    }
-                )
+                    )
+                }
             }
         } ?: throw ImageCaptureException(
             ImageCapture.ERROR_UNKNOWN, "camera capture timed out after 10s", null,

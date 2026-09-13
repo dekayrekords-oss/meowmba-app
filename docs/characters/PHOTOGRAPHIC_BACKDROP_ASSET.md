@@ -1,0 +1,9 @@
+# Photographic sunroom backdrop
+
+Generated with the built-in image_gen tool for this project. Original source: /Users/bobrossjr/.codex/generated_images/01a0979c-e527-70a2-8488-49fd078dc68d/exec-accd10be-6b16-4477-85ca-8fdbd83c0c68.png. The shipped, copied asset is app/src/main/assets/backgrounds/conservatory.png (1024×1536). No third-party photo was copied. This is a generated photographic-style still, not live video or a reconstructed 3D location. Decode is asynchronous, once per selection, with the existing2048-pixel longest-edge cap. The bitmap itself has no animation timer.
+
+## Exact prompt
+Create one photorealistic premium interior background plate for a mobile virtual pet app, portrait 2:3. A real sunlit conservatory reading nook, beautifully detailed warm oak tabletop across the lower quarter, distant soft-focus botanical plants, tall arched windows and stone plaster wall, soft afternoon sunlight, subtle natural surface imperfections, physically plausible bounce light and cinematic photographic detail. Camera near eye level, moderate wide lens, straight verticals. Large calm empty space in the central 60 percent for a cartoon character composited later. Objects and foliage concentrated around edges; no foreground object blocking center. Rich but restrained natural greens and honey oak, professional architectural photography, high resolution. Environment only, no character, no insects, no people, no text, no watermark, no UI. This is a static scene plate, do not draw mobile phone frame.
+
+## Inspection
+Viewed full generated image and actual phone composition with the cartoon fly. Photo selection and returning to home worked. The original plain/background-image choices remain present. Do not label this literal10× resolution or AAA studio output; quality assessment is visual, and game rooms remain separately authored lightweight3D geometry.

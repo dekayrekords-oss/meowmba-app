@@ -35,6 +35,19 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.material3.FilterChip
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -57,12 +70,17 @@ import com.example.meowmba.core.background.BackgroundSelection
  * comparison makes it a chore.
  */
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 fun BackgroundScreen(
     selection: BackgroundSelection,
     onSelect: (BackgroundSelection) -> Unit,
     onClose: () -> Unit,
     /** Whether the Weather page's ambient scene is on; it draws in FRONT of all of this. */
     ambientWeatherOn: Boolean = false,
+    avatarScale: Float = 1f,
+    onAvatarScale: (Float) -> Unit = {},
+    habitatMode: Boolean = false,
+    onHabitatMode: (Boolean) -> Unit = {},
 ) {
     val context = LocalContext.current
 
@@ -77,211 +95,120 @@ fun BackgroundScreen(
                     uri, Intent.FLAG_GRANT_READ_URI_PERMISSION,
                 )
             }
+            onHabitatMode(false)
             onSelect(selection.copy(kind = BackgroundKind.IMAGE, value = uri.toString()))
         }
     }
 
+    var tab by rememberSaveable { mutableStateOf(if (habitatMode) "Habitats" else if (selection.kind == BackgroundKind.ANIMATION || selection.kind == BackgroundKind.LIVE_WEATHER) "Animated" else "Static") }
+    val selectedName = when (selection.kind) {
+        BackgroundKind.NONE -> "Plain background"
+        BackgroundKind.IMAGE -> "Your picture"
+        BackgroundKind.LIVE_WEATHER -> "Live weather"
+        BackgroundKind.ANIMATION -> selection.animation?.label ?: "Background"
+    }
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Column(
-            modifier = Modifier
-                .safeDrawingPadding()
-                .padding(horizontal = 20.dp)
-                .verticalScroll(rememberScrollState()),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "Background",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.weight(1f),
-                )
-                IconButton(onClick = onClose) {
-                    Icon(Icons.Default.Close, contentDescription = "Close", tint = MaterialTheme.colorScheme.onSurface)
+        Column(Modifier.safeDrawingPadding().verticalScroll(rememberScrollState()).padding(horizontal = AvatarSetupTokens.page)) {
+            Row(Modifier.fillMaxWidth().padding(top = AvatarSetupTokens.compact), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Set the scene", style = MaterialTheme.typography.headlineSmall)
+                    Text("Backgrounds & habitats", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                IconButton(onClick = onClose) { Icon(Icons.Default.Close, contentDescription = "Close backgrounds") }
+            }
+            SetupSection(selectedName, if (habitatMode) "Play habitat selected" else "Backdrop selected")
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(AvatarSetupTokens.compact)) {
+                listOf("Static", "Animated", "Habitats").forEach { option ->
+                    FilterChip(selected = tab == option, onClick = { tab = option }, label = { Text(option) })
                 }
             }
-            Text(
-                text = "What sits behind the companion.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 13.sp,
-            )
-
-            Spacer(Modifier.height(20.dp))
-            SectionLabel("Live")
-
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                ChoiceTile(
-                    label = "None",
-                    selected = selection.kind == BackgroundKind.NONE,
-                    modifier = Modifier.weight(1f),
-                    onClick = { onSelect(selection.copy(kind = BackgroundKind.NONE, value = "")) },
-                ) {
-                    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background))
-                }
-                ChoiceTile(
-                    label = "Live weather",
-                    selected = selection.kind == BackgroundKind.LIVE_WEATHER,
-                    modifier = Modifier.weight(1f),
-                    onClick = {
-                        onSelect(selection.copy(kind = BackgroundKind.LIVE_WEATHER, value = ""))
-                    },
-                ) {
-                    Box(
-                        Modifier
-                            .fillMaxSize()
-                            .background(
-                                Brush.verticalGradient(
-                                    listOf(Color(0xFF2E6BA8), Color(0xFF123049)),
-                                )
-                            ),
-                        contentAlignment = Alignment.Center,
-                    ) { Text("🌤️", fontSize = 26.sp) }
-                }
-            }
-            Text(
-                text = "Live weather follows the real sky and the time of day.",
-                color = Color(0xFF6E7681),
-                fontSize = 11.sp,
-                modifier = Modifier.padding(top = 6.dp),
-            )
-            if (ambientWeatherOn) {
-                // Otherwise picking None looks broken: the weather is still there, because
-                // it is a different layer owned by a different page.
-                Text(
-                    text = "\"Always show weather\" is on, so the weather animation plays " +
-                        "in front of whatever you pick here — including None. Turn it off " +
-                        "on the Weather page.",
-                    color = Color(0xFFD29922),
-                    fontSize = 11.sp,
-                    modifier = Modifier.padding(top = 6.dp),
-                )
-            }
-
-            Spacer(Modifier.height(20.dp))
-            SectionLabel("Animations")
-
-            // Plain rows, not a LazyVerticalGrid. A lazy grid inside a scrolling column has
-            // to be given a fixed height, and every guess at that height was wrong by
-            // exactly enough to clip the last row's labels.
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                BackgroundAnimation.entries.chunked(3).forEach { row ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        row.forEach { animation ->
-                            val isSelected = selection.kind == BackgroundKind.ANIMATION &&
-                                selection.value == animation.id
-                            ChoiceTile(
-                                label = animation.label,
-                                selected = isSelected,
-                                modifier = Modifier.weight(1f),
-                                onClick = {
-                                    onSelect(
-                                        selection.copy(
-                                            kind = BackgroundKind.ANIMATION,
-                                            value = animation.id,
-                                        )
-                                    )
-                                },
-                            ) {
-                                val condition = animation.condition
-                                if (condition == null) {
-                                    AnimationThumbnail(animation, Modifier.fillMaxSize())
-                                } else {
-                                    Box(
-                                        Modifier
-                                            .fillMaxSize()
-                                            .background(
-                                                Brush.verticalGradient(
-                                                    weatherSwatch(animation.id)
-                                                )
-                                            ),
-                                        contentAlignment = Alignment.Center,
-                                    ) { Text(condition.emoji, fontSize = 24.sp) }
-                                }
-                            }
+            when (tab) {
+                "Static" -> {
+                    SetupSection("Keep it simple", "A quiet space or a picture of your own.")
+                    ChoiceTile("Sunroom · photographic", selection.value == "asset:///backgrounds/conservatory.png" && !habitatMode,
+                        onClick = { onHabitatMode(false); onSelect(BackgroundSelection(BackgroundKind.IMAGE, "asset:///backgrounds/conservatory.png", 10)) },
+                        modifier = Modifier.fillMaxWidth()) {
+                        AppBackground(BackgroundSelection(BackgroundKind.IMAGE, "asset:///backgrounds/conservatory.png", 0), null)
+                    }
+                    ChoiceTile("Plain background", selection.kind == BackgroundKind.NONE && !habitatMode,
+                        onClick = { onHabitatMode(false); onSelect(selection.copy(kind = BackgroundKind.NONE, value = "")) },
+                        modifier = Modifier.fillMaxWidth()) {
+                        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background), contentAlignment = Alignment.Center) {
+                            Text("Plain", style = MaterialTheme.typography.titleMedium)
                         }
-                        // Keeps a short last row's tiles the same size as a full row's.
-                        repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+                    }
+                    Button(onClick = { picker.launch(arrayOf("image/*")) }, modifier = Modifier.fillMaxWidth().padding(top = AvatarSetupTokens.item)) {
+                        Icon(Icons.Default.Image, contentDescription = null)
+                        Text(if (selection.kind == BackgroundKind.IMAGE) "Choose another picture" else "Choose a picture", modifier = Modifier.padding(start = AvatarSetupTokens.compact))
+                    }
+                    if (selection.kind == BackgroundKind.IMAGE && selection.value.isNotBlank()) {
+                        Box(Modifier.fillMaxWidth().padding(top = AvatarSetupTokens.item).aspectRatio(1.6f).clip(RoundedCornerShape(AvatarSetupTokens.corner))) {
+                            AppBackground(selection.copy(dimPercent = 0), weather = null, modifier = Modifier.fillMaxSize())
+                        }
+                    }
+                }
+                "Animated" -> {
+                    SetupSection("A little atmosphere", "Scenery moves behind your full-size companion.")
+                    ChoiceTile("Live weather", selection.kind == BackgroundKind.LIVE_WEATHER && !habitatMode,
+                        onClick = { onHabitatMode(false); onSelect(selection.copy(kind = BackgroundKind.LIVE_WEATHER, value = "")) },
+                        modifier = Modifier.fillMaxWidth()) {
+                        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.secondaryContainer), contentAlignment = Alignment.Center) {
+                            Text("Live sky", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                        }
+                    }
+                    Text("Live weather follows the real sky and time of day.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = AvatarSetupTokens.item))
+                    BackgroundChoiceGrid(BackgroundAnimation.entries.filter { !it.isPetEnvironment }, selection) { animation ->
+                        onHabitatMode(false)
+                        onSelect(selection.copy(kind = BackgroundKind.ANIMATION, value = animation.id))
+                    }
+                }
+                else -> {
+                    SetupSection("A place to play", "Choose a room to explore with your companion. Care is optional.")
+                    BackgroundChoiceGrid(BackgroundAnimation.entries.filter { it.isPetEnvironment }, selection) { animation ->
+                        onHabitatMode(true)
+                        onSelect(selection.copy(kind = BackgroundKind.ANIMATION, value = animation.id))
                     }
                 }
             }
-
-            Spacer(Modifier.height(20.dp))
-            SectionLabel("Image")
-
-            Button(
-                onClick = { picker.launch(arrayOf("image/*")) },
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Icon(Icons.Default.Image, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                Spacer(Modifier.height(0.dp))
-                Text(
-                    text = if (selection.kind == BackgroundKind.IMAGE) {
-                        "  Choose a different picture"
-                    } else {
-                        "  Choose a picture"
-                    },
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
+            if (ambientWeatherOn) {
+                SetupSection("Weather overlay is on", "Always show weather adds a separate animation over your choice. Change it on the Weather page.")
             }
-
-            if (selection.kind == BackgroundKind.IMAGE && selection.value.isNotBlank()) {
-                Spacer(Modifier.height(12.dp))
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(160.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(16.dp)),
-                ) {
-                    AppBackground(
-                        selection = selection.copy(dimPercent = 0),
-                        weather = null,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                }
+            if (!habitatMode) {
+            SetupSection("Background dimming", "Make the scenery softer so your companion is easy to see.")
+            Text("${selection.dimPercent}%", style = MaterialTheme.typography.titleMedium)
+            Slider(value = selection.dimPercent.toFloat().coerceIn(0f, 90f),
+                onValueChange = { onSelect(selection.copy(dimPercent = it.toInt().coerceIn(0, 90))) }, valueRange = 0f..90f,
+                modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Background dimming" })
             }
-
-            Spacer(Modifier.height(24.dp))
-            SectionLabel("Dim")
-            Text(
-                text = "Darkens whatever is behind the companion so the face stays readable.",
-                color = Color(0xFF6E7681),
-                fontSize = 11.sp,
-            )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Slider(
-                    value = selection.dimPercent.toFloat(),
-                    onValueChange = {
-                        onSelect(selection.copy(dimPercent = it.toInt().coerceIn(0, 90)))
-                    },
-                    valueRange = 0f..90f,
-                    colors = SliderDefaults.colors(
-                        thumbColor = MaterialTheme.colorScheme.primary,
-                        activeTrackColor = MaterialTheme.colorScheme.primary,
-                    ),
-                    modifier = Modifier.weight(1f),
-                )
-                Spacer(Modifier.padding(horizontal = 6.dp))
-                Text("${selection.dimPercent}%", color = MaterialTheme.colorScheme.onSurface, fontSize = 13.sp)
-            }
-
-            Spacer(Modifier.height(40.dp))
+            SetupSizeControl(avatarScale, onAvatarScale)
+            Spacer(Modifier.height(AvatarSetupTokens.section))
         }
     }
 }
 
 @Composable
-private fun SectionLabel(text: String) {
-    Text(
-        text = text.uppercase(),
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        fontSize = 11.sp,
-        fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(bottom = 8.dp),
-    )
+private fun BackgroundChoiceGrid(animations: List<BackgroundAnimation>, selection: BackgroundSelection, onChoose: (BackgroundAnimation) -> Unit) {
+    val fontScale = LocalDensity.current.fontScale
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val columns = (maxWidth.value / (132f * fontScale.coerceAtLeast(1f))).toInt().coerceIn(1, 4)
+        Column(verticalArrangement = Arrangement.spacedBy(AvatarSetupTokens.item)) {
+            animations.chunked(columns).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(AvatarSetupTokens.item)) {
+                    row.forEach { animation ->
+                        ChoiceTile(animation.label, selection.kind == BackgroundKind.ANIMATION && selection.value == animation.id,
+                            onClick = { onChoose(animation) }, modifier = Modifier.weight(1f)) {
+                            if (animation.condition == null) AnimationThumbnail(animation, Modifier.fillMaxSize())
+                            else Box(Modifier.fillMaxSize().background(Brush.verticalGradient(weatherSwatch(animation.id))), contentAlignment = Alignment.Center) {
+                                Text(animation.condition.emoji, style = MaterialTheme.typography.headlineSmall)
+                            }
+                        }
+                    }
+                    repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+        }
+    }
 }
 
 /** A preview square with its name under it, and a tick when it is the active choice. */
@@ -294,13 +221,13 @@ private fun ChoiceTile(
     preview: @Composable () -> Unit,
 ) {
     Column(
-        modifier = modifier.clickable(onClick = onClick),
+        modifier = modifier.semantics { this.selected = selected }.clickable(role = Role.RadioButton, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(
             Modifier
                 .fillMaxWidth()
-                .aspectRatio(1f)
+                .aspectRatio(1.65f)
                 .clip(RoundedCornerShape(14.dp))
                 .background(MaterialTheme.colorScheme.surface)
                 .border(
@@ -322,7 +249,7 @@ private fun ChoiceTile(
                     Icon(
                         Icons.Default.Check,
                         contentDescription = "Selected",
-                        tint = Color.Black,
+                        tint = MaterialTheme.colorScheme.onPrimary,
                         modifier = Modifier.padding(1.dp),
                     )
                 }
@@ -332,7 +259,7 @@ private fun ChoiceTile(
         Text(
             text = label,
             color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 11.sp,
+            style = MaterialTheme.typography.labelLarge,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
         )
     }

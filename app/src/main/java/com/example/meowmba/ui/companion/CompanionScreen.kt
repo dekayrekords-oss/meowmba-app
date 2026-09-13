@@ -33,6 +33,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material.icons.filled.VideocamOff
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -147,9 +149,9 @@ fun CompanionScreen(
         } else {
         // 0. User-chosen background always draws when set. Live weather sky too.
         // Only the empty NEO desk stays see-through.
-        if ((!isNeo || hasUserBg) && uiState.avatarStyle != AvatarStyle.FULL_FLY) {
+        if ((!isNeo || hasUserBg) && !(uiState.avatarStyle == AvatarStyle.FULL_FLY && uiState.habitatMode)) {
             AppBackground(
-                selection = uiState.background,
+                selection = if (uiState.habitatMode) com.example.meowmba.core.background.BackgroundSelection(com.example.meowmba.core.background.BackgroundKind.ANIMATION, uiState.habitatBackgroundId, 15) else uiState.background,
                 weather = uiState.ambientWeather ?: uiState.weather,
                 modifier = Modifier.matchParentSize(),
                 paused = animationsPaused,
@@ -166,8 +168,9 @@ fun CompanionScreen(
             modifier = Modifier.matchParentSize(),
         )
 
-        if (!habitatCovered && (uiState.avatarStyle == AvatarStyle.FULL_FLY || uiState.background.animation?.isPetEnvironment == true)) {
+        if (!habitatCovered && (uiState.avatarStyle.isLumen || uiState.habitatMode)) {
             PetCarePanel(
+                habitatMode = uiState.habitatMode, onTrick = viewModel::playCompanionTrick,
                 care = uiState.petCare, motionPaused = !avatarWorkAllowed, onCareChanged = viewModel::setPetCare,
                 onAction = viewModel::habitatAction, onFeedback = viewModel::petFeedback,
                 onLearningChanged = viewModel::setPetLearning, learningEnabled = uiState.petLearningEnabled,
@@ -382,17 +385,16 @@ fun CompanionScreen(
                     .padding(bottom = 128.dp, end = 16.dp),
             )
             IconButton(
-                onClick = { viewModel.togglePreview() },
+                onClick = { viewModel.setCameraEnabled(!uiState.isCameraEnabled) },
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .imePadding()
                     .padding(bottom = 72.dp, end = 16.dp)
             ) {
                 Icon(
-                    imageVector = if (uiState.isPreviewVisible)
-                        Icons.Default.Close else Icons.Default.PlayArrow,
-                    contentDescription = "Toggle camera preview",
-                    tint = if (uiState.isPreviewVisible) Color(0xFF3FB950) else Color(0x55CFF9FF)
+                    imageVector = if (uiState.isCameraEnabled) Icons.Default.Videocam else Icons.Default.VideocamOff,
+                    contentDescription = if (uiState.isCameraEnabled) "Turn camera off" else "Turn camera on",
+                    tint = if (uiState.isCameraEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
@@ -689,15 +691,19 @@ fun CompanionScreen(
 
         if (uiState.showBackgroundScreen) {
             BackgroundScreen(
-                selection = uiState.background,
+                selection = if (uiState.habitatMode) com.example.meowmba.core.background.BackgroundSelection(com.example.meowmba.core.background.BackgroundKind.ANIMATION, uiState.habitatBackgroundId, 15) else uiState.background,
                 onSelect = { viewModel.setBackground(it) },
                 onClose = { viewModel.toggleBackgroundScreen() },
                 ambientWeatherOn = uiState.ambientWeatherEnabled,
+                avatarScale = uiState.avatarScale, onAvatarScale = viewModel::setAvatarScale,
+                habitatMode = uiState.habitatMode, onHabitatMode = viewModel::setHabitatMode,
             )
         }
 
         if (uiState.showAvatarScreen) {
             AvatarScreen(
+                avatarScale = uiState.avatarScale, onAvatarScale = viewModel::setAvatarScale,
+                habitatMode = uiState.habitatMode, onHabitatMode = viewModel::setHabitatMode,
                 style = uiState.avatarStyle,
                 onSelectStyle = { viewModel.setAvatarStyle(it) },
                 animal = uiState.avatarAnimal,

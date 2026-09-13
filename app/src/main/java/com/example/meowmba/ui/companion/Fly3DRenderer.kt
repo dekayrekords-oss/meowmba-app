@@ -26,6 +26,7 @@ data class Fly3DFrame(
     val holding: String? = null, val backgroundId: String = "kitchen", val active: Boolean = true,
     val props: List<Fly3DProp>? = null,
     val handX: Float? = null, val handY: Float? = null, val handZ: Float? = null,
+    val avatarScale: Float = 1f, val stageMode: Boolean = false,
 )
 
 /** GLES2 mesh renderer. Host uses RENDERMODE_WHEN_DIRTY and publishes [frame] before
@@ -39,10 +40,13 @@ class Fly3DRenderer : GLSurfaceView.Renderer {
     @Volatile var renderedFrames: Long = 0
         private set
 
-    private val sphere = Fly3DGeometry.sphere()
+    private val sphere = Fly3DGeometry.sphere(28, 18)
+    private val edgePass = Fly3DEdgePass()
     private val smallSphere = Fly3DGeometry.sphere(12, 8)
     private val cube = Fly3DGeometry.cube()
     private val wing = Fly3DGeometry.wing()
+    private val ringMesh = Fly3DGeometry.ring()
+    private val shadeMesh = Fly3DGeometry.shade()
     private val model = FloatArray(16)
     private val view = FloatArray(16)
     private val projection = FloatArray(16)
@@ -69,6 +73,24 @@ class Fly3DRenderer : GLSurfaceView.Renderer {
     private val worldHand = FloatArray(4)
     private val localHand = FloatArray(4)
     private var hasHandTarget = false
+    private var viewportWidth = 1
+    private var viewportHeight = 1
+    private var materialHandle = 0
+    private var characterHandle = 0
+    private var environmentHandle = 0
+    private var shadowHandle = 0
+    private var shadowPlaneHandle = 0
+    private val shadowData = FloatArray(16)
+    private val shadowPlanes = FloatArray(4)
+    @Volatile var lastDrawCalls:Int=0
+        private set
+    @Volatile var lastTriangles:Int=0
+        private set
+    private var drawCalls=0
+    private var triangles=0
+    private var drawingCharacter = false
+    private var nightScene = false
+    private var sceneTime = 0f
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
         ready = false
@@ -85,12 +107,18 @@ class Fly3DRenderer : GLSurfaceView.Renderer {
             outlineHandle = GLES20.glGetUniformLocation(program, "uOutline")
             outlineWidthHandle = GLES20.glGetUniformLocation(program, "uOutlineWidth")
             unlitHandle = GLES20.glGetUniformLocation(program, "uUnlit")
-            sphere.upload(); smallSphere.upload(); cube.upload(); wing.upload()
+            materialHandle = GLES20.glGetUniformLocation(program,"uMaterial")
+            characterHandle = GLES20.glGetUniformLocation(program,"uCharacter")
+            environmentHandle = GLES20.glGetUniformLocation(program,"uEnvironment")
+            shadowHandle = GLES20.glGetUniformLocation(program,"uShadows[0]")
+            shadowPlaneHandle = GLES20.glGetUniformLocation(program,"uShadowPlanes[0]")
+            edgePass.contextCreated()
+            sphere.upload(); smallSphere.upload(); cube.upload(); wing.upload(); ringMesh.upload(); shadeMesh.upload()
             GLES20.glEnable(GLES20.GL_DEPTH_TEST)
             GLES20.glDepthFunc(GLES20.GL_LEQUAL)
             GLES20.glEnable(GLES20.GL_CULL_FACE)
             GLES20.glFrontFace(GLES20.GL_CCW)
-            GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA)
+            GLES20.glBlendFuncSeparate(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA, GLES20.GL_ONE, GLES20.GL_ONE_MINUS_SRC_ALPHA)
             Matrix.setLookAtM(view, 0, 0f, 2.5f, 8f, 0f, 1.5f, 0f, 0f, 1f, 0f)
             ready = true; lastError = null
         } catch (error: RuntimeException) {
@@ -99,69 +127,163 @@ class Fly3DRenderer : GLSurfaceView.Renderer {
     }
 
     override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
-        GLES20.glViewport(0, 0, width, height)
-        val aspect = width.toFloat() / max(1, height)
-        // Keep the entire play width visible on folded portrait displays without moving the camera.
-        val halfWidth = max(3.8f, 3.2f * aspect)
-        val near = .1f
-        Matrix.frustumM(projection, 0, -halfWidth * near / 8f, halfWidth * near / 8f,
-            -halfWidth / aspect * near / 8f, halfWidth / aspect * near / 8f, near, 40f)
-        Matrix.multiplyMM(vp, 0, projection, 0, view, 0)
+        viewportWidth=max(1,width); viewportHeight=max(1,height)
+        edgePass.resize(viewportWidth,viewportHeight)
+        configureCamera(false)
+    }
+
+    private fun configureCamera(stage:Boolean) {
+        val aspect=viewportWidth.toFloat()/viewportHeight
+        val halfWidth=if(stage) max(1.6f,1.6f*aspect) else max(3.25f,3.0f*aspect)
+        val near=.1f
+        Matrix.frustumM(projection,0,-halfWidth*near/8f,halfWidth*near/8f,
+            -halfWidth/aspect*near/8f,halfWidth/aspect*near/8f,near,40f)
+        if(stage) Matrix.setLookAtM(view,0,0f,0f,8f,0f,0f,0f,0f,1f,0f)
+        else Matrix.setLookAtM(view,0,0f,2.5f,8f,0f,1.5f,0f,0f,1f,0f)
+        Matrix.multiplyMM(vp,0,projection,0,view,0)
     }
 
     override fun onDrawFrame(gl: GL10?) {
         val incoming = frame
-        val f = if (incoming.active) incoming.also { lastActiveFrame = it } else lastActiveFrame
+        val f = if(incoming.active) incoming.also {lastActiveFrame=it} else {
+            if(incoming.avatarScale!=lastActiveFrame.avatarScale || incoming.stageMode!=lastActiveFrame.stageMode ||
+                incoming.backgroundId!=lastActiveFrame.backgroundId) {
+                lastActiveFrame=lastActiveFrame.copy(avatarScale=incoming.avatarScale,stageMode=incoming.stageMode,
+                    backgroundId=incoming.backgroundId)
+            }
+            lastActiveFrame
+        }
         // One coherent snapshot for opaque geometry, transparent wings and articulated hand.
-        GLES20.glClearColor(.88f, .90f, .84f, 1f)
-        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT or GLES20.GL_DEPTH_BUFFER_BIT)
         if (!ready) return
+        edgePass.begin()
+        if(f.stageMode) GLES20.glClearColor(0f,0f,0f,0f) else GLES20.glClearColor(.88f,.90f,.84f,1f)
+        GLES20.glDepthMask(true)
+        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT or GLES20.GL_DEPTH_BUFFER_BIT)
+        configureCamera(f.stageMode)
         GLES20.glUseProgram(program)
         GLES20.glDisable(GLES20.GL_BLEND)
         GLES20.glDepthMask(true)
-        Matrix.setIdentityM(model, 0); stackAt = 0
-        room(f)
+        Matrix.setIdentityM(model, 0); stackAt = 0; drawCalls=0; triangles=0
+        nightScene=!f.stageMode && f.backgroundId in NIGHT_BACKGROUNDS
+        sceneTime=f.timeSeconds.safe()
+        GLES20.glUniform2f(environmentHandle,if(nightScene)1f else 0f,sceneTime)
+        prepareShadows(f)
+        drawingCharacter=false
+        if(!f.stageMode) room(f)
         push()
-        Matrix.translateM(model, 0, f.x.safe().coerceIn(-2.5f,2.5f), f.y.safe(2.1f).coerceIn(.55f,4f), f.z.safe().coerceIn(-1.5f,1.5f))
-        Matrix.rotateM(model, 0, f.yaw.safe() * DEGREES, 0f,1f,0f)
-        Matrix.rotateM(model, 0, f.pitch.safe() * DEGREES, 1f,0f,0f)
-        Matrix.rotateM(model, 0, f.roll.safe() * DEGREES, 0f,0f,1f)
-        Matrix.scaleM(model, 0, .50f,.50f,.50f)
-        hasHandTarget = f.handX?.isFinite() == true && f.handY?.isFinite() == true && f.handZ?.isFinite() == true
+        val requestedScale=f.avatarScale.safe(1f).coerceIn(.5f,2f)
+        val unit:Float
+        if(f.stageMode) {
+            val aspect=viewportWidth.toFloat()/viewportHeight
+            val visibleWidth=2f*max(1.6f,1.6f*aspect)
+            val visibleHeight=visibleWidth/aspect
+            // Side/back wing bounds and a small orbit reserve remain inside the transparent layer.
+            val safeUnit=minOf(visibleWidth*.86f/2.7f,visibleHeight*.80f/2.7f)
+            // Fit the nominal size in both axes BEFORE applying the user's multiplier.
+            // Otherwise landscape's height cap can swallow even the 50% setting.
+            val baseUnit=minOf(visibleWidth*.65f/2.38f,visibleHeight*.65f/2.7f)
+            unit=minOf(baseUnit*requestedScale,safeUnit)
+            Matrix.translateM(model,0,sin(sceneTime*.23f)*unit*.06f,
+                -unit*.22f+sin(sceneTime*.41f)*unit*.035f,0f)
+            Matrix.rotateM(model,0,f.yaw.safe()*DEGREES+sin(sceneTime*.19f)*8f,0f,1f,0f)
+            Matrix.rotateM(model,0,f.pitch.safe().coerceIn(-.25f,.25f)*DEGREES,1f,0f,0f)
+            Matrix.rotateM(model,0,f.roll.safe().coerceIn(-.18f,.18f)*DEGREES,0f,0f,1f)
+        } else {
+            unit=.50f*requestedScale
+            // Root height compensation preserves grounded feet; world-space grip stays authoritative.
+            val groundCompensation=.545f*(requestedScale-1f)*(1f-f.flight.safe().coerceIn(0f,1f))
+            Matrix.translateM(model,0,f.x.safe().coerceIn(-2.5f,2.5f),
+                f.y.safe(2.1f).coerceIn(.55f,4f)+groundCompensation,f.z.safe().coerceIn(-1.5f,1.5f))
+            Matrix.rotateM(model,0,f.yaw.safe()*DEGREES,0f,1f,0f)
+            Matrix.rotateM(model,0,f.pitch.safe()*DEGREES,1f,0f,0f)
+            Matrix.rotateM(model,0,f.roll.safe()*DEGREES,0f,0f,1f)
+        }
+        Matrix.scaleM(model,0,unit,unit,unit)
+        drawingCharacter=true
+        hasHandTarget = !f.stageMode && f.handX?.isFinite() == true && f.handY?.isFinite() == true && f.handZ?.isFinite() == true
         if (hasHandTarget && Matrix.invertM(rootInverse,0,model,0)) {
             worldHand[0]=f.handX!!; worldHand[1]=f.handY!!; worldHand[2]=f.handZ!!; worldHand[3]=1f
             Matrix.multiplyMV(localHand,0,rootInverse,0,worldHand,0)
         } else hasHandTarget=false
         fly(f)
         pop()
+        edgePass.present()
+        lastDrawCalls=drawCalls+if(edgePass.available)1 else 0
+        lastTriangles=triangles+if(edgePass.available)2 else 0
         renderedFrames++
+    }
+
+    private fun prepareShadows(f:Fly3DFrame) {
+        shadowData.fill(0f); shadowPlanes.fill(-10f)
+        if(!f.stageMode) {
+            val ground=if(abs(f.x)<2.1f && abs(f.z)<1f && f.y>1.2f).8f else 0f
+            val height=max(.0f,f.y.safe(2f)-.545f-ground)
+            shadowData[0]=f.x.safe(); shadowData[1]=f.z.safe(); shadowData[2]=.35f+height*.12f
+            shadowData[3]=.27f/(1f+height*.9f); shadowPlanes[0]=ground
+            val props=f.props
+            if(props!=null) {
+                for(i in 0 until minOf(3,props.size)) {
+                    val p=props[i]; val at=(i+1)*4
+                    val plane=if(abs(p.x)<2.1f&&abs(p.z)<1f&&p.y>.7f).8f else 0f
+                    shadowData[at]=p.x; shadowData[at+1]=p.z; shadowData[at+2]=if(p.kind=="book").30f else .17f
+                    shadowData[at+3]=.25f/(1f+max(0f,p.y-plane)*2f); shadowPlanes[i+1]=plane
+                }
+            } else {
+                shadowData[4]=-1f;shadowData[5]=.5f;shadowData[6]=.30f;shadowData[7]=.22f;shadowPlanes[1]=.8f
+                shadowData[8]=1f;shadowData[9]=.5f;shadowData[10]=.16f;shadowData[11]=.22f;shadowPlanes[2]=.8f
+                shadowData[12]=1.6f;shadowData[13]=0f;shadowData[14]=.17f;shadowData[15]=.23f;shadowPlanes[3]=.8f
+            }
+        }
+        GLES20.glUniform4fv(shadowHandle,4,shadowData,0)
+        GLES20.glUniform1fv(shadowPlaneHandle,4,shadowPlanes,0)
     }
 
     private fun room(f: Fly3DFrame) {
         val night = f.backgroundId in NIGHT_BACKGROUNDS
         val garden = f.backgroundId in GARDEN_BACKGROUNDS
+        val outdoor=f.backgroundId in OUTDOOR_BACKGROUNDS
         val wallColor = when(f.backgroundId) {
-            "library" -> 0x9AAB9F; "workshop" -> 0xB9ADA0; "cafe" -> 0xD8B5A4
+            "library" -> 0x667F7C; "workshop" -> 0xB4A58D; "cafe" -> 0xDEB69A
             "pond" -> 0x91BDBA; "beach" -> 0xB7DDD7; "orchard" -> 0xB8CD9E
-            else -> if (night) 0x37465D else if (garden) 0xABC7AC else 0xDADAC4
+            else -> if (night) 0x37465D else if (garden) 0xABC7AC else 0xD9C9AF
         }
-        val floorColor = if (f.backgroundId == "beach") 0xD9C9A0 else if (night) 0x606870 else if (garden) 0x749770 else 0xB9B69A
-        box(0f,-.10f,0f, 4.5f,.10f,3.7f, floorColor, outline = false)
-        box(0f,3f,-2.6f, 4.5f,3f,.10f, wallColor, outline = false)
-        box(-4.3f,3f,0f, .10f,3f,2.6f, wallColor, outline = false)
+        val floorColor = if (f.backgroundId == "beach") 0xD9C9A0 else if (night) 0x606870 else if (garden) 0x749770 else 0xBCA181
+        box(0f,-.10f,0f, 18f,.10f,18f, floorColor, outline = false)
+        box(0f,6f,-2.6f,18f,6f,.10f,if(outdoor)0xBCDCD5 else wallColor,outline=false)
+        box(-4.3f,6f,0f,.10f,6f,18f,wallColor,outline=false)
+        box(4.3f,6f,0f,.10f,6f,18f,wallColor,outline=false)
+        if(!outdoor) {
+            box(0f,.58f,-2.46f,4.3f,.58f,.045f,if(night)0x3D5368 else 0x577975,outline=false)
+            box(0f,1.20f,-2.39f,4.3f,.045f,.065f,if(night)0x8695A0 else 0xAEC2AF,outline=false)
+        }
         // Floorboards and wall paneling establish parallax and depth cues without textures.
         for (i in -3..3) {
-            box(i * 1.1f,.004f,0f, .009f,.005f,2.6f, if (night) 0x505A64 else 0x939884, outline = false)
-            box(i * 1.1f,1.45f,-2.47f, .018f,1.4f,.022f, if (night) 0x526079 else 0xBAC7B2, outline = false)
+            box(i * 1.1f,.004f,0f, .007f,.005f,18f, if (night) 0x505A64 else 0x939884, outline = false)
+            if(!outdoor) box(i*1.1f,.60f,-2.395f,.016f,.48f,.018f,if(night)0x728498 else 0x8BAA9A,outline=false)
         }
+        if(!outdoor) {
         // Recessed window, sky, mullions and a slow passing cloud live at different depths.
-        box(-1.65f,3.10f,-2.42f, 1.0f,.95f,.06f, 0x657D77)
-        box(-1.65f,3.10f,-2.33f, .88f,.83f,.035f, if (night) 0x233955 else 0xC0DFD8, outline = false)
-        val cloudX = -1.65f + sin(f.timeSeconds.safe() * .12f) * .40f
-        ellipsoid(cloudX,3.38f,-2.25f, .37f,.16f,.06f, if (night) 0xD6D9B2 else 0xF1F0DF, outline = false)
-        box(-1.65f,3.10f,-2.18f, .027f,.86f,.035f, 0x708781, outline = false)
-        box(-1.65f,3.10f,-2.17f, .90f,.025f,.035f, 0x708781, outline = false)
+        box(-1.65f,3.18f,-2.42f,1.08f,1.13f,.07f,0x496D71)
+        box(-1.65f,3.18f,-2.32f,.975f,1.025f,.045f,if(night)0x203B62 else 0xA9D5E4,outline=false)
+        ellipsoid(-2.05f,2.39f,-2.24f,.54f,.24f,.025f,if(night)0x406675 else 0x739D92,outline=false)
+        ellipsoid(-1.27f,2.35f,-2.23f,.62f,.20f,.025f,if(night)0x375869 else 0x95B49B,outline=false)
+        val cloudX=-1.65f+sin(sceneTime*.05f)*.20f
+        ellipsoid(cloudX,3.58f,-2.23f,.35f,.13f,.025f,if(night)0xD6D9B2 else 0xFAEACC,outline=false)
+        ellipsoid(cloudX-.17f,3.56f,-2.22f,.18f,.10f,.025f,if(night)0xD6D9B2 else 0xFAEACC,outline=false)
+        ellipsoid(cloudX+.15f,3.53f,-2.22f,.20f,.09f,.025f,if(night)0xD6D9B2 else 0xFAEACC,outline=false)
+        box(-1.65f,3.18f,-2.15f,.035f,1.03f,.045f,0xD5DCC4,outline=false)
+        box(-1.65f,3.18f,-2.14f,.97f,.035f,.045f,0xD5DCC4,outline=false)
+        box(-1.65f,2.03f,-2.09f,1.17f,.065f,.21f,0xCBD3BA)
+        // Small greenery at the light source establishes scale and a natural focal point.
+        ellipsoid(-2.36f,2.20f,-1.98f,.11f,.15f,.10f,0xB4785B)
+        ellipsoid(-2.36f,2.44f,-1.98f,.075f,.20f,.06f,0x547C65,outline=false)
+        } else {
+            ellipsoid(-2.6f,3.7f,-2.35f,.32f,.32f,.06f,0xF2DEAE,outline=false)
+            for(i in 0..3) ellipsoid(-2.4f+i*1.45f+sin(sceneTime*.035f+i)*.16f,
+                3.3f+(i%2)*.42f,-2.33f,.55f,.14f,.08f,0xEAF0D8,outline=false)
+        }
         roomDetails(f)
+        roomFinishing(f)
         // Main interaction table top at y=.80. Grounded root≈1.35 (feet−1.10*.50).
         box(0f,.72f,0f, 2.10f,.08f,1.0f, if (garden) 0x9A8862 else 0xA88662)
         for (side in -1..1 step 2) {
@@ -270,10 +392,135 @@ class Fly3DRenderer : GLSurfaceView.Renderer {
                     segment(1.1f+i*.67f,3.3f,-2.17f,1.1f+i*.67f,2.89f,-2.17f,.027f,0x6B7771)
                     ellipsoid(1.1f+i*.67f,2.67f,-2.13f,.23f,.25f,.06f,0xB89169)
                 }
-                ellipsoid(2.0f,1.85f,-2.20f,.25f,.28f,.04f,0xDDD8BA)
-                segment(2f,1.85f,-2.14f,2f+sin(t*.12f)*.17f,1.85f+cos(t*.12f)*.17f,-2.14f,.013f,0x5A7068)
+                ellipsoid(.25f,3.82f,-2.20f,.25f,.28f,.04f,0xE2D3AC)
+                segment(.25f,3.82f,-2.14f,.25f+sin(t*.12f)*.17f,3.82f+cos(t*.12f)*.17f,-2.14f,.013f,0x365656)
             }
         }
+    }
+
+    /** Layered room-specific furnishings; every loop has a small fixed upper bound. */
+    private fun roomFinishing(f:Fly3DFrame) {
+        val t=sceneTime
+        // Beveled-looking tiered trim, table apron and warm/cool floor contact zones.
+        box(0f,.09f,-2.42f,4.25f,.09f,.04f,if(nightScene)0x626B79 else 0xA7B49E,outline=false)
+        box(0f,.63f,.88f,1.94f,.055f,.036f,0x735F49,outline=false)
+        for(side in -1..1 step 2)box(side*1.94f,.63f,0f,.036f,.055f,.86f,0x735F49,outline=false)
+        when(f.backgroundId) {
+            "library" -> {
+                box(0f,.015f,.15f,2.72f,.012f,1.65f,0x7C9290,outline=false)
+                for(i in 0..4)box(-2.45f+i*.10f,.03f,.15f,.018f,.004f,1.48f,0xC2BB98,outline=false)
+                segment(2.95f,0f,-.9f,2.95f,2.30f,-.9f,.035f,0xA78E60)
+                ellipsoid(2.95f,2.34f,-.9f,.36f,.16f,.29f,0xCDB989)
+                ellipsoid(2.95f,2.23f,-.9f,.24f,.035f,.20f,0xF3D7A4,outline=false)
+                for(i in 0..4)box(.90f+i*.34f,2.35f,-2.055f,.055f,.009f,.003f,0xD5C194,outline=false)
+            }
+            "greenhouse" -> {
+                for(i in 0..2){
+                    box(-2.85f,.23f,-1.35f+i*.85f,.35f,.23f,.31f,0xAC8669)
+                    for(j in 0..2) {
+                        val x=-2.97f+j*.13f
+                        segment(x,.43f,-1.35f+i*.85f,x+sin(t*.4f+i+j)*.04f,.9f,-1.35f+i*.85f,.012f,0x527950,outline=false)
+                        ellipsoid(x,.74f,-1.35f+i*.85f,.09f,.18f,.07f,0x77A36B,outline=false)
+                    }
+                }
+                for(i in 0..3) box(2.80f,.018f,-1.3f+i*.72f,.28f,.018f,.27f,0xA7B9A1,outline=false)
+            }
+            "workshop" -> {
+                for(i in 0..2) {
+                    box(-2.9f,.22f,-1.5f+i*.62f,.36f,.22f,.27f,0xA38366)
+                    box(-2.9f,.40f,-1.5f+i*.62f,.32f,.016f,.245f,0xCAB28E,outline=false)
+                }
+                for(i in 0..4)for(j in 0..2)ellipsoid(1.05f+i*.42f,2.28f+j*.36f,-2.245f,.018f,.018f,.008f,0x795F4B,outline=false)
+                box(2.75f,1.04f,-1.8f,.46f,.04f,.28f,0x806A55)
+                box(2.75f,1.18f,-1.8f,.20f,.12f,.18f,0x637C79)
+            }
+            "pond" -> {
+                ellipsoid(-2.85f,.016f,-.60f,.85f,.018f,1.30f,0x6FA7AA,outline=false)
+                for(i in 0..4) {
+                    val a=i*1.3f
+                    ellipsoid(-2.85f+cos(a)*.77f,.07f,-.60f+sin(a)*1.17f,.18f,.10f,.23f,0x8CA198,outline=false)
+                }
+                val pulse=(t*.12f)%1f
+                ring(-2.75f,.047f,-.55f,.12f+pulse*.35f,.12f+pulse*.35f,0xB4D8CB)
+                ellipsoid(-3.0f,.07f,-.24f,.20f,.035f,.16f,0x91BC8B,outline=false)
+                for(i in 0..2)segment(-3.4f,.10f,-1.3f+i*.18f,-3.4f+sin(t*.5f+i)*.035f,.64f,-1.3f+i*.18f,.014f,0x567E68,outline=false)
+            }
+            "orchard" -> {
+                box(-2.85f,.20f,-.7f,.4f,.20f,.34f,0xA38366)
+                for(i in 0..3)ellipsoid(-3.05f+(i%2)*.3f,.43f+(i/2)*.12f,-.77f+(i/2)*.19f,.13f,.14f,.13f,0xD38361)
+                for(i in 0..4)ellipsoid(2.95f+sin(i*1.8f)*.45f,.06f,-.6f+cos(i*1.8f)*.6f,.18f,.038f,.10f,0x87A768,outline=false)
+                segment(-2.8f,.43f,-1.7f,-2.8f,1.75f,-1.7f,.05f,0x8C7859)
+                ellipsoid(-2.8f,1.95f,-1.7f,.57f,.65f,.38f,0x87A768)
+            }
+            "cafe" -> {
+                for(side in -1..1 step 2){
+                    box(side*2.75f,.49f,.5f,.32f,.055f,.31f,0x806A55)
+                    box(side*2.75f,.96f,.76f,.31f,.30f,.04f,0xB48D78)
+                    box(side*2.96f,.23f,.66f,.035f,.23f,.035f,0x735F49)
+                    box(side*2.54f,.23f,.32f,.035f,.23f,.035f,0x735F49)
+                }
+                segment(-.3f,3.8f,-1.8f,3.3f,3.8f,-1.8f,.012f,0x667870,outline=false)
+                for(i in 0..5)ellipsoid(-.2f+i*.65f,3.66f+sin(t*.32f+i)*.012f,-1.8f,.06f,.075f,.06f,0xF0CEA0,outline=false)
+            }
+            "observatory" -> {
+                ring(0f,.015f,0f,2.90f,2.15f,0x9298A3)
+                for(i in 0..7){
+                    val a=i*.785f
+                    box(cos(a)*2.85f,.02f,sin(a)*2.10f,.035f,.015f,.06f,0xC1BEA0,outline=false)
+                }
+                for(i in 0..2)segment(2.65f,1.1f,-1.7f,2.65f+sin(i*2.094f)*.35f,.03f,-1.7f+cos(i*2.094f)*.35f,.025f,0x74828A)
+            }
+            "beach" -> {
+                for(i in 0..3) {
+                    val x=-2.8f+(i%2)*.30f;val z=-1f+(i/2)*.80f
+                    ellipsoid(x,.06f,z,.11f,.06f,.08f,0xEBD8BA,outline=false)
+                    ring(x,.012f,z,.17f,.12f,0xBEAA83)
+                }
+                box(2.8f,.025f,.65f,.42f,.022f,.75f,0xA4C1B8,outline=false)
+                for(i in 0..3)box(2.8f,.05f,.08f+i*.34f,.41f,.004f,.035f,0xECE2C5,outline=false)
+                ellipsoid(-3.2f,.22f,1f,.21f,.21f,.21f,0xC48F72)
+            }
+            "bedroom" -> {
+                box(0f,.015f,.2f,2.75f,.013f,1.6f,0x848E9F,outline=false)
+                box(2.05f,.31f,-1.9f,.24f,.31f,.29f,0x8E8078)
+                segment(2.05f,.62f,-1.9f,2.05f,.98f,-1.9f,.018f,0xB3A891)
+                ellipsoid(2.05f,1.03f,-1.9f,.20f,.13f,.17f,0xDAC29E)
+                for(i in 0..3)box(2.85f,.721f,-1.95f+i*.25f,.63f,.007f,.025f,0xCBD0B7,outline=false)
+                for(i in 0..2)box(-2.68f+i*.11f,3.1f,-2.13f,.045f,.94f,.065f,0x909DA9,outline=false)
+            }
+            else -> {
+                // Deep teal joinery, cream stone worktop and warm brass handles frame the pet table.
+                box(2.08f,.55f,-1.87f,1.10f,.55f,.40f,0x365F60)
+                box(2.08f,1.14f,-1.87f,1.16f,.055f,.45f,0xDFD4B8)
+                for(i in 0..2){
+                    val x=1.34f+i*.74f
+                    box(x,.59f,-1.445f,.32f,.40f,.025f,0x547E78)
+                    box(x,.61f,-1.412f,.245f,.30f,.008f,0x476F6A,outline=false)
+                    segment(x-.11f,.89f,-1.387f,x+.11f,.89f,-1.387f,.014f,0xC4A36B,outline=false)
+                }
+                box(1.75f,2.04f,-2.12f,1.45f,.045f,.24f,0x967C59)
+                for(i in 0..2) {
+                    val x=.70f+i*.30f
+                    ellipsoid(x,2.25f,-2.09f,.10f,.17f,.10f,if(i==1)0xAFB99D else 0xE0D4B7)
+                    ellipsoid(x,2.43f,-2.09f,.104f,.025f,.104f,0x9E8058,outline=false)
+                }
+                ellipsoid(2.66f,1.32f,-1.88f,.19f,.13f,.15f,0xC69761)
+                ring(2.66f,1.45f,-1.88f,.14f,.14f,0xE0C895)
+                ellipsoid(1.30f,1.28f,-1.88f,.15f,.11f,.15f,0xBE8261)
+                for(i in 0..2)ellipsoid(1.23f+i*.065f,1.49f+sin(t*.4f+i)*.013f,-1.88f,.065f,.18f,.06f,0x4F7861,outline=false)
+                // A pendant gives the tall viewport an intentional upper focal point.
+                segment(.10f,7f,-.10f,.10f,3.95f,-.10f,.013f,0x364F50,outline=false)
+                push();Matrix.translateM(model,0,.10f,3.79f,-.10f);Matrix.scaleM(model,0,.34f,.18f,.34f)
+                draw(shadeMesh,0x416B68,outline=false);pop()
+                ring(.10f,3.61f,-.10f,.34f,.34f,0xC7AC79)
+                ellipsoid(.10f,3.64f,-.10f,.18f,.045f,.18f,0xF3D7A4,outline=false)
+            }
+        }
+    }
+
+    private fun ring(x:Float,y:Float,z:Float,rx:Float,rz:Float,color:Int) {
+        push(); Matrix.translateM(model,0,x,y,z); Matrix.scaleM(model,0,rx,.10f,rz)
+        draw(ringMesh,color,outline=false); pop()
     }
 
     private fun fly(f: Fly3DFrame) {
@@ -317,7 +564,7 @@ class Fly3DRenderer : GLSurfaceView.Renderer {
             val elbowZ = if (ik) (.07f+handZ)*.5f else .16f
             segment(sx*.43f,.21f,.07f,elbowX,elbowY,elbowZ,.063f,SHELL)
             segment(elbowX,elbowY,elbowZ,handX,handY,handZ,.055f,SHELL)
-            if (held && f.props == null) {
+            if (held && f.props == null && !f.stageMode) {
                 push(); Matrix.translateM(model,0,handX+.03f,handY-.08f,handZ)
                 Matrix.scaleM(model,0,.70f,.70f,.70f)
                 if (f.holding == "book") { Matrix.rotateM(model,0,-74f,1f,0f,0f); book() } else glass()
@@ -437,6 +684,8 @@ class Fly3DRenderer : GLSurfaceView.Renderer {
     private fun push() { System.arraycopy(model,0,stack[stackAt++],0,16) }
     private fun pop() { System.arraycopy(stack[--stackAt],0,model,0,16) }
     private fun draw(mesh:Fly3DMesh,color:Int,alpha:Float=1f,outline:Boolean=true) {
+        drawCalls+=if(outline)2 else 1
+        triangles+=mesh.vertexCount/3*(if(outline)2 else 1)
         Matrix.multiplyMM(mvp,0,vp,0,model,0)
         if (!Matrix.invertM(inverse,0,model,0)) return
         Matrix.transposeM(normal,0,inverse,0)
@@ -445,7 +694,18 @@ class Fly3DRenderer : GLSurfaceView.Renderer {
         GLES20.glUniformMatrix4fv(viewProjectionHandle,1,false,vp,0)
         GLES20.glUniformMatrix4fv(normalMatrixHandle,1,false,normal,0)
         GLES20.glUniform4f(colorHandle,((color shr 16) and 255)/255f,((color shr 8) and 255)/255f,(color and 255)/255f,alpha)
-        GLES20.glUniform1f(unlitHandle,if (color == INK) 1f else 0f)
+        GLES20.glUniform1f(unlitHandle,if(color==INK)1f else if(color in EMISSIVE_COLORS).55f else 0f)
+        GLES20.glUniform1f(characterHandle,if(drawingCharacter)1f else 0f)
+        val material=when {
+            alpha<1f -> 2f
+            drawingCharacter -> if(color==RED)3f else 0f
+            color in WOOD_COLORS -> 1f
+            color in GLASS_COLORS -> 2f
+            color in METAL_COLORS -> 3f
+            color in LEAF_COLORS -> 4f
+            else -> 0f
+        }
+        GLES20.glUniform1f(materialHandle,material)
         mesh.bind(positionHandle,normalHandle)
         if (outline) {
             // Black inverted hull. Extrusion is in world units, independent of ellipsoid scale.
@@ -486,6 +746,12 @@ class Fly3DRenderer : GLSurfaceView.Renderer {
         const val DARK_GREEN=0x416C48
         const val RED=0xEC6856
         const val CREAM=0xFFF2D0
+        val EMISSIVE_COLORS=setOf(0xA9D5E4,0xFAEACC,0xF2DEAE,0xF0CEA0,0xF3D7A4)
+        val WOOD_COLORS=setOf(0xBCA181,0xA88662,0x9A8862,0x735F49,0x806A55,0xB9B69A,0x8C7859,0xB5996E,0xA38366)
+        val GLASS_COLORS=setOf(0xB9D7D4,0x72A9B1,0xE4EEDE,0x96C6BC,0x6FA7AA)
+        val METAL_COLORS=setOf(0xC4A36B,0xC7AC79,0xC69761,0xB89169,0xB99363,0xBCC6B5,0xA8AE9F,0x637C79)
+        val LEAF_COLORS=setOf(0x4F7861,0x547C65,0x77A36B,0x87A768,0x567D59,0x91BC8B,0x567E68)
+        val OUTDOOR_BACKGROUNDS=setOf("pond","orchard","beach")
         val NIGHT_BACKGROUNDS=setOf("observatory","bedroom")
         val GARDEN_BACKGROUNDS=setOf("greenhouse","pond","orchard","beach")
         const val VERTEX_SHADER="""
@@ -497,7 +763,9 @@ class Fly3DRenderer : GLSurfaceView.Renderer {
             uniform mat4 uNormalMatrix;
             uniform float uOutlineWidth;
             varying vec3 vNormal;
+            varying vec3 vWorld;
             void main() {
+                vWorld=(uModel*vec4(aPosition,1.0)).xyz;
                 vec3 n=normalize((uNormalMatrix*vec4(aNormal,0.0)).xyz);
                 vNormal=n;
                 vec4 base=uMvp*vec4(aPosition,1.0);
@@ -509,14 +777,58 @@ class Fly3DRenderer : GLSurfaceView.Renderer {
             uniform vec4 uColor;
             uniform float uOutline;
             uniform float uUnlit;
+            uniform float uMaterial;
+            uniform float uCharacter;
+            uniform vec2 uEnvironment;
+            uniform vec4 uShadows[4];
+            uniform float uShadowPlanes[4];
             varying vec3 vNormal;
+            varying vec3 vWorld;
+            float contact(vec4 s,float plane){
+                vec2 d=(vWorld.xz-s.xy)/max(s.z,.01);
+                float softness=1.0-smoothstep(.05,1.9,dot(d,d));
+                return softness*s.w*(1.0-smoothstep(.015,.05,abs(vWorld.y-plane)));
+            }
             void main() {
-                if(uOutline>0.5) { gl_FragColor=vec4(0.075,0.12,0.13,uColor.a); return; }
+                if(uOutline>0.5) {gl_FragColor=vec4(.075,.12,.13,uColor.a);return;}
                 vec3 n=normalize(vNormal);
-                float light=max(dot(n,normalize(vec3(-0.45,0.8,0.65))),0.0);
-                float band=light>0.76?1.08:(light>0.35?0.91:0.70);
-                band=mix(band,1.0,uUnlit);
-                gl_FragColor=vec4(uColor.rgb*band,uColor.a);
+                vec3 eye=normalize(vec3(0.,2.5,8.)-vWorld);
+                vec3 lightDirection=normalize(vec3(-.45,.8,.65));
+                float diffuse=max(dot(n,lightDirection),0.0);
+                float steps=.70+smoothstep(.26,.37,diffuse)*.19+smoothstep(.69,.80,diffuse)*.15;
+                float smoothLight=mix(.46+.66*diffuse,.65+.39*diffuse,uCharacter);
+                float illumination=mix(smoothLight,steps,.35*uCharacter);
+                vec3 color=uColor.rgb;
+                if(uMaterial>.5&&uMaterial<1.5){
+                    float grain=sin(vWorld.x*59.+sin(vWorld.z*1.2)*.9);
+                    color*=.985+.012*grain;
+                }
+                float glossy=step(1.5,uMaterial)*(1.-step(3.5,uMaterial));
+                float spec=pow(max(dot(n,normalize(lightDirection+eye)),0.),28.)*glossy*.17;
+                float rim=pow(1.-max(dot(n,eye),0.),3.)*.055;
+                vec3 tint=mix(vec3(1.,.98,.92),vec3(.79,.88,1.05),uEnvironment.x*.45);
+                color=color*illumination*tint+vec3(spec)+vec3(.68,.85,.85)*rim;
+                // Broad warm window spill against cool cabinetry, with soft mullion shadows.
+                vec2 pool=vec2(vWorld.x+1.15+vWorld.z*.25,vWorld.z-.25);
+                float spill=(1.-smoothstep(.65,1.65,abs(pool.x)))*(1.-smoothstep(.45,2.7,abs(pool.y)));
+                float pane=1.-.35*(1.-smoothstep(.025,.08,abs(pool.x)))
+                    -.20*(1.-smoothstep(.025,.08,abs(pool.y+.35)));
+                float up=smoothstep(.65,.95,n.y);
+                color+=vec3(.17,.12,.05)*spill*pane*up*(1.-uEnvironment.x*.75)*(1.-uCharacter);
+                float glow=1.-smoothstep(.0,3.2,length((vWorld-vec3(-1.7,3.1,-2.0))*vec3(.75,.75,1.)));
+                color+=vec3(.075,.045,.012)*glow*(1.-uCharacter)*(1.-uEnvironment.x);
+                float plaster=sin(vWorld.x*91.3)*sin(vWorld.y*83.7)*.004;
+                color+=vec3(plaster)*(1.-uCharacter)*(1.-up);
+                float shade=contact(uShadows[0],uShadowPlanes[0])+contact(uShadows[1],uShadowPlanes[1])
+                    +contact(uShadows[2],uShadowPlanes[2])+contact(uShadows[3],uShadowPlanes[3]);
+                color*=1.-min(.48,shade)*smoothstep(.55,.9,n.y);
+                float corner=1.-smoothstep(0.,.32,vWorld.y);
+                color*=1.-corner*.065;
+                // Bounded aerial perspective separates rear scenery from the interactive table.
+                float haze=(1.-smoothstep(-2.7,-.4,vWorld.z))*.06;
+                color=mix(color,mix(vec3(.79,.85,.76),vec3(.22,.29,.4),uEnvironment.x),haze);
+                color=mix(color,uColor.rgb,uUnlit);
+                gl_FragColor=vec4(color,uColor.a);
             }
         """
     }

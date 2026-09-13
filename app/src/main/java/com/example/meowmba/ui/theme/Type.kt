@@ -6,29 +6,29 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-// Set of Material typography styles to start with
+/** Shared native workbench hierarchy. System sans respects Android font fallback and scaling. */
+private fun type(size: Int, line: Int, weight: FontWeight = FontWeight.Normal, tracking: Float = 0f) = TextStyle(
+    fontFamily = FontFamily.SansSerif,
+    fontWeight = weight,
+    fontSize = size.sp,
+    lineHeight = line.sp,
+    letterSpacing = tracking.sp,
+)
+
 val Typography = Typography(
-    bodyLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
-        fontSize = 16.sp,
-        lineHeight = 24.sp,
-        letterSpacing = 0.5.sp
-    )
-    /* Other default text styles to override
-    titleLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
-        fontSize = 22.sp,
-        lineHeight = 28.sp,
-        letterSpacing = 0.sp
-    ),
-    labelSmall = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Medium,
-        fontSize = 11.sp,
-        lineHeight = 16.sp,
-        letterSpacing = 0.5.sp
-    )
-    */
+    displayLarge = type(48, 56, FontWeight.SemiBold, -.5f),
+    displayMedium = type(40, 48, FontWeight.SemiBold, -.4f),
+    displaySmall = type(36, 44, FontWeight.SemiBold, -.3f),
+    headlineLarge = type(32, 40, FontWeight.SemiBold, -.3f),
+    headlineMedium = type(28, 36, FontWeight.SemiBold, -.2f),
+    headlineSmall = type(24, 32, FontWeight.SemiBold, -.1f),
+    titleLarge = type(22, 28, FontWeight.SemiBold),
+    titleMedium = type(16, 24, FontWeight.SemiBold),
+    titleSmall = type(14, 20, FontWeight.SemiBold),
+    bodyLarge = type(16, 24),
+    bodyMedium = type(14, 22),
+    bodySmall = type(12, 18),
+    labelLarge = type(14, 20, FontWeight.Medium, .1f),
+    labelMedium = type(12, 18, FontWeight.Medium, .1f),
+    labelSmall = type(11, 16, FontWeight.Medium, .1f),
 )

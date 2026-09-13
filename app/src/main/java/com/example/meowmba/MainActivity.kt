@@ -164,6 +164,7 @@ class MainActivity : ComponentActivity() {
                                 // the VM — arm always-on / wake here so the face mic
                                 // is not left dead until the next resume.
                                 it.reclaimWakeMicForForeground()
+                                it.resumeFaceTrackingIfEnabled()
                                 if (pendingRoutineId >= 0) {
                                     it.onRoutineIntent(pendingRoutineId)
                                     pendingRoutineId = -1L

@@ -73,6 +73,36 @@ internal object Fly3DGeometry {
         return Fly3DMesh(out.toFloatArray())
     }
 
+    /** Open tapered shade, real thickness supplied by the lip/rim in scene composition. */
+    fun shade():Fly3DMesh {
+        val out=ArrayList<Float>(24*36)
+        fun point(a:Double,y:Float,r:Float) {
+            out.add(cos(a).toFloat()*r);out.add(y);out.add(sin(a).toFloat()*r)
+            out.add(cos(a).toFloat()*.97f);out.add(.24f);out.add(sin(a).toFloat()*.97f)
+        }
+        for(i in 0 until 24){
+            val a=i*PI/12;val b=(i+1)*PI/12
+            point(a,-1f,1f);point(a,1f,.5f);point(b,1f,.5f)
+            point(a,-1f,1f);point(b,1f,.5f);point(b,-1f,1f)
+        }
+        return Fly3DMesh(out.toFloatArray())
+    }
+
+    /** Unit torus in XZ, major radius1 and small tube .055. Reused for rims and ripples. */
+    fun ring():Fly3DMesh {
+        val out=ArrayList<Float>(24*6*36)
+        fun vertex(a:Double,b:Double) {
+            val radius=1f+.055f*cos(b).toFloat()
+            out.add(radius*cos(a).toFloat());out.add(.055f*sin(b).toFloat());out.add(radius*sin(a).toFloat())
+            out.add(cos(b).toFloat()*cos(a).toFloat());out.add(sin(b).toFloat());out.add(cos(b).toFloat()*sin(a).toFloat())
+        }
+        for(i in 0 until 24)for(j in 0 until 6){
+            val a=i*PI/12;val b=j*PI/3;val c=(i+1)*PI/12;val d=(j+1)*PI/3
+            vertex(a,b);vertex(a,d);vertex(c,d);vertex(a,b);vertex(c,d);vertex(c,b)
+        }
+        return Fly3DMesh(out.toFloatArray())
+    }
+
     /** A closed tapered curved wing: span along Z, small camber in Y, elliptical tip. */
     fun wing(): Fly3DMesh {
         val out = ArrayList<Float>()

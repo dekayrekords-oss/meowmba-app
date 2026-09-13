@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.material3.FilterChip
@@ -25,6 +27,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -89,64 +93,41 @@ fun AvatarScreen(
     onPlayfulness: (Playfulness) -> Unit = {},
     diagnostics: @Composable () -> Unit = {},
     preview: @Composable () -> Unit = {},
+    avatarScale: Float = 1f,
+    onAvatarScale: (Float) -> Unit = {},
+    habitatMode: Boolean = false,
+    onHabitatMode: (Boolean) -> Unit = {},
 ) {
-    var search by remember { mutableStateOf("") }
-    var category by remember { mutableStateOf("New") }
+    var search by rememberSaveable { mutableStateOf("") }
+    var category by rememberSaveable { mutableStateOf("New") }
     var expanded by remember(search, category) { mutableStateOf(false) }
+    var tab by rememberSaveable { mutableStateOf("Look") }
+    var advanced by rememberSaveable { mutableStateOf(false) }
     val choices = remember(animations, search, category) { avatarAnimationChoices(animations, category, search) }
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Column(
-            modifier = Modifier
-                .safeDrawingPadding()
-                .padding(horizontal = 20.dp)
-                .verticalScroll(rememberScrollState()),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    text = "Avatar",
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                )
-                IconButton(onClick = onClose) {
-                    Icon(Icons.Default.Close, contentDescription = "Close", tint = MaterialTheme.colorScheme.onSurface)
+        Column(Modifier.safeDrawingPadding().verticalScroll(rememberScrollState()).padding(horizontal = AvatarSetupTokens.page)) {
+            Row(Modifier.fillMaxWidth().padding(top = AvatarSetupTokens.compact), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Make it yours", style = MaterialTheme.typography.headlineSmall)
+                    Text("Avatar & expression", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+                IconButton(onClick = onClose) { Icon(Icons.Default.Close, contentDescription = "Close avatar setup") }
             }
-
-            Spacer(modifier = Modifier.height(8.dp))
-            FlipCoverSetupCard()
-            Text("App theme", style = MaterialTheme.typography.titleMedium)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                AppTheme.entries.forEach { option ->
-                    FilterChip(selected = appTheme == option,
-                        onClick = { onSelectTheme(option) }, label = { Text(option.label) })
-                }
-            }
-            Text("Professional adds a focused workspace and coordinated colors throughout the app.",
-                style = MaterialTheme.typography.bodySmall)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                AppearanceMode.entries.forEach { option ->
-                    FilterChip(selected = appearanceMode == option,
-                        onClick = { onSelectAppearance(option) }, label = { Text(option.label) })
-                }
-            }
-            Text("Live preview", style = MaterialTheme.typography.titleMedium)
-            Box(Modifier.fillMaxWidth().height(260.dp).clip(RoundedCornerShape(24.dp))
-                // Was hard-coded to the old dark-mode background, so the preview
-                // stayed near-black even with Light appearance selected.
+            Spacer(Modifier.height(AvatarSetupTokens.item))
+            Box(Modifier.fillMaxWidth().aspectRatio(1.7f).clip(RoundedCornerShape(AvatarSetupTokens.corner))
                 .background(MaterialTheme.colorScheme.surfaceVariant)) { preview() }
-            Spacer(Modifier.height(18.dp))
-            Text(
-                text = "Face style",
-                color = MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-
+            Text(if (style.isLumen && style != AvatarStyle.FULL_FLY) "${style.label} · ${if (style == AvatarStyle.LUMEN_CAT) AvatarAnimal.CAT.label else animal.label}" else style.label,
+                style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = AvatarSetupTokens.item))
+            Text("Selected · changes apply immediately", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            SetupModeChooser(habitatMode, onHabitatMode)
+            SetupSizeControl(avatarScale, onAvatarScale)
+            FlowRow(Modifier.padding(top = AvatarSetupTokens.section), horizontalArrangement = Arrangement.spacedBy(AvatarSetupTokens.compact)) {
+                listOf("Look", "Motion").forEach { option ->
+                    FilterChip(selected = tab == option, onClick = { tab = option }, label = { Text(option) })
+                }
+            }
+            if (tab == "Look") {
+                SetupSection("Choose an avatar")
             AvatarStyle.entries.forEach { option ->
                 StyleRow(
                     option = option,
@@ -156,22 +137,6 @@ fun AvatarScreen(
                 Spacer(modifier = Modifier.height(10.dp))
             }
 
-            Text("Create new performances", style = MaterialTheme.typography.titleMedium)
-            Text("Say “let’s go fishing”, “can you fish?” or “invent an animation of you juggling stars”. Your on-device model composes supported props and movements, then saves the result here. New creations take time; saved scenes replay immediately.", style = MaterialTheme.typography.bodySmall)
-            Text("Expression", style = MaterialTheme.typography.titleMedium)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ExpressionIntensity.entries.forEach { option ->
-                    FilterChip(selected = expressionIntensity == option, onClick = { onExpressionIntensity(option) }, label = { Text(option.label) })
-                }
-            }
-            Text("Idle playfulness", style = MaterialTheme.typography.titleMedium)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Playfulness.entries.forEach { option ->
-                    FilterChip(selected = playfulness == option, onClick = { onPlayfulness(option) }, label = { Text(option.label) })
-                }
-            }
-            Text("Quiet keeps small idle movements. Balanced and Lively add occasional scenes. Requested performances remain available.", style = MaterialTheme.typography.bodySmall)
-            diagnostics()
             if (style.isLumen) {
                   Text("Choose your character", style = MaterialTheme.typography.titleMedium)
                   Text("Choose a form, or say “be a rabbit”, “be a panda” or “become a robot”. Each has its own expressive eyes. Your choice is remembered. Say “go back to normal” to return to eyes only.",
@@ -192,15 +157,6 @@ fun AvatarScreen(
                 Text("Act-like performances are temporary. Choosing a form above, or saying “become”, keeps it until you change it. More forms can be added to the same rig.",
                     style = MaterialTheme.typography.bodySmall)
                 Spacer(Modifier.height(12.dp))
-                Text("Emotion rehearsal", style = MaterialTheme.typography.titleMedium)
-                Text("Watch a feeling arrive, hold and settle. Conversation and touch also bring these expressions to life.",
-                    style = MaterialTheme.typography.bodySmall)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    CompanionEmotion.entries.forEach { feeling ->
-                        FilterChip(selected = false, onClick = { onPlayAnimation("emotion:${feeling.name}") },
-                            label = { Text(feeling.name.lowercase().replaceFirstChar { it.uppercase() }) })
-                    }
-                }
             }
             Spacer(modifier = Modifier.height(18.dp))
             Text(
@@ -240,6 +196,34 @@ fun AvatarScreen(
             ColorSwatchRow(selected = glowColor, onSelect = onSelectGlowColor, label = "Glow color")
 
             Spacer(modifier = Modifier.height(18.dp))
+            } else {
+                SetupSection("Movement & personality")
+            Text("Create new performances", style = MaterialTheme.typography.titleMedium)
+            Text("Say “let’s go fishing”, “can you fish?” or “invent an animation of you juggling stars”. Your on-device model composes supported props and movements, then saves the result here. New creations take time; saved scenes replay immediately.", style = MaterialTheme.typography.bodySmall)
+            Text("Expression", style = MaterialTheme.typography.titleMedium)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ExpressionIntensity.entries.forEach { option ->
+                    FilterChip(selected = expressionIntensity == option, onClick = { onExpressionIntensity(option) }, label = { Text(option.label) })
+                }
+            }
+            Text("Idle playfulness", style = MaterialTheme.typography.titleMedium)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Playfulness.entries.forEach { option ->
+                    FilterChip(selected = playfulness == option, onClick = { onPlayfulness(option) }, label = { Text(option.label) })
+                }
+            }
+            Text("Quiet keeps small idle movements. Balanced and Lively add occasional scenes. Requested performances remain available.", style = MaterialTheme.typography.bodySmall)
+                if (style.isLumen) {
+                Text("Emotion rehearsal", style = MaterialTheme.typography.titleMedium)
+                Text("Watch a feeling arrive, hold and settle. Conversation and touch also bring these expressions to life.",
+                    style = MaterialTheme.typography.bodySmall)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CompanionEmotion.entries.forEach { feeling ->
+                        FilterChip(selected = false, onClick = { onPlayAnimation("emotion:${feeling.name}") },
+                            label = { Text(feeling.name.lowercase().replaceFirstChar { it.uppercase() }) })
+                    }
+                }
+                }
             Text(
                 text = "Animations",
                 color = MaterialTheme.colorScheme.onSurface,
@@ -276,7 +260,32 @@ fun AvatarScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(40.dp))
+            }
+            TextButton(onClick = { advanced = !advanced }, modifier = Modifier.padding(top = AvatarSetupTokens.section)) {
+                Text(if (advanced) "Hide advanced settings" else "Advanced settings")
+            }
+            if (advanced) {
+                SetupSection("App appearance")
+            FlipCoverSetupCard()
+            Text("App theme", style = MaterialTheme.typography.titleMedium)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                AppTheme.entries.forEach { option ->
+                    FilterChip(selected = appTheme == option,
+                        onClick = { onSelectTheme(option) }, label = { Text(option.label) })
+                }
+            }
+            Text("Professional adds a focused workspace and coordinated colors throughout the app.",
+                style = MaterialTheme.typography.bodySmall)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                AppearanceMode.entries.forEach { option ->
+                    FilterChip(selected = appearanceMode == option,
+                        onClick = { onSelectAppearance(option) }, label = { Text(option.label) })
+                }
+            }
+                SetupSection("Diagnostics")
+                diagnostics()
+            }
+            Spacer(Modifier.height(AvatarSetupTokens.section))
         }
     }
 }
@@ -311,7 +320,8 @@ private fun StyleRow(
                 color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
                 shape = RoundedCornerShape(14.dp),
             )
-            .clickable(onClick = onClick)
+            .semantics { this.selected = selected }
+            .clickable(role = Role.RadioButton, onClick = onClick)
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

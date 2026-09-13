@@ -895,6 +895,15 @@ class CompanionViewModel(
         if (action == HabitatAction.PLAY || action == HabitatAction.FEED) nervousSystem.noteAffect(.5f)
         secureStorage?.savePreference("pet_care_v1", care.encode())
         _uiState.update { it.copy(petCare = care, habitatCommand = HabitatCommand(it.habitatCommand.id + 1L, action)) }
+        if (!_uiState.value.habitatMode && action in setOf(HabitatAction.FEED, HabitatAction.REST)) {
+            playAnimationNamed(if (action == HabitatAction.REST) "drowsy_drift" else "content_smile")
+        }
+    }
+    fun playCompanionTrick(name: String) {
+        if (name !in setOf("peekaboo", "fond_nuzzle", "pocket_groove")) return
+        onAvatarPetted()
+        habitatAction(HabitatAction.PLAY)
+        playAnimationNamed(name)
     }
     fun petFeedback(positive: Boolean) {
         petPreferences.reward(lastPetActivity, positive, System.currentTimeMillis())
@@ -1238,6 +1247,9 @@ class CompanionViewModel(
                 musicServerUrl = storage.getPreference(KEY_MUSIC_SERVER_URL) ?: "",
                 backgroundListeningEnabled = storage.getBooleanPreference(KEY_BACKGROUND_LISTENING, false),
                 carModeEnabled = storage.getBooleanPreference(KEY_CAR_MODE, false),
+                avatarScale = storage.getPreference("avatar_scale")?.toFloatOrNull()?.takeIf { it.isFinite() }?.coerceIn(.5f, 2f) ?: 1f,
+                habitatMode = storage.getBooleanPreference("habitat_mode", false),
+                habitatBackgroundId = storage.getPreference("habitat_background")?.takeIf { id -> com.example.meowmba.core.background.BackgroundAnimation.byId(id)?.isPetEnvironment == true } ?: "kitchen",
                 avatarStyle = AvatarStyle.fromKey(storage.getPreference(KEY_AVATAR_STYLE)),
                 petCare = PetCareState.decode(storage.getPreference("pet_care_v1").orEmpty()).advance(System.currentTimeMillis()),
                 petLearningEnabled = petPreferences.enabled,
@@ -1266,7 +1278,7 @@ class CompanionViewModel(
                     kind = storage.getPreference(KEY_BACKGROUND_KIND),
                     value = storage.getPreference(KEY_BACKGROUND_VALUE),
                     dim = storage.getPreference(KEY_BACKGROUND_DIM),
-                ),
+                ).let { if (it.animation?.isPetEnvironment == true) com.example.meowmba.core.background.BackgroundSelection() else it },
             )
         }
         // Phase 6 (agentic ↔ Lumen presence): optional, flag-gated, minimal.
@@ -7721,6 +7733,8 @@ class CompanionViewModel(
         // Asking "what do you see" is consent for one look. Privacy CAM OFF
         // used to leave the capture on a dead/back camera, or the chat brain
         // inventing "I don't have camera access".
+        vm.setCaptureEnabled(true)
+        cameraEnablePending = false
         if (!_uiState.value.isCameraEnabled) {
             _uiState.value = _uiState.value.copy(isCameraEnabled = true)
             secureStorage?.saveBooleanPreference(KEY_CAMERA_ENABLED, true)
@@ -7806,7 +7820,10 @@ class CompanionViewModel(
 
     /** The MainActivity permission launcher reports back through here. */
     fun onCameraPermissionResult(granted: Boolean) {
+        val requested = cameraEnablePending
+        cameraEnablePending = false
         _uiState.value = _uiState.value.copy(cameraPermissionRequested = false)
+        if (!requested) return
         if (granted) {
             // Start auto face tracking; only announce if a look was mid-flight.
             ensureFaceTrackingOn()
@@ -7817,7 +7834,7 @@ class CompanionViewModel(
                 resetState()
             }
         } else {
-            visionManager?.setFaceTrackingEnabled(false)
+            setCameraEnabled(false)
             speak("No camera permission, so I can't see. You can enable it later in system settings.")
             resetState()
         }
@@ -8128,20 +8145,7 @@ class CompanionViewModel(
             AvatarZone.EAR_LEFT, AvatarZone.EAR_RIGHT -> {
                 setMicEnabled(!_uiState.value.isMicEnabled)
             }
-            AvatarZone.EYE_LEFT, AvatarZone.EYE_RIGHT -> {
-                if (_uiState.value.isCameraEnabled) {
-                    _uiState.value = _uiState.value.copy(
-                        isCameraEnabled = false,
-                        isPreviewVisible = false,
-                    )
-                    secureStorage?.saveBooleanPreference(KEY_CAMERA_ENABLED, false)
-                    visionManager?.setFaceTrackingEnabled(false)
-                } else {
-                    // Do not mark camera "on" until permission + bind succeed —
-                    // otherwise Lumen looks awake with no face follow.
-                    ensureFaceTrackingOn()
-                }
-            }
+            AvatarZone.EYE_LEFT, AvatarZone.EYE_RIGHT -> setCameraEnabled(!_uiState.value.isCameraEnabled)
             AvatarZone.MOUTH -> {
                 val muting = !_uiState.value.isMuted
                 if (muting) {
@@ -8253,9 +8257,14 @@ class CompanionViewModel(
     }
 
     /** Privacy dashboard / accessibility switch for the camera. Never enables silently. */
+    private var cameraEnablePending = false
     fun setCameraEnabled(enabled: Boolean) {
-        if (_uiState.value.isCameraEnabled == enabled) return
-        onAvatarZoneClick(AvatarZone.EYE_LEFT)
+        if (enabled) { ensureFaceTrackingOn(); return }
+        cameraEnablePending = false
+        _uiState.value = _uiState.value.copy(isCameraEnabled = false, isPreviewVisible = false,
+            cameraPermissionRequested = false, userInView = false)
+        secureStorage?.saveBooleanPreference(KEY_CAMERA_ENABLED, false)
+        visionManager?.setCaptureEnabled(false)
     }
 
     /** Privacy dashboard / accessibility switch for companion speech. */
@@ -8315,8 +8324,6 @@ class CompanionViewModel(
             _uiState.value = _uiState.value.copy(isFrontCamera = true)
             visionManager?.setUseFrontCamera(true)
             ensureFaceTrackingOn()
-        } else if (_uiState.value.isCameraEnabled) {
-            ensureFaceTrackingOn()
         }
     }
 
@@ -8356,6 +8363,7 @@ class CompanionViewModel(
      * the camera on, and doing that every unlock cooked the Fold.
      */
     fun resumeFaceTrackingIfEnabled() {
+        visionManager?.setCaptureEnabled(_uiState.value.isCameraEnabled)
         if (!_uiState.value.isCameraEnabled) return
         if (!faceModeActive(_uiState.value)) return
         val vm = visionManager ?: return
@@ -8375,17 +8383,19 @@ class CompanionViewModel(
 
     /** Rising-edge CAMERA ask so Compose LaunchedEffect always re-fires. */
     private fun askCameraPermission() {
+        cameraEnablePending = true
         _uiState.value = _uiState.value.copy(cameraPermissionRequested = false)
         viewModelScope.launch {
             kotlinx.coroutines.delay(16)
             val vm = visionManager
-            if (vm == null || !vm.hasPermission()) {
+            if (cameraEnablePending && (vm == null || !vm.hasPermission())) {
                 _uiState.value = _uiState.value.copy(cameraPermissionRequested = true)
             }
         }
     }
 
     fun ensureFaceTrackingOn(followOnly: Boolean = false) {
+        cameraEnablePending = true
         visionManager?.setFollowOnly(followOnly)
         val vm = visionManager ?: return
         if (!vm.hasPermission()) {
@@ -8397,6 +8407,8 @@ class CompanionViewModel(
             askCameraPermission()
             return
         }
+        vm.setCaptureEnabled(true)
+        cameraEnablePending = false
         if (!_uiState.value.isCameraEnabled) {
             _uiState.value = _uiState.value.copy(isCameraEnabled = true)
             // Body-following is a session state, not a preference: persisting
@@ -8410,7 +8422,6 @@ class CompanionViewModel(
         _uiState.value = _uiState.value.copy(
             isFrontCamera = true,
             isCameraEnabled = true,
-            isPreviewVisible = true,
         )
         vm.setUseFrontCamera(true)
         val ok = vm.setFaceTrackingEnabled(true)
@@ -9958,12 +9969,19 @@ class CompanionViewModel(
 
     /** Which face to draw. Persisted, so it survives a restart. */
     fun setAvatarStyle(style: AvatarStyle) {
-        if (style == AvatarStyle.FULL_FLY && _uiState.value.background.kind == com.example.meowmba.core.background.BackgroundKind.NONE) {
-            setBackground(com.example.meowmba.core.background.BackgroundSelection(
-                com.example.meowmba.core.background.BackgroundKind.ANIMATION, "kitchen", 15))
-        }
         _uiState.value = _uiState.value.copy(avatarStyle = style)
         secureStorage?.savePreference(KEY_AVATAR_STYLE, style.key)
+    }
+
+    fun setAvatarScale(value: Float) {
+        val scale = value.takeIf { it.isFinite() }?.coerceIn(.5f, 2f) ?: 1f
+        _uiState.value = _uiState.value.copy(avatarScale = scale)
+        secureStorage?.savePreference("avatar_scale", scale.toString())
+    }
+
+    fun setHabitatMode(enabled: Boolean) {
+        _uiState.value = _uiState.value.copy(habitatMode = enabled)
+        secureStorage?.saveBooleanPreference("habitat_mode", enabled)
     }
 
     fun setAvatarAnimal(animal: AvatarAnimal) {
@@ -10897,6 +10915,13 @@ class CompanionViewModel(
 
     /** Applies and persists a background choice. */
     fun setBackground(selection: com.example.meowmba.core.background.BackgroundSelection) {
+        if (selection.animation?.isPetEnvironment == true) {
+            _uiState.value = _uiState.value.copy(habitatBackgroundId = selection.value)
+            secureStorage?.savePreference("habitat_background", selection.value)
+            setHabitatMode(true)
+            return
+        }
+        setHabitatMode(false)
         _uiState.value = _uiState.value.copy(background = selection)
         secureStorage?.let {
             it.savePreference(KEY_BACKGROUND_KIND, selection.kind.name)

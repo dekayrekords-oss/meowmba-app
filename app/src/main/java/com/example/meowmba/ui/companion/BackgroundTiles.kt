@@ -1,73 +1,63 @@
 package com.example.meowmba.ui.companion
 
-import androidx.compose.animation.*
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 
-/**
- * Tile overlay for Memba ecosystem applications.
- */
+/** Modal navigation workbench. Original route keys stay stable despite clearer display labels. */
 @Composable
 fun BackgroundTiles(
     visible: Boolean,
     onClose: () -> Unit,
     onTileClick: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    selectedTile: String? = null,
 ) {
-    AnimatedVisibility(
-        visible = visible,
-        enter = scaleIn() + fadeIn(),
-        exit = scaleOut() + fadeOut(),
-        modifier = modifier.fillMaxSize()
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.8f))
-                .clickable { onClose() },
-            contentAlignment = Alignment.Center
-        ) {
-            Column(
-                modifier = Modifier
-                    .safeDrawingPadding()
-                    .fillMaxWidth(0.9f)
-                    .fillMaxHeight(0.7f)
-                    .clip(RoundedCornerShape(32.dp))
-                    .background(MaterialTheme.colorScheme.surface)
-                    .padding(24.dp)
-                    .clickable(enabled = false) { }
+    if (!visible) return
+    val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
+    val themedTiles = tileItems
+    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        BoxWithConstraints(modifier.fillMaxSize().safeDrawingPadding().padding(AvatarSetupTokens.page), contentAlignment = Alignment.Center) {
+            Surface(
+                modifier = Modifier.widthIn(max = 720.dp).fillMaxWidth().heightIn(max = maxHeight),
+                shape = MaterialTheme.shapes.extraLarge,
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 4.dp,
             ) {
-                Text(
-                    text = "Memba Ecosystem",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-                
-                val themedTiles = tileItems
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(3),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    items(themedTiles) { item ->
-                        TileItem(item, onClick = { onTileClick(item.name) })
+                Column(Modifier.padding(AvatarSetupTokens.page)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Memba", style = MaterialTheme.typography.headlineSmall)
+                            Text("Your workspace", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        IconButton(onClick = onClose) { Icon(Icons.Default.Close, contentDescription = "Close workspace") }
+                    }
+                    HorizontalDivider(Modifier.padding(vertical = AvatarSetupTokens.item), color = MaterialTheme.colorScheme.outlineVariant)
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive((176f * fontScale).dp),
+                        modifier = Modifier.weight(1f, fill = false),
+                        verticalArrangement = Arrangement.spacedBy(AvatarSetupTokens.compact),
+                        horizontalArrangement = Arrangement.spacedBy(AvatarSetupTokens.compact),
+                    ) {
+                        items(themedTiles, key = { it.name }) { item ->
+                            TileItem(item, onClick = { onTileClick(item.name) }, selected = item.name == selectedTile)
+                        }
                     }
                 }
             }
@@ -76,48 +66,47 @@ fun BackgroundTiles(
 }
 
 @Composable
-fun TileItem(item: MembaTile, onClick: () -> Unit) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(horizontal = 8.dp, vertical = 16.dp)
-            .clickable(onClick = onClick)
+fun TileItem(item: MembaTile, onClick: () -> Unit, selected: Boolean = false) {
+    Surface(
+        onClick = onClick,
+        shape = MaterialTheme.shapes.medium,
+        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.fillMaxWidth().semantics { this.selected = selected },
     ) {
-        Icon(
-            imageVector = item.icon,
-            contentDescription = item.name,
-            tint = item.color,
-            modifier = Modifier.size(40.dp)
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        // One line: "Background" wrapping to "Backgroun / d" made the whole grid look broken.
-        Text(
-            text = item.name,
-            style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp),
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1
-        )
+        Row(Modifier.padding(horizontal = AvatarSetupTokens.item, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(AvatarSetupTokens.item)) {
+            Icon(item.icon, contentDescription = null, tint = item.color, modifier = Modifier.size(24.dp))
+            Text(tileDisplayName(item.name), style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+            Icon(if (selected) Icons.Default.Check else Icons.AutoMirrored.Filled.ArrowForward,
+                contentDescription = if (selected) "Selected" else null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+        }
     }
+}
+
+private fun tileDisplayName(route: String): String = when (route) {
+    "LLM" -> "Models"
+    "NAV" -> "Navigate"
+    else -> route
 }
 
 data class MembaTile(val name: String, val icon: ImageVector, val color: Color)
 
 val tileItems: List<MembaTile> @Composable get() = listOf(
     MembaTile("Memory", Icons.Default.Terminal, MaterialTheme.colorScheme.primary),
-    MembaTile("Files", Icons.Default.FolderOpen, Color(0xFFFFC857)),
-    MembaTile("Studio", Icons.Default.Palette, Color(0xFFFF5CA8)),
-    MembaTile("LLM", Icons.Default.Memory, Color(0xFF00E5FF)),
-    MembaTile("Robot", Icons.Default.Android, Color(0xFF4DB6AC)),
-    MembaTile("Projects", Icons.Default.Folder, Color(0xFF00E676)),
-    MembaTile("Tools", Icons.Default.Build, Color(0xFFFFD600)),
-    MembaTile("Agents", Icons.Default.SmartToy, Color(0xFFAA00FF)),
+    MembaTile("Files", Icons.Default.FolderOpen, MaterialTheme.colorScheme.secondary),
+    MembaTile("Studio", Icons.Default.Palette, MaterialTheme.colorScheme.tertiary),
+    MembaTile("LLM", Icons.Default.Memory, MaterialTheme.colorScheme.primary),
+    MembaTile("Robot", Icons.Default.Android, MaterialTheme.colorScheme.secondary),
+    MembaTile("Projects", Icons.Default.Folder, MaterialTheme.colorScheme.primary),
+    MembaTile("Tools", Icons.Default.Build, MaterialTheme.colorScheme.tertiary),
+    MembaTile("Agents", Icons.Default.SmartToy, MaterialTheme.colorScheme.primary),
     MembaTile("Privacy", Icons.Default.Security, MaterialTheme.colorScheme.primary),
-    MembaTile("Notes", Icons.Default.Book, Color(0xFFD2A8FF)),
-    MembaTile("NAV", Icons.Default.Navigation, Color(0xFFFF6D00)),
-    MembaTile("Weather", Icons.Default.WbSunny, Color(0xFF29B6F6)),
-    MembaTile("Background", Icons.Default.Wallpaper, Color(0xFFEC407A)),
-    MembaTile("Avatar", Icons.Default.Face, Color(0xFF00BFA5)),
-    MembaTile("Settings", Icons.Default.Settings, Color(0xFFBDBDBD))
+    MembaTile("Notes", Icons.Default.Book, MaterialTheme.colorScheme.secondary),
+    MembaTile("NAV", Icons.Default.Navigation, MaterialTheme.colorScheme.tertiary),
+    MembaTile("Weather", Icons.Default.WbSunny, MaterialTheme.colorScheme.tertiary),
+    MembaTile("Background", Icons.Default.Wallpaper, MaterialTheme.colorScheme.secondary),
+    MembaTile("Avatar", Icons.Default.Face, MaterialTheme.colorScheme.primary),
+    MembaTile("Settings", Icons.Default.Settings, MaterialTheme.colorScheme.secondary),
 )

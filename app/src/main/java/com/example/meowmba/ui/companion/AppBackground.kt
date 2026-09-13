@@ -122,7 +122,9 @@ private fun ImageBackground(uriString: String) {
 }
 
 private fun decodeBackground(context: Context, uriString: String): Bitmap? = runCatching {
-    val source = ImageDecoder.createSource(context.contentResolver, Uri.parse(uriString))
+    val source = if (uriString == "asset:///backgrounds/conservatory.png")
+        ImageDecoder.createSource(context.assets, "backgrounds/conservatory.png")
+    else ImageDecoder.createSource(context.contentResolver, Uri.parse(uriString))
     ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
         val longest = maxOf(info.size.width, info.size.height)
         if (longest > MAX_EDGE) {

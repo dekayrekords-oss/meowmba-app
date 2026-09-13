@@ -40,6 +40,8 @@ fun PetCarePanel(
     learningEnabled: Boolean,
     onResetLearning: () -> Unit,
     modifier: Modifier = Modifier,
+    habitatMode: Boolean = true,
+    onTrick: (String) -> Unit = {},
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     if (!expanded) {
@@ -50,15 +52,15 @@ fun PetCarePanel(
         modifier = modifier.widthIn(max = 300.dp).heightIn(max = 360.dp),
         shape = MaterialTheme.shapes.large,
         tonalElevation = 6.dp,
-        color = androidx.compose.ui.graphics.Color(0xff20332f).copy(alpha = .97f),
-        contentColor = androidx.compose.ui.graphics.Color(0xfff0f5ef),
+        color = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface,
     ) {
         Column(
             Modifier.verticalScroll(rememberScrollState()).padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Play & care", style = MaterialTheme.typography.titleMedium)
+                Text(if (habitatMode) "Play & care" else "Together", style = MaterialTheme.typography.titleMedium)
                 TextButton(onClick = { expanded = false }) { Text("Close") }
             }
             if (motionPaused) {
@@ -76,7 +78,11 @@ fun PetCarePanel(
             if (care.careEnabled) {
                 Text("Food ${percent(care.food)}% · Energy ${percent(care.energy)}% · Happiness ${percent(care.happiness)}%", style = MaterialTheme.typography.bodySmall)
             }
-            val actions = listOf(
+            Text("Touch to catch their attention. Hold to pet; double-tap to play.", style = MaterialTheme.typography.bodySmall)
+            listOf("Peekaboo" to "peekaboo", "Tickle" to "fond_nuzzle", "Dance" to "pocket_groove").forEach { (label, clip) ->
+                FilledTonalButton(onClick = { onTrick(clip) }, modifier = Modifier.fillMaxWidth()) { Text(label) }
+            }
+            val actions = if (!habitatMode) listOf("Feed" to HabitatAction.FEED, "Rest" to HabitatAction.REST) else listOf(
                 "Feed" to HabitatAction.FEED, "Play" to HabitatAction.PLAY,
                 "Rest" to HabitatAction.REST, "Read" to HabitatAction.READ,
                 "Drink" to HabitatAction.DRINK, "Nudge" to HabitatAction.NUDGE,

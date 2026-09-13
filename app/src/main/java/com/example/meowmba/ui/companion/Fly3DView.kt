@@ -29,21 +29,23 @@ internal class Fly3DView(context: Context) : TextureView(context), TextureView.S
     private var ready = false
     var onFailure: ((String) -> Unit)? = null
 
-    init { isOpaque = true; surfaceTextureListener = this; isClickable = false }
+    init { isOpaque = false; surfaceTextureListener = this; isClickable = false }
     fun publish(frame: Fly3DFrame) {
+        val old = renderer.frame
         renderer.frame = frame
-        if (active && !disposed) requestFrame()
+        val appearanceChanged = old.avatarScale != frame.avatarScale || old.stageMode != frame.stageMode || old.backgroundId != frame.backgroundId
+        if (!disposed && (active || appearanceChanged)) requestFrame(appearanceChanged)
     }
     fun setStageActive(value: Boolean) {
         if (active == value) return
         active = value
         if (value) requestFrame()
     }
-    private fun requestFrame() {
+    private fun requestFrame(force: Boolean = false) {
         if (disposed || !scheduled.compareAndSet(false, true)) return
         handler.post {
             scheduled.set(false)
-            if (ready && active && !disposed) {
+            if (ready && (active || force) && !disposed) {
                 try {
                     check(EGL14.eglMakeCurrent(display, eglSurface, eglSurface, eglContext)) { "EGL context unavailable" }
                     renderer.onDrawFrame(null)
