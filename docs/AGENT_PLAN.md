@@ -1,5 +1,13 @@
 # Agent execution plan — immersive companion revision
 
+## September 13: installed setup cleanup, build 109
+
+Neural settings now explain control modes, network types, reflex sensitivity,
+FPS and trace/reset effects. Avatar setup separates Look, Space, Behavior and
+Animations. Eight focused checks passed; both menus were inspected on the phone.
+See [MEOW_BUILD_109_PASS_DOWN.md](characters/MEOW_BUILD_109_PASS_DOWN.md) for
+installation, signed artifact identity and efficient delta-transfer instructions.
+
 ## September 13: current full-fly integration
 
 The user explicitly resumed 3D fly work after the historical September 5 pause.

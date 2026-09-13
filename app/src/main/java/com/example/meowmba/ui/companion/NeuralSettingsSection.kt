@@ -13,7 +13,9 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.material3.TextButton
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -99,13 +101,26 @@ fun NeuralSettingsSection(
             .padding(vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Lumen / Neural", style = MaterialTheme.typography.titleMedium)
+        Text("Neural setup", style = MaterialTheme.typography.headlineSmall)
         Text(
-            "Optional reflex and agentic layers for the avatar. Defaults stay off until you enable them.",
+            "Choose how your companion reacts, then adjust sensitivity and animation speed. Changes save as you make them.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
+        NeuralSetupControls(
+            mode, substrate, traceConsent, diagnostics, showNeuralCoreControls,
+            onModeChanged, onSubstrateChanged, onTraceConsentChanged, onReset,
+            lumenReflexV2, onLumenReflexV2Change, reflexGain, onReflexGainChange,
+            avatarFpsTarget, onAvatarFpsTargetChange,
+        )
+        var advanced by rememberSaveable { mutableStateOf(false) }
+        TextButton(onClick = { advanced = !advanced }) {
+            Text(if (advanced) "Hide computer & task tools" else "Computer & task tools")
+        }
+        Text("Optional task automation and computer connections. Avatar reactions work without these tools.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (advanced) {
         YourComputerSettingsSection(
             phoneProbeSummary = computerPhoneProbeSummary,
             phoneReady = computerPhoneReady,
@@ -124,62 +139,6 @@ fun NeuralSettingsSection(
             onPowerChange = onComputerPowerChange,
             onConfirmInstallPrompt = onComputerConfirmInstallPrompt,
         )
-
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("How to use", style = MaterialTheme.typography.titleSmall)
-            Text(
-                "• Avatar FPS — 15–60 (default 30). Lower values reduce heat.",
-                style = MaterialTheme.typography.bodySmall,
-            )
-            Text(
-                "• Lumen reflex + gain — live avatar attention from vision, speech, touch, motion.",
-                style = MaterialTheme.typography.bodySmall,
-            )
-            Text(
-                "• Agentic — tasks, SSH profiles, and optional model adapter.",
-                style = MaterialTheme.typography.bodySmall,
-            )
-            Text(
-                "• Tasks — title → Create → Tick (one planner step) → Approve if SSH needs it.",
-                style = MaterialTheme.typography.bodySmall,
-            )
-            Text(
-                "• Model — optional OpenAI-compatible URL + key ref; empty uses the stub.",
-                style = MaterialTheme.typography.bodySmall,
-            )
-            Text(
-                "• Chat can use Computer when Agentic is on.",
-                style = MaterialTheme.typography.bodySmall,
-            )
-            Text(
-                "• Terminal is separate: Chat → Terminal → Computer / SSH.",
-                style = MaterialTheme.typography.bodySmall,
-            )
-            Text(
-                "• " + com.example.meowmba.core.config.ComputerPowerStore.COPY +
-                    " Termux + proot-distro = userspace guest (root inside only, not phone root). " +
-                    "openssh-client in the guest SSHes out. App SSH profiles also reach a full machine.",
-                style = MaterialTheme.typography.bodySmall,
-            )
-        }
-
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("Avatar FPS", style = MaterialTheme.typography.titleSmall)
-            Text(
-                "Target ${avatarFpsTarget.coerceIn(15, 60)} FPS when cool (default 30). " +
-                    "Light thermal quietly halves FPS; sustained warmer states pause avatar work " +
-                    "with a mild banner — never an overheating alarm for light load.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Slider(
-                value = avatarFpsTarget.coerceIn(15, 60).toFloat(),
-                onValueChange = { onAvatarFpsTargetChange(it.toInt().coerceIn(15, 60)) },
-                valueRange = 15f..60f,
-                steps = 44,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
 
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("Computer", style = MaterialTheme.typography.titleSmall)
@@ -219,30 +178,8 @@ fun NeuralSettingsSection(
         }
 
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("Lumen reflex", style = MaterialTheme.typography.titleSmall)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Checkbox(checked = lumenReflexV2, onCheckedChange = onLumenReflexV2Change)
-                Text("Enable Lumen reflex")
-            }
-            if (lumenReflexV2) {
-                Text(
-                    "Gain ${(reflexGain * 100).toInt()}% — how strongly senses push curiosity / social / caution.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Slider(
-                    value = reflexGain.coerceIn(0.25f, 1.5f),
-                    onValueChange = { onReflexGainChange(it.coerceIn(0.25f, 1.5f)) },
-                    valueRange = 0.25f..1.5f,
-                )
-            }
-        }
-
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("Agentic runtime", style = MaterialTheme.typography.titleSmall)
+            Text("Task automation", style = MaterialTheme.typography.titleSmall)
+            Text("Enables the task planner, connection profiles and optional model adapter. Tasks may request approval before using a remote computer.", style = MaterialTheme.typography.bodySmall)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -273,71 +210,6 @@ fun NeuralSettingsSection(
             )
         }
 
-        if (showNeuralCoreControls) {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Neural controller", style = MaterialTheme.typography.titleSmall)
-                Text(
-                    "Shadow mode compares the neural layer without changing avatar behaviour.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                NeuralChoiceRow(
-                    label = "Mode",
-                    choices = NeuralMode.entries.toList(),
-                    selected = mode,
-                    onSelected = onModeChanged,
-                )
-                NeuralChoiceRow(
-                    label = "Substrate",
-                    choices = NeuralSubstrate.entries.toList(),
-                    selected = substrate,
-                    onSelected = onSubstrateChanged,
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Checkbox(checked = traceConsent, onCheckedChange = onTraceConsentChanged)
-                    Text("Allow feature-only neural traces")
-                }
-                diagnostics?.let {
-                    Text(
-                        "Core: ${it.substrate.name.lowercase()}  " +
-                            "steps ${it.steps}  p95 ${it.p95StepMicros}µs  " +
-                            "fallback ${it.fallback.name.lowercase()}",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    Text(
-                        "Shadow divergence ${"%.3f".format(it.divergenceMean)} · " +
-                            "action ${it.currentAction.name.lowercase()}",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-                Button(onClick = onReset) {
-                    Text("Reset neural state")
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun <T : Enum<T>> NeuralChoiceRow(
-    label: String,
-    choices: List<T>,
-    selected: T,
-    onSelected: (T) -> Unit,
-) {
-    Row(modifier = Modifier.fillMaxWidth().padding(top = 2.dp)) {
-        Text(label, modifier = Modifier.width(72.dp), style = MaterialTheme.typography.bodyMedium)
-        choices.forEach { choice ->
-            Button(
-                onClick = { onSelected(choice) },
-                enabled = choice != selected,
-                modifier = Modifier.padding(end = 4.dp),
-            ) {
-                Text(choice.name.lowercase().replace('_', ' '))
-            }
-        }
+        } // Computer and task tools.
     }
 }

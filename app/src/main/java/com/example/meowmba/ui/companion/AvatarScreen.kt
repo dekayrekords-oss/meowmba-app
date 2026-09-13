@@ -103,13 +103,14 @@ fun AvatarScreen(
     var expanded by remember(search, category) { mutableStateOf(false) }
     var tab by rememberSaveable { mutableStateOf("Look") }
     var advanced by rememberSaveable { mutableStateOf(false) }
+    var feelings by rememberSaveable { mutableStateOf(false) }
     val choices = remember(animations, search, category) { avatarAnimationChoices(animations, category, search) }
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(Modifier.safeDrawingPadding().verticalScroll(rememberScrollState()).padding(horizontal = AvatarSetupTokens.page)) {
             Row(Modifier.fillMaxWidth().padding(top = AvatarSetupTokens.compact), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("Make it yours", style = MaterialTheme.typography.headlineSmall)
-                    Text("Avatar & expression", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Your avatar", style = MaterialTheme.typography.headlineSmall)
+                    Text("Appearance, behavior & play", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 IconButton(onClick = onClose) { Icon(Icons.Default.Close, contentDescription = "Close avatar setup") }
             }
@@ -119,12 +120,19 @@ fun AvatarScreen(
             Text(if (style.isLumen && style != AvatarStyle.FULL_FLY) "${style.label} · ${if (style == AvatarStyle.LUMEN_CAT) AvatarAnimal.CAT.label else animal.label}" else style.label,
                 style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = AvatarSetupTokens.item))
             Text("Selected · changes apply immediately", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            SetupModeChooser(habitatMode, onHabitatMode)
-            SetupSizeControl(avatarScale, onAvatarScale)
             FlowRow(Modifier.padding(top = AvatarSetupTokens.section), horizontalArrangement = Arrangement.spacedBy(AvatarSetupTokens.compact)) {
-                listOf("Look", "Motion").forEach { option ->
+                listOf("Look", "Space", "Behavior", "Animations").forEach { option ->
                     FilterChip(selected = tab == option, onClick = { tab = option }, label = { Text(option) })
                 }
+            }
+            if (tab == "Space") {
+                SetupSection("Size & play space")
+                Text("Keep a large avatar on your chosen background, or let it roam a game environment.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                SetupModeChooser(habitatMode, onHabitatMode)
+                SetupSizeControl(avatarScale, onAvatarScale)
+                Text("Size applies in both modes. Use the Background card to choose a scene. On the avatar screen, open Play to interact or manage optional care.",
+                    style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 12.dp))
             }
             if (tab == "Look") {
                 SetupSection("Choose an avatar")
@@ -137,9 +145,9 @@ fun AvatarScreen(
                 Spacer(modifier = Modifier.height(10.dp))
             }
 
-            if (style.isLumen) {
+            if (style.isLumen && style != AvatarStyle.FULL_FLY) {
                   Text("Choose your character", style = MaterialTheme.typography.titleMedium)
-                  Text("Choose a form, or say “be a rabbit”, “be a panda” or “become a robot”. Each has its own expressive eyes. Your choice is remembered. Say “go back to normal” to return to eyes only.",
+                  Text("Choose the floating features Lumen wears. This selection is remembered until you change it.",
                       style = MaterialTheme.typography.bodySmall)
                   FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     AvatarAnimal.entries.forEach { option ->
@@ -148,17 +156,18 @@ fun AvatarScreen(
                             label = { Text(option.label) })
                     }
                   }
-                Text("Tap an eye on the main screen to enable the camera. Lumen follows visible faces on-device; it does not identify people. Long-press for settings.",
+                Text("Tap or stroke the avatar to interact. Use the video button to enable or disable the camera for face following; swipe down to open the card menu.",
                     style = MaterialTheme.typography.bodySmall)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(selected = false, onClick = { onPlayAnimation("dog") }, label = { Text("Act like a dog") })
                     FilterChip(selected = false, onClick = { onPlayAnimation("cat") }, label = { Text("Act like a cat") })
                 }
-                Text("Act-like performances are temporary. Choosing a form above, or saying “become”, keeps it until you change it. More forms can be added to the same rig.",
+                Text("These performances are temporary. Your selected character stays saved.",
                     style = MaterialTheme.typography.bodySmall)
                 Spacer(Modifier.height(12.dp))
             }
             Spacer(modifier = Modifier.height(18.dp))
+            if (style != AvatarStyle.FULL_FLY) {
             Text(
                 text = "Eye color",
                 color = MaterialTheme.colorScheme.onSurface,
@@ -196,11 +205,12 @@ fun AvatarScreen(
             ColorSwatchRow(selected = glowColor, onSelect = onSelectGlowColor, label = "Glow color")
 
             Spacer(modifier = Modifier.height(18.dp))
-            } else {
+            }
+            } // Look
+            if (tab == "Behavior") {
                 SetupSection("Movement & personality")
-            Text("Create new performances", style = MaterialTheme.typography.titleMedium)
-            Text("Say “let’s go fishing”, “can you fish?” or “invent an animation of you juggling stars”. Your on-device model composes supported props and movements, then saves the result here. New creations take time; saved scenes replay immediately.", style = MaterialTheme.typography.bodySmall)
-            Text("Expression", style = MaterialTheme.typography.titleMedium)
+            Text("Expression strength", style = MaterialTheme.typography.titleMedium)
+            Text("Controls how strongly the face shows an expression.", style = MaterialTheme.typography.bodySmall)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ExpressionIntensity.entries.forEach { option ->
                     FilterChip(selected = expressionIntensity == option, onClick = { onExpressionIntensity(option) }, label = { Text(option.label) })
@@ -213,7 +223,9 @@ fun AvatarScreen(
                 }
             }
             Text("Quiet keeps small idle movements. Balanced and Lively add occasional scenes. Requested performances remain available.", style = MaterialTheme.typography.bodySmall)
-                if (style.isLumen) {
+                if (style.isLumen && style != AvatarStyle.FULL_FLY) {
+                TextButton(onClick = { feelings = !feelings }) { Text(if (feelings) "Hide expression previews" else "Preview expressions") }
+                if (feelings) {
                 Text("Emotion rehearsal", style = MaterialTheme.typography.titleMedium)
                 Text("Watch a feeling arrive, hold and settle. Conversation and touch also bring these expressions to life.",
                     style = MaterialTheme.typography.bodySmall)
@@ -224,6 +236,9 @@ fun AvatarScreen(
                     }
                 }
                 }
+                }
+            } // Behavior
+            if (tab == "Animations") {
             Text(
                 text = "Animations",
                 color = MaterialTheme.colorScheme.onSurface,
@@ -261,6 +276,7 @@ fun AvatarScreen(
             }
 
             }
+            if (tab == "Look") {
             TextButton(onClick = { advanced = !advanced }, modifier = Modifier.padding(top = AvatarSetupTokens.section)) {
                 Text(if (advanced) "Hide advanced settings" else "Advanced settings")
             }
@@ -284,6 +300,7 @@ fun AvatarScreen(
             }
                 SetupSection("Diagnostics")
                 diagnostics()
+            }
             }
             Spacer(Modifier.height(AvatarSetupTokens.section))
         }
