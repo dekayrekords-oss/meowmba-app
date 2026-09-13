@@ -38,6 +38,7 @@ fun PetCarePanel(
     onFeedback: (Boolean) -> Unit,
     onLearningChanged: (Boolean) -> Unit,
     learningEnabled: Boolean,
+    feedbackNotice: String? = null,
     onResetLearning: () -> Unit,
     modifier: Modifier = Modifier,
     habitatMode: Boolean = true,
@@ -104,6 +105,7 @@ fun PetCarePanel(
                 TextButton(onClick = { onFeedback(true) }, enabled = learningEnabled, modifier = Modifier.weight(1f)) { Text("Like this") }
                 TextButton(onClick = { onFeedback(false) }, enabled = learningEnabled, modifier = Modifier.weight(1f)) { Text("Less like this") }
             }
+            feedbackNotice?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             TextButton(onClick = onResetLearning) { Text("Reset learned preferences") }
         }
     }

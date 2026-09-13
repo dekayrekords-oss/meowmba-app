@@ -102,6 +102,62 @@ class Fly3DWorldTest {
         assertTrue(world.snapshot().pose.flight > .9f)
     }
 
+    @Test fun feedingHasOneServingApproachesLiftsAndConsumesOnlyInActiveTime() {
+        val world = Fly3DWorld()
+        val command = HabitatCommand(7, HabitatAction.FEED)
+        var held = false
+        var lifted = false
+        repeat(900) { i ->
+            val frame = world.step(i / 30f, command, bias)
+            assertTrue(frame.props.count { it.kind == "fruit" } <= 1)
+            if (frame.pose.holding == "fruit") {
+                held = true
+                lifted = lifted || frame.pose.handY > frame.pose.y
+                assertEquals(frame, world.step(i / 30f, command, bias))
+            }
+        }
+        assertTrue("food is grasped before consumption", held)
+        assertTrue("food lifts toward the mouth", lifted)
+        assertNull(world.snapshot().pose.holding)
+        assertTrue(world.snapshot().props.none { it.kind == "fruit" })
+        assertTrue(world.step(31f, command, bias).props.none { it.kind == "fruit" })
+        assertEquals(1, world.step(31.1f, HabitatCommand(8, HabitatAction.FEED), bias).props.count { it.kind == "fruit" })
+    }
+
+    @Test fun floorContactAndTakeoffNeverRaiseActorInstantly() {
+        val world = Fly3DWorld()
+        repeat(600) { world.step(it / 30f, HabitatCommand(1, HabitatAction.NUDGE), bias) }
+        assertEquals(0f, world.snapshot().props.first { it.kind == "ball" }.y, .02f)
+        var lowest = 4f
+        repeat(600) { i ->
+            val frame = world.step((600+i) / 30f, HabitatCommand(2, HabitatAction.PLAY), bias)
+            lowest = minOf(lowest, frame.pose.y)
+        }
+        assertEquals("feet meet the floor", .55f, lowest, .03f)
+        var previous = world.snapshot().pose
+        repeat(180) { i ->
+            val pose = world.step((1200+i) / 30f, HabitatCommand(3, HabitatAction.EXPLORE), bias).pose
+            assertTrue("takeoff respects velocity cap", abs(pose.y - previous.y) < .04f)
+            previous = pose
+        }
+        assertTrue(previous.y > 1.6f)
+    }
+
+    @Test fun stoppedWalkSettlesAndNeutralGripTurnsWithBody() {
+        val world = Fly3DWorld()
+        repeat(400) { world.step(it / 30f, HabitatCommand(1, HabitatAction.REST), bias) }
+        repeat(600) { world.step((400+it) / 30f, HabitatCommand(2, HabitatAction.READ), bias) }
+        assertEquals("book", world.snapshot().pose.holding)
+        assertTrue(abs(kotlin.math.sin(world.snapshot().pose.walkPhase)) < .01f)
+        val front = Fly3DWorld.neutralHandOffset(0f)
+        val side = Fly3DWorld.neutralHandOffset(90f)
+        val back = Fly3DWorld.neutralHandOffset(180f)
+        assertEquals(front.z, side.x, .0001f)
+        assertEquals(-front.x, side.z, .0001f)
+        assertEquals(-front.x, back.x, .0001f)
+        assertEquals(-front.z, back.z, .0001f)
+    }
+
     @Test fun touchTargetsAreBoundedAndNonfiniteInputIsSafe() {
         assertEquals(Fly3DTarget(0f, 2.65f, 0f), Fly3DWorld.normalizedTarget(Float.NaN, Float.NaN, Float.NaN))
         val target = Fly3DWorld.normalizedTarget(-10f, 15f, 80f)

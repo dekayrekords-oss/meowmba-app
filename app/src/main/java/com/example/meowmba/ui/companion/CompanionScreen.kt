@@ -174,6 +174,7 @@ fun CompanionScreen(
                 care = uiState.petCare, motionPaused = !avatarWorkAllowed, onCareChanged = viewModel::setPetCare,
                 onAction = viewModel::habitatAction, onFeedback = viewModel::petFeedback,
                 onLearningChanged = viewModel::setPetLearning, learningEnabled = uiState.petLearningEnabled,
+                feedbackNotice = uiState.petFeedbackNotice,
                 onResetLearning = viewModel::resetPetLearning,
                 modifier = Modifier.align(Alignment.TopStart).safeDrawingPadding().padding(start = 12.dp, top = 64.dp),
             )
@@ -1330,6 +1331,7 @@ private fun AvatarMotionHost(
             motionLurch = motionLurch,
             motionObservedAtMs = motionSampleTime,
             nervousBias = viewModel::nervousBiasNow,
+            neuralGaze = viewModel::neuralGazeNow,
             onPet = viewModel::onAvatarPetted,
             onPlay = { viewModel.playCompanionTrick("peekaboo") },
             onHabitatAction = viewModel::habitatAction,

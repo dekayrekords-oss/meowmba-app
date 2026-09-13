@@ -15,7 +15,7 @@ def main():
         "units": 2, "tauMs": [100., 400.], "adaptTauMs": [1000., 1000.], "adaptGain": [0., .1],
         "bias": [0., 0.], "inputWeights": [1., .5], "recurrentWeights": [.2, -.1, .1, .3], "outputWeights": [0., 0.]}}
     def trace(period):
-        rows = [{"tMs": (i+1)*50, "input": [1. if (i//period)%2 else 0.]} for i in range(400)]
+        rows = [{"tMs": (i+1)*50, "dtMs": 50, "input": [1. if (i//period)%2 else 0.]} for i in range(400)]
         states = replay_rate_states(checkpoint, rows)
         for row, h in zip(rows, states):
             row['targetReadout'] = [.2 + .3*h[0] + .2*h[1]]

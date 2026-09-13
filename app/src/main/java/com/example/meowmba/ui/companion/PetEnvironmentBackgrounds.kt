@@ -2,7 +2,6 @@ package com.example.meowmba.ui.companion
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -24,24 +23,15 @@ const val PET_ENVIRONMENT_TABLE_Y = .78f
  */
 class PetEnvironmentBackgroundPainter {
     private val path = Path()
+    private val atmosphere = PetEnvironmentAtmosphere()
 
     fun draw(scope: DrawScope, animation: BackgroundAnimation, clock: Float, slow: Float) = with(scope) {
         if (size.width <= 0 || size.height <= 0) return@with
         val t = phase(clock)
         val s = phase(slow)
-        val palette = when (animation) {
-            BackgroundAnimation.KITCHEN -> longArrayOf(0xFF334A48, 0xFF182B2A, 0xFFAA8663)
-            BackgroundAnimation.LIBRARY -> longArrayOf(0xFF302C3D, 0xFF191725, 0xFF76533D)
-            BackgroundAnimation.GREENHOUSE -> longArrayOf(0xFF294C45, 0xFF102F27, 0xFF64775A)
-            BackgroundAnimation.WORKSHOP -> longArrayOf(0xFF394451, 0xFF19232D, 0xFF967454)
-            BackgroundAnimation.POND -> longArrayOf(0xFF243C4A, 0xFF122B38, 0xFF566C63)
-            BackgroundAnimation.ORCHARD -> longArrayOf(0xFF4C4F38, 0xFF263929, 0xFF947052)
-            BackgroundAnimation.CAFE -> longArrayOf(0xFF45353C, 0xFF241E2C, 0xFF956650)
-            BackgroundAnimation.OBSERVATORY -> longArrayOf(0xFF182840, 0xFF0C1429, 0xFF4C5B76)
-            BackgroundAnimation.BEACH -> longArrayOf(0xFF295967, 0xFF173640, 0xFFAE8F62)
-            else -> longArrayOf(0xFF443850, 0xFF231E34, 0xFF826E76)
-        }
-        drawRect(Brush.verticalGradient(listOf(Color(palette[0]), Color(palette[1]))))
+        val material = atmosphere.material(animation)
+        drawRect(material.wall)
+        atmosphere.drawLight(this, animation, s)
         when (animation) {
             BackgroundAnimation.KITCHEN -> {
                 window(.08f, .13f, .26f, .29f, Color(0xFF70958D), t)
@@ -162,8 +152,11 @@ class PetEnvironmentBackgroundPainter {
                 }
             }
         }
-        // A quiet stage joins all ten rooms; props are drawn by the interactive overlay.
-        rect(0f, PET_ENVIRONMENT_TABLE_Y, 1f, .22f, palette[2])
+        atmosphere.drawDetails(this, animation, t, s)
+        // Static material shading preserves the exact contact plane while giving props
+        // a substantial surface. Detail motion never crosses into this stage.
+        drawRect(material.table(size.height), p(0f, PET_ENVIRONMENT_TABLE_Y), Size(size.width, size.height * .22f))
+        line(0f, PET_ENVIRONMENT_TABLE_Y, 1f, PET_ENVIRONMENT_TABLE_Y, 0x44F4DBC1, .002f)
         rect(0f, PET_ENVIRONMENT_TABLE_Y + .012f, 1f, .013f, 0x55301F21)
         repeat(5) { i -> line(0f, .84f + i * .036f, 1f, .84f + i * .036f, 0x22412B24, .0015f) }
         line(.12f, .80f, .08f, 1f, 0x22412B24, .002f)
@@ -201,7 +194,8 @@ class PetEnvironmentBackgroundPainter {
         oval(x - .035f, y + .039f, .07f, .012f, 0xFFB39879)
         rect(x - .016f, y - .013f, .032f, .055f, 0xFFCFB28D)
         oval(x - .009f, y - .038f + .002f * sin(t * TAU * 3), .018f, .028f, 0xFFE4BE77)
-        steam(x, y - .05f, t)
+        // A candle flickers rather than continuously smoking like a boiling kettle.
+        dot(x + .002f * sin(t * TAU * 3), y - .024f, .004f, 0xFFFFE4A4)
     }
 
     private fun DrawScope.steam(x: Float, y: Float, t: Float) {

@@ -1,0 +1,15 @@
+{
+  "scope": "synthetic known teacher; held-out pulse period; no phone traces or measured behavior improvement",
+  "trainingSamples": 400,
+  "heldOutSamples": 400,
+  "units": 2,
+  "fittedReadoutWeights": [
+    0.30000000408880123,
+    0.19999995424001438
+  ],
+  "fittedBaseline": [
+    0.20000001229752656
+  ],
+  "heldOutMSE": 4.2600429813441213e-17,
+  "constantTrainingMeanMSE": 0.018955914750724126
+}

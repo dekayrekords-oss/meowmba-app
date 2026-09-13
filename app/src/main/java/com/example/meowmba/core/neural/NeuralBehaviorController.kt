@@ -127,6 +127,8 @@ class NeuralBehaviorController(
     var fallback: FallbackReason = FallbackReason.NONE
         private set
 
+    private var traceStepIndex = 0L
+    private var traceResetGeneration = 0L
     private var core: NeuralCore = coreFactory(substrate)
 
     @Volatile
@@ -280,6 +282,11 @@ class NeuralBehaviorController(
     /** Forget the neural state (not the legacy drives) and clear any sticky fallback. */
     @Synchronized
     fun resetNeuralState() {
+        traceStepIndex = 0L
+        traceResetGeneration = 0L
+        economyAccumulatedMs = 0f
+        economyParity = false
+        lastArbitrated = null
         core.reset()
         encoder.reset()
         arbiter.reset()
@@ -345,6 +352,7 @@ class NeuralBehaviorController(
         }
 
         val arbitrated = neuralStep(stepDt, legacyBias)
+        traceStepIndex++
 
         if (mode == NeuralMode.SHADOW) {
             published = legacyBias
@@ -356,6 +364,8 @@ class NeuralBehaviorController(
         traceSink?.invoke(
             FeatureTraceSample(
                 tMs = simTimeMs,
+                dtMs = stepDt,
+                stepIndex = traceStepIndex, resetGeneration = traceResetGeneration,
                 mode = mode.name,
                 input = lastInput.copyOf(),
                 legacyBias = DriveBias.toArray(legacyBias),
@@ -381,6 +391,7 @@ class NeuralBehaviorController(
             lastReadout = y
             if (!allFinite(y)) {
                 enterFallback(FallbackReason.NON_FINITE_OUTPUT)
+                traceResetGeneration++
                 core.reset()
             } else {
                 val decoded = decoder.decode(y)
@@ -391,6 +402,7 @@ class NeuralBehaviorController(
             }
         } catch (e: Exception) {
             enterFallback(FallbackReason.EXCEPTION)
+            traceResetGeneration++
             try { core.reset() } catch (_: Exception) { }
         }
         val elapsed = monotonicNanos() - t0

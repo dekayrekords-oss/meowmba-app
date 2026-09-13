@@ -95,6 +95,20 @@ class PetEnvironmentBackgroundTest {
         }
     }
 
+    @Test fun tableHasMaterialDepthWithoutAnimatedContactPixels() {
+        entries.forEach { animation ->
+            val first = render(animation, 400, 600, clock = .1f, slow = .2f)
+            val later = render(animation, 400, 600, clock = .7f, slow = .8f)
+            val top = first.getPixel(200, 480)
+            val bottom = first.getPixel(200, 590)
+            assertNotEquals("table material has depth $animation", top, bottom)
+            for (y in 478 until 600 step 5) {
+                assertEquals("ambient details stay above interactive contact stage", first.getPixel(200, y), later.getPixel(200, y))
+            }
+            first.recycle(); later.recycle()
+        }
+    }
+
     private fun save(bitmap: Bitmap, name: String) {
         val file = File("build/reports/pet-environments/$name")
         file.parentFile!!.mkdirs()

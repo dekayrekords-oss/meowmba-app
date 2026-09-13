@@ -11,7 +11,7 @@ import java.io.File
  * Only *features* are stored: the encoded input vector, both controllers'
  * outputs and the legacy drives. Never audio, never video, never transcripts.
  * That is enough to fit a readout offline and to replay a session through the
- * cores on a laptop, and it is nothing a person would mind existing.
+ * cores on a laptop. These behavioral features still require recording consent.
  */
 @Serializable
 data class FeatureTraceSample(
@@ -22,18 +22,25 @@ data class FeatureTraceSample(
     val neuralReadout: FloatArray,
     val neuralBias: FloatArray? = null,
     val legacyDrives: FloatArray,
+    /** Actual core integration interval; null means an older, timing-ambiguous trace. */
+    val dtMs: Float? = null,
+    val stepIndex: Long? = null,
+    val resetGeneration: Long? = null,
 )
 
 /** Header written once per file so the trainer can check layouts before reading samples. */
 @Serializable
 data class FeatureTraceHeader(
-    val version: Int = 1,
+    val version: Int = 2,
     val inputLayout: List<String>,
     val outputLayout: List<String>,
     val biasFields: List<String>,
     val driveFields: List<String> = listOf("approach", "social", "curiosity", "caution", "energy"),
     val checkpoint: String,
     val startedAtEpochMs: Long,
+    /** Only the first segment captured atomically with a core reset can assert this. */
+    val startsFromReset: Boolean = false,
+    val checkpointJson: String? = null,
 )
 
 /**
@@ -52,10 +59,13 @@ class FeatureTraceRecorder(
     private val flushEvery: Int = 25,
 ) : AutoCloseable {
     private val json = Json { encodeDefaults = true }
+    private val headerBytes = maxOf(json.encodeToString(header).toByteArray(Charsets.UTF_8).size,
+        json.encodeToString(header.copy(startsFromReset = false)).toByteArray(Charsets.UTF_8).size) + 1L
     private var writer: java.io.Writer? = null
     private var currentFile: File? = null
     private var bytesWritten = 0L
     private var pending = 0
+    private var segment = 0L
     var samplesWritten: Long = 0L
         private set
     var dropped: Long = 0L
@@ -64,20 +74,25 @@ class FeatureTraceRecorder(
     @Synchronized
     fun record(sample: FeatureTraceSample) {
         try {
-            val w = writer ?: open()
             val line = json.encodeToString(sample)
-            if (bytesWritten + line.length + 1 > maxBytesPerFile) {
+            val lineBytes = line.toByteArray(Charsets.UTF_8).size + 1L
+            // Never recursively rotate a sample that cannot fit even an empty file.
+            if (lineBytes + headerBytes > maxBytesPerFile) { dropped++; return }
+            var w = writer ?: open()
+            if (bytesWritten + lineBytes > maxBytesPerFile) {
                 rotate()
-                return record(sample)
+                w = writer ?: open()
             }
             w.write(line)
             w.write("\n")
-            bytesWritten += line.length + 1
+            bytesWritten += lineBytes
             samplesWritten++
             if (++pending >= flushEvery) {
                 w.flush()
                 pending = 0
             }
+        } catch (_: IllegalArgumentException) {
+            dropped++
         } catch (_: java.io.IOException) {
             dropped++
         }
@@ -102,12 +117,13 @@ class FeatureTraceRecorder(
 
     private fun open(): java.io.Writer {
         directory.mkdirs()
-        val file = File(directory, "trace-${System.currentTimeMillis()}$EXTENSION")
+        val file = File.createTempFile("trace-${System.currentTimeMillis()}-", EXTENSION, directory)
         val w = file.bufferedWriter()
-        val head = json.encodeToString(header.copy(startedAtEpochMs = System.currentTimeMillis()))
+        val head = json.encodeToString(header.copy(startsFromReset = header.startsFromReset && segment == 0L))
         w.write(head)
         w.write("\n")
-        bytesWritten = head.length + 1L
+        segment++
+        bytesWritten = head.toByteArray(Charsets.UTF_8).size + 1L
         writer = w
         currentFile = file
         pending = 0

@@ -6,6 +6,7 @@ from pathlib import Path
 
 from train_neural_core import (
     affine_fit,
+    validate_trace_provenance,
     fit_checkpoint,
     replay_rate_states,
     load_checkpoint,
@@ -53,7 +54,7 @@ class TrainerTest(unittest.TestCase):
 
     def test_fit_uses_hidden_units_and_preserves_intercept(self):
         checkpoint = self.fixture()
-        samples = [{"tMs": (i+1)*50, "input": [1. if (i//12)%2 else 0.]} for i in range(200)]
+        samples = [{"tMs": (i+1)*50, "dtMs": 50, "input": [1. if (i//12)%2 else 0.]} for i in range(200)]
         states = replay_rate_states(checkpoint, samples)
         for sample, state in zip(samples, states):
             sample["targetReadout"] = [.2 + .3 * state[0] + .2 * state[1]]
@@ -70,6 +71,43 @@ class TrainerTest(unittest.TestCase):
         for ridge in [0, -1, float("nan")]:
             with self.assertRaises(ValueError):
                 affine_fit([[0.], [1.]], [[0.], [1.]], ridge)
+
+    def test_external_trace_requires_recorder_reset_provenance(self):
+        checkpoint = dict(self.fixture(), name="fixture")
+        rows = [{"tMs": 100000+i*50, "dtMs": 50, "stepIndex": i+1, "resetGeneration": 0, "input": [0.]} for i in range(2)]
+        header = {"version": 2, "startsFromReset": True, "checkpoint": "fixture", "checkpointJson": json.dumps(checkpoint),
+            "inputLayout": checkpoint["inputLayout"], "outputLayout": checkpoint["outputLayout"]}
+        validate_trace_provenance(header, rows, checkpoint)
+        for changed in [{"version": 1}, {"startsFromReset": False}, {"startsFromReset": None}, {"checkpoint": "other"}]:
+            with self.assertRaises(ValueError):
+                validate_trace_provenance(dict(header, **changed), rows, checkpoint)
+        with self.assertRaises(ValueError):
+            validate_trace_provenance(header, [{"tMs": 50}, {"tMs": 100}], checkpoint)
+
+    def test_external_trace_rejects_checkpoint_changes_gaps_and_resets(self):
+        checkpoint = dict(self.fixture(), name="fixture")
+        rows = [{"dtMs": 50, "stepIndex": i+1, "resetGeneration": 0} for i in range(2)]
+        header = {"version": 2, "startsFromReset": True, "checkpoint": "fixture",
+            "checkpointJson": json.dumps(checkpoint), "inputLayout": checkpoint["inputLayout"],
+            "outputLayout": checkpoint["outputLayout"]}
+        for value in [None, "{", json.dumps(dict(checkpoint, outputBaseline=[.3]))]:
+            with self.assertRaises(ValueError):
+                validate_trace_provenance(dict(header, checkpointJson=value), rows, checkpoint)
+        for patch in [{"stepIndex": 3}, {"stepIndex": None}, {"stepIndex": 2.0},
+                      {"resetGeneration": 1}, {"resetGeneration": None}, {"resetGeneration": False}]:
+            with self.assertRaises(ValueError):
+                validate_trace_provenance(header, [rows[0], dict(rows[1], **patch)], checkpoint)
+        with self.assertRaises(ValueError):
+            validate_trace_provenance(header, [dict(rows[0], stepIndex=True), rows[1]], checkpoint)
+        validate_trace_provenance(header, rows, checkpoint)
+
+    def test_explicit_dt_not_wall_gap_drives_replay(self):
+        initial = [{"tMs": 50, "dtMs": 50, "input": [1.]}, {"tMs": 100, "dtMs": 50, "input": [0.]}]
+        suspended = [dict(row, tMs=row["tMs"]+100000*(i+1)) for i,row in enumerate(initial)]
+        self.assertEqual(replay_rate_states(self.fixture(), initial), replay_rate_states(self.fixture(), suspended))
+        for dt in [None, 0, -1, 1001, float("nan"), True]:
+            with self.assertRaises(ValueError):
+                replay_rate_states(self.fixture(), [dict(initial[0], dtMs=dt)])
 
 
 if __name__ == "__main__":

@@ -840,6 +840,38 @@ class CompanionViewModel(
     private val petPreferences = AdaptivePreferenceModel.decode(secureStorage?.getPreference("pet_preferences_v1").orEmpty())
     private var lastPetActivity = "explore"
     private var lastPetCareSaveMs = 0L
+    private val neuralMotorDirector = NeuralMotorDirector()
+    private var neuralMotorPerformance: Pair<Long, BehaviorAction>? = null
+
+    fun neuralGazeNow(): androidx.compose.ui.geometry.Offset? {
+        val orientation = nervousSystem.orientationNow()
+        return if (orientation.strength > .05f) androidx.compose.ui.geometry.Offset(
+            orientation.x.coerceIn(-1f, 1f), orientation.y.coerceIn(-1f, 1f)) else null
+    }
+
+    private fun advanceNeuralMotor(nowMs: Long) {
+        val state = _uiState.value
+        val busy = state.activeAnimation != null || state.activeComposed != null
+        neuralMotorPerformance?.let { (sequence, action) ->
+            if (!busy || state.avatarPerformanceSequence != sequence) {
+                nervousSystem.onActionFeedback(ActionFeedback(action,
+                    if (state.avatarPerformanceSequence == sequence) ActionResult.COMPLETED else ActionResult.INTERRUPTED,
+                    nervousSystem.diagnostics().simTimeMs))
+                neuralMotorPerformance = null
+            }
+        }
+        val allowed = nervousSystem.mode == NeuralMode.NEURAL && nervousSystem.fallback == FallbackReason.NONE &&
+            avatarPerformanceStageAllowed && !appInBackground && socialContextAllowed() &&
+            com.example.meowmba.core.thermal.ThermalGovernor.currentTier().ordinal < 2 &&
+            state.interactionState == InteractionState.IDLE && !state.isChatExpanded
+        val action = nervousSystem.currentAction()
+        val clip = neuralMotorDirector.choose(action, nowMs, allowed, busy) ?: return
+        playAnimationNamed(clip, userRequested = false)
+        if (_uiState.value.activeAnimation != null) {
+            neuralMotorPerformance = _uiState.value.avatarPerformanceSequence to action
+        }
+    }
+
     private var lastNeuralDiagnosticsMs = 0L
 
     fun setNeuralMode(mode: NeuralMode) {
@@ -854,19 +886,24 @@ class CompanionViewModel(
         _uiState.update { it.copy(neuralSubstrate = substrate, neuralDiagnostics = nervousSystem.diagnostics()) }
     }
     fun resetNeuralController() {
+        setNeuralTraceConsent(false)
         nervousSystem.resetNeuralState()
         _uiState.update { it.copy(neuralDiagnostics = nervousSystem.diagnostics()) }
     }
     fun setNeuralTraceConsent(enabled: Boolean) {
-        neuralTraceRecorder?.close(); neuralTraceRecorder = null
-        if (enabled) {
-            val dir = secureStorage?.context?.filesDir ?: return
-            // Start at reset so deterministic replay can reconstruct hidden state.
-            nervousSystem.resetNeuralState()
-            val checkpoint = if (nervousSystem.substrate == NeuralSubstrate.RATE) NeuralCheckpoint.default() else NeuralCheckpoint.defaultSpiking()
-            neuralTraceRecorder = FeatureTraceRecorder(java.io.File(dir, "neural/traces"),
-                FeatureTraceHeader(inputLayout = checkpoint.inputLayout, outputLayout = checkpoint.outputLayout,
-                    biasFields = DriveBias.FIELD_NAMES, checkpoint = checkpoint.name, startedAtEpochMs = System.currentTimeMillis()))
+        // The controller tick holds this same monitor. No unrecorded core step
+        // may occur between reset and installing the first-segment recorder.
+        synchronized(nervousSystem) {
+            neuralTraceRecorder?.close(); neuralTraceRecorder = null
+            if (enabled) {
+                val dir = secureStorage?.context?.filesDir ?: return
+                nervousSystem.resetNeuralState()
+                val checkpoint = if (nervousSystem.substrate == NeuralSubstrate.RATE) NeuralCheckpoint.default() else NeuralCheckpoint.defaultSpiking()
+                neuralTraceRecorder = FeatureTraceRecorder(java.io.File(dir, "neural/traces"),
+                    FeatureTraceHeader(inputLayout = checkpoint.inputLayout, outputLayout = checkpoint.outputLayout,
+                        biasFields = DriveBias.FIELD_NAMES, checkpoint = checkpoint.name,
+                        startedAtEpochMs = System.currentTimeMillis(), startsFromReset = true, checkpointJson = checkpoint.toJson()))
+            }
         }
         secureStorage?.saveBooleanPreference(NeuralModeStore.KEY_TRACE_CONSENT, enabled)
         _uiState.update { it.copy(neuralTraceConsent = enabled) }
@@ -906,11 +943,16 @@ class CompanionViewModel(
         playAnimationNamed(name)
     }
     fun petFeedback(positive: Boolean) {
-        petPreferences.reward(lastPetActivity, positive, System.currentTimeMillis())
+        val saved = petPreferences.reward(lastPetActivity, positive, System.currentTimeMillis())
         persistPetPreferences()
+        _uiState.update { it.copy(petFeedbackNotice = if (saved) "Preference saved for $lastPetActivity."
+            else "No change saved. Learning accepts one update per minute, up to 1,000 before reset.") }
     }
     fun setPetLearning(enabled: Boolean) { petPreferences.enabled = enabled; persistPetPreferences() }
-    fun resetPetLearning() { petPreferences.reset(); persistPetPreferences() }
+    fun resetPetLearning() {
+        petPreferences.reset(); persistPetPreferences()
+        _uiState.update { it.copy(petFeedbackNotice = "Learned preferences reset.") }
+    }
     private fun persistPetPreferences() {
         secureStorage?.savePreference("pet_preferences_v1", petPreferences.encode())
         _uiState.update { it.copy(petLearningEnabled = petPreferences.enabled, petPlayPreference = petPreferences.preference("play")) }
@@ -1702,6 +1744,7 @@ class CompanionViewModel(
                         _uiState.update { it.copy(petCare = care) }
                     }
                 }
+                withContext(Dispatchers.Main.immediate) { advanceNeuralMotor(now) }
                 last = now
             }
         }
@@ -11059,6 +11102,11 @@ class CompanionViewModel(
     }
 
     fun stopAvatarPerformance() {
+        neuralMotorPerformance?.let { (_, action) ->
+            nervousSystem.onActionFeedback(ActionFeedback(action, ActionResult.INTERRUPTED,
+                nervousSystem.diagnostics().simTimeMs))
+            neuralMotorPerformance = null
+        }
         inventionGeneration++
         inventionStop.requestStop()
         customAnimJob?.cancel()

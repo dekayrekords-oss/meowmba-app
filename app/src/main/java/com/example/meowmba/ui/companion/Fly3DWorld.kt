@@ -73,8 +73,14 @@ internal class Fly3DWorld {
         targetKind = when (action) {
             HabitatAction.READ -> "book"
             HabitatAction.DRINK -> "glass"
+            HabitatAction.FEED -> "fruit"
             HabitatAction.PLAY, HabitatAction.NUDGE -> "ball"
             else -> null
+        }
+        if (action == HabitatAction.FEED) {
+            // One explicit serving, never an accumulating collection or an offline timer.
+            frame = frame.copy(props = frame.props.filterNot { it.kind == "fruit" } +
+                Fly3DProp("fruit", .25f, TABLE_Y, .55f))
         }
         if (action != HabitatAction.EXPLORE) tapRemaining = 0f
         if (action == HabitatAction.REST || action == HabitatAction.FEED || action == HabitatAction.RELEASE)
@@ -104,14 +110,16 @@ internal class Fly3DWorld {
         var vx = steer(old.vx, dx); var vy = steer(old.vy, dy); var vz = steer(old.vz, dz)
         val speed = sqrt(vx * vx + vy * vy + vz * vz)
         if (speed > maxSpeed) { val ratio = maxSpeed / speed; vx *= ratio; vy *= ratio; vz *= ratio }
-        val minY = if (target.y < TABLE_CHEST - .1f) FLOOR_CHEST else TABLE_CHEST
+        // Changing the destination must not raise the collision plane through the actor.
+        val landingY = if (target.y < TABLE_CHEST - .1f) FLOOR_CHEST else TABLE_CHEST
+        val minY = if (old.y >= TABLE_CHEST && landingY == TABLE_CHEST) TABLE_CHEST else FLOOR_CHEST
         val x = (old.x + vx * dt).coerceIn(-2.5f, 2.5f)
         val y = (old.y + vy * dt).coerceIn(minY, 4f)
         val z = (old.z + vz * dt).coerceIn(-1.5f, 1.5f)
         if (x == -2.5f || x == 2.5f) vx = 0f
         if (y == minY || y == 4f) vy = 0f
         if (z == -1.5f || z == 1.5f) vz = 0f
-        val grounded = abs(y - minY) < .022f && target.y <= minY + .01f && abs(vy) < .08f
+        val grounded = abs(y - landingY) < .022f && target.y <= landingY + .01f && abs(vy) < .08f
         val flight = ease(old.flight, if (grounded) 0f else 1f, dt, 6f)
         val horizontal = hypot(vx, vz)
         // Return frontward during held/perched moments; cruising turns show real depth.
@@ -122,9 +130,11 @@ internal class Fly3DWorld {
         val near = distance(x, y, z, target.x, target.y, target.z) < .18f
         val reaching = prop != null && !approached && near
         val reach = ease(old.reach, if (reaching || old.holding != null) 1f else 0f, dt, 6f)
-        val handTargetX = if (reaching) prop!!.x else x + .42f
-        val handTargetY = if (reaching) prop!!.y + .10f else y - .20f
-        val handTargetZ = if (reaching) prop!!.z else z + .20f
+        val feeding = old.holding == "fruit"
+        val neutral = neutralHandOffset(yaw, feeding)
+        val handTargetX = if (reaching) prop!!.x else x + neutral.x
+        val handTargetY = if (reaching) prop!!.y + .10f else y + neutral.y
+        val handTargetZ = if (reaching) prop!!.z else z + neutral.z
         // Exponential easing alone has unbounded speed when grasp changes to lifting.
         // Cap the complete 3D hand displacement (not each axis) so the carried prop
         // cannot jump on that transition, even at a low refresh rate or resume frame.
@@ -139,7 +149,7 @@ internal class Fly3DWorld {
         var holding = old.holding
         if (reaching && prop != null && distance(hx, hy, hz, prop.x, prop.y + .1f, prop.z) < .024f && horizontal < .08f) {
             approached = true; actionAge = 0f
-            if (frame.action == HabitatAction.READ || frame.action == HabitatAction.DRINK) {
+            if (frame.action == HabitatAction.READ || frame.action == HabitatAction.DRINK || frame.action == HabitatAction.FEED) {
                 holding = prop.kind
                 holdOffset = Fly3DTarget(prop.x - hx, prop.y - hy, prop.z - hz)
                 props = props.map { if (it.kind == prop.kind) it.copy(held = true, vx = 0f, vy = 0f, vz = 0f) else it }
@@ -148,11 +158,21 @@ internal class Fly3DWorld {
             }
         }
         props = props.map { if (it.held) it.copy(x = hx + holdOffset.x, y = hy + holdOffset.y, z = hz + holdOffset.z) else it }
+        if (holding == "fruit" && actionAge > 2.5f &&
+            distance(hx, hy, hz, handTargetX, handTargetY, handTargetZ) < .045f) {
+            props = props.filterNot { it.kind == "fruit" }
+            holding = null
+        }
+        // A stopped walker puts both feet down instead of retaining a lifted shoe.
+        val walkPhase = if (horizontal < .035f) {
+            val nearest = round(old.walkPhase / PI.toFloat()) * PI.toFloat()
+            ease(old.walkPhase, nearest, dt, 9f)
+        } else (old.walkPhase + dt * horizontal * 9f * (1f - flight)) % TAU
         val pose = Fly3DPose(x, y, z, yaw,
             ease(old.pitch, (vy * -12f).coerceIn(-18f, 18f), dt, 5f), ease(old.roll, bank, dt, 5f),
             vx, vy, vz, flight,
             (old.wingPhase + dt * (6f + flight * 34f)) % TAU,
-            (old.walkPhase + dt * horizontal * 9f * (1f - flight)) % TAU,
+            walkPhase,
             reach, holding, hx, hy, hz, (-yaw).coerceIn(-35f, 35f))
         frame = frame.copy(pose = pose, props = props, elapsed = elapsed)
     }
@@ -182,7 +202,15 @@ internal class Fly3DWorld {
     companion object {
         const val TABLE_Y = .8f
         const val TABLE_CHEST = 1.35f
-        const val FLOOR_CHEST = .7f
+        const val FLOOR_CHEST = .55f
+        /** Local grip turns with the chest; world-space contact still overrides this. */
+        fun neutralHandOffset(yawDegrees: Float, feeding: Boolean = false): Fly3DTarget {
+            val a = yawDegrees.finite(0f) / DEG
+            val x = if (feeding) .04f else .42f
+            val z = if (feeding) .35f else .20f
+            return Fly3DTarget(x * cos(a) + z * sin(a), if (feeding) .04f else -.20f,
+                -x * sin(a) + z * cos(a))
+        }
         private const val TAU = 6.2831855f
         private const val DEG = 57.29578f
         fun normalizedTarget(x: Float, y: Float, depth: Float = 0f) = Fly3DTarget(

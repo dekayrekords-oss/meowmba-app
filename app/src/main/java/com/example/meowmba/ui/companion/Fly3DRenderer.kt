@@ -27,6 +27,10 @@ data class Fly3DFrame(
     val props: List<Fly3DProp>? = null,
     val handX: Float? = null, val handY: Float? = null, val handZ: Float? = null,
     val avatarScale: Float = 1f, val stageMode: Boolean = false,
+    val wingPhase: Float? = null,
+    val leftBlink: Float? = null, val rightBlink: Float? = null,
+    val smile: Float = 0f, val concern: Float = 0f,
+    val antennaLift: Float = 0f, val antennaLag: Float = 0f,
 )
 
 /** GLES2 mesh renderer. Host uses RENDERMODE_WHEN_DIRTY and publishes [frame] before
@@ -296,7 +300,7 @@ class Fly3DRenderer : GLSurfaceView.Renderer {
             for (prop in sceneProps) {
                 push(); Matrix.translateM(model,0,prop.x,prop.y,prop.z)
                 Matrix.rotateM(model,0,prop.angle,0f,0f,1f)
-                when(prop.kind) { "book" -> book(); "glass" -> glass(); else -> ball() }
+                when(prop.kind) { "book" -> book(); "glass" -> glass(); "fruit" -> fruit(); else -> ball() }
                 pop()
             }
         } else {
@@ -572,10 +576,10 @@ class Fly3DRenderer : GLSurfaceView.Renderer {
             }
             hand(handX,handY,handZ,.108f)
         }
-        val closure = f.blink.safe().coerceIn(0f,1f)
-        val eyeHeight = .31f*(1f-closure)+.025f
         // Red compound lenses form the face's silhouette; pupils remain small, friendly and dimensional.
         for (side in -1..1 step 2) {
+            val closure = ((if (side < 0) f.leftBlink else f.rightBlink) ?: f.blink).safe().coerceIn(0f,1f)
+            val eyeHeight = .31f*(1f-closure)+.025f
             val eyeX = side*.30f
             ellipsoid(eyeX,.53f,.48f,.30f,eyeHeight,.23f,RED)
             if (closure < .92f) {
@@ -594,34 +598,37 @@ class Fly3DRenderer : GLSurfaceView.Renderer {
         }
         // A curved smile sits on the face: never a proboscis, muzzle or ant mandible.
         val speech = f.mouth.safe().coerceIn(0f,1f)
+        val expression = (f.smile.safe() - f.concern.safe()).coerceIn(-1f, 1f)
         if (speech > .08f) {
             ellipsoid(0f,.185f,.566f,.12f,.026f+speech*.086f,.021f,INK,outline=false)
             ellipsoid(0f,.15f-speech*.015f,.586f,.063f,.017f+speech*.018f,.007f,0xD58E86,outline=false)
         } else {
-            segment(-.13f,.205f,.554f,-.066f,.166f,.573f,.014f,INK,outline=false)
-            segment(-.066f,.166f,.573f,.066f,.166f,.573f,.014f,INK,outline=false)
-            segment(.066f,.166f,.573f,.13f,.205f,.554f,.014f,INK,outline=false)
+            segment(-.13f,.205f+expression*.025f,.554f,-.066f,.166f-expression*.012f,.573f,.014f,INK,outline=false)
+            segment(-.066f,.166f-expression*.012f,.573f,.066f,.166f-expression*.012f,.573f,.014f,INK,outline=false)
+            segment(.066f,.166f-expression*.012f,.573f,.13f,.205f+expression*.025f,.554f,.014f,INK,outline=false)
         }
         // Short arista antennae, with three fine bristles each; response shares gaze/time snapshot.
         for (side in -1..1 step 2) {
             val sx = side.toFloat()
-            val bend = sin(t*1.4f+side)*.035f + f.gazeX.safe().coerceIn(-1f,1f)*.025f
-            segment(sx*.19f,.89f,.12f,sx*.23f+bend,1.10f,.09f,.026f,SHELL)
-            ellipsoid(sx*.23f+bend,1.10f,.09f,.057f,.080f,.055f,SHELL_LIGHT)
-            for (i in 0..2) segment(sx*.24f+bend,1.10f+i*.025f,.09f,
-                sx*(.34f+i*.018f)+bend,1.13f+i*.046f,.10f,.009f,SHELL,outline=false)
+            val lift = f.antennaLift.safe().coerceIn(-1f,1f)*.08f
+            val bend = sin(t*1.4f+side)*.035f + f.gazeX.safe().coerceIn(-1f,1f)*.025f +
+                f.antennaLag.safe().coerceIn(-1f,1f)*.05f
+            segment(sx*.19f,.89f,.12f,sx*.23f+bend,1.10f+lift,.09f,.026f,SHELL)
+            ellipsoid(sx*.23f+bend,1.10f+lift,.09f,.057f,.080f,.055f,SHELL_LIGHT)
+            for (i in 0..2) segment(sx*.24f+bend,1.10f+lift+i*.025f,.09f,
+                sx*(.34f+i*.018f)+bend,1.13f+lift+i*.046f,.10f,.009f,SHELL,outline=false)
         }
         // Transparent geometry is last, after all opaque surfaces have written depth.
         // Their roots are behind the thorax, so the head correctly occludes them.
         val backFirst = if (sin(f.yaw.safe()) > 0f) -1 else 1
-        drawWing(backFirst,flight,t)
-        drawWing(-backFirst,flight,t)
+        drawWing(backFirst,flight,f.wingPhase?.takeIf { it.isFinite() } ?: t*24f)
+        drawWing(-backFirst,flight,f.wingPhase?.takeIf { it.isFinite() } ?: t*24f)
     }
 
-    private fun drawWing(side: Int, flight: Float, time: Float) {
+    private fun drawWing(side: Int, flight: Float, phase: Float) {
         push()
         Matrix.translateM(model,0,side*.24f,.32f,-.25f)
-        Matrix.rotateM(model,0,side*(116f+sin(time*(5f+flight*19f))*(8f+flight*23f)),0f,1f,0f)
+        Matrix.rotateM(model,0,side*(116f+sin(phase)*(8f+flight*23f)),0f,1f,0f)
         Matrix.rotateM(model,0,-42f+flight*12f,1f,0f,0f)
         GLES20.glEnable(GLES20.GL_BLEND)
         GLES20.glDepthMask(false)
@@ -639,6 +646,13 @@ class Fly3DRenderer : GLSurfaceView.Renderer {
         ellipsoid(x-.024f,y+.034f,z+.064f,r*.28f,r*.22f,r*.17f,SHELL_LIGHT,outline=false)
         // Two rounded knuckles and thumb, rather than featureless stick ends.
         ellipsoid(x+r*.58f,y+r*.22f,z+.018f,r*.40f,r*.42f,r*.46f,SHELL)
+    }
+
+    private fun fruit() {
+        ellipsoid(0f,.105f,0f,.125f,.105f,.115f,0xE9A247)
+        ellipsoid(-.035f,.15f,.085f,.035f,.035f,.013f,0xFFE0A1,outline=false)
+        segment(0f,.19f,0f,.02f,.24f,0f,.012f,0x665237,outline=false)
+        ellipsoid(.055f,.222f,0f,.05f,.018f,.025f,0x78A354,outline=false)
     }
 
     private fun ball() {

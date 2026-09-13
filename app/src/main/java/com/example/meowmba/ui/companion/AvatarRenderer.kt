@@ -171,6 +171,7 @@ fun AvatarRenderer(
     /** Stroking the avatar. Reported outward so the drive layer feels it too. */
     onPet: () -> Unit = {},
     onPlay: () -> Unit = {},
+    neuralGaze: () -> Offset? = { null },
     onHabitatAction: (HabitatAction) -> Unit = {},
     onFly3DFrame: ((Fly3DFrame) -> Unit)? = null,
     paused: Boolean = false,
@@ -521,10 +522,12 @@ fun AvatarRenderer(
     val gazeTargetX = faceGazeX.takeIf { state.isCameraEnabled }
         ?: heldFaceGaze?.x
         ?: touchGaze?.x
+        ?: neuralGaze()?.x
         ?: 0f
     val gazeTargetY = faceGazeY.takeIf { state.isCameraEnabled }
         ?: heldFaceGaze?.y
         ?: touchGaze?.y
+        ?: neuralGaze()?.y
         ?: 0f
     // FaceTrack already publishes screen-space offsets (see VisionManager), so
     // there is nothing to rotate here. The swap that used to live at this line
@@ -643,20 +646,23 @@ fun AvatarRenderer(
     }
 
     // ── Petting: stroking the cat makes it purr ────────────────────────────
-    var lastPetAt by remember { mutableLongStateOf(0L) }
+    var petPulse by remember { mutableLongStateOf(0L) }
     val petCallback by rememberUpdatedState(onPet)
     val playCallback by rememberUpdatedState(onPlay)
-    LaunchedEffect(lastPetAt) {
-        if (lastPetAt != 0L) {
+    val touchStyle by rememberUpdatedState(state.avatarStyle)
+    val touchFlyWorld by rememberUpdatedState(fly3DWorld)
+    val touchHabitatWorld by rememberUpdatedState(habitatWorld)
+    LaunchedEffect(petPulse) {
+        if (petPulse != 0L) {
             // Reported outward, not just consumed by the local `petted` pose:
             // being stroked is a real social event and should move the drives,
             // not merely swap one authored pose for another.
             petCallback()
             delay(2600)
-            lastPetAt = 0L
+            petPulse = 0L
         }
     }
-    val petted = lastPetAt != 0L
+    val petted = petPulse != 0L
 
     Canvas(
         modifier = {
@@ -684,17 +690,17 @@ fun AvatarRenderer(
             if (!pointerEnabled) base
             else
                 base
-                    .pointerInput(state.avatarStyle, state.habitatMode, state.avatarScale) {
+                    .pointerInput(Unit) {
                 detectTapGestures(
                     onTap = { offset ->
                         touchGaze = normalizeGaze(offset, size.width, size.height)
-                        lastPetAt = System.currentTimeMillis()
+                        petPulse += 1L
                         if (latestHabitatEnabled) {
-                            if (state.avatarStyle == AvatarStyle.FULL_FLY) {
-                                fly3DWorld.tap(offset.x / size.width, offset.y / size.height)
+                            if (touchStyle == AvatarStyle.FULL_FLY) {
+                                touchFlyWorld.tap(offset.x / size.width, offset.y / size.height)
                                 latestHabitatAction(HabitatAction.EXPLORE)
                             } else {
-                                habitatWorld.actionAt(offset.x, offset.y, size.width.toFloat(), size.height.toFloat())
+                                touchHabitatWorld.actionAt(offset.x, offset.y, size.width.toFloat(), size.height.toFloat())
                                     ?.let { latestHabitatAction(it) }
                             }
                         }
@@ -706,7 +712,7 @@ fun AvatarRenderer(
                     },
                     onLongPress = { offset ->
                         touchGaze = normalizeGaze(offset, size.width, size.height)
-                        lastPetAt = System.currentTimeMillis()
+                        petPulse += 1L
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                     }
                 )
@@ -728,7 +734,7 @@ fun AvatarRenderer(
                             // Shorter strokes stay petting.
                             if (totalX < 0) onSwipeLeft() else onSwipeRight()
                         } else {
-                            lastPetAt = System.currentTimeMillis()
+                            petPulse += 1L
                         }
                     }
                 ) { change, dragAmount ->
@@ -897,12 +903,13 @@ fun AvatarRenderer(
         if (useLumen) {
             val progress = if (customAnim != null) animTHolder[0].toFloat() / customAnim.durationMs.coerceAtLeast(1) else 0f
             val isCat = state.avatarStyle == AvatarStyle.LUMEN_CAT
-            val lumenGazeX = faceGazeX ?: heldFaceGaze?.x ?: touchGaze?.x
-            val lumenGazeY = faceGazeY ?: heldFaceGaze?.y ?: touchGaze?.y
+            val neuralLook = neuralGaze()
+            val lumenGazeX = faceGazeX.takeIf { state.isCameraEnabled } ?: heldFaceGaze?.x ?: touchGaze?.x ?: neuralLook?.x
+            val lumenGazeY = faceGazeY.takeIf { state.isCameraEnabled } ?: heldFaceGaze?.y ?: touchGaze?.y ?: neuralLook?.y
             val composedLumenInput = lumenInventedSceneInput(lumenPerformanceInput(LumenInput(
                 gazeX = lumenGazeX, gazeY = lumenGazeY,
                 // Touch is a local gaze target, not camera capture permission.
-                cameraEnabled = state.isCameraEnabled || touchGaze != null,
+                cameraEnabled = state.isCameraEnabled || touchGaze != null || neuralLook != null,
                 emotion = state.emotion, interaction = state.interactionState,
                 animal = state.performanceAnimal ?: if (isCat) AvatarAnimal.CAT else state.avatarAnimal,
                 openness = effectivePose.eyeOpen, pupil = if (playingClip) effectivePose.pupilSize else .5f,
@@ -956,6 +963,9 @@ fun AvatarRenderer(
                     pitch=(p?.pitch ?: (frame.headY * 12f))*radians,roll=(p?.roll ?: frame.roll)*radians,
                     flight=p?.flight ?: .15f,walkPhase=p?.walkPhase ?: if (playingClip) tSec * 5f else 0f,
                     gazeX=frame.gazeX,gazeY=frame.gazeY,
+                    wingPhase=p?.wingPhase, leftBlink=(1f-frame.leftOpen).coerceIn(0f,1f),
+                    rightBlink=(1f-frame.rightOpen).coerceIn(0f,1f), smile=frame.smile, concern=frame.concern,
+                    antennaLift=frame.earLift, antennaLag=frame.earLag,
                     blink=(1f-(frame.leftOpen+frame.rightOpen)*.5f).coerceIn(0f,1f),mouth=frame.mouthOpen,
                     reach=p?.reach ?: 0f,holding=p?.holding,backgroundId=state.habitatBackgroundId,props=world?.props,
                     handX=p?.handX,handY=p?.handY,handZ=p?.handZ,
@@ -1006,13 +1016,14 @@ fun AvatarRenderer(
         } else if (useSignalOrb) {
             val R = ambR
             val faceCy = fitGodotFaceCenterY(w, h)
-            val center = Offset(
+            val center = flyPose?.let { Offset(it.x * w, it.y * h) } ?: Offset(
                 w / 2f + ambient.offX + leanAnim * R * 0.22f,
                 faceCy + ambient.offY + lurchAnim * R * 0.12f,
             )
             val orbSpeaking = effectivePose.mouth == MouthMode.SPEAKING
             avatarHitTransform[0] = AvatarHitTransform(center, center, avatarScale)
-            scale(avatarScale, avatarScale, center) {
+            val sceneScale = avatarScale * if (flyPose != null) .4f else 1f
+            scale(sceneScale, sceneScale, center) {
             particleSim.draw(
                 scope = this,
                 measurer = textMeasurer,
@@ -1166,7 +1177,7 @@ fun AvatarRenderer(
                 )
             } ?: restingPose
             // Anchor at screen center band; pose offsets carry the whole face.
-            val center = Offset(
+            val center = flyPose?.let { Offset(it.x * w, it.y * h) } ?: Offset(
                 w / 2f + gPose.offsetX + effectivePose.leanX * R * 0.02f,
                 faceCy + gPose.offsetY,
             )
@@ -1178,7 +1189,8 @@ fun AvatarRenderer(
             // the rise, conserving the silhouette's area either way.
             val (squashX, squashY) = squashStretch(gPose.squash.coerceIn(-0.3f, 0.3f))
             avatarHitTransform[0] = AvatarHitTransform(center, center, avatarScale)
-            scale(avatarScale, avatarScale, center) {
+            val sceneScale = avatarScale * if (flyPose != null) .4f else 1f
+            scale(sceneScale, sceneScale, center) {
             rotate(gPose.headTiltDeg, pivot = center) {
                 scale(scaleX = squashX, scaleY = squashY, pivot = center) {
                 drawGodotCatFace(
@@ -1211,7 +1223,10 @@ fun AvatarRenderer(
 
         val classicCenter = Offset(cx, cy)
         avatarHitTransform[0] = AvatarHitTransform(classicCenter, classicCenter, avatarScale)
-        scale(avatarScale, avatarScale, classicCenter) {
+        val classicDestination = flyPose?.let { Offset(it.x * w, it.y * h) } ?: classicCenter
+        val classicScale = avatarScale * if (flyPose != null) .4f else 1f
+        translate(classicDestination.x - classicCenter.x, classicDestination.y - classicCenter.y) {
+        scale(classicScale, classicScale, classicCenter) {
         // ── LAYER -1: Tail (behind the face, wags during animations) ────────
         // Tail is ALWAYS drawn: at rest it sways gently via tailSway, during
         // clips the keyframed wag drives it. Invisible-at-rest is why the user
@@ -1378,6 +1393,7 @@ fun AvatarRenderer(
                 val radius = s * (0.005f + (hash % 100) / 100f * 0.008f)
                 drawCircle(color = sparkleColor, radius = radius, center = Offset(sx, sy))
             }
+        }
         }
         }
         fixedPrivacyMarks()

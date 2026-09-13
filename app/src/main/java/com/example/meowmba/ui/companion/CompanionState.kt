@@ -57,6 +57,7 @@ data class CompanionState(
     val petCare: com.example.meowmba.core.behavior.PetCareState = com.example.meowmba.core.behavior.PetCareState(),
     val habitatCommand: HabitatCommand = HabitatCommand(),
     val petLearningEnabled: Boolean = true,
+    val petFeedbackNotice: String? = null,
     val petPlayPreference: Float = 0f,
     val neuralMode: com.example.meowmba.core.neural.NeuralMode = com.example.meowmba.core.neural.NeuralMode.SHADOW,
     val neuralSubstrate: com.example.meowmba.core.neural.NeuralSubstrate = com.example.meowmba.core.neural.NeuralSubstrate.RATE,
