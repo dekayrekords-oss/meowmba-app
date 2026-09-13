@@ -47,3 +47,13 @@ failures/errors. These checks do not replace real-device gesture validation.
 Signed APK SHA-256:
 9375739e65e07a4af992135a9b45d50428587b714261f1bab4e3d789655187ac.
 The lossless delta against installed build 103 is 3,630,635 bytes.
+
+## Installed September 13
+
+USB returned on Samsung RFCY61NJEVM. `adb install -r` succeeded, preserving
+existing data. Package manager confirms code 105 / name 1.3.81, lastUpdateTime
+2026-09-13 08:47:13 (device time). Live UI hierarchy verified the downward swipe
+opens Memba Ecosystem with all 15 cards in three columns. Android Home key then
+closed the cards and returned to the Fly companion avatar with Play available.
+The UI still reports camera off and microphone off. Full per-avatar gesture
+acceptance and sustained thermal/battery validation remain pending.
