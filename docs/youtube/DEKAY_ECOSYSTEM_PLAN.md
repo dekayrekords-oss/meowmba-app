@@ -1,6 +1,6 @@
 # Dekay Records — site, channels, and GitHub integration
 
-Owner direction, 2026-09-13: connect the music channel and the apps/coding/Meow server/AIOS channel to the existing Dekayrecords.com site and GitHub. Extend the existing site once its source and host are identified; do not create a replacement website or change hosting based on this plan alone.
+Owner direction, 2026-09-13: connect the music channel and the apps/coding/Meow server/AIOS channel to the existing Dekayrecords.com site and GitHub. The owner confirmed Weebly as the existing website platform. Extend the existing Weebly site once its editor is accessible; do not create a replacement website or change hosting based on this plan alone.
 
 ## Roles
 
@@ -40,7 +40,7 @@ Each suitable repository README: explain purpose/status/setup, then link to its 
 
 ## Shared content record
 
-Keep public content metadata in the verified website repository or its existing CMS once identified. Fields: stable content ID, type (song/project/episode/guide), title, summary, status, site path, related IDs, channel/video URL, repository URL, demonstrated revision/version, artwork reference, publication date, and verified external links. Unknown values remain empty; unpublished records must not appear as live releases.
+Weebly is the website CMS. Maintain published pages there and keep the editorial link/metadata record in version-controlled planning files until a different workflow is explicitly chosen. No website Git repository is required for this manual first version. Fields: stable content ID, type (song/project/episode/guide), title, summary, status, site path, related IDs, channel/video URL, repository URL, demonstrated revision/version, artwork reference, publication date, and verified external links. Unknown values remain empty; unpublished records must not appear as live releases.
 
 Use the same IDs to connect a song to its making-of video and a tool to its build/debug episodes. The first version can be maintained manually; add synchronization only after the website stack and publishing workflow are known. Do not assume GitHub hosts the site or that committing locally deploys it.
 
@@ -53,16 +53,20 @@ Use the same IDs to connect a song to its making-of video and a tool to its buil
   - https://github.com/dekayrekords-oss/Meow-Kernel-1 — root contains LICENSE only in the inspected listing; do not label it as working AIOS code.
   - https://github.com/dekayrekords-oss/Master-Plan — root includes Python app files, core, docs, tests, and planning files. Its name does not establish it as the website repository or the editorial planning destination.
 - Technology channel supplied by owner: https://www.youtube.com/channel/UCjxT_IHbJ9OsysxHW1QxiqA.
-- Music channel URL, website source repository/CMS, host, and deployment process remain unknown. Owner was asked where the site is managed.
+- Owner confirmed the website is managed in Weebly. The music channel URL, current Weebly page structure, editor access, and publishing workflow remain unverified.
 - Current local Git origin is a server checkout, not GitHub. The planning commits in this task are local; no GitHub push, site deployment, or channel edit is claimed.
 
-## Implementation sequence when access is identified
+## Weebly implementation sequence
 
-1. Inspect the actual website source, contributor instructions, existing pages, branding, and deployment process.
-2. Map the proposed sections onto existing routes and prepare changes in that repository using its established design.
+1. Open the existing Dekayrecords.com site in the owner’s Weebly account. Inspect its current pages, branding, navigation, and publishing controls.
+2. Map the proposed sections onto existing Weebly pages, retaining the current design and music catalog. Add Music, Projects, Watch, and Journal navigation only where equivalent pages do not already exist.
 3. Add both verified channel destinations and relevant public repository links. Keep music-channel links unset until known.
 4. Add the first complete song/project/episode records using real available media; keep AIOS marked upcoming.
 5. Preview and check navigation, media embeds, mobile readability, and all outbound destinations.
-6. Publish through the existing hosting workflow and verify live pages. Then update channel descriptions and appropriate repository READMEs to point back to those actual pages.
+6. Publish through the existing Weebly workflow and verify live pages. Then update channel descriptions and appropriate repository READMEs to point back to those actual pages.
 
 No website code, remote README, access setting, DNS record, or channel profile was changed by this planning update.
+
+## First Weebly editing pass
+
+Prepare a homepage introduction connecting music and technology, two clear destinations (Music and Projects), a Watch section for both channels, and relevant GitHub links on project pages. Use the existing editor’s supported video/link components after inspecting them. Do not assume a GitHub-to-Weebly deployment integration or change DNS/hosting. The music-channel destination remains empty until supplied. This task has not entered the Weebly editor or published any changes.
