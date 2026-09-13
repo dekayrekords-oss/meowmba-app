@@ -70,3 +70,7 @@ Record artist, working/final title, musical direction, source session, current s
 - Artist/label identity and musical direction.
 - First track or session to feature.
 - Available production time and desired cadence after the first cycle is measured.
+
+## Dekayrecords.com and GitHub
+
+This channel is part of the existing Dekay Records site and GitHub ecosystem. See [DEKAY_ECOSYSTEM_PLAN.md](../DEKAY_ECOSYSTEM_PLAN.md) for site sections, reciprocal links, shared content records, and verified access gaps. Link each video to its actual song, project, or guide page once published. Site source/hosting and the music channel URL remain unresolved; no live integration is claimed.

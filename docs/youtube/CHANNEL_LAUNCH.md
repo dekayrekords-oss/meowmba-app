@@ -83,3 +83,7 @@ Upload description template:
 > Next tutorial: [published video URL].
 
 Track each episode as candidate → device verified → recorded → edited → uploaded → public. Do not fill in fake timestamps, links, metrics, or completion states.
+
+## Dekayrecords.com and GitHub
+
+This channel is part of the existing Dekay Records site and GitHub ecosystem. See [DEKAY_ECOSYSTEM_PLAN.md](DEKAY_ECOSYSTEM_PLAN.md) for site sections, reciprocal links, shared content records, and verified access gaps. Link each video to its actual song, project, or guide page once published. Site source/hosting and the music channel URL remain unresolved; no live integration is claimed.
