@@ -43,3 +43,7 @@ The next production choice is one simple concept to build alongside an existing-
 ## Meow server alongside app projects
 
 Include server operations in the rotation: running services, project organization, deployments, workload monitoring, and real incidents. See SERVER_MEOW_SERIES.md. Meow server is distinct from the Android companion app. Verify the current server setup before filming, and keep ideas/builds from other apps in the mix.
+
+## Upcoming AIOS work
+
+Add AIOS planning and bring-up milestones to the same rotation as they happen. See AIOS_SERIES.md. The owner says bring-up starts soon; no date, architecture, environment, or successful setup has been verified. Keep proposed work distinct from demonstrated results.

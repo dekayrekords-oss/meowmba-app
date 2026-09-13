@@ -21,7 +21,7 @@ We turn simple ideas into real apps—and share how we do it.
 
 Follow along as we build useful tools, try new app ideas, work with AI coding assistants, and troubleshoot what breaks. Some videos start with a tiny everyday problem. Others explore a bigger project, including Meow Assistant and the other apps we’re making.
 
-We also take you behind the scenes of Meow, our server: how we run it, manage our projects and services, deploy updates, and investigate problems.
+We also take you behind the scenes of Meow, our server: how we run it, manage our projects and services, deploy updates, and investigate problems. Next, we’ll document AIOS as we begin bringing it up—from the initial plan to working milestones and the issues we solve along the way.
 
 Expect a mix of ideas, step-by-step builds, working demos, server operations, and honest lessons from the code. See what works, what needs another try, and what we learn along the way.
 
@@ -34,7 +34,8 @@ Expect a mix of ideas, step-by-step builds, working demos, server operations, an
 5. Building with AI — writing tasks, reviewing suggestions, coordinating changes, and handing work down.
 6. Feature Guides — individual tutorials organized into additional per-app playlists as needed; retain Meow’s backlog.
 7. Running Meow Server — server tours, services, deployments, resource management, maintenance, and troubleshooting.
-8. Experiments — prototypes, research, measurements, and ideas that may or may not become apps.
+8. Bringing Up AIOS — upcoming planning, setup, first working milestones, integration, and troubleshooting.
+9. Experiments — prototypes, research, measurements, and ideas that may or may not become apps.
 
 The channel follows both building our apps and operating the server behind our work. Distinguish Meow the server/main AI from the Meow Assistant Android app in titles and introductions. Meow is a recurring project, not the boundary of the channel. Keep episodes understandable without requiring viewers to watch earlier installments. Use a project name in each title where it helps distinguish apps.
 
@@ -50,10 +51,11 @@ The channel follows both building our apps and operating the server behind our w
 8. “Meet Meow: The Server Behind Our Apps” — a verified overview of its actual roles and services.
 9. “How We Check AI-Written Code Before Keeping It” — a real reviewed change.
 10. “How We Check That Meow’s Services Are Working” — an actual service and application health walkthrough.
+11. “AIOS: What We’re Planning to Bring Up” — upcoming-project introduction; establish scope before describing its architecture.
 
-Rotate ideas, builds, app demos, server operations, and troubleshooting instead of finishing every Meow tutorial before featuring another project. Try not to publish more than two consecutive episodes about the same app. These are editorial choices, not scheduled automations or claims that proposed apps have been built.
+Rotate ideas, builds, app demos, server operations, AIOS milestones as they happen, and troubleshooting instead of finishing every Meow tutorial before featuring another project. Try not to publish more than two consecutive episodes about the same app. These are editorial choices, not scheduled automations or claims that proposed apps have been built.
 
-Aim for 2–4 minutes for concepts and demos, 5–10 minutes for focused builds or troubleshooting. Split larger builds at a working milestone. See `MIXED_APP_SERIES.md` for the idea backlog and episode template; `BUILD_AND_DEBUG_VIDEOS.md` retains the source-backed engineering stories. `SERVER_MEOW_SERIES.md` defines the server operations series.
+Aim for 2–4 minutes for concepts and demos, 5–10 minutes for focused builds or troubleshooting. Split larger builds at a working milestone. See `MIXED_APP_SERIES.md` for the idea backlog and episode template; `BUILD_AND_DEBUG_VIDEOS.md` retains the source-backed engineering stories. `SERVER_MEOW_SERIES.md` defines the server operations series. `AIOS_SERIES.md` tracks the upcoming AIOS story.
 
 ## Setup once browser access works
 
