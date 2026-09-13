@@ -2,20 +2,20 @@
 
 Drafts for real screen recordings; no footage or finished videos exist yet. Narration is conditional on a successful demonstration in the installed build. Replace any unsupported step before recording. Timing is an editing target.
 
-## 00 — We’re Building Meow Assistant—and Sharing the Process (60 seconds)
+## 00 — Small Ideas, Real Apps: What We’re Building (60 seconds)
 
-**Thumbnail:** MEET MEOW
+**Thumbnail:** LET’S BUILD APPS
 
 | Time | Picture | Narration |
 |---|---|---|
-| 0–8s | Real companion responding to a greeting | “We’re building Meow Assistant, an AI companion for Android, and sharing how we make it.” |
-| 8–18s | A spoken question and actual answer | “Start with a conversation. Speak to Meow, or type when you want a quiet chat.” |
-| 18–28s | Change the avatar using current controls | “Make Meow your own. Choose a look and explore its expressions.” |
-| 28–40s | Save a test memory; open a test project | “We’ll show the tools we build, the code behind them, and the problems they solve.” |
+| 0–8s | A simple app sketch followed by a real working app | “We take everyday problems and turn them into apps. This channel shows how.” |
+| 8–18s | A spoken question and actual answer | “Some projects start small: one idea, one useful feature, and a first version.” |
+| 18–28s | Meow demo, then a second verified project or a clearly labeled concept sketch | “Others grow into bigger projects, like Meow Assistant and the other apps we’re making.” |
+| 28–40s | Save a test memory; open a test project | “We’ll mix app ideas, step-by-step builds, and demos you can see working.” |
 | 40–50s | Show a readable code diff and a verified test result | “And when something breaks, we’ll walk through the clues, the fix, and how we checked it.” |
-| 50–60s | End on the live avatar and channel title | “Follow along for feature guides, coding with AI, and lessons from real troubleshooting.” |
+| 50–60s | End on a sketch becoming a working interface; avoid implying an unbuilt concept is finished | “Bring an idea and build along with us. We’ll share what works and what we learn.” |
 
-Description: “Follow the making of Meow Assistant and our tools through feature demos, coding walkthroughs, and real troubleshooting.” Add the recorded version and verified links before uploading.
+Description: “Simple ideas, real apps, and the process of making them. Follow our current and future projects through builds, demos, coding with AI, and real troubleshooting.” Add the recorded version and verified links before uploading.
 
 ## 01 — Your First Conversation with Meow (2–3 minutes)
 

@@ -28,9 +28,9 @@ Added at the owner's request on 2026-09-13. These are episode candidates grounde
 
 A development walkthrough can include unsuccessful approaches when they explain the final choice. Label historical reconstructions. Do not stage a fresh failure and imply it happened live, or present an untested proposal as a fix.
 
-## Tools beyond Meow
+## All current and future apps
 
-Retain Meow Assistant as the channel name for now. The channel can cover utilities and companion projects we have built without renaming it. For each additional tool, first record its repository, actual purpose, working demo, setup requirements, and current status. References to a sibling app in this repository do not establish that its complete code or demo is available here.
+The owner expanded the channel to all current and future apps, including simple new ideas and how we make them. Meow is one series. The live channel name has not been changed; broader branding needs an owner-selected name. For each additional tool, first record its repository, actual purpose, working demo, setup requirements, and current status. References to a sibling app in this repository do not establish that its complete code or demo is available here.
 
 ## Capture during future coding work
 
