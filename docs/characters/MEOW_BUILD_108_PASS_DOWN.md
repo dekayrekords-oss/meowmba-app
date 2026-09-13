@@ -59,7 +59,9 @@ All four build108 GPU tests passed on physical Samsung SM_F966U1, serial
 RFCY61NJEVM. Build107's all-avatar real-phone gesture replay passed earlier this
 turn after unlock. The first build108 gesture attempt hit keyguard and found no
 Compose hierarchy; its failed attempt is preserved, not counted as a pass.
-Host build108 replay covers every style and Lumen form in both modes.
+Host build108 replay covers every style and Lumen form in both modes. The
+subsequent unlocked build108 device replay passed in10.103 seconds; see
+`validation108/gesture-tests.txt`.
 
 ## Endurance recorder and USB diagnosis
 
@@ -69,7 +71,7 @@ core, battery31.3→32.4C (max32.5), thermal0→0; this is not a sustained or un
 acceptance result. See `PHONE_PROFILE_107_SUMMARY.json`.
 
 `PhoneEnduranceTest` is explicitly opt-in instrumentation. It launches the actual
-MainActivity, temporarily applies only its keep-screen-on window flag, leaves
+MainActivity, temporarily applies its keep-screen-on window flag, leaves
 privacy choices and thermal policy intact, waits for real USB unplug if requested,
 and appends local JSONL every ten seconds. It measures process CPU, battery charge
 counter/temperature, thermal status, actual window focus/unlocked/interactive
@@ -87,6 +89,17 @@ uncertain launch: some Android shells retain an ADB session despite nohup, while
 the on-phone test is already running. Verify the newest JSONL event instead of
 starting a duplicate. USB disappearance was confirmed once at the Mac hardware
 inventory level, not merely in ADB; neither Mac nor Meow saw a phone at that time.
+Separating directory creation from the backgrounded nohup command let the later
+dispatch return immediately. A timeout remains an uncertain dispatch, not a
+reason to start another recorder.
+
+The later `--fixed-fly` option adds a visible countdown and tap-to-end label,
+temporarily selects the full fly/game, and restores the prior style/mode on normal
+exit. An explicit different selection during the run cancels the test and is
+preserved. This temporary mode is opt-in; normal runs preserve all preferences.
+The countdown is a test-only native TextView, not a product menu or a dialog that
+steals window focus. A killed instrumentation process cannot promise finally-block
+preference restoration; inspect the current avatar if the owner kills the test.
 
 Reproduction (actual in-place app must already be build108):
 
@@ -111,9 +124,37 @@ CPU, temperature, pause state and completeness; a paused or incomplete run canno
 be used to advertise cooling improvements. Whole-phone drain includes radios,
 display and other processes; ten minutes does not establish all-day battery life.
 
-Build108 endurance outcome: measurement is in progress; append verified results
-after retrieval. The verified starting screen shows the full fly over the user's
-star background with MIC OFF and CAM OFF; it does not test every game room.
+Build108's first true unplugged run completed600.009 seconds and59 samples,
+all physically unplugged. Whole-phone charge declined70.4mAh; battery33.1→32.7C,
+max33.1C; Android thermal status remained0. The selected scene changed from the
+full-size fly/star stage to the kitchen game, and the avatar was hidden for about
+two minutes. It therefore **failed** the sustained-motion gate (48/59 foreground
+samples) despite obtaining a real mixed-use battery measurement. Two sampling
+gaps exceeded15 seconds. Over437.439 eligible active foreground seconds, app+
+instrumentation CPU averaged55.41% of one core and presented frames20.77fps.
+The aggregate entire-run average43.54% CPU includes hidden time and must not be
+compared directly with an active-only baseline. Raw JSONL and summary are in
+`validation108/phone-endurance-summary.*`.
+
+The next USB run also completed ten minutes but changed avatar/style and had only
+7/61 foreground samples. It failed the sustained gate; median interval fly FPS
+was0. Battery33.7→34.0C, maximum Android status1. Its50.013 eligible active
+foreground seconds averaged57.55% of one core and19.97fps. No unplugged-drain
+claim is made for this USB run. See `phone-game-usb-summary.*`.
+
+Afterward Android reported moderate status2 from its SKIN sensor (42C), with a
+visible cooling banner; the battery sensor alone did not explain the governor.
+A subsequent58.09-second screen-off profile measured approximately0.103% of one
+core for the app, while charging battery temperature38.2→38.3C. This confirms low
+background process cost for that interval, not foreground cooling acceptance or
+proof of the cause of whole-phone heat. All samples were screen-off; the host
+summary correctly reports zero foreground samples and no foreground CPU value.
+The unverified earlier single `top` snapshot must not override this interval.
+
+The fixed-fly countdown run is in progress. Append verified results after
+retrieval. The original starting screen showed MIC OFF and CAM OFF. No complete
+all-room, all-day battery or sustained uninterrupted foreground result is claimed
+until that evidence actually passes. Do not relax the governor to make it pass.
 
 ## Research milestones and remaining boundaries
 

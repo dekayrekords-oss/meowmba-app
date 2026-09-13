@@ -1,0 +1,74 @@
+{
+  "header": {
+    "event": "header",
+    "schema": 1,
+    "versionCode": 108,
+    "durationSeconds": 600,
+    "awaitUnplugSeconds": 0,
+    "label": "build108-game-foreground-usb",
+    "scope": "Whole-phone battery and app-process CPU; app+instrumentation cost; no all-day inference"
+  },
+  "completed": true,
+  "completion": {
+    "event": "complete",
+    "elapsedMs": 600012,
+    "samples": 61,
+    "foregroundSamples": 7,
+    "unpluggedSamples": 0,
+    "severeThermalSamples": 0,
+    "presentedFrames": 4033,
+    "averagePresentedFps": 6.721532236021946,
+    "cpuPercentOfOneCore": 44.14395045432425,
+    "chargeUsedMicroAh": null,
+    "batteryMeasurementValid": false,
+    "sustainedForegroundMotionGate": false,
+    "loops": [
+      {
+        "feature": "drives.tick",
+        "iterations": 2121,
+        "busyMs": 1843,
+        "windowMs": 604593
+      },
+      {
+        "feature": "neural.step",
+        "iterations": 2121,
+        "busyMs": 1240,
+        "windowMs": 604594
+      },
+      {
+        "feature": "neural.legacy",
+        "iterations": 2121,
+        "busyMs": 128,
+        "windowMs": 604625
+      }
+    ]
+  },
+  "sampleCount": 61,
+  "gapsOutside0to15Seconds": [],
+  "validUnpluggedRun": false,
+  "measuredActiveForegroundSeconds": 50.013000000000005,
+  "meanActiveForegroundCpuPercentOfOneCore": 57.55103673045007,
+  "meanActiveForegroundPresentedFps": 19.974806550296922,
+  "medianIntervalFps": 0.0,
+  "p05IntervalFps": 0.0,
+  "p95IntervalCpuPercentOfOneCore": 90.02698111322076,
+  "p95IntervalMeanDrawWallMs": 3.7927756470588236,
+  "batteryCStart": 33.7,
+  "batteryCEnd": 34.0,
+  "batteryCMax": 34.0,
+  "maxThermalStatus": 1,
+  "stageModesObserved": [
+    false,
+    true
+  ],
+  "roomsObserved": [
+    "kitchen"
+  ],
+  "limitations": [
+    "Temperature is the battery sensor, not SoC junction temperature.",
+    "Charge counter measures whole-phone use, including display, radios and other processes.",
+    "CPU includes app and instrumentation; presentation counts are TextureView updates.",
+    "Draw timing includes submission and EGL swap wait, not isolated GPU execution.",
+    "Ten-second samples and a bounded run do not prove every frame or all-day battery life."
+  ]
+}

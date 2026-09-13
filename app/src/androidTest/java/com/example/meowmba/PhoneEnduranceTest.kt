@@ -8,10 +8,18 @@ import android.os.PowerManager
 import android.os.Process
 import android.os.SystemClock
 import android.view.WindowManager
+import android.view.Gravity
+import android.view.ViewGroup
+import android.widget.FrameLayout
+import android.widget.TextView
+import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import com.example.meowmba.core.diagnostics.LoopTelemetry
 import com.example.meowmba.ui.companion.Fly3DPhoneTelemetry
+import com.example.meowmba.ui.companion.AvatarStyle
+import com.example.meowmba.ui.companion.CompanionViewModel
+import java.util.concurrent.atomic.AtomicBoolean
 import java.io.File
 import org.json.JSONArray
 import org.json.JSONObject
@@ -20,13 +28,15 @@ import org.junit.Assume.assumeTrue
 import org.junit.Test
 
 /** Opt-in actual-app measurement that survives unplugging ADB. No battery simulation,
- * preference changes, sensor activation, thermal overrides or hardware commands. */
+ * sensor activation, thermal overrides or hardware commands. An explicit fixed-fly
+ * run temporarily selects the game, then restores the previous avatar selection. */
 class PhoneEnduranceTest {
     @Test fun recordActualForegroundAvatar() {
         val args = InstrumentationRegistry.getArguments()
         assumeTrue("Explicit endurance invocation only", args.getString("runEndurance") == "true")
         val seconds = args.getString("seconds")?.toIntOrNull()?.coerceIn(30, 1800) ?: 600
         val waitSeconds = args.getString("awaitUnplugSeconds")?.toIntOrNull()?.coerceIn(0, 600) ?: 0
+        val fixedFly = args.getString("fixedFly") == "true"
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val battery = context.getSystemService(BatteryManager::class.java)
         val power = context.getSystemService(PowerManager::class.java)
@@ -38,6 +48,7 @@ class PhoneEnduranceTest {
         val version = context.packageManager.getPackageInfo(context.packageName, 0)
         append(JSONObject().put("event", "header").put("schema", 1).put("versionCode", version.longVersionCode)
             .put("durationSeconds", seconds).put("awaitUnplugSeconds", waitSeconds)
+            .put("fixedFly", fixedFly)
             .put("label", args.getString("label") ?: "actual foreground avatar")
             .put("scope", "Whole-phone battery and app-process CPU; app+instrumentation cost; no all-day inference"))
         // Authentication stays with the owner. Waiting here also survives a flaky USB cable;
@@ -55,16 +66,43 @@ class PhoneEnduranceTest {
         val scenario = ActivityScenario.launch<MainActivity>(Intent(context, MainActivity::class.java)
             .setAction(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME))
         var originallyKeptAwake = false
+        var viewModel: CompanionViewModel? = null
+        var originalStyle: AvatarStyle? = null
+        var originalHabitat = false
+        var notice: TextView? = null
+        val cancelled = AtomicBoolean(false)
         try {
             scenario.onActivity {
                 originallyKeptAwake = it.window.attributes.flags and WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON != 0
                 it.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             }
             SystemClock.sleep(4000)
+            scenario.onActivity { activity ->
+                viewModel = ViewModelProvider(activity)[CompanionViewModel::class.java]
+                if (fixedFly) viewModel?.let { vm ->
+                    originalStyle = vm.uiState.value.avatarStyle
+                    originalHabitat = vm.uiState.value.habitatMode
+                    vm.setAvatarStyle(AvatarStyle.FULL_FLY)
+                    vm.setHabitatMode(true)
+                    vm.returnToAvatar()
+                }
+                notice = TextView(activity).apply {
+                    text = "Performance check • please leave this screen open\nTap here to end the check"
+                    textSize = 14f
+                    setTextColor(android.graphics.Color.WHITE)
+                    setBackgroundColor(0xE6223430.toInt())
+                    setPadding(24, 18, 24, 18)
+                    setOnClickListener { cancelled.set(true); text = "Ending check…" }
+                }
+                (activity.window.decorView as ViewGroup).addView(notice,
+                    FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP)
+                        .apply { topMargin = (50 * activity.resources.displayMetrics.density).toInt() })
+            }
+            SystemClock.sleep(1500)
             if (waitSeconds > 0) {
                 append(JSONObject().put("event", "waiting_for_unplug"))
                 val deadline = SystemClock.elapsedRealtime() + waitSeconds * 1000L
-                while (plugged() != 0 && SystemClock.elapsedRealtime() < deadline) SystemClock.sleep(1000)
+                while (plugged() != 0 && SystemClock.elapsedRealtime() < deadline && !cancelled.get()) SystemClock.sleep(1000)
                 if (plugged() != 0) {
                     append(JSONObject().put("event", "aborted").put("reason", "No physical unplug detected"))
                     assertTrue("Reconnect and rerun: no unplug detected before timeout", false)
@@ -82,7 +120,13 @@ class PhoneEnduranceTest {
             while (true) {
                 val now = SystemClock.elapsedRealtime()
                 var focused = false
-                scenario.onActivity { focused = it.hasWindowFocus() && !it.isFinishing }
+                scenario.onActivity {
+                    focused = it.hasWindowFocus() && !it.isFinishing
+                    val remaining = ((seconds * 1000L - (now - started)).coerceAtLeast(0L) / 1000).toInt()
+                    notice?.text = "Performance check • ${remaining / 60}:${(remaining % 60).toString().padStart(2, '0')} left\nLeave this screen open • tap here to end"
+                    if (fixedFly && (viewModel?.uiState?.value?.avatarStyle != AvatarStyle.FULL_FLY ||
+                            viewModel?.uiState?.value?.habitatMode != true)) cancelled.set(true)
+                }
                 val foreground = focused && power.isInteractive && !keyguard.isKeyguardLocked
                 val b = status()
                 val plug = b?.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1) ?: -1
@@ -100,8 +144,9 @@ class PhoneEnduranceTest {
                     .put("presentedFrames", Fly3DPhoneTelemetry.presented.get())
                     .put("drawWallNanos", Fly3DPhoneTelemetry.drawWallNanos.get())
                     .put("renderPixels", Fly3DPhoneTelemetry.renderPixels).put("stageMode", Fly3DPhoneTelemetry.stageMode)
+                    .put("selectedAvatar", viewModel?.uiState?.value?.avatarStyle?.key)
                     .put("room", Fly3DPhoneTelemetry.room).put("stageActive", Fly3DPhoneTelemetry.active))
-                if (now - started >= seconds * 1000L) break
+                if (now - started >= seconds * 1000L || cancelled.get()) break
                 SystemClock.sleep(minOf(10_000L, seconds * 1000L - (now - started)))
             }
             val elapsed = SystemClock.elapsedRealtime() - started
@@ -111,10 +156,12 @@ class PhoneEnduranceTest {
             LoopTelemetry.snapshot().forEach { loops.put(JSONObject().put("feature", it.feature)
                 .put("iterations", it.iterations).put("busyMs", it.busyMs).put("windowMs", it.windowMs)) }
             val validCharge = initialCharge > 0 && finalCharge > 0 && unpluggedCount == count
-            val sustained = foregroundCount >= count * .95 && severeCount == 0 && frames >= seconds * 5
+            val sustained = !cancelled.get() && elapsed >= seconds * 1000L &&
+                foregroundCount >= count * .95 && severeCount == 0 && frames >= seconds * 5
             append(JSONObject().put("event", "complete").put("elapsedMs", elapsed).put("samples", count)
                 .put("foregroundSamples", foregroundCount).put("unpluggedSamples", unpluggedCount)
                 .put("severeThermalSamples", severeCount).put("presentedFrames", frames)
+                .put("cancelled", cancelled.get())
                 .put("averagePresentedFps", frames * 1000.0 / elapsed)
                 .put("cpuPercentOfOneCore", (Process.getElapsedCpuTime() - initialCpu) * 100.0 / elapsed)
                 .put("chargeUsedMicroAh", if (validCharge) initialCharge - finalCharge else JSONObject.NULL)
@@ -123,6 +170,14 @@ class PhoneEnduranceTest {
             assertTrue("Measurement preserved but sustained foreground-motion gate failed: $output", sustained)
             if (waitSeconds > 0) assertTrue("Unplugged measurement interrupted or charge counter unavailable", validCharge)
         } finally {
+            InstrumentationRegistry.getInstrumentation().runOnMainSync {
+                (notice?.parent as? ViewGroup)?.removeView(notice)
+                // Respect a different selection made explicitly during the run.
+                if (fixedFly && viewModel?.uiState?.value?.avatarStyle == AvatarStyle.FULL_FLY &&
+                    viewModel?.uiState?.value?.habitatMode == true) originalStyle?.let {
+                    viewModel?.setAvatarStyle(it); viewModel?.setHabitatMode(originalHabitat)
+                }
+            }
             scenario.onActivity { if (!originallyKeptAwake) it.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
             scenario.close()
         }

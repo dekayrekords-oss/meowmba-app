@@ -1,0 +1,78 @@
+{
+  "header": {
+    "event": "header",
+    "schema": 1,
+    "versionCode": 108,
+    "durationSeconds": 600,
+    "awaitUnplugSeconds": 600,
+    "label": "build108-unplugged-actual-avatar",
+    "scope": "Whole-phone battery and app-process CPU; app+instrumentation cost; no all-day inference"
+  },
+  "completed": true,
+  "completion": {
+    "event": "complete",
+    "elapsedMs": 600009,
+    "samples": 59,
+    "foregroundSamples": 48,
+    "unpluggedSamples": 59,
+    "severeThermalSamples": 0,
+    "presentedFrames": 9506,
+    "averagePresentedFps": 15.84309568689803,
+    "cpuPercentOfOneCore": 43.54484682729759,
+    "chargeUsedMicroAh": 70400,
+    "batteryMeasurementValid": true,
+    "sustainedForegroundMotionGate": false,
+    "loops": [
+      {
+        "feature": "drives.tick",
+        "iterations": 3462,
+        "busyMs": 3113,
+        "windowMs": 817525
+      },
+      {
+        "feature": "neural.step",
+        "iterations": 3462,
+        "busyMs": 2101,
+        "windowMs": 817525
+      },
+      {
+        "feature": "neural.legacy",
+        "iterations": 3462,
+        "busyMs": 218,
+        "windowMs": 817531
+      }
+    ]
+  },
+  "sampleCount": 59,
+  "gapsOutside0to15Seconds": [
+    19.828,
+    22.522
+  ],
+  "validUnpluggedRun": false,
+  "measuredActiveForegroundSeconds": 437.439,
+  "meanActiveForegroundCpuPercentOfOneCore": 55.40703961009421,
+  "meanActiveForegroundPresentedFps": 20.766323990316362,
+  "medianIntervalFps": 20.169745381927108,
+  "p05IntervalFps": 0.0,
+  "p95IntervalCpuPercentOfOneCore": 82.0067823658488,
+  "p95IntervalMeanDrawWallMs": 3.7893176262626262,
+  "batteryCStart": 33.1,
+  "batteryCEnd": 32.7,
+  "batteryCMax": 33.1,
+  "maxThermalStatus": 0,
+  "stageModesObserved": [
+    false,
+    true
+  ],
+  "roomsObserved": [
+    "kitchen",
+    "observatory"
+  ],
+  "limitations": [
+    "Temperature is the battery sensor, not SoC junction temperature.",
+    "Charge counter measures whole-phone use, including display, radios and other processes.",
+    "CPU includes app and instrumentation; presentation counts are TextureView updates.",
+    "Draw timing includes submission and EGL swap wait, not isolated GPU execution.",
+    "Ten-second samples and a bounded run do not prove every frame or all-day battery life."
+  ]
+}

@@ -14,6 +14,7 @@ def main():
     parser.add_argument('--seconds', type=int, default=600)
     parser.add_argument('--await-unplug-seconds', type=int, default=600)
     parser.add_argument('--wait-for-device', action='store_true')
+    parser.add_argument('--fixed-fly', action='store_true', help='Temporarily select the full fly game and restore afterward')
     parser.add_argument('--label', default='actual-avatar-unplugged')
     args = parser.parse_args()
     if not args.test_apk.is_file(): parser.error('Test APK must exist')
@@ -27,6 +28,7 @@ def main():
     folder = '/sdcard/Android/data/com.example.meowmba/files'
     command = ['am', 'instrument', '-w', '-e', 'class', 'com.example.meowmba.PhoneEnduranceTest',
                '-e', 'runEndurance', 'true', '-e', 'seconds', str(args.seconds),
+               '-e', 'fixedFly', str(args.fixed_fly).lower(),
                '-e', 'awaitUnplugSeconds', str(args.await_unplug_seconds), '-e', 'label', args.label,
                'com.example.meowmba.test/androidx.test.runner.AndroidJUnitRunner']
     subprocess.run(adb + ['shell', 'mkdir', '-p', folder], check=True, timeout=15)

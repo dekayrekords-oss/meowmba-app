@@ -17,6 +17,7 @@ def summarize(rows):
         if dt <= 0: continue
         count = b['submittedFrames'] - a['submittedFrames']
         intervals.append({'seconds': dt,
+            'activeForeground': a['foreground'] and b['foreground'] and a['stageActive'] and b['stageActive'] and dt <= 15,
             'fps': (b['presentedFrames'] - a['presentedFrames']) / dt,
             'cpuPercent': (b['processCpuMs'] - a['processCpuMs']) / (10 * dt),
             'drawWallMsPerSubmission': (b['drawWallNanos'] - a['drawWallNanos']) / (1e6 * count) if count > 0 else None})
@@ -24,11 +25,16 @@ def summarize(rows):
         values = sorted(x for x in values if x is not None)
         return values[int((len(values) - 1) * p)] if values else None
     temperatures = [x['batteryTenthsC'] / 10 for x in samples if x['batteryTenthsC'] > 0]
+    active = [x for x in intervals if x['activeForeground']]
+    active_seconds = sum(x['seconds'] for x in active)
     return {'header': header, 'completed': complete is not None,
         'completion': complete, 'sampleCount': len(samples),
         'gapsOutside0to15Seconds': gaps,
         'validUnpluggedRun': bool(complete and complete['batteryMeasurementValid'] and
             complete['sustainedForegroundMotionGate'] and not gaps),
+        'measuredActiveForegroundSeconds': active_seconds,
+        'meanActiveForegroundCpuPercentOfOneCore': sum(x['cpuPercent'] * x['seconds'] for x in active) / active_seconds if active_seconds else None,
+        'meanActiveForegroundPresentedFps': sum(x['fps'] * x['seconds'] for x in active) / active_seconds if active_seconds else None,
         'medianIntervalFps': percentile((x['fps'] for x in intervals), .5),
         'p05IntervalFps': percentile((x['fps'] for x in intervals), .05),
         'p95IntervalCpuPercentOfOneCore': percentile((x['cpuPercent'] for x in intervals), .95),
