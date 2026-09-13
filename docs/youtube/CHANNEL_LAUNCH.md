@@ -1,8 +1,11 @@
 # Meow Assistant — YouTube launch
 
-Prepared 2026-09-13. Channel creation is pending: YouTube opened as a blank page in the in-app browser and Chrome control timed out. No channel, handle, playlists, or uploads have been created. The owner selected their Google account in the task; do not publish the login email as contact information without their instruction.
+Updated 2026-09-13. The owner supplied the channel URL below after the creation instructions. Treat it as the selected destination; do not create a duplicate. Public-page verification was throttled, so its displayed name, handle, branding, playlists, and uploads remain unverified. The owner selected their Google account in the task; do not publish the login email as contact information without their instruction.
 
 ## Channel identity
+
+- Channel URL (owner supplied): https://www.youtube.com/channel/UCjxT_IHbJ9OsysxHW1QxiqA
+- Channel ID: `UCjxT_IHbJ9OsysxHW1QxiqA`
 
 - Name: **Meow Assistant**
 - Preferred handle: **@MeowAssistantApp** (availability unverified)
@@ -39,7 +42,7 @@ Welcome trailer → first setup → first conversation → avatar customization 
 
 ## Setup once browser access works
 
-Sign into the owner-selected Google account. Inspect its existing channels first. Create a separate Meow Assistant channel rather than renaming any existing music or personal channel. Check handle availability in the creation form. Save the actual channel ID and URL in this file after success. Apply the description, icon, and banner, then create the playlist structure as videos become available. Add only verified public app/download links; the older Play listing is explicitly a historical draft and does not establish public availability.
+Sign into the owner-selected Google account and select channel `UCjxT_IHbJ9OsysxHW1QxiqA`. Verify its displayed name and handle. Do not create another channel or rename an unrelated channel. Apply the description, icon, and banner, then create the playlist structure as videos become available. Add only verified public app/download links; the older Play listing is explicitly a historical draft and does not establish public availability.
 
 YouTube documents channel creation under Settings → Add or manage channel(s), with a separate option for a business name: https://support.google.com/youtube/answer/1646861?hl=en
 Profile editing is in YouTube Studio → Customization → Profile: https://support.google.com/youtube/answer/2657964?hl=en
