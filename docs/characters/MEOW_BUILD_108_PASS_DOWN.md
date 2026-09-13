@@ -203,7 +203,8 @@ with explicitly authored inertial parameters. Eight tests cover stale/order/
 generation/NaN rejection, bounds, newest-only dispatch, interrupt/resume and a
 bounded history. Its ten-second replay is deterministic; no actual neural output
 or real robot dynamics is claimed. Exact robot model/firmware and availability
-are still awaiting the user's answer. Existing physical quarantine remains:
+are still unavailable; the user confirmed that no physical robot is available for
+verification right now. Existing physical quarantine remains:
 the prior purported brake caused rotation, so unverified zero packets are not
 assumed safe. See `../neural/ROBOT_INTENT_REPLAY_PASS_DOWN_2026-09-13.md`.
 
