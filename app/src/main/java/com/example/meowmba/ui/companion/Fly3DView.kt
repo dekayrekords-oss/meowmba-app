@@ -31,6 +31,9 @@ internal class Fly3DView(context: Context) : TextureView(context), TextureView.S
 
     init { isOpaque = false; surfaceTextureListener = this; isClickable = false }
     fun publish(frame: Fly3DFrame) {
+        Fly3DPhoneTelemetry.stageMode = frame.stageMode
+        Fly3DPhoneTelemetry.room = frame.backgroundId
+        Fly3DPhoneTelemetry.active = frame.active && active && !disposed
         val old = renderer.frame
         renderer.frame = frame
         val appearanceChanged = old.avatarScale != frame.avatarScale || old.stageMode != frame.stageMode || old.backgroundId != frame.backgroundId
@@ -39,6 +42,7 @@ internal class Fly3DView(context: Context) : TextureView(context), TextureView.S
     fun setStageActive(value: Boolean) {
         if (active == value) return
         active = value
+        Fly3DPhoneTelemetry.active = value && renderer.frame.active && !disposed
         if (value) requestFrame()
     }
     private fun requestFrame(force: Boolean = false) {
@@ -47,10 +51,14 @@ internal class Fly3DView(context: Context) : TextureView(context), TextureView.S
             scheduled.set(false)
             if (ready && (active || force) && !disposed) {
                 try {
+                    val started = System.nanoTime()
                     check(EGL14.eglMakeCurrent(display, eglSurface, eglSurface, eglContext)) { "EGL context unavailable" }
                     renderer.onDrawFrame(null)
                     renderer.lastError?.let { error(it); return@post }
                     check(EGL14.eglSwapBuffers(display, eglSurface)) { "EGL frame failed" }
+                    Fly3DPhoneTelemetry.submitted.incrementAndGet()
+                    Fly3DPhoneTelemetry.drawWallNanos.addAndGet(System.nanoTime() - started)
+                    Fly3DPhoneTelemetry.renderPixels = renderer.lastRenderPixels
                 } catch (e: RuntimeException) { error(e.message ?: "GPU rendering failed") }
             }
         }
@@ -90,7 +98,9 @@ internal class Fly3DView(context: Context) : TextureView(context), TextureView.S
         handler.post { releaseEgl(); texture.release() }
         return false // Release the texture only after the GL thread stops using its native window.
     }
-    override fun onSurfaceTextureUpdated(texture: SurfaceTexture) = Unit
+    override fun onSurfaceTextureUpdated(texture: SurfaceTexture) {
+        Fly3DPhoneTelemetry.presented.incrementAndGet()
+    }
     private fun releaseEgl() {
         ready = false
         if (display != EGL14.EGL_NO_DISPLAY) {
@@ -102,6 +112,7 @@ internal class Fly3DView(context: Context) : TextureView(context), TextureView.S
         display = EGL14.EGL_NO_DISPLAY; eglSurface = EGL14.EGL_NO_SURFACE; eglContext = EGL14.EGL_NO_CONTEXT
     }
     fun dispose() {
+        Fly3DPhoneTelemetry.active = false
         disposed = true; active = false
         val texture = surfaceTexture
         surfaceTextureListener = null

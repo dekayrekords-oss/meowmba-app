@@ -39,8 +39,7 @@ fun AnimatedBackground(animation: BackgroundAnimation, modifier: Modifier = Modi
     val clock by remember(sceneClock) { derivedStateOf { sceneClock.phase(BG_CYCLE_MS) } }
     val slow by remember(sceneClock) { derivedStateOf { sceneClock.phase(BG_SLOW_MS) } }
     if (animation.isPetEnvironment) {
-        val environment = remember { PetEnvironmentBackgroundPainter() }
-        Canvas(modifier) { environment.draw(this, animation, clock, slow) }
+        IllustratedEnvironmentBackground(animation, modifier, clock = { clock }, slow = { slow })
         return
     }
     if (isCompanionSceneBackground(animation)) {
@@ -263,8 +262,7 @@ private fun DrawScope.embers(f: BgField, clock: Float, slow: Float, scale: Float
 @Composable
 fun AnimationThumbnail(animation: BackgroundAnimation, modifier: Modifier = Modifier) {
     if (animation.isPetEnvironment) {
-        val environment = remember { PetEnvironmentBackgroundPainter() }
-        Canvas(modifier) { environment.draw(this, animation, .25f, .15f) }
+        IllustratedEnvironmentBackground(animation, modifier, clock = { .25f }, slow = { .15f }, thumbnail = true)
         return
     }
     if (isCompanionSceneBackground(animation)) {

@@ -24,6 +24,7 @@ internal class Fly3DEdgePass {
     private val quad = ByteBuffer.allocateDirect(8 * 4).order(ByteOrder.nativeOrder()).asFloatBuffer().apply {
         put(floatArrayOf(-1f,-1f,1f,-1f,-1f,1f,1f,1f)); position(0)
     }
+    val renderPixels: Int get() = width * height
     var available = false
         private set
 
@@ -51,7 +52,9 @@ internal class Fly3DEdgePass {
                 vec3 l=vec3(.299,.587,.114);
                 float spread=max(max(abs(dot(n.rgb-s.rgb,l)),abs(dot(e.rgb-w.rgb,l))),
                     max(abs(n.a-s.a),abs(e.a-w.a)));
-                float weight=smoothstep(.06,.36,spread)*.30;
+                // Reconstruct only high-contrast edges; interiors keep their original color.
+                // Convex premultiplied RGBA weights prevent dark stage-compositing fringes.
+                float weight=smoothstep(.035,.22,spread)*.48;
                 gl_FragColor=mix(c,(n+s+e+w)*.25,weight);
             }
         """)
@@ -66,7 +69,9 @@ internal class Fly3DEdgePass {
     fun resize(w:Int,h:Int) {
         outputWidth=max(1,w); outputHeight=max(1,h)
         // <=1.2 million render pixels / ~7.2 MB color+depth, even on an unfolded high-DPI display.
-        val ratio=minOf(1f,sqrt(1_200_000f/(outputWidth.toFloat()*outputHeight)))
+        // Small viewports spend unused budget on actual silhouette coverage, not extra taps.
+        // Large/high-DPI phones retain exactly the prior maximum allocation.
+        val ratio=minOf(1.35f,sqrt(1_200_000f/(outputWidth.toFloat()*outputHeight)))
         width=max(1,(outputWidth*ratio).toInt()); height=max(1,(outputHeight*ratio).toInt())
         if(framebuffer!=0) { names[0]=framebuffer; GLES20.glDeleteFramebuffers(1,names,0) }
         if(texture!=0) { names[0]=texture; GLES20.glDeleteTextures(1,names,0) }

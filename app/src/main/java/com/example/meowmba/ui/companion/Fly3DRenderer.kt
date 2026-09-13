@@ -88,6 +88,7 @@ class Fly3DRenderer : GLSurfaceView.Renderer {
     private val shadowPlanes = FloatArray(4)
     @Volatile var lastDrawCalls:Int=0
         private set
+    val lastRenderPixels:Int get() = edgePass.renderPixels
     @Volatile var lastTriangles:Int=0
         private set
     private var drawCalls=0
@@ -193,9 +194,10 @@ class Fly3DRenderer : GLSurfaceView.Renderer {
             Matrix.rotateM(model,0,f.pitch.safe().coerceIn(-.25f,.25f)*DEGREES,1f,0f,0f)
             Matrix.rotateM(model,0,f.roll.safe().coerceIn(-.18f,.18f)*DEGREES,0f,0f,1f)
         } else {
-            unit=.50f*requestedScale
+            val gameScale=requestedScale*1.22f
+            unit=.50f*gameScale
             // Root height compensation preserves grounded feet; world-space grip stays authoritative.
-            val groundCompensation=.545f*(requestedScale-1f)*(1f-f.flight.safe().coerceIn(0f,1f))
+            val groundCompensation=.545f*(gameScale-1f)*(1f-f.flight.safe().coerceIn(0f,1f))
             Matrix.translateM(model,0,f.x.safe().coerceIn(-2.5f,2.5f),
                 f.y.safe(2.1f).coerceIn(.55f,4f)+groundCompensation,f.z.safe().coerceIn(-1.5f,1.5f))
             Matrix.rotateM(model,0,f.yaw.safe()*DEGREES,0f,1f,0f)
@@ -603,9 +605,9 @@ class Fly3DRenderer : GLSurfaceView.Renderer {
             ellipsoid(0f,.185f,.566f,.12f,.026f+speech*.086f,.021f,INK,outline=false)
             ellipsoid(0f,.15f-speech*.015f,.586f,.063f,.017f+speech*.018f,.007f,0xD58E86,outline=false)
         } else {
-            segment(-.13f,.205f+expression*.025f,.554f,-.066f,.166f-expression*.012f,.573f,.014f,INK,outline=false)
+            segment(-.135f,.203f+expression*.037f,.554f,-.066f,.166f-expression*.012f,.573f,.014f,INK,outline=false)
             segment(-.066f,.166f-expression*.012f,.573f,.066f,.166f-expression*.012f,.573f,.014f,INK,outline=false)
-            segment(.066f,.166f-expression*.012f,.573f,.13f,.205f+expression*.025f,.554f,.014f,INK,outline=false)
+            segment(.066f,.166f-expression*.012f,.573f,.135f,.203f+expression*.037f,.554f,.014f,INK,outline=false)
         }
         // Short arista antennae, with three fine bristles each; response shares gaze/time snapshot.
         for (side in -1..1 step 2) {
@@ -725,7 +727,7 @@ class Fly3DRenderer : GLSurfaceView.Renderer {
             // Black inverted hull. Extrusion is in world units, independent of ellipsoid scale.
             GLES20.glCullFace(GLES20.GL_FRONT)
             GLES20.glUniform1f(outlineHandle,1f)
-            GLES20.glUniform1f(outlineWidthHandle,.014f)
+            GLES20.glUniform1f(outlineWidthHandle,if(drawingCharacter).014f else .008f)
             mesh.draw()
         }
         GLES20.glCullFace(GLES20.GL_BACK)
@@ -809,18 +811,20 @@ class Fly3DRenderer : GLSurfaceView.Renderer {
                 vec3 eye=normalize(vec3(0.,2.5,8.)-vWorld);
                 vec3 lightDirection=normalize(vec3(-.45,.8,.65));
                 float diffuse=max(dot(n,lightDirection),0.0);
-                float steps=.70+smoothstep(.26,.37,diffuse)*.19+smoothstep(.69,.80,diffuse)*.15;
-                float smoothLight=mix(.46+.66*diffuse,.65+.39*diffuse,uCharacter);
+                float steps=.61+smoothstep(.22,.39,diffuse)*.24+smoothstep(.65,.83,diffuse)*.19;
+                float hemisphere=.08*(n.y*.5+.5);
+                float smoothLight=mix(.48+.56*diffuse+hemisphere,.61+.40*diffuse,uCharacter);
                 float illumination=mix(smoothLight,steps,.35*uCharacter);
                 vec3 color=uColor.rgb;
                 if(uMaterial>.5&&uMaterial<1.5){
-                    float grain=sin(vWorld.x*59.+sin(vWorld.z*1.2)*.9);
-                    color*=.985+.012*grain;
+                    // Broad quiet wood tone: previous subpixel grain crawled on phone surfaces.
+                    float grain=sin(vWorld.x*8.+vWorld.z*.7);
+                    color*=.99+.008*grain;
                 }
                 float glossy=step(1.5,uMaterial)*(1.-step(3.5,uMaterial));
                 float spec=pow(max(dot(n,normalize(lightDirection+eye)),0.),28.)*glossy*.17;
-                float rim=pow(1.-max(dot(n,eye),0.),3.)*.055;
-                vec3 tint=mix(vec3(1.,.98,.92),vec3(.79,.88,1.05),uEnvironment.x*.45);
+                float rim=pow(1.-max(dot(n,eye),0.),3.)*mix(.04,.085,uCharacter);
+                vec3 tint=mix(vec3(1.,.995,.98),vec3(.79,.88,1.05),uEnvironment.x*.45);
                 color=color*illumination*tint+vec3(spec)+vec3(.68,.85,.85)*rim;
                 // Broad warm window spill against cool cabinetry, with soft mullion shadows.
                 vec2 pool=vec2(vWorld.x+1.15+vWorld.z*.25,vWorld.z-.25);
@@ -831,8 +835,7 @@ class Fly3DRenderer : GLSurfaceView.Renderer {
                 color+=vec3(.17,.12,.05)*spill*pane*up*(1.-uEnvironment.x*.75)*(1.-uCharacter);
                 float glow=1.-smoothstep(.0,3.2,length((vWorld-vec3(-1.7,3.1,-2.0))*vec3(.75,.75,1.)));
                 color+=vec3(.075,.045,.012)*glow*(1.-uCharacter)*(1.-uEnvironment.x);
-                float plaster=sin(vWorld.x*91.3)*sin(vWorld.y*83.7)*.004;
-                color+=vec3(plaster)*(1.-uCharacter)*(1.-up);
+                // No high-frequency procedural plaster: it aliases into a checkerboard at mediump precision.
                 float shade=contact(uShadows[0],uShadowPlanes[0])+contact(uShadows[1],uShadowPlanes[1])
                     +contact(uShadows[2],uShadowPlanes[2])+contact(uShadows[3],uShadowPlanes[3]);
                 color*=1.-min(.48,shade)*smoothstep(.55,.9,n.y);

@@ -1,0 +1,94 @@
+{
+  "scope": "genuine published anatomical GROUP adjacency; not individual synaptic weights or physiological signs",
+  "sourceRevision": "e31a2e26b9937dca72e5ca1c1960df6454d76114",
+  "sourcePath": "figures/vignettes/network_fig3h_{edges,neurons}.csv",
+  "licenseEvidence": "https://github.com/htem/BANC-project/tree/e31a2e26b9937dca72e5ca1c1960df6454d76114#license",
+  "projectReportedLicense": "CC-BY-4.0",
+  "sha256": {
+    "edges.csv": "5b954bf628c0ba614cc840931122f234ab44a3ab43eb13ded25e7f87cf2f00dc",
+    "neurons.csv": "2a1253cfd57842193334b7eca375b4043d5e3fc9945cfbe7f71fa8d898711b01"
+  },
+  "individualRosterCount": 76,
+  "groupCount": 7,
+  "directedGroupRows": 14,
+  "sumPublishedCounts": 961,
+  "groups": [
+    "ANXXX139",
+    "DNg27",
+    "ISN",
+    "l_NSC_CRZ",
+    "leg_nociceptor",
+    "thorax_nociceptor",
+    "wing_power_motor_neuron"
+  ],
+  "adjacencyCounts": [
+    [
+      0,
+      31,
+      6,
+      215,
+      17,
+      0,
+      0
+    ],
+    [
+      61,
+      0,
+      0,
+      104,
+      0,
+      0,
+      265
+    ],
+    [
+      17,
+      116,
+      0,
+      4,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      33,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      58,
+      0,
+      0,
+      25,
+      0,
+      0,
+      0
+    ],
+    [
+      9,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  ],
+  "limitations": [
+    "Counts are grouped published anatomical observations, not executable model weights.",
+    "Grouped or mixed neurotransmitter labels do not establish per-synapse sign.",
+    "No conductances, delays, muscle mapping, or behavioral validation supplied."
+  ]
+}

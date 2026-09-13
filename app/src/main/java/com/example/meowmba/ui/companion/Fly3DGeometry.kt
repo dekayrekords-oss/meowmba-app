@@ -57,19 +57,43 @@ internal object Fly3DGeometry {
         return Fly3DMesh(values.toFloatArray())
     }
 
+    /** Beveled cuboid: 44 triangles instead of 12; no subdivisions, textures or extra draws.
+     * Broad planes stay flat while twelve chamfers catch light and soften toy-box corners.
+     */
     fun cube(): Fly3DMesh {
-        val out = ArrayList<Float>(216)
-        fun face(nx: Float, ny: Float, nz: Float, a: FloatArray, b: FloatArray, c: FloatArray, d: FloatArray) {
-            for (p in arrayOf(a, b, c, a, c, d)) {
-                out.add(p[0]); out.add(p[1]); out.add(p[2]); out.add(nx); out.add(ny); out.add(nz)
+        val out = ArrayList<Float>(44 * 18)
+        val inset = .92f
+        fun triangle(a:FloatArray,b:FloatArray,c:FloatArray,n:FloatArray) {
+            val crossX=(b[1]-a[1])*(c[2]-a[2])-(b[2]-a[2])*(c[1]-a[1])
+            val crossY=(b[2]-a[2])*(c[0]-a[0])-(b[0]-a[0])*(c[2]-a[2])
+            val crossZ=(b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0])
+            val forward=crossX*n[0]+crossY*n[1]+crossZ*n[2]>0f
+            for(v in if(forward)arrayOf(a,b,c) else arrayOf(a,c,b)) {
+                out.add(v[0]);out.add(v[1]);out.add(v[2])
+                out.add(n[0]);out.add(n[1]);out.add(n[2])
             }
         }
-        face(0f, 0f, 1f, floatArrayOf(-1f,-1f,1f), floatArrayOf(1f,-1f,1f), floatArrayOf(1f,1f,1f), floatArrayOf(-1f,1f,1f))
-        face(0f, 0f,-1f, floatArrayOf(1f,-1f,-1f), floatArrayOf(-1f,-1f,-1f), floatArrayOf(-1f,1f,-1f), floatArrayOf(1f,1f,-1f))
-        face(1f, 0f, 0f, floatArrayOf(1f,-1f,1f), floatArrayOf(1f,-1f,-1f), floatArrayOf(1f,1f,-1f), floatArrayOf(1f,1f,1f))
-        face(-1f,0f,0f, floatArrayOf(-1f,-1f,-1f), floatArrayOf(-1f,-1f,1f), floatArrayOf(-1f,1f,1f), floatArrayOf(-1f,1f,-1f))
-        face(0f,1f,0f, floatArrayOf(-1f,1f,1f), floatArrayOf(1f,1f,1f), floatArrayOf(1f,1f,-1f), floatArrayOf(-1f,1f,-1f))
-        face(0f,-1f,0f, floatArrayOf(-1f,-1f,-1f), floatArrayOf(1f,-1f,-1f), floatArrayOf(1f,-1f,1f), floatArrayOf(-1f,-1f,1f))
+        fun quad(a:FloatArray,b:FloatArray,c:FloatArray,d:FloatArray,n:FloatArray) {
+            triangle(a,b,c,n);triangle(a,c,d,n)
+        }
+        for(axis in 0..2)for(sign in listOf(-1f,1f)) {
+            val u=(axis+1)%3;val v=(axis+2)%3
+            fun point(x:Float,y:Float)=FloatArray(3).apply { this[axis]=sign;this[u]=x;this[v]=y }
+            val normal=FloatArray(3).apply { this[axis]=sign }
+            quad(point(-inset,-inset),point(inset,-inset),point(inset,inset),point(-inset,inset),normal)
+        }
+        for(axis in 0..2)for(a in listOf(-1f,1f))for(b in listOf(-1f,1f)) {
+            val u=(axis+1)%3;val v=(axis+2)%3
+            fun point(t:Float,outerU:Boolean)=FloatArray(3).apply {
+                this[axis]=t;this[u]=a*if(outerU)1f else inset;this[v]=b*if(outerU)inset else 1f
+            }
+            val normal=FloatArray(3).apply { this[u]=a*.7071068f;this[v]=b*.7071068f }
+            quad(point(-inset,true),point(inset,true),point(inset,false),point(-inset,false),normal)
+        }
+        for(x in listOf(-1f,1f))for(y in listOf(-1f,1f))for(z in listOf(-1f,1f)) {
+            triangle(floatArrayOf(x,y*inset,z*inset),floatArrayOf(x*inset,y,z*inset),
+                floatArrayOf(x*inset,y*inset,z),floatArrayOf(x*.5773503f,y*.5773503f,z*.5773503f))
+        }
         return Fly3DMesh(out.toFloatArray())
     }
 

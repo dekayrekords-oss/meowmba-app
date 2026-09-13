@@ -1,0 +1,1444 @@
+{
+  "scope": "scripted already-arbitrated proposals into transport-free authored neck dynamics; no actual neural or hardware replay",
+  "parameters": {
+    "positionRange": 0.35,
+    "commandSpacingMs": 250,
+    "commandSlewPerSecond": 0.25,
+    "naturalFrequencyPerSecond": 8.0,
+    "dampingRatio": 1.0,
+    "maxSpeedPerSecond": 0.5,
+    "maxAccelerationPerSecondSquared": 2.0,
+    "integrationStepMs": 10
+  },
+  "units": "dimensionless normalized neck position; rates per second; not calibrated angles/torques",
+  "durationMs": 10000,
+  "integratorSteps": 1000,
+  "acceptedProposals": 171,
+  "emittedSimulationCommands": 34,
+  "rejections": {
+    "nonfinite": 3,
+    "interrupted": 30,
+    "generation": 3,
+    "order": 2
+  },
+  "historyLength": 200,
+  "peakPosition": 0.26705550364673947,
+  "peakSpeed": 0.2932461597183808,
+  "peakAcceleration": 2.0,
+  "finalPosition": 0.0997168291088953,
+  "trajectory": [
+    {
+      "timeMs": 0,
+      "position": 0.0,
+      "velocity": 0.0,
+      "command": 0.0,
+      "active": true
+    },
+    {
+      "timeMs": 50,
+      "position": 0.0,
+      "velocity": 0.0,
+      "command": 0.0,
+      "active": true
+    },
+    {
+      "timeMs": 100,
+      "position": 0.0,
+      "velocity": 0.0,
+      "command": 0.0,
+      "active": true
+    },
+    {
+      "timeMs": 150,
+      "position": 0.0,
+      "velocity": 0.0,
+      "command": 0.0,
+      "active": true
+    },
+    {
+      "timeMs": 200,
+      "position": 0.0,
+      "velocity": 0.0,
+      "command": 0.0,
+      "active": true
+    },
+    {
+      "timeMs": 250,
+      "position": 0.0002,
+      "velocity": 0.02,
+      "command": 0.0625,
+      "active": true
+    },
+    {
+      "timeMs": 300,
+      "position": 0.004200000000000001,
+      "velocity": 0.12000000000000001,
+      "command": 0.0625,
+      "active": true
+    },
+    {
+      "timeMs": 350,
+      "position": 0.012233835415910735,
+      "velocity": 0.1775762281903153,
+      "command": 0.0625,
+      "active": true
+    },
+    {
+      "timeMs": 400,
+      "position": 0.0213623963799581,
+      "velocity": 0.18127604590086746,
+      "command": 0.0625,
+      "active": true
+    },
+    {
+      "timeMs": 450,
+      "position": 0.029901160112496362,
+      "velocity": 0.1620195017417446,
+      "command": 0.0625,
+      "active": true
+    },
+    {
+      "timeMs": 500,
+      "position": 0.03746820370464226,
+      "velocity": 0.16086003000914184,
+      "command": 0.125,
+      "active": true
+    },
+    {
+      "timeMs": 550,
+      "position": 0.048373858280254166,
+      "velocity": 0.25029910527323335,
+      "command": 0.125,
+      "active": true
+    },
+    {
+      "timeMs": 600,
+      "position": 0.06168346156644711,
+      "velocity": 0.26858479959789044,
+      "command": 0.125,
+      "active": true
+    },
+    {
+      "timeMs": 650,
+      "position": 0.07451611669902444,
+      "velocity": 0.24540839537321213,
+      "command": 0.125,
+      "active": true
+    },
+    {
+      "timeMs": 700,
+      "position": 0.0856765875142896,
+      "velocity": 0.2075518489105808,
+      "command": 0.125,
+      "active": true
+    },
+    {
+      "timeMs": 750,
+      "position": 0.09513427386316527,
+      "velocity": 0.1956360730443402,
+      "command": 0.1875,
+      "active": true
+    },
+    {
+      "timeMs": 800,
+      "position": 0.10765036003700944,
+      "velocity": 0.2780823609352402,
+      "command": 0.1875,
+      "active": true
+    },
+    {
+      "timeMs": 850,
+      "position": 0.12203245917533785,
+      "velocity": 0.2864417180763693,
+      "command": 0.1875,
+      "active": true
+    },
+    {
+      "timeMs": 900,
+      "position": 0.135560501190632,
+      "velocity": 0.25706468073985184,
+      "command": 0.1875,
+      "active": true
+    },
+    {
+      "timeMs": 950,
+      "position": 0.1471788424635303,
+      "velocity": 0.2152772407287123,
+      "command": 0.1875,
+      "active": true
+    },
+    {
+      "timeMs": 1000,
+      "position": 0.15694674895893082,
+      "velocity": 0.20125379180674702,
+      "command": 0.25,
+      "active": true
+    },
+    {
+      "timeMs": 1050,
+      "position": 0.1697139187348741,
+      "velocity": 0.282259664302229,
+      "command": 0.25,
+      "active": true
+    },
+    {
+      "timeMs": 1100,
+      "position": 0.18425357484442825,
+      "velocity": 0.28901741139478504,
+      "command": 0.25,
+      "active": true
+    },
+    {
+      "timeMs": 1150,
+      "position": 0.19787951477571047,
+      "velocity": 0.25867496633256787,
+      "command": 0.25,
+      "active": true
+    },
+    {
+      "timeMs": 1200,
+      "position": 0.20955956873929066,
+      "velocity": 0.21629897946058557,
+      "command": 0.25,
+      "active": true
+    },
+    {
+      "timeMs": 1250,
+      "position": 0.21931141596864862,
+      "velocity": 0.1963564843937605,
+      "command": 0.2853169548885461,
+      "active": true
+    },
+    {
+      "timeMs": 1300,
+      "position": 0.23020435980052328,
+      "velocity": 0.22404108681852736,
+      "command": 0.2853169548885461,
+      "active": true
+    },
+    {
+      "timeMs": 1350,
+      "position": 0.2410848268041952,
+      "velocity": 0.20990740533400257,
+      "command": 0.2853169548885461,
+      "active": true
+    },
+    {
+      "timeMs": 1400,
+      "position": 0.250711396657796,
+      "velocity": 0.17990684719577504,
+      "command": 0.2853169548885461,
+      "active": true
+    },
+    {
+      "timeMs": 1450,
+      "position": 0.2587087940348546,
+      "velocity": 0.14671353726740483,
+      "command": 0.2853169548885461,
+      "active": true
+    },
+    {
+      "timeMs": 1500,
+      "position": 0.26496516734636405,
+      "velocity": 0.10180672600750856,
+      "command": 0.2281217896800093,
+      "active": true
+    },
+    {
+      "timeMs": 1550,
+      "position": 0.26705550364673947,
+      "velocity": 0.0018067260075085509,
+      "command": 0.2281217896800093,
+      "active": true
+    },
+    {
+      "timeMs": 1600,
+      "position": 0.26436731212235126,
+      "velocity": -0.08402253350167734,
+      "command": 0.2281217896800093,
+      "active": true
+    },
+    {
+      "timeMs": 1650,
+      "position": 0.25909283042894715,
+      "velocity": -0.11398005668678267,
+      "command": 0.2281217896800093,
+      "active": true
+    },
+    {
+      "timeMs": 1700,
+      "position": 0.25333263781315596,
+      "velocity": -0.11342791385705955,
+      "command": 0.2281217896800093,
+      "active": true
+    },
+    {
+      "timeMs": 1750,
+      "position": 0.24779887311955115,
+      "velocity": -0.12332974565040299,
+      "command": 0.1656217896800093,
+      "active": true
+    },
+    {
+      "timeMs": 1800,
+      "position": 0.23867615251094507,
+      "velocity": -0.21895307825899496,
+      "command": 0.1656217896800093,
+      "active": true
+    },
+    {
+      "timeMs": 1850,
+      "position": 0.22657158733887883,
+      "velocity": -0.24858532624290547,
+      "command": 0.1656217896800093,
+      "active": true
+    },
+    {
+      "timeMs": 1900,
+      "position": 0.21451450871239056,
+      "velocity": -0.23244939346484159,
+      "command": 0.1656217896800093,
+      "active": true
+    },
+    {
+      "timeMs": 1950,
+      "position": 0.2038610006470614,
+      "velocity": -0.1990244751281749,
+      "command": 0.1656217896800093,
+      "active": true
+    },
+    {
+      "timeMs": 2000,
+      "position": 0.19474447602734063,
+      "velocity": -0.1894689673550875,
+      "command": 0.19474447602734063,
+      "active": false
+    },
+    {
+      "timeMs": 2050,
+      "position": 0.1882461780073544,
+      "velocity": -0.09195393257827353,
+      "command": 0.19474447602734063,
+      "active": false
+    },
+    {
+      "timeMs": 2100,
+      "position": 0.1854375487666262,
+      "velocity": -0.03845623275487841,
+      "command": 0.19474447602734063,
+      "active": false
+    },
+    {
+      "timeMs": 2150,
+      "position": 0.18426294647637978,
+      "velocity": -0.016082855797804198,
+      "command": 0.19474447602734063,
+      "active": false
+    },
+    {
+      "timeMs": 2200,
+      "position": 0.18377171377102833,
+      "velocity": -0.006726042362538794,
+      "command": 0.19474447602734063,
+      "active": false
+    },
+    {
+      "timeMs": 2250,
+      "position": 0.18356627438715292,
+      "velocity": -0.002812911241102034,
+      "command": 0.19474447602734063,
+      "active": false
+    },
+    {
+      "timeMs": 2300,
+      "position": 0.18348035718337694,
+      "velocity": -0.0011763930739400763,
+      "command": 0.19474447602734063,
+      "active": false
+    },
+    {
+      "timeMs": 2350,
+      "position": 0.18344442558270022,
+      "velocity": -0.000491981632478386,
+      "command": 0.19474447602734063,
+      "active": false
+    },
+    {
+      "timeMs": 2400,
+      "position": 0.18342939855818768,
+      "velocity": -0.00020575259414390873,
+      "command": 0.19474447602734063,
+      "active": false
+    },
+    {
+      "timeMs": 2450,
+      "position": 0.1834231140770778,
+      "velocity": -8.604819205076292e-05,
+      "command": 0.19474447602734063,
+      "active": false
+    },
+    {
+      "timeMs": 2500,
+      "position": 0.18342048583202583,
+      "velocity": -3.59863815375578e-05,
+      "command": 0.18342048583202583,
+      "active": true
+    },
+    {
+      "timeMs": 2550,
+      "position": 0.18341941671494996,
+      "velocity": -1.3678413909962428e-05,
+      "command": 0.18342048583202583,
+      "active": true
+    },
+    {
+      "timeMs": 2600,
+      "position": 0.18341909229291242,
+      "velocity": -2.7791743962196715e-06,
+      "command": 0.18342048583202583,
+      "active": true
+    },
+    {
+      "timeMs": 2650,
+      "position": 0.18341911654300364,
+      "velocity": 2.0979651844559925e-06,
+      "command": 0.18342048583202583,
+      "active": true
+    },
+    {
+      "timeMs": 2700,
+      "position": 0.18341928382892053,
+      "velocity": 3.896873621852433e-06,
+      "command": 0.18342048583202583,
+      "active": true
+    },
+    {
+      "timeMs": 2750,
+      "position": 0.18321949184538508,
+      "velocity": -0.01999578706431075,
+      "command": 0.12092048583202583,
+      "active": true
+    },
+    {
+      "timeMs": 2800,
+      "position": 0.17921970249216954,
+      "velocity": -0.11999578706431076,
+      "command": 0.12092048583202583,
+      "active": true
+    },
+    {
+      "timeMs": 2850,
+      "position": 0.17118605228200834,
+      "velocity": -0.17757285373513004,
+      "command": 0.12092048583202583,
+      "active": true
+    },
+    {
+      "timeMs": 2900,
+      "position": 0.1620576374171102,
+      "velocity": -0.181273409372132,
+      "command": 0.12092048583202583,
+      "active": true
+    },
+    {
+      "timeMs": 2950,
+      "position": 0.15351898666204145,
+      "velocity": -0.1620174763996175,
+      "command": 0.12092048583202583,
+      "active": true
+    },
+    {
+      "timeMs": 3000,
+      "position": 0.14595203011403346,
+      "velocity": -0.16085840428497822,
+      "command": 0.05842048583202583,
+      "active": true
+    },
+    {
+      "timeMs": 3050,
+      "position": 0.13504645303573518,
+      "velocity": -0.25029772839729647,
+      "command": 0.05842048583202583,
+      "active": true
+    },
+    {
+      "timeMs": 3100,
+      "position": 0.12173690403191852,
+      "velocity": -0.26858388122405275,
+      "command": 0.05842048583202583,
+      "active": true
+    },
+    {
+      "timeMs": 3150,
+      "position": 0.10890428539930068,
+      "velocity": -0.24540777414611545,
+      "command": 0.05842048583202583,
+      "active": true
+    },
+    {
+      "timeMs": 3200,
+      "position": 0.09774383945831717,
+      "velocity": -0.20755142324792253,
+      "command": 0.05842048583202583,
+      "active": true
+    },
+    {
+      "timeMs": 3250,
+      "position": 0.08828617048881511,
+      "velocity": -0.19563575584495546,
+      "command": -0.004079514167974169,
+      "active": true
+    },
+    {
+      "timeMs": 3300,
+      "position": 0.07577009858333911,
+      "velocity": -0.27808212077468103,
+      "command": -0.004079514167974169,
+      "active": true
+    },
+    {
+      "timeMs": 3350,
+      "position": 0.06138800866573206,
+      "velocity": -0.2864415651967422,
+      "command": -0.004079514167974169,
+      "active": true
+    },
+    {
+      "timeMs": 3400,
+      "position": 0.04785997257135664,
+      "velocity": -0.25706458190713594,
+      "command": -0.004079514167974169,
+      "active": true
+    },
+    {
+      "timeMs": 3450,
+      "position": 0.03624163515985558,
+      "velocity": -0.21527717584143688,
+      "command": -0.004079514167974169,
+      "active": true
+    },
+    {
+      "timeMs": 3500,
+      "position": 0.026473731257403262,
+      "velocity": -0.20125374496109377,
+      "command": -0.06657951416797417,
+      "active": true
+    },
+    {
+      "timeMs": 3550,
+      "position": 0.013706563571195592,
+      "velocity": -0.28225962965775886,
+      "command": -0.06657951416797417,
+      "active": true
+    },
+    {
+      "timeMs": 3600,
+      "position": -0.0008330912388396067,
+      "velocity": -0.2890173902452958,
+      "command": -0.06657951416797417,
+      "active": true
+    },
+    {
+      "timeMs": 3650,
+      "position": -0.014459030371134014,
+      "velocity": -0.2586749532540278,
+      "command": -0.06657951416797417,
+      "active": true
+    },
+    {
+      "timeMs": 3700,
+      "position": -0.02613908383674906,
+      "velocity": -0.2162989712583502,
+      "command": -0.06657951416797417,
+      "active": true
+    },
+    {
+      "timeMs": 3750,
+      "position": -0.03594708325934112,
+      "velocity": -0.20197172998815643,
+      "command": -0.12907951416797417,
+      "active": true
+    },
+    {
+      "timeMs": 3800,
+      "position": -0.0487460435468801,
+      "velocity": -0.28277950015018494,
+      "command": -0.12907951416797417,
+      "active": true
+    },
+    {
+      "timeMs": 3850,
+      "position": -0.06330477587550576,
+      "velocity": -0.2893222684644021,
+      "command": -0.12907951416797417,
+      "active": true
+    },
+    {
+      "timeMs": 3900,
+      "position": -0.07694194302076593,
+      "velocity": -0.25885493028137313,
+      "command": -0.12907951416797417,
+      "active": true
+    },
+    {
+      "timeMs": 3950,
+      "position": -0.08862865317761101,
+      "velocity": -0.21640605834333357,
+      "command": -0.12907951416797417,
+      "active": true
+    },
+    {
+      "timeMs": 4000,
+      "position": -0.09804070202784695,
+      "velocity": -0.16204289016821907,
+      "command": -0.06657951416797417,
+      "active": true
+    },
+    {
+      "timeMs": 4050,
+      "position": -0.10314284653625791,
+      "velocity": -0.06204289016821907,
+      "command": -0.06657951416797417,
+      "active": true
+    },
+    {
+      "timeMs": 4100,
+      "position": -0.10324499104466886,
+      "velocity": 0.03795710983178094,
+      "command": -0.06657951416797417,
+      "active": true
+    },
+    {
+      "timeMs": 4150,
+      "position": -0.09930687403775808,
+      "velocity": 0.0974211843683147,
+      "command": -0.06657951416797417,
+      "active": true
+    },
+    {
+      "timeMs": 4200,
+      "position": -0.09390400397101065,
+      "velocity": 0.1111093858828298,
+      "command": -0.06657951416797417,
+      "active": true
+    },
+    {
+      "timeMs": 4250,
+      "position": -0.08828536454631478,
+      "velocity": 0.12640704404981712,
+      "command": -0.004079514167974169,
+      "active": true
+    },
+    {
+      "timeMs": 4300,
+      "position": -0.079001506375159,
+      "velocity": 0.222757640916309,
+      "command": -0.004079514167974169,
+      "active": true
+    },
+    {
+      "timeMs": 4350,
+      "position": -0.06664075572143653,
+      "velocity": 0.2542588893906931,
+      "command": -0.004079514167974169,
+      "active": true
+    },
+    {
+      "timeMs": 4400,
+      "position": -0.05429160251573931,
+      "velocity": 0.23825347764304042,
+      "command": -0.004079514167974169,
+      "active": true
+    },
+    {
+      "timeMs": 4450,
+      "position": -0.04336453008852059,
+      "velocity": 0.20421704843009253,
+      "command": -0.004079514167974169,
+      "active": true
+    },
+    {
+      "timeMs": 4500,
+      "position": -0.03401182171897961,
+      "velocity": 0.193985457556624,
+      "command": 0.05842048583202583,
+      "active": true
+    },
+    {
+      "timeMs": 4550,
+      "position": -0.021560303332070124,
+      "velocity": 0.27728851718944403,
+      "command": 0.05842048583202583,
+      "active": true
+    },
+    {
+      "timeMs": 4600,
+      "position": -0.007191735706440187,
+      "velocity": 0.28643683947236903,
+      "command": 0.05842048583202583,
+      "active": true
+    },
+    {
+      "timeMs": 4650,
+      "position": 0.006347251316676785,
+      "velocity": 0.2573903166653826,
+      "command": 0.05842048583202583,
+      "active": true
+    },
+    {
+      "timeMs": 4700,
+      "position": 0.01798551788447409,
+      "velocity": 0.2157037306975021,
+      "command": 0.05842048583202583,
+      "active": true
+    },
+    {
+      "timeMs": 4750,
+      "position": 0.027774882014126877,
+      "velocity": 0.20167985173789618,
+      "command": 0.12092048583202583,
+      "active": true
+    },
+    {
+      "timeMs": 4800,
+      "position": 0.040562472746992366,
+      "velocity": 0.28264138349835305,
+      "command": 0.12092048583202583,
+      "active": true
+    },
+    {
+      "timeMs": 4850,
+      "position": 0.05511898298553305,
+      "velocity": 0.28932532316002807,
+      "command": 0.12092048583202583,
+      "active": true
+    },
+    {
+      "timeMs": 4900,
+      "position": 0.06875829241692122,
+      "velocity": 0.2589166739532294,
+      "command": 0.12092048583202583,
+      "active": true
+    },
+    {
+      "timeMs": 4950,
+      "position": 0.08044872423814635,
+      "velocity": 0.21648526053333483,
+      "command": 0.12092048583202583,
+      "active": true
+    },
+    {
+      "timeMs": 5000,
+      "position": 0.09026474060508011,
+      "velocity": 0.2021215490340422,
+      "command": 0.09026474060508011,
+      "active": false
+    },
+    {
+      "timeMs": 5050,
+      "position": 0.09737542357832775,
+      "velocity": 0.10258210118859547,
+      "command": 0.09026474060508011,
+      "active": false
+    },
+    {
+      "timeMs": 5100,
+      "position": 0.10050867825156733,
+      "velocity": 0.04290105979355585,
+      "command": 0.09026474060508011,
+      "active": false
+    },
+    {
+      "timeMs": 5150,
+      "position": 0.10181904277449673,
+      "velocity": 0.017941735547281536,
+      "command": 0.09026474060508011,
+      "active": false
+    },
+    {
+      "timeMs": 5200,
+      "position": 0.1023670528668831,
+      "velocity": 0.0075034480732557385,
+      "command": 0.09026474060508011,
+      "active": false
+    },
+    {
+      "timeMs": 5250,
+      "position": 0.10259623723207481,
+      "velocity": 0.0031380315934138197,
+      "command": 0.09026474060508011,
+      "active": false
+    },
+    {
+      "timeMs": 5300,
+      "position": 0.10269208487060934,
+      "velocity": 0.0013123622879941607,
+      "command": 0.09026474060508011,
+      "active": false
+    },
+    {
+      "timeMs": 5350,
+      "position": 0.10273216949769533,
+      "velocity": 0.0005488455815945461,
+      "command": 0.09026474060508011,
+      "active": false
+    },
+    {
+      "timeMs": 5400,
+      "position": 0.10274893336744934,
+      "velocity": 0.0002295337767563129,
+      "command": 0.09026474060508011,
+      "active": false
+    },
+    {
+      "timeMs": 5450,
+      "position": 0.10275594421798129,
+      "velocity": 9.599376662366558e-05,
+      "command": 0.09026474060508011,
+      "active": false
+    },
+    {
+      "timeMs": 5500,
+      "position": 0.10275887623940014,
+      "velocity": 4.0145739597975477e-05,
+      "command": 0.10275887623940014,
+      "active": true
+    },
+    {
+      "timeMs": 5550,
+      "position": 0.10276006892657498,
+      "velocity": 1.525938478610474e-05,
+      "command": 0.10275887623940014,
+      "active": true
+    },
+    {
+      "timeMs": 5600,
+      "position": 0.10276043084578113,
+      "velocity": 3.1003953950954266e-06,
+      "command": 0.10275887623940014,
+      "active": true
+    },
+    {
+      "timeMs": 5650,
+      "position": 0.1027604037928293,
+      "velocity": -2.34045103691618e-06,
+      "command": 0.10275887623940014,
+      "active": true
+    },
+    {
+      "timeMs": 5700,
+      "position": 0.102760217171764,
+      "velocity": -4.347279915060914e-06,
+      "command": 0.10275887623940014,
+      "active": true
+    },
+    {
+      "timeMs": 5750,
+      "position": 0.10295998511245542,
+      "velocity": 0.019995300127106378,
+      "command": 0.13619714992186438,
+      "active": true
+    },
+    {
+      "timeMs": 5800,
+      "position": 0.10610169174920422,
+      "velocity": 0.08283379099077023,
+      "command": 0.13619714992186438,
+      "active": true
+    },
+    {
+      "timeMs": 5850,
+      "position": 0.1108694475481406,
+      "velocity": 0.09960731231107214,
+      "command": 0.13619714992186438,
+      "active": true
+    },
+    {
+      "timeMs": 5900,
+      "position": 0.1157700727454077,
+      "velocity": 0.09519092720661392,
+      "command": 0.13619714992186438,
+      "active": true
+    },
+    {
+      "timeMs": 5950,
+      "position": 0.12016385319008858,
+      "velocity": 0.08241950946796014,
+      "command": 0.13619714992186438,
+      "active": true
+    },
+    {
+      "timeMs": 6000,
+      "position": 0.12367092839182335,
+      "velocity": 0.050570447325671466,
+      "command": 0.07369714992186438,
+      "active": true
+    },
+    {
+      "timeMs": 6050,
+      "position": 0.12319945075810693,
+      "velocity": -0.04942955267432854,
+      "command": 0.07369714992186438,
+      "active": true
+    },
+    {
+      "timeMs": 6100,
+      "position": 0.11807393575993662,
+      "velocity": -0.1290591467842405,
+      "command": 0.07369714992186438,
+      "active": true
+    },
+    {
+      "timeMs": 6150,
+      "position": 0.11083819339170432,
+      "velocity": -0.1495038842520298,
+      "command": 0.07369714992186438,
+      "active": true
+    },
+    {
+      "timeMs": 6200,
+      "position": 0.10354968776009524,
+      "velocity": -0.14089654623544784,
+      "command": 0.07369714992186438,
+      "active": true
+    },
+    {
+      "timeMs": 6250,
+      "position": 0.09683220121267201,
+      "velocity": -0.14546391504586612,
+      "command": 0.01119714992186438,
+      "active": true
+    },
+    {
+      "timeMs": 6300,
+      "position": 0.08665158601539653,
+      "velocity": -0.23783456029418493,
+      "command": 0.01119714992186438,
+      "active": true
+    },
+    {
+      "timeMs": 6350,
+      "position": 0.07380210369468626,
+      "velocity": -0.26119482930262944,
+      "command": 0.01119714992186438,
+      "active": true
+    },
+    {
+      "timeMs": 6400,
+      "position": 0.061243540507095504,
+      "velocity": -0.2409887707975692,
+      "command": 0.01119714992186438,
+      "active": true
+    },
+    {
+      "timeMs": 6450,
+      "position": 0.05024790636021598,
+      "velocity": -0.20488166945158567,
+      "command": 0.01119714992186438,
+      "active": true
+    },
+    {
+      "timeMs": 6500,
+      "position": 0.04089211827883914,
+      "velocity": -0.19383690384046276,
+      "command": -0.05130285007813562,
+      "active": true
+    },
+    {
+      "timeMs": 6550,
+      "position": 0.028454751455636126,
+      "velocity": -0.27682430177260137,
+      "command": -0.05130285007813562,
+      "active": true
+    },
+    {
+      "timeMs": 6600,
+      "position": 0.014117082768664635,
+      "velocity": -0.2857551976538087,
+      "command": -0.05130285007813562,
+      "active": true
+    },
+    {
+      "timeMs": 6650,
+      "position": 0.0006130857512856719,
+      "velocity": -0.25669597204946865,
+      "command": -0.05130285007813562,
+      "active": true
+    },
+    {
+      "timeMs": 6700,
+      "position": -0.010992495449059872,
+      "velocity": -0.21508375895645634,
+      "command": -0.05130285007813562,
+      "active": true
+    },
+    {
+      "timeMs": 6750,
+      "position": -0.020753678763933883,
+      "velocity": -0.20114109788576062,
+      "command": -0.11380285007813562,
+      "active": true
+    },
+    {
+      "timeMs": 6800,
+      "position": -0.03351614459553921,
+      "velocity": -0.282191542775628,
+      "command": -0.11380285007813562,
+      "active": true
+    },
+    {
+      "timeMs": 6850,
+      "position": -0.0480538247340756,
+      "velocity": -0.28899293136082266,
+      "command": -0.11380285007813562,
+      "active": true
+    },
+    {
+      "timeMs": 6900,
+      "position": -0.061679236697105205,
+      "velocity": -0.2586715471035011,
+      "command": -0.11380285007813562,
+      "active": true
+    },
+    {
+      "timeMs": 6950,
+      "position": -0.07335942885590409,
+      "velocity": -0.2163047605139343,
+      "command": -0.11380285007813562,
+      "active": true
+    },
+    {
+      "timeMs": 7000,
+      "position": -0.08316782619897628,
+      "velocity": -0.2019803677345502,
+      "command": -0.17630285007813562,
+      "active": true
+    },
+    {
+      "timeMs": 7050,
+      "position": -0.09596722519312816,
+      "velocity": -0.2827884021837179,
+      "command": -0.17630285007813562,
+      "active": true
+    },
+    {
+      "timeMs": 7100,
+      "position": -0.11052638711853978,
+      "velocity": -0.2893305283829972,
+      "command": -0.17630285007813562,
+      "active": true
+    },
+    {
+      "timeMs": 7150,
+      "position": -0.12416393185493871,
+      "velocity": -0.25886197372363945,
+      "command": -0.17630285007813562,
+      "active": true
+    },
+    {
+      "timeMs": 7200,
+      "position": -0.13585095451990364,
+      "velocity": -0.21641178471141587,
+      "command": -0.17630285007813562,
+      "active": true
+    },
+    {
+      "timeMs": 7250,
+      "position": -0.14566325507540578,
+      "velocity": -0.20204763655585598,
+      "command": -0.23880285007813562,
+      "active": true
+    },
+    {
+      "timeMs": 7300,
+      "position": -0.1584655351398065,
+      "velocity": -0.28283251260761455,
+      "command": -0.23880285007813562,
+      "active": true
+    },
+    {
+      "timeMs": 7350,
+      "position": -0.17302613708350578,
+      "velocity": -0.28935112024299103,
+      "command": -0.23880285007813562,
+      "active": true
+    },
+    {
+      "timeMs": 7400,
+      "position": -0.186664312747616,
+      "velocity": -0.2588703666478456,
+      "command": -0.23880285007813562,
+      "active": true
+    },
+    {
+      "timeMs": 7450,
+      "position": -0.1983515555615528,
+      "velocity": -0.2164141126946239,
+      "command": -0.23880285007813562,
+      "active": true
+    },
+    {
+      "timeMs": 7500,
+      "position": -0.20781326866013128,
+      "velocity": -0.16698610611304937,
+      "command": -0.2281217896800096,
+      "active": true
+    },
+    {
+      "timeMs": 7550,
+      "position": -0.2143309199519728,
+      "velocity": -0.10944048123748171,
+      "command": -0.2281217896800096,
+      "active": true
+    },
+    {
+      "timeMs": 7600,
+      "position": -0.21863936640987897,
+      "velocity": -0.07281445392277619,
+      "command": -0.2281217896800096,
+      "active": true
+    },
+    {
+      "timeMs": 7650,
+      "position": -0.22152944513617906,
+      "velocity": -0.0491405789035415,
+      "command": -0.2281217896800096,
+      "active": true
+    },
+    {
+      "timeMs": 7700,
+      "position": -0.2234946703294153,
+      "velocity": -0.03360034261725028,
+      "command": -0.2281217896800096,
+      "active": true
+    },
+    {
+      "timeMs": 7750,
+      "position": -0.22466513384288853,
+      "velocity": -0.005001041496216361,
+      "command": -0.1656217896800096,
+      "active": true
+    },
+    {
+      "timeMs": 7800,
+      "position": -0.22191518591769935,
+      "velocity": 0.09499895850378365,
+      "command": -0.1656217896800096,
+      "active": true
+    },
+    {
+      "timeMs": 7850,
+      "position": -0.21480719575616453,
+      "velocity": 0.16315667267553605,
+      "command": -0.1656217896800096,
+      "active": true
+    },
+    {
+      "timeMs": 7900,
+      "position": -0.2061898658358503,
+      "velocity": 0.17334883887931316,
+      "command": -0.1656217896800096,
+      "active": true
+    },
+    {
+      "timeMs": 7950,
+      "position": -0.1979302659290831,
+      "velocity": 0.1577172254822025,
+      "command": -0.1656217896800096,
+      "active": true
+    },
+    {
+      "timeMs": 8000,
+      "position": -0.19051641829194113,
+      "velocity": 0.15825516725738345,
+      "command": -0.19051641829194113,
+      "active": false
+    },
+    {
+      "timeMs": 8050,
+      "position": -0.18542265997512214,
+      "velocity": 0.07009031065412019,
+      "command": -0.19051641829194113,
+      "active": false
+    },
+    {
+      "timeMs": 8100,
+      "position": -0.18328183042628998,
+      "velocity": 0.029312604962079013,
+      "command": -0.19051641829194113,
+      "active": false
+    },
+    {
+      "timeMs": 8150,
+      "position": -0.18238650994232558,
+      "velocity": 0.012258881457994943,
+      "command": -0.19051641829194113,
+      "active": false
+    },
+    {
+      "timeMs": 8200,
+      "position": -0.1820120762236563,
+      "velocity": 0.005126810626199408,
+      "command": -0.19051641829194113,
+      "active": false
+    },
+    {
+      "timeMs": 8250,
+      "position": -0.18185548357087158,
+      "velocity": 0.0021440934302998146,
+      "command": -0.19051641829194113,
+      "active": false
+    },
+    {
+      "timeMs": 8300,
+      "position": -0.1817899946533849,
+      "velocity": 0.0008966854781727646,
+      "command": -0.19051641829194113,
+      "active": false
+    },
+    {
+      "timeMs": 8350,
+      "position": -0.18176260640599712,
+      "velocity": 0.00037500457554850465,
+      "command": -0.19051641829194113,
+      "active": false
+    },
+    {
+      "timeMs": 8400,
+      "position": -0.18175115231385816,
+      "velocity": 0.0001568313919490277,
+      "command": -0.19051641829194113,
+      "active": false
+    },
+    {
+      "timeMs": 8450,
+      "position": -0.18174636207573627,
+      "velocity": 6.558876105629857e-05,
+      "command": -0.19051641829194113,
+      "active": false
+    },
+    {
+      "timeMs": 8500,
+      "position": -0.18174435874094677,
+      "velocity": 2.74300031609641e-05,
+      "command": -0.18174435874094677,
+      "active": true
+    },
+    {
+      "timeMs": 8550,
+      "position": -0.1817435438247613,
+      "velocity": 1.0426136798293733e-05,
+      "command": -0.18174435874094677,
+      "active": true
+    },
+    {
+      "timeMs": 8600,
+      "position": -0.181743296539618,
+      "velocity": 2.1183780978332792e-06,
+      "command": -0.18174435874094677,
+      "active": true
+    },
+    {
+      "timeMs": 8650,
+      "position": -0.1817433150238348,
+      "velocity": -1.59913804022677e-06,
+      "command": -0.18174435874094677,
+      "active": true
+    },
+    {
+      "timeMs": 8700,
+      "position": -0.18174344253466065,
+      "velocity": -2.9703251953683147e-06,
+      "command": -0.18174435874094677,
+      "active": true
+    },
+    {
+      "timeMs": 8750,
+      "position": -0.18154360109164908,
+      "velocity": 0.019996788761905457,
+      "command": -0.11924435874094677,
+      "active": true
+    },
+    {
+      "timeMs": 8800,
+      "position": -0.1775437616535538,
+      "velocity": 0.11999678876190548,
+      "command": -0.11924435874094677,
+      "active": true
+    },
+    {
+      "timeMs": 8850,
+      "position": -0.1695100674075545,
+      "velocity": 0.1775736560696283,
+      "command": -0.11924435874094677,
+      "active": true
+    },
+    {
+      "timeMs": 8900,
+      "position": -0.16038161780508212,
+      "velocity": 0.18127403625198193,
+      "command": -0.11924435874094677,
+      "active": true
+    },
+    {
+      "timeMs": 8950,
+      "position": -0.1518429401876856,
+      "velocity": 0.1620179579593865,
+      "command": -0.11924435874094677,
+      "active": true
+    },
+    {
+      "timeMs": 9000,
+      "position": -0.14427596294344344,
+      "velocity": 0.16085879082873417,
+      "command": -0.05674435874094677,
+      "active": true
+    },
+    {
+      "timeMs": 9050,
+      "position": -0.13337036743883193,
+      "velocity": 0.2502980557731257,
+      "command": -0.05674435874094677,
+      "active": true
+    },
+    {
+      "timeMs": 9100,
+      "position": -0.12006080552845085,
+      "velocity": 0.2685840995831574,
+      "command": -0.05674435874094677,
+      "active": true
+    },
+    {
+      "timeMs": 9150,
+      "position": -0.10722817821734268,
+      "velocity": 0.2454079218534946,
+      "command": -0.05674435874094677,
+      "active": true
+    },
+    {
+      "timeMs": 9200,
+      "position": -0.09606772636207281,
+      "velocity": 0.20755152445650787,
+      "command": -0.05674435874094677,
+      "active": true
+    },
+    {
+      "timeMs": 9250,
+      "position": -0.08661005326032707,
+      "velocity": 0.19563583126454037,
+      "command": 0.005755641259053229,
+      "active": true
+    },
+    {
+      "timeMs": 9300,
+      "position": -0.07409397796230222,
+      "velocity": 0.27808217787696604,
+      "command": 0.005755641259053229,
+      "active": true
+    },
+    {
+      "timeMs": 9350,
+      "position": -0.05971188585231079,
+      "velocity": 0.2864416015464911,
+      "command": 0.005755641259053229,
+      "active": true
+    },
+    {
+      "timeMs": 9400,
+      "position": -0.04618384835013557,
+      "velocity": 0.2570646054063063,
+      "command": 0.005755641259053229,
+      "active": true
+    },
+    {
+      "timeMs": 9450,
+      "position": -0.03456551002052121,
+      "velocity": 0.21527719126949757,
+      "command": 0.005755641259053229,
+      "active": true
+    },
+    {
+      "timeMs": 9500,
+      "position": -0.024797605501551058,
+      "velocity": 0.2012537560994499,
+      "command": 0.06825564125905323,
+      "active": true
+    },
+    {
+      "timeMs": 9550,
+      "position": -0.012030437318472966,
+      "velocity": 0.2822596378950748,
+      "command": 0.06825564125905323,
+      "active": true
+    },
+    {
+      "timeMs": 9600,
+      "position": 0.002509217800545121,
+      "velocity": 0.28901739527394904,
+      "command": 0.06825564125905323,
+      "active": true
+    },
+    {
+      "timeMs": 9650,
+      "position": 0.016135157122812563,
+      "velocity": 0.2586749563636746,
+      "command": 0.06825564125905323,
+      "active": true
+    },
+    {
+      "timeMs": 9700,
+      "position": 0.027815210706827347,
+      "velocity": 0.21629897320857205,
+      "command": 0.06825564125905323,
+      "active": true
+    },
+    {
+      "timeMs": 9750,
+      "position": 0.0376232102054553,
+      "velocity": 0.2019717313453692,
+      "command": 0.13075564125905323,
+      "active": true
+    },
+    {
+      "timeMs": 9800,
+      "position": 0.05042217055293029,
+      "velocity": 0.2827795011252815,
+      "command": 0.13075564125905323,
+      "active": true
+    },
+    {
+      "timeMs": 9850,
+      "position": 0.06498090291704259,
+      "velocity": 0.28932226902750213,
+      "command": 0.13075564125905323,
+      "active": true
+    },
+    {
+      "timeMs": 9900,
+      "position": 0.07861807008282932,
+      "velocity": 0.258854930607548,
+      "command": 0.13075564125905323,
+      "active": true
+    },
+    {
+      "timeMs": 9950,
+      "position": 0.0903047802515888,
+      "velocity": 0.21640605853299055,
+      "command": 0.13075564125905323,
+      "active": true
+    },
+    {
+      "timeMs": 10000,
+      "position": 0.0997168291088953,
+      "velocity": 0.16204289029153934,
+      "command": 0.06825564125905323,
+      "active": true
+    }
+  ],
+  "transport": "none exists in this harness; no network, device, serial, Bluetooth or injected actuator output",
+  "limitations": [
+    "Authored inertial model has no calibrated mass/friction/firmware latency or stop distance.",
+    "Already-arbitrated scripted intent does not evaluate upstream RNN versus SNN quality.",
+    "No physical robot readiness or biological motor mapping is established."
+  ]
+}

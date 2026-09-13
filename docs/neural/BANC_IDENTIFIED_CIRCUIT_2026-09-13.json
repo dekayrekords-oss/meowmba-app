@@ -1,0 +1,147 @@
+{
+  "scope": "genuine BANC v888 v2 individual-neuron anatomical counts induced on 76 identified Figure3h neurons; not fitted physiology",
+  "dataverseDataset": "doi:10.7910/DVN/7WTH1N",
+  "dataverseRelease": "3.0",
+  "dataFileId": 13992792,
+  "license": "CC-BY-4.0",
+  "licenseEvidence": "https://dataverse.harvard.edu/api/datasets/:persistentId/?persistentId=doi:10.7910/DVN/7WTH1N",
+  "sourceBytes": 305250378,
+  "sourceMd5": "394406f8a9bdf093c895f95aff4f6c49",
+  "sourceSha256": "363fdef3813b72a5e45a42f17034cd5a544b654c838929cecf6e1ce5f60625cb",
+  "rosterSourceRevision": "e31a2e26b9937dca72e5ca1c1960df6454d76114",
+  "rosterNeurons": 76,
+  "connectedRosterNeurons": 76,
+  "directedNeuronPairs": 515,
+  "sumSynapticCounts": 3316,
+  "pairsCountAtLeast5": 164,
+  "groupCountSummary": [
+    {
+      "preGroup": "ANXXX139",
+      "postGroup": "ANXXX139",
+      "count": 222
+    },
+    {
+      "preGroup": "ANXXX139",
+      "postGroup": "DNg27",
+      "count": 31
+    },
+    {
+      "preGroup": "ANXXX139",
+      "postGroup": "ISN",
+      "count": 6
+    },
+    {
+      "preGroup": "ANXXX139",
+      "postGroup": "l_NSC_CRZ",
+      "count": 215
+    },
+    {
+      "preGroup": "ANXXX139",
+      "postGroup": "leg_nociceptor",
+      "count": 17
+    },
+    {
+      "preGroup": "ANXXX139",
+      "postGroup": "thorax_nociceptor",
+      "count": 1
+    },
+    {
+      "preGroup": "DNg27",
+      "postGroup": "ANXXX139",
+      "count": 61
+    },
+    {
+      "preGroup": "DNg27",
+      "postGroup": "DNg27",
+      "count": 135
+    },
+    {
+      "preGroup": "DNg27",
+      "postGroup": "l_NSC_CRZ",
+      "count": 104
+    },
+    {
+      "preGroup": "DNg27",
+      "postGroup": "wing_power_motor_neuron",
+      "count": 265
+    },
+    {
+      "preGroup": "ISN",
+      "postGroup": "ANXXX139",
+      "count": 17
+    },
+    {
+      "preGroup": "ISN",
+      "postGroup": "DNg27",
+      "count": 116
+    },
+    {
+      "preGroup": "ISN",
+      "postGroup": "ISN",
+      "count": 150
+    },
+    {
+      "preGroup": "ISN",
+      "postGroup": "l_NSC_CRZ",
+      "count": 4
+    },
+    {
+      "preGroup": "l_NSC_CRZ",
+      "postGroup": "DNg27",
+      "count": 33
+    },
+    {
+      "preGroup": "l_NSC_CRZ",
+      "postGroup": "l_NSC_CRZ",
+      "count": 28
+    },
+    {
+      "preGroup": "leg_nociceptor",
+      "postGroup": "ANXXX139",
+      "count": 58
+    },
+    {
+      "preGroup": "leg_nociceptor",
+      "postGroup": "l_NSC_CRZ",
+      "count": 25
+    },
+    {
+      "preGroup": "leg_nociceptor",
+      "postGroup": "leg_nociceptor",
+      "count": 733
+    },
+    {
+      "preGroup": "leg_nociceptor",
+      "postGroup": "thorax_nociceptor",
+      "count": 2
+    },
+    {
+      "preGroup": "thorax_nociceptor",
+      "postGroup": "ANXXX139",
+      "count": 9
+    },
+    {
+      "preGroup": "thorax_nociceptor",
+      "postGroup": "leg_nociceptor",
+      "count": 2
+    },
+    {
+      "preGroup": "thorax_nociceptor",
+      "postGroup": "thorax_nociceptor",
+      "count": 21
+    },
+    {
+      "preGroup": "wing_power_motor_neuron",
+      "postGroup": "wing_power_motor_neuron",
+      "count": 1061
+    }
+  ],
+  "subsetSha256": "2f2747c9ac506bf67a0239262833dda008d72d6b6d37bba2adb9ce75e93a1862",
+  "wallSeconds": 0.6225268090202007,
+  "limitations": [
+    "Induced subset omits all connections to neurons outside roster.",
+    "Anatomical counts and target-input fractions are not conductances or delays.",
+    "No claim of reconstructing fly brain physiology or flight.",
+    "Published group vignette and full edge export can use different display thresholds; do not silently equate them."
+  ]
+}

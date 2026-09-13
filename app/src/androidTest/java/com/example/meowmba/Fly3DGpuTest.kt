@@ -87,6 +87,25 @@ class Fly3DGpuTest {
         }
     }
 
+    @Test fun antialiasedSilhouetteKeepsPremultipliedAlphaAndPixelBudget() {
+        // One viewport can supersample; the other must obey the high-DPI allocation cap.
+        for((w,h) in listOf(360 to 800,1100 to 1400))withGpu(w,h) { gpu ->
+            val raw=gpu.render("edge-coverage-$w-$h",Fly3DFrame(stageMode=true,
+                timeSeconds=2f,flight=.5f,yaw=.47f,roll=.11f))
+            assertTrue("offscreen budget",gpu.renderer.lastRenderPixels in 1..1_200_000)
+            if(w==360) assertTrue("unused budget improves real geometric coverage",gpu.renderer.lastRenderPixels>w*h)
+            var partial=0
+            for(i in raw.indices step 4) {
+                val alpha=raw[i+3].toInt()and 255
+                if(alpha in 2..253)partial++
+                // Filtering transparent pixels must never introduce a white/dark unassociated fringe.
+                for(channel in 0..2) if((raw[i+channel].toInt()and 255)>alpha+2)
+                    fail("non-premultiplied channel at $i")
+            }
+            assertTrue("real fractional silhouette coverage",partial>50)
+        }
+    }
+
     @Test fun allTenRoomsRemainDistinctOpaqueAndWithinDrawBudget()=withGpu { gpu ->
         val hashes=mutableSetOf<Int>()
         for(id in listOf("kitchen","library","greenhouse","workshop","pond","orchard","cafe","observatory","beach","bedroom")) {
@@ -94,6 +113,7 @@ class Fly3DGpuTest {
             assertEquals(255,raw[3].toInt()and 255)
             assertTrue("distinct room $id",hashes.add(raw.contentHashCode()))
             assertTrue("bounded draw count for $id: ${gpu.renderer.lastDrawCalls}",gpu.renderer.lastDrawCalls<500)
+            assertTrue("render pixel budget for $id",gpu.renderer.lastRenderPixels<=1_200_000)
             assertTrue("bounded triangles for $id: ${gpu.renderer.lastTriangles}",gpu.renderer.lastTriangles<500_000)
         }
         gpu.render("game-scale-small",Fly3DFrame(y=1.35f,avatarScale=.5f,handX=.42f,handY=1.15f,handZ=.2f))

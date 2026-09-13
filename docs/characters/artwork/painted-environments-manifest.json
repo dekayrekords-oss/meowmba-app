@@ -1,0 +1,102 @@
+[
+  {
+    "id": "kitchen",
+    "sourcePath": "/Users/bobrossjr/.codex/generated_images/01a0979c-e527-70a2-8488-49fd078dc68d/exec-8622be76-7a31-4c64-a9f7-8be490f2bfd8.png",
+    "prompt": "Create a finished premium illustrated game environment background, portrait 2:3 aspect ratio at 1024x1536 or higher. ONE complete scene: a sunlit countryside kitchen, sage-green cabinetry with carved details, copper utensils, ceramic jars, a beautiful leaded window looking onto a garden, warm cream plaster, morning beams. Original art direction: feature-animation environment painting, beautifully controlled cinematic color and soft global illumination, rich believable materials, intricate craftsmanship and atmospheric depth, tasteful brush texture, crisp shape design, exceptional professional polish. A 3D cartoon companion will be composited separately: NO people, NO animals, NO fly, NO face or eyes, NO text, logos, watermark, frames or grid. Keep the central middle region calm and relatively open so the character is readable; put most detailed furnishing around sides and upper background. IMPORTANT compositing geometry: one empty foreground wooden tabletop or stone ledge stretches all the way across the image. Its REAR TOP EDGE is an exactly horizontal line at 78 percent of image height measured from top. The entire bottom22 percent shows the broad clean surface of this foreground ledge continuing to bottom edge; no front legs, no front vertical face. No books, cups, food or toys on this foreground surface since these are separate interactive objects. Environment beyond this ledge visible in upper78 percent. Perspective coherent and eye level with slight downward view of the ledge. Rich high-resolution illustration, not vector clipart, not flat simple geometric icons.",
+    "sourceTableAnchor": 0.6888020833333334,
+    "sha256": "f7c9fef71ea3eb0f30e1bb9841806b5c195e41855894a451a4804a303423c7b2",
+    "width": 1024,
+    "height": 1536,
+    "assetPath": "app/src/main/assets/backgrounds/painted/kitchen.png"
+  },
+  {
+    "id": "library",
+    "sourcePath": "/Users/bobrossjr/.codex/generated_images/01a0979c-e527-70a2-8488-49fd078dc68d/exec-d467b021-b4cf-4a77-93af-1462b54edd84.png",
+    "prompt": "Create a finished premium illustrated game environment background, portrait 2:3 aspect ratio at 1024x1536 or higher. ONE complete scene: an intimate candlelit library, tall walnut shelves filled with richly bound books, brass reading lamps, a vaulted window at blue hour, cozy amber pools of light and burgundy accents. Original art direction: feature-animation environment painting, beautifully controlled cinematic color and soft global illumination, rich believable materials, intricate craftsmanship and atmospheric depth, tasteful brush texture, crisp shape design, exceptional professional polish. A 3D cartoon companion will be composited separately: NO people, NO animals, NO fly, NO face or eyes, NO text, logos, watermark, frames or grid. Keep the central middle region calm and relatively open so the character is readable; put most detailed furnishing around sides and upper background. IMPORTANT compositing geometry: one empty foreground wooden tabletop or stone ledge stretches all the way across the image. Its REAR TOP EDGE is an exactly horizontal line at 78 percent of image height measured from top. The entire bottom22 percent shows the broad clean surface of this foreground ledge continuing to bottom edge; no front legs, no front vertical face. No books, cups, food or toys on this foreground surface since these are separate interactive objects. Environment beyond this ledge visible in upper78 percent. Perspective coherent and eye level with slight downward view of the ledge. Rich high-resolution illustration, not vector clipart, not flat simple geometric icons.",
+    "sourceTableAnchor": 0.6888020833333334,
+    "sha256": "3908d3ad1c3a03d4130d4ca5ba209e3595538671f92d53736012f4fb4e8e1fa5",
+    "width": 1024,
+    "height": 1536,
+    "assetPath": "app/src/main/assets/backgrounds/painted/library.png"
+  },
+  {
+    "id": "greenhouse",
+    "sourcePath": "/Users/bobrossjr/.codex/generated_images/01a0979c-e527-70a2-8488-49fd078dc68d/exec-9f28e7b7-cd91-493e-9ed8-42c0bea08627.png",
+    "prompt": "Create ONE complete premium illustrated game environment background, portrait 2:3 ratio,1024x1536 or higher: an ornate glass greenhouse in late morning, slender dark-green ironwork, layered fern leaves and orchids around the edges, sunbeams filtered through foliage, dewy glass. Feature-film environment art with cinematic lighting, sophisticated depth, beautifully realistic handcrafted materials, layered environmental detail, rich but harmonious colors, subtle painterly finish and crisp crafted forms. This is final usable game artwork, not a mockup. No people, animals, fly, face, text, labels, logos or watermark. Calm relatively open center to read a separately composited character, complex furnishings/foliage framing sides and upper background. COMPOSITING: a single EMPTY foreground wooden tabletop (or pale stone ledge for pond) extends across the full width; its straight horizontal rear top edge at roughly69 percent of image height. The bottom31 percent shows just its broad clean empty surface continuing to bottom edge, without a front vertical face or legs. Nothing rests on this foreground surface: the game will place its own moving objects. Everything else belongs beyond that ledge in the upper69 percent. Frontal slight downward camera angle. No UI, border or panels. Exceptional detailed high-resolution professional original environment illustration, believable spatial construction, controlled soft global illumination.",
+    "sourceTableAnchor": 0.6471354166666666,
+    "sha256": "c53d71c1182e7753aa2c2f35c8fe417e1ebc6f9e454ed54aae0f850544c86794",
+    "width": 1024,
+    "height": 1536,
+    "assetPath": "app/src/main/assets/backgrounds/painted/greenhouse.png"
+  },
+  {
+    "id": "workshop",
+    "sourcePath": "/Users/bobrossjr/.codex/generated_images/01a0979c-e527-70a2-8488-49fd078dc68d/exec-2e6da761-535b-4e52-bec0-898cbeaf5e85.png",
+    "prompt": "Create ONE complete premium illustrated game environment background, portrait 2:3 ratio,1024x1536 or higher: a whimsical clockmaker's workshop, aged brass clocks and fine gears, miniature mechanical curiosities on shelves, hand tools, rich teal-and-honey palette with bright skylight. Feature-film environment art with cinematic lighting, sophisticated depth, beautifully realistic handcrafted materials, layered environmental detail, rich but harmonious colors, subtle painterly finish and crisp crafted forms. This is final usable game artwork, not a mockup. No people, animals, fly, face, text, labels, logos or watermark. Calm relatively open center to read a separately composited character, complex furnishings/foliage framing sides and upper background. COMPOSITING: a single EMPTY foreground wooden tabletop (or pale stone ledge for pond) extends across the full width; its straight horizontal rear top edge at roughly69 percent of image height. The bottom31 percent shows just its broad clean empty surface continuing to bottom edge, without a front vertical face or legs. Nothing rests on this foreground surface: the game will place its own moving objects. Everything else belongs beyond that ledge in the upper69 percent. Frontal slight downward camera angle. No UI, border or panels. Exceptional detailed high-resolution professional original environment illustration, believable spatial construction, controlled soft global illumination.",
+    "sourceTableAnchor": 0.5911458333333334,
+    "sha256": "187a6d1747bdc9450ee492f60af8c55a0f24884a01ca5b7b6bff8acf652ff156",
+    "width": 1024,
+    "height": 1536,
+    "assetPath": "app/src/main/assets/backgrounds/painted/workshop.png"
+  },
+  {
+    "id": "pond",
+    "sourcePath": "/Users/bobrossjr/.codex/generated_images/01a0979c-e527-70a2-8488-49fd078dc68d/exec-bc7171d1-24d7-486a-aace-c9b8a895b812.png",
+    "prompt": "Create ONE complete premium illustrated game environment background, portrait 2:3 ratio,1024x1536 or higher: a peaceful lotus pond garden, pink water lilies, moss-covered stones, arching willow branches at the sides, a small distant wooden bridge, clear turquoise water and afternoon light. Feature-film environment art with cinematic lighting, sophisticated depth, beautifully realistic handcrafted materials, layered environmental detail, rich but harmonious colors, subtle painterly finish and crisp crafted forms. This is final usable game artwork, not a mockup. No people, animals, fly, face, text, labels, logos or watermark. Calm relatively open center to read a separately composited character, complex furnishings/foliage framing sides and upper background. COMPOSITING: a single EMPTY foreground wooden tabletop (or pale stone ledge for pond) extends across the full width; its straight horizontal rear top edge at roughly69 percent of image height. The bottom31 percent shows just its broad clean empty surface continuing to bottom edge, without a front vertical face or legs. Nothing rests on this foreground surface: the game will place its own moving objects. Everything else belongs beyond that ledge in the upper69 percent. Frontal slight downward camera angle. No UI, border or panels. Exceptional detailed high-resolution professional original environment illustration, believable spatial construction, controlled soft global illumination.",
+    "sourceTableAnchor": 0.6341145833333334,
+    "sha256": "dde7f030658374e13a32a81a3dd60151dcb049b0fb435d733f4577053a9b4aeb",
+    "width": 1024,
+    "height": 1536,
+    "assetPath": "app/src/main/assets/backgrounds/painted/pond.png"
+  },
+  {
+    "id": "orchard",
+    "sourcePath": "/Users/bobrossjr/.codex/generated_images/01a0979c-e527-70a2-8488-49fd078dc68d/exec-1ec299cf-59bf-4ee4-8f9b-70e2998412e8.png",
+    "prompt": "Create ONE complete premium illustrated game environment background, portrait 2:3 ratio,1024x1536 or higher: a ripe peach orchard in late summer, softly detailed peach trees curving around the edges, shafts of golden sunlight, distant rows of trees, pale blue sky and textured earth. Feature-film environment art with cinematic lighting, sophisticated depth, beautifully realistic handcrafted materials, layered environmental detail, rich but harmonious colors, subtle painterly finish and crisp crafted forms. This is final usable game artwork, not a mockup. No people, animals, fly, face, text, labels, logos or watermark. Calm relatively open center to read a separately composited character, complex furnishings/foliage framing sides and upper background. COMPOSITING: a single EMPTY foreground wooden tabletop (or pale stone ledge for pond) extends across the full width; its straight horizontal rear top edge at roughly69 percent of image height. The bottom31 percent shows just its broad clean empty surface continuing to bottom edge, without a front vertical face or legs. Nothing rests on this foreground surface: the game will place its own moving objects. Everything else belongs beyond that ledge in the upper69 percent. Frontal slight downward camera angle. No UI, border or panels. Exceptional detailed high-resolution professional original environment illustration, believable spatial construction, controlled soft global illumination.",
+    "sourceTableAnchor": 0.6126302083333334,
+    "sha256": "8245ad954c9f6e3df9a8d03e311728ba13e75b787b9e4d52fa60b4566ccc4d31",
+    "width": 1024,
+    "height": 1536,
+    "assetPath": "app/src/main/assets/backgrounds/painted/orchard.png"
+  },
+  {
+    "id": "cafe",
+    "sourcePath": "/Users/bobrossjr/.codex/generated_images/01a0979c-e527-70a2-8488-49fd078dc68d/exec-0f1b19a9-d870-4c3c-bac6-92f069869d54.png",
+    "prompt": "Create ONE complete premium illustrated game environment background, portrait 2:3 ratio,1024x1536 or higher: an elegant cozy cafe during soft rain, a tall rain-streaked window, dark blue-green woodwork, warm pendant lights, small coffee station and pastries on distant shelves, cinematic amber-blue light. Feature-film environment art with cinematic lighting, sophisticated depth, beautifully realistic handcrafted materials, layered environmental detail, rich but harmonious colors, subtle painterly finish and crisp crafted forms. This is final usable game artwork, not a mockup. No people, animals, fly, face, text, labels, logos or watermark. Calm relatively open center to read a separately composited character, complex furnishings/foliage framing sides and upper background. COMPOSITING: a single EMPTY foreground wooden tabletop (or pale stone ledge for pond) extends across the full width; its straight horizontal rear top edge at roughly69 percent of image height. The bottom31 percent shows just its broad clean empty surface continuing to bottom edge, without a front vertical face or legs. Nothing rests on this foreground surface: the game will place its own moving objects. Everything else belongs beyond that ledge in the upper69 percent. Frontal slight downward camera angle. No UI, border or panels. Exceptional detailed high-resolution professional original environment illustration, believable spatial construction, controlled soft global illumination.",
+    "sourceTableAnchor": 0.615234375,
+    "sha256": "76bfd723ea16047cb02721dc9a796e0c8e38557c4caf0843639c5cefbc24eb99",
+    "width": 1024,
+    "height": 1536,
+    "assetPath": "app/src/main/assets/backgrounds/painted/cafe.png"
+  },
+  {
+    "id": "observatory",
+    "sourcePath": "/Users/bobrossjr/.codex/generated_images/01a0979c-e527-70a2-8488-49fd078dc68d/exec-7aaf9bba-2db8-4646-8099-c68602fc7c9f.png",
+    "prompt": "Create ONE complete premium illustrated game environment background, portrait 2:3 ratio,1024x1536 or higher: a magical but plausible astronomical observatory, a brass telescope to one side, domed roof open to a deep blue starry sky, detailed celestial charts without readable text, cool midnight light with warm instrument lamps. Feature-film environment art with cinematic lighting, sophisticated depth, beautifully realistic handcrafted materials, layered environmental detail, rich but harmonious colors, subtle painterly finish and crisp crafted forms. This is final usable game artwork, not a mockup. No people, animals, fly, face, text, labels, logos or watermark. Calm relatively open center to read a separately composited character, complex furnishings/foliage framing sides and upper background. COMPOSITING: a single EMPTY foreground wooden tabletop (or pale stone ledge for pond) extends across the full width; its straight horizontal rear top edge at roughly69 percent of image height. The bottom31 percent shows just its broad clean empty surface continuing to bottom edge, without a front vertical face or legs. Nothing rests on this foreground surface: the game will place its own moving objects. Everything else belongs beyond that ledge in the upper69 percent. Frontal slight downward camera angle. No UI, border or panels. Exceptional detailed high-resolution professional original environment illustration, believable spatial construction, controlled soft global illumination.",
+    "sourceTableAnchor": 0.5891927083333334,
+    "sha256": "e381c04de1073504645a2ffdcf12838365a7113a8585cb0b0ac5ea29ad09b123",
+    "width": 1024,
+    "height": 1536,
+    "assetPath": "app/src/main/assets/backgrounds/painted/observatory.png"
+  },
+  {
+    "id": "beach",
+    "sourcePath": "/Users/bobrossjr/.codex/generated_images/01a0979c-e527-70a2-8488-49fd078dc68d/exec-ef73d2d4-f586-4ed6-a1a2-e4ce490efb1b.png",
+    "prompt": "Create ONE complete premium illustrated game environment background, portrait 2:3 ratio,1024x1536 or higher: a breezy seaside terrace, pale turquoise ocean and distant islands, weathered white balustrade, tropical leaves at the edges, warm late-afternoon sunlight, crisp clean coastal atmosphere. Feature-film environment art with cinematic lighting, sophisticated depth, beautifully realistic handcrafted materials, layered environmental detail, rich but harmonious colors, subtle painterly finish and crisp crafted forms. This is final usable game artwork, not a mockup. No people, animals, fly, face, text, labels, logos or watermark. Calm relatively open center to read a separately composited character, complex furnishings/foliage framing sides and upper background. COMPOSITING: a single EMPTY foreground wooden tabletop (or pale stone ledge for pond) extends across the full width; its straight horizontal rear top edge at roughly69 percent of image height. The bottom31 percent shows just its broad clean empty surface continuing to bottom edge, without a front vertical face or legs. Nothing rests on this foreground surface: the game will place its own moving objects. Everything else belongs beyond that ledge in the upper69 percent. Frontal slight downward camera angle. No UI, border or panels. Exceptional detailed high-resolution professional original environment illustration, believable spatial construction, controlled soft global illumination.",
+    "sourceTableAnchor": 0.6393229166666666,
+    "sha256": "ed71e8d5c1e9439b3bd2abbf5400852159ebb3a7118b436ca95eae1097d94bf3",
+    "width": 1024,
+    "height": 1536,
+    "assetPath": "app/src/main/assets/backgrounds/painted/beach.png"
+  },
+  {
+    "id": "bedroom",
+    "sourcePath": "/Users/bobrossjr/.codex/generated_images/01a0979c-e527-70a2-8488-49fd078dc68d/exec-83f839fb-2c7c-4b81-a009-6aea8322b7b5.png",
+    "prompt": "Create ONE complete premium illustrated game environment background, portrait 2:3 ratio,1024x1536 or higher: a cozy storybook attic bedroom, angled wooden beams, a softly lit arched moonlit window, quilts and a small bed placed to the far side, warm bedside lamp, lavender-blue and honey palette. Feature-film environment art with cinematic lighting, sophisticated depth, beautifully realistic handcrafted materials, layered environmental detail, rich but harmonious colors, subtle painterly finish and crisp crafted forms. This is final usable game artwork, not a mockup. No people, animals, fly, face, text, labels, logos or watermark. Calm relatively open center to read a separately composited character, complex furnishings/foliage framing sides and upper background. COMPOSITING: a single EMPTY foreground wooden tabletop (or pale stone ledge for pond) extends across the full width; its straight horizontal rear top edge at roughly69 percent of image height. The bottom31 percent shows just its broad clean empty surface continuing to bottom edge, without a front vertical face or legs. Nothing rests on this foreground surface: the game will place its own moving objects. Everything else belongs beyond that ledge in the upper69 percent. Frontal slight downward camera angle. No UI, border or panels. Exceptional detailed high-resolution professional original environment illustration, believable spatial construction, controlled soft global illumination.",
+    "sourceTableAnchor": 0.5774739583333334,
+    "sha256": "5f36a6c3a6ae6489804c0d0489b1ae9b0507962419dc00e653c8e9e5a270488c",
+    "width": 1024,
+    "height": 1536,
+    "assetPath": "app/src/main/assets/backgrounds/painted/bedroom.png"
+  }
+]

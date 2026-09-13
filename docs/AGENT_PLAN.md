@@ -1,5 +1,16 @@
 # Agent execution plan — immersive companion revision
 
+## September 13: current full-fly integration
+
+The user explicitly resumed 3D fly work after the historical September 5 pause.
+Current branch is `codex/fly-habitat`; debug build108 is installed in place on the
+physical Fold. Meow's current implementation, exact signed artifact, tests,
+artwork provenance, endurance procedure and unresolved hardware/biology gates are
+in [MEOW_BUILD_108_PASS_DOWN.md](characters/MEOW_BUILD_108_PASS_DOWN.md).
+Read it before interpreting older checkpoint statuses below. The integrator
+remains the sole Gradle/install owner. No physical robot command is authorized by
+a successful screen avatar or a synthetic simulator result.
+
 ## September 9: provider cards — 1.3.75/code79
 
 Added automatically refreshed OpenAI model discovery, native Claude Messages,
