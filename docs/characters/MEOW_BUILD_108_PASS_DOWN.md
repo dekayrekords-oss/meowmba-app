@@ -116,8 +116,13 @@ changing reported charging state does not stop actual charging. Summary command:
 python3 scripts/summarize_phone_endurance.py REPORT.jsonl --out SUMMARY.json
 ```
 
-The gate requires at least95% foreground samples, no severe thermal status and
-at least5 presented frames/second averaged over the run. Unplugged validity also
+The first recorder gate required at least95% foreground samples, no severe
+thermal status and at least5 presented frames/second averaged over the run.
+The final schema2 recorder additionally requires active motion in at least95%
+of sampled periods. The summary independently requires at least95% of intervals
+to be foreground, active and at least5fps; this stricter summary also applies to
+earlier schema1 reports. It prevents long paused stretches from being hidden by
+a faster moving stretch in a whole-run average. Unplugged validity also
 requires all samples physically unplugged and available charge counters. This
 is a minimum sustained-motion gate, not a 60fps promise. Review interval FPS,
 CPU, temperature, pause state and completeness; a paused or incomplete run cannot
@@ -155,6 +160,24 @@ The fixed-fly countdown run is in progress. Append verified results after
 retrieval. The original starting screen showed MIC OFF and CAM OFF. No complete
 all-room, all-day battery or sustained uninterrupted foreground result is claimed
 until that evidence actually passes. Do not relax the governor to make it pass.
+
+The retrieved fixed-fly run completed 600.026 seconds with 61 physically
+unplugged samples and a valid 79.2 mAh whole-phone charge decline. It stayed on
+the kitchen game, but Android thermal status was already MODERATE (tier 2) at
+start and the renderer remained paused for about 250 seconds before resuming.
+Only 34/60 measured intervals met the active-motion threshold, so the stricter
+summary correctly marks `validUnpluggedRun=false`; this is useful diagnostic
+evidence, not a sustained animation acceptance result. Battery temperature fell
+38.6→37.2°C and no severe status occurred. The raw JSONL and summary are
+`validation108/phone-fixed-fly-unplugged-summary.jsonl/.json`.
+
+The tile grid now includes a read-only Brain activity panel. It reuses the
+controller's once-per-second `NeuralDiagnostics` stream to show mode, rate or
+spiking substrate, core units, activity, steps, p95 step time, current action and
+thermal tier. Its bars are a deterministic visualization of measured aggregate
+core activity. The panel states that the separate BANC extract (515 pairs,
+3,316 counts) is research provenance and is not a literal FlyWire spike trace or
+an input to the avatar controller.
 
 ## Research milestones and remaining boundaries
 

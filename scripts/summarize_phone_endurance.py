@@ -27,11 +27,16 @@ def summarize(rows):
     temperatures = [x['batteryTenthsC'] / 10 for x in samples if x['batteryTenthsC'] > 0]
     active = [x for x in intervals if x['activeForeground']]
     active_seconds = sum(x['seconds'] for x in active)
+    moving_intervals = sum(x['activeForeground'] and x['fps'] >= 5 for x in intervals)
+    observed_sustained = bool(intervals and moving_intervals >= len(intervals) * .95 and not gaps)
     return {'header': header, 'completed': complete is not None,
         'completion': complete, 'sampleCount': len(samples),
         'gapsOutside0to15Seconds': gaps,
         'validUnpluggedRun': bool(complete and complete['batteryMeasurementValid'] and
-            complete['sustainedForegroundMotionGate'] and not gaps),
+            complete['sustainedForegroundMotionGate'] and observed_sustained),
+        'observedSustainedMotion': observed_sustained,
+        'movingForegroundIntervals': moving_intervals,
+        'totalMeasuredIntervals': len(intervals),
         'measuredActiveForegroundSeconds': active_seconds,
         'meanActiveForegroundCpuPercentOfOneCore': sum(x['cpuPercent'] * x['seconds'] for x in active) / active_seconds if active_seconds else None,
         'meanActiveForegroundPresentedFps': sum(x['fps'] * x['seconds'] for x in active) / active_seconds if active_seconds else None,

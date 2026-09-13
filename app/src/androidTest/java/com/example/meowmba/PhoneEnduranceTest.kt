@@ -46,7 +46,7 @@ class PhoneEnduranceTest {
         fun status() = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         fun plugged() = status()?.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1) ?: -1
         val version = context.packageManager.getPackageInfo(context.packageName, 0)
-        append(JSONObject().put("event", "header").put("schema", 1).put("versionCode", version.longVersionCode)
+        append(JSONObject().put("event", "header").put("schema", 2).put("versionCode", version.longVersionCode)
             .put("durationSeconds", seconds).put("awaitUnplugSeconds", waitSeconds)
             .put("fixedFly", fixedFly)
             .put("label", args.getString("label") ?: "actual foreground avatar")
@@ -100,6 +100,7 @@ class PhoneEnduranceTest {
             }
             SystemClock.sleep(1500)
             if (waitSeconds > 0) {
+                scenario.onActivity { notice?.text = "Unplug USB to start the ten-minute check\nThen leave this screen open • tap here to cancel" }
                 append(JSONObject().put("event", "waiting_for_unplug"))
                 val deadline = SystemClock.elapsedRealtime() + waitSeconds * 1000L
                 while (plugged() != 0 && SystemClock.elapsedRealtime() < deadline && !cancelled.get()) SystemClock.sleep(1000)
@@ -113,7 +114,9 @@ class PhoneEnduranceTest {
             var foregroundCount = 0
             var unpluggedCount = 0
             var severeCount = 0
+            var activeSampleCount = 0
             val initialPresented = Fly3DPhoneTelemetry.presented.get()
+            var previousPresented = initialPresented
             val initialCpu = Process.getElapsedCpuTime()
             val initialCharge = battery.getIntProperty(BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER)
             append(JSONObject().put("event", "measurement_started").put("elapsedRealtimeMs", started))
@@ -131,6 +134,10 @@ class PhoneEnduranceTest {
                 val b = status()
                 val plug = b?.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1) ?: -1
                 val thermal = power.currentThermalStatus
+                val presented = Fly3DPhoneTelemetry.presented.get()
+                if (foreground && Fly3DPhoneTelemetry.active && presented > previousPresented &&
+                    thermal < PowerManager.THERMAL_STATUS_MODERATE) activeSampleCount++
+                previousPresented = presented
                 count++
                 if (foreground) foregroundCount++
                 if (plug == 0) unpluggedCount++
@@ -157,9 +164,11 @@ class PhoneEnduranceTest {
                 .put("iterations", it.iterations).put("busyMs", it.busyMs).put("windowMs", it.windowMs)) }
             val validCharge = initialCharge > 0 && finalCharge > 0 && unpluggedCount == count
             val sustained = !cancelled.get() && elapsed >= seconds * 1000L &&
-                foregroundCount >= count * .95 && severeCount == 0 && frames >= seconds * 5
+                foregroundCount >= count * .95 && activeSampleCount >= (count - 1) * .95 &&
+                severeCount == 0 && frames >= seconds * 5
             append(JSONObject().put("event", "complete").put("elapsedMs", elapsed).put("samples", count)
                 .put("foregroundSamples", foregroundCount).put("unpluggedSamples", unpluggedCount)
+                .put("activeMotionSamples", activeSampleCount)
                 .put("severeThermalSamples", severeCount).put("presentedFrames", frames)
                 .put("cancelled", cancelled.get())
                 .put("averagePresentedFps", frames * 1000.0 / elapsed)

@@ -9061,6 +9061,11 @@ class CompanionViewModel(
         if (show) refreshRobot()
     }
 
+    /** Opens the read-only neural activity view; diagnostics already refresh at 1 Hz. */
+    fun toggleNeuralInfo() {
+        _uiState.update { it.copy(showNeuralInfo = !it.showNeuralInfo, showTiles = false) }
+    }
+
     // ── Plugins & MCP connectors ────────────────────────────────────────────
 
     fun toggleConnectorsScreen() {
@@ -11053,6 +11058,7 @@ class CompanionViewModel(
         showVaultScreen = false,
         showBrowser = false,
         showAvatarScreen = false,
+        showNeuralInfo = false,
     )
 
     /**

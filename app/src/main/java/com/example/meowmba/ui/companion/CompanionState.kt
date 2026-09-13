@@ -111,6 +111,8 @@ data class CompanionState(
     val showModelManager: Boolean = false,
     val showPrivacyDashboard: Boolean = false,
     val showAvatarScreen: Boolean = false,
+    /** Lightweight live neural activity panel, opened from the tile grid. */
+    val showNeuralInfo: Boolean = false,
     /** Which eye style the face is drawn in. Persisted across launches. */
     val avatarStyle: AvatarStyle = AvatarStyle.DEFAULT,
     val avatarAnimal: AvatarAnimal = AvatarAnimal.NONE,
@@ -558,6 +560,7 @@ fun faceModeActive(state: CompanionState): Boolean =
         !state.showWeatherScreen &&
         !state.showNavScreen &&
         !state.showAvatarScreen &&
+        !state.showNeuralInfo &&
         !state.showVaultScreen &&
         !state.showProjectsScreen &&
         !state.showToolsScreen &&

@@ -42,6 +42,7 @@ class IdleBehaviorTest {
         assertFalse(faceModeActive(CompanionState(showToolsScreen = true)))
         assertFalse(faceModeActive(CompanionState(showRobotScreen = true)))
         assertFalse(faceModeActive(CompanionState(showAppDrawer = true)))
+        assertFalse(faceModeActive(CompanionState(showNeuralInfo = true)))
     }
 
     @Test

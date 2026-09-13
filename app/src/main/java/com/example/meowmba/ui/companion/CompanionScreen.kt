@@ -549,6 +549,7 @@ fun CompanionScreen(
                 when (tileName) {
                     "Settings" -> viewModel.toggleSettings()
                     "LLM", "Hardware" -> viewModel.toggleModelManager()
+                    "Brain" -> viewModel.toggleNeuralInfo()
                     "Privacy" -> viewModel.togglePrivacyDashboard()
                     "Memory" -> viewModel.toggleMemoryScreen()
                     "Studio" -> viewModel.toggleStudioScreen()
@@ -736,6 +737,13 @@ fun CompanionScreen(
                 animations = viewModel.avatarAnimationNames(),
                 onPlayAnimation = { viewModel.playAnimationNamed(it) },
                 onClose = { viewModel.toggleAvatarScreen() },
+            )
+        }
+
+        if (uiState.showNeuralInfo) {
+            NeuralInfoPanel(
+                diagnostics = uiState.neuralDiagnostics,
+                onClose = viewModel::toggleNeuralInfo,
             )
         }
 

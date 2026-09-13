@@ -49,6 +49,9 @@
     22.522
   ],
   "validUnpluggedRun": false,
+  "observedSustainedMotion": false,
+  "movingForegroundIntervals": 44,
+  "totalMeasuredIntervals": 58,
   "measuredActiveForegroundSeconds": 437.439,
   "meanActiveForegroundCpuPercentOfOneCore": 55.40703961009421,
   "meanActiveForegroundPresentedFps": 20.766323990316362,
