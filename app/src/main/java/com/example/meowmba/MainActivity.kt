@@ -159,6 +159,7 @@ class MainActivity : ComponentActivity() {
                                 glassesController = com.example.meowmba.core.glasses.MetaGlassesController(this@MainActivity)
                             ).also {
                                 companionViewModel = it
+                                if (pendingAvatarHome) { pendingAvatarHome = false; it.returnToAvatar() }
                                 if (pendingBusinessAgents) { pendingBusinessAgents = false; it.openBusinessAgents() }
                                 // onResume often runs before first composition assigns
                                 // the VM — arm always-on / wake here so the face mic
@@ -479,10 +480,16 @@ class MainActivity : ComponentActivity() {
     }
 
     /** Wake command arriving before the ViewModel exists (cold launch). */
+    private var pendingAvatarHome = false
     private var pendingWakeCommand: String? = null
     private var pendingBusinessAgents = false
 
     private fun consumeWakeCommand(source: Intent?) {
+        if (com.example.meowmba.ui.companion.isAvatarHomeIntent(source?.action, source?.categories)) {
+            companionViewModel?.returnToAvatar() ?: run { pendingAvatarHome = true }
+            (getSystemService(INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager)
+                ?.hideSoftInputFromWindow(window.decorView.windowToken, 0)
+        }
         if (source?.getBooleanExtra(com.example.meowmba.core.workflows.BusinessNotifications.OPEN_TEAM, false) == true) {
             source.removeExtra(com.example.meowmba.core.workflows.BusinessNotifications.OPEN_TEAM)
             companionViewModel?.openBusinessAgents() ?: run { pendingBusinessAgents = true }

@@ -3935,6 +3935,10 @@ class CompanionViewModel(
         }.getOrNull()
     }
 
+    fun returnToAvatar() {
+        _uiState.update { it.atAvatarHome() }
+    }
+
     fun closeOverlays() {
         _uiState.value = _uiState.value.copy(showAppDrawer = false, showBrowser = false)
     }
