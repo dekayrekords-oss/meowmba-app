@@ -10,35 +10,45 @@ Updated 2026-09-13. The owner supplied the channel URL below after the creation 
 - Name: **Meow Assistant**
 - Preferred handle: **@MeowAssistantApp** (availability unverified)
 - Alternatives: @MeetMeowAssistant, @MeowAssistantAndroid
-- Banner copy: **Meet Meow. Make it yours.**
-- Supporting line: **Feature demos • Setup guides • Development updates**
+- Banner copy: **Building Meow. Sharing what we learn.**
+- Supporting line: **Tools we build • Coding walkthroughs • Real bug fixes**
 - Profile image candidate: existing `docs/store/icon-512.png`; inspect its current branding before upload.
 - Public-facing name is Meow Assistant. Memba and Meowmba are names viewers may encounter in older builds; explain this once in the setup video.
 
 ## Ready-to-paste channel description
 
-Meet Meow Assistant, an AI companion for Android.
+Follow the making of Meow Assistant and the tools we build along the way.
 
-Learn one feature at a time: talking with Meow, choosing its appearance, working with memory, organizing projects, creating content, and connecting tools.
+We share app demos, coding walkthroughs, and real troubleshooting: what we wanted to build, what went wrong, how we investigated it, and what finally worked.
 
-Watch practical walkthroughs, setup guides, and development updates. Each demo shows the app version and any models, services, or hardware it needs. Experimental features are labeled clearly.
+Explore Meow’s features, see how we work with AI coding assistants, and learn from the decisions, tests, and fixes behind each update. We show working results and explain what is still experimental.
 
-Start with the welcome video, then choose the feature you want to try next.
+Whether you want to use our tools or understand how we make them, start here.
 
 ## Channel organization
 
-1. Start Here — welcome, setup, first conversation, privacy controls.
-2. Meet Your Companion — appearance, animations, environments, care.
-3. Get Things Done — notes, memory, projects, calendar, phone tools.
-4. Create with Meow — characters, comics, scripts, images, video, audio.
-5. Connect Meow — providers, plugins, services, desktop and accessories.
-6. Meow Lab — experimental neural behavior and research demonstrations.
+1. Start Here — channel introduction, Meow overview, first setup.
+2. Tools We Build — each app, utility, or integration gets a practical demo showing the problem it solves.
+3. Coding Meow — feature implementation, design decisions, code walkthroughs, and tests.
+4. Debugging Diaries — one real symptom, investigation, fix, and verification per episode.
+5. Building with AI — how we write tasks, inspect suggestions, coordinate changes, review diffs, and hand work down to Meow.
+6. Meow Feature Guides — retain all individual feature tutorials in `FEATURE_VIDEOS.md`.
+7. Meow Lab — experimental behavior, research, measurements, and unresolved work.
 
-Use one main tutorial for each feature and one optional short excerpt showing the result. Aim for 2–4 minutes per ordinary tutorial; allow 5–8 minutes for model or connection setup. These are production choices, not platform requirements.
+These three central topics—tools, coding, and troubleshooting—share the channel alongside individual feature guides. Aim for 2–4 minutes for feature demos and 5–10 minutes for a focused coding or debugging story. These are editorial targets, not platform requirements. Other tools belong here when we can demonstrate what we actually built; inventory their repositories before promising episodes about them.
 
 ## Initial release order
 
-Welcome trailer → first setup → first conversation → avatar customization → memory → notes → projects → privacy → comics → model selection. Record these first; release two finished tutorials per week if production capacity permits. This is a proposed cadence, not a scheduled automation.
+1. “We’re Building Meow Assistant—and Sharing the Process” — revised trailer.
+2. “Meet Meow Assistant: What It Can Do” — real app demo.
+3. “Meow Said It Did the Task. Did It Actually?” — documented action-verification bug.
+4. “How We Give Meow Its Own Animations” — one feature from request to working result.
+5. “The Email Draft Bug: Why the Body Was Missing” — investigation and measured fix.
+6. “How We Hand Coding Work Between AI Assistants” — scoped changes, Git, review, and pass-downs.
+
+Then rotate one tool/feature demo, one coding walkthrough, and one troubleshooting story. Publish when each episode has real footage and verified evidence; no posting automation is configured.
+
+See `BUILD_AND_DEBUG_VIDEOS.md` for source-backed episode briefs and a reusable recording format.
 
 ## Setup once browser access works
 

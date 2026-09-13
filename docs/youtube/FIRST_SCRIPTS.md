@@ -2,20 +2,20 @@
 
 Drafts for real screen recordings; no footage or finished videos exist yet. Narration is conditional on a successful demonstration in the installed build. Replace any unsupported step before recording. Timing is an editing target.
 
-## 00 — Meet Meow Assistant (60 seconds)
+## 00 — We’re Building Meow Assistant—and Sharing the Process (60 seconds)
 
 **Thumbnail:** MEET MEOW
 
 | Time | Picture | Narration |
 |---|---|---|
-| 0–8s | Real companion responding to a greeting | “Meet Meow Assistant, an AI companion for your Android phone.” |
+| 0–8s | Real companion responding to a greeting | “We’re building Meow Assistant, an AI companion for Android, and sharing how we make it.” |
 | 8–18s | A spoken question and actual answer | “Start with a conversation. Speak to Meow, or type when you want a quiet chat.” |
 | 18–28s | Change the avatar using current controls | “Make Meow your own. Choose a look and explore its expressions.” |
-| 28–40s | Save a test memory; open a test project | “Then explore memory and projects, one useful feature at a time.” |
-| 40–50s | Show provider selection and privacy controls | “Your setup matters. We’ll show which features need a model, a connected service, or extra hardware.” |
-| 50–60s | End on the live avatar and channel title | “This channel is your guide to Meow. Start with setup, or pick the feature you want to try.” |
+| 28–40s | Save a test memory; open a test project | “We’ll show the tools we build, the code behind them, and the problems they solve.” |
+| 40–50s | Show a readable code diff and a verified test result | “And when something breaks, we’ll walk through the clues, the fix, and how we checked it.” |
+| 50–60s | End on the live avatar and channel title | “Follow along for feature guides, coding with AI, and lessons from real troubleshooting.” |
 
-Description: “A first look at Meow Assistant for Android. Follow the channel for individual feature demos, setup walkthroughs, and clearly labeled development updates.” Add the recorded version and verified links before uploading.
+Description: “Follow the making of Meow Assistant and our tools through feature demos, coding walkthroughs, and real troubleshooting.” Add the recorded version and verified links before uploading.
 
 ## 01 — Your First Conversation with Meow (2–3 minutes)
 
