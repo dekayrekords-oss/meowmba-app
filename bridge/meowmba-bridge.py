@@ -70,7 +70,9 @@ from blender_scene import validate as validate_scene
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-VERSION = "0.9.0"
+VERSION = "0.10.0"
+from malecns_control import MaleCnsController
+_malecns = MaleCnsController()
 _desktop_ui = DesktopUI()
 _blender_lock = threading.Lock()
 CONFIG_DIR = Path.home() / ".meowmba-bridge"
@@ -426,6 +428,22 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 self._send(200,result)
             except Exception as ex:
                 self._send(409,{"error":str(ex)[:600]})
+        elif method in ("malecns_step", "malecns_stop"):
+            try:
+                params = data.get("params") or {}
+                if method == "malecns_step":
+                    result = _malecns.step(params, self.server.cfg)
+                else:
+                    import re
+                    session = params.get("session")
+                    if not isinstance(session, str) or not re.fullmatch(r"[a-f0-9-]{36}", session):
+                        raise ValueError("Invalid neural session")
+                    result = _malecns.stop(session)
+                self._send(200, result)
+            except ValueError as error:
+                self._send(400, {"error": str(error)})
+            except Exception:
+                self._send(503, {"error": "Meow neural worker unavailable; local behavior remains available"})
         elif method == "blender_scene":
             self._rpc_blender_scene(data.get("params") or {}, pairing)
         elif method in ('logic_inspect', 'logic_edit', 'logic_receipt', 'logic_verify_audio', 'logic_screen', 'logic_act', 'logic_cancel'):
@@ -1102,6 +1120,7 @@ def main() -> None:
         pass
     finally:
         stop_broadcast.set()
+        _malecns.stop()
 
 
 if __name__ == "__main__":

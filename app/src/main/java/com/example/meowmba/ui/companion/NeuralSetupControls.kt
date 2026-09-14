@@ -36,12 +36,17 @@ internal fun NeuralSetupControls(
                 NeuralOption("Neural · control", "Lets the network influence attention, drives and allowed actions. Authored animation and safety rules still apply, with Classic as a fallback.", mode == NeuralMode.NEURAL) { onMode(NeuralMode.NEURAL) }
             }
         }
-        SetupHelpCard("2 · Choose a network", "The rate and spiking networks are synthetic. The BANC option uses audited anatomical counts with clearly marked synthetic dynamics.") {
+        SetupHelpCard("2 · Choose a network", "Local networks work offline. MaleCNS runs the larger fly model on Meow through your paired computer.") {
             if (mode == NeuralMode.LEGACY) HelpText("Your choice is saved, but the network stays idle in Classic mode.")
             Column(Modifier.selectableGroup()) {
                 NeuralOption("Recurrent · rate", "Uses continuous activity that carries information between steps. The default and faster option in our phone comparison.", substrate == NeuralSubstrate.RATE) { onSubstrate(NeuralSubstrate.RATE) }
                 NeuralOption("Spiking · experimental", "Uses simulated firing pulses and membrane state. Useful for comparison; it took more processing in our phone test and is not proven more capable.", substrate == NeuralSubstrate.SPIKING) { onSubstrate(NeuralSubstrate.SPIKING) }
                 NeuralOption("BANC fly circuit · experimental", "Routes touch through named leg/thorax nociceptor groups and DNg27 to wing-power neurons from a 76-neuron BANC extract. Connection signs, timing and flight/muscle behavior are bounded authored assumptions; this is not FlyWire or a complete biological fly brain.", substrate == NeuralSubstrate.BANC_EXPERIMENTAL) { onSubstrate(NeuralSubstrate.BANC_EXPERIMENTAL) }
+                NeuralOption("MaleCNS · Meow brain", "Runs 176,422 fly neurons and 6.29 million retained connections on Meow. Keep your paired computer online with its MaleCNS helper enabled. Food, touch and looming cues stimulate named circuits; motor activity influences reactions and wings. Requires a connection; Classic takes over when replies are unavailable. Neural dynamics and avatar movements are modeled, not a validated biological fly.", substrate == NeuralSubstrate.MALECNS_REMOTE) { onSubstrate(NeuralSubstrate.MALECNS_REMOTE) }
+            }
+            if (substrate == NeuralSubstrate.MALECNS_REMOTE) {
+                HelpText("Sends six numeric sensory values through the paired Desktop Bridge. This feature does not send camera images, audio or chat. It pauses when hidden or too hot. Use Brain activity to check the live connection.")
+                diagnostics?.core?.status?.takeIf { it.isNotBlank() }?.let { HelpText(it) }
             }
             HelpText("Switching networks resets its transient state and turns off trace recording.")
         }
@@ -79,8 +84,9 @@ internal fun NeuralSetupControls(
                 } ?: HelpText("Waiting for the controller's first status update.")
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Record replay trace", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
-                    Switch(checked = traceConsent, onCheckedChange = onTrace)
+                    Switch(checked = traceConsent, onCheckedChange = onTrace, enabled = substrate != NeuralSubstrate.MALECNS_REMOTE)
                 }
+                if (substrate == NeuralSubstrate.MALECNS_REMOTE) HelpText("Local replay recording is unavailable for this remote model. Its neural clock and state live on Meow; the Brain view shows measured population rates.")
                 HelpText("Saves numeric sensory features and controller state locally for replay testing. It does not record raw audio or images. Starting a trace resets neural state so the replay has a known starting point.")
                 OutlinedButton(onClick = onReset) { Text("Reset neural state") }
                 HelpText("Restarts the network's transient state and stops tracing. It keeps your avatar selection and care preferences.")

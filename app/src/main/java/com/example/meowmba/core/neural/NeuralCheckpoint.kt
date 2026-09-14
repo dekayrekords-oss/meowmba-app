@@ -99,7 +99,7 @@ data class NeuralCheckpoint(
                 val s = spiking
                 if (s == null) problems += "spiking substrate without spiking config" else validateSpiking(s, problems)
             }
-            NeuralSubstrate.BANC_EXPERIMENTAL -> if (rate != null || spiking != null) {
+            NeuralSubstrate.BANC_EXPERIMENTAL, NeuralSubstrate.MALECNS_REMOTE -> if (rate != null || spiking != null) {
                 problems += "BANC experimental substrate must use the built-in anatomical adapter"
             }
         }

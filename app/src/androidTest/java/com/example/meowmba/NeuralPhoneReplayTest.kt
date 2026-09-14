@@ -10,7 +10,9 @@ import java.io.File
 class NeuralPhoneReplayTest {
     @Test fun compareRealDeviceCoreLatencyAndReplay() {
         val rows = mutableListOf<String>()
-        for (kind in NeuralSubstrate.values()) {
+        // This benchmark covers only the two synthetic local models. Never label
+        // a spiking fallback as a BANC or remote MaleCNS measurement.
+        for (kind in listOf(NeuralSubstrate.RATE, NeuralSubstrate.SPIKING)) {
             fun core(): NeuralCore = if (kind == NeuralSubstrate.RATE) LeakyRecurrentCore(NeuralCheckpoint.default()) else SpikingCore(NeuralCheckpoint.defaultSpiking())
             val model = core()
             val input = List(400) { i -> FloatArray(model.inputLayout.size).also { x ->

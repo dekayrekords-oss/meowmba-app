@@ -9,6 +9,8 @@ enum class NeuralSubstrate {
      * counts. It is not FlyWire and does not claim physiological flight control.
      */
     BANC_EXPERIMENTAL,
+    /** Retained MaleCNS graph stepped on Meow through the paired desktop. */
+    MALECNS_REMOTE,
 }
 
 /**
@@ -29,6 +31,7 @@ data class CoreDiagnostics(
     /** Times the state was reset because it went non-finite. */
     val nanResets: Long,
     val extra: Map<String, Float> = emptyMap(),
+    val status: String = "",
 )
 
 /**
@@ -49,4 +52,8 @@ interface NeuralCore {
     fun readout(): FloatArray
     fun reset()
     fun diagnostics(): CoreDiagnostics
+    /** Asynchronous substrates cannot supply usable output until a fresh reply arrives. */
+    fun ready(): Boolean = true
+    /** Stop pending external work when hidden, disabled, hot or replaced. */
+    fun pause() {}
 }

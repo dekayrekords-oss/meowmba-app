@@ -18,7 +18,7 @@ enum class NeuralMode {
 }
 
 /** Why the controller is (or last was) publishing the legacy bias while in NEURAL mode. */
-enum class FallbackReason { NONE, NON_FINITE_OUTPUT, EXCEPTION, DEADLINE, THERMAL_SUSPENDED }
+enum class FallbackReason { NONE, NON_FINITE_OUTPUT, EXCEPTION, DEADLINE, THERMAL_SUSPENDED, REMOTE_UNAVAILABLE }
 
 /** Where CPU time is charged. The default reports into [LoopTelemetry]; tests inject a recorder. */
 fun interface NeuralTelemetry {
@@ -102,6 +102,7 @@ class NeuralBehaviorController(
             NeuralSubstrate.RATE -> LeakyRecurrentCore(NeuralCheckpoint.default())
             NeuralSubstrate.SPIKING -> SpikingCore(NeuralCheckpoint.defaultSpiking())
             NeuralSubstrate.BANC_EXPERIMENTAL -> BancExperimentalCore()
+            NeuralSubstrate.MALECNS_REMOTE -> MaleCnsRemoteCore()
         }
     },
     initialMode: NeuralMode = NeuralMode.SHADOW,
@@ -215,7 +216,7 @@ class NeuralBehaviorController(
 
     /** Drives behind the published bias. */
     fun snapshot(): DriveVector =
-        if (mode == NeuralMode.NEURAL && fallback == FallbackReason.NONE) neuralDrives else legacy.snapshot()
+        if (mode == NeuralMode.NEURAL && fallback == FallbackReason.NONE && core.ready()) neuralDrives else legacy.snapshot()
 
     fun dominant(): String = dominantOf(snapshot())
 
@@ -250,7 +251,7 @@ class NeuralBehaviorController(
 
     /** Where the neural layer wants to look; [Orientation.NONE] when it has no opinion or is not in control. */
     fun orientationNow(): Orientation =
-        if (mode == NeuralMode.NEURAL && fallback == FallbackReason.NONE) lastArbitrated?.orientation ?: Orientation.NONE
+        if (mode == NeuralMode.NEURAL && fallback == FallbackReason.NONE && core.ready()) lastArbitrated?.orientation ?: Orientation.NONE
         else Orientation.NONE
 
     fun currentAction(): BehaviorAction = lastArbitrated?.action ?: BehaviorAction.REST
@@ -260,7 +261,24 @@ class NeuralBehaviorController(
     /** Bounded BANC wing-power population activity for the avatar motor layer.
      * Other substrates return zero. This is an authored visual retarget, not a
      * biological muscle command or robot-control output. */
-    fun wingMotorNow(): Float = experimentalWingPower
+    fun wingMotorNow(): Float = if (mode == NeuralMode.NEURAL && fallback == FallbackReason.NONE && core.ready()) experimentalWingPower else 0f
+
+    @Synchronized fun noteFood() { (core as? MaleCnsRemoteCore)?.noteFood() }
+    @Synchronized fun feedingMotorNow(): Float =
+        if (mode == NeuralMode.NEURAL && fallback == FallbackReason.NONE && core.ready())
+            core.diagnostics().extra["malecns.feed"] ?: 0f else 0f
+    @Synchronized fun pauseExternalWork() {
+        core.pause()
+        if (substrate == NeuralSubstrate.MALECNS_REMOTE) {
+            bus.clear()
+            encoder.reset()
+            lastReadout = FloatArray(0)
+            experimentalWingPower = 0f
+            published = legacy.bias()
+            lastArbitrated = null
+            if (mode == NeuralMode.NEURAL) fallback = FallbackReason.REMOTE_UNAVAILABLE
+        }
+    }
 
     @Synchronized
     fun setMode(newMode: NeuralMode) {
@@ -274,6 +292,7 @@ class NeuralBehaviorController(
         }
         if (newMode == NeuralMode.NEURAL) clearFallback()
         if (newMode == NeuralMode.LEGACY) {
+            core.pause()
             experimentalWingPower = 0f
             published = legacy.bias()
         }
@@ -282,8 +301,11 @@ class NeuralBehaviorController(
     @Synchronized
     fun setSubstrate(newSubstrate: NeuralSubstrate) {
         if (newSubstrate == substrate) return
+        core.pause()
         substrate = newSubstrate
         core = coreFactory(newSubstrate)
+        lastArbitrated = null
+        lastReadout = FloatArray(0)
         // A circuit-specific render value must never continue after its core is replaced.
         experimentalWingPower = 0f
         encoder.reset()
@@ -337,6 +359,8 @@ class NeuralBehaviorController(
 
         currentTier = thermalTier()
         if (currentTier >= TIER_SURVIVAL) {
+            if (!suspended) core.pause()
+            experimentalWingPower = 0f
             suspended = true
             if (mode == NeuralMode.NEURAL) fallback = FallbackReason.THERMAL_SUSPENDED
             bus.clear()
@@ -401,20 +425,31 @@ class NeuralBehaviorController(
             val x = encoder.encode(batch, intent, dtMs, simTimeMs)
             lastInput = x
             core.step(x, dtMs)
-            val y = core.readout()
-            lastReadout = y
-            experimentalWingPower = if (substrate == NeuralSubstrate.BANC_EXPERIMENTAL)
-                core.diagnostics().extra["banc.wing_power"]?.coerceIn(0f, 1f) ?: 0f else 0f
-            if (!allFinite(y)) {
-                enterFallback(FallbackReason.NON_FINITE_OUTPUT)
-                traceResetGeneration++
-                core.reset()
+            if (!core.ready()) {
+                experimentalWingPower = 0f
+                if (fallback == FallbackReason.NONE || fallback == FallbackReason.REMOTE_UNAVAILABLE)
+                    fallback = FallbackReason.REMOTE_UNAVAILABLE
+                lastReadout = FloatArray(0)
             } else {
-                val decoded = decoder.decode(y)
-                neuralDrives = decoded.drives
-                val proposals = decoder.proposals(decoded, simTimeMs)
-                result = arbiter.arbitrate(proposals, decoded.bias, ownership, simTimeMs)
-                lastArbitrated = result
+                if (fallback == FallbackReason.REMOTE_UNAVAILABLE) fallback = FallbackReason.NONE
+                val y = core.readout()
+                lastReadout = y
+                experimentalWingPower = when (substrate) {
+                    NeuralSubstrate.BANC_EXPERIMENTAL -> core.diagnostics().extra["banc.wing_power"] ?: 0f
+                    NeuralSubstrate.MALECNS_REMOTE -> core.diagnostics().extra["malecns.wing_power"] ?: 0f
+                    else -> 0f
+                }.coerceIn(0f, 1f)
+                if (!allFinite(y)) {
+                    enterFallback(FallbackReason.NON_FINITE_OUTPUT)
+                    traceResetGeneration++
+                    core.reset()
+                } else {
+                    val decoded = decoder.decode(y)
+                    neuralDrives = decoded.drives
+                    val proposals = decoder.proposals(decoded, simTimeMs)
+                    result = arbiter.arbitrate(proposals, decoded.bias, ownership, simTimeMs)
+                    lastArbitrated = result
+                }
             }
         } catch (e: Exception) {
             enterFallback(FallbackReason.EXCEPTION)

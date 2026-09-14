@@ -58,6 +58,7 @@ class NeuralModeStore(
             NeuralSubstrate.RATE -> LeakyRecurrentCore(ckpt)
             NeuralSubstrate.SPIKING -> SpikingCore(ckpt)
             NeuralSubstrate.BANC_EXPERIMENTAL -> BancExperimentalCore()
+            NeuralSubstrate.MALECNS_REMOTE -> MaleCnsRemoteCore()
         }
     }
 
@@ -65,6 +66,9 @@ class NeuralModeStore(
         NeuralSubstrate.RATE -> NeuralCheckpoint.default()
         NeuralSubstrate.SPIKING -> NeuralCheckpoint.defaultSpiking()
         NeuralSubstrate.BANC_EXPERIMENTAL -> BancExperimentalCheckpoint.value
+        NeuralSubstrate.MALECNS_REMOTE -> BancExperimentalCheckpoint.value.copy(
+            name = "malecns-v1-retained-remote", substrate = NeuralSubstrate.MALECNS_REMOTE,
+            notes = "Metadata only. Remote MaleCNS state is not a locally replayable checkpoint.")
     }
 
     companion object {

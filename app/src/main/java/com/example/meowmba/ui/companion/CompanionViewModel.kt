@@ -825,7 +825,19 @@ class CompanionViewModel(
      * without ever animating anything.
      */
     @Volatile private var neuralTraceRecorder: FeatureTraceRecorder? = null
+    private val maleCnsBridge = secureStorage?.let { DesktopBridgeManager(it) }
     private val nervousSystem = NeuralBehaviorController(
+        coreFactory = { substrate -> when (substrate) {
+            NeuralSubstrate.RATE -> LeakyRecurrentCore(NeuralCheckpoint.default())
+            NeuralSubstrate.SPIKING -> SpikingCore(NeuralCheckpoint.defaultSpiking())
+            NeuralSubstrate.BANC_EXPERIMENTAL -> BancExperimentalCore()
+            NeuralSubstrate.MALECNS_REMOTE -> MaleCnsRemoteCore(viewModelScope, maleCnsBridge?.let { bridge ->
+                object : MaleCnsTransport {
+                    override suspend fun step(request: MaleCnsRequest) = bridge.maleCnsStep(request)
+                    override suspend fun stop(session: String) = bridge.maleCnsStop(session)
+                }
+            })
+        } },
         initialMode = secureStorage?.getPreference(NeuralModeStore.KEY_MODE)?.let {
             runCatching { NeuralMode.valueOf(it) }.getOrNull()
         } ?: NeuralMode.SHADOW,
@@ -869,7 +881,7 @@ class CompanionViewModel(
             com.example.meowmba.core.thermal.ThermalGovernor.currentTier().ordinal < 2 &&
             state.interactionState == InteractionState.IDLE && !state.isChatExpanded
         val action = nervousSystem.currentAction()
-        val clip = neuralMotorDirector.choose(action, nowMs, allowed, busy) ?: return
+        val clip = neuralMotorDirector.choose(action, nowMs, allowed, busy, nervousSystem.feedingMotorNow()) ?: return
         playAnimationNamed(clip, userRequested = false)
         if (_uiState.value.activeAnimation != null) {
             neuralMotorPerformance = _uiState.value.avatarPerformanceSequence to action
@@ -895,6 +907,11 @@ class CompanionViewModel(
         _uiState.update { it.copy(neuralDiagnostics = nervousSystem.diagnostics()) }
     }
     fun setNeuralTraceConsent(enabled: Boolean) {
+        if (enabled && nervousSystem.substrate == NeuralSubstrate.MALECNS_REMOTE) {
+            // The existing local recorder cannot reconstruct remote neural clock/state.
+            setNeuralTraceConsent(false)
+            return
+        }
         // The controller tick holds this same monitor. No unrecorded core step
         // may occur between reset and installing the first-segment recorder.
         synchronized(nervousSystem) {
@@ -906,6 +923,7 @@ class CompanionViewModel(
                     NeuralSubstrate.RATE -> NeuralCheckpoint.default()
                     NeuralSubstrate.SPIKING -> NeuralCheckpoint.defaultSpiking()
                     NeuralSubstrate.BANC_EXPERIMENTAL -> com.example.meowmba.core.neural.BancExperimentalCheckpoint.value
+                    NeuralSubstrate.MALECNS_REMOTE -> error("Remote traces require server-state provenance")
                 }
                 neuralTraceRecorder = FeatureTraceRecorder(java.io.File(dir, "neural/traces"),
                     FeatureTraceHeader(inputLayout = checkpoint.inputLayout, outputLayout = checkpoint.outputLayout,
@@ -937,6 +955,7 @@ class CompanionViewModel(
             else -> "explore"
         }
         nervousSystem.onStimulus(com.example.meowmba.core.behavior.Stimulus.TOUCH, .3f)
+        if (action == HabitatAction.FEED) nervousSystem.noteFood()
         if (action == HabitatAction.PLAY || action == HabitatAction.FEED) nervousSystem.noteAffect(.5f)
         secureStorage?.savePreference("pet_care_v1", care.encode())
         _uiState.update { it.copy(petCare = care, habitatCommand = HabitatCommand(it.habitatCommand.id + 1L, action)) }
@@ -1100,6 +1119,7 @@ class CompanionViewModel(
     /** Hidden stories are cancelled, so resuming cannot replay an old entrance. */
     fun setAvatarPerformanceStageAllowed(allowed: Boolean) {
         avatarPerformanceStageAllowed = allowed
+        if (!allowed && !_uiState.value.showNeuralInfo) nervousSystem.pauseExternalWork()
         if (!allowed && (_uiState.value.activeAnimation != null || _uiState.value.activeComposed != null ||
                 _uiState.value.emotionPreview != null)) stopAvatarPerformance()
     }
@@ -1719,7 +1739,9 @@ class CompanionViewModel(
                 // observe the drives, so do not spend a scheduler thread on it.
                 // (Advance [last] first — on resume the drives must ease from
                 // now, not integrate the whole time we were away.)
-                if (appInBackground) {
+                if (appInBackground || (nervousSystem.substrate == NeuralSubstrate.MALECNS_REMOTE &&
+                        !avatarPerformanceStageAllowed && !_uiState.value.showNeuralInfo)) {
+                    nervousSystem.pauseExternalWork()
                     last = now
                     continue
                 }
@@ -3271,6 +3293,7 @@ class CompanionViewModel(
     }
 
     override fun onCleared() {
+        nervousSystem.pauseExternalWork()
         neuralTraceRecorder?.close(); neuralTraceRecorder = null
         runCatching { secureStorage?.let { AgenticRuntime.from(it.context).computerHost = null } }
         computerIdleWatchJob?.cancel()
@@ -4769,6 +4792,7 @@ class CompanionViewModel(
         stopAvatarPerformance()
         resetMouthEnergy()
         appInBackground = true
+        nervousSystem.pauseExternalWork()
         finishNoting("Notes stopped when the app left the screen")
         motionSense?.stop()
         _motionObservedAtMs.value = 0L
@@ -4814,6 +4838,7 @@ class CompanionViewModel(
         stopAvatarPerformance()
         resetMouthEnergy()
         appInBackground = true
+        nervousSystem.pauseExternalWork()
         finishNoting("Notes stopped when the app left the screen")
         motionSense?.stop()
         _motionObservedAtMs.value = 0L

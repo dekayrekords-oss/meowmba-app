@@ -183,6 +183,15 @@ class DesktopBridgeManager(
             ?: throw Exception("bridge sent an unreadable pong")
     }
 
+    suspend fun maleCnsStep(request: com.example.meowmba.core.neural.MaleCnsRequest): Result<com.example.meowmba.core.neural.MaleCnsSnapshot> =
+        rpc("malecns_step", request.parameters(), 10_000).mapCatching {
+            com.example.meowmba.core.neural.MaleCnsSnapshot.parse(it, request)
+        }
+
+    suspend fun maleCnsStop(session: String) {
+        rpc("malecns_stop", mapOf("session" to session), 2000)
+    }
+
     suspend fun status(): Result<BridgeStatus> = rpc("status").mapCatching { body ->
         val obj = Json.parseToJsonElement(body).jsonObject
         BridgeStatus(

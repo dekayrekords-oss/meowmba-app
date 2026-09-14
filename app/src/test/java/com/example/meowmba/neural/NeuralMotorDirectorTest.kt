@@ -3,6 +3,15 @@ import com.example.meowmba.core.neural.*
 import org.junit.Assert.*
 import org.junit.Test
 class NeuralMotorDirectorTest {
+    @Test fun neuralFeedingRespectsOwnershipBusyStateAndDoesNotRepeat() {
+        val d = NeuralMotorDirector()
+        assertNull(d.choose(BehaviorAction.REST, 0, false, false, 1f))
+        assertNull(d.choose(BehaviorAction.REST, 0, true, true, 1f))
+        assertEquals("content_smile", d.choose(BehaviorAction.REST, 0, true, false, 1f))
+        assertNull(d.choose(BehaviorAction.REST, 20_000, true, false, 1f))
+        d.choose(BehaviorAction.REST, 21_000, true, false, 0f)
+        assertEquals("content_smile", d.choose(BehaviorAction.REST, 22_000, true, false, 1f))
+    }
     @Test fun respectsOwnershipCooldownAndClockReversal() {
         val d = NeuralMotorDirector()
         assertNull(d.choose(BehaviorAction.STARTLE, 0, false, false))

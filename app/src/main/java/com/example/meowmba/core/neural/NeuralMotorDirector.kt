@@ -4,8 +4,15 @@ package com.example.meowmba.core.neural
 class NeuralMotorDirector {
     private var previous: BehaviorAction? = null
     private var lastPlayedAt: Long? = null
-    fun choose(action: BehaviorAction, nowMs: Long, allowed: Boolean, busy: Boolean): String? {
+    private var wasFeeding = false
+    fun choose(action: BehaviorAction, nowMs: Long, allowed: Boolean, busy: Boolean, feeding: Float = 0f): String? {
         if (!allowed) { previous = null; return null }
+        if (feeding < .15f) wasFeeding = false
+        if (!busy && action != BehaviorAction.STARTLE && feeding >= .4f && !wasFeeding &&
+            (lastPlayedAt == null || nowMs - lastPlayedAt!! >= 10_000L)) {
+            wasFeeding = true; lastPlayedAt = nowMs
+            return "content_smile"
+        }
         if (busy || action == previous) return null
         previous = action
         val clip = when (action) {
