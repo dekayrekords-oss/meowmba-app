@@ -152,6 +152,85 @@ class PetEnvironmentBackgroundPainter {
                     line(.88f, .40f, .88f, .49f, 0xFF243C44, .007f)
                 }
             }
+            BackgroundAnimation.CARTOON_SNACK_LAB -> {
+                // Complete, sparse loading art: the crowned banana lives at the room edge.
+                line(0f, .72f, 1f, .72f, CARTOON_INK, .006f)
+                cartoonRect(.015f, .56f, .20f, .16f, 0xFFE6AC7C)
+                cartoonRect(.035f, .25f, .145f, .27f, 0xFFD7F0DC)
+                cartoonRect(.03f, .225f, .155f, .035f, 0xFF88BAB2)
+                path.reset()
+                path.moveTo(.08f * size.width, .31f * size.height)
+                path.cubicTo(.13f * size.width, .43f * size.height, .16f * size.width, .39f * size.height,
+                    .15f * size.width, .32f * size.height)
+                drawPath(path, Color(CARTOON_INK), style = Stroke(.040f * size.minDimension, cap = StrokeCap.Round))
+                drawPath(path, Color(0xFFF5D76E), style = Stroke(.027f * size.minDimension, cap = StrokeCap.Round))
+                path.reset()
+                path.moveTo(.06f * size.width, .22f * size.height)
+                path.lineTo(.048f * size.width, .16f * size.height)
+                path.lineTo(.085f * size.width, .188f * size.height)
+                path.lineTo(.11f * size.width, .145f * size.height)
+                path.lineTo(.134f * size.width, .188f * size.height)
+                path.lineTo(.17f * size.width, .16f * size.height)
+                path.lineTo(.157f * size.width, .22f * size.height)
+                path.close()
+                drawPath(path, Color(0xFFE9B855))
+                drawPath(path, Color(CARTOON_INK), style = Stroke(.005f * size.minDimension))
+                cartoonRect(.82f, .31f, .18f, .41f, 0xFF78ADA6)
+                cartoonRect(.845f, .35f, .13f, .15f, 0xFFD5EAC8)
+                line(.85f, .56f, .96f, .56f, CARTOON_INK, .006f)
+                line(.84f, .61f, .84f, .66f, CARTOON_INK, .008f)
+            }
+            BackgroundAnimation.CARTOON_LAUNDROMAT -> {
+                // Washer portals frame a quiet wall; the lone sock has earned a trophy.
+                line(0f, .72f, 1f, .72f, CARTOON_INK, .006f)
+                repeat(2) { i ->
+                    val x = .015f + i * .80f
+                    cartoonRect(x, .425f, .17f, .295f, if (i == 0) 0xFF96C9B8 else 0xFFC4A5CF)
+                    cartoonOval(x + .024f, .51f, .122f, .155f, 0xFFECDEBC)
+                    cartoonOval(x + .041f, .533f, .087f, .107f, 0xFF658B9B)
+                    dot(x + .035f, .465f, .008f, CARTOON_INK)
+                    line(x + .08f, .465f, x + .13f, .465f, CARTOON_INK, .005f)
+                }
+                cartoonRect(.82f, .295f, .13f, .027f, 0xFFE8BB67)
+                line(.885f, .295f, .885f, .258f, CARTOON_INK, .009f)
+                path.reset()
+                path.moveTo(.83f * size.width, .135f * size.height)
+                path.lineTo(.90f * size.width, .135f * size.height)
+                path.lineTo(.90f * size.width, .21f * size.height)
+                path.cubicTo(.975f * size.width, .21f * size.height, .97f * size.width, .26f * size.height,
+                    .89f * size.width, .26f * size.height)
+                path.lineTo(.83f * size.width, .232f * size.height)
+                path.close()
+                drawPath(path, Color(0xFFF3D378))
+                drawPath(path, Color(CARTOON_INK), style = Stroke(.005f * size.minDimension))
+                line(.834f, .157f, .896f, .157f, CARTOON_INK, .004f)
+            }
+            BackgroundAnimation.CARTOON_DINER -> {
+                line(0f, .71f, 1f, .71f, CARTOON_INK, .006f)
+                repeat(2) { i ->
+                    val x = .09f + i * .76f
+                    line(x + .035f, 0f, x + .035f, .15f, CARTOON_INK, .005f)
+                    cartoonOval(x - .015f, .155f, .105f, .066f, 0xFFABCCC0)
+                    cartoonOval(x - .035f, .197f, .15f, .043f, 0xFFE9AC6F)
+                }
+                cartoonRect(.795f, .69f, .205f, .035f, 0xFFB96558)
+                repeat(3) { i -> cartoonOval(.835f, .66f - i * .028f, .13f, .033f, 0xFFE1B676) }
+                // A boot flowerpot is deliberately separate from the movable tabletop props.
+                path.reset()
+                path.moveTo(.025f * size.width, .55f * size.height)
+                path.lineTo(.105f * size.width, .55f * size.height)
+                path.lineTo(.105f * size.width, .638f * size.height)
+                path.cubicTo(.19f * size.width, .638f * size.height, .20f * size.width, .71f * size.height,
+                    .12f * size.width, .71f * size.height)
+                path.lineTo(.025f * size.width, .71f * size.height)
+                path.close()
+                drawPath(path, Color(0xFFC57562))
+                drawPath(path, Color(CARTOON_INK), style = Stroke(.006f * size.minDimension))
+                line(.065f, .55f, .065f, .435f, CARTOON_INK, .006f)
+                cartoonOval(.025f, .424f, .08f, .052f, 0xFFE9C969)
+                dot(.065f, .45f, .012f, CARTOON_INK)
+                line(.026f, .685f, .13f, .685f, CARTOON_INK, .005f)
+            }
             else -> {
                 window(.70f, .13f, .23f, .28f, Color(0xFF404C76), t)
                 oval(.835f, .17f, .045f, .030f, 0xFFBEB5BD)
@@ -183,6 +262,16 @@ class PetEnvironmentBackgroundPainter {
     private fun DrawScope.dot(x: Float, y: Float, r: Float, color: Long) = drawCircle(Color(color), r * size.minDimension, p(x, y))
     private fun DrawScope.line(x: Float, y: Float, xx: Float, yy: Float, color: Long, width: Float) = drawLine(Color(color), p(x, y), p(xx, yy), width * size.minDimension, StrokeCap.Round)
     private fun DrawScope.p(x: Float, y: Float) = Offset(x * size.width, y * size.height)
+
+    private fun DrawScope.cartoonRect(x: Float, y: Float, w: Float, h: Float, color: Long) {
+        rect(x, y, w, h, color)
+        drawRect(Color(CARTOON_INK), p(x, y), Size(w * size.width, h * size.height), style = Stroke(.005f * size.minDimension))
+    }
+
+    private fun DrawScope.cartoonOval(x: Float, y: Float, w: Float, h: Float, color: Long) {
+        oval(x, y, w, h, color)
+        drawOval(Color(CARTOON_INK), p(x, y), Size(w * size.width, h * size.height), style = Stroke(.005f * size.minDimension))
+    }
 
     private fun DrawScope.window(x: Float, y: Float, w: Float, h: Float, sky: Color, t: Float) {
         rect(x - .012f, y - .010f, w + .024f, h + .02f, 0xFF897F72)
@@ -276,5 +365,8 @@ class PetEnvironmentBackgroundPainter {
     }
 
     private fun phase(value: Float): Float = if (value.isFinite()) value - floor(value) else 0f
-    private companion object { const val TAU = (PI * 2).toFloat() }
+    private companion object {
+        const val TAU = (PI * 2).toFloat()
+        const val CARTOON_INK = 0xFF293B42L
+    }
 }

@@ -45,6 +45,9 @@ internal class PetEnvironmentAtmosphere {
         BackgroundAnimation.BEDROOM to PetEnvironmentMaterial(0xFF443850, 0xFF231E34, 0xFF826E76),
         BackgroundAnimation.CARTOON_NOOK to PetEnvironmentMaterial(0xFF83D1E0, 0xFFBCE6D8, 0xFFC98C45),
         BackgroundAnimation.CARTOON_GALLEY to PetEnvironmentMaterial(0xFF345E7B, 0xFF839CA2, 0xFFE5AB51),
+        BackgroundAnimation.CARTOON_SNACK_LAB to PetEnvironmentMaterial(0xFFB6DDD1, 0xFFD2E4C6, 0xFFE9AF7D),
+        BackgroundAnimation.CARTOON_LAUNDROMAT to PetEnvironmentMaterial(0xFFD2C5E2, 0xFFB9D8CF, 0xFFE4C89F),
+        BackgroundAnimation.CARTOON_DINER to PetEnvironmentMaterial(0xFFF3E0A7, 0xFFF0CCA6, 0xFFDA8A77),
     )
     private val beam = Path().apply {
         moveTo(.07f, .12f); lineTo(.23f, .12f); lineTo(.48f, .76f); lineTo(.27f, .76f); close()
@@ -136,6 +139,35 @@ internal class PetEnvironmentAtmosphere {
                     val center = Offset((.38f + i * .23f) * size.width, (.17f + i * .08f) * size.height)
                     val alpha = .12f + .12f * (1f + sin(slow * TAU + i * 2f))
                     drawCircle(Color(0xFFEDF4D8), size.minDimension * .0025f, center, alpha = alpha)
+                }
+            }
+            BackgroundAnimation.CARTOON_SNACK_LAB -> {
+                // Two tiny bubbles above the equipment; the illustration owns every prop.
+                repeat(2) { i ->
+                    val phase = slow * TAU + i * PI.toFloat()
+                    val center = Offset((.09f + i * .065f + sin(phase) * .006f) * size.width,
+                        (.12f + i * .045f + cos(phase) * .013f) * size.height)
+                    drawCircle(Color(0xFF639E95), size.minDimension * (.0035f + i * .001f), center,
+                        alpha = .42f, style = rippleStroke)
+                }
+            }
+            BackgroundAnimation.CARTOON_LAUNDROMAT -> {
+                // One drifting soap glint stays high at the edge, away from the avatar.
+                val center = Offset((.90f + sin(slow * TAU) * .015f) * size.width,
+                    (.12f + cos(slow * TAU) * .012f) * size.height)
+                val length = size.minDimension * .006f
+                val alpha = .28f + .12f * sin(clock * TAU)
+                drawLine(Color(0xFFFDF6DE), center - Offset(length, 0f), center + Offset(length, 0f),
+                    size.minDimension * .002f, alpha = alpha)
+                drawLine(Color(0xFFFDF6DE), center - Offset(0f, length), center + Offset(0f, length),
+                    size.minDimension * .002f, alpha = alpha)
+            }
+            BackgroundAnimation.CARTOON_DINER -> {
+                // A pair of warm ceiling glints, with no steam laid over unrelated objects.
+                repeat(2) { i ->
+                    val center = Offset((.10f + i * .80f) * size.width, (.075f + i * .035f) * size.height)
+                    drawCircle(Color(0xFFFFF5D4), size.minDimension * .003f, center,
+                        alpha = .24f + .10f * sin(slow * TAU + i * 2f))
                 }
             }
             else -> Unit

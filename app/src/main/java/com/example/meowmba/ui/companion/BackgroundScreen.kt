@@ -164,8 +164,19 @@ fun BackgroundScreen(
                     }
                 }
                 else -> {
-                    SetupSection("A place to play", "Choose a room to explore with your companion. Care is optional.")
-                    BackgroundChoiceGrid(BackgroundAnimation.entries.filter { it.isPetEnvironment }, selection) { animation ->
+                    SetupSection("Cartoon worlds", "Tap the spring toys in the three new rooms to surprise your companion. Care is optional.")
+                    BackgroundChoiceGrid(listOf(
+                        BackgroundAnimation.CARTOON_SNACK_LAB,
+                        BackgroundAnimation.CARTOON_LAUNDROMAT,
+                        BackgroundAnimation.CARTOON_DINER,
+                        BackgroundAnimation.CARTOON_NOOK,
+                        BackgroundAnimation.CARTOON_GALLEY,
+                    ), selection) { animation ->
+                        onHabitatMode(true)
+                        onSelect(selection.copy(kind = BackgroundKind.ANIMATION, value = animation.id))
+                    }
+                    SetupSection("More places to play", "The original rooms, gardens and escapes are here too.")
+                    BackgroundChoiceGrid(BackgroundAnimation.entries.filter { it.isPetEnvironment && !it.isCartoonEnvironment }, selection) { animation ->
                         onHabitatMode(true)
                         onSelect(selection.copy(kind = BackgroundKind.ANIMATION, value = animation.id))
                     }

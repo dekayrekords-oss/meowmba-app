@@ -130,5 +130,44 @@
       "sha256": "513ae79ef5dedc15a16b4f1091a277ac113d7df4bad29c1540e83b49fe6580a5",
       "prompt": "Original high-budget adult animated sci-fi cartoon spaceship kitchen; thick expressive ink outlines, bright cel shading, playful perspective, oversized water glass/book/ball, clean center airspace. No characters, text, logos, watermark, UI or photorealism. Do not imitate a named franchise."
     }
+  },
+  {
+    "id": "cartoon_snack_lab",
+    "prompt": "Use case: illustration-story. Create one original production-ready cartoon mobile-game background, landscape 3:2 composition, high resolution. This is an empty scene plate for a separately rendered pet avatar, not a screenshot or concept sheet. Visual style: eccentric adult science-fiction television cartoon, crisp dark hand-inked outlines, bold simple silhouettes, cel-shaded flat colors, slightly wonky perspective and witty visual comedy; no copied franchise characters or logos. Restrained, polished composition with only a few large deliberate details; NOT cluttered. Keep the central middle 45 percent airy and low contrast for a large avatar. Keep any joke silhouettes legible around upper center and side edges. COMPOSITING GEOMETRY: an empty broad tabletop spans the entire width. Its rear top edge is a straight horizontal line about 68 percent down the image; the entire lower 32 percent is its clean empty top surface continuing to the bottom. No front fascia or legs. Absolutely no objects, cups, books, food, toys or buttons on this foreground table; interactive objects are added in code. No foreground people, pets, flies or humanoids; objects may have silly accessories. No words, text, watermark, border, UI or lettering. Scene: a cozy absurd snack invention lab, mint walls, apricot cabinet accents, warm afternoon light. One chunky round observation window in the upper middle contains a tranquil peach sky. On a narrow high shelf left of the window sits a single giant banana wearing a tiny gold crown inside a bell jar, treated as a very important scientific specimen. At the far right, a squat refrigerator with a bent drinking-straw-shaped ventilation pipe. Just two little readout dials, no collections of tools or bottles. Empty pale warm-teal foreground lab counter. Cheerful, clean, expressive architecture with a broad quiet center. Everything is illustrated with real drawn shapes, no sterile geometric placeholder look.",
+    "sourcePath": "/Users/bobrossjr/.codex/generated_images/01a0979c-e527-70a2-8488-49fd078dc68d/exec-404d0f77-c64f-49c4-9a04-9ae8f01a4c1b.png",
+    "generator": "Built-in image_gen",
+    "sourceTableAnchor": 0.6630859375,
+    "sourceTableAnchorPixelY": 679,
+    "sha256": "ded5e3040e2512d632ddfe9e99aaf7807b3479549ee039d4431ee80805e4227d",
+    "width": 1536,
+    "height": 1024,
+    "assetPath": "app/src/main/assets/backgrounds/painted/cartoon_snack_lab.png",
+    "sourceFocusX": 0.23
+  },
+  {
+    "id": "cartoon_laundromat",
+    "prompt": "Use case: illustration-story. Create one original production-ready cartoon mobile-game background, landscape 3:2 composition, high resolution. This is an empty scene plate for a separately rendered pet avatar, not a screenshot or concept sheet. Visual style: eccentric adult science-fiction television cartoon, crisp dark hand-inked outlines, bold simple silhouettes, cel-shaded flat colors, slightly wonky perspective and witty visual comedy; no copied franchise characters or logos. Restrained, polished composition with only a few large deliberate details; NOT cluttered. Keep the central middle 45 percent airy and low contrast for a large avatar. Keep any joke silhouettes legible around upper center and side edges. COMPOSITING GEOMETRY: an empty broad tabletop spans the entire width. Its rear top edge is a straight horizontal line about 68 percent down the image; the entire lower 32 percent is its clean empty top surface continuing to the bottom. No front fascia or legs. Absolutely no objects, cups, books, food, toys or buttons on this foreground table; interactive objects are added in code. No foreground people, pets, flies or humanoids; objects may have silly accessories. No words, text, watermark, border, UI or lettering. Scene: a goofy cosmic laundromat, lavender walls, seafoam washing machines at the far left and right, warm cream tiles and a peach empty folding counter in the foreground. The machine windows resemble small circular space portals, containing dark indigo and one simple swirl. In the upper central zone, a narrow floating display shelf holds a single oversized striped sock in a shiny gold trophy cup, proudly framed by a few tiny drawn sparkle marks. Beside one washer, a tiny stool wears enormous red sneakers. Only these two funny visual gags; no scattered washing, baskets, posters or clutter. Cel-shaded comedy animation background, cozy rather than neon. Keep central middle wall quiet.",
+    "sourcePath": "/Users/bobrossjr/.codex/generated_images/01a0979c-e527-70a2-8488-49fd078dc68d/exec-f7c6bc6a-939b-4a36-988f-16e2c876eaaf.png",
+    "generator": "Built-in image_gen",
+    "sourceTableAnchor": 0.6689453125,
+    "sourceTableAnchorPixelY": 685,
+    "sha256": "aae099eb916496845738adaf4ff1a4d2d74086c937898fc3c6b63d7280d28e03",
+    "width": 1536,
+    "height": 1024,
+    "assetPath": "app/src/main/assets/backgrounds/painted/cartoon_laundromat.png",
+    "sourceFocusX": 0.5
+  },
+  {
+    "id": "cartoon_diner",
+    "prompt": "Use case: illustration-story. Create one original production-ready cartoon mobile-game background, landscape 3:2 composition, high resolution. This is an empty scene plate for a separately rendered pet avatar, not a screenshot or concept sheet. Visual style: eccentric adult science-fiction television cartoon, crisp dark hand-inked outlines, bold simple silhouettes, cel-shaded flat colors, slightly wonky perspective and witty visual comedy; no copied franchise characters or logos. Restrained, polished composition with only a few large deliberate details; NOT cluttered. Keep the central middle 45 percent airy and low contrast for a large avatar. Keep any joke silhouettes legible around upper center and side edges. COMPOSITING GEOMETRY: an empty broad tabletop spans the entire width. Its rear top edge is a straight horizontal line about 68 percent down the image; the entire lower 32 percent is its clean empty top surface continuing to the bottom. No front fascia or legs. Absolutely no objects, cups, books, food, toys or buttons on this foreground table; interactive objects are added in code. No foreground people, pets, flies or humanoids; objects may have silly accessories. No words, text, watermark, border, UI or lettering. Scene: an oddball intergalactic roadside diner in butter yellow, tomato coral, and soft turquoise, with a big rounded window showing a simple dusty desert horizon. A single UFO-shaped pendant light in the upper central portion shines a drawn pale beam on a pancake-shaped little display ornament on a HIGH BACK shelf; the pancakes float comically in that beam. At the far side a cowboy boot serves as a pot for one drooping cactus with a tiny bow tie. Only these two funny visual gags, no signs, menus, crowds, table settings or extra decor. Empty cream diner counter fills the foreground, separated from all background furniture. Bold outlines, sparse cel shading, charming wonky silhouettes. Keep middle center open for a large pet avatar.",
+    "sourcePath": "/Users/bobrossjr/.codex/generated_images/01a0979c-e527-70a2-8488-49fd078dc68d/exec-5ff47cde-4f8b-4e16-b656-01184ad0c3ed.png",
+    "generator": "Built-in image_gen",
+    "sourceTableAnchor": 0.6484375,
+    "sourceTableAnchorPixelY": 664,
+    "sha256": "3b41791cbace4b1733746757de52b7fb6e3894160eda0e8dd5b9e5e84d39a27d",
+    "width": 1536,
+    "height": 1024,
+    "assetPath": "app/src/main/assets/backgrounds/painted/cartoon_diner.png",
+    "sourceFocusX": 0.18
   }
 ]

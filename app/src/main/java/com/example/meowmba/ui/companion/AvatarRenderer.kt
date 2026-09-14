@@ -49,6 +49,8 @@ import com.example.meowmba.core.thermal.ThermalGovernor
 import com.example.meowmba.core.lumen.ReflexSensoryFeed
 import com.example.meowmba.ui.companion.lumen.LumenReflexBridge
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -276,6 +278,13 @@ fun AvatarRenderer(
     val avatarScale = if (state.avatarScale.isFinite()) state.avatarScale.coerceIn(.5f, 3f) else 2f
     val avatarHitTransform = remember { arrayOf(AvatarHitTransform()) }
     val habitatEnabled = state.habitatMode
+    val cartoonGagKind = if (habitatEnabled) CartoonGagKind.forBackground(state.habitatBackgroundId) else null
+    val cartoonGag = remember(cartoonGagKind, habitatEnabled) { cartoonGagKind?.let(::CartoonHabitatGag) }
+    val latestCartoonGag by rememberUpdatedState(cartoonGag)
+    val latestPaused by rememberUpdatedState(paused)
+    val touchFly3DFrame by rememberUpdatedState(lastFly3DFrame)
+    val lastFullFlyPose = remember { arrayOf(FullFlyPose()) }
+    val canvasSize = remember { floatArrayOf(0f, 0f) }
     val latestHabitatAction by rememberUpdatedState(onHabitatAction)
     val latestHabitatEnabled by rememberUpdatedState(habitatEnabled)
     val lumenContext = LocalContext.current
@@ -666,6 +675,47 @@ fun AvatarRenderer(
     }
     val petted = petPulse != 0L
 
+    fun playCartoonGag(point: Offset, width: Float, height: Float, accessibleAction: Boolean = false): Boolean {
+        val gag = latestCartoonGag ?: return false
+        val gpuFrame = touchFly3DFrame[0].takeIf { touchStyle == AvatarStyle.FULL_FLY }
+        val avatarOwnsTap = when {
+            accessibleAction -> false // This names the toy directly; it is not an ambiguous screen tap.
+            gpuFrame != null -> cartoonFlyOwnsPoint(point, width, height, gpuFrame)
+            touchStyle == AvatarStyle.FULL_FLY -> {
+                val pose = lastFullFlyPose[0]
+                val unit = minOf(minOf(width, height) * .32f * pose.scale.coerceIn(.35f, 1.8f), minOf(width, height) * .46f)
+                val at = Offset((width * pose.x).coerceIn(unit * 1.05f, width - unit * 1.05f),
+                    (height * pose.y).coerceIn(unit * .88f, height - unit * .73f))
+                hypot(point.x - at.x, point.y - at.y) <= unit * 1.05f
+            }
+            touchStyle.isLumen -> {
+                val local = avatarHitTransform[0].inverse(point)
+                lumenZoneAt(local, width.toInt(), height.toInt(), lumenLastFrame[0]) != AvatarZone.BACKGROUND
+            }
+            else -> {
+                val transform = avatarHitTransform[0]
+                val radius = minOf(width, height) * .64f * transform.scale
+                hypot(point.x - transform.destination.x, point.y - transform.destination.y) <= radius
+            }
+        }
+        val propOwnsTap = !accessibleAction && if (gpuFrame != null) {
+            gpuFrame.props.orEmpty().any { prop ->
+                cartoonProjectHabitatPoint(prop.x, prop.y + .10f, prop.z, width, height)?.let { at ->
+                    hypot(point.x - at.x, point.y - at.y) <= maxOf(42f, minOf(width, height) * .09f)
+                } == true
+            }
+        } else touchHabitatWorld.actionAt(point.x, point.y, width, height) != null
+        if (!gag.tap(point, width, height, clockSec,
+                active = latestHabitatEnabled && !latestPaused &&
+                    ThermalGovernor.currentStatus() < android.os.PowerManager.THERMAL_STATUS_SEVERE,
+                avatarOwnsTap = avatarOwnsTap, propOwnsTap = propOwnsTap)) return false
+        // One event enters the existing care, affect and neural TOUCH pathway.
+        // Normal petting is skipped for this tap to avoid counting it twice.
+        latestHabitatAction(HabitatAction.PLAY)
+        drawEpoch++
+        return true
+    }
+
     Canvas(
         modifier = {
             val base = modifier
@@ -681,13 +731,21 @@ fun AvatarRenderer(
                 .onSizeChanged { sz ->
                     // Match draw-time fit so CatMotion scales stay consistent.
                     faceRadiusPx = fitGodotFaceRadius(sz.width.toFloat(), sz.height.toFloat())
+                    canvasSize[0] = sz.width.toFloat(); canvasSize[1] = sz.height.toFloat()
                 }
                 .semantics {
                     contentDescription =
                         "${state.avatarStyle.label} avatar, currently ${state.interactionState.name.lowercase()}" +
                             (if (state.isCameraEnabled) ", camera enabled" else ", camera off") +
                             (if (!state.isMicEnabled) ", microphone off" else "") +
-                            (if (state.isMuted) ", speech muted" else "")
+                            (if (state.isMuted) ", speech muted" else "") +
+                            (cartoonGagKind?.let { ". ${it.description}" } ?: "")
+                    if (cartoonGagKind != null && pointerEnabled) customActions = listOf(
+                        CustomAccessibilityAction(cartoonGagKind.description) {
+                            val layout = cartoonGagLayout(canvasSize[0], canvasSize[1])
+                            layout != null && playCartoonGag(layout.center, canvasSize[0], canvasSize[1], accessibleAction = true)
+                        }
+                    )
                 }
             if (!pointerEnabled) base
             else
@@ -696,6 +754,7 @@ fun AvatarRenderer(
                 detectTapGestures(
                     onTap = { offset ->
                         touchGaze = normalizeGaze(offset, size.width, size.height)
+                        if (playCartoonGag(offset, size.width.toFloat(), size.height.toFloat())) return@detectTapGestures
                         petPulse += 1L
                         if (latestHabitatEnabled) {
                             if (touchStyle == AvatarStyle.FULL_FLY) {
@@ -890,6 +949,10 @@ fun AvatarRenderer(
         // pose/clock inputs as every other style — so switching faces
         // mid-animation stays seamless. (The Aura Home card in
         // AuraHomeAvatar.kt is parked — the face runs full-screen.)
+        // The toy shares this clock and paints under Canvas avatars/movable props.
+        // Full-fly uses a separate GPU surface; foreground ownership is guarded above.
+        // No ambient timer is added, and Android's disabled animator setting gets a still toy.
+        cartoonGag?.draw(this, tSec, reducedMotion = !android.animation.ValueAnimator.areAnimatorsEnabled())
         val flyPose = if (habitatEnabled && !(state.avatarStyle == AvatarStyle.FULL_FLY && onFly3DFrame != null)) {
             val bias = nervousBias()
             val care = state.petCare
@@ -982,7 +1045,9 @@ fun AvatarRenderer(
                 return@Canvas
             }
             if (state.avatarStyle == AvatarStyle.FULL_FLY) {
-                fullFlyPainter.draw(this, frame, (flyPose ?: FullFlyPose(scale = 1.8f)).let { it.copy(scale = it.scale * avatarScale) })
+                val fullPose = (flyPose ?: FullFlyPose(scale = 1.8f)).let { it.copy(scale = it.scale * avatarScale) }
+                lastFullFlyPose[0] = fullPose
+                fullFlyPainter.draw(this, frame, fullPose)
                 // Shared renderer keeps privacy marks fixed; hide only its face.
                 lumenPainter.draw(this, frame.copy(presence = 0f), Color(state.avatarEyeColor), Color(state.avatarGlowColor),
                     cameraOff = !state.isCameraEnabled, micOff = !state.isMicEnabled,
@@ -1024,8 +1089,8 @@ fun AvatarRenderer(
                 faceCy + ambient.offY + lurchAnim * R * 0.12f,
             )
             val orbSpeaking = effectivePose.mouth == MouthMode.SPEAKING
-            avatarHitTransform[0] = AvatarHitTransform(center, center, avatarScale)
             val sceneScale = avatarScale * if (flyPose != null) .4f else 1f
+            avatarHitTransform[0] = AvatarHitTransform(center, center, sceneScale)
             scale(sceneScale, sceneScale, center) {
             particleSim.draw(
                 scope = this,
@@ -1191,8 +1256,8 @@ fun AvatarRenderer(
             // an impact or the breath's compression, lengthens and narrows on
             // the rise, conserving the silhouette's area either way.
             val (squashX, squashY) = squashStretch(gPose.squash.coerceIn(-0.3f, 0.3f))
-            avatarHitTransform[0] = AvatarHitTransform(center, center, avatarScale)
             val sceneScale = avatarScale * if (flyPose != null) .4f else 1f
+            avatarHitTransform[0] = AvatarHitTransform(center, center, sceneScale)
             scale(sceneScale, sceneScale, center) {
             rotate(gPose.headTiltDeg, pivot = center) {
                 scale(scaleX = squashX, scaleY = squashY, pivot = center) {
@@ -1225,9 +1290,9 @@ fun AvatarRenderer(
         }
 
         val classicCenter = Offset(cx, cy)
-        avatarHitTransform[0] = AvatarHitTransform(classicCenter, classicCenter, avatarScale)
         val classicDestination = flyPose?.let { Offset(it.x * w, it.y * h) } ?: classicCenter
         val classicScale = avatarScale * if (flyPose != null) .4f else 1f
+        avatarHitTransform[0] = AvatarHitTransform(classicCenter, classicDestination, classicScale)
         translate(classicDestination.x - classicCenter.x, classicDestination.y - classicCenter.y) {
         scale(classicScale, classicScale, classicCenter) {
         // ── LAYER -1: Tail (behind the face, wags during animations) ────────

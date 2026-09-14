@@ -34,8 +34,9 @@ class PetEnvironmentBackgroundTest {
         return bitmap
     }
 
-    @Test fun tenNewEnvironmentsRoundTripAndAreDistinct() {
-        assertEquals(10, entries.size)
+    @Test fun allFifteenEnvironmentsRoundTripAndAreDistinct() {
+        assertEquals(15, entries.size)
+        assertEquals(5, entries.count { it.isCartoonEnvironment })
         assertEquals(.78f, PET_ENVIRONMENT_TABLE_Y, 0f)
         val samples = entries.map { animation ->
             assertNull(animation.condition)
@@ -49,7 +50,7 @@ class PetEnvironmentBackgroundTest {
     }
 
     @Test fun nativeContactSheetAndAspectRatiosStayOpaque() {
-        val sheet = Bitmap.createBitmap(1600, 960, Bitmap.Config.ARGB_8888)
+        val sheet = Bitmap.createBitmap(1600, ((entries.size + 4) / 5) * 480, Bitmap.Config.ARGB_8888)
         entries.forEachIndexed { index, animation ->
             val portrait = render(animation)
             android.graphics.Canvas(sheet).drawBitmap(portrait, index % 5 * 320f, index / 5 * 480f, null)

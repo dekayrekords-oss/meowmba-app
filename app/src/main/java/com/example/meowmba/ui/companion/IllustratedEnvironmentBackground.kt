@@ -53,7 +53,8 @@ internal fun IllustratedEnvironmentBackground(
         if (image == null) {
             fallback.draw(this, animation, t, s)
         } else {
-            val placement = illustratedRoomPlacement(image.width, image.height, size.width, size.height, illustratedSourceTableAnchor(animation))
+            val placement = illustratedRoomPlacement(image.width, image.height, size.width, size.height,
+                illustratedSourceTableAnchor(animation), illustratedSourceFocusX(animation))
             // Anchored cover maps each measured image ledge to the world's .78 plane.
             // Center-crop would silently move the contact plane on a landscape Fold.
             clipRect {
@@ -85,11 +86,22 @@ internal fun illustratedSourceTableAnchor(animation: BackgroundAnimation): Float
     // New landscape art carries a deliberately broad, nearly level counter.
     BackgroundAnimation.CARTOON_NOOK -> 612f / 941f
     BackgroundAnimation.CARTOON_GALLEY -> 604f / 941f
+    BackgroundAnimation.CARTOON_SNACK_LAB -> 679f / 1024f
+    BackgroundAnimation.CARTOON_LAUNDROMAT -> 685f / 1024f
+    BackgroundAnimation.CARTOON_DINER -> 664f / 1024f
     else -> .69f
 }
 
-/** Cover without stretching; align the measured source ledge to the viewport's .78. */
-internal fun illustratedRoomPlacement(imageWidth: Int, imageHeight: Int, width: Float, height: Float, sourceAnchorFraction: Float = .69f): IllustratedRoomPlacement {
+/** Keep the illustrated joke in portrait's narrow crop; other rooms retain center framing. */
+internal fun illustratedSourceFocusX(animation: BackgroundAnimation): Float = when (animation) {
+    BackgroundAnimation.CARTOON_SNACK_LAB -> .23f
+    BackgroundAnimation.CARTOON_DINER -> .18f
+    else -> .5f
+}
+
+/** Cover without stretching; align the ledge vertically and bound horizontal focal framing. */
+internal fun illustratedRoomPlacement(imageWidth: Int, imageHeight: Int, width: Float, height: Float,
+    sourceAnchorFraction: Float = .69f, sourceFocusX: Float = .5f): IllustratedRoomPlacement {
     if (imageWidth <= 0 || imageHeight <= 0 || !width.isFinite() || !height.isFinite() || width <= 0f || height <= 0f)
         return IllustratedRoomPlacement(0f, 0f, 1f, 1f)
     val sourceAnchor = if (sourceAnchorFraction.isFinite()) sourceAnchorFraction.coerceIn(.05f, .95f) else .69f
@@ -101,7 +113,9 @@ internal fun illustratedRoomPlacement(imageWidth: Int, imageHeight: Int, width: 
     val scale = maxOf(width / imageWidth, targetY / sourceY, (height - targetY) / (imageHeight - sourceY))
     val drawnWidth = imageWidth * scale
     val drawnHeight = imageHeight * scale
-    return IllustratedRoomPlacement((width - drawnWidth) * .5f,
+    val focus = if (sourceFocusX.isFinite()) sourceFocusX.coerceIn(0f, 1f) else .5f
+    val left = (width * .5f - drawnWidth * focus).coerceIn(minOf(0f, width - drawnWidth), 0f)
+    return IllustratedRoomPlacement(left,
         targetY - sourceY * scale, drawnWidth, drawnHeight)
 }
 

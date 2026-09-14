@@ -66,7 +66,17 @@ enum class BackgroundAnimation(
     BEACH("beach", "Seaside deck", isPetEnvironment = true),
     BEDROOM("bedroom", "Cozy bedroom", isPetEnvironment = true),
     CARTOON_NOOK("cartoon_nook", "Cartoon sky nook", isPetEnvironment = true),
-    CARTOON_GALLEY("cartoon_galley", "Cartoon space galley", isPetEnvironment = true);
+    CARTOON_GALLEY("cartoon_galley", "Cartoon space galley", isPetEnvironment = true),
+    CARTOON_SNACK_LAB("cartoon_snack_lab", "Cartoon snack lab", isPetEnvironment = true),
+    CARTOON_LAUNDROMAT("cartoon_laundromat", "Cosmic laundry", isPetEnvironment = true),
+    CARTOON_DINER("cartoon_diner", "Oddball diner", isPetEnvironment = true);
+
+    /** Picker grouping is independent of the stable IDs already stored on the phone. */
+    val isCartoonEnvironment: Boolean
+        get() = when (this) {
+            CARTOON_NOOK, CARTOON_GALLEY, CARTOON_SNACK_LAB, CARTOON_LAUNDROMAT, CARTOON_DINER -> true
+            else -> false
+        }
 
     companion object {
         fun byId(id: String?): BackgroundAnimation? = entries.firstOrNull { it.id == id }

@@ -2,6 +2,7 @@ package com.example.meowmba
 
 import com.example.meowmba.ui.companion.illustratedDecodeSize
 import com.example.meowmba.ui.companion.illustratedSourceTableAnchor
+import com.example.meowmba.ui.companion.illustratedSourceFocusX
 import com.example.meowmba.core.background.BackgroundAnimation
 import com.example.meowmba.ui.companion.illustratedRoomPlacement
 import com.example.meowmba.ui.companion.PET_ENVIRONMENT_TABLE_Y
@@ -50,13 +51,29 @@ class IllustratedEnvironmentPlacementTest {
         val viewports = listOf(280f to 1200f, 1200f to 280f, 1768f to 2208f, 2208f to 1768f)
         BackgroundAnimation.entries.filter { it.isPetEnvironment }.forEach { room ->
             val anchor = illustratedSourceTableAnchor(room)
+            val (sourceWidth, sourceHeight) = when (room) {
+                BackgroundAnimation.CARTOON_NOOK, BackgroundAnimation.CARTOON_GALLEY -> 1672 to 941
+                BackgroundAnimation.CARTOON_SNACK_LAB, BackgroundAnimation.CARTOON_LAUNDROMAT,
+                BackgroundAnimation.CARTOON_DINER -> 1536 to 1024
+                else -> 1024 to 1536
+            }
             for ((width, height) in viewports) {
-                val p = illustratedRoomPlacement(1024, 1536, width, height, anchor)
+                val p = illustratedRoomPlacement(sourceWidth, sourceHeight, width, height, anchor, illustratedSourceFocusX(room))
                 assertEquals("measured table edge: ${room.id}", height * PET_ENVIRONMENT_TABLE_Y, p.y + p.height * anchor, .001f)
-                assertEquals(1024f / 1536f, p.width / p.height, .00001f)
+                assertEquals(sourceWidth.toFloat() / sourceHeight, p.width / p.height, .00001f)
                 assertTrue("full viewport coverage: ${room.id}", p.x <= .001f && p.y <= .001f &&
                     p.x + p.width >= width - .001f && p.y + p.height >= height - .001f)
             }
+        }
+    }
+
+    @Test fun portraitFramingKeepsNewBackgroundJokesOnScreen() {
+        for ((room, subjectX) in listOf(BackgroundAnimation.CARTOON_SNACK_LAB to 320f,
+            BackgroundAnimation.CARTOON_DINER to 250f, BackgroundAnimation.CARTOON_LAUNDROMAT to 768f)) {
+            val p = illustratedRoomPlacement(1536, 1024, 360f, 800f,
+                illustratedSourceTableAnchor(room), illustratedSourceFocusX(room))
+            val x = p.x + subjectX / 1536f * p.width
+            assertTrue("Joke remains inside the portrait viewport: ${room.id}", x in 40f..320f)
         }
     }
 

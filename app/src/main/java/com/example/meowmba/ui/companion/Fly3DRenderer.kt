@@ -94,6 +94,7 @@ class Fly3DRenderer : GLSurfaceView.Renderer {
     private var drawCalls=0
     private var triangles=0
     private var drawingCharacter = false
+    private var cartoonScenery = false
     private var nightScene = false
     private var sceneTime = 0f
 
@@ -174,6 +175,7 @@ class Fly3DRenderer : GLSurfaceView.Renderer {
         GLES20.glUniform2f(environmentHandle,if(nightScene)1f else 0f,sceneTime)
         prepareShadows(f)
         drawingCharacter=false
+        cartoonScenery=!f.stageMode && f.backgroundId in CARTOON_ROOM_BACKGROUNDS
         if(!f.stageMode) room(f)
         push()
         val requestedScale=f.avatarScale.safe(2f).coerceIn(.5f,3f)
@@ -245,6 +247,11 @@ class Fly3DRenderer : GLSurfaceView.Renderer {
     }
 
     private fun room(f: Fly3DFrame) {
+        if (cartoonScenery) {
+            cartoonRoom(f)
+            interactionTable(f, if (f.backgroundId == "cartoon_diner") 0xDA8A77 else 0xE4B386)
+            return
+        }
         val night = f.backgroundId in NIGHT_BACKGROUNDS
         val garden = f.backgroundId in GARDEN_BACKGROUNDS
         val outdoor=f.backgroundId in OUTDOOR_BACKGROUNDS
@@ -290,8 +297,21 @@ class Fly3DRenderer : GLSurfaceView.Renderer {
         }
         roomDetails(f)
         roomFinishing(f)
+        interactionTable(f, if (garden) 0x9A8862 else 0xA88662)
+        // A succulent offers a recognizable volumetric silhouette and gentle background movement.
+        ellipsoid(-2.65f,.24f,-1.55f,.24f,.24f,.24f,0xB17A5B)
+        for (i in 0..4) {
+            push(); Matrix.translateM(model,0,-2.65f,.46f,-1.55f)
+            Matrix.rotateM(model,0,i*72f,0f,1f,0f)
+            Matrix.rotateM(model,0,25f + sin(f.timeSeconds.safe()*.65f+i)*3f,0f,0f,1f)
+            ellipsoid(0f,.22f,0f,.065f,.28f,.11f,0x567D59); pop()
+        }
+    }
+
+    /** Both room styles share one authoritative contact plane and simulation-owned inventory. */
+    private fun interactionTable(f: Fly3DFrame, color: Int) {
         // Main interaction table top at y=.80. Grounded root≈1.35 (feet−1.10*.50).
-        box(0f,.72f,0f, 2.10f,.08f,1.0f, if (garden) 0x9A8862 else 0xA88662)
+        box(0f,.72f,0f, 2.10f,.08f,1.0f, color)
         for (side in -1..1 step 2) {
             box(side*1.90f,.35f,-.80f, .075f,.35f,.075f, 0x735F49)
             box(side*1.90f,.35f,.80f, .075f,.35f,.075f, 0x735F49)
@@ -310,14 +330,120 @@ class Fly3DRenderer : GLSurfaceView.Renderer {
             if (f.holding != "glass") { push(); Matrix.translateM(model,0,1f,.8f,.5f); glass(); pop() }
             push(); Matrix.translateM(model,0,1.6f,.8f,0f); ball(); pop()
         }
-        // A succulent offers a recognizable volumetric silhouette and gentle background movement.
-        ellipsoid(-2.65f,.24f,-1.55f,.24f,.24f,.24f,0xB17A5B)
-        for (i in 0..4) {
-            push(); Matrix.translateM(model,0,-2.65f,.46f,-1.55f)
-            Matrix.rotateM(model,0,i*72f,0f,1f,0f)
-            Matrix.rotateM(model,0,25f + sin(f.timeSeconds.safe()*.65f+i)*3f,0f,0f,1f)
-            ellipsoid(0f,.22f,0f,.065f,.28f,.11f,0x567D59); pop()
+    }
+
+    /**
+     * Full-fly habitats are opaque 3D rooms, so a new bitmap alone cannot change them.
+     * These native counterparts keep the center clear and put two comic motifs at the
+     * rear edges. All motion uses the existing paused frame snapshot; no extra GL assets.
+     */
+    private fun cartoonRoom(f: Fly3DFrame) {
+        val wall = when (f.backgroundId) {
+            "cartoon_snack_lab" -> 0xB6DDD1
+            "cartoon_laundromat" -> 0xD2C5E2
+            else -> 0xF3E0A7
         }
+        val floor = when (f.backgroundId) {
+            "cartoon_snack_lab" -> 0xE9BC97
+            "cartoon_laundromat" -> 0xA8CABE
+            else -> 0xD69A88
+        }
+        box(0f,-.10f,0f,18f,.10f,18f,floor,outline=false)
+        box(0f,6f,-2.6f,18f,6f,.10f,wall,outline=false)
+        box(-4.3f,6f,0f,.10f,6f,18f,wall,outline=false)
+        box(4.3f,6f,0f,.10f,6f,18f,wall,outline=false)
+        box(0f,.12f,-2.45f,4.3f,.12f,.05f,0x729891)
+        // One broad wall stripe gives perspective without the older panels/window clutter.
+        box(0f,1.24f,-2.46f,4.3f,.035f,.045f,0xF1E7C9,outline=false)
+        when (f.backgroundId) {
+            "cartoon_snack_lab" -> snackLabScenery()
+            "cartoon_laundromat" -> laundryScenery()
+            else -> dinerScenery()
+        }
+    }
+
+    private fun snackLabScenery() {
+        // The glass is a pale rear shell and open ink silhouette, so it never occludes the banana.
+        box(-2.68f,.65f,-1.93f,.64f,.65f,.40f,0xE6AC7C)
+        ellipsoid(-2.68f,1.34f,-1.93f,.66f,.065f,.43f,0x729891)
+        ellipsoid(-2.68f,2.02f,-2.13f,.56f,.66f,.12f,0xD7F0DC)
+        ellipsoid(-2.68f,2.72f,-2.02f,.085f,.075f,.085f,0x8BB9AC)
+        val lean = sin(sceneTime * .45f) * 3f
+        push(); Matrix.translateM(model,0,-2.68f,1.97f,-1.83f)
+        Matrix.rotateM(model,0,lean,0f,0f,1f)
+        // A six-piece curved fruit silhouette; small meshes keep this rear detail inexpensive.
+        for (i in 0..5) {
+            val a=i/6f; val b=(i+1)/6f
+            segment(-.32f+a*.64f,.05f-sin(a*3.141593f)*.31f,0f,
+                -.32f+b*.64f,.05f-sin(b*3.141593f)*.31f,0f,.115f,0xF0CB5C,outline=false)
+        }
+        ellipsoid(-.31f,.06f,0f,.060f,.050f,.065f,0x6F6546,outline=false)
+        ellipsoid(.31f,.06f,0f,.060f,.050f,.065f,0x6F6546,outline=false)
+        ellipsoid(-.07f,-.18f,.107f,.026f,.034f,.022f,INK,outline=false)
+        ellipsoid(.07f,-.18f,.107f,.026f,.034f,.022f,INK,outline=false)
+        box(0f,.23f,0f,.23f,.045f,.13f,0xDEAA48)
+        for(i in -1..1) {
+            segment(i*.17f,.24f,0f,i*.19f,.39f+(if(i==0).05f else 0f),0f,.042f,0xDEAA48)
+        }
+        pop()
+        // Specimen jar gleam is fixed to the glass, separate from the gently tilting fruit.
+        segment(-3.08f,1.70f,-1.94f,-3.04f,2.35f,-1.98f,.016f,0xFAF4D9,outline=false)
+        // A compact absurdly oversized snack button is the only other piece of equipment.
+        box(2.64f,1.11f,-1.93f,.52f,1.11f,.40f,0x78ADA6)
+        box(2.64f,1.53f,-1.49f,.34f,.38f,.025f,0xD7F0DC)
+        ellipsoid(2.64f,1.53f,-1.425f,.19f,.19f,.055f,0xD98369)
+        box(2.64f,.52f,-1.49f,.26f,.065f,.06f,INK,outline=false)
+    }
+
+    private fun laundryScenery() {
+        box(-2.60f,.89f,-1.92f,.61f,.89f,.43f,0x93C4B6)
+        box(-2.60f,1.55f,-1.455f,.51f,.115f,.025f,0xEFE1BB)
+        ellipsoid(-2.89f,1.55f,-1.405f,.061f,.061f,.032f,0xC58473)
+        box(-2.40f,1.55f,-1.407f,.13f,.025f,.016f,INK,outline=false)
+        ellipsoid(-2.60f,.83f,-1.435f,.47f,.47f,.050f,0xE5D8B7)
+        ellipsoid(-2.60f,.83f,-1.37f,.37f,.37f,.035f,0x5D8999)
+        // One lost sock slowly tumbles behind the portal rim using the host's active time.
+        push(); Matrix.translateM(model,0,-2.60f,.83f,-1.32f)
+        Matrix.rotateM(model,0,sceneTime*16f,0f,0f,1f)
+        box(-.05f,.05f,0f,.063f,.13f,.018f,0xF1D49C,outline=false)
+        ellipsoid(.01f,-.07f,.0f,.12f,.060f,.022f,0xF1D49C,outline=false)
+        pop()
+        // Opposite wall: the recovered sock receives a trophy instead of a second washer.
+        box(2.63f,1.75f,-2.01f,.48f,.055f,.30f,0xAC92B9)
+        box(2.63f,1.86f,-1.93f,.28f,.070f,.19f,0xB88A51)
+        segment(2.63f,1.92f,-1.93f,2.63f,2.13f,-1.93f,.048f,0xDDB359)
+        push(); Matrix.translateM(model,0,2.62f,2.47f,-1.93f)
+        Matrix.rotateM(model,0,-14f,0f,0f,1f)
+        box(-.055f,.045f,0f,.14f,.24f,.105f,0xF0D285)
+        ellipsoid(.07f,-.20f,.01f,.26f,.12f,.14f,0xF0D285)
+        box(-.055f,.23f,.112f,.14f,.030f,.012f,0x729891,outline=false)
+        pop()
+    }
+
+    private fun dinerScenery() {
+        // The flying saucer is interested only in this stack of pancakes at the room edge.
+        box(-2.62f,1.22f,-1.92f,.60f,.06f,.43f,0xB86F63)
+        box(-2.62f,.60f,-1.92f,.11f,.60f,.11f,0xD6AA86)
+        ellipsoid(-2.62f,1.33f,-1.92f,.41f,.046f,.32f,0xEDE4C5)
+        for(i in 0..2) ellipsoid(-2.62f,1.43f+i*.105f,-1.92f,.31f,.052f,.25f,0xDCAF69)
+        box(-2.60f,1.715f,-1.90f,.08f,.040f,.07f,0xF4D977)
+        val hover = sin(sceneTime * .8f) * .075f
+        ellipsoid(-2.62f,2.55f+hover,-1.92f,.57f,.13f,.44f,0x95BDB1)
+        ellipsoid(-2.62f,2.72f+hover,-1.92f,.29f,.18f,.25f,0xD5E7D8)
+        ellipsoid(-2.62f,2.435f+hover,-1.92f,.28f,.035f,.24f,0xF3D7A4,outline=false)
+        for(i in -1..1) ellipsoid(-2.62f+i*.24f,2.53f+hover,-1.49f,.041f,.041f,.025f,0xE9B46B,outline=false)
+        // A boot cactus fills the opposite corner without introducing more tabletop inventory.
+        box(2.79f,.065f,-1.80f,.44f,.065f,.29f,0x805B4D)
+        ellipsoid(2.79f,.28f,-1.80f,.44f,.16f,.29f,0xB8725E)
+        box(2.58f,.54f,-1.93f,.22f,.29f,.235f,0xB8725E)
+        ellipsoid(2.60f,.845f,-1.93f,.245f,.050f,.25f,0xE1AD79)
+        segment(2.60f,.85f,-1.93f,2.60f,1.69f,-1.93f,.14f,0x7BA36A)
+        segment(2.58f,1.15f,-1.93f,2.25f,1.22f,-1.93f,.085f,0x7BA36A)
+        segment(2.25f,1.22f,-1.93f,2.25f,1.48f,-1.93f,.080f,0x7BA36A)
+        segment(2.63f,1.38f,-1.93f,2.88f,1.40f,-1.93f,.075f,0x7BA36A)
+        segment(2.88f,1.40f,-1.93f,2.88f,1.62f,-1.93f,.070f,0x7BA36A)
+        ellipsoid(2.60f,1.83f,-1.93f,.12f,.095f,.10f,0xD98691)
+        box(2.61f,.55f,-1.681f,.13f,.018f,.008f,INK,outline=false)
     }
 
     /** Ten authored scenery motifs use the same bounded geometry and active host time. */
@@ -710,11 +836,13 @@ class Fly3DRenderer : GLSurfaceView.Renderer {
         GLES20.glUniformMatrix4fv(viewProjectionHandle,1,false,vp,0)
         GLES20.glUniformMatrix4fv(normalMatrixHandle,1,false,normal,0)
         GLES20.glUniform4f(colorHandle,((color shr 16) and 255)/255f,((color shr 8) and 255)/255f,(color and 255)/255f,alpha)
-        GLES20.glUniform1f(unlitHandle,if(color==INK)1f else if(color in EMISSIVE_COLORS).55f else 0f)
+        GLES20.glUniform1f(unlitHandle,if(color==INK)1f else if(color in EMISSIVE_COLORS).55f
+            else if(cartoonScenery && !drawingCharacter).35f else 0f)
         GLES20.glUniform1f(characterHandle,if(drawingCharacter)1f else 0f)
         val material=when {
             alpha<1f -> 2f
             drawingCharacter -> if(color==RED)3f else 0f
+            cartoonScenery -> 0f
             color in WOOD_COLORS -> 1f
             color in GLASS_COLORS -> 2f
             color in METAL_COLORS -> 3f
@@ -727,7 +855,7 @@ class Fly3DRenderer : GLSurfaceView.Renderer {
             // Black inverted hull. Extrusion is in world units, independent of ellipsoid scale.
             GLES20.glCullFace(GLES20.GL_FRONT)
             GLES20.glUniform1f(outlineHandle,1f)
-            GLES20.glUniform1f(outlineWidthHandle,if(drawingCharacter).014f else .008f)
+            GLES20.glUniform1f(outlineWidthHandle,if(drawingCharacter).014f else if(cartoonScenery).013f else .008f)
             mesh.draw()
         }
         GLES20.glCullFace(GLES20.GL_BACK)
@@ -770,6 +898,7 @@ class Fly3DRenderer : GLSurfaceView.Renderer {
         val OUTDOOR_BACKGROUNDS=setOf("pond","orchard","beach")
         val NIGHT_BACKGROUNDS=setOf("observatory","bedroom")
         val GARDEN_BACKGROUNDS=setOf("greenhouse","pond","orchard","beach")
+        val CARTOON_ROOM_BACKGROUNDS=setOf("cartoon_snack_lab","cartoon_laundromat","cartoon_diner")
         const val VERTEX_SHADER="""
             attribute vec3 aPosition;
             attribute vec3 aNormal;

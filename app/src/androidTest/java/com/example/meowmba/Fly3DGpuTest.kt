@@ -119,4 +119,25 @@ class Fly3DGpuTest {
         gpu.render("game-scale-small",Fly3DFrame(y=1.35f,avatarScale=.5f,handX=.42f,handY=1.15f,handZ=.2f))
         gpu.render("game-scale-large",Fly3DFrame(y=1.35f,avatarScale=2f,handX=.42f,handY=1.15f,handZ=.2f))
     }
+
+    @Test fun newCartoonRoomsHaveNativeSceneryAndFreezeWithTheAvatarClock() {
+        for ((w,h) in listOf(640 to 800,960 to 540)) withGpu(w,h) { gpu ->
+            val base=Fly3DFrame(timeSeconds=3f,y=1.35f,avatarScale=1f)
+            val kitchen=gpu.render("cartoon-reference-$w-$h",base)
+            val oldDraws=gpu.renderer.lastDrawCalls
+            val hashes=mutableSetOf(kitchen.contentHashCode())
+            for (id in listOf("cartoon_snack_lab","cartoon_laundromat","cartoon_diner")) {
+                val room=base.copy(backgroundId=id)
+                val raw=gpu.render("$id-$w-$h",room)
+                assertTrue("native room must differ from kitchen and other new rooms: $id",hashes.add(raw.contentHashCode()))
+                assertTrue("less scenery draw work than original kitchen: $id",gpu.renderer.lastDrawCalls<oldDraws)
+                assertTrue("bounded cartoon draw work: $id",gpu.renderer.lastDrawCalls<400)
+                assertTrue("bounded cartoon triangles: $id",gpu.renderer.lastTriangles<350_000)
+                assertTrue("shared render pixel budget: $id",gpu.renderer.lastRenderPixels<=1_200_000)
+                for (index in raw.indices step 4) assertEquals("opaque habitat: $id",255,raw[index+3].toInt()and 255)
+                val paused=gpu.render("$id-paused-$w-$h",room.copy(active=false,timeSeconds=90f))
+                assertArrayEquals("paused scene uses the same clock snapshot: $id",raw,paused)
+            }
+        }
+    }
 }
