@@ -69,9 +69,11 @@ class LumenPainter {
             flyParts.backdrop(this, center, unit, frame)
             speciesParts.backdrop(this, center, unit, frame, featureColor, glowColor)
             for (side in intArrayOf(-1, 1)) {
-                val c = center + Offset(side * spread, abs(frame.headX) * side * unit * 0.009f)
+                val flyTurn = frame.form.fruitFly * frame.perspective
+                val c = center + Offset(side * spread + side * flyTurn * unit * .018f,
+                    abs(frame.headX) * side * unit * .009f)
                 translate(c.x, c.y) {
-                    val nearScale = 1f + side * frame.headX * 0.1f
+                    val nearScale = 1f + side * (frame.headX * .10f + flyTurn * .13f)
                     scale(nearScale, 1f, Offset.Zero) {
                         animalEar(side, rx, ry, frame, featureColor, glowColor)
                         animalParts.roundEar(this, side, rx, ry, frame, featureColor, glowColor)

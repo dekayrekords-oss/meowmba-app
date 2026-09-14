@@ -101,6 +101,7 @@ class NeuralBehaviorController(
         when (substrate) {
             NeuralSubstrate.RATE -> LeakyRecurrentCore(NeuralCheckpoint.default())
             NeuralSubstrate.SPIKING -> SpikingCore(NeuralCheckpoint.defaultSpiking())
+            NeuralSubstrate.BANC_EXPERIMENTAL -> BancExperimentalCore()
         }
     },
     initialMode: NeuralMode = NeuralMode.SHADOW,
@@ -139,6 +140,8 @@ class NeuralBehaviorController(
     private var lastArbitrated: ArbitratedBehavior? = null
     @Volatile
     private var lastReadout: FloatArray = FloatArray(0)
+    @Volatile
+    private var experimentalWingPower = 0f
 
     private var simTimeMs: Long = 0L
     private var intent: IntentEnvelope? = null
@@ -254,6 +257,11 @@ class NeuralBehaviorController(
 
     fun lastReadout(): FloatArray = lastReadout.copyOf()
 
+    /** Bounded BANC wing-power population activity for the avatar motor layer.
+     * Other substrates return zero. This is an authored visual retarget, not a
+     * biological muscle command or robot-control output. */
+    fun wingMotorNow(): Float = experimentalWingPower
+
     @Synchronized
     fun setMode(newMode: NeuralMode) {
         if (newMode == mode) return
@@ -287,6 +295,7 @@ class NeuralBehaviorController(
         economyAccumulatedMs = 0f
         economyParity = false
         lastArbitrated = null
+        experimentalWingPower = 0f
         core.reset()
         encoder.reset()
         arbiter.reset()
@@ -389,6 +398,8 @@ class NeuralBehaviorController(
             core.step(x, dtMs)
             val y = core.readout()
             lastReadout = y
+            experimentalWingPower = if (substrate == NeuralSubstrate.BANC_EXPERIMENTAL)
+                core.diagnostics().extra["banc.wing_power"]?.coerceIn(0f, 1f) ?: 0f else 0f
             if (!allFinite(y)) {
                 enterFallback(FallbackReason.NON_FINITE_OUTPUT)
                 traceResetGeneration++

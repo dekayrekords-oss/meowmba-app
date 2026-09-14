@@ -57,12 +57,14 @@ class NeuralModeStore(
         when (substrate) {
             NeuralSubstrate.RATE -> LeakyRecurrentCore(ckpt)
             NeuralSubstrate.SPIKING -> SpikingCore(ckpt)
+            NeuralSubstrate.BANC_EXPERIMENTAL -> BancExperimentalCore()
         }
     }
 
     private fun default(substrate: NeuralSubstrate): NeuralCheckpoint = when (substrate) {
         NeuralSubstrate.RATE -> NeuralCheckpoint.default()
         NeuralSubstrate.SPIKING -> NeuralCheckpoint.defaultSpiking()
+        NeuralSubstrate.BANC_EXPERIMENTAL -> BancExperimentalCheckpoint.value
     }
 
     companion object {

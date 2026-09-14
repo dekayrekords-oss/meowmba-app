@@ -50,7 +50,7 @@ internal class Fly3DWorld {
     }
 
     fun step(timeSec: Float, command: HabitatCommand, bias: BehaviorBias,
-        playPreference: Float = 0f, backgroundId: String = "kitchen"): Fly3DWorldSnapshot {
+        playPreference: Float = 0f, backgroundId: String = "kitchen", wingDrive: Float = 0f): Fly3DWorldSnapshot {
         if (!timeSec.isFinite()) return frame
         val prior = lastTime
         if (prior != null && timeSec <= prior) return frame
@@ -62,7 +62,7 @@ internal class Fly3DWorld {
         }
         frame = frame.copy(backgroundId = backgroundId)
         val steps = ceil(dt / .01f).toInt().coerceAtLeast(1)
-        repeat(steps) { advance(dt / steps, bias.arousal.finite(.4f).coerceIn(0f, 1f), playPreference.finite(0f).coerceIn(-1f, 1f)) }
+        repeat(steps) { advance(dt / steps, bias.arousal.finite(.4f).coerceIn(0f, 1f), playPreference.finite(0f).coerceIn(-1f, 1f), wingDrive.finite(0f).coerceIn(0f, 1f)) }
         return frame
     }
 
@@ -87,7 +87,7 @@ internal class Fly3DWorld {
             target = Fly3DTarget(frame.pose.x.coerceIn(-1.8f, 1.8f), TABLE_CHEST, frame.pose.z.coerceIn(-.7f, .7f))
     }
 
-    private fun advance(dt: Float, activity: Float, preference: Float) {
+    private fun advance(dt: Float, activity: Float, preference: Float, wingDrive: Float) {
         if (dt <= 0f) return
         actionAge += dt
         tapRemaining = (tapRemaining - dt).coerceAtLeast(0f)
@@ -171,7 +171,9 @@ internal class Fly3DWorld {
         val pose = Fly3DPose(x, y, z, yaw,
             ease(old.pitch, (vy * -12f).coerceIn(-18f, 18f), dt, 5f), ease(old.roll, bank, dt, 5f),
             vx, vy, vz, flight,
-            (old.wingPhase + dt * (6f + flight * 34f)) % TAU,
+            // BANC DNg27 -> wing-power activity only changes the visual motor
+            // rhythm. Kinematic flight remains bounded authored animation.
+            (old.wingPhase + dt * (6f + flight * 34f + wingDrive * 16f)) % TAU,
             walkPhase,
             reach, holding, hx, hy, hz, (-yaw).coerceIn(-35f, 35f))
         frame = frame.copy(pose = pose, props = props, elapsed = elapsed)

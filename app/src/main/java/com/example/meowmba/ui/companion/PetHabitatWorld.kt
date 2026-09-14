@@ -192,7 +192,7 @@ internal class PetHabitatWorld {
         if (!x.isFinite() || !y.isFinite() || !width.isFinite() || !height.isFinite() || width <= 0 || height <= 0) return null
         val nx = x / width; val ny = y / height
         // Use a finger-sized hit target in physical canvas pixels, not aspect-distorted distance.
-        val hit = maxOf(30f, minOf(width, height) * .075f)
+        val hit = maxOf(42f, minOf(width, height) * .105f)
         val prop = props.filterNot { it.held }.minByOrNull { hypot((nx - it.x) * width, (ny - it.y) * height) }
         if (prop == null || hypot((nx - prop.x) * width, (ny - prop.y) * height) > hit) return null
         return when (prop.kind) { "book" -> HabitatAction.READ; "glass" -> HabitatAction.DRINK; else -> HabitatAction.PLAY }
@@ -200,28 +200,43 @@ internal class PetHabitatWorld {
 
     fun drawProps(scope: DrawScope, fullFly: Boolean) = with(scope) {
         val u = size.minDimension
-        val timber = Color(0xFF755A44)
-        drawRoundRect(timber, Offset(size.width * TABLE_LEFT, size.height * TABLE + u * .014f),
-            Size(size.width * (TABLE_RIGHT - TABLE_LEFT), u * .028f), CornerRadius(u * .008f))
-        drawRect(timber.copy(alpha = .8f), Offset(size.width * .17f, size.height * TABLE + u * .035f), Size(u * .023f, size.height * .17f))
-        drawRect(timber.copy(alpha = .8f), Offset(size.width * .83f, size.height * TABLE + u * .035f), Size(u * .023f, size.height * .17f))
+        val timber = Color(0xFF76523C)
+        val edge = Color(0xFF432C25)
+        // The tabletop is intentionally broader than the thin old rail: it gives
+        // the larger glass/book/ball a believable surface in portrait and landscape.
+        drawRoundRect(timber, Offset(size.width * TABLE_LEFT, size.height * TABLE - u * .004f),
+            Size(size.width * (TABLE_RIGHT - TABLE_LEFT), u * .055f), CornerRadius(u * .014f))
+        drawRoundRect(edge.copy(alpha = .55f), Offset(size.width * TABLE_LEFT, size.height * TABLE + u * .040f),
+            Size(size.width * (TABLE_RIGHT - TABLE_LEFT), u * .010f), CornerRadius(u * .004f))
+        drawRoundRect(timber.copy(alpha = .92f), Offset(size.width * .16f, size.height * TABLE + u * .046f), Size(u * .040f, size.height * .19f), CornerRadius(u * .009f))
+        drawRoundRect(timber.copy(alpha = .92f), Offset(size.width * .80f, size.height * TABLE + u * .046f), Size(u * .040f, size.height * .19f), CornerRadius(u * .009f))
         for (p in props) {
             if (p.held && fullFly) continue
             val at = Offset(p.x * size.width, p.y * size.height)
             rotate(p.angle, at) {
                 when (p.kind) {
                     "book" -> {
-                        drawRoundRect(Color(0xFF467D79), at - Offset(u * .045f, u * .020f), Size(u * .09f, u * .028f), CornerRadius(u * .004f))
-                        drawRect(Color(0xFFE9DCC2), at - Offset(u * .037f, u * .012f), Size(u * .076f, u * .012f))
+                        val book = at - Offset(u * .064f, u * .030f)
+                        drawRoundRect(edge, book - Offset(u * .004f, u * .004f), Size(u * .136f, u * .044f), CornerRadius(u * .008f))
+                        drawRoundRect(Color(0xFF2C777A), book, Size(u * .128f, u * .036f), CornerRadius(u * .007f))
+                        drawRect(Color(0xFFF5DEC0), book + Offset(u * .011f, u * .010f), Size(u * .106f, u * .016f))
+                        drawLine(Color(0xFFF9F1D8), book + Offset(u * .016f, u * .016f), book + Offset(u * .108f, u * .016f), u * .002f)
+                        drawCircle(Color(0xFFF0B75B), u * .006f, book + Offset(u * .103f, u * .018f))
                     }
                     "glass" -> {
-                        drawRoundRect(Color(0x669BDCE3), at - Offset(u * .022f, u * .085f), Size(u * .044f, u * .085f), CornerRadius(u * .006f))
-                        drawRect(Color(0x8896D4E0), at - Offset(u * .018f, u * .04f), Size(u * .036f, u * .034f))
-                        drawRoundRect(Color(0xFFCEE6E4), at - Offset(u * .022f, u * .085f), Size(u * .044f, u * .085f), CornerRadius(u * .006f), style = Stroke(u * .003f))
+                        val glass = at - Offset(u * .031f, u * .115f)
+                        drawRoundRect(Color(0x442C6F86), glass + Offset(u * .004f, u * .006f), Size(u * .062f, u * .115f), CornerRadius(u * .010f))
+                        drawRoundRect(Color(0x779BE7F2), glass, Size(u * .062f, u * .115f), CornerRadius(u * .010f))
+                        drawRect(Color(0xAA4DA8D0), glass + Offset(u * .006f, u * .059f), Size(u * .050f, u * .046f))
+                        drawLine(Color(0xFFE9FFFF), glass + Offset(u * .012f, u * .012f), glass + Offset(u * .012f, u * .095f), u * .004f)
+                        drawRoundRect(Color(0xFFCEF4F4), glass, Size(u * .062f, u * .115f), CornerRadius(u * .010f), style = Stroke(u * .0035f))
                     }
                     else -> {
-                        drawCircle(Color(0xFFE69B62), u * .026f, at - Offset(0f, u * .026f))
-                        drawArc(Color(0xFFFADEC1), -70f, 120f, false, at - Offset(u * .026f, u * .052f), Size(u * .052f, u * .052f), style = Stroke(u * .004f))
+                        val ballAt = at - Offset(0f, u * .040f)
+                        drawCircle(edge, u * .039f, ballAt)
+                        drawCircle(Color(0xFFF09258), u * .035f, ballAt)
+                        drawArc(Color(0xFFFFD78B), -70f, 128f, false, ballAt - Offset(u * .027f, u * .027f), Size(u * .054f, u * .054f), style = Stroke(u * .005f))
+                        drawArc(Color(0xFF4B8E9B), 112f, 116f, false, ballAt - Offset(u * .031f, u * .031f), Size(u * .062f, u * .062f), style = Stroke(u * .005f))
                     }
                 }
             }

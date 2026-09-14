@@ -82,6 +82,8 @@ internal fun illustratedSourceTableAnchor(animation: BackgroundAnimation): Float
     BackgroundAnimation.OBSERVATORY -> 905f / 1536f
     BackgroundAnimation.BEACH -> 982f / 1536f
     BackgroundAnimation.BEDROOM -> 887f / 1536f
+    // New landscape art carries a deliberately broad, nearly level counter.
+    BackgroundAnimation.CARTOON_NOOK, BackgroundAnimation.CARTOON_GALLEY -> .70f
     else -> .69f
 }
 
@@ -92,6 +94,9 @@ internal fun illustratedRoomPlacement(imageWidth: Int, imageHeight: Int, width: 
     val sourceAnchor = if (sourceAnchorFraction.isFinite()) sourceAnchorFraction.coerceIn(.05f, .95f) else .69f
     val sourceY = imageHeight * sourceAnchor
     val targetY = height * PET_ENVIRONMENT_TABLE_Y
+    // Anchor each image to the shared interaction plane while still covering
+    // every edge. Landscape rooms now have dedicated wide source art; reducing
+    // cover below this value would expose blank bands on an unfolded screen.
     val scale = maxOf(width / imageWidth, targetY / sourceY, (height - targetY) / (imageHeight - sourceY))
     val drawnWidth = imageWidth * scale
     val drawnHeight = imageHeight * scale

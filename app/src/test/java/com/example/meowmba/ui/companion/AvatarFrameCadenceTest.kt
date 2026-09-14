@@ -85,15 +85,11 @@ class AvatarFrameCadenceTest {
         assertEquals(30, admitted)
     }
 
-    @Test fun `MODERATE thermal refuses admits`() {
+    @Test fun `MODERATE thermal keeps a sparse motion cadence`() {
         val c = AvatarFrameCadence()
-        assertFalse(
-            c.admit(
-                0L,
-                fpsTarget = 60,
-                thermalStatus = PowerManager.THERMAL_STATUS_MODERATE,
-            ),
-        )
+        assertTrue(c.admit(0L, fpsTarget = 60, thermalStatus = PowerManager.THERMAL_STATUS_MODERATE))
+        assertFalse(c.admit(60_000_000L, fpsTarget = 60, thermalStatus = PowerManager.THERMAL_STATUS_MODERATE))
+        assertTrue(c.admit(67_000_000L, fpsTarget = 60, thermalStatus = PowerManager.THERMAL_STATUS_MODERATE))
     }
 
     @Test fun `starting a clip admits again instead of waiting out the idle interval`() {

@@ -77,7 +77,7 @@ fun BackgroundScreen(
     onClose: () -> Unit,
     /** Whether the Weather page's ambient scene is on; it draws in FRONT of all of this. */
     ambientWeatherOn: Boolean = false,
-    avatarScale: Float = 1f,
+    avatarScale: Float = 2f,
     onAvatarScale: (Float) -> Unit = {},
     habitatMode: Boolean = false,
     onHabitatMode: (Boolean) -> Unit = {},

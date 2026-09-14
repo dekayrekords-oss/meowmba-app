@@ -98,5 +98,27 @@
     "width": 1024,
     "height": 1536,
     "assetPath": "app/src/main/assets/backgrounds/painted/bedroom.png"
+  },
+  {
+    "id": "cartoon_nook",
+    "sourcePath": "/Users/bobrossjr/.codex/generated_images/01a0979c-e527-70a2-8488-49fd078dc68d/exec-78f9a621-140a-4ebd-8a87-dcf77d066a13.png",
+    "prompt": "Original high-budget adult animated sci-fi cartoon reading nook; thick expressive ink outlines, bright cel shading, wonky perspective, large water glass/book/ball and clear center airspace. No characters, text, logos, watermark, UI or photorealism. Do not imitate a named franchise.",
+    "sourceTableAnchor": 0.70,
+    "sha256": "ce79b8102f35695e97c5270bf909971055e5a50c02af10d685b9a87bf3bd9d50",
+    "width": 1672,
+    "height": 941,
+    "assetPath": "app/src/main/assets/backgrounds/painted/cartoon_nook.png",
+    "generator": "built-in image_gen"
+  },
+  {
+    "id": "cartoon_galley",
+    "sourcePath": "/Users/bobrossjr/.codex/generated_images/01a0979c-e527-70a2-8488-49fd078dc68d/exec-54fccc99-e527-4e08-bb28-d0a84dffead7.png",
+    "prompt": "Original high-budget adult animated sci-fi cartoon spaceship kitchen; thick expressive ink outlines, bright cel shading, playful perspective, oversized water glass/book/ball, clean center airspace. No characters, text, logos, watermark, UI or photorealism. Do not imitate a named franchise.",
+    "sourceTableAnchor": 0.70,
+    "sha256": "513ae79ef5dedc15a16b4f1091a277ac113d7df4bad29c1540e83b49fe6580a5",
+    "width": 1672,
+    "height": 941,
+    "assetPath": "app/src/main/assets/backgrounds/painted/cartoon_galley.png",
+    "generator": "built-in image_gen"
   }
 ]

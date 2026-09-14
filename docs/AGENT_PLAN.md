@@ -10,6 +10,17 @@ build were made. Resume from
 [BUILD_110_MODEL_HANDOFF.md](characters/BUILD_110_MODEL_HANDOFF.md), which records
 scope, entrypoints, evidence limits and deployment continuity for Meow.
 
+## September 13: build 110 implementation ready for server assembly
+
+Experimental BANC anatomical-path integration, two original cartoon habitat
+assets, larger props/touch targets, 200% default/300% scale, landscape coverage,
+moderate thermal sparse cadence, and expressive wing/perspective polish are in
+the working tree. The exact evidence, circuit limits, art provenance, diagnostics
+and required server/phone gates are in
+[MEOW_BUILD_110_PASS_DOWN.md](characters/MEOW_BUILD_110_PASS_DOWN.md). Do not
+describe BANC as FlyWire, physiological flight, or a completed installed build
+until the assembly/signing/install checks are recorded.
+
 ## September 13: installed setup cleanup, build 109
 
 Neural settings now explain control modes, network types, reflex sensitivity,

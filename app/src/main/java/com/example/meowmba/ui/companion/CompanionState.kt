@@ -83,7 +83,7 @@ data class CompanionState(
     /** Vault title, e.g. Notes/2026-08-19. */
     val notingTitle: String? = null,
     val isCameraEnabled: Boolean = false,
-    val avatarScale: Float = 1f,
+    val avatarScale: Float = 2f,
     val habitatMode: Boolean = false,
     val habitatBackgroundId: String = "kitchen",
     val isMicEnabled: Boolean = true,

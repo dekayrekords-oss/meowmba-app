@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.lerp
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -41,12 +42,15 @@ internal class LumenFruitFlyParts {
             for (side in intArrayOf(-1, 1)) scale(side.toFloat(), 1f, Offset.Zero) {
                 // One detached wing on each side, behind the eyes. Follow the
                 // shared ear/body lag softly instead of buzzing at render rate.
-                rotate(5f + f.earLag * side * .35f, Offset(.30f, .06f)) {
+                // The viewer reads the asymmetric hinge angle as a small turn
+                // toward them. WingBeat comes from LumenRig's active clock.
+                val flap = (f.wingBeat * 2f - 1f)
+                rotate(5f + f.earLag * side * .35f + flap * (13f + abs(f.perspective) * 8f), Offset(.30f, .06f)) {
                     wing.reset(); wing.moveTo(.32f, .06f)
                     wing.cubicTo(.35f, -.08f, .52f, -.19f, .56f, -.13f)
                     wing.cubicTo(.62f, -.02f, .49f, .13f, .35f, .14f)
                     wing.quadraticBezierTo(.32f, .13f, .32f, .06f); wing.close()
-                    drawPath(wing, Brush.linearGradient(listOf(Color(0xFFBDEBF1).copy(alpha = a * .40f),
+                    drawPath(wing, Brush.linearGradient(listOf(Color(0xFFBDEBF1).copy(alpha = a * (.34f + f.wingBeat * .20f)),
                         Color(0xFF76BCCB).copy(alpha = a * .09f)), Offset(.48f, -.13f), Offset(.34f, .14f)))
                     drawPath(wing, Color(0xFFBCE8EE).copy(alpha = a * .50f), style = Stroke(.0025f))
                     for (i in 0..2) {
@@ -73,7 +77,8 @@ internal class LumenFruitFlyParts {
 
     fun compoundEye(scope: DrawScope, rx: Float, ry: Float, f: LumenFrame, color: Color) = with(scope) {
         val a = f.form.fruitFly
-        drawRect(Brush.radialGradient(listOf(lerp(color, Color.White, .22f), color,
+        val sideShade = (f.perspective * .12f).coerceIn(-.12f, .12f)
+        drawRect(Brush.radialGradient(listOf(lerp(color, Color.White, .22f + sideShade), color,
             lerp(color, Color(0xFF290D1B), .72f)), Offset(-rx * .24f, -ry * .30f), ry * 1.8f),
             Offset(-rx, -ry * 1.5f), Size(rx * 2f, ry * 3f), alpha = a)
         val radius = rx * .105f

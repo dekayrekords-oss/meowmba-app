@@ -31,10 +31,16 @@ internal class AvatarFrameCadence {
         fpsTarget: Int = DEFAULT_ACTIVE_FPS,
         thermalStatus: Int = PowerManager.THERMAL_STATUS_NONE,
     ): Boolean {
-        if (thermalStatus >= PowerManager.THERMAL_STATUS_MODERATE) return false
+        if (thermalStatus >= PowerManager.THERMAL_STATUS_SEVERE) return false
         val target = fpsTarget.coerceIn(MIN_FPS, MAX_FPS)
         val baseFps = if (active) target.toFloat() else (target / 2f).coerceAtLeast(MIN_IDLE_FPS.toFloat())
-        val thermalMul = if (thermalStatus >= PowerManager.THERMAL_STATUS_LIGHT) 0.5f else 1f
+        // MODERATE keeps a deliberately sparse 7.5 FPS lifeline so the avatar
+        // can settle and acknowledge touch without resuming the old hot loop.
+        val thermalMul = when {
+            thermalStatus >= PowerManager.THERMAL_STATUS_MODERATE -> 0.25f
+            thermalStatus >= PowerManager.THERMAL_STATUS_LIGHT -> 0.5f
+            else -> 1f
+        }
         val effectiveFps = (baseFps * thermalMul).coerceAtLeast(1f)
         val intervalNs = (1_000_000_000.0 / effectiveFps).toLong().coerceAtLeast(MIN_INTERVAL_NS)
         if (previous != Long.MIN_VALUE && nowNanos - previous in 0 until intervalNs) return false

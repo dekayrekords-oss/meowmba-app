@@ -111,9 +111,15 @@ fun NeuralInfoPanel(
                 NeuralInfoRow("Simulation", if (d == null) "—" else "${d.steps} steps  ·  p95 ${d.p95StepMicros} µs")
                 NeuralInfoRow("Current action", d?.currentAction?.name?.lowercase() ?: "idle")
                 NeuralInfoRow("Thermal tier", d?.thermalTier?.toString() ?: "—")
+                if (d?.substrate == com.example.meowmba.core.neural.NeuralSubstrate.BANC_EXPERIMENTAL) {
+                    NeuralInfoRow("BANC wing power", "${((core?.extra?.get("banc.wing_power") ?: 0f) * 100).roundToInt()}%")
+                    NeuralInfoRow("Circuit source", "76 neurons · 515 pairs · 3,316 counts")
+                }
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    "The bars summarize the synthetic running core; they are not a literal FlyWire spike trace. The separate research extract contains 515 neuron pairs and 3,316 synapse counts and is not loaded into this controller.",
+                    if (d?.substrate == com.example.meowmba.core.neural.NeuralSubstrate.BANC_EXPERIMENTAL)
+                        "The bars summarize the running BANC anatomical-path adapter. Its topology comes from BANC, while connection signs, timing and visual motor retargeting are synthetic. It is not FlyWire or a literal spike trace."
+                    else "The bars summarize the synthetic running core; they are not a literal FlyWire spike trace. The separate BANC extract is available as an experimental network option.",
                     style = MaterialTheme.typography.bodySmall,
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

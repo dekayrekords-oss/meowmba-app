@@ -849,6 +849,10 @@ class CompanionViewModel(
             orientation.x.coerceIn(-1f, 1f), orientation.y.coerceIn(-1f, 1f)) else null
     }
 
+    /** Read by the renderer only; BANC's bounded wing-power activity retargets
+     * the visual wing beat and never leaves the avatar presentation layer. */
+    fun neuralWingPowerNow(): Float = nervousSystem.wingMotorNow()
+
     private fun advanceNeuralMotor(nowMs: Long) {
         val state = _uiState.value
         val busy = state.activeAnimation != null || state.activeComposed != null
@@ -898,7 +902,11 @@ class CompanionViewModel(
             if (enabled) {
                 val dir = secureStorage?.context?.filesDir ?: return
                 nervousSystem.resetNeuralState()
-                val checkpoint = if (nervousSystem.substrate == NeuralSubstrate.RATE) NeuralCheckpoint.default() else NeuralCheckpoint.defaultSpiking()
+                val checkpoint = when (nervousSystem.substrate) {
+                    NeuralSubstrate.RATE -> NeuralCheckpoint.default()
+                    NeuralSubstrate.SPIKING -> NeuralCheckpoint.defaultSpiking()
+                    NeuralSubstrate.BANC_EXPERIMENTAL -> com.example.meowmba.core.neural.BancExperimentalCheckpoint.value
+                }
                 neuralTraceRecorder = FeatureTraceRecorder(java.io.File(dir, "neural/traces"),
                     FeatureTraceHeader(inputLayout = checkpoint.inputLayout, outputLayout = checkpoint.outputLayout,
                         biasFields = DriveBias.FIELD_NAMES, checkpoint = checkpoint.name,
@@ -1289,7 +1297,7 @@ class CompanionViewModel(
                 musicServerUrl = storage.getPreference(KEY_MUSIC_SERVER_URL) ?: "",
                 backgroundListeningEnabled = storage.getBooleanPreference(KEY_BACKGROUND_LISTENING, false),
                 carModeEnabled = storage.getBooleanPreference(KEY_CAR_MODE, false),
-                avatarScale = storage.getPreference("avatar_scale")?.toFloatOrNull()?.takeIf { it.isFinite() }?.coerceIn(.5f, 2f) ?: 1f,
+                avatarScale = storage.getPreference("avatar_scale")?.toFloatOrNull()?.takeIf { it.isFinite() }?.coerceIn(.5f, 3f) ?: 2f,
                 habitatMode = storage.getBooleanPreference("habitat_mode", false),
                 habitatBackgroundId = storage.getPreference("habitat_background")?.takeIf { id -> com.example.meowmba.core.background.BackgroundAnimation.byId(id)?.isPetEnvironment == true } ?: "kitchen",
                 avatarStyle = AvatarStyle.fromKey(storage.getPreference(KEY_AVATAR_STYLE)),
@@ -10026,7 +10034,7 @@ class CompanionViewModel(
     }
 
     fun setAvatarScale(value: Float) {
-        val scale = value.takeIf { it.isFinite() }?.coerceIn(.5f, 2f) ?: 1f
+        val scale = value.takeIf { it.isFinite() }?.coerceIn(.5f, 3f) ?: 2f
         _uiState.value = _uiState.value.copy(avatarScale = scale)
         secureStorage?.savePreference("avatar_scale", scale.toString())
     }

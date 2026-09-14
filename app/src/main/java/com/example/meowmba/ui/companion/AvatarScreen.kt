@@ -93,7 +93,7 @@ fun AvatarScreen(
     onPlayfulness: (Playfulness) -> Unit = {},
     diagnostics: @Composable () -> Unit = {},
     preview: @Composable () -> Unit = {},
-    avatarScale: Float = 1f,
+    avatarScale: Float = 2f,
     onAvatarScale: (Float) -> Unit = {},
     habitatMode: Boolean = false,
     onHabitatMode: (Boolean) -> Unit = {},

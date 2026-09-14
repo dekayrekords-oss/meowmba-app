@@ -154,6 +154,8 @@ data class LumenInput(
      * anything that does not supply it animates exactly as before.
      */
     val bias: BehaviorBias = REST_BIAS,
+    /** BANC's bounded wing-power population, retargeted visually only. */
+    val wingDrive: Float = 0f,
 )
 
 data class LumenFrame(
@@ -178,6 +180,10 @@ data class LumenFrame(
     val innerLift: Float = 0f, val tension: Float = 0f,
     val earAsymmetry: Float = 0f, val warmth: Float = 0f,
     val squash: Float = 0f,
+    /** Shared active-clock wing rhythm for floating fruit-fly features. */
+    val wingBeat: Float = 0f,
+    /** Side-to-side head turn cue, used as a subtle drawn perspective. */
+    val perspective: Float = 0f,
 )
 
 /**
@@ -319,6 +325,8 @@ class LumenRig(seed: Int = 731) {
             warmth = warmth.step(actor.warmth * actorWeight, dt, 5f),
             earAsymmetry = earSplit.step((actor.earSplit * actorWeight + input.earAsymmetry.clean()).coerceIn(-12f, 12f), dt, 6f),
             squash = squash.step(actor.squash * actorWeight, dt, 16f),
+            wingBeat = sin(time * (12f + input.bias.arousal.coerceIn(0f, 1f) * 12f + input.wingDrive.coerceIn(0f, 1f) * 16f)) * .5f + .5f,
+            perspective = (headX * .62f + gx * .18f).coerceIn(-1f, 1f),
         )
         return frame
     }

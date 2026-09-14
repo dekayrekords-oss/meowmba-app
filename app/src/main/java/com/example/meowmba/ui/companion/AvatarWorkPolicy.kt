@@ -67,10 +67,11 @@ internal fun thermalUiBannerText(warning: ThermalUiWarning): String? = when (war
 }
 
 internal fun allowAvatarWork(started: Boolean, interactive: Boolean, thermalStatus: Int): Boolean =
-    started && interactive && thermalStatus < PowerManager.THERMAL_STATUS_MODERATE
+    started && interactive && thermalStatus < PowerManager.THERMAL_STATUS_SEVERE
 
 /** Stop decorative work when invisible or thermally throttled. Uses Android's
- * thermal severity rather than inventing a battery-temperature threshold. */
+ * thermal severity rather than inventing a battery-temperature threshold.
+ * MODERATE is now a sparse-cadence tier; SEVERE still stops decorative work. */
 @Composable
 internal fun rememberAvatarWorkAllowed(): Boolean = rememberAvatarWorkStatus().allowed
 

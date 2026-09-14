@@ -57,8 +57,8 @@ class CompanionAppearancePreferencesTest {
     @Test fun scaleBoundsRejectNonfiniteAndPersistOnlyUsableValues() = runTest(dispatcher) {
         val values = mutableMapOf<String, String>()
         val vm = model(storage(values))
-        for ((input, expected) in listOf(0f to .5f, 8f to 2f, 1.4f to 1.4f,
-            Float.NaN to 1f, Float.POSITIVE_INFINITY to 1f, Float.NEGATIVE_INFINITY to 1f)) {
+        for ((input, expected) in listOf(0f to .5f, 8f to 3f, 2.65f to 2.65f,
+            Float.NaN to 2f, Float.POSITIVE_INFINITY to 2f, Float.NEGATIVE_INFINITY to 2f)) {
             vm.setAvatarScale(input)
             assertEquals(expected, vm.uiState.value.avatarScale, 0f)
             assertEquals(expected, values.getValue("avatar_scale").toFloat(), 0f)
@@ -116,7 +116,7 @@ class CompanionAppearancePreferencesTest {
     @Test fun malformedRestoredScaleAndNonHabitatSceneUseSafeDefaults() = runTest(dispatcher) {
         val values = mutableMapOf("avatar_scale" to "NaN", "habitat_background" to "aurora", "habitat_mode" to "true")
         val vm = model(storage(values))
-        assertEquals(1f, vm.uiState.value.avatarScale, 0f)
+        assertEquals(2f, vm.uiState.value.avatarScale, 0f)
         assertEquals("kitchen", vm.uiState.value.habitatBackgroundId)
         assertTrue(vm.uiState.value.habitatMode)
     }

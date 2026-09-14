@@ -26,7 +26,7 @@ data class Fly3DFrame(
     val holding: String? = null, val backgroundId: String = "kitchen", val active: Boolean = true,
     val props: List<Fly3DProp>? = null,
     val handX: Float? = null, val handY: Float? = null, val handZ: Float? = null,
-    val avatarScale: Float = 1f, val stageMode: Boolean = false,
+    val avatarScale: Float = 2f, val stageMode: Boolean = false,
     val wingPhase: Float? = null,
     val leftBlink: Float? = null, val rightBlink: Float? = null,
     val smile: Float = 0f, val concern: Float = 0f,
@@ -176,7 +176,7 @@ class Fly3DRenderer : GLSurfaceView.Renderer {
         drawingCharacter=false
         if(!f.stageMode) room(f)
         push()
-        val requestedScale=f.avatarScale.safe(1f).coerceIn(.5f,2f)
+        val requestedScale=f.avatarScale.safe(2f).coerceIn(.5f,3f)
         val unit:Float
         if(f.stageMode) {
             val aspect=viewportWidth.toFloat()/viewportHeight

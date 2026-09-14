@@ -64,7 +64,9 @@ enum class BackgroundAnimation(
     CAFE("cafe", "Rainy cafe", isPetEnvironment = true),
     OBSERVATORY("observatory", "Star observatory", isPetEnvironment = true),
     BEACH("beach", "Seaside deck", isPetEnvironment = true),
-    BEDROOM("bedroom", "Cozy bedroom", isPetEnvironment = true);
+    BEDROOM("bedroom", "Cozy bedroom", isPetEnvironment = true),
+    CARTOON_NOOK("cartoon_nook", "Cartoon sky nook", isPetEnvironment = true),
+    CARTOON_GALLEY("cartoon_galley", "Cartoon space galley", isPetEnvironment = true);
 
     companion object {
         fun byId(id: String?): BackgroundAnimation? = entries.firstOrNull { it.id == id }

@@ -32,11 +32,12 @@ internal fun NeuralSetupControls(
                 NeuralOption("Neural · control", "Lets the network influence attention, drives and allowed actions. Authored animation and safety rules still apply, with Classic as a fallback.", mode == NeuralMode.NEURAL) { onMode(NeuralMode.NEURAL) }
             }
         }
-        SetupHelpCard("2 · Choose a network", "Both are small synthetic networks. Neither runs a complete biological fruit-fly brain.") {
+        SetupHelpCard("2 · Choose a network", "The rate and spiking networks are synthetic. The BANC option uses audited anatomical counts with clearly marked synthetic dynamics.") {
             if (mode == NeuralMode.LEGACY) HelpText("Your choice is saved, but the network stays idle in Classic mode.")
             Column(Modifier.selectableGroup()) {
                 NeuralOption("Recurrent · rate", "Uses continuous activity that carries information between steps. The default and faster option in our phone comparison.", substrate == NeuralSubstrate.RATE) { onSubstrate(NeuralSubstrate.RATE) }
                 NeuralOption("Spiking · experimental", "Uses simulated firing pulses and membrane state. Useful for comparison; it took more processing in our phone test and is not proven more capable.", substrate == NeuralSubstrate.SPIKING) { onSubstrate(NeuralSubstrate.SPIKING) }
+                NeuralOption("BANC fly circuit · experimental", "Routes touch through named leg/thorax nociceptor groups and DNg27 to wing-power neurons from a 76-neuron BANC extract. Connection signs, timing and flight/muscle behavior are bounded authored assumptions; this is not FlyWire or a complete biological fly brain.", substrate == NeuralSubstrate.BANC_EXPERIMENTAL) { onSubstrate(NeuralSubstrate.BANC_EXPERIMENTAL) }
             }
             HelpText("Switching networks resets its transient state and turns off trace recording.")
         }
@@ -60,7 +61,7 @@ internal fun NeuralSetupControls(
                 FilterChip(selected = fps == target, onClick = { onFps(target) }, label = { Text("$target FPS") })
             }
         }
-        HelpText("15 uses less animation work; 30 is the default; 60 requests smoother motion with more work. Idle motion runs more slowly. Android reduces the cadence when warm and pauses animation at moderate heat.")
+        HelpText("15 uses less animation work; 30 is the default; 60 requests smoother motion with more work. Idle motion runs more slowly. Android reduces the cadence when warm, keeps a sparse motion cadence at moderate heat, and pauses at severe heat.")
     }
     if (showCore) {
         var details by rememberSaveable { mutableStateOf(false) }

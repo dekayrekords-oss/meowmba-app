@@ -1,7 +1,15 @@
 package com.example.meowmba.core.neural
 
 /** Which kind of network is running. Both satisfy [NeuralCore]. */
-enum class NeuralSubstrate { RATE, SPIKING }
+enum class NeuralSubstrate {
+    RATE,
+    SPIKING,
+    /**
+     * A small, explicitly experimental adapter around verified BANC anatomical
+     * counts. It is not FlyWire and does not claim physiological flight control.
+     */
+    BANC_EXPERIMENTAL,
+}
 
 /**
  * Cheap, allocation-free view of a core's health. Read by the controller's

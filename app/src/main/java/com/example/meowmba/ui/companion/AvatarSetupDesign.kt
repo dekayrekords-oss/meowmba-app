@@ -43,16 +43,16 @@ internal fun SetupModeChooser(habitatMode: Boolean, onHabitatMode: (Boolean) -> 
 
 @Composable
 internal fun SetupSizeControl(scale: Float, onScale: (Float) -> Unit) {
-    val value = if (scale.isFinite()) scale.coerceIn(.5f, 2f) else 1f
+    val value = if (scale.isFinite()) scale.coerceIn(.5f, 3f) else 2f
     SetupSection("Avatar size", "Applies in every background and habitat.")
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
         Text("${(value * 100).roundToInt()}%", style = MaterialTheme.typography.titleMedium)
-        TextButton(onClick = { onScale(1f) }, enabled = value != 1f) { Text("Reset") }
+        TextButton(onClick = { onScale(2f) }, enabled = value != 2f) { Text("Reset") }
     }
-    Slider(value = value, onValueChange = { onScale(it.coerceIn(.5f, 2f)) }, valueRange = .5f..2f,
+    Slider(value = value, onValueChange = { onScale(it.coerceIn(.5f, 3f)) }, valueRange = .5f..3f,
         modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Avatar size" })
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text("50%", style = MaterialTheme.typography.bodySmall)
-        Text("200%", style = MaterialTheme.typography.bodySmall)
+        Text("300%", style = MaterialTheme.typography.bodySmall)
     }
 }

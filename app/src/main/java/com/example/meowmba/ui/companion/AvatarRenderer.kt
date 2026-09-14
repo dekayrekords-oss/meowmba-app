@@ -213,6 +213,8 @@ fun AvatarRenderer(
      * Defaults to the resting bias, which is a no-op.
      */
     nervousBias: () -> BehaviorBias = { REST_BIAS },
+    /** Experimental BANC wing-power activity, sampled only while drawing. */
+    neuralWingPower: () -> Float = { 0f },
     /** Rich vision/social/speech/touch/motion feed for Lumen reflex v2 (read during draw). */
     reflexFeed: () -> ReflexSensoryFeed = { ReflexSensoryFeed() },
     reflexGain: Float = 1f,
@@ -271,7 +273,7 @@ fun AvatarRenderer(
     val habitatWorld = remember(state.habitatBackgroundId, state.avatarStyle, state.habitatMode) { PetHabitatWorld() }
     val fly3DWorld = remember(state.habitatBackgroundId, state.avatarStyle, state.habitatMode) { Fly3DWorld() }
     val lastFly3DFrame = remember(fly3DWorld) { arrayOfNulls<Fly3DFrame>(1) }
-    val avatarScale = if (state.avatarScale.isFinite()) state.avatarScale.coerceIn(.5f, 2f) else 1f
+    val avatarScale = if (state.avatarScale.isFinite()) state.avatarScale.coerceIn(.5f, 3f) else 2f
     val avatarHitTransform = remember { arrayOf(AvatarHitTransform()) }
     val habitatEnabled = state.habitatMode
     val latestHabitatAction by rememberUpdatedState(onHabitatAction)
@@ -934,6 +936,7 @@ fun AvatarRenderer(
                 whiskerFlutter = effectivePose.whiskerFlutter,
                 tailWag = effectivePose.tailWag,
                 bias = nervousBias(),
+                wingDrive = neuralWingPower(),
             ), lumenPerformance, progress), customAnim, animTHolder[0].toFloat())
             val gatedLumenInput = if (lumenReflexV2) {
                 val modulated = lumenReflexBridge.modulate(
@@ -954,7 +957,7 @@ fun AvatarRenderer(
                 val care = state.petCare
                 val adjusted = if (care.careEnabled) bias.copy(arousal = bias.arousal * (.5f + .5f * care.energy)) else bias
                 val world = if (habitatEnabled) fly3DWorld.step(tSec, state.habitatCommand, adjusted,
-                    state.petPlayPreference, state.habitatBackgroundId) else null
+                    state.petPlayPreference, state.habitatBackgroundId, neuralWingPower()) else null
                 val p = world?.pose
                 val radians = (kotlin.math.PI / 180.0).toFloat()
                 val published = Fly3DFrame(timeSeconds = world?.elapsed ?: tSec,
