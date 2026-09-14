@@ -92,6 +92,8 @@ class DefaultAgenticSshExecutor(
             )
         }
 
+        if (allowJschFallback) return runJsch(profile, secret, argv, timeoutMs.coerceAtLeast(1_000L))
+
         val hostKey = verifyOrPinHostKey(profile)
         if (hostKey is SshExecResult) return hostKey
         val effectiveProfile = hostKey as ConnectionProfile
@@ -243,26 +245,35 @@ class DefaultAgenticSshExecutor(
         timeoutMs: Long,
     ): SshExecResult {
         return try {
-            val jsch = JSch()
-            val session = jsch.getSession(profile.username, profile.host, profile.port)
-            session.setPassword(secret)
-            session.setConfig("StrictHostKeyChecking", "no")
-            session.timeout = 10_000
-            session.connect(10_000)
+            val session = ComputerSshSession.connect(profile, secret) { profiles.save(it) }
             try {
                 val channel = session.openChannel("exec") as ChannelExec
                 channel.setCommand(buildRemoteExecCommand(profile.workspaceRoot, argv))
                 channel.setInputStream(null)
+                val input = channel.inputStream
+                val error = channel.errStream
+                val stdout = StringBuilder()
+                val stderr = StringBuilder()
+                val buf = ByteArray(4096)
+                val deadline = System.nanoTime() + timeoutMs * 1_000_000
                 channel.connect(10_000)
-                val stdout = channel.inputStream.bufferedReader().use { it.readText() }.take(MAX_OUTPUT)
-                val stderr = channel.errStream.bufferedReader().use { it.readText() }.take(MAX_OUTPUT)
-                val deadline = System.currentTimeMillis() + timeoutMs
-                while (!channel.isClosed && System.currentTimeMillis() < deadline) {
-                    Thread.sleep(40)
+                try {
+                    while (true) {
+                        for ((stream, output) in listOf(input to stdout, error to stderr)) {
+                            if (stream.available() > 0) {
+                                val n = stream.read(buf, 0, minOf(buf.size, stream.available()))
+                                if (n > 0) output.append(String(buf, 0, n, Charsets.UTF_8))
+                                if (output.length > MAX_OUTPUT) output.delete(0, output.length - MAX_OUTPUT)
+                            }
+                        }
+                        if (channel.isClosed && input.available() == 0 && error.available() == 0) break
+                        if (System.nanoTime() >= deadline) return SshExecResult.Error("SSH command timed out")
+                        Thread.sleep(10)
+                    }
+                    SshExecResult.Ok(channel.exitStatus, stdout.toString(), stderr.toString())
+                } finally {
+                    channel.disconnect()
                 }
-                val exit = channel.exitStatus
-                channel.disconnect()
-                SshExecResult.Ok(exitCode = exit, stdout = stdout, stderr = stderr)
             } finally {
                 session.disconnect()
             }

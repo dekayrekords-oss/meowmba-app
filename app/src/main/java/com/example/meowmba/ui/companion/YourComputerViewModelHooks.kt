@@ -77,10 +77,13 @@ object YourComputerViewModelHooks {
         if (!install && profile.type == ConnectionProfileType.HTTPS_RUNTIME) {
             return@withContext testHttpsRuntime(credentials, profile)
         }
-        val client = ComputerInstallOverSsh(credentials)
-        if (!install) return@withContext client.testConnection(profile)
+        val profiles = com.example.meowmba.core.agentic.RoomConnectionProfileStore(
+            com.example.meowmba.core.database.MeowmbaDatabase.getDatabase(context).connectionProfileDao())
+        val currentProfile = profiles.get(profile.id) ?: profile
+        val client = ComputerInstallOverSsh(credentials) { profiles.save(it) }
+        if (!install) return@withContext client.testConnection(currentProfile)
         val script = loadInstallScript(context)
-        client.install(profile, script, onLogLine = onLog)
+        client.install(currentProfile, script, onLogLine = onLog)
     }
 
     /** Health-check an HTTPS_RUNTIME worker; surfaces reachability honestly. */

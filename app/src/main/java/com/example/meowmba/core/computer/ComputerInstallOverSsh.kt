@@ -16,6 +16,7 @@ import java.nio.charset.StandardCharsets
  */
 class ComputerInstallOverSsh(
     private val credentials: CredentialResolver,
+    private val saveProfile: (ConnectionProfile) -> Unit,
 ) {
     fun testConnection(profile: ConnectionProfile): Result<String> {
         if (profile.type != ConnectionProfileType.SSH) {
@@ -129,11 +130,7 @@ class ComputerInstallOverSsh(
                 "No credential for ref \"${profile.credentialRef}\". " +
                     "Save a password or key material under that ref first.",
             )
-        val jsch = JSch()
-        val session = jsch.getSession(profile.username, profile.host, profile.port.coerceAtLeast(1))
-        session.setPassword(secret)
-        session.setConfig("StrictHostKeyChecking", "no")
-        session.connect(20_000)
+        val session = com.example.meowmba.core.agentic.ComputerSshSession.connect(profile, secret, saveProfile)
         try {
             return block(session)
         } finally {

@@ -133,7 +133,7 @@ install_worker() {
 #!/usr/bin/env python3
 """Authenticated, bounded Computer worker. Run behind SSH or a private network."""
 from __future__ import annotations
-import hmac, json, os, signal, subprocess, tempfile, threading, time, uuid
+import hmac, json, os, signal, subprocess, selectors, threading, time, uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
@@ -154,25 +154,40 @@ MAX_OUTPUT = 200_000
 
 def run_job(job_id, argv, cwd, timeout_ms):
     try:
-        with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
-            proc = subprocess.Popen(argv, cwd=cwd, stdout=out, stderr=err, start_new_session=True)
-            with LOCK:
-                JOBS[job_id].update(status='running', process=proc)
-            try:
-                code = proc.wait(timeout=timeout_ms / 1000)
-            except subprocess.TimeoutExpired:
-                os.killpg(proc.pid, signal.SIGKILL)
-                proc.wait()
-                code = 124
-            def tail(stream):
-                stream.seek(0, 2)
-                stream.seek(max(0, stream.tell() - MAX_OUTPUT))
-                return stream.read().decode('utf-8', errors='replace')
-            with LOCK:
-                job = JOBS[job_id]
-                cancelled = job['status'] == 'cancelled'
-                job.update(status='cancelled' if cancelled else ('succeeded' if code == 0 else 'failed'),
-                           exitCode=code, stdout=tail(out), stderr=tail(err), process=None)
+        proc = subprocess.Popen(argv, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+        with LOCK:
+            JOBS[job_id].update(status='running', process=proc)
+        output = {'stdout': bytearray(), 'stderr': bytearray()}
+        deadline = time.monotonic() + timeout_ms / 1000
+        timed_out = False
+        with selectors.DefaultSelector() as poller:
+            for stream, label in ((proc.stdout, 'stdout'), (proc.stderr, 'stderr')):
+                os.set_blocking(stream.fileno(), False)
+                poller.register(stream, selectors.EVENT_READ, label)
+            while poller.get_map() or proc.poll() is None:
+                if time.monotonic() >= deadline:
+                    timed_out = True
+                    try: os.killpg(proc.pid, signal.SIGKILL)
+                    except ProcessLookupError: pass
+                    break
+                for key, _ in poller.select(min(.1, max(0, deadline - time.monotonic()))):
+                    chunk = os.read(key.fileobj.fileno(), 8192)
+                    if not chunk:
+                        poller.unregister(key.fileobj)
+                    else:
+                        tail = output[key.data]
+                        tail.extend(chunk)
+                        del tail[:-MAX_OUTPUT]
+        code = 124 if timed_out else proc.wait()
+        if timed_out: proc.wait()
+        proc.stdout.close()
+        proc.stderr.close()
+        with LOCK:
+            job = JOBS[job_id]
+            cancelled = job['status'] == 'cancelled'
+            job.update(status='cancelled' if cancelled else ('succeeded' if code == 0 else 'failed'),
+                       exitCode=code, process=None,
+                       **{k: v.decode('utf-8', errors='replace') for k, v in output.items()})
     except Exception as exc:
         with LOCK:
             JOBS[job_id].update(status='failed', exitCode=1, detail=type(exc).__name__, process=None)
