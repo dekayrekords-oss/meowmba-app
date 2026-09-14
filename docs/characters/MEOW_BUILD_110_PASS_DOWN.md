@@ -3,9 +3,10 @@
 ## What changed and why
 
 Build 110 implements the user's requested experimental research-circuit hookup
-and avatar/habitat polish. It is source work pending final server build,
-signature verification, and in-place phone installation. Build 109 remains the
-last confirmed installed artifact at the time this document was written.
+and avatar/habitat polish. The server build, focused tests, reconstructed APK
+hash and signing certificate are verified. The only remaining gate is the
+in-place phone installation: the USB device was disconnected when the package
+became ready. Build 109 remains the last confirmed installed artifact.
 
 ### BANC circuit is now a running experimental controller option
 
@@ -71,7 +72,7 @@ small policy increase requested by the user, not an endurance claim. The earlier
 unplugged test did not pass continuous-motion endurance at MODERATE, so sustained
 heat/battery validation remains required.
 
-## Focused verification completed locally
+## Verification completed
 
 The following focused JVM tests passed after the initial implementation:
 
@@ -87,11 +88,26 @@ The following focused JVM tests passed after the initial implementation:
   aspect-ratio hand alignment.
 - `LumenNaturalMotionTest` — 9 tests.
 
-Run the same focused set plus `:app:assembleDebug` on the server after source
-sync. The source edits that directly bridge BANC wing power into Lumen/Fly3D
-were made after this first focused run, so final server assembly is the compile
-gate for that bridge. Do not claim the full build or installation until that is
-recorded.
+The final server command completed successfully with the same focused set plus
+`:app:assembleDebug`; it compiled the later BANC-to-Lumen/Fly3D wing bridge.
+The resulting signed debug package is reproducible from Build 109 with
+`scripts/apk_delta.py`:
+
+- Server APK SHA-256 and reconstructed local APK SHA-256:
+  `c01a9ca7bff128947e0ea96880684399553d2e3a349572a6df06dbba76a36944`.
+- Debug signer SHA-256:
+  `b7850d5fb645df9f5d12525db1b10e457b0ee7f3aa50bbf4294ff31dae3379ff`.
+- Delta patch: `build-out/habitat/meowmba-110.patch` (9,086,141 bytes).
+- Reconstructed install artifact:
+  `build-out/habitat/meowmba-110.apk`.
+
+The server job emitted only pre-existing Kotlin/Compose deprecation warnings;
+it completed `BUILD SUCCESSFUL`. At the device gate, `adb devices -l` returned
+no connected device. Do not substitute a different base APK or uninstall/clear
+the current application. Reconnect and unlock `RFCY61NJEVM`, then run
+`adb install -r build-out/habitat/meowmba-110.apk`, launch
+`com.example.meowmba/.MainActivity`, and record the installed version before
+calling the release complete.
 
 ## Meow: diagnosis and future changes
 
