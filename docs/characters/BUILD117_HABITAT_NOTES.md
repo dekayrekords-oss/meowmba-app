@@ -123,3 +123,13 @@ captures do not validate GLES rasterization, occlusion or sustained device
 performance; those remain covered by the device-only GPU checks when hardware
 is available. No AAA-quality or physical-phone verification claim follows
 from this source review alone.
+
+
+## Final integration result
+
+All 131 focused checks pass at production source `016ecde`, including 14 drawer
+UI tests, 11 Google intent tests and three real-capture cancellation tests. Both
+signed packages and preserved assets are verified. See
+[MEOW_BUILD_117_PASS_DOWN.md](MEOW_BUILD_117_PASS_DOWN.md) for exact artifacts,
+source, diagnostics and physical-phone limits. Build 117 is ready on Meow; it
+is not installed on the disconnected phone.

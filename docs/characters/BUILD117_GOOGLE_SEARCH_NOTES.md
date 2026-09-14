@@ -68,3 +68,13 @@ tab internally. No launch-success caption is emitted after a failed start.
 - [Google's Play Store listing](https://play.google.com/store/apps/details?id=com.google.android.googlequicksearchbox)
   identifies the Google app package. The HTTPS compatibility route is a runtime
   capability check, not an assertion of a permanent Google-specific API.
+
+
+## Final integration result
+
+All 131 focused checks pass at production source `016ecde`, including 14 drawer
+UI tests, 11 Google intent tests and three real-capture cancellation tests. Both
+signed packages and preserved assets are verified. See
+[MEOW_BUILD_117_PASS_DOWN.md](MEOW_BUILD_117_PASS_DOWN.md) for exact artifacts,
+source, diagnostics and physical-phone limits. Build 117 is ready on Meow; it
+is not installed on the disconnected phone.

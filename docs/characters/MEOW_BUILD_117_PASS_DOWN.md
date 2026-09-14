@@ -43,11 +43,80 @@ when a shell cannot allocate a heredoc temporary file.
 
 ## Validation and hardware follow-up
 
-Final test totals, package hashes, visual review and connection status follow
-after the Meow run. Host tests do not establish the installed Google version's
-UI, actual network results, native GPU behavior or sustained device heat/battery.
-Preserve phone data and pairing when installing an update. Prior verified phone:
-Build 112. No new brain/model, sensor, robot, account or permission workflow.
+Build 117 is complete and ready on Meow. All **131 focused checks across 21
+suites pass**, with no failures, errors or skips. Both debug APK and Android-test
+APK assemble. Built production source: `016ecdec34a62b859b73be4d81e014c8a125a48e`.
+The final acceptance log is `/tmp/meow-build117-final-acceptance.log` on Meow.
+Machine-readable evidence: [BUILD_117_VERIFICATION.json](BUILD_117_VERIFICATION.json).
+
+Native host renders cover the compact drawer, light/dark appearances, 1.4x text,
+landscape, inline folder editing, seven interactive cartoon rooms and background
+selection. Reviewed drawer previews remain readable at 320 dp and in landscape;
+all four new source illustrations and portrait/landscape samples were inspected.
+The Google failure/voice checks assert actual response visibility and retained
+query. The file named `google-unavailable.png` was captured after the next Speak
+attempt; it shows the retained query, not the error card, and is not visual proof
+of that error. The assertions provide that behavioral evidence.
+
+The phone remains disconnected, last verified on Build 112. Build 117 has **not
+been installed**. Actual Google-app behavior, device GPU rendering and sustained
+heat/battery remain physical-device checks. The extended `Fly3DGpuTest` is
+compiled into the test APK but has not been run on a phone. Full-fly uses native
+cel-shaded room geometry; the painted 2D previews do not prove its GLES quality.
+Preserve phone data/pairing and use update installation when available. No new
+brain/model, sensor, robot, account or permission workflow was added this turn.
+
+### Final release location and integrity
+
+Use `/home/prog/research/meowmba-build117-016ecde/` on `meow-nb`, the owner-designated
+`prog@100.77.97.236` server. The earlier `meowmba-build117-0d72ebc` folder is a
+superseded review checkpoint; the `016ecde` archive is the final release.
+
+- `meowmba-117.apk`: 464,784,952 bytes; SHA-256 `81371bef3d77c3e6abb257b3d244b177196d97d756d436758ee5f1ebe48feaff`.
+- `tests117.apk`: 2,740,566 bytes; SHA-256 `91906071c12d3f3648fa27c27db48e19055a836c1b0699537de7f49cf2b204ae`.
+
+Both packages verify with signer SHA-256
+`b7850d5fb645df9f5d12525db1b10e457b0ee7f3aa50bbf4294ff31dae3379ff`.
+The application is `com.example.meowmba`, debug versionCode 117/versionName 1.3.81.
+All 53 protected runtime entries and all 15 prior painted backgrounds match the
+Build 116 hashes exactly. The four new PNGs match the artwork manifest; the APK
+contains 19 painted backgrounds and no bundled full MaleCNS graph. Existing
+server model assets remain intact and untracked in the build checkout.
+
+Complete APKs, signature logs, verification JSON, 30 native preview PNGs and
+Build 115-to-117 deltas are retained on Meow. The small deltas, JSON and previews
+were copied to `build-out/habitat/build117/` locally. Delta transfer checks:
+
+- `app117.patch.gz`: `14a2085839bc962520000e197006494c5491333302ebfa2d83020c2f42de47b6`.
+- `test117.patch.gz`: `ddbf3c0d57379293af0026981e09afed42ab3174656983755f30734b7434bc97`.
+
+Use `scripts/apk_delta.py apply` only with the exact Build 115 base, enough disk
+space and the corresponding delta; verify the resulting APK hash before an
+update install. The complete verified APK is already available on Meow. Never
+clear app data or delete previous releases to make room without authorization.
+
+One archive approval was initially rejected as a possible transfer to a new
+research destination. Read-only checks established that `meow-nb` resolves to
+the exact owner-designated server, `/home/prog/research` is its existing local
+release archive, and the script hashes match. The same operation was then
+approved. No alternative host or indirect transfer was used.
+
+### Reproduce the focused acceptance
+
+From `/home/claude/meowmba-fly-habitat` on Meow, use the existing JDK 21 and Android
+SDK. Set `JAVA_HOME=/home/claude/.local-toolchain/jdk-21.0.12+8`, add its `bin` to
+`PATH`, and set `ANDROID_HOME=/home/claude/Android/Sdk` before Gradle or apksigner.
+Run the following test filters with `:app:testDebugUnitTest`:
+
+`*Drawer*Test`, `GoogleAppSearchTest`, `Cartoon*Test`, `Pet*Test`,
+`IllustratedEnvironmentPlacementTest`, `Fly3D*Test`, `OfficeHelpers*Test`,
+`CompanionSceneBackground*Test`, `CompanionBrainControlsTest`,
+`CompanionSetupUiTest` (all in `com.example.meowmba`). Include
+`:app:assembleDebug :app:assembleDebugAndroidTest` and
+`-PprebuiltDebugNativeDir=/home/claude/meowmba-fruit-fly/.native-preview`.
+The archive verifier at `/tmp/meow-verify-build117.py` checks the source SHA,
+suite totals, signatures, protected assets, artwork and transfer deltas. It will
+not overwrite an already finalized verification report.
 
 ## Integration findings
 

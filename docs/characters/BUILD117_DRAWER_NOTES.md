@@ -145,3 +145,13 @@ Hallmark adaptation preserves design.md/native route and removes no production
 files. No copied media or simulated browser chrome. Pre-emit: Philosophy 4,
 Hierarchy 5, Execution 4, Specificity 5, Restraint 4, Variety 4. Final native visual
 inspection and physical-phone acceptance are left to the root build passdown.
+
+
+## Final integration result
+
+All 131 focused checks pass at production source `016ecde`, including 14 drawer
+UI tests, 11 Google intent tests and three real-capture cancellation tests. Both
+signed packages and preserved assets are verified. See
+[MEOW_BUILD_117_PASS_DOWN.md](MEOW_BUILD_117_PASS_DOWN.md) for exact artifacts,
+source, diagnostics and physical-phone limits. Build 117 is ready on Meow; it
+is not installed on the disconnected phone.
