@@ -274,7 +274,7 @@ class LumenPainter {
                     if (helper > .005f) {
                         drawOval(Color(0xFF131A2A).copy(alpha = helper), Offset(-pr * slit, -pupilHeight),
                             Size(pr * slit * 2f, pupilHeight * 2f))
-                        drawCircle(Color.White.copy(alpha = helper), pr * .18f, Offset(-pr * .29f, -pr * .34f))
+                        drawCircle(Color.White.copy(alpha = helper), pr * .12f, Offset(-pr * .62f, -pr * .50f))
                     }
                     drawOval(color.copy(alpha = .13f * (1f - shape.dark) * (1f - f.form.fruitFly) * (1f - helper)),
                         Offset(-pr * slit * 1.035f, -pupilHeight * 1.035f),

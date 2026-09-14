@@ -80,3 +80,19 @@ Microsoft identifies Merlin as its wizard character in the original
 and documents its [Merlin animations](https://learn.microsoft.com/en-us/windows/win32/lwef/microsoft-agent-animations-for-merlin-character).
 The new native vector art implements the user's requested character forms; it
 contains no Microsoft binary assets and does not imply Microsoft endorsement.
+
+## First validation findings
+
+The first complete Meow run compiled both APKs and passed 73 of 75 checks.
+The helper render's new catchlight crossed the central pupil sample used by the
+existing visibility regression; it now sits at the outer upper corner, keeping
+the pupil center clear. Actual native previews show distinguishable Clippy and
+wizard forms, gaze/blink/speech motion, and readable compact picker controls.
+
+The older `AvatarMorphTest` preference test failed while its mocked Context
+started unrelated AgenticRuntime/Room setup, before any appearance assertion.
+It now uses the same scoped Android/AgenticRuntime mock and fake speech fixture
+as current preference tests, disables spontaneous idle performances during the
+scenario, and restores all fixtures afterward. Its transformation, persistence,
+color, performance-return and reset assertions are unchanged. Do not mask this
+kind of host-test problem by weakening production Context checks or assertions.

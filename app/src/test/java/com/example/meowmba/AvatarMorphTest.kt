@@ -95,8 +95,13 @@ class AvatarMorphTest {
         Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
         val storage = mock(SecureStorageManager::class.java)
         `when`(storage.context).thenReturn(mock(android.content.Context::class.java))
-        val vm = CompanionViewModel(secureStorage = storage, ioDispatcher = UnconfinedTestDispatcher(testScheduler))
+        val previousIdle = System.getProperty("meowmba.idleAnimations")
+        System.setProperty("meowmba.idleAnimations", "false")
+        val android = ScopedCompanionAndroidMocks { testScheduler.currentTime }
+        var created: CompanionViewModel? = null
         try {
+            val vm = CompanionViewModel(secureStorage = storage, ioDispatcher = UnconfinedTestDispatcher(testScheduler),
+                ttsManager = VoicePipelineTest.FakeSpeechSynthesizer()).also { created = it }
             vm.setAvatarStyle(AvatarStyle.LUMEN_CAT)
             vm.setAvatarEyeColor(0xFFAD77EEL); vm.setAvatarFeatureColor(0xFFFFA6C9L)
             vm.setAppearanceMode(AppearanceMode.LIGHT)
@@ -110,7 +115,8 @@ class AvatarMorphTest {
             verify(storage).saveAvatarForm("raccoon")
             `when`(storage.getPreference("avatar_style")).thenReturn("lumen")
             `when`(storage.getPreference("avatar_animal")).thenReturn("raccoon")
-            val restored = CompanionViewModel(secureStorage = storage, ioDispatcher = UnconfinedTestDispatcher(testScheduler))
+            val restored = CompanionViewModel(secureStorage = storage, ioDispatcher = UnconfinedTestDispatcher(testScheduler),
+                ttsManager = VoicePipelineTest.FakeSpeechSynthesizer())
             try { assertEquals(AvatarAnimal.RACCOON, restored.uiState.value.avatarAnimal)
                 assertEquals(AvatarStyle.LUMEN, restored.uiState.value.avatarStyle)
             } finally { restored.viewModelScope.coroutineContext[Job]?.cancelAndJoin() }
@@ -126,6 +132,11 @@ class AvatarMorphTest {
             assertEquals(AvatarStyle.LUMEN, vm.uiState.value.avatarStyle)
             assertNull(vm.uiState.value.performanceAnimal)
             verify(storage).saveAvatarForm("none")
-        } finally { vm.viewModelScope.coroutineContext[Job]?.cancelAndJoin(); Dispatchers.resetMain() }
+        } finally {
+            created?.viewModelScope?.coroutineContext?.get(Job)?.cancelAndJoin()
+            android.close(); Dispatchers.resetMain()
+            if (previousIdle == null) System.clearProperty("meowmba.idleAnimations")
+            else System.setProperty("meowmba.idleAnimations", previousIdle)
+        }
     }
 }
