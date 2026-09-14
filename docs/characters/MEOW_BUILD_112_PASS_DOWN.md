@@ -84,6 +84,13 @@ bridge checks pass for malformed input, disabled execution, process reuse,
 session-specific stop, timer races, malformed replies and no queue under load.
 The 18 existing bridge control tests pass.
 
+The broader neural run exposed an old enum/factory mismatch: the recorded replay
+test iterated every substrate but replayed every non-RATE case as SPIKING. It
+already misrepresented BANC. The replay check now instantiates each of the three
+local cores explicitly; remote replay stays in its separate stateful harness.
+Both synthetic comparison reports explicitly enumerate RATE/SPIKING, so a new
+enum entry can no longer receive a mislabeled spiking benchmark result.
+
 A live, certificate-verified, HMAC-signed Mac bridge probe reached Meow for six
 requests: observed MN9 rates peaked at 100 Hz; round trips ranged 90.34–1616.34
 ms including worker startup. Unsigned input received HTTP 401. Repeating the

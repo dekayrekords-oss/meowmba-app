@@ -25,7 +25,7 @@ class NeuralComparisonReportTest {
     @Test fun sameReplayProducesMeasuredComparison() {
         val rows = mutableListOf<String>()
         val sequences = mutableListOf<List<FloatArray>>()
-        for (kind in NeuralSubstrate.values()) {
+        for (kind in listOf(NeuralSubstrate.RATE, NeuralSubstrate.SPIKING)) {
             fun make(): NeuralCore = if (kind == NeuralSubstrate.RATE) LeakyRecurrentCore(NeuralCheckpoint.default())
                 else SpikingCore(NeuralCheckpoint.defaultSpiking())
             repeat(2) { replay(make()) }

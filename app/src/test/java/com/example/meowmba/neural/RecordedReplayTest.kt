@@ -7,8 +7,9 @@ import org.junit.Test
 import java.nio.file.Files
 
 class RecordedReplayTest {
-    @Test fun recordedIntervalsReproduceBothCoresAcrossThermalCadenceAndReset() {
-        for (substrate in NeuralSubstrate.values()) {
+    @Test fun recordedIntervalsReproduceLocalCoresAcrossThermalCadenceAndReset() {
+        // Remote replies do not contain a locally replayable neural checkpoint.
+        for (substrate in listOf(NeuralSubstrate.RATE, NeuralSubstrate.SPIKING, NeuralSubstrate.BANC_EXPERIMENTAL)) {
             var tier = 0
             val samples = mutableListOf<FeatureTraceSample>()
             val controller = NeuralBehaviorController(initialSubstrate = substrate,
@@ -22,8 +23,12 @@ class RecordedReplayTest {
                 if (i % 17 == 0) controller.onStimulus(Stimulus.LOUD_SOUND, .4f)
                 controller.tick(listOf(50L, 173L, 200L, 250L)[i % 4])
             }
-            val core: NeuralCore = if (substrate == NeuralSubstrate.RATE)
-                LeakyRecurrentCore(NeuralCheckpoint.default()) else SpikingCore(NeuralCheckpoint.defaultSpiking())
+            val core: NeuralCore = when (substrate) {
+                NeuralSubstrate.RATE -> LeakyRecurrentCore(NeuralCheckpoint.default())
+                NeuralSubstrate.SPIKING -> SpikingCore(NeuralCheckpoint.defaultSpiking())
+                NeuralSubstrate.BANC_EXPERIMENTAL -> BancExperimentalCore()
+                NeuralSubstrate.MALECNS_REMOTE -> error("Remote state requires the server replay harness")
+            }
             assertTrue(samples.isNotEmpty())
             for ((index, sample) in samples.withIndex()) {
                 assertEquals(index + 1L, sample.stepIndex)
