@@ -59,6 +59,11 @@ class MaleCnsDeviceTest {
                 val d = vm.uiState.value.neuralDiagnostics!!
                 assertEquals(NeuralSubstrate.MALECNS_REMOTE, d.substrate)
                 assertEquals(FallbackReason.NONE, d.fallback)
+                assertEquals("The phone must be using the verified full graph", 1f, d.core.extra["malecns.full_graph"])
+                for (key in listOf("forward", "backward", "halt", "landing", "takeoff", "groom2")) {
+                    val hz = d.core.extra["malecns.${key}_hz"]
+                    assertTrue("Missing measured $key population", hz != null && hz.isFinite() && hz >= 0f)
+                }
                 assertTrue("Phone controller exceeded its 20 ms p95 guard", d.p95StepMicros < 20_000)
                 scenario.onActivity {
                     if (vm.uiState.value.showNeuralInfo) vm.toggleNeuralInfo()
@@ -66,12 +71,14 @@ class MaleCnsDeviceTest {
                 }
                 Thread.sleep(1000)
                 assertEquals(0f, vm.neuralWingPowerNow())
+                assertEquals(FlyMotorIntent.NONE, vm.neuralFlyMotorNow())
                 val output = JSONObject().put("build", context.packageManager.getPackageInfo(context.packageName, 0).longVersionCode).put("connected", true)
                     .put("units", d.core.units).put("feedMaxHz", maxFeed).put("groomMaxHz", maxGroom)
                     .put("phoneStepP95Micros", d.p95StepMicros).put("thermalTier", d.thermalTier)
-                    .put("hiddenWingOutputZero", true).put("scope", "Short live phone to paired computer to Meow check; not heat/battery endurance")
+                    .put("graph", "full").put("assetSha256", MaleCnsGraphProfile.FULL.asset)
+                    .put("hiddenBodyOutputInactive", true).put("hiddenWingOutputZero", true).put("scope", "Short live phone to paired computer to Meow check; not heat/battery endurance")
                     .put("extra", JSONObject(d.core.extra))
-                File(context.getExternalFilesDir(null), "malecns-build112-device.json").writeText(output.toString(2))
+                File(context.getExternalFilesDir(null), "malecns-build115-device.json").writeText(output.toString(2))
                 assertEquals(oldMic, com.example.meowmba.core.audio.MicrophonePrivacy.isEnabled(storage))
                 assertEquals(oldCamera, storage.getBooleanPreference("camera_enabled", false))
                 passed = true

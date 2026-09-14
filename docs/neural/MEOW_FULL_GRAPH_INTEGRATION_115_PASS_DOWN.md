@@ -152,3 +152,19 @@ the upstream license is retained with deployed classes. Local changes include
 replay/observer fixes from the earlier audited model, complete graph conversion,
 strict profiles, readouts and bounded avatar retargeting. Do not claim that
 open-source connectivity establishes whole-animal biological fidelity.
+
+## Final acceptance refinements
+
+The first complete server build passed 129 focused Android tests without failures,
+errors or skips. Live authenticated acceptance passed 124 measured updates per
+graph: full compute p95 248.951 ms / maximum steady round trip 354.325 ms;
+retained 116.824 ms / 298.448 ms. Unsigned requests were rejected, duplicate
+requests were cached, reset results matched, and workers exited after stop.
+
+The optional `MaleCnsDeviceTest` now explicitly requires the full profile and
+all six extra measured body fields before activation, verifies hidden body output
+is inactive, and writes `malecns-build115-device.json`. It remains opt-in and has
+not run on the disconnected phone. During review, the grooming hand blend was
+corrected to retain its existing IK baseline throughout the transition; switching
+IK off at a threshold could cause a visible right-arm jump. Final package/test
+identity is recorded in the Build 115 verification file after rebuilding.
