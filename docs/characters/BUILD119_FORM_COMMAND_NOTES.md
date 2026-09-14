@@ -70,7 +70,7 @@ fallback design masquerading as the requested form.
 
 Worker static check: `git diff --check` passed. The worker did not build or run
 Gradle; one root build owner is required. Root should include
-`AvatarFormToolTest` (22 tests) and `AvatarFormInventorTest` (10 tests), along
+`AvatarFormToolTest` (23 tests) and `AvatarFormInventorTest` (10 tests), along
 with `ToolCallPromptTest`, `OfficeHelpersTest` and `FruitFlyAvatarTest`.
 
 The new checks cover rich descriptions, command gating, real tool routing,
@@ -89,3 +89,33 @@ after a new choice, inspect generation-token stamping at task submission and
 both callback entry points. If an available model repeatedly fails design
 validation, retain the concrete schema error and simplify its requested
 silhouette; do not weaken finite bounds or allow generated drawing code.
+
+## Bounded live Meow model check
+
+The existing `Qwen3.8-Flash-Next` llama-server process on Meow exposed its
+localhost OpenAI-compatible API at port 8090. Ollama reported no loaded model;
+no Ollama model was loaded for this test. No service was restarted or
+reconfigured, no model was installed/downloaded, and no paid fallback was used.
+
+Three actual generator prompts (coffee cup, dragon, spaceship) each reached an
+80-second HTTP deadline without a response. A further streaming coffee-cup
+retry reached its 90-second total deadline with zero content and zero reasoning
+characters. Both ordinary and streaming payloads already set
+`chat_template_kwargs.enable_thinking=false`; the served chat template exposes
+that flag. The server was idle before the streaming retry. During that retry,
+read-only `/props` and `/slots` checks each timed out after five seconds; the
+existing process showed Linux state `Dsl`, RSS 6,342,420 KiB and 0.0% reported
+CPU. This is evidence of unavailable/stalled inference during the measurement,
+not proof of an invalid design or a specific underlying model/server fault.
+
+No live model-generated design was produced, so there is no successful live
+schema/render validation to claim. Deterministic fixture tests remain separate
+from this evidence. No invalid-output repair was attempted because all failures
+were transport deadlines before any output, matching the generator's policy
+that provider failure is not a schema repair.
+
+Raw prompts, request settings, timing/failure JSON and reproduction scripts are
+retained privately at `/home/prog/research/meowmba-build119-live-forms` on Meow
+and `build-out/habitat/build119/live` locally. The three-prompt trial took about
+240 seconds; the separate streaming retry took 90 seconds. Root owns final
+acceptance and reporting of this live-inference limitation.

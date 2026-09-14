@@ -12,7 +12,8 @@ import com.example.meowmba.core.agent.tools.ToolRegistry
 import com.example.meowmba.core.agent.tools.Workspace
 import com.example.meowmba.ui.companion.CompanionViewModel
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.cancel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
@@ -325,19 +326,27 @@ class AgentViewModelTest {
 
     private val testDispatcher = UnconfinedTestDispatcher()
     private lateinit var fakeTts: VoicePipelineTest.FakeSpeechSynthesizer
+    private lateinit var androidMocks: ScopedCompanionAndroidMocks
     private val viewModels = mutableListOf<CompanionViewModel>()
 
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
+        // Completed tools now feed the live expression/reflex pipeline before
+        // speech. Its Android clock must be supplied in this plain-JVM fixture.
+        androidMocks = ScopedCompanionAndroidMocks { testDispatcher.scheduler.currentTime }
         fakeTts = VoicePipelineTest.FakeSpeechSynthesizer()
     }
 
     @After
-    fun tearDown() {
-        viewModels.forEach { it.viewModelScope.cancel() }
-        viewModels.clear()
-        Dispatchers.resetMain()
+    fun tearDown() = runTest(testDispatcher) {
+        try {
+            viewModels.forEach { it.viewModelScope.coroutineContext[Job]?.cancelAndJoin() }
+        } finally {
+            viewModels.clear()
+            androidMocks.close()
+            Dispatchers.resetMain()
+        }
     }
 
     @Test
