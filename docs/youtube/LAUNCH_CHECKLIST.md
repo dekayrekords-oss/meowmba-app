@@ -3,9 +3,9 @@
 ## Next: inspect the existing Weebly site
 
 - [x] Owner reports signing in; browser URL advanced to the existing site dashboard.
-- [ ] Restore readable editor access: dashboard screenshot was blank, reload timed out, and Chrome inspection timed out.
-- [ ] Inspect existing pages, navigation, music catalog, and branding.
-- [ ] Map the proposed Music, Projects, Watch, and Journal content onto that structure.
+- [ ] Restore readable editor access: dashboard is now readable; Edit opens editor/main.php but that editor remains blank.
+- [x] Inspect live homepage navigation and embedded music; artist-page bodies and editor layout still need review.
+- [x] Draft mapping: preserve music/artist pages, add Projects and Watch, and reuse Blog for journal content. See WEEBLY_FIRST_EDIT.md.
 - [ ] Prepare and preview the first page updates.
 - [ ] Verify links and publish through the existing Weebly workflow.
 

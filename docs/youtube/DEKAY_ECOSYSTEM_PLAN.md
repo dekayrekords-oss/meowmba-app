@@ -70,3 +70,7 @@ No website code, remote README, access setting, DNS record, or channel profile w
 ## First Weebly editing pass
 
 Prepare a homepage introduction connecting music and technology, two clear destinations (Music and Projects), a Watch section for both channels, and relevant GitHub links on project pages. Use the existing editor’s supported video/link components after inspecting them. Do not assume a GitHub-to-Weebly deployment integration or change DNS/hosting. The music-channel destination remains empty until supplied. This task has not entered the Weebly editor or published any changes.
+
+## Live-site inspection update
+
+The www homepage and signed-in dashboard became readable. Existing navigation includes music artist pages, Store, Blog, and Meow Assistant. Reuse Blog for written stories and retain the music catalog. WEEBLY_FIRST_EDIT.md provides the observed page map and concrete draft copy for Home, Projects, and Watch. The editor opened from the dashboard Edit control but rendered blank; no website edits have been made. Earlier site-inspection failures are historical, not current evidence that the public homepage is unavailable.
