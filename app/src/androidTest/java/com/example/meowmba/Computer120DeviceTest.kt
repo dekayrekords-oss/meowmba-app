@@ -33,17 +33,28 @@ class Computer120DeviceTest {
                 while (vm.uiState.value.computerTaskRunning && System.currentTimeMillis() < deadline) Thread.sleep(100)
                 assertFalse("Computer did not finish", vm.uiState.value.computerTaskRunning)
             }
+            val marker = "meow120_" + System.currentTimeMillis()
+            fun awaitReply(token: String): String {
+                val deadline = System.currentTimeMillis() + 5_000
+                while (System.currentTimeMillis() < deadline) {
+                    vm.uiState.value.chatMessages.lastOrNull { it.isCompanion && it.text.contains(token) }?.let { return it.text }
+                    Thread.sleep(50)
+                }
+                fail("No persisted Computer reply for acceptance marker; caption=" + vm.uiState.value.captionText)
+                return ""
+            }
             try {
                 // Avoid scheduling unrelated persisted goals just to test the chat path.
                 flags.setAgenticRuntimeV1(true)
-                scenario.onActivity { vm.runOnComputer("printf meow120_verified") }
+                scenario.onActivity { vm.runOnComputer("printf ${marker}_verified") }
                 awaitStopped()
-                assertTrue(vm.uiState.value.captionText, vm.uiState.value.captionText.orEmpty().contains("Computer completed"))
-                assertTrue(vm.uiState.value.captionText, vm.uiState.value.captionText.orEmpty().contains("meow120_verified"))
-                scenario.onActivity { vm.runOnComputer("printf meow120_failed; exit 7") }
+                val success = awaitReply("${marker}_verified")
+                assertTrue(success, success.contains("Computer completed"))
+                scenario.onActivity { vm.runOnComputer("printf ${marker}_failed; exit 7") }
                 awaitStopped()
-                assertTrue(vm.uiState.value.captionText, vm.uiState.value.captionText.orEmpty().contains("BLOCKED"))
-                scenario.onActivity { vm.runOnComputer("sleep 3; printf meow120_late") }
+                val failure = awaitReply("${marker}_failed")
+                assertTrue(failure, failure.contains("BLOCKED"))
+                scenario.onActivity { vm.runOnComputer("sleep 3; printf ${marker}_late") }
                 Thread.sleep(300)
                 scenario.onActivity { vm.cancelAgenticComputerChat() }
                 val stopped = vm.uiState.value.captionText
