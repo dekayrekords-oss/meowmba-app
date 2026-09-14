@@ -4,8 +4,10 @@
 
 Clippy and The Wizard are selectable Lumen forms, using native vector art and
 the existing gaze/blink/speech/brain/touch paths. Stable saved keys and explicit
-spoken form commands are wired. Native preview, regression and package checks
-are in progress on Meow; the phone remains disconnected. Read
+spoken form commands are wired. All 75 regression/render checks pass, final native previews are inspected, and
+both signed packages preserve all 53 runtime/15 background assets. Build116 is
+archived on Meow and ready for installation; the disconnected phone remains
+last verified on Build112. Small update deltas are retained locally. Read
 [MEOW_BUILD_116_PASS_DOWN.md](characters/MEOW_BUILD_116_PASS_DOWN.md).
 
 ## September 13: Build 115 full annotated graph integration
