@@ -41,14 +41,14 @@ class GeneratedAvatarIntegrationTest {
         val android = ScopedCompanionAndroidMocks { testScheduler.currentTime }
         val fixture = Fixture(dispatcher, temporary.newFolder())
         try { fixture.block() } finally {
-            fixture.models.forEach { it.viewModelScope.cancel() }
+            fixture.models.forEach { it.viewModelScope.coroutineContext[Job]?.cancelAndJoin() }
             android.close()
             Dispatchers.resetMain()
             if (previousIdle == null) System.clearProperty("meowmba.idleAnimations") else System.setProperty("meowmba.idleAnimations", previousIdle)
         }
     }
 
-    private class Fixture(val dispatcher: TestDispatcher, folder: File) {
+    private class Fixture(val dispatcher: TestDispatcher, val folder: File) {
         val values = mutableMapOf<String, String>()
         val models = mutableListOf<CompanionViewModel>()
         val store = GeneratedAvatarStore(File(folder, "avatar_forms"))
@@ -71,6 +71,7 @@ class GeneratedAvatarIntegrationTest {
                 .`when`(storage).saveGeneratedAvatarForm(anyString())
         }
         fun model() = CompanionViewModel(secureStorage = storage,
+            workspaceRoot = File(folder, "workspace"),
             ttsManager = VoicePipelineTest.FakeSpeechSynthesizer(), ioDispatcher = dispatcher).also { models += it }
     }
 
