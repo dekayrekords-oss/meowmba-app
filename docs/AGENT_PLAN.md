@@ -1,5 +1,19 @@
 # Agent execution plan — immersive companion revision
 
+## September 13: Build 112 installed; MaleCNS server route verified
+
+The retained MaleCNS graph is integrated through the pinned, paired Desktop
+Bridge and a request-driven Meow worker. Build 112 is installed with production
+data and runtime assets preserved. Seventy-five focused Android host tests,
+23 Python bridge tests and 124 live Mac-to-Meow sensory requests pass. Phone
+pairing and live avatar acceptance are pending: the phone test stopped before
+changes at its missing-pairing precondition, then the device disconnected and
+the user requested continuing without it. Do not claim the remote brain is
+enabled on the phone. Read
+[MEOW_BUILD_112_PASS_DOWN.md](characters/MEOW_BUILD_112_PASS_DOWN.md)
+for changes, exact artifact identity, Meow setup/debugging lessons and the next
+phone procedure. Earlier Build 111/research checkpoints below are historical.
+
 ## September 13: MaleCNS open model tested on Meow and Mac
 
 The user's linked release is available as CC BY 4.0 data with a runnable MIT

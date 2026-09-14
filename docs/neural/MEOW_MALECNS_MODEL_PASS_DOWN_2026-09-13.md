@@ -1,5 +1,12 @@
 # MaleCNS open model — runnable research handoff
 
+**Follow-up:** Build 112 now includes the remote Android substrate and is
+installed. The Mac-to-Meow service route is tested; phone pairing and live
+avatar acceptance remain pending at the user's request to continue without the
+device. See [the Build 112 handoff](../characters/MEOW_BUILD_112_PASS_DOWN.md).
+The pre-integration status and research findings below describe this earlier
+audit checkpoint.
+
 The user explicitly authorized the open-source fruit-fly brain models and linked
 the [Minecraft discussion](https://www.reddit.com/r/Minecraft/comments/1wcg3cy/google_just_opensourced_a_complete_fruit_fly/).
 This pass verified the applicable release, downloaded a runnable implementation

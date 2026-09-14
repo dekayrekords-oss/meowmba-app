@@ -1,9 +1,12 @@
 # Build 112 — MaleCNS remote avatar integration
 
-Implementation and host tests are complete; server assembly and phone acceptance
-are pending at this checkpoint. The user authorized connecting the tested model
-and installing the update. Build 111 is still the installed version until the
-installation evidence below is updated.
+Build 112 (1.3.81) is installed in place over Build 111 on SM-F966U1. Assembly,
+signing, retained runtime assets, 75 focused Android host tests, 23 Python bridge
+tests and the live Mac-to-Meow sensory checks passed. **Phone pairing and live
+avatar acceptance remain pending.** The device test stopped at its initial
+"Pair the computer bridge first" precondition, before changing neural settings.
+The phone then disconnected; the user explicitly said to continue without it.
+Do not report MaleCNS as enabled or verified on the phone yet.
 
 ## What changed and why
 
@@ -75,7 +78,7 @@ helper config and restart that helper. Never clear app data, overwrite pairing,
 disable certificate checks or remove private model assets to repair connectivity.
 Do not publish Android source; use only the canonical private Meow Git repo.
 
-## Verification at the implementation checkpoint
+## Verification and installed artifact
 
 The focused Kotlin remote tests cover response identity/finite bounds, one
 request in flight, freshness, reset sessions, late-result rejection, fallback
@@ -104,7 +107,117 @@ hidden wing-output suppression. `activate=true` retains the verified neural
 selection only on success; ordinary invocation restores earlier choices. Pet
 care state is restored. Camera/microphone preferences are checked unchanged.
 
-Phone evidence, final test totals, signed APK identity and install status must
-be appended after the build. This does not complete sustained heat/battery
-validation, biological flight simulation, retinal/odor fidelity, or robot
-transfer. The user has no robot; physical control remains quarantined.
+Final server assembly at source commit `776eb0d` passed with 75 tests, zero
+failures/errors/skips. This is the focused neural/BANC/setup suite, not a claim
+that the entire app suite ran. The earlier focused Mac run passed 12 tests.
+The final server command was:
+
+```sh
+JAVA_HOME=/home/claude/.local-toolchain/jdk-21.0.12+8 \
+PATH=/home/claude/.local-toolchain/jdk-21.0.12+8/bin:$PATH \
+./gradlew :app:testDebugUnitTest --tests 'com.example.meowmba.neural.*' \
+  --tests '*BancExperimentalCoreTest' --tests '*CompanionSetupUiTest' \
+  :app:assembleDebug :app:assembleDebugAndroidTest \
+  -PprebuiltDebugNativeDir=/home/claude/meowmba-fruit-fly/.native-preview \
+  --console=plain
+```
+
+The install used `adb install -r`, preserving production data. Both app and test
+APK installs returned Success. Package inspection reported versionCode 112,
+versionName 1.3.81, lastUpdateTime `2026-09-13 20:27:44` (phone local time).
+The existing cat avatar selection was preserved; no forced fly selection.
+
+- App: `build-out/habitat/meowmba-112.apk`, 441,901,342 bytes; SHA-256
+  `7b861d0c9ef77824bab0980b0ce43a98262569fe802af04e85303be107e9cd9c`.
+- Test APK: `build-out/habitat/tests112.apk`, 2,736,070 bytes; SHA-256
+  `ae44fc06943049dd336523a0e509b6ba67accabebf168fa123b9792d3a182cbc`.
+- Signing certificate SHA-256:
+  `b7850d5fb645df9f5d12525db1b10e457b0ee7f3aa50bbf4294ff31dae3379ff`.
+- All 53 protected runtime entries (native libraries, bundled models, pose,
+  acceleration, Sherpa/VAD/speaker entries) match Build 111 by CRC and length.
+- `scripts/apk_delta.py` reconstructed byte-identical APKs using a 4,239,589-byte
+  app patch and a 153,536-byte test patch. Avoid sending the entire APK over VPN.
+
+After the user deferred phone work, `scripts/neural/verify_malecns_bridge.py`
+completed 124 sensory requests across quiet, food, touch, looming and combined
+food/touch episodes using the installed TLS/HMAC helper and real Meow worker.
+It verifies the exact local certificate, reads the existing private pairing
+record without printing it, and never changes pairing. This is a Mac self-client;
+it does not establish or prove Android pairing.
+
+Observed population peaks: feeding MN9 100 Hz, touch/grooming DNg62 200 Hz,
+loom/escape DNp01 480 Hz; combined food/touch yielded 90 Hz feeding and 210 Hz
+grooming. Quiet output populations stayed zero. Round-trip median was 145.077 ms,
+p95 187.392 ms, maximum 1518.113 ms including cold starts. None exceeded the
+phone's 1800 ms freshness boundary in this short run. Worker compute maximum
+was 142.120 ms. These are measured desktop/network timings, not phone CPU or
+animation frame timings. Duplicate requests were cached without another neural
+step; restarting reproduced the first food response exactly apart from timing
+and request identity. Unsigned requests returned HTTP 401. No worker remained
+on Meow after the test's session-specific stop.
+
+Reproduce while the phone's remote brain is inactive (one worker is shared):
+
+```sh
+python3 scripts/neural/verify_malecns_bridge.py --run-live \
+  --output build-out/habitat/build112/bridge-sensory-acceptance.json
+```
+
+Sanitized summary: `docs/neural/BUILD_112_VERIFICATION.json`. Full numeric host
+report and original device precondition failure are retained in the ignored
+`build-out/habitat/build112` folder. Do not publish the pre-install screenshot:
+it includes an unrelated private caption. No new phone visual acceptance was
+completed for the remote controls.
+
+## Teach Meow: connectivity diagnosis and next phone check
+
+The current phone has no saved Desktop Bridge pairing, even though the Mac has
+an older private pairing record. An installed APK and an authenticated Mac
+self-client are not proof of a paired phone. Preserve that old record until
+proper one-time-code pairing is performed; never inject a secret into phone
+preferences or bypass the certificate/HMAC checks.
+
+The last connected phone had only a cellular address and no reachable LAN/VPN
+address. The Mac's NetBird address is `100.77.138.81`. The configured ADB reverse
+tunnel forwards phone `127.0.0.1:8765` to this Mac. Signed `/rpc` requests can
+fall back to USB after pairing; the initial `/pair` request uses the payload's
+explicit host. With USB-only connectivity, use `127.0.0.1` in a valid manual
+payload while retaining the exact helper certificate fingerprint and temporary
+pairing token. That pairing will require the USB tunnel until a reachable
+network host is configured by the owner.
+
+For the next authorized phone session:
+
+1. Reconnect/unlock and run `bash scripts/connect_desktop_usb.sh`.
+2. Use the existing Desktop Bridge settings and a temporary `--pair` helper
+   session to perform code/payload pairing. Back up the old pairing privately
+   first. Stop the launch agent while using a temporary pairing process on the
+   same port; afterward restore its existing non-pairing launch configuration.
+   Do not permanently add `--pair` to its KeepAlive launch arguments.
+3. Confirm Ping in the phone settings, then run the installed opt-in test:
+
+   ```sh
+   adb -d shell am instrument -w -r \
+     -e class com.example.meowmba.MaleCnsDeviceTest \
+     -e maleCnsLive true -e activate true \
+     com.example.meowmba.test/androidx.test.runner.AndroidJUnitRunner
+   ```
+
+4. Only on success does that test retain MaleCNS + Neural. Pull
+   `malecns-build112-device.json` from the app's external files directory;
+   relaunch the avatar, inspect Brain/settings in landscape, and verify the
+   user's mic/camera/avatar preferences. Do not infer app heat from controller
+   step time: collect a separate sustained thermal/battery sample.
+
+If Ping fails, fix pairing/tunnel/helper availability before debugging anatomy.
+If Ping succeeds but the brain is unavailable, check `malecns_enabled`, fixed
+SSH argv, `meow-nb` key access, Java/model paths and exact asset hash. Do not use
+the timing-out `meow` LAN alias or change SSH to password retries. A slow reply
+correctly falls back to Classic rather than animating from stale input. If tests
+mislabel substrates, use explicit model factories instead of treating every new
+enum value as SPIKING. If observed-spike logging changes deterministic output,
+check the separate observer RNG and reset reseeding from the model audit.
+
+This does not complete sustained heat/battery validation, biological flight
+simulation, retinal/odor fidelity, or robot transfer. The user has no robot;
+physical control remains quarantined.
