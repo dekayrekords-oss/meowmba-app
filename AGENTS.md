@@ -1,5 +1,16 @@
 # Meowmba — guide for AI contributors
 
+## Android source publication restriction — owner instruction, 2026-09-13
+
+Do not upload any Android app source code to public GitHub. This includes
+source copied into public repositories, gists, issues, PRs, snippets, or public
+website assets. A request to connect the website or videos to GitHub does not
+authorize publishing the Android implementation. Keep app code in local Git or
+owner-authorized private server repositories. Review destinations before any
+push; never assume a remote is private from its name. Public website updates
+may describe features without including Android source. Record changes and
+Meow passdowns locally; a local commit is not a public push.
+
 ## Active appearance revision and agent assignments
 
 For the current user-requested animation/chat/orb work, read `docs/IMMERSIVE_COMPANION_PLAN.md` and `docs/AGENT_PLAN.md`. They supersede the older orb-ribbon direction, not the security rules or unrelated roadmap below.
