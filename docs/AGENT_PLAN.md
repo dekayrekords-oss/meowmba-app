@@ -9,8 +9,9 @@ Forty focused UI/placement tests pass, with native render review across four
 widths, dark/light and large text. See
 [MEOW_BUILD_111_PASS_DOWN.md](characters/MEOW_BUILD_111_PASS_DOWN.md) for exact
 implementation, debugging guidance, provenance and build/install status.
-Build 110 was verified and packaged; Build 109 is still the last confirmed
-installed version. Older checkpoints below remain historical.
+Build 111 is now installed in place over Build 109; signed package, preserved
+runtime assets, phone menu/settings, and Android Home-to-avatar routing are
+verified. Build 110's work is included. Older checkpoints below remain historical.
 
 ## September 13: paused before build 110 for model switch
 

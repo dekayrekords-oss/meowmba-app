@@ -6,10 +6,17 @@ The user approved the Build 110 cartoon direction and asked for the same feel
 throughout the app's menus, options and buttons, with less cluttered scenes.
 This continues that build. No app data or preferred appearance is reset.
 
-Source and 40 focused JVM/native Compose tests are complete. Final signed
-assembly and phone installation are recorded below when verified. At the first
-device check in this revision ADB listed no connected phone; Build 109 is the
-last confirmed installed version. Build 110 was packaged but not installed.
+Build 111 is now installed on `RFCY61NJEVM` / SM-F966U1. The phone reconnected
+after the signed build and exact local reconstruction were ready. `adb install
+-r` upgraded Build 109 directly to Build 111 without clearing data. Android
+reports `versionCode=111`, `versionName=1.3.81`, and phone-local lastUpdateTime
+`2026-09-13 19:21:03`. Build 110 was packaged but never installed separately.
+
+Forty focused tests passed locally and on the final server build. The on-phone
+swipe-down card, scrolling to Settings, Settings overview, and Android Home
+return to the Lumen avatar were verified. Existing camera and mic preferences
+remained off. The phone locked before the optional background-gallery preview;
+that extra physical screenshot was not completed. No attempt bypassed the lock.
 
 ## What changed, how, and why
 
@@ -78,6 +85,22 @@ last confirmed installed version. Build 110 was packaged but not installed.
 
 ## Validation
 
+Final source commit: `82e5db6`. Server `:app:assembleDebug` and the focused test
+set completed successfully. Server and reconstructed APK SHA-256 both equal
+`15a6412ccb03355cf6733491c3e3cc5421307ace0beea47a2038b4653046a5d1`.
+The 7,069,015-byte patch SHA-256 is
+`c539e4ed42c48321905212b62ac1ec31897e89513cfa33f00e4654f4e69504d5`.
+Signer verification passed on both hosts. All 53 protected native/model ZIP
+entries match Build 110 by CRC and uncompressed size. APK:
+`build-out/habitat/meowmba-111.apk`. Machine-readable evidence:
+[BUILD_111_VERIFICATION.json](BUILD_111_VERIFICATION.json).
+
+Several VPN transfer attempts dropped after partial delivery. Resuming with
+`tail -c +(current byte count + 1)` appended only the missing suffix, followed
+by full patch SHA-256, delta reconstruction, full APK SHA-256 and signer checks.
+Never apply or install a partial artifact just because its filename exists.
+The completed patch and APK are preserved locally for future updates.
+
 40 tests, zero failures/errors/skips, in these focused classes:
 `CartoonInterfaceUiTest`, `CompanionSetupUiTest`, `SettingsNavigationUiTest`,
 `ChatOverlayUiTest`, `MicKillUiTest`, `IllustratedEnvironmentPlacementTest`,
@@ -89,6 +112,18 @@ Native screenshots under `app/build/reports/cartoon111/` cover menus/settings at
 They verify menu-to-settings-and-back navigation, Avatar return, disabled click
 suppression, and selected-chip semantics. These are Robolectric native renders;
 physical phone visual acceptance and a fresh sustained thermal run are separate.
+
+The same release directory also contains `phone-home.png`, `phone-menu.png`
+and `phone-settings.png`, captured from the installed build. Menu/settings
+visuals and Android Home routing have physical-phone evidence. Sustained thermal
+validation is still separate; the previously configured cooling/reflex indicators
+remain available. Native previews and device screenshots are copied to
+`build-out/habitat/build111/`.
+
+Artwork files: `app/src/main/assets/backgrounds/painted/cartoon_nook.png` and
+`app/src/main/assets/backgrounds/painted/cartoon_galley.png`. Both were edited
+with built-in image_gen; exact prompts, source paths, dimensions, measured
+anchors and hashes are in the [art manifest](artwork/painted-environments-manifest.json).
 
 Design review: hierarchy, legibility, consistent icons/tokens, native input
 states, restraint and responsive layouts reviewed. System font and native app

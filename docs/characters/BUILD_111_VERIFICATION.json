@@ -1,0 +1,25 @@
+{
+  "sourceCommit": "82e5db6",
+  "versionCode": 111,
+  "verifiedAt": "2026-09-14T02:19:47.273084+00:00",
+  "apkSha256": "15a6412ccb03355cf6733491c3e3cc5421307ace0beea47a2038b4653046a5d1",
+  "signerSha256": "b7850d5fb645df9f5d12525db1b10e457b0ee7f3aa50bbf4294ff31dae3379ff",
+  "focusedTests": 40,
+  "protectedRuntimeEntries": 53,
+  "runtimeEntriesUnchanged": true,
+  "localArtifactVerified": true,
+  "installation": "verified; adb install -r from Build 109",
+  "device": "RFCY61NJEVM / SM-F966U1",
+  "installedVersionCode": 111,
+  "phoneLastUpdateTime": "2026-09-13 19:21:03",
+  "dataCleared": false,
+  "phoneUiChecks": [
+    "swipe-down card opens",
+    "menu scrolls to Settings",
+    "settings overview renders correctly",
+    "Android Home returns to Lumen avatar",
+    "camera and microphone remain off"
+  ],
+  "phoneBackgroundGallery": "optional preview not completed; phone locked",
+  "sustainedThermalValidation": "not performed in this UI revision"
+}
