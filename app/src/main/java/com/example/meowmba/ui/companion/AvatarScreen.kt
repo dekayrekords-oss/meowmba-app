@@ -147,7 +147,7 @@ fun AvatarScreen(
 
             if (style.isLumen && style != AvatarStyle.FULL_FLY) {
                   Text("Choose your character", style = MaterialTheme.typography.titleMedium)
-                  Text("Choose the floating features Lumen wears. This selection is remembered until you change it.",
+                  Text("Pick a character for Lumen, including Clippy and the classic wizard. Your choice stays saved.",
                       style = MaterialTheme.typography.bodySmall)
                   FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     AvatarAnimal.entries.forEach { option ->
@@ -156,6 +156,12 @@ fun AvatarScreen(
                             label = { Text(option.label) })
                     }
                   }
+                if (style == AvatarStyle.LUMEN && (animal == AvatarAnimal.CLIPPY || animal == AvatarAnimal.WIZARD)) {
+                    Text(if (animal == AvatarAnimal.CLIPPY)
+                        "A springy silver paperclip with expressive eyes. Say ‘turn into Clippy’ to switch here any time."
+                    else "A starry hat, flowing beard and magic wand. Say ‘become the wizard’ to switch here any time.",
+                        style = MaterialTheme.typography.bodySmall)
+                }
                 Text("Tap or stroke the avatar to interact. Use the video button to enable or disable the camera for face following; swipe down to open the card menu.",
                     style = MaterialTheme.typography.bodySmall)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -181,7 +187,8 @@ fun AvatarScreen(
             Spacer(modifier = Modifier.height(10.dp))
             ColorSwatchRow(selected = eyeColor, onSelect = onSelectEyeColor, label = "Eye color")
 
-            if (style == AvatarStyle.PEARL || style.isLumen) {
+            if ((style == AvatarStyle.PEARL || style.isLumen) &&
+                !(style == AvatarStyle.LUMEN && (animal == AvatarAnimal.CLIPPY || animal == AvatarAnimal.WIZARD))) {
                 Spacer(Modifier.height(18.dp))
                 Text(if (style.isLumen) "Animal color" else "Cat color", style = MaterialTheme.typography.titleMedium)
                 Text(if (style.isLumen) "Ears, muzzle, markings and tail. Eyes and glow stay independent."

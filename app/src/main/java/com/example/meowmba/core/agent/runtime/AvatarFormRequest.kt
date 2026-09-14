@@ -20,7 +20,8 @@ object AvatarFormRequest {
             "stop (?:being|acting like) (?:an animal|a cat|a dog|a squirrel|a raccoon|a racoon|" +
             "an owl|a duck|an australian shepherd(?: dog)?|an aussie|a shepherd|" +
             "a rabbit|a bunny(?: rabbit)?|a pig|a piglet|a piggy|an alien|an extraterrestrial|" +
-            "a fruit fly|a fruit-fly|a fruitfly|a drosophila|a robot|an android|a panda(?: bear)?|a giant panda)|" +
+            "a fruit fly|a fruit-fly|a fruitfly|a drosophila|a robot|an android|a panda(?: bear)?|a giant panda|" +
+            "clippy|clippit|merlin|(?:a |the )?wizard|(?:a |the )?paperclip)|" +
             "(?:just |be )?eyes only)$",
     )
     private val command = Regex(
@@ -71,7 +72,7 @@ object AvatarFormRequest {
         val rawTarget = match.groupValues[2]
         val requested = rawTarget.replaceFirst(article, "")
         if (requested.length !in 1..48 || !animalPhrase.matches(requested)) return null
-        if (requested.split(' ', '-').any { it in forbiddenWords }) return null
+        if (requested != "paper clip" && requested.split(' ', '-').any { it in forbiddenWords }) return null
         val explicitAppearance = match.groupValues[1].startsWith("change your ") ||
             match.groupValues[1].startsWith("set your ")
         if (!explicitAppearance && AvatarAnimal.resolve(requested) == null && requested !in otherSpecies) return null

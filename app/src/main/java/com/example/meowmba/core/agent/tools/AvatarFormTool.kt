@@ -18,11 +18,11 @@ class AvatarFormTool(private val onChange: (AvatarAnimal) -> Unit) : Tool {
         id = "avatar.form",
         displayName = "Change avatar form",
         description = "Change Lumen's saved local on-screen form when the user explicitly asks " +
-            "to become, be, turn into, or look like an animal. Supported forms: $supported. " +
+            "to become, be, turn into, or look like an animal or classic helper (Clippy or the wizard). Supported forms: $supported. " +
             "This is a reversible appearance setting for the same avatar, not a new character, " +
             "generated image/video/asset/file, or robot movement. For a short 'act like' or " +
             "'pretend' performance use avatar.animate instead. Do not change form merely " +
-            "because the user mentions a pet. Unsupported animals must fail, never be substituted.",
+            "because the user mentions a pet. Unsupported forms must fail, never be substituted.",
         inputSchema = mapOf("animal" to "string"),
         riskLevel = RiskLevel.SAFE,
         environments = setOf(ToolEnvironment.PHONE),

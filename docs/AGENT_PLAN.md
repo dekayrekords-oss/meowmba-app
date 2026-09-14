@@ -1,5 +1,13 @@
 # Agent execution plan — immersive companion revision
 
+## September 13: Build 116 Office helper forms
+
+Clippy and The Wizard are selectable Lumen forms, using native vector art and
+the existing gaze/blink/speech/brain/touch paths. Stable saved keys and explicit
+spoken form commands are wired. Native preview, regression and package checks
+are in progress on Meow; the phone remains disconnected. Read
+[MEOW_BUILD_116_PASS_DOWN.md](characters/MEOW_BUILD_116_PASS_DOWN.md).
+
 ## September 13: Build 115 full annotated graph integration
 
 The official MaleCNS confidence-0.5 graph is converted and verified: 176,422

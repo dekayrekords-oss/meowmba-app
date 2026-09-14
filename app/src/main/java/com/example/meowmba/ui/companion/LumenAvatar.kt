@@ -31,6 +31,7 @@ class LumenPainter {
     private val speciesParts = LumenSpeciesParts()
     private val characterParts = LumenCharacterParts()
     private val flyParts = LumenFruitFlyParts()
+    private val officeHelpers = LumenOfficeHelperParts()
     private val morphPaint = Paint()
     private var eyeMaterials: LumenEyeMaterials? = null
     private val irisDirections = Array(48) { i ->
@@ -67,6 +68,7 @@ class LumenPainter {
             animalParts.tail(this, center, unit, frame, featureColor, glowColor)
             characterParts.backdrop(this, center, unit, frame, featureColor)
             flyParts.backdrop(this, center, unit, frame)
+            officeHelpers.backdrop(this, center, unit, frame)
             speciesParts.backdrop(this, center, unit, frame, featureColor, glowColor)
             for (side in intArrayOf(-1, 1)) {
                 val flyTurn = frame.form.fruitFly * frame.perspective
@@ -88,6 +90,7 @@ class LumenPainter {
             speciesParts.beak(this, center, unit, frame, featureColor)
             characterParts.muzzle(this, center, unit, frame, featureColor)
             flyParts.mouth(this, center, unit, frame)
+            officeHelpers.foreground(this, center, unit, frame)
             val muzzleAlpha = if (catFeatures) 1f else frame.form.shortMuzzle
             if (muzzleAlpha > 0.005f) {
                 // Only the brief morph needs a small offscreen layer. Stable
@@ -198,6 +201,7 @@ class LumenPainter {
 
     private fun DrawScope.lens(side: Int, baseRx: Float, baseRy: Float, f: LumenFrame, selectedColor: Color, glow: Color) {
         val shape = lumenEyeShape(f.form)
+        val helper = (f.form.clippy + f.form.wizard).coerceIn(0f, 1f)
         val color = lumenIrisColor(f.form, selectedColor)
         val rx = baseRx * shape.width
         val ry = baseRy * shape.height
@@ -209,13 +213,16 @@ class LumenPainter {
         val lower = ry * (.10f + (.88f - f.smile * .17f - lowerLift) * open)
         val tilt = lumenEyeTilt(side, f, shape)
         rotate(tilt, Offset.Zero) {
-            drawOval(m.halo, Offset(-rx * 2.7f, -ry * 2.5f), Size(rx * 5.4f, ry * 5f))
+            drawOval(m.halo, Offset(-rx * 2.7f, -ry * 2.5f), Size(rx * 5.4f, ry * 5f), alpha = 1f - helper * .65f)
             if (open < .025f) {
                 aperture.reset()
                 aperture.moveTo(-rx, 0f)
                 val curve = ry * (.10f - f.smile * .25f)
                 aperture.cubicTo(-rx * .45f, curve, rx * .45f, curve, rx, 0f)
-                drawPath(aperture, lerp(color, Color.White, .40f), style = Stroke(ry * .028f, cap = StrokeCap.Round))
+                if (helper > .005f) drawPath(aperture, Color(0xFFFFFCF1).copy(alpha = helper),
+                    style = Stroke(ry * .07f, cap = StrokeCap.Round))
+                drawPath(aperture, lerp(lerp(color, Color.White, .40f), Color(0xFF202538), helper),
+                    style = Stroke(ry * .028f, cap = StrokeCap.Round))
                 return@rotate
             }
             // The inner brow rises for concern and lowers for resolve. The lower
@@ -236,14 +243,16 @@ class LumenPainter {
             drawPath(aperture, glow.copy(alpha = .045f), style = Stroke(ry * .08f))
             clipPath(aperture) {
                 drawRect(m.sclera, Offset(-rx, -ry * 1.5f), Size(rx * 2f, ry * 3f))
+                if (helper > .005f) drawRect(Color(0xFFFFFCF1).copy(alpha = helper),
+                    Offset(-rx, -ry * 1.5f), Size(rx * 2f, ry * 3f))
                 if (shape.dark > .005f) drawRect(Color(0xFF07161D).copy(alpha = shape.dark),
                     Offset(-rx, -ry * 1.5f), Size(rx * 2f, ry * 3f))
                 if (f.form.fruitFly > .005f) flyParts.compoundEye(this, rx, ry, f, color)
                 val iris = Offset(f.gazeX * rx * .28f, f.gazeY * ry * .22f + ry * .06f)
                 val irisR = rx * .86f * shape.irisScale
                 translate(iris.x, iris.y) {
-                    drawCircle(m.iris, irisR, Offset.Zero, alpha = (1f - shape.dark * .92f) * (1f - f.form.fruitFly))
-                    drawCircle(Color(0xFF14333E).copy(alpha = .64f * (1f - f.form.fruitFly)), irisR * .99f, Offset.Zero,
+                    drawCircle(m.iris, irisR, Offset.Zero, alpha = (1f - shape.dark * .92f) * (1f - f.form.fruitFly) * (1f - helper))
+                    drawCircle(Color(0xFF14333E).copy(alpha = .64f * (1f - f.form.fruitFly) * (1f - helper)), irisR * .99f, Offset.Zero,
                         style = Stroke(rx * .023f))
                     // Irregular long/short fibres are cached directions; nothing
                     // shimmers or rolls a random number at display refresh rate.
@@ -251,14 +260,23 @@ class LumenPainter {
                         val direction = irisDirections[i]
                         val root = .48f + (i % 5) * .024f
                         val tip = .89f + (i % 3) * .018f
-                        drawLine(lerp(color, Color.White, .42f).copy(alpha = (if (i % 3 == 0) .21f else .10f) * (1f - shape.dark) * (1f - f.form.fruitFly)),
+                        drawLine(lerp(color, Color.White, .42f).copy(alpha = (if (i % 3 == 0) .21f else .10f) * (1f - shape.dark) * (1f - f.form.fruitFly) * (1f - helper)),
                             direction * (irisR * root), direction * (irisR * tip), rx * .009f, StrokeCap.Round)
                     }
                     val pr = irisR * (.56f + (f.pupil - .5f) * .40f) * shape.pupilScale * (1f - .24f * f.form.fruitFly)
                     val slit = shape.pupilAspect + (1f - shape.pupilAspect) * (f.pupil - .5f).coerceAtLeast(0f) * .6f
                     val pupilHeight = pr * (1f + (1f - shape.pupilAspect) * .38f)
+                    // Small flat pupils retain the same gaze and blink geometry.
+                    // Custom eye colors remain available as a cartoon iris ring.
+                    val tint = if (selectedColor != Color(AvatarColors.DEFAULT_EYE)) helper else f.form.wizard
+                    if (tint > .005f) drawCircle(color.copy(alpha = tint), pr * 1.23f, Offset.Zero)
                     drawOval(m.pupil, Offset(-pr * slit, -pupilHeight), Size(pr * slit * 2f, pupilHeight * 2f))
-                    drawOval(color.copy(alpha = .13f * (1f - shape.dark) * (1f - f.form.fruitFly)),
+                    if (helper > .005f) {
+                        drawOval(Color(0xFF131A2A).copy(alpha = helper), Offset(-pr * slit, -pupilHeight),
+                            Size(pr * slit * 2f, pupilHeight * 2f))
+                        drawCircle(Color.White.copy(alpha = helper), pr * .18f, Offset(-pr * .29f, -pr * .34f))
+                    }
+                    drawOval(color.copy(alpha = .13f * (1f - shape.dark) * (1f - f.form.fruitFly) * (1f - helper)),
                         Offset(-pr * slit * 1.035f, -pupilHeight * 1.035f),
                         Size(pr * slit * 2.07f, pupilHeight * 2.07f), style = Stroke(rx * .015f))
                     if (shape.mechanical > .005f) drawCircle(color.copy(alpha = shape.mechanical * .7f),
@@ -266,14 +284,16 @@ class LumenPainter {
                 }
                 // Studio key + fill: a shaped soft reflection, a small sharp
                 // catchlight and a restrained lower bounce describe curved glass.
-                drawOval(m.reflection, Offset(-rx * .60f - f.gazeX * rx * .035f, -ry * .67f), Size(rx * .77f, ry * .43f))
-                drawOval(Color.White.copy(alpha = .86f), Offset(-rx * .39f, -ry * .52f), Size(rx * .13f, ry * .09f))
-                drawOval(m.fillLight, Offset(-rx * .9f, ry * .24f), Size(rx * 1.8f, ry * .9f))
-                drawOval(Color(0xFFE4F4F0).copy(alpha = .64f), Offset(rx * .44f, ry * .32f), Size(rx * .065f, ry * .095f))
+                drawOval(m.reflection, Offset(-rx * .60f - f.gazeX * rx * .035f, -ry * .67f), Size(rx * .77f, ry * .43f), alpha = 1f - helper)
+                drawOval(Color.White.copy(alpha = .86f * (1f - helper)), Offset(-rx * .39f, -ry * .52f), Size(rx * .13f, ry * .09f))
+                drawOval(m.fillLight, Offset(-rx * .9f, ry * .24f), Size(rx * 1.8f, ry * .9f), alpha = 1f - helper)
+                drawOval(Color(0xFFE4F4F0).copy(alpha = .64f * (1f - helper)), Offset(rx * .44f, ry * .32f), Size(rx * .065f, ry * .095f))
                 drawRect(Brush.verticalGradient(listOf(Color(0x88091622), Color.Transparent), upper, upper + ry * .31f),
-                    Offset(-rx, upper), Size(rx * 2f, ry * .32f))
+                    Offset(-rx, upper), Size(rx * 2f, ry * .32f), alpha = 1f - helper)
             }
             drawPath(aperture, m.rim, style = Stroke(ry * .014f))
+            if (helper > .005f) drawPath(aperture, Color(0xFF202538).copy(alpha = helper),
+                style = Stroke(ry * .028f))
             // A little cheek lift warms a smile without turning every emotion
             // into a colour-changing alarm light.
             if (f.warmth > .01f) {

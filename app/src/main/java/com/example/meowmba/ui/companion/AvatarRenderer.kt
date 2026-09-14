@@ -1532,6 +1532,13 @@ internal fun lumenZoneAt(offset: Offset, w: Int, h: Int, frame: LumenFrame = Lum
     if (abs(point.x) < unit * .16f && abs(point.y + unit * .28f) < unit * .12f) {
         return AvatarZone.FOREHEAD
     }
+    // The helper's wire/beard and hat belong to the avatar too. Using the
+    // same inverse root keeps a toy behind them from stealing its pet gesture.
+    val helper = (frame.form.clippy + frame.form.wizard).coerceIn(0f, 1f)
+    if (helper > .05f && abs(point.x) < unit * .48f && point.y in (unit * .14f)..(unit * .51f))
+        return AvatarZone.FOREHEAD
+    if (frame.form.wizard > .05f && abs(point.x) < unit * .40f && point.y in (-unit * .58f)..(-unit * .25f))
+        return AvatarZone.FOREHEAD
     return AvatarZone.BACKGROUND
 }
 

@@ -21,18 +21,18 @@ internal fun lumenEyeShape(f: AvatarFormTraits): LumenEyeShape = LumenEyeShape(
     width = 1f + f.pointedEars * .08f - f.floppyEars * .06f - f.bushyTail * .05f +
         f.eyeMask * .02f - f.shepherdCoat * .03f + f.owlFeathers * .09f -
         f.duckFeathers * .12f - f.rabbitFur * .12f - f.pigSkin * .15f +
-        f.alienSkin * .12f - f.robotShell * .03f - f.pandaFur * .08f + f.fruitFly * .10f,
+        f.alienSkin * .12f - f.robotShell * .03f - f.pandaFur * .08f + f.fruitFly * .10f - f.clippy * .02f - f.wizard * .07f,
     height = 1f - f.pointedEars * .27f - f.floppyEars * .04f + f.bushyTail * .10f -
         f.eyeMask * .20f - f.shepherdCoat * .08f - f.owlFeathers * .09f +
         f.duckFeathers * .04f + f.rabbitFur * .08f - f.pigSkin * .10f -
-        f.alienSkin * .13f - f.robotShell * .18f - f.pandaFur * .08f + f.fruitFly * .06f,
+        f.alienSkin * .13f - f.robotShell * .18f - f.pandaFur * .08f + f.fruitFly * .06f + f.clippy * .13f - f.wizard * .12f,
     almond = f.pointedEars * .83f + f.eyeMask * .36f + f.shepherdCoat * .17f + f.alienSkin * .85f,
     outerLift = f.pointedEars * 10f + f.eyeMask * 4f + f.shepherdCoat * 3f +
         f.duckFeathers * 3f + f.alienSkin * 23f - f.rabbitFur * 4f - f.pandaFur * 5f,
     pupilAspect = 1f - f.pointedEars * .72f,
-    irisScale = 1f + f.owlFeathers * .17f + f.alienSkin * .40f - f.pigSkin * .09f,
+    irisScale = 1f + f.owlFeathers * .17f + f.alienSkin * .40f - f.pigSkin * .09f - f.clippy * .25f - f.wizard * .20f,
     pupilScale = 1f + f.floppyEars * .14f + f.bushyTail * .12f + f.rabbitFur * .23f +
-        f.pandaFur * .20f + f.alienSkin * .50f,
+        f.pandaFur * .20f + f.alienSkin * .50f - f.clippy * .18f - f.wizard * .10f,
     mechanical = f.robotShell,
     dark = f.alienSkin,
 )
@@ -58,5 +58,7 @@ internal fun lumenIrisColor(f: AvatarFormTraits, selected: Color): Color {
     tint(0xFF66C4D4, f.robotShell)
     tint(0xFFA98D68, f.pandaFur)
     tint(0xFFC72F46, f.fruitFly)
+    tint(0xFF545B6B, f.clippy)
+    tint(0xFF68A8D6, f.wizard)
     return color
 }

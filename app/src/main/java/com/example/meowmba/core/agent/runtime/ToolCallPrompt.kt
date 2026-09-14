@@ -43,7 +43,7 @@ object ToolCallPrompt {
         append("For NEW activities needing props, use avatar.invent with a plain request; it creates on-device animation data. ")
         append("\"animate yourself/the cat/it\" — are avatar.animate, never media.* tools ")
         append("(those only make files).\n")
-        append("- Explicitly becoming an animal or changing your avatar form uses avatar.form(animal); this saves the form until changed. Go back to normal or stop being an animal uses avatar.form(animal=none) to restore eyes only. Temporary act-like performances use avatar.describe_animation. Never pretend an unsupported form exists.\n")
+        append("- Explicitly becoming an animal or helper (Clippy, wizard) or changing your avatar form uses avatar.form(animal); this saves the form until changed. Go back to normal or stop being an animal uses avatar.form(animal=none) to restore eyes only. Temporary act-like performances use avatar.describe_animation. Never pretend an unsupported form exists.\n")
         append('\n')
         // Follow-ups ("yes", "do it") are meaningless without the turn before;
         // measured on device, a bare "yes" invented a random 60ms clip.
@@ -73,7 +73,7 @@ object ToolCallPrompt {
         append("<tool_call>\n{\"arguments\": <args-dict>, \"name\": <function-name>}\n</tool_call>")
         append(" Requests for the companion to perform (trick, gesture, \"animate yourself/it\") ")
         append("are avatar.animate, never media.* tools — those only make files.")
-        append(" Explicitly becoming an animal or changing your avatar form uses avatar.form(animal), saved until changed. Go back to normal or stop being an animal uses avatar.form(animal=none) to restore eyes only. Temporary act-like performances use avatar.describe_animation. Never pretend an unsupported form exists.")
+        append(" Explicitly becoming an animal or helper (Clippy, wizard) or changing your avatar form uses avatar.form(animal), saved until changed. Go back to normal or stop being an animal uses avatar.form(animal=none) to restore eyes only. Temporary act-like performances use avatar.describe_animation. Never pretend an unsupported form exists.")
         append("<|im_end|>\n")
         if (!context.isNullOrBlank()) {
             append("<|im_start|>user\n").append(context).append("<|im_end|>\n")
