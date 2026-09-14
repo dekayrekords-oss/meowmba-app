@@ -7,6 +7,18 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ComputerP0Test {
+    @Test fun explicitComputerCommandNeverCallsModel() {
+        val planner = HeuristicAgenticPlanner(object : ModelAdapter {
+            override fun complete(prompt: String): String = error("Model must not replace explicit command")
+        })
+        val goal = AgenticGoal("explicit", "Run on Computer: printf verified")
+        val call = planner.propose(goal, listOf("computer_exec"), emptyList(), emptyList())
+        assertEquals("computer_exec", call.tool)
+        assertEquals(listOf("sh", "-c", "printf verified"), call.argv)
+        val approved = planner.propose(goal.copy(status = GoalStatus.WAITING_APPROVAL, approvalGranted = true), listOf("computer_exec"), emptyList(), emptyList())
+        assertEquals("computer_exec", approved.tool)
+    }
+
 
     @Test
     fun `worker port avoids Desktop Bridge discovery 8766`() {

@@ -55,7 +55,7 @@ required_names.update({'com.example.meowmba.core.agentic.ComputerP0Test', 'com.e
 missing_names = sorted(required_names - names)
 assert not missing_names, {'missing_acceptance_suites': missing_names, 'observed_suites': sorted(names)}
 acceptance_test_count = sum(int(x.attrib.get('tests', 0)) for x in roots if x.attrib['name'] in required_names)
-assert acceptance_test_count >= 280, {'minimum_acceptance_tests': 280, 'acceptance_tests': acceptance_test_count, **tests}
+assert acceptance_test_count >= 281, {'minimum_acceptance_tests': 281, 'acceptance_tests': acceptance_test_count, **tests}
 assert tests['failures'] == 0 and tests['errors'] == 0 and tests['skipped'] == 0, tests
 tests['suites'] = [dict(name=x.attrib['name'],tests=int(x.attrib['tests'])) for x in roots]
 env = dict(os.environ, JAVA_HOME='/home/claude/.local-toolchain/jdk-21.0.12+8')

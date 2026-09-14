@@ -412,15 +412,16 @@ class Fly3DRenderer : GLSurfaceView.Renderer {
                 for(side in intArrayOf(-1,1)) {
                     val x=side*2.74f
                     box(x,.22f,-1.80f,.56f,.22f,.36f,0xA7839C)
-                    for(i in 0..2) {
-                        val stem=x+(i-1)*.28f
-                        val top=1.23f+(i%2)*.55f
-                        val sway=sin(sceneTime*.52f+i)*.08f
+                    run {
+                        // One expressive bloom per planter keeps the fly readable.
+                        val stem=x
+                        val top=1.78f
+                        val sway=sin(sceneTime*.52f+side)*.08f
                         segment(stem,.43f,-1.80f,stem+sway,top,-1.80f,.047f,0x8AB78D)
                         for(petal in 0..4) {
                             val a=petal*1.256637f
                             ellipsoid(stem+sway+cos(a)*.20f,top+sin(a)*.20f,-1.79f,
-                                .15f,.15f,.07f,if(i%2==0)0xC795BC else 0xB3D698)
+                                .15f,.15f,.07f,if(side<0)0xC795BC else 0xB3D698)
                         }
                         ellipsoid(stem+sway,top,-1.68f,.13f,.13f,.06f,CREAM)
                         for(eye in intArrayOf(-1,1)) ellipsoid(stem+sway+eye*.043f,top+.01f,-1.61f,.015f,.037f,.012f,INK,outline=false)

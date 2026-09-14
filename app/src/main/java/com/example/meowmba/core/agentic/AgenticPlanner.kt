@@ -38,8 +38,7 @@ class HeuristicAgenticPlanner(
         profiles: List<ConnectionProfile>,
         recentEvents: List<AgenticEvent>,
     ): ProposedToolCall {
-        val prompt = buildPrompt(goal, tools, profiles, recentEvents)
-        lastModelText = model.complete(prompt)
+        lastModelText = ""
 
         if (goal.budgets.exhausted() || goal.budgets.stepsRemaining() == 0) {
             return ProposedToolCall(
@@ -47,7 +46,7 @@ class HeuristicAgenticPlanner(
                 reason = "budget exhausted steps=${goal.budgets.stepsUsed}/${goal.budgets.maxSteps}",
             )
         }
-        if (goal.status == GoalStatus.WAITING_APPROVAL || goal.status == GoalStatus.BLOCKED) {
+        if ((goal.status == GoalStatus.WAITING_APPROVAL && !goal.approvalGranted) || goal.status == GoalStatus.BLOCKED) {
             return ProposedToolCall(
                 tool = "noop",
                 reason = "goal status=${goal.status} — waiting",
@@ -58,6 +57,14 @@ class HeuristicAgenticPlanner(
         }
 
         val toolNames = tools.map { it.lowercase().replace('-', '_') }.toSet()
+        // An explicit Computer command is already a complete user request. A model
+        // must not replace it with a generic SSH probe or a configured stub response.
+        if ("computer_exec" in toolNames && Regex("(?i)^(run on computer[:\\s]+|computer:)" ).containsMatchIn(goal.title.trim())) {
+            return ProposedToolCall(tool = "computer_exec", argv = shellArgvFromTitle(goal.title),
+                reason = "explicit Computer command")
+        }
+        val prompt = buildPrompt(goal, tools, profiles, recentEvents)
+        lastModelText = model.complete(prompt)
         val sshProfile = profiles.firstOrNull { it.type == ConnectionProfileType.SSH }
         val httpsProfile = profiles.firstOrNull { it.type == ConnectionProfileType.HTTPS_RUNTIME }
         val fallbackProfileId = sshProfile?.id ?: httpsProfile?.id
