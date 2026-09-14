@@ -8,14 +8,14 @@ import kotlin.random.Random
  * Mouth energy is separate because a muted microphone can coexist with TTS.
  * The caller supplies foreground/thermal/pause eligibility through stageAllowed
  * and may hold unsolicited acting during a serious conversation through socialContextAllowed.
+ * The compact Brain monitor leaves this visual stage visible. Speech and other
+ * bare-face policies continue to use faceModeActive without this exception.
  */
 internal fun idlePerformanceAllowed(
     state: CompanionState,
     mouthEnergy: Float,
     stageAllowed: Boolean = true,
     socialContextAllowed: Boolean = true,
-// This is visual acting only. The compact Brain monitor leaves that stage
-// visible; speech and other bare-face policies still use faceModeActive as-is.
 ): Boolean = stageAllowed && socialContextAllowed && faceModeActive(state.copy(showNeuralInfo = false)) &&
     !state.showConnectorsScreen && !state.showBrowser && !state.driving &&
     state.activeTask == null && state.pendingApproval == null && state.emotionPreview == null &&

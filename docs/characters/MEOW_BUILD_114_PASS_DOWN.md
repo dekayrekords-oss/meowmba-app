@@ -30,6 +30,13 @@ count, with a nonzero minimum. They were not individual synapse measurements.
   mode, fallback and remote freshness/pairing guard the callbacks themselves,
   even before the UI's next snapshot. Static-background feeding keeps Brain
   open by avoiding the usual explicit-animation panel dismissal.
+- Visual performance eligibility permits the visible Brain overlay. Neural
+  motor selection now uses that same eligibility rule, so microphone-off and
+  offline states do not freeze it. Speaking, tasks, opaque menus, driving,
+  social quiet periods and thermal/background restrictions still take priority.
+- Android Home clears Brain and its transient navigation/notice state. Opening
+  settings, the tile menu, drawer or browser from the visible avatar closes
+  Brain first, preventing hidden remote work or menus appearing underneath it.
 - Settings opens directly to Neural / Lumen. Pair computer opens Connections
   & memory and the existing secure pairing workflow. Neural settings provides
   Open Brain activity and explains why the remote brain pauses under settings.
@@ -51,6 +58,16 @@ Brain from it. The separate `avatarSceneVisible` predicate permits the partial
 overlay to keep rendering while retaining the original bare-face policy and
 the physical body pause. Both background and avatar must be resized together,
 or habitat prop contact coordinates will diverge from the visible table.
+
+The renderer's pause flag is not the only animation gate. Catalog clips also
+check `idlePerformanceAllowed`. Leaving Brain excluded there caused Feed's
+contented smile to be silently discarded even after rendering was resumed.
+The regression now requires an actual `activeAnimation`, not just a new food
+command. Neural motor selection also had an IDLE-only check that rejected
+MUTED/OFFLINE; reusing the tested visual eligibility rule fixes that without
+enabling a microphone. For future dead-animation reports check the whole chain:
+input, network mode/fallback, chosen action, motor eligibility, active clip and
+visible render viewport.
 
 Do not call a default user-requested animation from an overlay action unless
 the panel should close. `applyHabitatAction(..., revealAvatar = false)` retains

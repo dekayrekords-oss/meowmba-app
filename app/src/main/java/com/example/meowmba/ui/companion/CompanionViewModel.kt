@@ -877,9 +877,10 @@ class CompanionViewModel(
             }
         }
         val allowed = nervousSystem.mode == NeuralMode.NEURAL && nervousSystem.fallback == FallbackReason.NONE &&
-            avatarPerformanceStageAllowed && !appInBackground && socialContextAllowed() &&
-            com.example.meowmba.core.thermal.ThermalGovernor.currentTier().ordinal < 2 &&
-            state.interactionState == InteractionState.IDLE && !state.isChatExpanded
+            idlePerformanceAllowed(state, _mouthEnergy.value,
+                stageAllowed = avatarPerformanceStageAllowed && !appInBackground &&
+                    com.example.meowmba.core.thermal.ThermalGovernor.currentTier().ordinal < 2,
+                socialContextAllowed = socialContextAllowed())
         val action = nervousSystem.currentAction()
         val clip = neuralMotorDirector.choose(action, nowMs, allowed, busy, nervousSystem.feedingMotorNow()) ?: return
         playAnimationNamed(clip, userRequested = false)

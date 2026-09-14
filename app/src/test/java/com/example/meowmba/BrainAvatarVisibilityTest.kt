@@ -4,6 +4,7 @@ import com.example.meowmba.ui.companion.CompanionState
 import com.example.meowmba.ui.companion.avatarSceneVisible
 import com.example.meowmba.ui.companion.faceModeActive
 import com.example.meowmba.ui.companion.idlePerformanceAllowed
+import com.example.meowmba.ui.companion.InteractionState
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -16,6 +17,10 @@ class BrainAvatarVisibilityTest {
         assertTrue("Visible neural clips can run", idlePerformanceAllowed(state, 0f))
         assertFalse("Heat and lifecycle gate still wins", idlePerformanceAllowed(state, 0f, stageAllowed = false))
         assertFalse("Speaking must still block ambient acting", idlePerformanceAllowed(state, .8f))
+        assertTrue("Brain movement works with microphone off",
+            idlePerformanceAllowed(state.copy(interactionState = InteractionState.MUTED, isMicEnabled = false), 0f))
+        assertTrue("Offline text/voice state does not freeze a local brain",
+            idlePerformanceAllowed(state.copy(interactionState = InteractionState.OFFLINE), 0f))
     }
 
     @Test fun compactChatAndBrainCanShareTheScene() {
