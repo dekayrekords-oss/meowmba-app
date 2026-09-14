@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -128,6 +129,16 @@ fun AppDrawerScreen(
     var namingForPackage by rememberSaveable { mutableStateOf<String?>(null) }
     var renamingFolderId by rememberSaveable { mutableStateOf<String?>(null) }
     var folderName by rememberSaveable { mutableStateOf("") }
+    val gridState = rememberLazyGridState()
+    val navigation = listOf(query, sort, typeFilter, openFolderId, submitted)
+    var previousNavigation by remember { mutableStateOf(navigation) }
+    // Reveal the new query/folder's actions; restoration and background refresh keep position.
+    LaunchedEffect(navigation) {
+        if (previousNavigation != navigation) {
+            gridState.scrollToItem(0)
+            previousNavigation = navigation
+        }
+    }
     var apps by remember(installedApps) { mutableStateOf(installedApps ?: DrawerApps.snapshot(context)) }
     var loading by remember(installedApps) { mutableStateOf(installedApps == null) }
     var loadFailed by remember { mutableStateOf(false) }
@@ -156,6 +167,9 @@ fun AppDrawerScreen(
     val shownFolders = if (openFolder == null && typeFilter == null) DrawerCatalog.matchingFolders(folders, query) else emptyList()
     val favoriteApps = if (openFolder == null && query.isBlank() && typeFilter == null) {
         pins.distinct().take(8).mapNotNull { pkg -> apps.firstOrNull { it.packageName == pkg } }
+    } else emptyList()
+    val missingPins = if (!loading && !loadFailed) {
+        pins.distinct().filter { pkg -> apps.none { it.packageName == pkg } }
     } else emptyList()
     val exact = visible.firstOrNull { it.label.equals(query.trim(), ignoreCase = true) }
     val hint = DrawerQuery.hint(query, visible.size, exact?.label ?: visible.singleOrNull()?.label)
@@ -234,11 +248,13 @@ fun AppDrawerScreen(
                         unfocusedBorderColor = colors.outline,
                     ),
                 )
+                DrawerHeaderTrim(Modifier.fillMaxWidth().padding(top = 8.dp).height(5.dp))
             }
         }
-        val gridMinimum = (96f * LocalDensity.current.fontScale.coerceIn(1f, 1.8f)).dp
+        val gridMinimum = (88f * LocalDensity.current.fontScale.coerceIn(1f, 1.8f)).dp
         LazyVerticalGrid(
             columns = GridCells.Adaptive(gridMinimum),
+            state = gridState,
             modifier = Modifier.weight(1f).fillMaxWidth().testTag("drawer-grid"),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -312,6 +328,12 @@ fun AppDrawerScreen(
                             TextButton(onClick = { beginFolder() }) { Icon(Icons.Default.CreateNewFolder, null, Modifier.size(20.dp)); Spacer(Modifier.width(6.dp)); Text("New folder") }
                             if (openFolder != null) TextButton(onClick = { actionFolder = openFolder }) { Text("Folder options") }
                         }
+                        if (missingPins.isNotEmpty()) {
+                            Text(if (missingPins.size == 1) "1 saved favorite is no longer available."
+                                else "${missingPins.size} saved favorites are no longer available.",
+                                style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                            TextButton(onClick = { missingPins.forEach(onTogglePin) }) { Text("Remove missing pins") }
+                        }
                     }
                 }
             }
@@ -321,7 +343,7 @@ fun AppDrawerScreen(
                 }
                 items(favoriteApps, key = { "pin:${it.packageName}" }) { app ->
                     DrawerAppTile(app, "pin:${app.packageName}", true, "", organizing,
-                        onClick = { openApp(app) }, onOptions = { actionApp = app })
+                        compact = true, onClick = { openApp(app) }, onOptions = { actionApp = app })
                 }
             }
             if (shownFolders.isNotEmpty()) {
@@ -427,21 +449,21 @@ private fun DrawerSection(title: String, detail: String, icon: androidx.compose.
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DrawerAppTile(app: DrawerApp, tag: String, pinned: Boolean, extra: String, organizing: Boolean,
-    onClick: () -> Unit, onOptions: () -> Unit) {
+    compact: Boolean = false, onClick: () -> Unit, onOptions: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
         .background(if (pinned) colors.primaryContainer else colors.surfaceContainer)
         .border(CartoonTokens.outline, colors.outlineVariant, RoundedCornerShape(18.dp))
         .combinedClickable(role = Role.Button, onClick = onClick, onLongClickLabel = "App options", onLongClick = onOptions)
-        .testTag(tag).padding(horizontal = 8.dp, vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        .testTag(tag).padding(horizontal = 8.dp, vertical = if (compact) 8.dp else 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box {
-            DrawerIcon(app.packageName, 52.dp, app.label)
+            DrawerIcon(app.packageName, if (compact) 42.dp else 52.dp, app.label)
             if (pinned) Icon(Icons.Default.Star, "Pinned", Modifier.align(Alignment.BottomEnd).size(18.dp)
                 .background(colors.primaryContainer, CircleShape), tint = colors.primary)
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(if (compact) 6.dp else 8.dp))
         Text(app.label, style = MaterialTheme.typography.labelLarge, color = if (pinned) colors.onPrimaryContainer else colors.onSurface,
-            maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+            maxLines = 2, minLines = if (compact) 1 else 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
         if (extra.isNotBlank()) Text(extra, style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant,
             maxLines = 1, overflow = TextOverflow.Ellipsis)
         if (organizing) TextButton(onClick = onOptions, contentPadding = PaddingValues(horizontal = 8.dp),
@@ -481,6 +503,22 @@ private fun DrawerOrbit(modifier: Modifier) {
         drawOval(colors.primary, Offset(u * .02f, u * .36f), Size(u * .96f, u * .28f), style = Stroke(u * .055f))
         drawCircle(colors.primary, u * .06f, Offset(u * .8f, u * .17f))
         drawCircle(colors.secondary, u * .04f, Offset(u * .12f, u * .78f))
+    }
+}
+
+/** A small static cut-panel edge, not a loading indicator or another running effect. */
+@Composable
+private fun DrawerHeaderTrim(modifier: Modifier) {
+    val colors = MaterialTheme.colorScheme
+    Canvas(modifier) {
+        val stroke = 2.dp.toPx()
+        val notch = 12.dp.toPx()
+        drawLine(colors.secondary, Offset(0f, 0f), Offset(notch, size.height), stroke)
+        drawLine(colors.outlineVariant, Offset(notch, size.height), Offset(size.width - notch * 4f, size.height), stroke)
+        repeat(3) { i ->
+            val x = size.width - notch * (3 - i)
+            drawLine(colors.primary, Offset(x, size.height), Offset(x + notch * .5f, 0f), stroke)
+        }
     }
 }
 

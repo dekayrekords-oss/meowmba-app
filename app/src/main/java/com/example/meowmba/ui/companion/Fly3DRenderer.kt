@@ -896,8 +896,10 @@ class Fly3DRenderer : GLSurfaceView.Renderer {
     }
 
     private fun book() {
-        box(0f,.055f,0f,.28f,.055f,.20f,0x477C77)
-        box(.015f,.058f,.0f,.248f,.030f,.181f,0xE6D6B5,outline=false)
+        // Separate covers expose the page block. A full-height solid cover volume
+        // hides these page faces in depth testing and reads as an unbroken brick.
+        box(0f,.011f,0f,.28f,.011f,.20f,0x477C77)
+        box(.015f,.060f,.0f,.248f,.038f,.181f,0xE6D6B5,outline=false)
         box(0f,.111f,0f,.28f,.012f,.20f,0x477C77)
         box(0f,.125f,0f,.13f,.003f,.014f,0xD6BD7D,outline=false)
         box(-.255f,.059f,0f,.020f,.060f,.20f,0x315B60,outline=false)

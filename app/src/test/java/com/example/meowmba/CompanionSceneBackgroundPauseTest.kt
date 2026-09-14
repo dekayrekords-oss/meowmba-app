@@ -14,13 +14,17 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.dp
 import com.example.meowmba.core.background.BackgroundAnimation
+import com.example.meowmba.core.security.SecureStorageManager
 import com.example.meowmba.ui.companion.AnimatedBackground
 import com.example.meowmba.ui.companion.AnimationThumbnail
 import org.junit.Assert.*
+import org.junit.Before
+import org.junit.After
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.ArgumentCaptor
+import org.mockito.MockedConstruction
 import org.mockito.Mockito.*
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -32,6 +36,17 @@ import java.util.concurrent.Executor
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class CompanionSceneBackgroundPauseTest {
     @get:Rule val compose = createAndroidComposeRule<androidx.activity.ComponentActivity>()
+
+    private lateinit var storage: MockedConstruction<SecureStorageManager>
+
+    @Before fun isolateEncryptedPreferences() {
+        // SceneClock reads the saved FPS target. Robolectric has no AndroidKeyStore;
+        // only encrypted preference construction is replaced, retaining the real
+        // clock/cadence/lifecycle and thermal listener exercised below.
+        storage = mockConstruction(SecureStorageManager::class.java)
+    }
+
+    @After fun restoreEncryptedPreferences() { storage.close() }
 
     /** Robolectric has no thermal service listener binder; only that service is
      * replaced. The production lifecycle/interactive/thermal policy still runs. */

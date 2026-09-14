@@ -98,3 +98,28 @@ available. Both heredoc creation and apply_patch failed. The unchanged first
 target was verified before retrying. The integrator removed only its rebuildable
 local Gradle cache to regain write headroom. The worker did not remove releases,
 production assets or user data. Builds remain on Meow, not this nearly full Mac.
+
+## Independent 3D review follow-up
+
+Selection wiring was traced from `BackgroundScreen` through `setBackground`,
+`habitatBackgroundId`, `AvatarRenderer`'s `Fly3DFrame`, the renderer's cartoon
+ID set and all four scene branches. A paused frame still accepts background ID
+changes while preserving its previous animation time. The painted assets are
+for Canvas backgrounds; Full-fly receives native geometry, not a painted image
+misrepresented as a 3D room. Both presentations share the same room names and
+play path but are visually different renderings.
+
+The review found an existing depth-occlusion error in the 3D book: its supposed
+bottom cover was a full-height solid box, hiding the page block and page-edge
+strokes. It is now a thin bottom cover with pages filling the space below the
+existing top cover. Outer dimensions, spine, bookmark and physics stay fixed.
+When layered prop details seem absent, inspect depth overlap before adding
+more detail or disabling depth testing.
+
+Quality limits: the native scenes use outlined reusable primitive meshes,
+not the full detail of the painted illustrations. Their rear machines are
+decorations; the named native overlay is the interactive button. Native 2D
+captures do not validate GLES rasterization, occlusion or sustained device
+performance; those remain covered by the device-only GPU checks when hardware
+is available. No AAA-quality or physical-phone verification claim follows
+from this source review alone.

@@ -93,11 +93,11 @@ class AppDrawerUiTest {
         rule.onNodeWithTag("drawer-search").performImeAction()
         assertEquals("set a timer for five minutes", submitted.last().first)
         rule.onNodeWithContentDescription("Clear search").performClick()
-        rule.onNodeWithTag("drawer-search").performTextInput("search Google for cartoon planets")
+        rule.onNodeWithTag("drawer-search").performTextInput("search for cartoon planets")
         rule.onNodeWithContentDescription("Search in Google app").performClick()
         assertEquals("cartoon planets", google)
         rule.onNodeWithText("Google app is unavailable.").assertExists()
-        rule.onNodeWithTag("drawer-search").assertTextContains("search Google for cartoon planets")
+        rule.onNodeWithTag("drawer-search").assertTextContains("search for cartoon planets")
         rule.onNodeWithContentDescription("Speak").performClick()
         assertEquals(1, microphone)
         render("google-unavailable")
@@ -123,6 +123,24 @@ class AppDrawerUiTest {
         assertEquals(listOf("open Camera"), submissions)
         assertEquals(1, consumed)
         rule.onNodeWithContentDescription("Stop listening").assertExists()
+    }
+
+    @Test fun changingQueryOrEnteringFolderRevealsSearchActionsAfterDeepScroll() {
+        rule.setContent { MeowmbaTheme(darkTheme = true) {
+            AppDrawerScreen(onClose = {}, installedApps = apps, folders = listOf(folder),
+                pins = apps.take(8).map { it.packageName })
+        } }
+        scrollTo("app:${apps.last().packageName}")
+        rule.onNodeWithTag("drawer-search").performTextInput("Camera")
+        rule.onNodeWithContentDescription("Search in Google app").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Speak").assertIsDisplayed()
+        rule.onNodeWithTag("app:${apps[1].packageName}").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Clear search").performClick()
+        scrollTo("folder:games")
+        rule.onNodeWithTag("folder:games").performClick()
+        rule.onNodeWithContentDescription("Back to all apps").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Search in Google app").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Speak").assertIsDisplayed()
     }
 
     @Test fun foldersSupportCreateAddRemoveRenameDeleteAndBackToAvatar() {
@@ -211,6 +229,24 @@ class AppDrawerUiTest {
         rule.onNodeWithText("No matching apps").assertExists()
         rule.onNodeWithText("Clear filters").performClick()
         rule.onNodeWithText("No launchable apps found").assertExists()
+    }
+
+    @Test fun unavailableFavoritesAreRemovedOnlyByTheExplicitOrganizeAction() {
+        val missing = "preview.uninstalled"
+        var pins by mutableStateOf(apps.take(7).map { it.packageName } + missing)
+        val removed = mutableListOf<String>()
+        rule.setContent { MeowmbaTheme {
+            AppDrawerScreen(onClose = {}, installedApps = apps, pins = pins,
+                onTogglePin = { pkg -> removed += pkg; pins = pins - pkg })
+        } }
+        assertTrue(removed.isEmpty())
+        rule.onNodeWithText("Organize").performClick()
+        rule.onNodeWithText("1 saved favorite is no longer available.").assertExists()
+        assertEquals(8, pins.size)
+        rule.onNodeWithText("Remove missing pins").performClick()
+        assertEquals(listOf(missing), removed)
+        assertEquals(apps.take(7).map { it.packageName }, pins)
+        rule.onNodeWithText("Remove missing pins").assertDoesNotExist()
     }
 
     private fun scrollTo(tag: String) = rule.onNodeWithTag("drawer-grid").performScrollToNode(hasTestTag(tag))

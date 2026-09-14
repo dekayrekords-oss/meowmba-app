@@ -102,7 +102,8 @@ object DrawerApps {
     }
 
     private fun writeDisk(context: Context, apps: List<DrawerApp>) {
-        if (apps.isEmpty()) return
+        // A successful empty scan must replace the old list too. Otherwise snapshot()
+        // revives removed launchers from disk the next time the drawer opens.
         runCatching {
             File(context.filesDir, DISK_NAME).writeText(DrawerCatalog.encodeApps(apps))
         }

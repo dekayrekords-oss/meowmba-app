@@ -57,6 +57,27 @@ New native Robolectric suite `com.example.meowmba.AppDrawerUiTest`:
 7. foldersSupportCreateAddRemoveRenameDeleteAndBackToAvatar
 8. sortingFilteringAndFavoriteCapacityRemainActionable
 9. emptyCatalogShowsAnExplanationWithoutInventedApps
+10. changingQueryOrEnteringFolderRevealsSearchActionsAfterDeepScroll
+11. unavailableFavoritesAreRemovedOnlyByTheExplicitOrganizeAction
+
+The follow-up navigation review adds remembered grid state. Query, sort,
+category, folder and submit changes reveal the search actions and first results;
+initial/restored positions and background refresh retain scroll. No autofocus or
+animated scroll is added. `DrawerApps.kt` also persists a successfully scanned
+empty list, preventing stale launchers reappearing from the previous disk cache.
+`DrawerAppsCacheTest.successfulEmptyRefreshCannotResurrectRemovedAppsFromDisk`
+exercises that disk-to-memory lifecycle.
+
+After successful catalog loading only, Organize identifies saved favorites that
+are no longer launchable and offers `Remove missing pins`. Nothing is removed
+automatically. This prevents hidden stale IDs from permanently consuming the
+eight-favorite limit while preserving the user's preferences after a failed scan.
+The new callback test verifies that only the explicit cleanup removes them.
+
+Initial native 320 dp and landscape renders were reviewed. Favorites were too
+large, so the base grid minimum is now 88 dp (three columns at 320), favorite
+icons are 42 dp with reduced padding, and a small static cut-panel header accent
+strengthens the existing space-console theme. Large text still expands tracks.
 
 The first four exercise 320/375/414/768 dp, both appearances and 1.4x text,
 including landscape. They reach the eighth favorite and last app, assert
