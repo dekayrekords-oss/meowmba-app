@@ -1,0 +1,2 @@
+PASS: compiled app adapter authenticated with local key, matched pinned host, returned real command output.
+PASS: mismatched host key rejected before command execution.
