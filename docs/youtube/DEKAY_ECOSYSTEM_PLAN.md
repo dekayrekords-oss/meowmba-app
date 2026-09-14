@@ -74,3 +74,7 @@ Prepare a homepage introduction connecting music and technology, two clear desti
 ## Live-site inspection update
 
 The www homepage and signed-in dashboard became readable. Existing navigation includes music artist pages, Store, Blog, and Meow Assistant. Reuse Blog for written stories and retain the music catalog. WEEBLY_FIRST_EDIT.md provides the observed page map and concrete draft copy for Home, Projects, and Watch. The editor opened from the dashboard Edit control but rendered blank; no website edits have been made. Earlier site-inspection failures are historical, not current evidence that the public homepage is unavailable.
+
+## Implementation completed
+
+The first Weebly integration is now published: Home introduction, /projects.html, and /watch.html. See weebly/PUBLISHED_2026-09-13.md for exact scope, live verification, and editing instructions. Earlier blank-editor and no-publication statements in this document describe historical planning states. Music YouTube link and remote channel/GitHub backlinks remain pending.

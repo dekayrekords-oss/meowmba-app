@@ -3,11 +3,11 @@
 ## Next: inspect the existing Weebly site
 
 - [x] Owner reports signing in; browser URL advanced to the existing site dashboard.
-- [ ] Restore readable editor access: dashboard is now readable; Edit opens editor/main.php but that editor remains blank.
+- [x] Editor access restored by reopening the existing editor after sign-in.
 - [x] Inspect live homepage navigation and embedded music; artist-page bodies and editor layout still need review.
 - [x] Draft mapping: preserve music/artist pages, add Projects and Watch, and reuse Blog for journal content. See WEEBLY_FIRST_EDIT.md.
-- [ ] Prepare and preview the first page updates.
-- [ ] Verify links and publish through the existing Weebly workflow.
+- [x] Prepared Home introduction plus Projects and Watch pages in Weebly.
+- [x] Published via Weebly and verified Home, Projects, Watch, their link targets, and narrow-width new-page rendering.
 
 ## Connect the channels and GitHub
 

@@ -60,3 +60,7 @@ Production note: music channel URL is still needed; do not publish an empty link
 ## Continuation notes
 
 Reinspect the editor once it renders before using any controls. The live homepage and dashboard now work, so do not repeat the earlier claim that the whole site cannot be read or ask the owner to sign in again. Current blocker is the editor rendering. These drafts need application and visual verification in the existing theme; no redesign or replacement hosting is proposed.
+
+## Implementation completed
+
+The first Weebly integration is now published: Home introduction, /projects.html, and /watch.html. See weebly/PUBLISHED_2026-09-13.md for exact scope, live verification, and editing instructions. Earlier blank-editor and no-publication statements in this document describe historical planning states. Music YouTube link and remote channel/GitHub backlinks remain pending.
