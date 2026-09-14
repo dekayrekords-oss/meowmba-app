@@ -136,3 +136,12 @@ restored, and IO work uses the same test dispatcher. All original routing,
 provider-selection and honest no-camera assertions remain unchanged. This is
 a fixture repair, not a production null-handling change. Integrator retest of
 the repaired older suite is pending.
+
+
+## Final integration result
+
+All 247 focused Android checks and four Python helper checks passed at built
+source `d1a544b`. Both signed APKs and all 53 runtime/19 painted assets are
+verified. Final previews were inspected. Build 118 is archived on Meow and is
+not installed on the disconnected phone. Exact evidence, artifact hashes and
+hardware limits are in [the final Meow handoff](MEOW_BUILD_118_PASS_DOWN.md).

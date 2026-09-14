@@ -212,3 +212,12 @@ hostile-input assertion remains, with additional percent-encoding, embedded
 port, bracketed-DNS, control-character and backslash cases. Root reruns the
 actual Android suites; do not weaken these tests or rely on URI construction
 alone as a security boundary in future endpoint editors.
+
+
+## Final integration result
+
+All 247 focused Android checks and four Python helper checks passed at built
+source `d1a544b`. Both signed APKs and all 53 runtime/19 painted assets are
+verified. Final previews were inspected. Build 118 is archived on Meow and is
+not installed on the disconnected phone. Exact evidence, artifact hashes and
+hardware limits are in [the final Meow handoff](../characters/MEOW_BUILD_118_PASS_DOWN.md).

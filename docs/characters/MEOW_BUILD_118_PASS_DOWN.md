@@ -54,12 +54,92 @@ user action and cannot override OFF or thermal protection.
 
 ## Build and verification
 
-Pending the final focused run. Root owns builds and private synchronization.
-The phone was checked with ADB and is disconnected; last verified installation
-is Build 112. Build 118 cannot establish physical face tracking, actual camera
-indicator behavior, live connection from a phone to another host, or sustained
-thermal performance without a device. Continue authorized work without claiming
-those checks or altering saved phone choices.
+Build 118 is complete and ready on Meow. **247 Android checks across 34 suites
+passed**, with zero failures, errors or skips. Four Python pairing-host checks
+also passed on Meow. Both debug and instrumentation APKs assemble and verify.
+Built source: `d1a544b3d162aa34aaf8ba083d59dfe41f1c090d`. Final Gradle log:
+`/tmp/meow-build118-acceptance.log` on Meow. Machine-readable evidence:
+[BUILD_118_VERIFICATION.json](BUILD_118_VERIFICATION.json).
+
+Coverage includes 10 actual VisionManager lifecycle tests with mocked CameraX
+hardware, five asynchronous face/pose completion tests, seven camera privacy/VM
+checks, five native camera status UI checks, 16 neural server manager checks,
+eight native server setup checks, protocol/fallback, neural replacement,
+full-graph parsing/control, existing face geometry, Brain, vision routing and
+drawer regressions. All 19 existing VisionPipeline tests now reach their original
+assertions. This is a focused acceptance suite, not the entire repository suite.
+
+Native previews were reviewed for compact/landscape server setup, failure without
+replacing the current computer, and the camera Retry control at 320 dp/1.4x text.
+They are stored in `build-out/habitat/build118/server118/`; seven updated Brain
+previews are retained under `brain114/` within the same folder. These are
+host-native renders. They do not prove camera hardware or network connectivity.
+
+ADB showed no phone both before work and after verification. Last verified phone
+installation remains Build 112. Build 118 is **not installed**. Actual face
+tracking, camera indicator shutdown, phone-to-server pairing/connection and
+sustained heat/battery checks remain physical-device work. A host camera test
+cannot establish a hardware diagnosis. No phone settings or data were changed.
+
+### Artifacts and installation handoff
+
+Final archive on the user-designated `prog@100.77.97.236` (`meow-nb`) server:
+`/home/prog/research/meowmba-build118-d1a544b/`.
+
+- `meowmba-118.apk`: 457,439,380 bytes; SHA-256 `2286ba288c2fab8dfb9038914a6967c8a4a1457b7d1b3a01a74e8372628691b5`.
+- `tests118.apk`: 2,740,730 bytes; SHA-256 `0a342805441dc9f40af2e75eace7764d1ff2e226ea595640323eb80c7e56ebe0`.
+
+Both packages verify with signer SHA-256
+`b7850d5fb645df9f5d12525db1b10e457b0ee7f3aa50bbf4294ff31dae3379ff`.
+Application identity stays `com.example.meowmba`, debug versionCode 118,
+versionName 1.3.81. All 53 protected runtime entries and all 19 painted backgrounds
+match their prior hashes. No full MaleCNS graph was added to the APK. Comparing
+Build 117 and 118 ZIP entry lists found no added or removed entries; the smaller
+APK does not reflect dropped assets. Only code/signature entry sizes changed.
+
+Complete APKs, signature logs, verification JSON and 11 native previews are on
+Meow. The Build 115-based transfer deltas are also retained locally and verified:
+
+- `app118.patch.gz`: SHA-256 `c01ec4e4a664ab5187be0ab88d7bbd62d9370403e5a00c75b878ede4188d5520`.
+- `test118.patch.gz`: SHA-256 `8a0876ca0fba645d775fcbdf4d1eb3be79eb72fc26a481162b7d2df497e9f512`.
+
+Use the archived complete APK, or apply `scripts/apk_delta.py` only against the
+exact Build 115 base and verify the target hash. Update installation must keep
+app data, camera OFF choice and pairing; never uninstall or clear app data to
+work around a signing mismatch. Runtime assets remain untracked and preserved
+in the private build checkout. No Android source was sent to public GitHub.
+
+After installation, open Settings → Neural / Lumen → MaleCNS and choose the
+paired computer or another compatible server. Connect & verify checks its full
+graph; Test current server verifies saved credentials. Server changes preserve
+the neural mode choice. Select Neural control when the network should influence
+the avatar; Shadow remains observational. Detailed portable helper preparation,
+model setup and pairing commands are in the server notes linked above.
+
+Use the home camera button to enable tracking if it is off. A camera permission
+grant alone does not turn it on. The status distinguishes waiting for frames,
+looking for a face, following a face and thermal suspension. ERROR offers explicit
+Retry; it rebinds without changing the saved ON choice. Opening Brain keeps the
+visible avatar's authorized tracking; full settings pause it until returning.
+
+### Reproduce acceptance
+
+Use Meow's existing `/home/claude/meowmba-fly-habitat` checkout with
+`JAVA_HOME=/home/claude/.local-toolchain/jdk-21.0.12+8`, its `bin` on `PATH`, and
+`ANDROID_HOME=/home/claude/Android/Sdk`. Gradle tasks:
+`:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest`, with
+`-PprebuiltDebugNativeDir=/home/claude/meowmba-fruit-fly/.native-preview`.
+Filters under `com.example.meowmba` are `*Camera*Test`, `*Face*Test`, `*Vision*Test`,
+`*MaleCns*Test`, `*Brain*Test`, `*DesktopBridge*Test`, `*BridgeTransport*Test`,
+`neural.NeuralServerReplacementTest`, `CompanionSetupUiTest`,
+`CompanionSceneBackgroundPauseTest`, and `*Drawer*Test`.
+Run `python3 -m unittest discover -s bridge -p test_pairing_host.py -v` for the
+advertised-host helper. The root's local-only archive verifier is
+`/tmp/meow-verify-build118.py` on Meow; it refuses to overwrite a finalized report.
+
+The live Meow bridge and neural worker service were not restarted or reconfigured.
+The updated portable bridge script is committed in the private repository for
+installation on a selected host. Existing Meow clients retain their credentials.
 
 ## Integration findings and lessons
 

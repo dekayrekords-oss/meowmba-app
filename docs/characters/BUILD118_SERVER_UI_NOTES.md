@@ -95,3 +95,12 @@ pairing must not call a success callback or overwrite the manager's previous
 selection. Do not accept arbitrary unauthenticated URLs or weaken TLS to make a
 server appear connected. Opening settings and Brain should create no polling
 loop or network side effect.
+
+
+## Final integration result
+
+All 247 focused Android checks and four Python helper checks passed at built
+source `d1a544b`. Both signed APKs and all 53 runtime/19 painted assets are
+verified. Final previews were inspected. Build 118 is archived on Meow and is
+not installed on the disconnected phone. Exact evidence, artifact hashes and
+hardware limits are in [the final Meow handoff](MEOW_BUILD_118_PASS_DOWN.md).

@@ -2,12 +2,14 @@
 
 ## September 13: Build 118 portable MaleCNS servers and face tracking
 
-In progress: independent authenticated neural-server pairing with the existing
-paired computer retained as default; portable advertised DNS/VPN host pairing;
-preview-detach/face-result/landmark tracking fixes and visible camera status.
-Camera OFF, thermal limits and the existing desktop connection remain explicit.
-Root is running focused integration tests and will archive verified packages on
-Meow. Read [MEOW_BUILD_118_PASS_DOWN.md](characters/MEOW_BUILD_118_PASS_DOWN.md).
+Independent authenticated neural-server selection now preserves the existing
+paired desktop while supporting another compatible Meow/bridge host. Preview
+removal, delayed face publication, mouth landmarks, retry and visible camera
+status are repaired. All 247 Android and four Python checks pass; signed Build
+118 is archived on Meow at source d1a544b with all protected assets preserved.
+The phone is disconnected (last verified Build 112); installation and physical
+face/Google/network/heat checks remain pending. Read
+[MEOW_BUILD_118_PASS_DOWN.md](characters/MEOW_BUILD_118_PASS_DOWN.md).
 
 ## September 13: Build 117 play worlds and app drawer
 
