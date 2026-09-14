@@ -11,6 +11,13 @@ class ComputerDiagnosticsTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val db = MeowmbaDatabase.getDatabase(context).openHelper.readableDatabase
         val since = System.currentTimeMillis() - 24 * 60 * 60 * 1000
+        db.query("SELECT title,status FROM agentic_goals WHERE status='BLOCKED' AND updatedAt>=? AND title LIKE '%meow120_%' ORDER BY updatedAt DESC LIMIT 8", arrayOf(since)).use { rows ->
+            println("COMPUTER_DIAGNOSTICS test_blocks=${rows.count}")
+            while (rows.moveToNext()) println("COMPUTER_GOAL TEST " + AgenticOutput.scrub(rows.getString(0), 240))
+        }
+        db.query("SELECT m.id,m.content,(SELECT u.content FROM messages u WHERE u.conversationId=m.conversationId AND u.id<m.id AND u.role='USER' ORDER BY u.id DESC LIMIT 1) FROM messages m WHERE m.role='ASSISTANT' AND m.content LIKE 'Computer stopped%' AND m.timestamp>=? ORDER BY m.id DESC LIMIT 8", arrayOf(since)).use { rows ->
+            while (rows.moveToNext()) println("COMPUTER_EVENT retained_warning id=${rows.getLong(0)} preceding_user=" + AgenticOutput.scrub(rows.getString(2).orEmpty(), 200) + " reply=" + AgenticOutput.scrub(rows.getString(1), 200))
+        }
         db.query("SELECT id,title,status,updatedAt FROM agentic_goals WHERE status='BLOCKED' AND updatedAt>=? AND title NOT LIKE '%meow120_%' ORDER BY updatedAt DESC LIMIT 3", arrayOf(since)).use { goals ->
             println("COMPUTER_DIAGNOSTICS count=${goals.count}")
             while (goals.moveToNext()) {
