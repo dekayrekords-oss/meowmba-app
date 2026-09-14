@@ -7,7 +7,9 @@ cd "$repo_dir"
 suites=(
   GeneratedAvatar\* AvatarForm\* AgentCancellationLifecycleTest
   OrchestratorTest AgentRouterTest AgentViewModelTest AgentReliabilityTest
-  CrossDeviceControlTest ProjectExecutionContextTest ToolCallBrainTest
+  CrossDeviceControlTest ProjectExecutionContextTest
+  ToolCallPromptTest ToolCallParserTest CommandHeuristicsTest
+  LlmToolCallRouterTest AgentBrainViewModelTest
   OfficeHelpers\* FruitFlyAvatarTest AvatarMorph\* LumenIntegrationTest
   LumenNaturalMotionTest CustomAnimationTest InventedSceneRenderTest
   CompanionBrainControlsTest BrainAvatarVisibilityTest CameraPrivacyViewModelTest
