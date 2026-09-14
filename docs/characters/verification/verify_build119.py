@@ -10,9 +10,52 @@ assert not (target/'verification.json').exists(), 'Archive already finalized'
 target.mkdir(exist_ok=True)
 roots = [E.parse(p).getroot() for p in (repo/'app/build/test-results/testDebugUnitTest').glob('TEST-*.xml')]
 tests = {k: sum(int(x.attrib.get(k, 0)) for x in roots) for k in ('tests','failures','errors','skipped')}
-assert tests['tests'] >= 100 and tests['failures'] == 0 and tests['errors'] == 0 and tests['skipped'] == 0, tests
 names = {x.attrib['name'] for x in roots}
-assert {'com.example.meowmba.GeneratedAvatarIntegrationTest','com.example.meowmba.GeneratedAvatarRenderTest','com.example.meowmba.GeneratedAvatarSetupUiTest','com.example.meowmba.GeneratedAvatarFormTest','com.example.meowmba.GeneratedAvatarStoreTest','com.example.meowmba.AgentCancellationLifecycleTest','com.example.meowmba.OrchestratorTest','com.example.meowmba.AgentReliabilityTest','com.example.meowmba.CameraPrivacyViewModelTest','com.example.meowmba.VisionManagerLifecycleTest'} <= names
+# Gradle filters class names, not filenames: ToolCallBrainTest.kt contains five
+# differently named classes, and its old filename selector silently skipped all
+# five while other matching filters kept the run green. Pin the complete set.
+required_names = {'com.example.meowmba.' + name for name in (
+    'AgentBrainViewModelTest',
+    'AgentCancellationLifecycleTest',
+    'AgentReliabilityTest',
+    'AgentRouterTest',
+    'AgentViewModelTest',
+    'AvatarFormInventorTest',
+    'AvatarFormToolTest',
+    'AvatarMorphRenderTest',
+    'AvatarMorphTest',
+    'BrainAvatarVisibilityTest',
+    'CameraPrivacyViewModelTest',
+    'CommandHeuristicsTest',
+    'CompanionBrainControlsTest',
+    'CrossDeviceControlTest',
+    'CustomAnimationTest',
+    'FruitFlyAvatarTest',
+    'GeneratedAvatarFormTest',
+    'GeneratedAvatarIntegrationTest',
+    'GeneratedAvatarRenderTest',
+    'GeneratedAvatarSetupUiTest',
+    'GeneratedAvatarStoreTest',
+    'InventedSceneRenderTest',
+    'LlmToolCallRouterTest',
+    'LumenIntegrationTest',
+    'LumenNaturalMotionTest',
+    'OfficeHelpersRenderTest',
+    'OfficeHelpersTest',
+    'OrchestratorTest',
+    'ProjectExecutionContextTest',
+    'ToolCallParserTest',
+    'ToolCallPromptTest',
+    'VisionManagerLifecycleTest',
+    'VisionPipelineTest',
+    'neural.MaleCnsServerManagerTest',
+    'neural.NeuralServerReplacementTest',
+)}
+missing_names = sorted(required_names - names)
+assert not missing_names, {'missing_acceptance_suites': missing_names, 'observed_suites': sorted(names)}
+acceptance_test_count = sum(int(x.attrib.get('tests', 0)) for x in roots if x.attrib['name'] in required_names)
+assert acceptance_test_count >= 261, {'minimum_acceptance_tests': 261, 'acceptance_tests': acceptance_test_count, **tests}
+assert tests['failures'] == 0 and tests['errors'] == 0 and tests['skipped'] == 0, tests
 tests['suites'] = [dict(name=x.attrib['name'],tests=int(x.attrib['tests'])) for x in roots]
 env = dict(os.environ, JAVA_HOME='/home/claude/.local-toolchain/jdk-21.0.12+8')
 env['PATH'] = env['JAVA_HOME'] + '/bin:' + env.get('PATH','/usr/bin:/bin')

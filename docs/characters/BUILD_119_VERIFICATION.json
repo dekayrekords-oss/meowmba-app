@@ -1,35 +1,25 @@
 {
   "build": 119,
   "code_committed": true,
-  "latest_source_commit": "6425d6b",
+  "latest_source_commit": "a16cfbb5e7b966d8b0146788f0964ecf4576d117",
   "last_built_checkout": "9fc5ff1",
   "last_built_production_change": "69f52c8",
-  "status": "Implemented; final acceptance rerun and archive blocked by Meow SSH banner timeout",
-  "latest_test_run": {
-    "tests": 235,
-    "passed": 233,
-    "failures": 2,
-    "errors": 0,
-    "failed_tests": [
-      "AgentViewModelTest.voice command to create a file runs the full approval loop end to end",
-      "AgentViewModelTest.task status question uses real task evidence without a chat model"
-    ],
-    "failure_cause": "Both tools completed, but old tests lacked a mocked Android SystemClock for speech expression handling. Fixture repaired in 6425d6b; rerun not yet completed."
-  },
-  "new_form_test_status": "All generated form/schema/store/render/setup/inventor/tool/cancellation/integration tests passed in the 235-test run.",
+  "status": "Implemented; all 261 local acceptance tests pass. Final Meow packaging, archive and live generation remain blocked; phone excluded by owner.",
+  "new_form_test_status": "All form/schema/store/render/setup/inventor/tool/cancellation/integration tests pass. The corrected acceptance selection also runs all five actual classes in ToolCallBrainTest.kt (26 tests).",
   "apk_assembled": true,
   "signature_and_protected_assets_checked": false,
   "final_archive_created": false,
   "phone_installed": false,
   "last_verified_phone_build": 112,
-  "phone_status": "ADB devices returned no devices",
+  "phone_status": "Owner explicitly requested continuation without the phone; no install attempted.",
   "ssh_status": {
     "host": "100.77.97.236",
     "user": "prog",
     "tcp_connection_seconds": 0.05,
     "banner_received": false,
     "banner_read_timeout_seconds": 8,
-    "retries": "SSH banner timeouts with 8, 15 and 30 second connection deadlines, including QoS-disabled retry"
+    "retries": "SSH banner timeouts with 8, 15 and 30 second connection deadlines, including QoS-disabled retry",
+    "latest_retry": "Authorized meow-nb key/alias still timed out during banner exchange with a 10-second ConnectTimeout after local acceptance passed."
   },
   "live_model_generation": {
     "success": false,
@@ -48,5 +38,186 @@
     "build-out/habitat/build119/forms119/generation-failure-retry.png",
     "build-out/habitat/build119/forms119/saved-forms-landscape-large-text.png"
   ],
-  "note": "Do not present assembled packages as verified/installed. The native examples and deterministic provider fixtures are not successful live AI output."
+  "note": "261 passing local JVM/Robolectric tests do not establish APK signing/assets, successful live AI generation or phone installation. Native preview examples use deterministic designs.",
+  "latest_meow_test_run": {
+    "tests": 235,
+    "passed": 233,
+    "failures": 2,
+    "errors": 0,
+    "failed_tests": [
+      "AgentViewModelTest.voice command to create a file runs the full approval loop end to end",
+      "AgentViewModelTest.task status question uses real task evidence without a chat model"
+    ],
+    "failure_cause": "Old speech fixtures lacked a mocked Android SystemClock. Repaired in 6425d6b; both assertions pass in the final local run. The Meow rerun remains pending SSH recovery."
+  },
+  "latest_test_run": {
+    "tests": 261,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "passed": 261,
+    "suite_count": 35,
+    "host": "local Mac",
+    "source_commit": "a16cfbb5e7b966d8b0146788f0964ecf4576d117",
+    "started_utc": "2026-09-14T06:34:02Z",
+    "seconds": 39.31,
+    "offline": true,
+    "production_native_runtime": false,
+    "apk_built": false,
+    "evidence_path": "build-out/habitat/build119/local-verification-final/test-evidence.json",
+    "evidence_sha256": "fc9d385eb7efa4ae2e70646fb0c9e0555f31680119ca375c785ca62d29796f1c",
+    "suites": [
+      {
+        "name": "com.example.meowmba.AgentBrainViewModelTest",
+        "tests": 3
+      },
+      {
+        "name": "com.example.meowmba.AgentCancellationLifecycleTest",
+        "tests": 6
+      },
+      {
+        "name": "com.example.meowmba.AgentReliabilityTest",
+        "tests": 3
+      },
+      {
+        "name": "com.example.meowmba.AgentRouterTest",
+        "tests": 7
+      },
+      {
+        "name": "com.example.meowmba.AgentViewModelTest",
+        "tests": 2
+      },
+      {
+        "name": "com.example.meowmba.AvatarFormInventorTest",
+        "tests": 10
+      },
+      {
+        "name": "com.example.meowmba.AvatarFormToolTest",
+        "tests": 23
+      },
+      {
+        "name": "com.example.meowmba.AvatarMorphRenderTest",
+        "tests": 3
+      },
+      {
+        "name": "com.example.meowmba.AvatarMorphTest",
+        "tests": 7
+      },
+      {
+        "name": "com.example.meowmba.BrainAvatarVisibilityTest",
+        "tests": 4
+      },
+      {
+        "name": "com.example.meowmba.CameraPrivacyViewModelTest",
+        "tests": 7
+      },
+      {
+        "name": "com.example.meowmba.CommandHeuristicsTest",
+        "tests": 4
+      },
+      {
+        "name": "com.example.meowmba.CompanionBrainControlsTest",
+        "tests": 12
+      },
+      {
+        "name": "com.example.meowmba.CrossDeviceControlTest",
+        "tests": 11
+      },
+      {
+        "name": "com.example.meowmba.CustomAnimationTest",
+        "tests": 23
+      },
+      {
+        "name": "com.example.meowmba.FruitFlyAvatarTest",
+        "tests": 2
+      },
+      {
+        "name": "com.example.meowmba.GeneratedAvatarFormTest",
+        "tests": 8
+      },
+      {
+        "name": "com.example.meowmba.GeneratedAvatarIntegrationTest",
+        "tests": 10
+      },
+      {
+        "name": "com.example.meowmba.GeneratedAvatarRenderTest",
+        "tests": 5
+      },
+      {
+        "name": "com.example.meowmba.GeneratedAvatarSetupUiTest",
+        "tests": 8
+      },
+      {
+        "name": "com.example.meowmba.GeneratedAvatarStoreTest",
+        "tests": 6
+      },
+      {
+        "name": "com.example.meowmba.InventedSceneRenderTest",
+        "tests": 1
+      },
+      {
+        "name": "com.example.meowmba.LlmToolCallRouterTest",
+        "tests": 6
+      },
+      {
+        "name": "com.example.meowmba.LumenIntegrationTest",
+        "tests": 1
+      },
+      {
+        "name": "com.example.meowmba.LumenNaturalMotionTest",
+        "tests": 9
+      },
+      {
+        "name": "com.example.meowmba.OfficeHelpersRenderTest",
+        "tests": 5
+      },
+      {
+        "name": "com.example.meowmba.OfficeHelpersTest",
+        "tests": 5
+      },
+      {
+        "name": "com.example.meowmba.OrchestratorTest",
+        "tests": 6
+      },
+      {
+        "name": "com.example.meowmba.ProjectExecutionContextTest",
+        "tests": 5
+      },
+      {
+        "name": "com.example.meowmba.ToolCallParserTest",
+        "tests": 9
+      },
+      {
+        "name": "com.example.meowmba.ToolCallPromptTest",
+        "tests": 4
+      },
+      {
+        "name": "com.example.meowmba.VisionManagerLifecycleTest",
+        "tests": 10
+      },
+      {
+        "name": "com.example.meowmba.VisionPipelineTest",
+        "tests": 19
+      },
+      {
+        "name": "com.example.meowmba.neural.MaleCnsServerManagerTest",
+        "tests": 16
+      },
+      {
+        "name": "com.example.meowmba.neural.NeuralServerReplacementTest",
+        "tests": 1
+      }
+    ]
+  },
+  "apk_assembly_note": "Earlier Meow source 9fc5ff1 assembled debug and Android-test APKs. Local continuation runs JVM tests only; these are not final verified packages.",
+  "local_model_probe": {
+    "working_text_generation_endpoint": false,
+    "observed_model_type": "embedding only",
+    "model_downloaded": false,
+    "paid_fallback_used": false,
+    "configuration_changed": false,
+    "note": "LM Studio status reported server not running. lms ps attempted a wake and was interrupted; no new listener observed."
+  },
+  "latest_private_git_delivery": "6425d6b; later local commits and teaching updates not delivered because SSH remains unavailable.",
+  "local_verification_notes": "docs/characters/BUILD119_LOCAL_VERIFICATION.md"
 }

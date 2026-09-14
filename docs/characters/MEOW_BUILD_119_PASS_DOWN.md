@@ -1,13 +1,13 @@
 # Build 119 — describe and become a new cartoon form
 
-**Current status: implemented and committed; release finalization is blocked by
-Meow's SSH service failing to return its banner. Not installed.** Both packages
-assembled and the latest run passed 233 of 235 tests, including every new form
-test. The two older agent speech tests completed their tools but lacked a mocked
-Android clock; that fixture repair is committed as `6425d6b` and pushed to the
-private build ref. The final rerun could not start because SSH stopped
-responding. Do not claim 235 passing, verified signatures/assets, a finalized
-archive, successful live generation, or phone installation.
+**Current status: implemented; all 261 local acceptance tests pass across 35
+suites, with zero failures, errors or skips. Not installed.** The owner asked
+to continue without the phone. The Mac completed offline JVM/native-render
+verification at source `a16cfbb` after the two older agent speech fixtures were
+repaired and a missing test-selector group was corrected. Meow's SSH service
+still fails to return its banner. Both packages assembled on Meow earlier, but
+final signing/asset checks and the release archive remain pending. Do not claim
+successful live generation or phone installation.
 
 The owner requested that the avatar turn into anything the user describes.
 This build extends `avatar.form` beyond a preset whitelist: explicit voice/text
@@ -70,19 +70,36 @@ interpretations, not newly generated 3D meshes or guaranteed exact likenesses.
 6. If touch lands on scenery, inspect `GeneratedAvatarPlacement` against the
    exact draw center/unit. Privacy markers stay outside generated geometry.
    Frozen animation must use the frozen shared clock; never add a second timer.
+7. A green Gradle result does not prove every intended filter matched. The old
+   `ToolCallBrainTest` selector was a filename containing five differently named
+   classes. Select the actual classes and compare XML names and testcase counts;
+   the corrected acceptance script runs 261 tests and the archive verifier now
+   requires all 35 suites.
+8. If Meow is unavailable, use the existing offline Mac toolchain and bounded
+   heap overrides described in `BUILD119_LOCAL_VERIFICATION.md`. Keep JVM-only
+   native placeholders out of APK builds. Inspect exact pinned cache revisions
+   before deleting reproducible objects; preserve source, assets and models.
 
 ## Verification and deployment
 
 Native preview inspection passed for three distinct example forms with gaze,
 blink and speech states, portrait creation, busy/cancel, failure/retry and
 landscape large-text saved forms. These are deterministic renderer examples,
-not output from a successful live AI request. The latest 235-test run passed all
-new form/tool/inventor/render/store/setup/cancellation/integration checks and the
-existing camera/neural checks. Two old `AgentViewModelTest` speech assertions
-failed only after successful tool completion because `SystemClock.elapsedRealtime`
-was unmocked. The scoped-clock and joined-shutdown fixture repair is saved but
-not rerun. Earlier fixture repairs also provided a real temporary workspace so
-the integration tests exercised production tool registration.
+not output from a successful live AI request. Final local acceptance passed all
+261 tests in 39.31 seconds at source `a16cfbb`, including all new
+form/tool/inventor/render/store/setup/cancellation/integration checks, existing
+camera/neural checks and the five previously omitted routing classes. Two old
+`AgentViewModelTest` speech assertions had failed on Meow because
+`SystemClock.elapsedRealtime` was unmocked; both now pass with the scoped-clock
+and joined-shutdown fixture repair. Earlier fixture repairs also provided a real
+temporary workspace so integration tests exercised production tool registration.
+
+The local run used JDK 21, cached dependencies, one worker and 2 GiB Gradle/test
+heaps. It did not assemble an APK or load production JNI. Evidence, all 35 XML
+reports, eight previews and hashes are retained under
+`build-out/habitat/build119/local-verification-final/`. An independent audit
+confirmed actual testcase counts and the exact expected suite set. Detailed
+commands, disk-space recovery and lessons are in `BUILD119_LOCAL_VERIFICATION.md`.
 
 The existing Meow `Qwen3.8-Flash-Next` model returned no content in three
 80-second requests and one 90-second streaming retry. Thinking was disabled.
@@ -94,15 +111,18 @@ in `build-out/habitat/build119/live` and
 
 SSH to the authorized `prog@100.77.97.236` subsequently timed out waiting for its
 banner at 8, 15 and 30 seconds, including a QoS-disabled retry. A direct socket
-connected in 0.05 seconds but received no banner in eight seconds. This blocks
-the final rerun, signing/asset checks, archive and final teaching-copy delivery;
+connected in 0.05 seconds but received no banner in eight seconds. A further
+10-second retry after local acceptance also timed out. This blocks the Meow
+packaging rerun, signing/asset checks, archive and final teaching-copy delivery;
 it does not justify changing keys, hosts, authentication or restarting unknown
 server workloads. Earlier code/passdown commits through `6425d6b` reached the
 private bare repository; the last inspected working checkout was `9fc5ff1`.
+Later local commits and this updated teaching document have not reached Meow.
 
-Do not infer that Build 119 is installed. USB ADB currently reports no devices;
-the last verified phone build remains 112 and the owner asked to continue
-without the phone. Build 118's camera and portable MaleCNS work is retained.
+Do not infer that Build 119 is installed. The last verified phone build remains
+112 and the owner asked to continue without the phone, so no installation was
+attempted during this continuation. Build 118's camera and portable MaleCNS work
+is retained.
 Physical graphics, camera, battery/thermal and robot checks require the device
 or hardware and are not replaced by JVM/native render tests.
 
@@ -117,19 +137,12 @@ Worker details: `BUILD119_FORM_COMMAND_NOTES.md` and
    `/home/claude/git/meowmba-app.git`, ref `codex/fly-habitat-built`, then
    fast-forward `/home/claude/meowmba-fly-habitat` after confirming tracked files
    are clean. Preserve the three untracked production asset directories.
-2. Use the established JDK 21, Android SDK and prebuilt native directory. Rerun
-   the same acceptance suites, including `GeneratedAvatar*`, `AvatarForm*`,
-   `AgentCancellationLifecycleTest`, `OrchestratorTest`, `AgentRouterTest`,
-   `AgentViewModelTest`, `AgentReliabilityTest`, `CrossDeviceControlTest`,
-   `ProjectExecutionContextTest`, `ToolCallBrainTest`, `OfficeHelpers*`,
-   `FruitFlyAvatarTest`, `AvatarMorph*`, `LumenIntegrationTest`,
-   `LumenNaturalMotionTest`, `CustomAnimationTest`, `InventedSceneRenderTest`,
-   `CompanionBrainControlsTest`, `BrainAvatarVisibilityTest`,
-   `CameraPrivacyViewModelTest`, `VisionPipelineTest`,
-   `VisionManagerLifecycleTest`, `neural.MaleCnsServerManagerTest` and
-   `neural.NeuralServerReplacementTest`; assemble debug and Android-test APKs.
-   Every suite is under `com.example.meowmba`. The prior log is
-   `/tmp/meow-build119-acceptance.log`.
+2. Use the established JDK 21, Android SDK and actual prebuilt native directory.
+   Run `bash scripts/verify_avatar_forms.sh` with the established server Gradle
+   options, then assemble debug and Android-test APKs. The script includes all
+   35 acceptance classes and currently runs 261 tests. Do not use the empty
+   local JVM-only native directory for packaging. The prior Meow log is
+   `/tmp/meow-build119-acceptance.log`; it predates the final local pass.
 3. Once all tests pass, run the retained
    `docs/characters/verification/verify_build119.py <HEAD prefix>` on Meow. It
    verifies version 119, the existing signing certificate, all 53 runtime assets
