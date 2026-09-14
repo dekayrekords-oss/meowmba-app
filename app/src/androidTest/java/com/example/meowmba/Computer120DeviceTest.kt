@@ -57,6 +57,28 @@ class Computer120DeviceTest {
             }
         }
     }
+    @Test fun pinnedSshKeyExecutesOnMeow() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val keyFile = File(context.filesDir, "computer120-test-key")
+        assertTrue("Temporary SSH credential not provisioned", keyFile.isFile)
+        val profiles = com.example.meowmba.core.agentic.InMemoryConnectionProfileStore()
+        profiles.save(com.example.meowmba.core.agentic.ConnectionProfile(
+            id = "build120-test", displayName = "Temporary acceptance", type = com.example.meowmba.core.agentic.ConnectionProfileType.SSH,
+            host = "127.0.0.1", port = 18767, username = "prog", credentialRef = "temporary"))
+        val resolver = object : com.example.meowmba.core.agentic.CredentialResolver {
+            override fun resolve(credentialRef: String): String = keyFile.readText()
+        }
+        val executor = com.example.meowmba.core.agentic.DefaultAgenticSshExecutor({ true }, profiles, resolver)
+        val result = executor.exec("build120-test", listOf("printf", "meow120_ssh"), 10_000)
+        assertTrue(result.toString(), result is SshExecResult.Ok)
+        result as SshExecResult.Ok
+        assertEquals(0, result.exitCode)
+        assertEquals("meow120_ssh", result.stdout)
+        val pinned = profiles.get("build120-test")!!
+        assertTrue(pinned.hostKeyFingerprint.orEmpty().startsWith("SHA256:"))
+        profiles.save(pinned.copy(hostKeyFingerprint = "SHA256:deliberately-wrong"))
+        assertTrue("Changed server key accepted", executor.exec("build120-test", listOf("true"), 5_000) is SshExecResult.Error)
+    }
     @Test fun authenticatedMeowWorkerReturnsRealOutput() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val tokenFile = File(context.filesDir, "computer120-test-token")
