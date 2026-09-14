@@ -83,7 +83,7 @@ outside the sheet and details. VM tests cover actual public affection/care/
 habitat signals, persistence and privacy, thermal transitions, static feeding,
 mode authority and settings routes. Existing neural core and remote transport
 tests cover the underlying event/step/readiness paths. Final results and APK
-identity will be recorded after assembly in `BUILD_114_VERIFICATION.json`.
+identity are recorded in `BUILD_114_VERIFICATION.json`.
 
 Build 114 is debug-only; release remains unchanged. Build on the private Meow
 checkout with its preserved native and bundled assets, transfer APK deltas from
@@ -93,3 +93,39 @@ verified running Build 112; Build 113 was prepared but not installed. Honor the
 user's instruction to continue without it. Do not claim installation, secure
 phone pairing, physical touch/GLES or sustained thermal acceptance without
 device evidence. No robot hardware is available.
+
+## Final verified result
+
+Source commits are `8ea4c51` and final `4869f22`. The final server run passed
+**66 tests, zero failures/errors/skips**, including 12 VM action/persistence/
+privacy checks, eight native Brain UI checks, four visibility checks, Home,
+visual performance policy, settings navigation, recurrent core contracts and
+remote transport/readiness. Debug and instrumentation assembly passed. The
+local UI/remote run passed 18 tests before the final motor policy correction;
+seven native panel captures were inspected for compact/landscape, dark/light,
+zero activity, Classic, Shadow, unpaired, stale and cooling states. Their
+diagnostics are test fixtures, not live phone measurements.
+
+Both transferred APKs match the server target SHA-256 and pass `apksigner
+verify` using the existing signer fingerprint
+`b7850d5fb645df9f5d12525db1b10e457b0ee7f3aa50bbf4294ff31dae3379ff`.
+The app is `com.example.meowmba`, versionCode114/versionName1.3.81.
+All **53 protected runtime members and 15 painted background assets** match
+Build 113 by SHA-256 of each uncompressed ZIP member. Existing voice, pose,
+models, acceleration and all three new cartoon rooms are retained.
+
+- App SHA-256: `6795c4692001b4ec42e5567e243e715637df7f334c02396323150dbee0fd7d62`.
+- Instrumentation SHA-256: `d1d37d2148b5942af5bfd3da7b24aa5dab142c677c0df15664be0b081f42a851`.
+- App delta: 3,825,624 bytes,
+  `965b9b903aeb4169bb1f13f72b71061ca90a68834c5550782eae0d8c407be73b`.
+- Test delta: 155,066 bytes,
+  `5e622fcc23137bb5ad42795fdd91c62324d278bf270aa8693f893c88f77f6c7c`.
+
+Local packages are `build-out/habitat/meowmba-114.apk` and
+`build-out/habitat/tests114.apk`. Build 114 is ready but **not installed**;
+ADB listed no device. Last verified phone version remains 112. The next
+device session must recheck installed version before an in-place upgrade,
+then exercise Pet/Feed with camera/mic off, Shadow-to-Neural, static/habitat
+and portrait/landscape, Home and settings navigation. Secure pairing/live
+MaleCNS phone acceptance and sustained heat/battery checks remain pending.
+The Meow worker/bridge were not changed by this repair.

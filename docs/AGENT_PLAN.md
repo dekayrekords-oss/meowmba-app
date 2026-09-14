@@ -1,12 +1,15 @@
 # Agent execution plan — immersive companion revision
 
-## September 13: Build 114 Brain usability repair
+## September 13: Build 114 Brain repair verified and ready
 
 Brain now reserves a visible avatar viewport, exposes real Pet/Feed events and
 explicit local/Shadow-control actions, and explains inactive, cooling and
 unpaired/stale remote states with measured aggregate activity. Settings/pairing
-deep links retain privacy and secure transport. Validation and assembly are in
-progress; the disconnected phone remains last-verified Build 112. Read
+deep links retain privacy and secure transport. Neural movement also works with
+the microphone off; Home and opaque menus dismiss Brain correctly. All 66
+focused server tests pass; signed packages and all 53 runtime/15 background
+assets are verified. Build 114 is ready, not installed; the disconnected phone
+remains last-verified Build 112, with remote pairing pending. Read
 [MEOW_BUILD_114_PASS_DOWN.md](characters/MEOW_BUILD_114_PASS_DOWN.md) for the
 cause, fixes, regression coverage and debugging lessons.
 
