@@ -17,7 +17,7 @@ import java.util.concurrent.ConcurrentHashMap
  * No FlyWire. Secrets never enter event detail / prompts — only credential refs.
  * No opencode. Do not drive SSH from the Lumen frame loop.
  */
-class AgenticRuntime private constructor(
+class AgenticRuntime internal constructor(
     private val appContext: Context,
     private val flags: FeatureFlags,
     private val store: AgenticGoalStore,
@@ -28,6 +28,23 @@ class AgenticRuntime private constructor(
     private val credentials: CredentialResolver,
 ) {
     private val tools = ConcurrentHashMap<String, String>()
+    private val goalCommitLock = Any()
+    private val executing = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    private fun commitGoal(goal: AgenticGoal): AgenticGoal? = synchronized(goalCommitLock) {
+        val current = store.getGoal(goal.id) ?: return@synchronized null
+        if (current.status == GoalStatus.CANCELLED || current.status == GoalStatus.DONE) current
+        else store.updateGoal(goal)
+    }
+
+    fun cancelGoal(goalId: String): AgenticGoal? = synchronized(goalCommitLock) {
+        val current = store.getGoal(goalId) ?: return@synchronized null
+        if (current.status == GoalStatus.DONE || current.status == GoalStatus.CANCELLED) current else {
+            store.appendEvent(goalId, "cancelled", "Stopped further Computer steps")
+            store.updateGoal(current.copy(status = GoalStatus.CANCELLED, approvalGranted = false))
+        }
+    }
+
 
     /**
      * Optional host that can wake Computer and drive CompanionTerminalSession.
@@ -107,20 +124,20 @@ class AgenticRuntime private constructor(
     fun tickUntilTerminal(
         goalId: String,
         isCancelled: () -> Boolean = { false },
+        host: ComputerExecHost? = computerHost,
     ): AgenticGoal? {
         if (!enabled) return null
         val initial = store.getGoal(goalId) ?: return null
         return AgenticAutoTick.run(
             initial = initial,
-            tick = { _ -> tick(goalId) },
-            isCancelled = isCancelled,
+            tick = { _ -> tick(goalId, host) },
+            isCancelled = { isCancelled() || !enabled },
             onCancel = { g ->
-                store.appendEvent(goalId, type = "cancelled", detail = "auto-tick cancelled")
-                store.updateGoal(g.copy(status = GoalStatus.CANCELLED)) ?: g.copy(status = GoalStatus.CANCELLED)
+                cancelGoal(goalId) ?: g.copy(status = GoalStatus.CANCELLED)
             },
             onBudgetExhausted = { g ->
                 store.appendEvent(goalId, type = "budget_exhausted", detail = "auto-tick stop")
-                store.updateGoal(g.copy(status = GoalStatus.BLOCKED)) ?: g.copy(status = GoalStatus.BLOCKED)
+                commitGoal(g.copy(status = GoalStatus.BLOCKED)) ?: g.copy(status = GoalStatus.BLOCKED)
             },
             maxGuard = (initial.budgets.maxSteps + 2).coerceAtMost(32),
         )
@@ -139,7 +156,7 @@ class AgenticRuntime private constructor(
         if (!enabled) return null
         val goal = store.getGoal(goalId) ?: return null
         store.appendEvent(goalId, type = "approved", detail = "user approved pending ssh_exec")
-        return store.updateGoal(
+        return commitGoal(
             goal.copy(status = GoalStatus.RUNNING, approvalGranted = true),
         )
     }
@@ -149,7 +166,7 @@ class AgenticRuntime private constructor(
         if (!enabled) return null
         val goal = store.getGoal(goalId) ?: return null
         store.appendEvent(goalId, type = "rejected", detail = "user rejected pending ssh_exec")
-        return store.updateGoal(
+        return commitGoal(
             goal.copy(status = GoalStatus.CANCELLED, approvalGranted = false),
         )
     }
@@ -214,7 +231,7 @@ class AgenticRuntime private constructor(
         val result = sshExecutor.exec(profileId, argv, timeoutMs)
         val detail = when (result) {
             is SshExecResult.Ok ->
-                "ok exit=${result.exitCode} profile=$profileId argv=${argv.take(4).joinToString(" ")}"
+                AgenticOutput.scrub("exit=${result.exitCode} profile=$profileId\n${result.stdout}\n${result.stderr}")
             is SshExecResult.NotEnabled -> "not_enabled"
             is SshExecResult.Unsupported -> "unsupported: ${result.message.take(200)}"
             is SshExecResult.Error -> "error: ${result.message.take(200)}"
@@ -227,7 +244,12 @@ class AgenticRuntime private constructor(
 
     // --- Phase 5: model-driven agent loop ---
 
-    fun tick(goalId: String): AgenticGoal? {
+    fun tick(goalId: String, host: ComputerExecHost? = computerHost): AgenticGoal? {
+        if (!executing.add(goalId)) return store.getGoal(goalId)
+        return try { tickOwned(goalId, host) } finally { executing.remove(goalId) }
+    }
+
+    private fun tickOwned(goalId: String, executionHost: ComputerExecHost?): AgenticGoal? {
         if (!enabled) return null
         val goal = store.getGoal(goalId) ?: return null
         if (goal.status == GoalStatus.DONE || goal.status == GoalStatus.CANCELLED) {
@@ -237,6 +259,7 @@ class AgenticRuntime private constructor(
             return goal
         }
 
+        if (goal.budgets.exhausted()) return commitGoal(goal.copy(status = GoalStatus.BLOCKED))
         val toolsList = listTools()
         val profiles = profileStore.list()
         val events = store.listEvents(goalId)
@@ -251,11 +274,12 @@ class AgenticRuntime private constructor(
         }
         val proposal = planner.propose(goal, toolsList, profiles, events + memoryEvents)
 
+        if (store.getGoal(goalId)?.status == GoalStatus.CANCELLED) return store.getGoal(goalId)
         val modelText = (planner as? HeuristicAgenticPlanner)?.lastModelText.orEmpty()
         store.appendEvent(
             goalId,
             type = "model_attempt",
-            detail = "plan=${modelText.take(120)} propose=${proposal.tool} reason=${proposal.reason.take(120)}",
+            detail = AgenticOutput.scrub("plan=${modelText.take(120)} propose=${proposal.tool} reason=${proposal.reason.take(120)}"),
         )
 
         var budgets = goal.budgets.copy(stepsUsed = goal.budgets.stepsUsed + 1)
@@ -275,7 +299,7 @@ class AgenticRuntime private constructor(
                 }
                 hadOkTool -> status = GoalStatus.DONE
             }
-            return store.updateGoal(
+            return commitGoal(
                 goal.copy(status = status, budgets = budgets, approvalGranted = approvalGranted),
             )
         }
@@ -288,7 +312,7 @@ class AgenticRuntime private constructor(
                 if (budgets.sshExecsRemaining() <= 0) {
                     store.appendEvent(goalId, type = "ssh_exec_skipped", detail = "ssh budget exhausted")
                     status = GoalStatus.BLOCKED
-                    return store.updateGoal(
+                    return commitGoal(
                         goal.copy(status = status, budgets = budgets, approvalGranted = false),
                     )
                 }
@@ -296,7 +320,7 @@ class AgenticRuntime private constructor(
                 if (profileId.isNullOrBlank()) {
                     store.appendEvent(goalId, type = "ssh_exec_skipped", detail = "missing profileId")
                     status = GoalStatus.BLOCKED
-                    return store.updateGoal(
+                    return commitGoal(
                         goal.copy(status = status, budgets = budgets, approvalGranted = false),
                     )
                 }
@@ -308,7 +332,7 @@ class AgenticRuntime private constructor(
                         type = "awaiting_approval",
                         detail = "$toolKey profile=$profileId argv=${argv.take(6).joinToString(" ")}",
                     )
-                    return store.updateGoal(
+                    return commitGoal(
                         goal.copy(
                             status = GoalStatus.WAITING_APPROVAL,
                             budgets = budgets,
@@ -328,7 +352,7 @@ class AgenticRuntime private constructor(
                     goalId = goalId,
                 )
                 status = when (result) {
-                    is SshExecResult.Ok -> GoalStatus.RUNNING
+                    is SshExecResult.Ok -> if (result.exitCode == 0) GoalStatus.DONE else GoalStatus.BLOCKED
                     is SshExecResult.Unsupported -> GoalStatus.BLOCKED
                     is SshExecResult.Error -> GoalStatus.BLOCKED
                     is SshExecResult.NotEnabled -> GoalStatus.BLOCKED
@@ -346,7 +370,7 @@ class AgenticRuntime private constructor(
                         type = "awaiting_approval",
                         detail = "local_shell argv=${argv.take(6).joinToString(" ")}",
                     )
-                    return store.updateGoal(
+                    return commitGoal(
                         goal.copy(
                             status = GoalStatus.WAITING_APPROVAL,
                             budgets = budgets,
@@ -374,7 +398,7 @@ class AgenticRuntime private constructor(
                     },
                 )
                 status = when (result) {
-                    is SshExecResult.Ok -> GoalStatus.RUNNING
+                    is SshExecResult.Ok -> if (result.exitCode == 0) GoalStatus.DONE else GoalStatus.BLOCKED
                     else -> GoalStatus.BLOCKED
                 }
                 memoryIndex.note(goalId, "local_shell result=${result::class.simpleName}")
@@ -392,7 +416,7 @@ class AgenticRuntime private constructor(
                         type = "awaiting_approval",
                         detail = "computer_exec destructive argv=${argv.take(6).joinToString(" ")}",
                     )
-                    return store.updateGoal(
+                    return commitGoal(
                         goal.copy(
                             status = GoalStatus.WAITING_APPROVAL,
                             budgets = budgets,
@@ -400,20 +424,21 @@ class AgenticRuntime private constructor(
                         ),
                     )
                 }
+                val commandApproved = approvalGranted
                 if (approvalGranted && ComputerGuestPolicy.requiresConfirm(script)) {
                     approvalGranted = false
                 }
-                val host = computerHost
+                val host = executionHost
                 val detail: String
                 if (host != null) {
-                    val result = host.computerExec(script, timeoutMs = 45_000L)
-                    if (result.needsApproval && !approvalGranted) {
+                    val result = host.computerExec(script, timeoutMs = 45_000L, approvalGranted = commandApproved)
+                    if (result.needsApproval) {
                         store.appendEvent(
                             goalId,
                             type = "awaiting_approval",
                             detail = "computer_exec host requested approval",
                         )
-                        return store.updateGoal(
+                        return commitGoal(
                             goal.copy(
                                 status = GoalStatus.WAITING_APPROVAL,
                                 budgets = budgets,
@@ -428,7 +453,7 @@ class AgenticRuntime private constructor(
                         append(result.output.take(400))
                     }
                     // One successful Computer tool call settles the chat auto-tick goal.
-                    status = if (result.ok) GoalStatus.DONE else GoalStatus.BLOCKED
+                    status = if (result.ok && result.exitCode == 0) GoalStatus.DONE else GoalStatus.BLOCKED
                     memoryIndex.note(goalId, "computer_exec ok=${result.ok}")
                 } else {
                     val result = TermuxRunCommandHelper.execSh(appContext, script)
@@ -440,12 +465,12 @@ class AgenticRuntime private constructor(
                         is SshExecResult.NotEnabled -> "not_enabled"
                     }
                     status = when (result) {
-                        is SshExecResult.Ok -> GoalStatus.DONE
+                        is SshExecResult.Ok -> if (result.exitCode == 0) GoalStatus.DONE else GoalStatus.BLOCKED
                         else -> GoalStatus.BLOCKED
                     }
                     memoryIndex.note(goalId, "computer_exec fallback=${result::class.simpleName}")
                 }
-                store.appendEvent(goalId, type = "computer_exec", detail = detail.take(500))
+                store.appendEvent(goalId, type = "computer_exec", detail = AgenticOutput.scrub(detail, 3500))
             }
             else -> {
                 store.appendEvent(
@@ -457,12 +482,12 @@ class AgenticRuntime private constructor(
             }
         }
 
-        if (budgets.exhausted()) {
+        if (budgets.exhausted() && status != GoalStatus.DONE) {
             status = GoalStatus.BLOCKED
             store.appendEvent(goalId, type = "budget_exhausted", detail = "steps/tools budget hit")
         }
 
-        return store.updateGoal(
+        return commitGoal(
             goal.copy(status = status, budgets = budgets, approvalGranted = approvalGranted),
         )
     }

@@ -609,7 +609,10 @@ class CompanionViewModel(
     private var followUpJob: Job? = null
     /** Chat → agentic auto-tick; cancel stops further ticks. */
     private var agenticAutoTickJob: Job? = null
-    @Volatile private var agenticAutoTickCancelRequested: Boolean = false
+    private var agenticRunEpoch = 0L
+    private var agenticRunStop = java.util.concurrent.atomic.AtomicBoolean(false)
+    @Volatile private var activeComputerGoal: Pair<AgenticRuntime, String>? = null
+    private val computerCommandLock = java.util.concurrent.locks.ReentrantLock()
 
     /** Ambient sky refresh loop; null when the ambient scene is off. */
     private var ambientWeatherJob: Job? = null
@@ -2582,6 +2585,7 @@ class CompanionViewModel(
      * On from Idle/Off reconnects (no reinstall).
      */
     fun setComputerPowerState(state: ComputerPowerState) {
+        if (state != ComputerPowerState.On) cancelAgenticComputerChat()
         val storage = secureStorage ?: return
         val store = ComputerPowerStore(storage)
         val prev = store.state
@@ -2644,8 +2648,6 @@ class CompanionViewModel(
      * Uses last stdin/stdout time on the Computer guest session.
      */
     private fun syncComputerIdleWatch() {
-        agenticAutoTickCancelRequested = true
-        agenticAutoTickJob?.cancel()
         computerIdleWatchJob?.cancel()
         computerIdleWatchJob = null
         val storage = secureStorage ?: return
@@ -2695,6 +2697,7 @@ class CompanionViewModel(
     }
 
     fun setAgenticRuntimeV1(enabled: Boolean) {
+        if (!enabled) cancelAgenticComputerChat()
         val storage = secureStorage ?: return
         FeatureFlags.from(storage.context).setAgenticRuntimeV1(enabled)
         runCatching { com.example.meowmba.core.agentic.AgenticScheduler.ensureScheduled(storage.context) }
@@ -3008,8 +3011,8 @@ class CompanionViewModel(
             runtime.computerHost = null
             return
         }
-        runtime.computerHost = ComputerExecHost { command, timeoutMs ->
-            runComputerExecBlocking(command, timeoutMs)
+        runtime.computerHost = ComputerExecHost { command, timeoutMs, approved ->
+            runComputerExecBlocking(command, timeoutMs, approved)
         }
     }
 
@@ -3018,55 +3021,42 @@ class CompanionViewModel(
      * else one-shot local shell. Mirror output into Terminal scrollback.
      * Destructive patterns return [ComputerExecResult.needsApproval].
      */
-    private fun runComputerExecBlocking(command: String, timeoutMs: Long): ComputerExecResult {
+    private fun runComputerExecBlocking(
+        command: String, timeoutMs: Long, approved: Boolean = false,
+        isCancelled: () -> Boolean = { false },
+    ): ComputerExecResult {
         val trimmed = command.trim()
-        if (trimmed.isEmpty()) {
-            return ComputerExecResult(ok = false, output = "error: empty command")
-        }
-        if (ComputerGuestPolicy.requiresConfirm(trimmed)) {
-            return ComputerExecResult(
-                ok = false,
-                output = "needs approval: destructive Computer command",
-                needsApproval = true,
-            )
-        }
+        if (trimmed.isEmpty()) return ComputerExecResult(false, "Empty command")
+        if (ComputerGuestPolicy.requiresConfirm(trimmed) && !approved)
+            return ComputerExecResult(false, "Computer command needs approval", needsApproval = true)
+        if (!computerCommandLock.tryLock()) return ComputerExecResult(false, "Computer is already running a command")
         return try {
             kotlinx.coroutines.runBlocking {
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                    ensureComputerAwakeForAgentic()
-                    val sessionReady = awaitComputerSessionConnected(8_000L)
-                    val beforeLen = _companionTerminalScrollback.value.length
-                    if (sessionReady) {
-                        appendCompanionTerminalOutput("\n[agentic] $ $trimmed\n")
-                        sendCompanionTerminalLine(trimmed)
-                        val captured = awaitScrollbackDelta(beforeLen, timeoutMs.coerceIn(3_000L, 60_000L))
-                        val out = captured.ifBlank { "(no output)" }.take(16_000)
-                        ComputerExecResult(ok = true, output = out)
-                    } else {
-                        val storage = secureStorage
-                            ?: return@withContext ComputerExecResult(
-                                ok = false,
-                                output = "error: secure storage unavailable",
-                            )
-                        val oneShot = CompanionTerminalLocalShell.exec(
-                            trimmed,
-                            timeoutMs.coerceIn(3_000L, 60_000L),
-                            storage,
-                        )
-                        appendCompanionTerminalOutput("\n[agentic one-shot] $ $trimmed\n$oneShot\n")
-                        ComputerExecResult(
-                            ok = !oneShot.startsWith("error:"),
-                            output = oneShot.take(16_000),
-                        )
+                val frame = ComputerCommandFrame()
+                if (isCancelled()) return@runBlocking ComputerExecResult(false, "Cancelled")
+                kotlinx.coroutines.withContext(Dispatchers.Main) { ensureComputerAwakeForAgentic() }
+                val connected = awaitComputerSessionConnected(8_000L)
+                if (isCancelled()) return@runBlocking ComputerExecResult(false, "Cancelled")
+                if (connected) {
+                    sendCompanionTerminalLine(frame.wrap(trimmed))
+                    val deadline = android.os.SystemClock.elapsedRealtime() + timeoutMs.coerceIn(3_000L, 60_000L)
+                    while (android.os.SystemClock.elapsedRealtime() < deadline) {
+                        if (isCancelled()) return@runBlocking ComputerExecResult(false,
+                            "Cancelled further steps; the current command may still finish")
+                        frame.result(_companionTerminalScrollback.value)?.let { return@runBlocking it }
+                        delay(100)
                     }
+                    ComputerExecResult(false, "Command did not report completion before its deadline")
+                } else {
+                    val output = CompanionTerminalLocalShell.exec(frame.wrap(trimmed), timeoutMs, secureStorage)
+                    if (isCancelled()) ComputerExecResult(false, "Cancelled")
+                    else frame.result(output) ?: ComputerExecResult(false,
+                        com.example.meowmba.core.agentic.AgenticOutput.scrub(output))
                 }
             }
         } catch (e: Exception) {
-            ComputerExecResult(
-                ok = false,
-                output = "error: ${e.message ?: e.javaClass.simpleName}",
-            )
-        }
+            ComputerExecResult(false, "Computer failed: ${e.javaClass.simpleName}")
+        } finally { computerCommandLock.unlock() }
     }
 
     private fun ensureComputerAwakeForAgentic() {
@@ -3109,27 +3099,6 @@ class CompanionViewModel(
         return false
     }
 
-    private suspend fun awaitScrollbackDelta(beforeLen: Int, timeoutMs: Long): String {
-        val deadline = android.os.SystemClock.elapsedRealtime() + timeoutMs
-        var lastLen = beforeLen
-        var lastChange = android.os.SystemClock.elapsedRealtime()
-        while (android.os.SystemClock.elapsedRealtime() < deadline) {
-            kotlinx.coroutines.delay(200)
-            val cur = _companionTerminalScrollback.value
-            if (cur.length > lastLen) {
-                lastLen = cur.length
-                lastChange = android.os.SystemClock.elapsedRealtime()
-            } else if (
-                cur.length > beforeLen &&
-                android.os.SystemClock.elapsedRealtime() - lastChange > 900L
-            ) {
-                break
-            }
-        }
-        val cur = _companionTerminalScrollback.value
-        return if (cur.length > beforeLen) cur.substring(beforeLen) else ""
-    }
-
     /**
      * Chat → Computer when Agentic is ON.
      * Explicit "Run on Computer: …" always. Stub model: shell-looking lines.
@@ -3143,165 +3112,88 @@ class CompanionViewModel(
         val trimmed = text.trim()
         if (trimmed.isEmpty()) return false
 
-        val explicit = Regex("(?i)^(?:run on computer[:\\s]+|computer:\\s*)(.+)$").find(trimmed)
-        val shellish = HeuristicAgenticPlanner.looksLikeShellCommand(trimmed)
-        val modelConfigured = com.example.meowmba.core.agentic.AgenticModelConfig.read(storage).configured
-
-        when {
-            explicit != null -> {
-                val cmd = explicit.groupValues[1].trim()
-                runComputerFromChat(cmd, userText = trimmed)
-                return true
-            }
-            !modelConfigured && shellish -> {
-                runComputerFromChat(trimmed, userText = trimmed)
-                return true
-            }
-            modelConfigured && shellish -> {
-                runAgenticComputerTickFromChat(trimmed)
-                return true
-            }
-            else -> return false
-        }
+        if (!HeuristicAgenticPlanner.looksLikeShellCommand(trimmed)) return false
+        runAgenticComputerTickFromChat(trimmed)
+        return true
     }
 
     private fun runComputerFromChat(command: String, userText: String) {
-        followUpJob?.cancel()
-        _uiState.value = _uiState.value.copy(
-            interactionState = InteractionState.THINKING,
-            captionText = "Computer: $command",
-            emotion = CompanionEmotion.DETERMINED,
-        )
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            persistTurn(com.example.meowmba.core.database.MessageRole.USER, userText)
-            val result = runComputerExecBlocking(command, 45_000L)
-            val body = if (result.needsApproval) {
-                "Computer needs approval for a destructive command. " +
-                    "Create/approve an agentic goal, or avoid rm -rf style cmds."
-            } else {
-                "Computer:\n${result.output.take(3500)}"
-            }
-            persistTurn(com.example.meowmba.core.database.MessageRole.ASSISTANT, body)
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                _uiState.value = _uiState.value.copy(
-                    interactionState = InteractionState.IDLE,
-                    captionText = body.take(240),
-                    emotion = if (result.ok) CompanionEmotion.PROUD else CompanionEmotion.CONCERNED,
-                )
-                publishChat()
-                refreshAgenticPresenceHint()
-            }
-            // Short spoken ack — full output stays in chat + Terminal.
-            speak(
-                when {
-                    result.needsApproval -> "That Computer command needs approval."
-                    result.ok -> "Done on Computer. Output is in chat and the Terminal."
-                    else -> "Computer command failed. Check chat for details."
-                },
-            )
-        }
+        runAgenticComputerTickFromChat(userText)
     }
 
     private fun runAgenticComputerTickFromChat(text: String) {
+        cancelAgenticComputerChat()
         followUpJob?.cancel()
-        agenticAutoTickJob?.cancel()
-        agenticAutoTickCancelRequested = false
-        _uiState.value = _uiState.value.copy(
-            interactionState = InteractionState.THINKING,
-            captionText = text,
-            emotion = CompanionEmotion.DETERMINED,
-        )
-        agenticAutoTickJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            persistTurn(com.example.meowmba.core.database.MessageRole.USER, text)
-            val storage = secureStorage ?: return@launch
-            val runtime = AgenticRuntime.from(storage.context)
-            bindAgenticComputerHost()
-            val goal = runtime.createGoal(text) ?: run {
-                runComputerFromChat(
-                    HeuristicAgenticPlanner.shellArgvFromTitle(text)
-                        .let { argv ->
-                            if (argv.size >= 3 && argv[0] == "sh" && argv[1] == "-c") {
-                                argv.drop(2).joinToString(" ")
-                            } else {
-                                argv.joinToString(" ")
-                            }
-                        },
-                    userText = text,
-                )
-                return@launch
+        val epoch = agenticRunEpoch
+        val stop = java.util.concurrent.atomic.AtomicBoolean(false).also { agenticRunStop = it }
+        val conversation = conversationId()
+        _uiState.value = _uiState.value.copy(computerTaskRunning = true,
+            interactionState = InteractionState.THINKING, captionText = "Running on Computer…")
+        agenticAutoTickJob = viewModelScope.launch(Dispatchers.IO) {
+            var runtime: AgenticRuntime? = null
+            var goalId: String? = null
+            try {
+                val storage = secureStorage ?: error("Computer storage unavailable")
+                runtime = AgenticRuntime.from(storage.context)
+                val goal = runtime.createGoal(text) ?: error("Turn on Agentic to use Computer")
+                goalId = goal.id
+                if (stop.get()) { runtime.cancelGoal(goal.id); return@launch }
+                activeComputerGoal = runtime to goal.id
+                persistTurn(com.example.meowmba.core.database.MessageRole.USER, text)
+                val updated = runtime.tickUntilTerminal(goal.id,
+                    isCancelled = { stop.get() || !isActive },
+                    host = ComputerExecHost { command, timeout, approved ->
+                        runComputerExecBlocking(command, timeout, approved) { stop.get() || !isActive }
+                    })
+                val toolOut = runtime.listEvents(goal.id).lastOrNull {
+                    it.type in setOf("computer_exec", "local_shell", "ssh_exec", "https_runtime")
+                }?.detail.orEmpty()
+                val safeOut = com.example.meowmba.core.agentic.AgenticOutput.scrub(toolOut)
+                val awaiting = updated?.status == GoalStatus.WAITING_APPROVAL
+                val body = when {
+                    awaiting -> "Computer needs approval. Open Computer & task tools to review the exact pending command."
+                    updated?.status == GoalStatus.DONE -> "Computer completed.\n$safeOut"
+                    else -> "Computer stopped (${updated?.status ?: "unavailable"}).\n$safeOut"
+                }
+                withContext(Dispatchers.Main) {
+                    if (epoch != agenticRunEpoch || stop.get() || conversationId() != conversation) return@withContext
+                    persistTurn(com.example.meowmba.core.database.MessageRole.ASSISTANT, body)
+                    _uiState.value = _uiState.value.copy(computerTaskRunning = false,
+                        interactionState = InteractionState.IDLE, captionText = body.take(240),
+                        emotion = if (updated?.status == GoalStatus.DONE) CompanionEmotion.PROUD else CompanionEmotion.CONCERNED)
+                    publishChat()
+                    refreshAgenticPresenceHint()
+                    speak(if (awaiting) "Computer needs your approval." else if (updated?.status == GoalStatus.DONE)
+                        "Done on Computer." else "Computer stopped. Check chat for details.")
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    if (epoch == agenticRunEpoch && !stop.get()) _uiState.value = _uiState.value.copy(
+                        computerTaskRunning = false, interactionState = InteractionState.IDLE,
+                        captionText = "Computer unavailable: ${e.javaClass.simpleName}")
+                }
+            } finally {
+                if (stop.get() || !isActive) goalId?.let { runtime?.cancelGoal(it) }
+                if (activeComputerGoal?.second == goalId) activeComputerGoal = null
             }
-            val updated = runtime.tickUntilTerminal(goal.id) {
-                agenticAutoTickCancelRequested || !isActive
-            }
-            val events = runtime.listEvents(goal.id)
-            val toolOut = events.asReversed().firstOrNull {
-                it.type == "computer_exec" || it.type == "local_shell" || it.type == "ssh_exec" ||
-                    it.type == "https_runtime"
-            }?.detail.orEmpty()
-            // Truncate + scrub obvious secret-looking fragments before chat.
-            val safeOut = scrubAgenticChatOutput(toolOut).take(3500)
-            val awaiting = updated?.status == GoalStatus.WAITING_APPROVAL
-            val cancelled = updated?.status == GoalStatus.CANCELLED || agenticAutoTickCancelRequested
-            val body = when {
-                cancelled ->
-                    "Agentic cancelled for '${goal.title.take(60)}'."
-                awaiting ->
-                    "Agentic waiting for approval on '${goal.title.take(60)}'. " +
-                        "Approve in Settings → Neural / Lumen → Agentic."
-                safeOut.isNotBlank() -> "Computer / agentic:\n$safeOut"
-                else ->
-                    "Agentic finished: status=${updated?.status ?: "?"} " +
-                        "(no tool output — check Agentic tasks)."
-            }
-            persistTurn(com.example.meowmba.core.database.MessageRole.ASSISTANT, body)
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                _uiState.value = _uiState.value.copy(
-                    interactionState = InteractionState.IDLE,
-                    captionText = body.take(240),
-                    emotion = when {
-                        cancelled -> CompanionEmotion.IDLE
-                        awaiting -> CompanionEmotion.CONCERNED
-                        updated?.status == GoalStatus.DONE -> CompanionEmotion.PROUD
-                        updated?.status == GoalStatus.BLOCKED -> CompanionEmotion.CONCERNED
-                        else -> CompanionEmotion.IDLE
-                    },
-                )
-                publishChat()
-                refreshAgenticPresenceHint()
-            }
-            speak(
-                when {
-                    cancelled -> "Cancelled that Computer step."
-                    awaiting -> "Waiting for your approval on that agentic step."
-                    safeOut.isNotBlank() -> "Ran that on Computer. Output is in chat and the Terminal."
-                    updated?.status == GoalStatus.DONE -> "Done on Computer."
-                    else -> "Agentic stopped. Check Agentic tasks for details."
-                },
-            )
         }
     }
 
-    /** Cancel in-flight chat auto-tick (also cancels the open goal when possible). */
+    /** Stops subsequent steps immediately; an already dispatched command may finish. */
     fun cancelAgenticComputerChat() {
-        agenticAutoTickCancelRequested = true
+        agenticRunEpoch++
+        agenticRunStop.set(true)
         agenticAutoTickJob?.cancel()
         agenticAutoTickJob = null
-        _uiState.value = _uiState.value.copy(
-            interactionState = InteractionState.IDLE,
-            captionText = "Agentic cancelled",
-        )
-    }
-
-    private fun scrubAgenticChatOutput(raw: String): String {
-        if (raw.isBlank()) return raw
-        // Drop lines that look like secrets; never echo credential material.
-        val lines = raw.lineSequence().filterNot { line ->
-            val l = line.lowercase()
-            "password=" in l || "api_key" in l || "apikey" in l ||
-                "authorization:" in l || "private_key" in l || "begin rsa" in l ||
-                "begin openssh" in l || "secret=" in l
+        activeComputerGoal?.let { (runtime, id) ->
+            viewModelScope.launch(Dispatchers.IO) { runtime.cancelGoal(id) }
         }
-        return lines.joinToString("\n").take(8_192)
+        activeComputerGoal = null
+        if (_uiState.value.computerTaskRunning) _uiState.value = _uiState.value.copy(
+            computerTaskRunning = false, interactionState = InteractionState.IDLE,
+            captionText = "Computer steps stopped. A dispatched command may still finish.")
     }
 
     /** Explicit action: run the last typed / given line on Computer (Agentic ON). */
@@ -3434,6 +3326,7 @@ class CompanionViewModel(
     }
 
     override fun onCleared() {
+        cancelAgenticComputerChat()
         cancelAvatarFormGeneration()
         nervousSystem.pauseExternalWork()
         neuralTraceRecorder?.close(); neuralTraceRecorder = null
@@ -4933,6 +4826,7 @@ class CompanionViewModel(
      * listening at all, with every log line claiming it was.
      */
     fun releaseWakeMicForBackground() {
+        cancelAgenticComputerChat()
         cancelAvatarFormGeneration()
         stopAvatarPerformance()
         resetMouthEnergy()

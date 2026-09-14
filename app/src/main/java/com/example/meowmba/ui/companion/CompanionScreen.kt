@@ -233,6 +233,13 @@ fun CompanionScreen(
                 }
             }
 
+            if (uiState.computerTaskRunning) {
+                OutlinedButton(onClick = viewModel::cancelAgenticComputerChat,
+                    modifier = Modifier.align(Alignment.TopCenter).padding(top = 56.dp)) {
+                    Text("Stop Computer")
+                }
+            }
+
             // Right-edge app tab: four more pinned apps in a strip down the
             // right side. Swipe left to pull it out, swipe left again to put
             // it back; the "+" opens the drawer where long-press pins an app.

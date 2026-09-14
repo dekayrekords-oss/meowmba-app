@@ -8,7 +8,7 @@ package com.example.meowmba.core.agentic
  * Never pass secrets through [command] / [ComputerExecResult.output].
  */
 fun interface ComputerExecHost {
-    fun computerExec(command: String, timeoutMs: Long): ComputerExecResult
+    fun computerExec(command: String, timeoutMs: Long, approvalGranted: Boolean): ComputerExecResult
 }
 
 data class ComputerExecResult(

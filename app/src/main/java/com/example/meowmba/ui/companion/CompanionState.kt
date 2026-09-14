@@ -66,6 +66,7 @@ data class CompanionState(
     val coverAvatarEnabled: Boolean = false,
     val name: String = "Meow",
     val interactionState: InteractionState = InteractionState.IDLE,
+    val computerTaskRunning: Boolean = false,
     val emotion: CompanionEmotion = CompanionEmotion.IDLE,
     /** Short, explicit acting rehearsal; never persists as a conversational mood. */
     val emotionPreview: CompanionEmotion? = null,

@@ -24,17 +24,23 @@ MEOW_COMPUTER_PORT="${MEOW_COMPUTER_PORT:-18766}"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --bind|--host)
-      MEOW_COMPUTER_HOST="${2:-}"; shift 2 || true ;;
+      [[ $# -ge 2 ]] || { warn "--bind requires an IP"; exit 2; }; MEOW_COMPUTER_HOST="$2"; shift 2 ;;
     --port)
-      MEOW_COMPUTER_PORT="${2:-}"; shift 2 || true ;;
+      [[ $# -ge 2 ]] || { warn "--port requires a value"; exit 2; }; MEOW_COMPUTER_PORT="$2"; shift 2 ;;
     -h|--help)
       printf 'Usage: [MEOW_COMPUTER_HOST=..] [MEOW_COMPUTER_PORT=..] %s [--bind HOST] [--port PORT]\n' "$0"
       exit 0 ;;
     *)
-      warn "unknown arg: $1 (ignored)"; shift ;;
+      warn "unknown arg: $1"; exit 2 ;;
   esac
 done
 export MEOW_COMPUTER_HOST MEOW_COMPUTER_PORT
+python3 - <<'PYVALID'
+import ipaddress, os
+host = os.environ['MEOW_COMPUTER_HOST']
+if host != 'localhost': ipaddress.ip_address(host)
+assert 1 <= int(os.environ['MEOW_COMPUTER_PORT']) <= 65535
+PYVALID
 log "bind=${MEOW_COMPUTER_HOST} port=${MEOW_COMPUTER_PORT}"
 
 # Prefer /opt when writable; else $HOME
@@ -45,6 +51,34 @@ else
 fi
 mkdir -p "$WORKSPACE"/{bin,data,logs,workspace}
 log "workspace=$WORKSPACE (user=$(id -un) uid=$(id -u))"
+# Private token is preserved on reinstall and never printed or passed in argv.
+export MEOW_COMPUTER_HOME="$WORKSPACE"
+python3 - <<'PYTOKEN'
+from pathlib import Path
+import os, secrets
+p = Path(os.environ['MEOW_COMPUTER_HOME']) / '.worker-token'
+if not p.exists():
+    fd = os.open(p, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    with os.fdopen(fd, 'w') as out: out.write(secrets.token_urlsafe(32))
+os.chmod(p, 0o600)
+PYTOKEN
+probe_worker() {
+  python3 - <<'PYPROBE'
+import json, os, urllib.request
+from pathlib import Path
+host = os.environ['MEOW_COMPUTER_HOST']
+if host in ('0.0.0.0', '::'): host = '127.0.0.1'
+if ':' in host: host = '[' + host + ']'
+token = (Path(os.environ['MEOW_COMPUTER_HOME']) / '.worker-token').read_text().strip()
+req = urllib.request.Request('http://' + host + ':' + os.environ['MEOW_COMPUTER_PORT'] + '/health', headers={'Authorization': 'Bearer ' + token})
+try:
+    with urllib.request.urlopen(req, timeout=3) as res:
+        data=json.load(res)
+        assert data.get('version') == 2 and data.get('ok')
+except Exception: raise SystemExit(1)
+PYPROBE
+}
+
 
 have_cmd() { command -v "$1" >/dev/null 2>&1; }
 
@@ -97,161 +131,125 @@ install_worker() {
   local worker="$WORKSPACE/bin/meow-computer-worker.py"
   cat > "$worker" << 'PY'
 #!/usr/bin/env python3
-"""Meow Computer HTTPS_RUNTIME-compatible worker stub (no secrets)."""
+"""Authenticated, bounded Computer worker. Run behind SSH or a private network."""
 from __future__ import annotations
-
-import json
-import os
-import subprocess
-import threading
-import time
-import uuid
+import hmac, json, os, signal, subprocess, tempfile, threading, time, uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
-HOST = os.environ.get("MEOW_COMPUTER_HOST", "127.0.0.1")
-PORT = int(os.environ.get("MEOW_COMPUTER_PORT", "18766"))
-ROOT = Path(os.environ.get("MEOW_COMPUTER_HOME", str(Path.home() / "meow-computer")))
-WORK = ROOT / "workspace"
-LOGS = ROOT / "logs"
-WORK.mkdir(parents=True, exist_ok=True)
-LOGS.mkdir(parents=True, exist_ok=True)
+ROOT = Path(os.environ.get('MEOW_COMPUTER_HOME', str(Path.home() / 'meow-computer')))
+WORK = ROOT / 'workspace'
+HOST = os.environ.get('MEOW_COMPUTER_HOST', '127.0.0.1')
+PORT = int(os.environ.get('MEOW_COMPUTER_PORT', '18766'))
+TOKEN = os.environ.get('MEOW_COMPUTER_TOKEN', '')
+if not TOKEN and (ROOT / '.worker-token').is_file():
+    TOKEN = (ROOT / '.worker-token').read_text().strip()
+JOBS = {}
+LOCK = threading.Lock()
+MAX_JOBS = 64
+MAX_ACTIVE = 2
+MAX_OUTPUT = 200_000
 
-_jobs: dict[str, dict] = {}
-_lock = threading.Lock()
 
-
-def _run_job(job_id: str, argv: list[str], cwd: str | None, timeout_ms: int | None) -> None:
-    with _lock:
-        _jobs[job_id]["status"] = "running"
-    timeout = None if timeout_ms is None else max(1.0, timeout_ms / 1000.0)
+def run_job(job_id, argv, cwd, timeout_ms):
     try:
-        proc = subprocess.run(
-            argv,
-            cwd=cwd or str(WORK),
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            check=False,
-        )
-        with _lock:
-            _jobs[job_id].update(
-                {
-                    "status": "succeeded" if proc.returncode == 0 else "failed",
-                    "exitCode": proc.returncode,
-                    "stdout": (proc.stdout or "")[-200_000:],
-                    "stderr": (proc.stderr or "")[-200_000:],
-                }
-            )
-    except subprocess.TimeoutExpired:
-        with _lock:
-            _jobs[job_id].update(
-                {
-                    "status": "failed",
-                    "exitCode": 124,
-                    "stdout": "",
-                    "stderr": "timeout",
-                    "detail": "timeout",
-                }
-            )
-    except Exception as exc:  # noqa: BLE001
-        with _lock:
-            _jobs[job_id].update(
-                {"status": "failed", "exitCode": 1, "stderr": str(exc)[:2000], "detail": str(exc)[:200]}
-            )
+        with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
+            proc = subprocess.Popen(argv, cwd=cwd, stdout=out, stderr=err, start_new_session=True)
+            with LOCK:
+                JOBS[job_id].update(status='running', process=proc)
+            try:
+                code = proc.wait(timeout=timeout_ms / 1000)
+            except subprocess.TimeoutExpired:
+                os.killpg(proc.pid, signal.SIGKILL)
+                proc.wait()
+                code = 124
+            def tail(stream):
+                stream.seek(0, 2)
+                stream.seek(max(0, stream.tell() - MAX_OUTPUT))
+                return stream.read().decode('utf-8', errors='replace')
+            with LOCK:
+                job = JOBS[job_id]
+                cancelled = job['status'] == 'cancelled'
+                job.update(status='cancelled' if cancelled else ('succeeded' if code == 0 else 'failed'),
+                           exitCode=code, stdout=tail(out), stderr=tail(err), process=None)
+    except Exception as exc:
+        with LOCK:
+            JOBS[job_id].update(status='failed', exitCode=1, detail=type(exc).__name__, process=None)
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "MeowComputerWorker/1.0"
-
-    def log_message(self, fmt: str, *args) -> None:  # quieter
-        pass
-
-    def _json(self, code: int, payload: dict) -> None:
-        body = json.dumps(payload).encode("utf-8")
+    server_version = 'MeowComputerWorker/2.0'
+    def log_message(self, *_): pass
+    def reply(self, code, payload):
+        body = json.dumps(payload).encode()
         self.send_response(code)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(body)))
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', str(len(body)))
         self.end_headers()
         self.wfile.write(body)
-
-    def _read_json(self) -> dict:
-        length = int(self.headers.get("Content-Length", "0") or "0")
-        raw = self.rfile.read(length) if length else b"{}"
+    def authorized(self):
+        supplied = self.headers.get('Authorization', '')
+        if not TOKEN or not hmac.compare_digest(supplied, 'Bearer ' + TOKEN):
+            self.reply(401, {'error': 'Computer worker token required'})
+            return False
+        return True
+    def do_GET(self):
+        if not self.authorized(): return
+        path = urlparse(self.path).path.rstrip('/')
+        if path == '/health':
+            self.reply(200, {'ok': True, 'service': 'meow-computer', 'version': 2})
+            return
+        bits = path.strip('/').split('/')
+        if len(bits) in (3, 4) and bits[:2] == ['v1', 'jobs']:
+            with LOCK:
+                job = JOBS.get(bits[2])
+                payload = None if job is None else {k: v for k, v in job.items() if k != 'process'}
+            if payload is not None:
+                if len(bits) == 4 and bits[3] == 'logs':
+                    payload = {'stdout': payload.get('stdout', ''), 'stderr': payload.get('stderr', '')}
+                self.reply(200, payload)
+                return
+        self.reply(404, {'error': 'unknown job'})
+    def do_POST(self):
+        if not self.authorized(): return
+        path = urlparse(self.path).path.rstrip('/')
+        if path != '/v1/jobs':
+            self.reply(404, {'error': 'not found'}); return
         try:
-            return json.loads(raw.decode("utf-8") or "{}")
-        except json.JSONDecodeError:
-            return {}
-
-    def do_GET(self) -> None:  # noqa: N802
-        path = urlparse(self.path).path.rstrip("/") or "/"
-        if path == "/health":
-            self._json(200, {"ok": True, "service": "meow-computer", "workspace": str(WORK)})
-            return
-        if path.startswith("/v1/jobs/") and path.endswith("/logs"):
-            job_id = path[len("/v1/jobs/") : -len("/logs")].strip("/")
-            with _lock:
-                job = _jobs.get(job_id)
-            if not job:
-                self._json(404, {"error": "unknown job"})
-                return
-            self._json(200, {"stdout": job.get("stdout", ""), "stderr": job.get("stderr", "")})
-            return
-        if path.startswith("/v1/jobs/"):
-            job_id = path[len("/v1/jobs/") :].strip("/")
-            with _lock:
-                job = _jobs.get(job_id)
-            if not job:
-                self._json(404, {"error": "unknown job"})
-                return
-            self._json(
-                200,
-                {
-                    "status": job.get("status", "unknown"),
-                    "exitCode": job.get("exitCode"),
-                    "detail": job.get("detail", ""),
-                },
-            )
-            return
-        self._json(404, {"error": "not found"})
-
-    def do_POST(self) -> None:  # noqa: N802
-        path = urlparse(self.path).path.rstrip("/") or "/"
-        if path != "/v1/jobs":
-            self._json(404, {"error": "not found"})
-            return
-        payload = self._read_json()
-        argv = payload.get("argv") or []
-        if not isinstance(argv, list) or not argv or not all(isinstance(x, str) for x in argv):
-            self._json(400, {"error": "argv must be a non-empty string list"})
-            return
-        cwd = payload.get("cwd")
-        timeout_ms = payload.get("timeoutMs")
-        job_id = uuid.uuid4().hex
-        with _lock:
-            _jobs[job_id] = {
-                "status": "queued",
-                "stdout": "",
-                "stderr": "",
-                "created": time.time(),
-            }
-        threading.Thread(
-            target=_run_job,
-            args=(job_id, list(argv), cwd if isinstance(cwd, str) else None, timeout_ms if isinstance(timeout_ms, int) else None),
-            daemon=True,
-        ).start()
-        self._json(200, {"jobId": job_id})
+            length = int(self.headers.get('Content-Length', '0'))
+            if not 0 < length <= 65_536: raise ValueError()
+            payload = json.loads(self.rfile.read(length))
+            argv = payload.get('argv')
+            if not isinstance(argv, list) or not 1 <= len(argv) <= 128: raise ValueError()
+            if not all(isinstance(x, str) and len(x) <= 32_768 and '\0' not in x for x in argv): raise ValueError()
+            timeout = payload.get('timeoutMs', 30_000)
+            if type(timeout) is not int or not 1 <= timeout <= 120_000: raise ValueError()
+            cwd = Path(payload.get('cwd') or WORK).resolve()
+            if not cwd.is_dir(): raise ValueError()
+        except (ValueError, TypeError, AttributeError):
+            self.reply(400, {'error': 'Invalid argv, directory, timeout or payload size'}); return
+        with LOCK:
+            active = sum(j['status'] in ('queued', 'running') for j in JOBS.values())
+            if active >= MAX_ACTIVE:
+                self.reply(429, {'error': 'Computer is busy'}); return
+            if len(JOBS) >= MAX_JOBS:
+                completed = next((k for k, j in JOBS.items() if j['status'] not in ('queued', 'running')), None)
+                if completed: JOBS.pop(completed)
+            job_id = uuid.uuid4().hex
+            JOBS[job_id] = dict(status='queued', stdout='', stderr='', created=time.time())
+        threading.Thread(target=run_job, args=(job_id, argv, str(cwd), timeout), daemon=True).start()
+        self.reply(200, {'jobId': job_id})
 
 
-def main() -> None:
-    httpd = ThreadingHTTPServer((HOST, PORT), Handler)
-    print(f"meow-computer worker on http://{HOST}:{PORT} workspace={WORK}", flush=True)
-    httpd.serve_forever()
+def main():
+    if len(TOKEN) < 24:
+        raise SystemExit('Set a Computer worker token of at least 24 characters; refusing unauthenticated execution')
+    WORK.mkdir(parents=True, exist_ok=True)
+    server = ThreadingHTTPServer((HOST, PORT), Handler)
+    server.serve_forever()
 
-
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__': main()
 PY
   chmod +x "$worker"
   log "worker stub written: $worker"
@@ -312,7 +310,7 @@ services:
       MEOW_COMPUTER_PORT: "$MEOW_COMPUTER_PORT"
     command: ["python3", "/opt/meow-computer/bin/meow-computer-worker.py"]
     ports:
-      - "$MEOW_COMPUTER_PORT:$MEOW_COMPUTER_PORT"
+      - "$MEOW_COMPUTER_HOST:$MEOW_COMPUTER_PORT:$MEOW_COMPUTER_PORT"
     restart: unless-stopped
 COMPOSE
   log "docker-compose.yml written"
@@ -343,7 +341,7 @@ JSON
 
 # --- main ---
 log "install begin"
-if have_cmd apt-get; then
+if [[ "${MEOW_COMPUTER_WORKER_ONLY:-0}" != "1" ]] && have_cmd apt-get; then
   install_pkgs_apt
   install_desktop_optional
 else
@@ -361,7 +359,7 @@ PROBE_URL="$HEALTH_URL"
 if [[ "$MEOW_COMPUTER_HOST" == "0.0.0.0" ]]; then
   PROBE_URL="http://127.0.0.1:${MEOW_COMPUTER_PORT}/health"
 fi
-if ! curl -fsS --max-time 2 "$PROBE_URL" >/dev/null 2>&1; then
+if ! probe_worker; then
   nohup env MEOW_COMPUTER_HOME="$WORKSPACE" \
     MEOW_COMPUTER_HOST="$MEOW_COMPUTER_HOST" \
     MEOW_COMPUTER_PORT="$MEOW_COMPUTER_PORT" \
@@ -371,7 +369,7 @@ if ! curl -fsS --max-time 2 "$PROBE_URL" >/dev/null 2>&1; then
   sleep 1
 fi
 
-if curl -fsS --max-time 3 "$PROBE_URL"; then
+if probe_worker; then
   echo
   log "READY — health OK at $PROBE_URL"
   if [[ "$MEOW_COMPUTER_HOST" == "127.0.0.1" || "$MEOW_COMPUTER_HOST" == "localhost" ]]; then
@@ -380,4 +378,5 @@ if curl -fsS --max-time 3 "$PROBE_URL"; then
 else
   warn "worker not responding yet; start: MEOW_COMPUTER_HOST=$MEOW_COMPUTER_HOST MEOW_COMPUTER_PORT=$MEOW_COMPUTER_PORT python3 $WORKSPACE/bin/meow-computer-worker.py"
 fi
+log "Worker requires its private .worker-token in an HTTP profile; SSH profiles use SSH credentials."
 log "install complete workspace=$WORKSPACE"
