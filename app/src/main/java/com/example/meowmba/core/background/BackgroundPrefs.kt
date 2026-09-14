@@ -69,12 +69,17 @@ enum class BackgroundAnimation(
     CARTOON_GALLEY("cartoon_galley", "Cartoon space galley", isPetEnvironment = true),
     CARTOON_SNACK_LAB("cartoon_snack_lab", "Cartoon snack lab", isPetEnvironment = true),
     CARTOON_LAUNDROMAT("cartoon_laundromat", "Cosmic laundry", isPetEnvironment = true),
-    CARTOON_DINER("cartoon_diner", "Oddball diner", isPetEnvironment = true);
+    CARTOON_DINER("cartoon_diner", "Oddball diner", isPetEnvironment = true),
+    CARTOON_PORTAL_ARCADE("cartoon_portal_arcade", "Portal arcade", isPetEnvironment = true),
+    CARTOON_MOON_GARDEN("cartoon_moon_garden", "Moon garden", isPetEnvironment = true),
+    CARTOON_ALIEN_AQUARIUM("cartoon_alien_aquarium", "Alien aquarium", isPetEnvironment = true),
+    CARTOON_METEOR_GARAGE("cartoon_meteor_garage", "Meteor garage", isPetEnvironment = true);
 
     /** Picker grouping is independent of the stable IDs already stored on the phone. */
     val isCartoonEnvironment: Boolean
         get() = when (this) {
-            CARTOON_NOOK, CARTOON_GALLEY, CARTOON_SNACK_LAB, CARTOON_LAUNDROMAT, CARTOON_DINER -> true
+            CARTOON_NOOK, CARTOON_GALLEY, CARTOON_SNACK_LAB, CARTOON_LAUNDROMAT, CARTOON_DINER,
+            CARTOON_PORTAL_ARCADE, CARTOON_MOON_GARDEN, CARTOON_ALIEN_AQUARIUM, CARTOON_METEOR_GARAGE -> true
             else -> false
         }
 

@@ -2,6 +2,8 @@ package com.example.meowmba
 
 import androidx.compose.ui.geometry.Offset
 import com.example.meowmba.ui.companion.*
+import com.example.meowmba.core.background.BackgroundAnimation
+import com.example.meowmba.core.background.BackgroundSelection
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -9,6 +11,44 @@ class CartoonHabitatGagTest {
     private val width = 800f
     private val height = 360f
     private val at = cartoonGagLayout(width, height)!!.center
+
+    @Test fun allFourSpaceHabitatsPersistAndExposeTheirOwnNamedToy() {
+        val rooms = listOf(
+            BackgroundAnimation.CARTOON_PORTAL_ARCADE to CartoonGagKind.PORTAL,
+            BackgroundAnimation.CARTOON_MOON_GARDEN to CartoonGagKind.MOONFLOWER,
+            BackgroundAnimation.CARTOON_ALIEN_AQUARIUM to CartoonGagKind.PERISCOPE,
+            BackgroundAnimation.CARTOON_METEOR_GARAGE to CartoonGagKind.ROCKET,
+        )
+        rooms.forEach { (room, toy) ->
+            assertTrue(room.isPetEnvironment && room.isCartoonEnvironment)
+            assertEquals(room, BackgroundSelection.parse("ANIMATION", room.id, "47").animation)
+            assertEquals(toy, CartoonGagKind.forBackground(room.id))
+            assertTrue(toy.description.contains("tap", ignoreCase = true))
+        }
+        assertEquals(4, rooms.map { it.second.description }.toSet().size)
+        assertNull(CartoonGagKind.forBackground("missing-room"))
+    }
+
+    @Test fun everyNewMachineReplaysFromOneClockAndRetainsForegroundOwnership() {
+        for (kind in listOf(CartoonGagKind.PORTAL, CartoonGagKind.MOONFLOWER, CartoonGagKind.PERISCOPE, CartoonGagKind.ROCKET)) {
+            val first = CartoonHabitatGag(kind)
+            val replay = CartoonHabitatGag(kind)
+            assertFalse(tap(first, active = false))
+            assertFalse(tap(first, avatar = true))
+            assertFalse(tap(first, prop = true))
+            assertEquals(CartoonGagPose(), first.pose(.4f))
+            assertTrue(tap(first, clock = 7f)); assertTrue(tap(replay, clock = 7f))
+            for (i in 0..200) {
+                val time = 7f + i / 100f
+                assertEquals("Deterministic $kind", first.pose(time), replay.pose(time))
+            }
+            val paused = first.pose(7.4f)
+            assertTrue(paused.lift > 0f)
+            repeat(120) { assertEquals(paused, first.pose(7.4f)) }
+            assertEquals(CartoonGagPose(), first.pose(7.4f, reducedMotion = true))
+            assertEquals(CartoonGagPose(), first.pose(9f))
+        }
+    }
 
     private fun tap(gag: CartoonHabitatGag, clock: Float = 0f, point: Offset = at,
         active: Boolean = true, avatar: Boolean = false, prop: Boolean = false) =

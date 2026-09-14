@@ -1,5 +1,15 @@
 # Agent execution plan — immersive companion revision
 
+## September 13: Build 117 play worlds and app drawer
+
+Four new original illustrated cartoon habitats (Portal Arcade, Moon Garden,
+Alien Aquarium, Meteor Garage) add bounded play toys, ambient motion and native
+3D room counterparts. The drawer uses the shared cartoon theme, clear Avatar
+navigation, adaptive favorites and folder tools. Web searches target the actual
+Google app; local app matching, Meow, phone tasks and microphone input remain.
+Native UI/render/interaction tests and signed package validation are running on
+Meow. Read [MEOW_BUILD_117_PASS_DOWN.md](characters/MEOW_BUILD_117_PASS_DOWN.md).
+
 ## September 13: Build 116 Office helper forms
 
 Clippy and The Wizard are selectable Lumen forms, using native vector art and

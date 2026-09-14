@@ -89,6 +89,12 @@ internal fun illustratedSourceTableAnchor(animation: BackgroundAnimation): Float
     BackgroundAnimation.CARTOON_SNACK_LAB -> 679f / 1024f
     BackgroundAnimation.CARTOON_LAUNDROMAT -> 685f / 1024f
     BackgroundAnimation.CARTOON_DINER -> 664f / 1024f
+    // Build 117 source artwork is square; the final measured contact anchors are
+    // verified against the shipped PNGs by the integration build.
+    BackgroundAnimation.CARTOON_PORTAL_ARCADE -> 758f / 1254f
+    BackgroundAnimation.CARTOON_MOON_GARDEN -> 833f / 1254f
+    BackgroundAnimation.CARTOON_ALIEN_AQUARIUM -> 753f / 1254f
+    BackgroundAnimation.CARTOON_METEOR_GARAGE -> 850f / 1254f
     else -> .69f
 }
 

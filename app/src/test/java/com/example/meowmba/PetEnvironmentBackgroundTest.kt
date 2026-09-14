@@ -34,9 +34,9 @@ class PetEnvironmentBackgroundTest {
         return bitmap
     }
 
-    @Test fun allFifteenEnvironmentsRoundTripAndAreDistinct() {
-        assertEquals(15, entries.size)
-        assertEquals(5, entries.count { it.isCartoonEnvironment })
+    @Test fun allNineteenEnvironmentsRoundTripAndAreDistinct() {
+        assertEquals(19, entries.size)
+        assertEquals(9, entries.count { it.isCartoonEnvironment })
         assertEquals(.78f, PET_ENVIRONMENT_TABLE_Y, 0f)
         val samples = entries.map { animation ->
             assertNull(animation.condition)

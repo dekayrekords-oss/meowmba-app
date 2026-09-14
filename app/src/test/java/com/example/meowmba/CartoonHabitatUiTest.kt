@@ -174,7 +174,7 @@ class CartoonHabitatUiTest {
         rule.waitForIdle()
         val bitmap = captureWindow()
         try {
-            File("build/reports/cartoon113/$name.png").apply { parentFile.mkdirs() }.outputStream().use {
+            File("build/reports/cartoon117/$name.png").apply { parentFile.mkdirs() }.outputStream().use {
                 bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
             }
         } finally { bitmap.recycle() }
@@ -182,6 +182,8 @@ class CartoonHabitatUiTest {
 
     private fun newToy(room: BackgroundAnimation) = CartoonHabitatGag(requireNotNull(CartoonGagKind.forBackground(room.id)))
 
-    private val rooms = listOf(BackgroundAnimation.CARTOON_SNACK_LAB,
+    private val rooms = listOf(BackgroundAnimation.CARTOON_PORTAL_ARCADE,
+        BackgroundAnimation.CARTOON_MOON_GARDEN, BackgroundAnimation.CARTOON_ALIEN_AQUARIUM,
+        BackgroundAnimation.CARTOON_METEOR_GARAGE, BackgroundAnimation.CARTOON_SNACK_LAB,
         BackgroundAnimation.CARTOON_LAUNDROMAT, BackgroundAnimation.CARTOON_DINER)
 }

@@ -164,8 +164,12 @@ fun BackgroundScreen(
                     }
                 }
                 else -> {
-                    SetupSection("Cartoon worlds", "Tap the spring toys in the three new rooms to surprise your companion. Care is optional.")
+                    SetupSection("Cartoon worlds", "Play with a portal, wake a moonflower, blow alien bubbles or launch a tiny rocket. Tap the toy at the left of each room. Care is optional.")
                     BackgroundChoiceGrid(listOf(
+                        BackgroundAnimation.CARTOON_PORTAL_ARCADE,
+                        BackgroundAnimation.CARTOON_MOON_GARDEN,
+                        BackgroundAnimation.CARTOON_ALIEN_AQUARIUM,
+                        BackgroundAnimation.CARTOON_METEOR_GARAGE,
                         BackgroundAnimation.CARTOON_SNACK_LAB,
                         BackgroundAnimation.CARTOON_LAUNDROMAT,
                         BackgroundAnimation.CARTOON_DINER,

@@ -14,18 +14,27 @@ import androidx.compose.ui.graphics.drawscope.translate
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.hypot
+import kotlin.math.cos
 import kotlin.math.sin
 
 internal enum class CartoonGagKind(val description: String) {
     JELLY("Spring jelly toy: tap to play"),
     SOCK("Runaway sock toy: tap to play"),
-    PANCAKE("Pancake launcher: tap to play");
+    PANCAKE("Pancake launcher: tap to play"),
+    PORTAL("Pocket portal: tap to spin a tiny planet"),
+    MOONFLOWER("Sleepy moonflower: tap to wake and play"),
+    PERISCOPE("Bubble periscope: tap to blow alien bubbles"),
+    ROCKET("Pocket rocket: tap to launch and play");
 
     companion object {
         fun forBackground(id: String): CartoonGagKind? = when (id) {
             "cartoon_snack_lab" -> JELLY
             "cartoon_laundromat" -> SOCK
             "cartoon_diner" -> PANCAKE
+            "cartoon_portal_arcade" -> PORTAL
+            "cartoon_moon_garden" -> MOONFLOWER
+            "cartoon_alien_aquarium" -> PERISCOPE
+            "cartoon_meteor_garage" -> ROCKET
             else -> null
         }
     }
@@ -103,6 +112,12 @@ internal class CartoonHabitatGag(private val kind: CartoonGagKind) {
                 drawCircle(ink, .21f, Offset(0f, 1.23f), style = Stroke(.05f))
                 drawLine(ink, Offset(-.09f, 1.23f), Offset(.09f, 1.23f), .045f, StrokeCap.Round)
                 drawLine(ink, Offset(0f, 1.14f), Offset(0f, 1.32f), .045f, StrokeCap.Round)
+                if (kind == CartoonGagKind.PORTAL || kind == CartoonGagKind.PERISCOPE) {
+                    // These two machines remain planted; only their portal/bubble contents
+                    // respond. Moonflower and rocket use the spring/launch silhouette.
+                    if (kind == CartoonGagKind.PORTAL) portal(pose) else periscope(pose)
+                    return@scale
+                }
                 path.reset()
                 path.moveTo(0f, .97f)
                 repeat(6) { i ->
@@ -117,6 +132,9 @@ internal class CartoonHabitatGag(private val kind: CartoonGagKind) {
                                 CartoonGagKind.JELLY -> jelly(pose.lift)
                                 CartoonGagKind.SOCK -> sock(pose.lift)
                                 CartoonGagKind.PANCAKE -> pancake(pose.lift)
+                                CartoonGagKind.MOONFLOWER -> moonflower(pose)
+                                CartoonGagKind.ROCKET -> rocket(pose)
+                                else -> Unit
                             }
                         }
                     }
@@ -184,6 +202,82 @@ internal class CartoonHabitatGag(private val kind: CartoonGagKind) {
             drawRoundRect(ink, Offset(-.28f, -.92f), Size(.62f, .33f), CornerRadius(.055f), style = Stroke(.06f))
         }
         face(-.21f, excited)
+    }
+
+    private fun DrawScope.portal(pose: CartoonGagPose) {
+        drawOval(ink, Offset(-1.03f, -1.15f), Size(2.06f, 2.13f))
+        drawOval(Color(0xFFA7CF95), Offset(-.91f, -1.04f), Size(1.82f, 1.90f))
+        drawOval(ink, Offset(-.70f, -.84f), Size(1.40f, 1.50f))
+        drawOval(Color(0xFF487D78), Offset(-.62f, -.76f), Size(1.24f, 1.34f))
+        rotate(pose.lift * 125f + pose.lean, Offset(0f, -.12f)) {
+            repeat(3) { i ->
+                drawArc(Color(0xFFC5EB9A), i * 120f, 72f, false,
+                    Offset(-.48f, -.63f), Size(.96f, 1.03f), style = Stroke(.11f, cap = StrokeCap.Round))
+            }
+            drawCircle(cream, .23f, Offset(0f, -.12f))
+            drawOval(Color(0xFFDE9CBA), Offset(-.36f, -.18f), Size(.72f, .13f), style = Stroke(.07f))
+            drawCircle(ink, .038f, Offset(-.06f, -.16f)); drawCircle(ink, .038f, Offset(.06f, -.16f))
+        }
+        // Three raised studs, rather than a field of particles.
+        repeat(3) { i -> drawCircle(cream, .07f, Offset((i - 1) * .48f, .75f)) }
+    }
+
+    private fun DrawScope.moonflower(pose: CartoonGagPose) {
+        val awake = pose.lift > .08f
+        repeat(6) { i ->
+            val angle = i * PI.toFloat() / 3f
+            val center = Offset(cos(angle) * .62f, -.27f + sin(angle) * .62f)
+            drawOval(Color(0xFFD49CBC), center - Offset(.32f, .32f), Size(.64f, .64f))
+            drawOval(ink, center - Offset(.32f, .32f), Size(.64f, .64f), style = Stroke(.075f))
+        }
+        drawCircle(cream, .46f, Offset(0f, -.27f))
+        drawCircle(ink, .46f, Offset(0f, -.27f), style = Stroke(.075f))
+        for (side in intArrayOf(-1, 1)) {
+            if (awake) drawOval(ink, Offset(side * .15f - .045f, -.41f), Size(.09f, .17f))
+            else drawArc(ink, 5f, 170f, false, Offset(side * .15f - .10f, -.40f), Size(.20f, .11f), style = Stroke(.05f))
+        }
+        drawArc(ink, 7f, 166f, false, Offset(-.13f, -.22f), Size(.26f, .17f), style = Stroke(.05f))
+        drawOval(Color(0xFF95C283), Offset(-.74f, .30f), Size(.60f, .25f))
+        drawOval(Color(0xFF95C283), Offset(.14f, .30f), Size(.60f, .25f))
+    }
+
+    private fun DrawScope.periscope(pose: CartoonGagPose) {
+        path.reset(); path.moveTo(-.18f, .92f); path.lineTo(-.18f, -.49f)
+        path.quadraticBezierTo(-.18f, -.80f, .15f, -.80f); path.lineTo(.66f, -.80f)
+        drawPath(path, ink, style = Stroke(.57f, cap = StrokeCap.Round))
+        drawPath(path, Color(0xFF91C8C2), style = Stroke(.41f, cap = StrokeCap.Round))
+        drawOval(cream, Offset(.39f, -1.13f), Size(.51f, .66f))
+        drawOval(ink, Offset(.39f, -1.13f), Size(.51f, .66f), style = Stroke(.08f))
+        drawOval(Color(0xFF417C95), Offset(.49f, -1.01f), Size(.28f, .42f))
+        drawCircle(cream, .08f, Offset(.59f, -.90f))
+        drawRoundRect(Color(0xFFE8BC89), Offset(-.62f, .40f), Size(.86f, .30f), CornerRadius(.08f))
+        drawRoundRect(ink, Offset(-.62f, .40f), Size(.86f, .30f), CornerRadius(.08f), style = Stroke(.06f))
+        if (pose.lift > .04f) repeat(3) { i ->
+            val rise = pose.lift * (.43f + i * .18f)
+            val center = Offset(.57f - i * .36f, -1.24f - rise)
+            val radius = .13f + i * .028f
+            drawCircle(Color(0xFFBCECDC).copy(alpha = .75f), radius, center)
+            drawCircle(ink, radius, center, style = Stroke(.042f))
+            drawCircle(cream, radius * .25f, center + Offset(-.04f, -.05f))
+        }
+    }
+
+    private fun DrawScope.rocket(pose: CartoonGagPose) {
+        if (pose.lift > .05f) {
+            path.reset(); path.moveTo(-.23f, .36f); path.lineTo(0f, .83f + pose.burst * .42f)
+            path.lineTo(.23f, .36f); path.close()
+            drawPath(path, Color(0xFFFFCD6F)); drawPath(path, ink, style = Stroke(.06f))
+        }
+        path.reset(); path.moveTo(-.36f, -.18f); path.lineTo(-.83f, .45f)
+        path.lineTo(-.27f, .30f); path.lineTo(.27f, .30f); path.lineTo(.83f, .45f)
+        path.lineTo(.36f, -.18f); path.close()
+        drawPath(path, Color(0xFFC48FAD)); drawPath(path, ink, style = Stroke(.075f))
+        drawOval(Color(0xFFE6CBA0), Offset(-.40f, -1.15f), Size(.80f, 1.56f))
+        drawOval(ink, Offset(-.40f, -1.15f), Size(.80f, 1.56f), style = Stroke(.075f))
+        drawCircle(ink, .28f, Offset(0f, -.43f))
+        drawCircle(Color(0xFF92D1C2), .21f, Offset(0f, -.43f))
+        drawCircle(cream, .065f, Offset(-.055f, -.49f))
+        drawLine(ink, Offset(-.26f, .25f), Offset(.26f, .25f), .09f)
     }
 
     companion object { const val DURATION = 1.8f }

@@ -8402,8 +8402,11 @@ class CompanionViewModel(
     fun searchDrawerQuery(query: String) {
         val q = query.trim()
         if (q.isBlank()) return
-        closeOverlays()
-        showSearchInBrowser(q)
+        val result = GoogleAppSearch.launch(secureStorage?.context, q)
+        if (result == GoogleAppSearch.Result.OPENED) closeOverlays()
+        // On failure the drawer and its query remain in place. Its answer card
+        // explains how to restore Google instead of silently opening Chrome.
+        _uiState.value = _uiState.value.copy(captionText = result.message)
     }
 
     fun deleteMessage(id: Long) {

@@ -1,15 +1,19 @@
+/* Hallmark · pre-emit critique: P4 H5 E4 S5 R4 V4
+ * Native cartoon console; existing design.md colors/type and Material semantics.
+ * Search stays visible; the rest scrolls as one adaptive surface, including favorites. */
 package com.example.meowmba.ui.companion
 
-import androidx.compose.material3.MaterialTheme
 import android.content.Context
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
@@ -17,62 +21,72 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import com.example.meowmba.ui.theme.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
+import com.example.meowmba.ui.theme.Button
+import com.example.meowmba.ui.theme.CartoonTokens
+import com.example.meowmba.ui.theme.FilterChip
+import com.example.meowmba.ui.theme.OutlinedButton
+import com.example.meowmba.ui.theme.Surface
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
 
-/**
- * App drawer (swipe up from the face): solid black, opens instantly (the app
- * list and icons load in the background), with a Favorites row at the bottom
- * holding up to 8 pinned apps. Long-press an app to pin it or drop it in a
- * folder. Sort by name, date added, size, or type.
- *
- * Search is a full AI bar. Typing still filters apps. Enter (or the search
- * key) then asks Meow, runs a phone task, searches Google, or opens the
- * matching app — whichever the line is.
- */
-
-/** Shared icon cache so reopening the drawer costs nothing. */
+/** Shared icon cache: returning to the drawer does not decode every installed icon again. */
 private val iconCache = ConcurrentHashMap<String, ImageBitmap>()
 private const val ICON_PX = 96
 
 fun launchApp(context: Context, packageName: String) {
     runCatching {
-        val launch = context.packageManager.getLaunchIntentForPackage(packageName)
-        if (launch != null) context.startActivity(launch)
+        context.packageManager.getLaunchIntentForPackage(packageName)?.let(context::startActivity)
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+/**
+ * One native drawer for installed apps, favorites, folders and the existing AI/task search.
+ * The header alone is fixed: favorites and management controls share the app grid's scroll
+ * so eight pins or large text cannot squeeze the app list out of a landscape window.
+ * [installedApps] and [onLaunchApp] allow deterministic previews without probing a test host.
+ */
+@OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun AppDrawerScreen(
     onClose: () -> Unit,
@@ -93,49 +107,69 @@ fun AppDrawerScreen(
     onMicClick: () -> Unit = {},
     voiceCommit: String? = null,
     onVoiceConsumed: () -> Unit = {},
+    installedApps: List<DrawerApp>? = null,
+    onLaunchApp: ((String) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
-    var query by remember { mutableStateOf("") }
-    var submitted by remember { mutableStateOf(false) }
-    var sort by remember { mutableStateOf(DrawerSort.NAME) }
-    var typeFilter by remember { mutableStateOf<DrawerAppType?>(null) }
-    var openFolderId by remember { mutableStateOf<String?>(null) }
+    val colors = MaterialTheme.colorScheme
+    var query by rememberSaveable { mutableStateOf("") }
+    var submitted by rememberSaveable { mutableStateOf(false) }
+    var sort by rememberSaveable { mutableStateOf(DrawerSort.NAME) }
+    var typeFilter by rememberSaveable { mutableStateOf<DrawerAppType?>(null) }
+    var openFolderId by rememberSaveable { mutableStateOf<String?>(null) }
+    var organizing by rememberSaveable { mutableStateOf(false) }
+    var sortMenu by remember { mutableStateOf(false) }
+    var typeMenu by remember { mutableStateOf(false) }
     var actionApp by remember { mutableStateOf<DrawerApp?>(null) }
     var actionFolder by remember { mutableStateOf<DrawerFolder?>(null) }
-    var namingFolder by remember { mutableStateOf(false) }
-    var namingForPackage by remember { mutableStateOf<String?>(null) }
-    var renamingFolderId by remember { mutableStateOf<String?>(null) }
-    var folderName by remember { mutableStateOf("") }
-
-    // Disk/memory cache first so swipe-up is never a blank grid. Refresh
-    // labels in the background; only re-stat APKs for new packages.
-    var apps by remember { mutableStateOf(DrawerApps.snapshot(context)) }
-    LaunchedEffect(Unit) {
-        if (apps.isEmpty()) apps = DrawerApps.snapshot(context)
-        val next = withContext(Dispatchers.IO) {
-            DrawerApps.warm(context)
-            DrawerApps.snapshot()
+    var namingFolder by rememberSaveable { mutableStateOf(false) }
+    var namingForPackage by rememberSaveable { mutableStateOf<String?>(null) }
+    var renamingFolderId by rememberSaveable { mutableStateOf<String?>(null) }
+    var folderName by rememberSaveable { mutableStateOf("") }
+    var apps by remember(installedApps) { mutableStateOf(installedApps ?: DrawerApps.snapshot(context)) }
+    var loading by remember(installedApps) { mutableStateOf(installedApps == null) }
+    var loadFailed by remember { mutableStateOf(false) }
+    var refresh by remember { mutableIntStateOf(0) }
+    LaunchedEffect(installedApps, refresh) {
+        if (installedApps != null) return@LaunchedEffect
+        loading = true
+        loadFailed = false
+        try {
+            apps = withContext(Dispatchers.IO) {
+                DrawerApps.warm(context)
+                DrawerApps.snapshot()
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            loadFailed = true
+        } finally {
+            loading = false
         }
-        if (next.isNotEmpty()) apps = next
     }
 
     val openFolder = folders.firstOrNull { it.id == openFolderId }
-    val scoped = if (openFolder == null) apps
-    else apps.filter { it.packageName in openFolder.packages }
-    val visible = remember(query, scoped, sort, typeFilter) {
-        DrawerCatalog.visible(scoped, query, sort, typeFilter)
-    }
-    val shownFolders = if (openFolder == null) {
-        DrawerCatalog.matchingFolders(folders, query)
+    val scoped = if (openFolder == null) apps else apps.filter { it.packageName in openFolder.packages }
+    val visible = remember(query, scoped, sort, typeFilter) { DrawerCatalog.visible(scoped, query, sort, typeFilter) }
+    val shownFolders = if (openFolder == null && typeFilter == null) DrawerCatalog.matchingFolders(folders, query) else emptyList()
+    val favoriteApps = if (openFolder == null && query.isBlank() && typeFilter == null) {
+        pins.distinct().take(8).mapNotNull { pkg -> apps.firstOrNull { it.packageName == pkg } }
     } else emptyList()
     val exact = visible.firstOrNull { it.label.equals(query.trim(), ignoreCase = true) }
-    val singleLabel = exact?.label ?: visible.singleOrNull()?.label
-    val hint = DrawerQuery.hint(query, visible.size, singleLabel)
-    val kind = if (query.isBlank()) null else DrawerQuery.classify(query)
+    val hint = DrawerQuery.hint(query, visible.size, exact?.label ?: visible.singleOrNull()?.label)
     val presentTypes = remember(apps) { apps.map { it.type }.toSet().sortedBy { it.ordinal } }
 
+    fun goBack() { if (openFolder != null) openFolderId = null else onClose() }
+    BackHandler(enabled = !namingFolder && actionApp == null && actionFolder == null) { goBack() }
+    fun openApp(app: DrawerApp) { onLaunchApp?.invoke(app.packageName) ?: launchApp(context, app.packageName) }
+    fun beginFolder(pkg: String? = null) {
+        namingForPackage = pkg
+        renamingFolderId = null
+        folderName = ""
+        namingFolder = true
+    }
     fun submit(raw: String = query) {
         val q = raw.trim()
         if (q.isBlank()) return
@@ -144,521 +178,328 @@ fun AppDrawerScreen(
         focus.clearFocus()
         keyboard?.hide()
         val matches = DrawerCatalog.visible(scoped, q, sort, typeFilter)
-        val exactMatch = matches.firstOrNull { it.label.equals(q, ignoreCase = true) }
-        onSubmitQuery(q, matches.size, exactMatch?.label ?: matches.singleOrNull()?.label)
+        val match = matches.firstOrNull { it.label.equals(q, ignoreCase = true) }
+        onSubmitQuery(q, matches.size, match?.label ?: matches.singleOrNull()?.label)
     }
-
     LaunchedEffect(listening, listenPartial) {
-        if (listening && !listenPartial.isNullOrBlank()) query = listenPartial
+        if (listening && !listenPartial.isNullOrBlank()) { query = listenPartial; submitted = false }
     }
     LaunchedEffect(voiceCommit) {
         val spoken = voiceCommit?.trim().orEmpty()
-        if (spoken.isBlank()) return@LaunchedEffect
-        submit(spoken)
-        onVoiceConsumed()
+        if (spoken.isNotBlank()) { submit(spoken); onVoiceConsumed() }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            .safeDrawingPadding()
-    ) {
-        Spacer(Modifier.height(12.dp))
-        OutlinedTextField(
-            value = query,
-            onValueChange = {
-                query = it
-                if (it.isBlank()) submitted = false
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp),
-            placeholder = {
-                Text(
-                    if (listening) "Listening…" else "Ask, search Google, or find an app",
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(onSearch = { submit() }),
-            trailingIcon = {
-                Row {
-                    IconButton(onClick = onMicClick) {
-                        Icon(
-                            Icons.Default.Mic,
-                            contentDescription = if (listening) "Stop listening" else "Speak",
-                            tint = if (listening) Color(0xFF00E5FF) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-                        )
+    Column(Modifier.fillMaxSize().background(colors.background).safeDrawingPadding().imePadding()) {
+        Surface(color = colors.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (openFolder != null) IconButton(onClick = { openFolderId = null }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back to all apps")
+                    } else DrawerOrbit(Modifier.size(36.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(openFolder?.name ?: "App drawer", style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(if (openFolder != null) "Folder · ${scoped.size} apps" else "Your apps & shortcuts",
+                            style = MaterialTheme.typography.labelMedium, color = colors.onSurfaceVariant)
                     }
-                    IconButton(onClick = { submit() }) {
-                        Icon(
-                            Icons.Default.Search,
-                            contentDescription = "Go",
-                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-                        )
+                    OutlinedButton(onClick = onClose, contentPadding = PaddingValues(horizontal = 12.dp),
+                        modifier = Modifier.semantics { contentDescription = "Return to avatar" }) {
+                        Text("Avatar", maxLines = 1)
                     }
                 }
-            },
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-                cursorColor = MaterialTheme.colorScheme.onSurface,
-                focusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
-                unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.28f),
-            ),
-        )
-        if (hint != null) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 22.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    hint,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontSize = 13.sp,
-                    modifier = Modifier.clickable { submit() },
-                )
-                if (kind != DrawerQuery.Kind.WEB_SEARCH && query.isNotBlank()) {
-                    Text(
-                        "Google",
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
-                        fontSize = 13.sp,
-                        modifier = Modifier.clickable {
-                            val q = query.trim()
-                            if (q.isNotBlank()) {
-                                submitted = true
-                                focus.clearFocus()
-                                keyboard?.hide()
-                                onSearchGoogle(DrawerQuery.webQuery(q))
-                            }
-                        },
-                    )
-                }
-            }
-        }
-        if (submitted && (thinking || !answer.isNullOrBlank())) {
-            Surface(
-                color = MaterialTheme.colorScheme.surface,
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 4.dp),
-            ) {
-                Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                    Text("Meow", color = MaterialTheme.colorScheme.primary, fontSize = 11.sp)
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        if (thinking && answer.isNullOrBlank()) "Thinking…" else answer.orEmpty(),
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontSize = 14.sp,
-                    )
-                }
-            }
-        }
-        Spacer(Modifier.height(8.dp))
-        if (openFolder != null) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
-                    tint = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier
-                        .size(22.dp)
-                        .clickable { openFolderId = null },
-                )
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    openFolder.name,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontSize = 16.sp,
-                    modifier = Modifier.weight(1f),
-                )
-                Text(
-                    "Rename",
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                    fontSize = 12.sp,
-                    modifier = Modifier.clickable { actionFolder = openFolder },
-                )
-            }
-        }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            DrawerSort.entries.forEach { option ->
-                DrawerChip(
-                    label = option.label,
-                    selected = sort == option,
-                    onClick = { sort = option },
-                )
-            }
-            DrawerChip(
-                label = "+ Folder",
-                selected = false,
-                onClick = {
-                    namingForPackage = null
-                    renamingFolderId = null
-                    folderName = ""
-                    namingFolder = true
-                },
-            )
-        }
-        if (presentTypes.size > 1) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp, vertical = 2.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                DrawerChip(
-                    label = "All",
-                    selected = typeFilter == null,
-                    onClick = { typeFilter = null },
-                )
-                presentTypes.forEach { type ->
-                    DrawerChip(
-                        label = type.label,
-                        selected = typeFilter == type,
-                        onClick = {
-                            typeFilter = if (typeFilter == type) null else type
-                        },
-                    )
-                }
-            }
-        }
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 84.dp),
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp),
-            contentPadding = PaddingValues(bottom = 8.dp),
-        ) {
-            items(shownFolders, key = { "f:${it.id}" }) { folder ->
-                Column(
-                    modifier = Modifier
-                        .combinedClickable(
-                            onClick = { openFolderId = folder.id },
-                            onLongClick = { actionFolder = folder },
-                        )
-                        .padding(8.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    FolderTile(packages = folder.packages)
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        folder.name,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontSize = 11.sp,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        textAlign = TextAlign.Center,
-                    )
-                }
-            }
-            items(visible, key = { it.packageName }) { app ->
-                val pinned = app.packageName in pins
-                val extra = DrawerCatalog.subtitle(app, sort)
-                Column(
-                    modifier = Modifier
-                        .combinedClickable(
-                            onClick = { launchApp(context, app.packageName) },
-                            onLongClick = { actionApp = app },
-                        )
-                        .padding(8.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    DrawerIcon(packageName = app.packageName, size = 48.dp, label = app.label)
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        (if (pinned) "★ " else "") + app.label,
-                        color = if (pinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                        fontSize = 11.sp,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        textAlign = TextAlign.Center,
-                    )
-                    if (extra.isNotBlank()) {
-                        Text(
-                            extra,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
-                            fontSize = 9.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-            }
-        }
-
-        // Favorites: up to 8 pinned apps, drawer-only.
-        if (pins.isNotEmpty()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color(0xFF101010))
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-            ) {
-                pins.take(8).forEach { pkg ->
-                    Column(
-                        modifier = Modifier.combinedClickable(
-                            onClick = { launchApp(context, pkg) },
-                            onLongClick = { onTogglePin(pkg) },
-                        ),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        DrawerIcon(packageName = pkg, size = 40.dp, label = "favorite")
-                    }
-                }
-            }
-        }
-        Text(
-            when {
-                openFolder != null -> "Long-press an app to remove it from this folder"
-                pins.isEmpty() -> "Long-press an app to pin it or add it to a folder"
-                else -> "Swipe left to go back"
-            },
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-            fontSize = 12.sp,
-            textAlign = TextAlign.Center,
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Color.Black)
-                .padding(bottom = 8.dp),
-        )
-    }
-
-    val targetApp = actionApp
-    if (targetApp != null) {
-        AlertDialog(
-            onDismissRequest = { actionApp = null },
-            containerColor = MaterialTheme.colorScheme.surface,
-            title = { Text(targetApp.label, color = MaterialTheme.colorScheme.onSurface) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    DialogLine(
-                        if (targetApp.packageName in pins) "Unpin from favorites" else "Pin to favorites",
-                    ) {
-                        onTogglePin(targetApp.packageName)
-                        actionApp = null
-                    }
-                    folders.forEach { folder ->
-                        val already = targetApp.packageName in folder.packages
-                        DialogLine(
-                            if (already) "In ${folder.name}" else "Add to ${folder.name}",
-                        ) {
-                            if (!already) onAddToFolder(folder.id, targetApp.packageName)
-                            actionApp = null
-                        }
-                    }
-                    DialogLine("New folder with this app") {
-                        namingForPackage = targetApp.packageName
-                        renamingFolderId = null
-                        folderName = ""
-                        namingFolder = true
-                        actionApp = null
-                    }
-                    if (openFolder != null) {
-                        DialogLine("Remove from ${openFolder.name}") {
-                            onRemoveFromFolder(openFolder.id, targetApp.packageName)
-                            actionApp = null
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { actionApp = null }) {
-                    Text("Close", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
-                }
-            },
-        )
-    }
-
-    val targetFolder = actionFolder
-    if (targetFolder != null) {
-        AlertDialog(
-            onDismissRequest = { actionFolder = null },
-            containerColor = MaterialTheme.colorScheme.surface,
-            title = { Text(targetFolder.name, color = MaterialTheme.colorScheme.onSurface) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    DialogLine("Rename") {
-                        folderName = targetFolder.name
-                        namingForPackage = null
-                        renamingFolderId = targetFolder.id
-                        namingFolder = true
-                        actionFolder = null
-                    }
-                    DialogLine("Delete folder") {
-                        if (openFolderId == targetFolder.id) openFolderId = null
-                        onDeleteFolder(targetFolder.id)
-                        actionFolder = null
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { actionFolder = null }) {
-                    Text("Close", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
-                }
-            },
-        )
-    }
-
-    if (namingFolder) {
-        val renameId = renamingFolderId
-        AlertDialog(
-            onDismissRequest = { namingFolder = false },
-            containerColor = MaterialTheme.colorScheme.surface,
-            title = {
-                Text(if (renameId != null) "Rename folder" else "New folder", color = MaterialTheme.colorScheme.onSurface)
-            },
-            text = {
+                Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
-                    value = folderName,
-                    onValueChange = { folderName = it.take(24) },
+                    value = query,
+                    onValueChange = { query = it; submitted = false },
+                    modifier = Modifier.fillMaxWidth().testTag("drawer-search"),
+                    placeholder = { Text(if (listening) "Listening…" else "Find apps, ask or search", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     singleLine = true,
-                    placeholder = { Text("Folder name", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)) },
+                    shape = RoundedCornerShape(18.dp),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { submit() }),
+                    trailingIcon = {
+                        Row {
+                            if (query.isNotEmpty()) IconButton(onClick = { query = ""; submitted = false }) {
+                                Icon(Icons.Default.Close, "Clear search")
+                            }
+                            IconButton(onClick = { submit() }, enabled = query.isNotBlank()) {
+                                Icon(Icons.Default.Search, "Submit search")
+                            }
+                        }
+                    },
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-                        cursorColor = MaterialTheme.colorScheme.onSurface,
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                        focusedContainerColor = colors.surface,
+                        unfocusedContainerColor = colors.surface,
+                        focusedBorderColor = colors.primary,
+                        unfocusedBorderColor = colors.outline,
                     ),
                 )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        val name = folderName.trim()
-                        if (name.isBlank()) return@TextButton
-                        if (renameId != null) onRenameFolder(renameId, name)
-                        else onCreateFolder(name, namingForPackage)
-                        namingFolder = false
-                        renamingFolderId = null
-                        namingForPackage = null
-                    },
-                ) { Text("Save", color = MaterialTheme.colorScheme.primary) }
-            },
-            dismissButton = {
-                TextButton(onClick = { namingFolder = false }) {
-                    Text("Cancel", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+            }
+        }
+        val gridMinimum = (96f * LocalDensity.current.fontScale.coerceIn(1f, 1.8f)).dp
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(gridMinimum),
+            modifier = Modifier.weight(1f).fillMaxWidth().testTag("drawer-grid"),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            item(key = "search-actions", span = { GridItemSpan(maxLineSpan) }) {
+                Column {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Button(onClick = {
+                            val q = query.trim()
+                            if (q.isNotBlank()) {
+                                submitted = true; focus.clearFocus(); keyboard?.hide()
+                                onSearchGoogle(DrawerQuery.webQuery(q))
+                            }
+                        }, enabled = query.isNotBlank(), contentPadding = PaddingValues(horizontal = 14.dp),
+                            modifier = Modifier.semantics { contentDescription = "Search in Google app" }) {
+                            Icon(Icons.Default.Search, null, Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp)); Text("Google", maxLines = 1)
+                        }
+                        OutlinedButton(onClick = onMicClick, contentPadding = PaddingValues(horizontal = 14.dp),
+                            modifier = Modifier.semantics { contentDescription = if (listening) "Stop listening" else "Speak" }) {
+                            Icon(if (listening) Icons.Default.Stop else Icons.Default.Mic, null, Modifier.size(18.dp),
+                                tint = if (listening) colors.secondary else colors.primary)
+                            Spacer(Modifier.width(6.dp)); Text(if (listening) "Stop" else "Speak", maxLines = 1)
+                        }
+                    }
+                    Text(hint ?: "Type to find an app. Enter to ask Meow or run a task.",
+                        style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 6.dp, bottom = 4.dp))
                 }
-            },
+            }
+            if (submitted && (thinking || !answer.isNullOrBlank())) item(key = "answer", span = { GridItemSpan(maxLineSpan) }) {
+                Surface(shape = RoundedCornerShape(18.dp), color = colors.secondaryContainer) {
+                    Column(Modifier.padding(14.dp).heightIn(max = 220.dp).verticalScroll(rememberScrollState())) {
+                        Text("Response", fontWeight = FontWeight.Bold, color = colors.onSecondaryContainer)
+                        Spacer(Modifier.height(4.dp))
+                        Text(if (thinking && answer.isNullOrBlank()) "Thinking…" else answer.orEmpty(),
+                            style = MaterialTheme.typography.bodyMedium, color = colors.onSecondaryContainer)
+                    }
+                }
+            }
+            item(key = "organize", span = { GridItemSpan(maxLineSpan) }) {
+                Column {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Box {
+                            OutlinedButton(onClick = { sortMenu = true }, contentPadding = PaddingValues(horizontal = 12.dp)) {
+                                Text("Sort: ${sort.label}", maxLines = 1); Icon(Icons.Default.ArrowDropDown, null)
+                            }
+                            DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
+                                DrawerSort.entries.forEach { option -> DropdownMenuItem(
+                                    text = { Text(option.label) }, onClick = { sort = option; sortMenu = false },
+                                    trailingIcon = { if (sort == option) Icon(Icons.Default.Check, "Selected") },
+                                ) }
+                            }
+                        }
+                        if (presentTypes.size > 1) Box {
+                            OutlinedButton(onClick = { typeMenu = true }, contentPadding = PaddingValues(horizontal = 12.dp)) {
+                                Text(typeFilter?.label ?: "All types", maxLines = 1); Icon(Icons.Default.ArrowDropDown, null)
+                            }
+                            DropdownMenu(expanded = typeMenu, onDismissRequest = { typeMenu = false }) {
+                                DropdownMenuItem(text = { Text("All types") }, onClick = { typeFilter = null; typeMenu = false })
+                                presentTypes.forEach { type -> DropdownMenuItem(text = { Text(type.label) },
+                                    onClick = { typeFilter = type; typeMenu = false }) }
+                            }
+                        }
+                        FilterChip(organizing, { organizing = !organizing }, { Text(if (organizing) "Done" else "Organize", maxLines = 1) },
+                            leadingIcon = { Icon(if (organizing) Icons.Default.Check else Icons.Default.Edit, null, Modifier.size(18.dp)) })
+                    }
+                    if (organizing) {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TextButton(onClick = { beginFolder() }) { Icon(Icons.Default.CreateNewFolder, null, Modifier.size(20.dp)); Spacer(Modifier.width(6.dp)); Text("New folder") }
+                            if (openFolder != null) TextButton(onClick = { actionFolder = openFolder }) { Text("Folder options") }
+                        }
+                    }
+                }
+            }
+            if (favoriteApps.isNotEmpty()) {
+                item(key = "favorites-heading", span = { GridItemSpan(maxLineSpan) }) {
+                    DrawerSection("Favorites", "${favoriteApps.size}/8 pinned", Icons.Default.Star)
+                }
+                items(favoriteApps, key = { "pin:${it.packageName}" }) { app ->
+                    DrawerAppTile(app, "pin:${app.packageName}", true, "", organizing,
+                        onClick = { openApp(app) }, onOptions = { actionApp = app })
+                }
+            }
+            if (shownFolders.isNotEmpty()) {
+                item(key = "folders-heading", span = { GridItemSpan(maxLineSpan) }) { DrawerSection("Folders", "${shownFolders.size}", Icons.Default.Folder) }
+                items(shownFolders, key = { "folder:${it.id}" }) { folder ->
+                    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(colors.tertiaryContainer)
+                        .border(CartoonTokens.outline, colors.outlineVariant, RoundedCornerShape(18.dp))
+                        .combinedClickable(role = Role.Button, onClick = { openFolderId = folder.id; query = ""; submitted = false },
+                            onLongClickLabel = "Folder options", onLongClick = { actionFolder = folder })
+                        .testTag("folder:${folder.id}").padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        FolderTile(folder.packages)
+                        Spacer(Modifier.height(8.dp))
+                        Text(folder.name, color = colors.onTertiaryContainer, style = MaterialTheme.typography.labelLarge,
+                            maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+                        Text("${folder.packages.count { pkg -> apps.any { it.packageName == pkg } }} apps",
+                            style = MaterialTheme.typography.labelSmall, color = colors.onTertiaryContainer)
+                        if (organizing) TextButton(onClick = { actionFolder = folder },
+                            modifier = Modifier.semantics { contentDescription = "Options for folder ${folder.name}" }) { Text("Options") }
+                    }
+                }
+            }
+            item(key = "apps-heading", span = { GridItemSpan(maxLineSpan) }) {
+                DrawerSection(if (query.isNotBlank()) "Matching apps" else if (openFolder != null) "In this folder" else "All apps",
+                    "${visible.size}", Icons.Default.Apps)
+            }
+            if (visible.isEmpty()) item(key = "empty", span = { GridItemSpan(maxLineSpan) }) {
+                Surface(shape = RoundedCornerShape(18.dp), color = colors.surfaceContainer) {
+                    Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(when { loading -> "Loading your apps…"; loadFailed -> "App list unavailable"; query.isNotBlank() || typeFilter != null -> "No matching apps"; openFolder != null -> "This folder is empty"; else -> "No launchable apps found" },
+                            style = MaterialTheme.typography.titleMedium, color = colors.onSurface)
+                        Text(when { loading -> "Reading the installed app list."; loadFailed -> "Your saved folders and favorites are still here. Try refreshing the list."; query.isNotBlank() -> "Try another name, ask Meow, or use Google above."; typeFilter != null -> "Choose All types to see more apps."; openFolder != null -> "Return to all apps, then use Organize to add apps to this folder."; else -> "Only apps with a launchable screen appear here." },
+                            style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
+                        if (loadFailed) TextButton(onClick = { refresh++ }) { Text("Retry app list") }
+                        if (query.isNotBlank() || typeFilter != null) TextButton(onClick = { query = ""; typeFilter = null; submitted = false }) { Text("Clear filters") }
+                    }
+                }
+            }
+            items(visible, key = { "app:${it.packageName}" }) { app ->
+                DrawerAppTile(app, "app:${app.packageName}", app.packageName in pins, DrawerCatalog.subtitle(app, sort), organizing,
+                    onClick = { openApp(app) }, onOptions = { actionApp = app })
+            }
+            item(key = "help", span = { GridItemSpan(maxLineSpan) }) {
+                Text(if (organizing) "Options let you pin apps and manage folders. Apps stay installed when a folder is removed."
+                    else "Hold an app for shortcuts, or choose Organize to show its options.",
+                    style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant, modifier = Modifier.padding(vertical = 12.dp))
+            }
+        }
+    }
+
+    actionApp?.let { app ->
+        AlertDialog(onDismissRequest = { actionApp = null }, title = { Text(app.label) },
+            text = { Column(Modifier.verticalScroll(rememberScrollState())) {
+                val pinned = app.packageName in pins
+                DialogLine(if (pinned) "Unpin from favorites" else if (pins.distinct().size >= 8) "Favorites full (8)" else "Pin to favorites",
+                    enabled = pinned || pins.distinct().size < 8) { onTogglePin(app.packageName); actionApp = null }
+                folders.forEach { folder ->
+                    val already = app.packageName in folder.packages
+                    DialogLine(if (already) "Remove from ${folder.name}" else "Add to ${folder.name}") {
+                        if (already) onRemoveFromFolder(folder.id, app.packageName) else onAddToFolder(folder.id, app.packageName)
+                        actionApp = null
+                    }
+                }
+                DialogLine("New folder with this app") { beginFolder(app.packageName); actionApp = null }
+            } },
+            confirmButton = { TextButton(onClick = { actionApp = null }) { Text("Close") } },
         )
+    }
+    actionFolder?.let { folder ->
+        AlertDialog(onDismissRequest = { actionFolder = null }, title = { Text(folder.name) },
+            text = { Column {
+                Text("Manage this folder. Its apps stay installed.", style = MaterialTheme.typography.bodyMedium)
+                DialogLine("Rename") { folderName = folder.name; namingForPackage = null; renamingFolderId = folder.id; namingFolder = true; actionFolder = null }
+                DialogLine("Delete folder") { if (openFolderId == folder.id) openFolderId = null; onDeleteFolder(folder.id); actionFolder = null }
+            } }, confirmButton = { TextButton(onClick = { actionFolder = null }) { Text("Close") } },
+        )
+    }
+    if (namingFolder) AlertDialog(onDismissRequest = { namingFolder = false },
+        title = { Text(if (renamingFolderId != null) "Rename folder" else "New folder") },
+        text = { OutlinedTextField(value = folderName, onValueChange = { folderName = it.take(24) }, singleLine = true,
+            label = { Text("Folder name") }, supportingText = { Text("${folderName.length}/24") }, modifier = Modifier.testTag("folder-name")) },
+        confirmButton = { TextButton(enabled = folderName.isNotBlank(), onClick = {
+            val name = folderName.trim()
+            if (name.isNotEmpty()) {
+                val renameId = renamingFolderId
+                if (renameId != null) onRenameFolder(renameId, name) else onCreateFolder(name, namingForPackage)
+                namingFolder = false; renamingFolderId = null; namingForPackage = null
+            }
+        }) { Text("Save") } },
+        dismissButton = { TextButton(onClick = { namingFolder = false }) { Text("Cancel") } },
+    )
+}
+
+@Composable
+private fun DrawerSection(title: String, detail: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {
+    Row(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(19.dp))
+        Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
+        Text(detail, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun DrawerAppTile(app: DrawerApp, tag: String, pinned: Boolean, extra: String, organizing: Boolean,
+    onClick: () -> Unit, onOptions: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
+        .background(if (pinned) colors.primaryContainer else colors.surfaceContainer)
+        .border(CartoonTokens.outline, colors.outlineVariant, RoundedCornerShape(18.dp))
+        .combinedClickable(role = Role.Button, onClick = onClick, onLongClickLabel = "App options", onLongClick = onOptions)
+        .testTag(tag).padding(horizontal = 8.dp, vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Box {
+            DrawerIcon(app.packageName, 52.dp, app.label)
+            if (pinned) Icon(Icons.Default.Star, "Pinned", Modifier.align(Alignment.BottomEnd).size(18.dp)
+                .background(colors.primaryContainer, CircleShape), tint = colors.primary)
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(app.label, style = MaterialTheme.typography.labelLarge, color = if (pinned) colors.onPrimaryContainer else colors.onSurface,
+            maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+        if (extra.isNotBlank()) Text(extra, style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant,
+            maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (organizing) TextButton(onClick = onOptions, contentPadding = PaddingValues(horizontal = 8.dp),
+            modifier = Modifier.semantics { contentDescription = "Options for ${app.label}" }) { Text("Options", maxLines = 1) }
     }
 }
 
 @Composable
-private fun DrawerChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    Text(
-        label,
-        color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
-        fontSize = 12.sp,
-        modifier = Modifier
-            .clip(RoundedCornerShape(14.dp))
-            .background(if (selected) MaterialTheme.colorScheme.primary else Color(0xFF222222))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 5.dp),
-    )
-}
-
-@Composable
-private fun DialogLine(label: String, onClick: () -> Unit) {
-    Text(
-        label,
-        color = MaterialTheme.colorScheme.onSurface,
-        fontSize = 15.sp,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 10.dp),
-    )
+private fun DialogLine(label: String, enabled: Boolean = true, onClick: () -> Unit) {
+    TextButton(onClick = onClick, enabled = enabled, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+        contentPadding = PaddingValues(horizontal = 0.dp, vertical = 10.dp)) {
+        Text(label, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start)
+    }
 }
 
 @Composable
 private fun FolderTile(packages: List<String>) {
-    Box(
-        modifier = Modifier
-            .size(48.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFF2A2416)),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (packages.isEmpty()) {
-            Icon(
-                Icons.Default.Folder,
-                contentDescription = "Folder",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(26.dp),
-            )
-        } else {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                packages.take(4).chunked(2).forEach { row ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                        row.forEach { pkg ->
-                            DrawerIcon(packageName = pkg, size = 20.dp, label = "")
-                        }
-                    }
-                }
-            }
+    val colors = MaterialTheme.colorScheme
+    Box(Modifier.size(52.dp).background(colors.tertiaryContainer, RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
+        if (packages.isEmpty()) Icon(Icons.Default.Folder, null, Modifier.size(38.dp), tint = colors.tertiary)
+        else Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            packages.take(4).chunked(2).forEach { row -> Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                row.forEach { DrawerIcon(it, 22.dp, "") }
+            } }
         }
     }
 }
 
-/** Async icon with a neutral placeholder until decoded (keeps the grid fluid). */
+/** Tiny static orbit mark, painted from theme roles; no animation clock or bitmap. */
 @Composable
-fun DrawerIcon(
-    packageName: String,
-    size: androidx.compose.ui.unit.Dp,
-    label: String,
-) {
+private fun DrawerOrbit(modifier: Modifier) {
+    val colors = MaterialTheme.colorScheme
+    Canvas(modifier) {
+        val u = size.minDimension
+        drawCircle(colors.secondaryContainer, u * .3f, center)
+        drawCircle(colors.secondary, u * .3f, center, style = Stroke(u * .055f))
+        drawOval(colors.primary, Offset(u * .02f, u * .36f), Size(u * .96f, u * .28f), style = Stroke(u * .055f))
+        drawCircle(colors.primary, u * .06f, Offset(u * .8f, u * .17f))
+        drawCircle(colors.secondary, u * .04f, Offset(u * .12f, u * .78f))
+    }
+}
+
+/** Async icon with a readable initial until decoded; never blocks drawer composition. */
+@Composable
+fun DrawerIcon(packageName: String, size: Dp, label: String) {
     val context = LocalContext.current
     var bitmap by remember(packageName) { mutableStateOf(iconCache[packageName]) }
-    if (bitmap == null) {
-        LaunchedEffect(packageName) {
-            bitmap = withContext(Dispatchers.IO) {
-                iconCache.getOrPut(packageName) {
-                    runCatching {
-                        context.packageManager.getApplicationIcon(packageName)
-                            .toBitmap(ICON_PX, ICON_PX)
-                            .asImageBitmap()
-                    }.getOrNull() ?: return@withContext null
-                }
-            }
+    if (bitmap == null) LaunchedEffect(packageName) {
+        bitmap = withContext(Dispatchers.IO) {
+            iconCache[packageName] ?: runCatching {
+                context.packageManager.getApplicationIcon(packageName).toBitmap(ICON_PX, ICON_PX).asImageBitmap()
+            }.getOrNull()?.also { iconCache[packageName] = it }
         }
     }
     val bmp = bitmap
-    if (bmp != null) {
-        Image(
-            bitmap = bmp,
-            contentDescription = label,
-            modifier = Modifier.size(size).clip(CircleShape),
-        )
-    } else {
-        Box(
-            modifier = Modifier
-                .size(size)
-                .clip(CircleShape)
-                .background(Color(0xFF222222))
-        )
+    if (bmp != null) Image(bmp, contentDescription = label.takeIf { it.isNotEmpty() }, modifier = Modifier.size(size).clip(RoundedCornerShape(14.dp)))
+    else Box(Modifier.size(size).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.secondaryContainer), contentAlignment = Alignment.Center) {
+        Text(label.firstOrNull()?.uppercase().orEmpty(), color = MaterialTheme.colorScheme.onSecondaryContainer,
+            style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
     }
 }

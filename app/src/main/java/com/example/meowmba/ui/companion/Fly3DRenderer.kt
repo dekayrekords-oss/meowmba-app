@@ -342,11 +342,19 @@ class Fly3DRenderer : GLSurfaceView.Renderer {
         val wall = when (f.backgroundId) {
             "cartoon_snack_lab" -> 0xB6DDD1
             "cartoon_laundromat" -> 0xD2C5E2
+            "cartoon_portal_arcade" -> 0x355563
+            "cartoon_moon_garden" -> 0x625977
+            "cartoon_alien_aquarium" -> 0x467F8D
+            "cartoon_meteor_garage" -> 0x958AA8
             else -> 0xF3E0A7
         }
         val floor = when (f.backgroundId) {
             "cartoon_snack_lab" -> 0xE9BC97
             "cartoon_laundromat" -> 0xA8CABE
+            "cartoon_portal_arcade" -> 0x8BAE96
+            "cartoon_moon_garden" -> 0xABA692
+            "cartoon_alien_aquarium" -> 0x92BEB6
+            "cartoon_meteor_garage" -> 0xC8AD8F
             else -> 0xD69A88
         }
         box(0f,-.10f,0f,18f,.10f,18f,floor,outline=false)
@@ -359,7 +367,101 @@ class Fly3DRenderer : GLSurfaceView.Renderer {
         when (f.backgroundId) {
             "cartoon_snack_lab" -> snackLabScenery()
             "cartoon_laundromat" -> laundryScenery()
+            "cartoon_portal_arcade", "cartoon_moon_garden", "cartoon_alien_aquarium",
+            "cartoon_meteor_garage" -> spaceHabitatScenery(f.backgroundId)
             else -> dinerScenery()
+        }
+    }
+
+    /** Volumetric counterparts to the four illustrated worlds. Reuse the six existing
+     * meshes, static bounded prop counts and one paused scene time. Decorative machines
+     * remain behind the simulation-owned table; the screen toy owns the play button.
+     */
+    private fun spaceHabitatScenery(id: String) {
+        val aquarium = id == "cartoon_alien_aquarium"
+        box(0f,3.13f,-2.43f,2.10f,1.37f,.065f,0x294452)
+        box(0f,3.13f,-2.34f,1.98f,1.25f,.025f,if(aquarium)0x2A7489 else 0x283C59,outline=false)
+        // Recessed moon and a sill: quiet center, clear depth cues at the room edges.
+        ellipsoid(1.37f,3.86f,-2.28f,.29f,.29f,.035f,0xE8D8A8,outline=false)
+        ellipsoid(1.44f,3.92f,-2.23f,.08f,.09f,.015f,0xBDAE97,outline=false)
+        box(0f,1.72f,-2.21f,2.20f,.060f,.15f,0x8FB4AA)
+        // Angled braces frame rather than subdivide the avatar's open airspace.
+        segment(-3.95f,.30f,-2.14f,-3.52f,4.40f,-2.14f,.10f,0xB0C4B1)
+        segment(3.95f,.30f,-2.14f,3.52f,4.40f,-2.14f,.10f,0xB0C4B1)
+        when(id) {
+            "cartoon_portal_arcade" -> {
+                box(-2.75f,1.12f,-1.94f,.58f,1.12f,.35f,0x8BA6A7)
+                ellipsoid(-2.75f,1.48f,-1.55f,.43f,.77f,.045f,0x182E40)
+                ellipsoid(-2.75f,1.48f,-1.49f,.36f,.69f,.025f,0xAAD68E)
+                ellipsoid(-2.75f,1.48f,-1.455f,.28f,.58f,.020f,0x437E76,outline=false)
+                push(); Matrix.translateM(model,0,-2.75f,1.48f,-1.41f)
+                Matrix.rotateM(model,0,sceneTime*23f,0f,0f,1f)
+                ellipsoid(.11f,.17f,0f,.085f,.21f,.020f,0xD3EFA3,outline=false)
+                ellipsoid(-.11f,-.17f,0f,.085f,.21f,.020f,0xD3EFA3,outline=false); pop()
+                segment(-3.13f,2.24f,-1.93f,-3.27f,2.55f,-1.93f,.055f,0xAEC594)
+                segment(-2.37f,2.24f,-1.93f,-2.21f,2.55f,-1.93f,.055f,0xAEC594)
+                box(2.70f,1.10f,-1.96f,.55f,1.10f,.37f,0x9F84B1)
+                box(2.70f,1.49f,-1.54f,.41f,.43f,.030f,0x243B4A)
+                for(side in intArrayOf(-1,1)) {
+                    ellipsoid(2.70f+side*.18f,1.51f,-1.48f,.10f,.15f,.025f,CREAM)
+                    ellipsoid(2.70f+side*.18f,1.51f,-1.445f,.03f,.075f,.015f,INK,outline=false)
+                    ellipsoid(2.70f+side*.24f,.75f,-1.51f,.09f,.06f,.045f,if(side<0)0xDA817C else 0xBCD985)
+                }
+            }
+            "cartoon_moon_garden" -> {
+                for(side in intArrayOf(-1,1)) {
+                    val x=side*2.74f
+                    box(x,.22f,-1.80f,.56f,.22f,.36f,0xA7839C)
+                    for(i in 0..2) {
+                        val stem=x+(i-1)*.28f
+                        val top=1.23f+(i%2)*.55f
+                        val sway=sin(sceneTime*.52f+i)*.08f
+                        segment(stem,.43f,-1.80f,stem+sway,top,-1.80f,.047f,0x8AB78D)
+                        for(petal in 0..4) {
+                            val a=petal*1.256637f
+                            ellipsoid(stem+sway+cos(a)*.20f,top+sin(a)*.20f,-1.79f,
+                                .15f,.15f,.07f,if(i%2==0)0xC795BC else 0xB3D698)
+                        }
+                        ellipsoid(stem+sway,top,-1.68f,.13f,.13f,.06f,CREAM)
+                        for(eye in intArrayOf(-1,1)) ellipsoid(stem+sway+eye*.043f,top+.01f,-1.61f,.015f,.037f,.012f,INK,outline=false)
+                    }
+                }
+            }
+            "cartoon_alien_aquarium" -> {
+                for(side in intArrayOf(-1,1)) {
+                    val x=side*2.73f
+                    box(x,1.18f,-1.94f,.55f,1.18f,.37f,0x87B9B5)
+                    box(x,1.43f,-1.52f,.42f,.70f,.028f,0x28687F)
+                    for(i in 0..2) {
+                        val y=.99f+i*.37f+sin(sceneTime*.65f+i)*.09f
+                        ellipsoid(x+(i%2-.5f)*.32f,y,-1.46f,.08f,.10f,.025f,0xB1E1CB,outline=false)
+                    }
+                    box(x,.49f,-1.49f,.29f,.055f,.06f,0xDE9F8D)
+                }
+                // Only one helmet fish; no persistent school or particle population.
+                val y=1.49f+sin(sceneTime*.42f)*.15f
+                ellipsoid(2.73f,y,-1.39f,.24f,.27f,.13f,0xE1C18D)
+                ellipsoid(2.73f,y+.03f,-1.24f,.18f,.17f,.045f,0xA9DCD2)
+                ellipsoid(2.78f,y+.04f,-1.18f,.026f,.044f,.020f,INK,outline=false)
+                segment(-3.26f,2.01f,-1.87f,-3.45f,2.28f,-1.87f,.08f,0xCF9C8F)
+            }
+            else -> {
+                box(-2.74f,1.14f,-1.99f,.58f,1.14f,.36f,0xB59A97)
+                box(-2.74f,1.62f,-1.58f,.44f,.47f,.026f,0x635D76)
+                for(i in -1..1) {
+                    segment(-2.74f+i*.24f,1.32f,-1.52f,-2.78f+i*.24f,1.87f,-1.52f,.044f,0xC9D3B9)
+                    ellipsoid(-2.78f+i*.24f,1.87f,-1.51f,.09f,.09f,.04f,0xA5BFB5)
+                }
+                box(-2.74f,.56f,-1.55f,.35f,.13f,.07f,0x7F98A1)
+                box(2.72f,.50f,-1.84f,.62f,.07f,.48f,0x718D99)
+                segment(2.26f,.15f,-1.83f,3.17f,.43f,-1.83f,.04f,0xB6C6B5)
+                segment(3.17f,.15f,-1.83f,2.26f,.43f,-1.83f,.04f,0xB6C6B5)
+                ellipsoid(2.72f,1.17f,-1.82f,.32f,.61f,.28f,0xE5C69F)
+                ellipsoid(2.72f,1.30f,-1.52f,.18f,.21f,.04f,0x6999A8)
+                ellipsoid(2.72f,1.32f,-1.465f,.12f,.15f,.02f,0xB2DACE,outline=false)
+                segment(2.47f,.90f,-1.82f,2.19f,.61f,-1.82f,.10f,0xB28CAA)
+                segment(2.97f,.90f,-1.82f,3.25f,.61f,-1.82f,.10f,0xB28CAA)
+            }
         }
     }
 
@@ -790,6 +892,7 @@ class Fly3DRenderer : GLSurfaceView.Renderer {
     private fun ball() {
         ellipsoid(0f,.18f,0f,.18f,.18f,.18f,0xDF9965)
         ellipsoid(-.04f,.24f,.15f,.08f,.08f,.013f,0xF5D6A7,outline=false)
+        ring(0f,.18f,0f,.181f,.181f,0x659EA2)
     }
 
     private fun book() {
@@ -797,6 +900,9 @@ class Fly3DRenderer : GLSurfaceView.Renderer {
         box(.015f,.058f,.0f,.248f,.030f,.181f,0xE6D6B5,outline=false)
         box(0f,.111f,0f,.28f,.012f,.20f,0x477C77)
         box(0f,.125f,0f,.13f,.003f,.014f,0xD6BD7D,outline=false)
+        box(-.255f,.059f,0f,.020f,.060f,.20f,0x315B60,outline=false)
+        for(i in 0..2) box(.025f,.044f+i*.011f,.183f,.226f,.002f,.003f,0xBDBAA1,outline=false)
+        box(.13f,.058f,.209f,.037f,.006f,.046f,0xD895A5,outline=false)
     }
 
     private fun glass() {
@@ -902,7 +1008,8 @@ class Fly3DRenderer : GLSurfaceView.Renderer {
         val OUTDOOR_BACKGROUNDS=setOf("pond","orchard","beach")
         val NIGHT_BACKGROUNDS=setOf("observatory","bedroom")
         val GARDEN_BACKGROUNDS=setOf("greenhouse","pond","orchard","beach")
-        val CARTOON_ROOM_BACKGROUNDS=setOf("cartoon_snack_lab","cartoon_laundromat","cartoon_diner")
+        val CARTOON_ROOM_BACKGROUNDS=setOf("cartoon_snack_lab","cartoon_laundromat","cartoon_diner",
+            "cartoon_portal_arcade","cartoon_moon_garden","cartoon_alien_aquarium","cartoon_meteor_garage")
         const val VERTEX_SHADER="""
             attribute vec3 aPosition;
             attribute vec3 aNormal;

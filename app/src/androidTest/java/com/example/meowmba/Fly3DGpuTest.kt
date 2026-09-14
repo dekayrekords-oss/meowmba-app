@@ -126,7 +126,8 @@ class Fly3DGpuTest {
             val kitchen=gpu.render("cartoon-reference-$w-$h",base)
             val oldDraws=gpu.renderer.lastDrawCalls
             val hashes=mutableSetOf(kitchen.contentHashCode())
-            for (id in listOf("cartoon_snack_lab","cartoon_laundromat","cartoon_diner")) {
+            for (id in listOf("cartoon_snack_lab","cartoon_laundromat","cartoon_diner",
+                "cartoon_portal_arcade","cartoon_moon_garden","cartoon_alien_aquarium","cartoon_meteor_garage")) {
                 val room=base.copy(backgroundId=id)
                 val raw=gpu.render("$id-$w-$h",room)
                 assertTrue("native room must differ from kitchen and other new rooms: $id",hashes.add(raw.contentHashCode()))

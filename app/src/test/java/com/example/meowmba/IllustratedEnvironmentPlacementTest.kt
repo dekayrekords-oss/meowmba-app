@@ -55,6 +55,8 @@ class IllustratedEnvironmentPlacementTest {
                 BackgroundAnimation.CARTOON_NOOK, BackgroundAnimation.CARTOON_GALLEY -> 1672 to 941
                 BackgroundAnimation.CARTOON_SNACK_LAB, BackgroundAnimation.CARTOON_LAUNDROMAT,
                 BackgroundAnimation.CARTOON_DINER -> 1536 to 1024
+                BackgroundAnimation.CARTOON_PORTAL_ARCADE, BackgroundAnimation.CARTOON_MOON_GARDEN,
+                BackgroundAnimation.CARTOON_ALIEN_AQUARIUM, BackgroundAnimation.CARTOON_METEOR_GARAGE -> 1536 to 1536
                 else -> 1024 to 1536
             }
             for ((width, height) in viewports) {

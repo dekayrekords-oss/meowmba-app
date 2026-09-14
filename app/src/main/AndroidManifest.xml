@@ -88,6 +88,8 @@
              service, erroring 5/9). Android System Intelligence is the one we
              actually want. -->
         <package android:name="com.google.android.as" />
+        <!-- Also used by the drawer's package-scoped Google app searches.
+             Keep visible even when it has no launcher/WEB_SEARCH entry point. -->
         <package android:name="com.google.android.googlequicksearchbox" />
         <package android:name="com.amazon.dee.app" />
         <package android:name="com.google.android.apps.bard" />

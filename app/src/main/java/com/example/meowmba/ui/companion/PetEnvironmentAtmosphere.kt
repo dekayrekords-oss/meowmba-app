@@ -48,6 +48,10 @@ internal class PetEnvironmentAtmosphere {
         BackgroundAnimation.CARTOON_SNACK_LAB to PetEnvironmentMaterial(0xFFB6DDD1, 0xFFD2E4C6, 0xFFE9AF7D),
         BackgroundAnimation.CARTOON_LAUNDROMAT to PetEnvironmentMaterial(0xFFD2C5E2, 0xFFB9D8CF, 0xFFE4C89F),
         BackgroundAnimation.CARTOON_DINER to PetEnvironmentMaterial(0xFFF3E0A7, 0xFFF0CCA6, 0xFFDA8A77),
+        BackgroundAnimation.CARTOON_PORTAL_ARCADE to PetEnvironmentMaterial(0xFF203A52, 0xFF4B6975, 0xFFB7D6A4),
+        BackgroundAnimation.CARTOON_MOON_GARDEN to PetEnvironmentMaterial(0xFF32476D, 0xFF75988A, 0xFFD8C79B),
+        BackgroundAnimation.CARTOON_ALIEN_AQUARIUM to PetEnvironmentMaterial(0xFF154D64, 0xFF579F9D, 0xFFA4D1C2),
+        BackgroundAnimation.CARTOON_METEOR_GARAGE to PetEnvironmentMaterial(0xFF473B62, 0xFF857889, 0xFFDDB47D),
     )
     private val beam = Path().apply {
         moveTo(.07f, .12f); lineTo(.23f, .12f); lineTo(.48f, .76f); lineTo(.27f, .76f); close()
@@ -168,6 +172,26 @@ internal class PetEnvironmentAtmosphere {
                     val center = Offset((.10f + i * .80f) * size.width, (.075f + i * .035f) * size.height)
                     drawCircle(Color(0xFFFFF5D4), size.minDimension * .003f, center,
                         alpha = .24f + .10f * sin(slow * TAU + i * 2f))
+                }
+            }
+            BackgroundAnimation.CARTOON_PORTAL_ARCADE, BackgroundAnimation.CARTOON_MOON_GARDEN,
+            BackgroundAnimation.CARTOON_ALIEN_AQUARIUM, BackgroundAnimation.CARTOON_METEOR_GARAGE -> {
+                // Two edge beacons add life without covering the illustrated characters or
+                // starting a second animation clock. The contact plane remains untouched.
+                val tint = when (animation) {
+                    BackgroundAnimation.CARTOON_PORTAL_ARCADE -> Color(0xFFC7EF85)
+                    BackgroundAnimation.CARTOON_MOON_GARDEN -> Color(0xFFFFDA9F)
+                    BackgroundAnimation.CARTOON_ALIEN_AQUARIUM -> Color(0xFFA7F1E8)
+                    else -> Color(0xFFFFBB8C)
+                }
+                repeat(2) { i ->
+                    val a = slow * TAU + i * PI.toFloat()
+                    val center = Offset((.07f + i * .86f + sin(a) * .008f) * size.width,
+                        (.17f + i * .10f + cos(a) * .012f) * size.height)
+                    drawCircle(tint, size.minDimension * .006f, center,
+                        alpha = .24f + .14f * (1f + sin(clock * TAU + i)))
+                    drawCircle(tint, size.minDimension * .014f, center,
+                        alpha = .12f, style = rippleStroke)
                 }
             }
             else -> Unit

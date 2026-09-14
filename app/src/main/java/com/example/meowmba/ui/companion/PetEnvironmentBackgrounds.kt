@@ -24,6 +24,7 @@ const val PET_ENVIRONMENT_TABLE_Y = .78f
 class PetEnvironmentBackgroundPainter {
     private val path = Path()
     private val atmosphere = PetEnvironmentAtmosphere()
+    private val spaceScenery = SpaceCartoonHabitatPainter()
 
     fun draw(scope: DrawScope, animation: BackgroundAnimation, clock: Float, slow: Float) = with(scope) {
         if (size.width <= 0 || size.height <= 0) return@with
@@ -33,6 +34,9 @@ class PetEnvironmentBackgroundPainter {
         drawRect(material.wall)
         atmosphere.drawLight(this, animation, s)
         when (animation) {
+            BackgroundAnimation.CARTOON_PORTAL_ARCADE, BackgroundAnimation.CARTOON_MOON_GARDEN,
+            BackgroundAnimation.CARTOON_ALIEN_AQUARIUM, BackgroundAnimation.CARTOON_METEOR_GARAGE ->
+                spaceScenery.draw(this, animation, t, s)
             BackgroundAnimation.KITCHEN -> {
                 window(.08f, .13f, .26f, .29f, Color(0xFF70958D), t)
                 repeat(5) { i -> line(.65f + i * .06f, .16f, .65f + i * .06f, .32f, 0xFF80938B, .004f) }
