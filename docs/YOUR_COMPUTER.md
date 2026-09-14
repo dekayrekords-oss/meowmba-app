@@ -56,9 +56,18 @@ Status meanings:
 | Error | Human-readable failure (no secrets) |
 
 Server install creates `/opt/meow-computer` or `$HOME/meow-computer` and a small
-HTTP worker on `127.0.0.1:8766` matching `HttpsRuntimeClient`.
+HTTP worker on port **18766** (not 8766 — Desktop Bridge UDP discovery uses 8766)
+matching `HttpsRuntimeClient`. Default bind is `127.0.0.1` (safe); the Fold
+**cannot** reach that. Prefer **SSH** ConnectionProfiles day-to-day. For HTTPS_RUNTIME:
 
-See also: `computer/README.md`, `docs/LOCAL_LINUX.md` (if present).
+- Bind on NetBird: `MEOW_COMPUTER_HOST=100.77.97.236 bash computer/install.sh`
+- Or SSH local-forward: `ssh -L 18766:127.0.0.1:18766 user@meow`
+- App Host field: full URL e.g. `http://100.77.97.236:18766`
+
+**Maturity:** preview — same idea as a cloud computer agent; expect rough edges.
+Flags `agentic_runtime_v1` / `lumen_reflex_v2` stay default OFF.
+
+See also: `computer/README.md`, `docs/COMPUTER_P0_FOLD_CHECKLIST.md`, `docs/LOCAL_LINUX.md`.
 
 ## Shared links (for onboarding / Settings)
 

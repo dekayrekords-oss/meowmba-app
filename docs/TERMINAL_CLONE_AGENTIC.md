@@ -99,7 +99,14 @@ shipped inside the APK.
 | GET | `/v1/jobs/{id}/logs` | → `{ "stdout": "...", "stderr": "..." }` |
 
 Auth: optional Bearer from profile `credentialRef`. Profile `host` may be a full
-URL (`https://worker:8443`) or host+port (default port 8443 / https).
+URL (`http://100.77.97.236:18766`) or host+port. Meow Computer worker default
+port is **18766** / **http** (not Bridge 8766). Ports 443/8443 still imply https.
+
+**Reachability:** Fold cannot use `127.0.0.1` on meow. Prefer SSH profiles
+day-to-day. For HTTPS_RUNTIME use NetBird bind, `ssh -L 18766:127.0.0.1:18766`,
+or a phone-reachable base URL. Health failures surface this hint in Settings Test.
+
+Chat with Agentic ON auto-ticks until DONE | BLOCKED | WAITING_APPROVAL (cancel supported).
 
 `DefaultAgenticSshExecutor.exec` routes `ConnectionProfileType.HTTPS_RUNTIME`
 through this client (health → start → poll → logs).

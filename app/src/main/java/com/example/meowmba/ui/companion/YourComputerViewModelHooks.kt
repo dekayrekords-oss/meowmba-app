@@ -2,6 +2,8 @@ package com.example.meowmba.ui.companion
 
 import android.content.Context
 import com.example.meowmba.core.agentic.ConnectionProfile
+import com.example.meowmba.core.agentic.ConnectionProfileType
+import com.example.meowmba.core.agentic.HttpsRuntimeClient
 import com.example.meowmba.core.agentic.ConnectionProfileStore
 import com.example.meowmba.core.agentic.CredentialResolver
 import com.example.meowmba.core.agentic.SecureStorageCredentialResolver
@@ -72,9 +74,36 @@ object YourComputerViewModelHooks {
         install: Boolean,
         onLog: (String) -> Unit,
     ): Result<String> = withContext(Dispatchers.IO) {
+        if (!install && profile.type == ConnectionProfileType.HTTPS_RUNTIME) {
+            return@withContext testHttpsRuntime(credentials, profile)
+        }
         val client = ComputerInstallOverSsh(credentials)
         if (!install) return@withContext client.testConnection(profile)
         val script = loadInstallScript(context)
         client.install(profile, script, onLogLine = onLog)
+    }
+
+    /** Health-check an HTTPS_RUNTIME worker; surfaces reachability honestly. */
+    fun testHttpsRuntime(
+        credentials: CredentialResolver,
+        profile: ConnectionProfile,
+    ): Result<String> {
+        if (profile.type != ConnectionProfileType.HTTPS_RUNTIME) {
+            return Result.failure(IllegalArgumentException("Expected HTTPS_RUNTIME profile"))
+        }
+        val token = credentials.resolve(profile.credentialRef)
+        val base = HttpsRuntimeClient.baseUrlFor(profile)
+        val health = HttpsRuntimeClient(baseUrl = base, bearerToken = token).health()
+        return if (health.ok) {
+            Result.success("HTTPS_RUNTIME OK at $base (${health.detail.take(120)})")
+        } else {
+            val hint = ComputerProfileMarks.httpsReachabilityHint(base, profile.port.takeIf { it > 0 }
+                ?: ComputerProfileMarks.WORKER_PORT)
+            Result.failure(
+                IllegalStateException(
+                    "HTTPS_RUNTIME unreachable: ${health.detail.take(160)}. $hint",
+                ),
+            )
+        }
     }
 }
