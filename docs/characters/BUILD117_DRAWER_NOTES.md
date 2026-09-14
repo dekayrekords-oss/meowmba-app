@@ -79,6 +79,12 @@ large, so the base grid minimum is now 88 dp (three columns at 320), favorite
 icons are 42 dp with reduced padding, and a small static cut-panel header accent
 strengthens the existing space-console theme. Large text still expands tracks.
 
+The first full rerun isolated one native non-idle failure when opening the naming
+dialog; all other drawer callbacks and dialogs passed. Naming now uses an explicit
+full-width field with its label and counter outside the floating-label/supporting-
+text measurement path. The name remains accessible, the 24-character limit and
+disabled-empty Save assertion are preserved. Root must record the confirming run.
+
 The first four exercise 320/375/414/768 dp, both appearances and 1.4x text,
 including landscape. They reach the eighth favorite and last app, assert
 horizontal bounds and invoke launch/Avatar callbacks. Two native screenshots per

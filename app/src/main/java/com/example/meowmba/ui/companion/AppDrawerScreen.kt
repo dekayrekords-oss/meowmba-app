@@ -422,8 +422,23 @@ fun AppDrawerScreen(
     }
     if (namingFolder) AlertDialog(onDismissRequest = { namingFolder = false },
         title = { Text(if (renamingFolderId != null) "Rename folder" else "New folder") },
-        text = { OutlinedTextField(value = folderName, onValueChange = { folderName = it.take(24) }, singleLine = true,
-            label = { Text("Folder name") }, supportingText = { Text("${folderName.length}/24") }, modifier = Modifier.testTag("folder-name")) },
+        text = {
+            // Keep the dialog's intrinsic sizing separate from TextField's floating-label
+            // measurements. The external label/counter also stay visible while editing.
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Folder name", style = MaterialTheme.typography.labelLarge)
+                OutlinedTextField(
+                    value = folderName,
+                    onValueChange = { folderName = it.take(24) },
+                    singleLine = true,
+                    placeholder = { Text("e.g. Mission control") },
+                    modifier = Modifier.fillMaxWidth().testTag("folder-name")
+                        .semantics { contentDescription = "Folder name" },
+                )
+                Text("${folderName.length}/24", style = MaterialTheme.typography.labelSmall,
+                    color = colors.onSurfaceVariant)
+            }
+        },
         confirmButton = { TextButton(enabled = folderName.isNotBlank(), onClick = {
             val name = folderName.trim()
             if (name.isNotEmpty()) {
