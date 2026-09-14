@@ -2,7 +2,8 @@
 
 ## Next: inspect the existing Weebly site
 
-- [ ] Owner signs into the supplied Weebly dashboard in the task browser.
+- [x] Owner reports signing in; browser URL advanced to the existing site dashboard.
+- [ ] Restore readable editor access: dashboard screenshot was blank, reload timed out, and Chrome inspection timed out.
 - [ ] Inspect existing pages, navigation, music catalog, and branding.
 - [ ] Map the proposed Music, Projects, Watch, and Journal content onto that structure.
 - [ ] Prepare and preview the first page updates.
