@@ -22,7 +22,9 @@ permission or duplicate declaration was added.
 
 App filtering while typing, unique app launches, Ask Meow, phone tasks, and the
 microphone path retain their existing callbacks and `DrawerQuery` classifier.
-`submitDrawerQuery` and generic `showSearchInBrowser` are unchanged. No external
+`submitDrawerQuery` retains its classifier routes; manual submit and Google now
+cancel drawer capture first so a result cannot become a live transcript. Generic
+`showSearchInBrowser` remains unchanged. No external
 app is launched by text changes. There is no silent Chrome/WebView fallback and
 no automatic Google installation, account operation, or new permission request.
 

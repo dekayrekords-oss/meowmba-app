@@ -111,9 +111,11 @@ class AppDrawerUiTest {
         var partial by mutableStateOf<String?>(null)
         val submissions = mutableListOf<String>()
         var consumed = 0
+        var cancelled = 0
         rule.setContent { MeowmbaTheme {
             AppDrawerScreen(onClose = {}, installedApps = apps, listening = true, listenPartial = partial,
                 voiceCommit = voice, onVoiceConsumed = { consumed++; voice = null },
+                onCancelVoice = { cancelled++ },
                 onSubmitQuery = { q, _, _ -> submissions += q })
         } }
         rule.runOnIdle { partial = "open camera" }
@@ -122,7 +124,65 @@ class AppDrawerUiTest {
         rule.waitForIdle()
         assertEquals(listOf("open Camera"), submissions)
         assertEquals(1, consumed)
+        assertEquals(0, cancelled)
         rule.onNodeWithContentDescription("Stop listening").assertExists()
+    }
+
+    @Test fun manualGoogleStopsVoiceAndConsumesBeforeDispatchWithoutLosingQueryOnFailure() {
+        val events = mutableListOf<String>()
+        var listening by mutableStateOf(true)
+        var caption by mutableStateOf("cartoon planets")
+        rule.setContent { MeowmbaTheme {
+            AppDrawerScreen(onClose = {}, installedApps = apps, listening = listening,
+                answer = caption, listenPartial = caption,
+                onCancelVoice = { events += "cancel"; listening = false },
+                onVoiceConsumed = { events += "consume" },
+                onSubmitQuery = { q, _, _ -> events += "submit:$q" },
+                onSearchGoogle = { q -> events += "google:$q"; caption = "Google app is unavailable." })
+        } }
+        rule.onNodeWithTag("drawer-search").assertTextContains("cartoon planets")
+        rule.onNodeWithContentDescription("Search in Google app").performClick()
+        assertEquals(listOf("cancel", "consume", "google:cartoon planets"), events)
+        rule.onNodeWithTag("drawer-search").assertTextContains("cartoon planets")
+        rule.onNodeWithTag("drawer-response").assertIsDisplayed()
+        rule.onNodeWithText("Google app is unavailable.").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Clear search").performClick()
+        rule.onNodeWithTag("drawer-search").performTextInput("Camera")
+        rule.onNodeWithContentDescription("Submit search").performClick()
+        assertEquals(listOf("cancel", "consume", "google:cartoon planets", "cancel", "consume", "submit:Camera"), events)
+    }
+
+    @Test fun microphoneFailureIsVisibleWithoutOldCaptionsOrLiveDraftResponses() {
+        var listening by mutableStateOf(false)
+        var caption by mutableStateOf("Previous conversation")
+        var attempts = 0
+        rule.setContent { MeowmbaTheme {
+            AppDrawerScreen(onClose = {}, installedApps = apps, listening = listening,
+                answer = caption, listenPartial = caption, onMicClick = {
+                    attempts++
+                    when (attempts) {
+                        1, 2 -> caption = "Microphone is off."
+                        3 -> { listening = true; caption = "A live partial transcript" }
+                        else -> caption = "Speech recognition is unavailable."
+                    }
+                })
+        } }
+        rule.onNodeWithTag("drawer-response").assertDoesNotExist()
+        rule.onNodeWithContentDescription("Speak").performClick()
+        rule.onNodeWithText("Microphone is off.").assertIsDisplayed()
+        rule.onNodeWithText("Previous conversation").assertDoesNotExist()
+        rule.onNodeWithTag("drawer-search").performTextInput("Camera")
+        rule.onNodeWithTag("drawer-response").assertDoesNotExist()
+        rule.onNodeWithContentDescription("Clear search").performClick()
+        rule.onNodeWithContentDescription("Speak").performClick()
+        rule.onNodeWithText("Microphone is off.").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Speak").performClick()
+        rule.onNodeWithTag("drawer-search").assertTextContains("A live partial transcript")
+        rule.onNodeWithTag("drawer-response").assertDoesNotExist()
+        rule.runOnIdle { listening = false }
+        rule.onNodeWithTag("drawer-response").assertDoesNotExist()
+        rule.onNodeWithContentDescription("Speak").performClick()
+        rule.onNodeWithText("Speech recognition is unavailable.").assertIsDisplayed()
     }
 
     @Test fun changingQueryOrEnteringFolderRevealsSearchActionsAfterDeepScroll() {
@@ -254,6 +314,27 @@ class AppDrawerUiTest {
         assertEquals(listOf(missing), removed)
         assertEquals(apps.take(7).map { it.packageName }, pins)
         rule.onNodeWithText("Remove missing pins").assertDoesNotExist()
+    }
+
+    @Test fun deletingTheFolderBeingRenamedCancelsItsInlineEditor() {
+        var folders by mutableStateOf(listOf(folder))
+        var renames = 0
+        rule.setContent { MeowmbaTheme {
+            AppDrawerScreen(onClose = {}, installedApps = apps, folders = folders,
+                onRenameFolder = { _, _ -> renames++ },
+                onDeleteFolder = { id -> folders = DrawerCatalog.deleteFolder(folders, id) })
+        } }
+        scrollTo("folder:games")
+        rule.onNodeWithTag("folder:games").performTouchInput { longClick() }
+        rule.onNodeWithText("Rename").performClick()
+        rule.onNodeWithTag("folder-editor").assertIsDisplayed()
+        scrollTo("folder:games")
+        rule.onNodeWithTag("folder:games").performTouchInput { longClick() }
+        rule.onNodeWithText("Delete folder").performClick()
+        assertTrue(folders.isEmpty())
+        assertEquals(0, renames)
+        rule.onNodeWithTag("folder-editor").assertDoesNotExist()
+        rule.onNodeWithText("Save").assertDoesNotExist()
     }
 
     private fun scrollTo(tag: String) = rule.onNodeWithTag("drawer-grid").performScrollToNode(hasTestTag(tag))

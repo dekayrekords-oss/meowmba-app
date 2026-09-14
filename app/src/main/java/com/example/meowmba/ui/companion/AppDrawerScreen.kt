@@ -106,6 +106,7 @@ fun AppDrawerScreen(
     listening: Boolean = false,
     listenPartial: String? = null,
     onMicClick: () -> Unit = {},
+    onCancelVoice: () -> Unit = {},
     voiceCommit: String? = null,
     onVoiceConsumed: () -> Unit = {},
     installedApps: List<DrawerApp>? = null,
@@ -129,6 +130,11 @@ fun AppDrawerScreen(
     var namingForPackage by rememberSaveable { mutableStateOf<String?>(null) }
     var renamingFolderId by rememberSaveable { mutableStateOf<String?>(null) }
     var folderName by rememberSaveable { mutableStateOf("") }
+    var consumedVoiceCommit by remember { mutableStateOf<String?>(null) }
+    var awaitingMicFeedback by remember { mutableStateOf(false) }
+    var micFeedbackBaseline by remember { mutableStateOf<String?>(null) }
+    var micFeedback by remember { mutableStateOf<String?>(null) }
+    var lastMicFailure by remember { mutableStateOf<String?>(null) }
     val gridState = rememberLazyGridState()
     val navigation = listOf(query, sort, typeFilter, openFolderId, submitted, namingFolder, renamingFolderId)
     var previousNavigation by remember { mutableStateOf(navigation) }
@@ -206,9 +212,25 @@ fun AppDrawerScreen(
             focus.clearFocus()
         }
     }
-    fun submit(raw: String = query) {
+    fun clearResponse() {
+        submitted = false
+        awaitingMicFeedback = false
+        micFeedback = null
+    }
+    fun cancelVoiceForManualSubmit() {
+        // Suppress a committed transcript already queued for this composition as well as
+        // canceling capture. The parent detaches its capture before stopping the engine.
+        consumedVoiceCommit = voiceCommit?.trim()?.takeIf { it.isNotBlank() }
+        onCancelVoice()
+        onVoiceConsumed()
+        awaitingMicFeedback = false
+        micFeedback = null
+    }
+    fun submit(raw: String = query, fromVoice: Boolean = false) {
         val q = raw.trim()
         if (q.isBlank()) return
+        if (!fromVoice) cancelVoiceForManualSubmit()
+        else { awaitingMicFeedback = false; micFeedback = null }
         query = q
         submitted = true
         focus.clearFocus()
@@ -222,7 +244,26 @@ fun AppDrawerScreen(
     }
     LaunchedEffect(voiceCommit) {
         val spoken = voiceCommit?.trim().orEmpty()
-        if (spoken.isNotBlank()) { submit(spoken); onVoiceConsumed() }
+        if (spoken.isBlank()) consumedVoiceCommit = null
+        else if (spoken != consumedVoiceCommit) {
+            consumedVoiceCommit = spoken
+            submit(spoken, fromVoice = true)
+            onVoiceConsumed()
+        }
+    }
+    LaunchedEffect(answer, listening, awaitingMicFeedback) {
+        if (awaitingMicFeedback) {
+            if (listening) {
+                // A partial transcript is input, never a failed-mic response. Keep its
+                // latest value as the baseline in case stopping leaves it unchanged.
+                micFeedbackBaseline = answer
+                micFeedback = null
+            } else if (!answer.isNullOrBlank() && answer != micFeedbackBaseline) {
+                micFeedback = answer
+                lastMicFailure = answer
+                awaitingMicFeedback = false
+            }
+        }
     }
 
     Column(Modifier.fillMaxSize().background(colors.background).safeDrawingPadding().imePadding()) {
@@ -246,7 +287,7 @@ fun AppDrawerScreen(
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = query,
-                    onValueChange = { query = it; submitted = false },
+                    onValueChange = { query = it; clearResponse() },
                     modifier = Modifier.fillMaxWidth().testTag("drawer-search"),
                     placeholder = { Text(if (listening) "Listening…" else "Find apps, ask or search", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     singleLine = true,
@@ -255,7 +296,7 @@ fun AppDrawerScreen(
                     keyboardActions = KeyboardActions(onSearch = { submit() }),
                     trailingIcon = {
                         Row {
-                            if (query.isNotEmpty()) IconButton(onClick = { query = ""; submitted = false }) {
+                            if (query.isNotEmpty()) IconButton(onClick = { query = ""; clearResponse() }) {
                                 Icon(Icons.Default.Close, "Clear search")
                             }
                             IconButton(onClick = { submit() }, enabled = query.isNotBlank()) {
@@ -297,6 +338,7 @@ fun AppDrawerScreen(
                         Button(onClick = {
                             val q = query.trim()
                             if (q.isNotBlank()) {
+                                cancelVoiceForManualSubmit()
                                 submitted = true; focus.clearFocus(); keyboard?.hide()
                                 onSearchGoogle(DrawerQuery.webQuery(q))
                             }
@@ -305,7 +347,13 @@ fun AppDrawerScreen(
                             Icon(Icons.Default.Search, null, Modifier.size(18.dp))
                             Spacer(Modifier.width(6.dp)); Text("Google", maxLines = 1)
                         }
-                        OutlinedButton(onClick = onMicClick, contentPadding = PaddingValues(horizontal = 14.dp),
+                        OutlinedButton(onClick = {
+                            submitted = false
+                            micFeedback = lastMicFailure.takeIf { it == answer }
+                            micFeedbackBaseline = answer
+                            awaitingMicFeedback = true
+                            onMicClick()
+                        }, contentPadding = PaddingValues(horizontal = 14.dp),
                             modifier = Modifier.semantics { contentDescription = if (listening) "Stop listening" else "Speak" }) {
                             Icon(if (listening) Icons.Default.Stop else Icons.Default.Mic, null, Modifier.size(18.dp),
                                 tint = if (listening) colors.secondary else colors.primary)
@@ -317,12 +365,12 @@ fun AppDrawerScreen(
                         modifier = Modifier.padding(top = 6.dp, bottom = 4.dp))
                 }
             }
-            if (submitted && (thinking || !answer.isNullOrBlank())) item(key = "answer", span = { GridItemSpan(maxLineSpan) }) {
-                Surface(shape = RoundedCornerShape(18.dp), color = colors.secondaryContainer) {
+            if ((submitted && (thinking || !answer.isNullOrBlank())) || (!listening && !micFeedback.isNullOrBlank())) item(key = "answer", span = { GridItemSpan(maxLineSpan) }) {
+                Surface(shape = RoundedCornerShape(18.dp), color = colors.secondaryContainer, modifier = Modifier.testTag("drawer-response")) {
                     Column(Modifier.padding(14.dp).heightIn(max = 220.dp).verticalScroll(rememberScrollState())) {
                         Text("Response", fontWeight = FontWeight.Bold, color = colors.onSecondaryContainer)
                         Spacer(Modifier.height(4.dp))
-                        Text(if (thinking && answer.isNullOrBlank()) "Thinking…" else answer.orEmpty(),
+                        Text(if (submitted && thinking && answer.isNullOrBlank()) "Thinking…" else if (submitted) answer.orEmpty() else micFeedback.orEmpty(),
                             style = MaterialTheme.typography.bodyMedium, color = colors.onSecondaryContainer)
                     }
                 }
@@ -382,7 +430,7 @@ fun AppDrawerScreen(
                 items(shownFolders, key = { "folder:${it.id}" }) { folder ->
                     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(colors.tertiaryContainer)
                         .border(CartoonTokens.outline, colors.outlineVariant, RoundedCornerShape(18.dp))
-                        .combinedClickable(role = Role.Button, onClick = { openFolderId = folder.id; query = ""; submitted = false },
+                        .combinedClickable(role = Role.Button, onClick = { openFolderId = folder.id; query = ""; clearResponse() },
                             onLongClickLabel = "Folder options", onLongClick = { actionFolder = folder })
                         .testTag("folder:${folder.id}").padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         FolderTile(folder.packages)
@@ -408,7 +456,7 @@ fun AppDrawerScreen(
                         Text(when { loading -> "Reading the installed app list."; loadFailed -> "Your saved folders and favorites are still here. Try refreshing the list."; query.isNotBlank() -> "Try another name, ask Meow, or use Google above."; typeFilter != null -> "Choose All types to see more apps."; openFolder != null -> "Return to all apps, then use Organize to add apps to this folder."; else -> "Only apps with a launchable screen appear here." },
                             style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
                         if (loadFailed) TextButton(onClick = { refresh++ }) { Text("Retry app list") }
-                        if (query.isNotBlank() || typeFilter != null) TextButton(onClick = { query = ""; typeFilter = null; submitted = false }) { Text("Clear filters") }
+                        if (query.isNotBlank() || typeFilter != null) TextButton(onClick = { query = ""; typeFilter = null; clearResponse() }) { Text("Clear filters") }
                     }
                 }
             }
@@ -447,7 +495,12 @@ fun AppDrawerScreen(
             text = { Column {
                 Text("Manage this folder. Its apps stay installed.", style = MaterialTheme.typography.bodyMedium)
                 DialogLine("Rename") { organizing = true; folderName = folder.name; namingForPackage = null; renamingFolderId = folder.id; namingFolder = true; actionFolder = null }
-                DialogLine("Delete folder") { if (openFolderId == folder.id) openFolderId = null; onDeleteFolder(folder.id); actionFolder = null }
+                DialogLine("Delete folder") {
+                    if (renamingFolderId == folder.id) { cancelFolderEditor(); keyboard?.hide(); focus.clearFocus() }
+                    if (openFolderId == folder.id) openFolderId = null
+                    onDeleteFolder(folder.id)
+                    actionFolder = null
+                }
             } }, confirmButton = { TextButton(onClick = { actionFolder = null }) { Text("Close") } },
         )
     }

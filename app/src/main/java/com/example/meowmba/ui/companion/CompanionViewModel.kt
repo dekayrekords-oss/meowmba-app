@@ -6215,14 +6215,7 @@ class CompanionViewModel(
         }
         if (!canCaptureMicrophone()) { requestMicrophoneFor { startDrawerVoiceSearch() }; return }
         if (_uiState.value.interactionState == InteractionState.LISTENING) {
-            cancelCaptureTiming(); utteranceCapture?.cancel()
-            utteranceCapture = null
-            speechService?.stopListening()
-            sherpaAsrEngine?.stop()
-            _uiState.value = _uiState.value.copy(
-                interactionState = InteractionState.IDLE,
-                captionText = null,
-            )
+            cancelDrawerVoice()
             return
         }
         val engine = preferredSpeechEngine()
@@ -6255,6 +6248,25 @@ class CompanionViewModel(
                 drawerVoiceCommit = text,
             )
         }
+    }
+
+    /** Manual drawer actions supersede capture before publishing a result caption. */
+    fun cancelDrawerVoice() {
+        if (_uiState.value.interactionState == InteractionState.LISTENING) {
+            // Detach first so even a synchronous late engine callback is rejected.
+            val capture = utteranceCapture
+            utteranceCapture = null
+            cancelCaptureTiming()
+            captureCaptionJob?.cancel()
+            captureCaptionJob = null
+            capture?.cancel()
+            stopAlwaysOnListening()
+            _uiState.value = _uiState.value.copy(
+                interactionState = InteractionState.IDLE,
+                captionText = null,
+                drawerVoiceCommit = null,
+            )
+        } else consumeDrawerVoice()
     }
 
     fun consumeDrawerVoice() {
@@ -8384,6 +8396,7 @@ class CompanionViewModel(
     fun submitDrawerQuery(raw: String, matchCount: Int, singleLabel: String?) {
         val q = raw.trim()
         if (q.isBlank()) return
+        cancelDrawerVoice()
         when (val action = DrawerQuery.resolve(q, matchCount, singleLabel)) {
             is DrawerQuery.Action.Launch -> {
                 closeOverlays()
@@ -8402,6 +8415,7 @@ class CompanionViewModel(
     fun searchDrawerQuery(query: String) {
         val q = query.trim()
         if (q.isBlank()) return
+        cancelDrawerVoice()
         val result = GoogleAppSearch.launch(secureStorage?.context, q)
         if (result == GoogleAppSearch.Result.OPENED) closeOverlays()
         // On failure the drawer and its query remain in place. Its answer card

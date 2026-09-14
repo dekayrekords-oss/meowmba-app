@@ -1117,6 +1117,7 @@ fun CompanionScreen(
                 listening = uiState.interactionState == InteractionState.LISTENING,
                 listenPartial = uiState.captionText,
                 onMicClick = { viewModel.startDrawerVoiceSearch() },
+                onCancelVoice = { viewModel.cancelDrawerVoice() },
                 voiceCommit = uiState.drawerVoiceCommit,
                 onVoiceConsumed = { viewModel.consumeDrawerVoice() },
             )

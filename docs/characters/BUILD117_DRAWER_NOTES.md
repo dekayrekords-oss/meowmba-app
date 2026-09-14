@@ -59,6 +59,9 @@ New native Robolectric suite `com.example.meowmba.AppDrawerUiTest`:
 9. emptyCatalogShowsAnExplanationWithoutInventedApps
 10. changingQueryOrEnteringFolderRevealsSearchActionsAfterDeepScroll
 11. unavailableFavoritesAreRemovedOnlyByTheExplicitOrganizeAction
+12. manualGoogleStopsVoiceAndConsumesBeforeDispatchWithoutLosingQueryOnFailure
+13. microphoneFailureIsVisibleWithoutOldCaptionsOrLiveDraftResponses
+14. deletingTheFolderBeingRenamedCancelsItsInlineEditor
 
 The follow-up navigation review adds remembered grid state. Query, sort,
 category, folder and submit changes reveal the search actions and first results;
@@ -96,6 +99,23 @@ window. Navigation scrolls to the editor, while Back cancels editing before
 returning from a folder or closing the drawer. CRUD assertions remain intact and
 now also check Back cancellation without mutations; the test captures the inline
 editor before input. Root must record the confirming run.
+
+The final read-only review found two additional interaction races. Manual typed
+submit and Google now cancel voice capture and consume any queued transcript
+before dispatch; a locally consumed transcript cannot submit again from a pending
+effect. Actual voice commits submit/consume once without invoking the UI manual
+cancel callback. The parent owns engine cancellation. This prevents Google launch
+errors being treated as live dictation and replacing the original query.
+
+Microphone attempts track a caption baseline separately from submitted searches.
+Only a changed, non-listening status becomes mic feedback; earlier conversations
+and live partials remain hidden as responses. Editing the query clears that
+feedback. A separate lastMicFailure value keeps repeated identical known failures
+readable after a search edit/clear, without showing unrelated old captions. The
+mic regression covers that repeat attempt. Deleting a folder
+that is currently being renamed cancels its inline editor, avoiding a later Save
+against a removed ID. Focused UI tests cover all three cases; existing CRUD and
+voice assertions remain, including zero manual cancellation for actual voice input.
 
 The first four exercise 320/375/414/768 dp, both appearances and 1.4x text,
 including landscape. They reach the eighth favorite and last app, assert
