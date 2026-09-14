@@ -1,5 +1,11 @@
 # Fruit-fly motor research boundary — September 12, 2026
 
+Historical build/release-specific note. The separate MaleCNS CC BY 4.0 release
+and MIT simulator are now downloaded and tested on Meow; see the
+[September 13 MaleCNS handoff](MEOW_MALECNS_MODEL_PASS_DOWN_2026-09-13.md).
+The FAFB v783 terms below must not be generalized to all fruit-fly data. Build
+111 also includes the separate experimental BANC adapter described in its handoff.
+
 ## What this build can accurately claim
 
 The full-body character is an original stylized rig. Its humanoid arms, grasping gestures, mouth expressions, and on-screen flight need authored kinematics and contact constraints. Neither the shipped rate network nor its seeded spiking alternative contains measured FlyWire connections. Their role is bounded attention, drives, and action proposals. Adding neurons or calling connections “synapses” does not establish biological provenance or improve movement.

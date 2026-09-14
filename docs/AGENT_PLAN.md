@@ -1,5 +1,17 @@
 # Agent execution plan — immersive companion revision
 
+## September 13: MaleCNS open model tested on Meow and Mac
+
+The user's linked release is available as CC BY 4.0 data with a runnable MIT
+simulator. The 176,422-neuron retained graph is downloaded and runs on Meow.
+Nine corrected-model checks pass on both hosts, including connectivity ablation,
+deterministic reset and observer independence. Android remains Build 111; full
+graph integration is not yet shipped. Read
+[MEOW_MALECNS_MODEL_PASS_DOWN_2026-09-13.md](neural/MEOW_MALECNS_MODEL_PASS_DOWN_2026-09-13.md)
+for exact source/data identity, licensing scope, two reproduced simulator fixes,
+performance evidence, reproduction and the remaining integration work. Do not
+apply the old FAFB/FlyWire license finding to MaleCNS.
+
 ## September 13: Build 111 cartoon app interface
 
 The user extended the cartoon direction to all app controls and requested
