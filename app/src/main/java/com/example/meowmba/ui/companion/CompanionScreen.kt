@@ -103,7 +103,7 @@ fun CompanionScreen(
     // alive beside the browser.
     val avatarWorkStatus = rememberAvatarWorkStatus()
     val avatarWorkAllowed = avatarWorkStatus.allowed
-    val habitatCovered = !faceModeActive(uiState.copy(isChatExpanded = false)) ||
+    val habitatCovered = !avatarSceneVisible(uiState) ||
         uiState.showConnectorsScreen || showOnboarding || onboardingVisible || (uiState.showBrowser && !splitBrowser)
     val animationsPaused = !avatarWorkAllowed || habitatCovered
     // Report the real stage policy, including thermal/fold/onboarding changes.
@@ -114,8 +114,9 @@ fun CompanionScreen(
     DisposableEffect(viewModel) {
         onDispose { viewModel.setAvatarPerformanceStageAllowed(false) }
     }
-    DisposableEffect(viewModel, animationsPaused, uiState.isCameraEnabled, uiState.robotBodyEnabled) {
-        viewModel.setBodyStageAllowed(!animationsPaused)
+    DisposableEffect(viewModel, animationsPaused, uiState.showNeuralInfo, uiState.isCameraEnabled, uiState.robotBodyEnabled) {
+        // Brain is a visual monitor; opening it does not enable a physical body.
+        viewModel.setBodyStageAllowed(!animationsPaused && !uiState.showNeuralInfo)
         onDispose { viewModel.setBodyStageAllowed(false) }
     }
 
@@ -152,6 +153,15 @@ fun CompanionScreen(
                     Modifier.fillMaxSize(), interactive = false)
             }
         } else {
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+        // Reserve real layout space for the monitor so even a 300% avatar can
+        // remain visible. Background and props share the same resized viewport.
+        val brainSpace = when {
+            !uiState.showNeuralInfo -> Modifier
+            maxWidth > maxHeight -> Modifier.padding(end = minOf(360.dp, maxWidth * .48f) + 24.dp)
+            else -> Modifier.padding(bottom = maxHeight * .56f + 24.dp)
+        }
+        Box(Modifier.matchParentSize().then(brainSpace)) {
         // 0. User-chosen background always draws when set. Live weather sky too.
         // Only the empty NEO desk stays see-through.
         if ((!isNeo || hasUserBg) && !(uiState.avatarStyle == AvatarStyle.FULL_FLY && uiState.habitatMode)) {
@@ -172,8 +182,10 @@ fun CompanionScreen(
             paused = animationsPaused,
             modifier = Modifier.matchParentSize(),
         )
+        }
+        }
 
-        if (!habitatCovered) {
+        if (!habitatCovered && !uiState.showNeuralInfo) {
             PetCarePanel(
                 habitatMode = uiState.habitatMode, onTrick = viewModel::playCompanionTrick,
                 care = uiState.petCare, motionPaused = !avatarWorkAllowed, onCareChanged = viewModel::setPetCare,
@@ -753,6 +765,14 @@ fun CompanionScreen(
             NeuralInfoPanel(
                 diagnostics = uiState.neuralDiagnostics,
                 onClose = viewModel::toggleNeuralInfo,
+                desktopPaired = uiState.neuralDesktopPaired,
+                inputNotice = uiState.neuralInputNotice,
+                onUseLocalBrain = viewModel::startLocalBrainFromInfo,
+                onEnableNeuralControl = viewModel::enableNeuralControlFromInfo,
+                onPet = viewModel::petBrainFromInfo,
+                onFeed = viewModel::feedBrainFromInfo,
+                onOpenSettings = viewModel::openNeuralSettingsFromInfo,
+                onPairComputer = viewModel::openBrainPairingFromInfo,
             )
         }
 
@@ -792,6 +812,8 @@ fun CompanionScreen(
         if (uiState.showSettings && secureStorage != null) {
             SettingsScreen(
                 secureStorage = secureStorage,
+                initialPage = uiState.settingsInitialPage,
+                onOpenBrain = viewModel::toggleNeuralInfo,
                 companionName = uiState.name,
                 coverAvatarEnabled = uiState.coverAvatarEnabled,
                 onCoverAvatarChange = viewModel::setCoverAvatarEnabled,

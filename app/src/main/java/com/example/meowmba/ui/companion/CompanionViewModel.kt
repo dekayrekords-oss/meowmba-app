@@ -939,7 +939,9 @@ class CompanionViewModel(
         secureStorage?.savePreference("pet_care_v1", care.encode())
         _uiState.update { it.copy(petCare = care) }
     }
-    fun habitatAction(action: HabitatAction) {
+    fun habitatAction(action: HabitatAction) = applyHabitatAction(action, revealAvatar = true)
+
+    private fun applyHabitatAction(action: HabitatAction, revealAvatar: Boolean) {
         val now = System.currentTimeMillis()
         val current = _uiState.value.petCare
         val care = when (action) {
@@ -960,7 +962,8 @@ class CompanionViewModel(
         secureStorage?.savePreference("pet_care_v1", care.encode())
         _uiState.update { it.copy(petCare = care, habitatCommand = HabitatCommand(it.habitatCommand.id + 1L, action)) }
         if (!_uiState.value.habitatMode && action in setOf(HabitatAction.FEED, HabitatAction.REST)) {
-            playAnimationNamed(if (action == HabitatAction.REST) "drowsy_drift" else "content_smile")
+            playAnimationNamed(if (action == HabitatAction.REST) "drowsy_drift" else "content_smile",
+                userRequested = revealAvatar)
         }
     }
     fun playCompanionTrick(name: String) {
@@ -3905,6 +3908,7 @@ class CompanionViewModel(
         _uiState.value = _uiState.value.copy(
             showAppDrawer = !_uiState.value.showAppDrawer,
             showBrowser = false,
+            showNeuralInfo = false,
         )
     }
 
@@ -3914,6 +3918,7 @@ class CompanionViewModel(
         _uiState.value = _uiState.value.copy(
             showBrowser = opening,
             showAppDrawer = false,
+            showNeuralInfo = false,
         )
         if (opening) browserAgent?.browserOpened() else browserAgent?.browserClosed()
     }
@@ -8235,10 +8240,10 @@ class CompanionViewModel(
                 _uiState.value = _uiState.value.copy(isMuted = muting)
             }
             AvatarZone.FOREHEAD -> {
-                _uiState.value = _uiState.value.copy(showSettings = !_uiState.value.showSettings)
+                toggleSettings()
             }
             AvatarZone.BACKGROUND -> {
-                _uiState.value = _uiState.value.copy(showTiles = !_uiState.value.showTiles)
+                _uiState.value = _uiState.value.copy(showTiles = !_uiState.value.showTiles, showNeuralInfo = false)
             }
         }
     }
@@ -8592,7 +8597,8 @@ class CompanionViewModel(
 
     fun toggleSettings() {
         if (_uiState.value.showSettings) rebuildOmniRoute()
-        _uiState.value = _uiState.value.copy(showSettings = !_uiState.value.showSettings)
+        _uiState.value = _uiState.value.copy(showSettings = !_uiState.value.showSettings,
+            settingsInitialPage = null, showNeuralInfo = false)
     }
 
     fun toggleSetupWizard() {
@@ -9094,9 +9100,54 @@ class CompanionViewModel(
         if (show) refreshRobot()
     }
 
-    /** Opens the read-only neural activity view; diagnostics already refresh at 1 Hz. */
+    /** Opens the interactive monitor without changing the saved brain or sensor choices. */
     fun toggleNeuralInfo() {
-        _uiState.update { it.copy(showNeuralInfo = !it.showNeuralInfo, showTiles = false) }
+        _uiState.update { it.copy(showNeuralInfo = !it.showNeuralInfo, showTiles = false,
+            showSettings = false, settingsInitialPage = null, neuralInputNotice = null,
+            neuralDesktopPaired = maleCnsBridge?.isPaired() == true,
+            neuralDiagnostics = nervousSystem.diagnostics()) }
+    }
+
+    /** An explicit offline alternative, never an automatic replacement for MaleCNS. */
+    fun startLocalBrainFromInfo() {
+        setNeuralSubstrate(NeuralSubstrate.RATE)
+        setNeuralMode(NeuralMode.NEURAL)
+        _uiState.update { it.copy(neuralInputNotice = "Local brain selected · controls the avatar") }
+    }
+
+    fun enableNeuralControlFromInfo() {
+        if (!brainInputAllowed()) return
+        setNeuralMode(NeuralMode.NEURAL)
+        _uiState.update { it.copy(neuralInputNotice = "Brain control enabled") }
+    }
+
+    private fun brainInputAllowed(): Boolean {
+        val d = nervousSystem.diagnostics()
+        return !appInBackground && d.mode != NeuralMode.LEGACY && d.fallback == FallbackReason.NONE &&
+            com.example.meowmba.core.thermal.ThermalGovernor.currentTier().ordinal < 2 &&
+            (d.substrate != NeuralSubstrate.MALECNS_REMOTE ||
+                (maleCnsBridge?.isPaired() == true && d.core.extra["malecns.connected"] == 1f))
+    }
+
+    fun petBrainFromInfo() {
+        if (!brainInputAllowed()) return
+        onAvatarPetted()
+        _uiState.update { it.copy(neuralInputNotice = "Pet sent to the brain") }
+    }
+
+    fun feedBrainFromInfo() {
+        if (!brainInputAllowed()) return
+        applyHabitatAction(HabitatAction.FEED, revealAvatar = false)
+        _uiState.update { it.copy(neuralInputNotice = "Food sent to the brain") }
+    }
+
+    fun openNeuralSettingsFromInfo() = openBrainSettingsCategory("Neural / Lumen")
+
+    fun openBrainPairingFromInfo() = openBrainSettingsCategory("Connections & memory")
+
+    private fun openBrainSettingsCategory(category: String) {
+        _uiState.update { it.copy(showNeuralInfo = false, showSettings = true,
+            settingsInitialPage = category, neuralInputNotice = null) }
     }
 
     // ── Plugins & MCP connectors ────────────────────────────────────────────

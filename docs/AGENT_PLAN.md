@@ -1,5 +1,15 @@
 # Agent execution plan — immersive companion revision
 
+## September 13: Build 114 Brain usability repair
+
+Brain now reserves a visible avatar viewport, exposes real Pet/Feed events and
+explicit local/Shadow-control actions, and explains inactive, cooling and
+unpaired/stale remote states with measured aggregate activity. Settings/pairing
+deep links retain privacy and secure transport. Validation and assembly are in
+progress; the disconnected phone remains last-verified Build 112. Read
+[MEOW_BUILD_114_PASS_DOWN.md](characters/MEOW_BUILD_114_PASS_DOWN.md) for the
+cause, fixes, regression coverage and debugging lessons.
+
 ## September 13: Build 113 cartoon worlds ready for phone installation
 
 Three new cartoon habitats add the snack lab, cosmic laundry and oddball diner,

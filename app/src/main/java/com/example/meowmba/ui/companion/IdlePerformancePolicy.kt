@@ -14,7 +14,9 @@ internal fun idlePerformanceAllowed(
     mouthEnergy: Float,
     stageAllowed: Boolean = true,
     socialContextAllowed: Boolean = true,
-): Boolean = stageAllowed && socialContextAllowed && faceModeActive(state) &&
+// This is visual acting only. The compact Brain monitor leaves that stage
+// visible; speech and other bare-face policies still use faceModeActive as-is.
+): Boolean = stageAllowed && socialContextAllowed && faceModeActive(state.copy(showNeuralInfo = false)) &&
     !state.showConnectorsScreen && !state.showBrowser && !state.driving &&
     state.activeTask == null && state.pendingApproval == null && state.emotionPreview == null &&
     mouthEnergy.isFinite() && mouthEnergy <= .02f &&

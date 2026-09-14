@@ -24,6 +24,7 @@ class AvatarHomeNavigationTest {
             showRobotScreen=true, showVoiceModelScreen=true, showVaultScreen=true, showConnectorsScreen=true,
             avatarStyle=AvatarStyle.FULL_FLY, avatarScale=1.5f, habitatMode=true, background=wallpaper,
             isCameraEnabled=false, isMicEnabled=false,
+            showNeuralInfo=true, settingsInitialPage="Neural / Lumen", neuralInputNotice="Pet sent to the brain",
         )
         val after=before.atAvatarHome()
         // Include every show* panel getter so a future route cannot silently escape this contract.
@@ -31,6 +32,7 @@ class AvatarHomeNavigationTest {
             assertEquals(method.name, false, method.invoke(after))
         }
         assertFalse(after.isChatExpanded); assertFalse(after.isPreviewVisible)
+        assertNull(after.settingsInitialPage); assertNull(after.neuralInputNotice)
         assertEquals(before.avatarStyle,after.avatarStyle);assertEquals(before.avatarScale,after.avatarScale,0f)
         assertEquals(before.background,after.background);assertEquals(before.habitatMode,after.habitatMode)
         assertEquals(before.isCameraEnabled,after.isCameraEnabled);assertEquals(before.isMicEnabled,after.isMicEnabled)

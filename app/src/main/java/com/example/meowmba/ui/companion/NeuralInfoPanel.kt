@@ -1,153 +1,206 @@
 package com.example.meowmba.ui.companion
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import com.example.meowmba.ui.theme.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import com.example.meowmba.core.neural.NeuralDiagnostics
+import com.example.meowmba.core.neural.NeuralMode
+import com.example.meowmba.core.neural.NeuralSubstrate
+import com.example.meowmba.ui.theme.OutlinedButton
+import com.example.meowmba.ui.theme.Surface
 import kotlin.math.roundToInt
 
 /**
- * Read-only neural telemetry for curious users. The controller exposes
- * aggregate activity, not individual biological spikes, so the bars are
- * explicitly labelled as a visualisation of the running core. No new timer is
- * created here: [CompanionViewModel] publishes diagnostics once per second.
+ * A monitor beside the avatar, with deliberate sensory actions and measured values.
+ * Diagnostics come from the controller's existing cadence; this creates no timer.
+ * The transparent space outside the sheet keeps the avatar visible and touchable.
  */
 @Composable
 fun NeuralInfoPanel(
     diagnostics: NeuralDiagnostics?,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
+    desktopPaired: Boolean = false,
+    inputNotice: String? = null,
+    onUseLocalBrain: () -> Unit = {},
+    onPet: () -> Unit = {},
+    onFeed: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
+    onPairComputer: () -> Unit = {},
+    onEnableNeuralControl: () -> Unit = {},
 ) {
-    val d = diagnostics
-    val core = d?.core
-    val activity = (core?.meanAbsActivity ?: 0f).coerceIn(0f, 1f)
-    val saturation = core?.saturatedUnits ?: 0
-    val silent = core?.silentUnits ?: 0
-    val units = core?.units ?: 0
-    val maleCns = d?.substrate == com.example.meowmba.core.neural.NeuralSubstrate.MALECNS_REMOTE
-    // Deterministic bars avoid random "activity" that would misrepresent the
-    // brain. Their variation is derived from measured aggregate activity.
-    val bars = remember(activity, d?.steps, d?.substrate, core?.extra) {
-        if (maleCns) listOf("feed_hz", "escape_hz", "groom_hz", "wing_hz").map {
-            ((core?.extra?.get("malecns.$it") ?: 0f) / 400f).coerceIn(0f, 1f)
-        } else List(18) { i ->
-            (activity * (0.55f + ((i * 17 + (d?.steps ?: 0L) % 23) % 46) / 100f))
-                .coerceIn(0.02f, 1f)
-        }
-    }
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = .72f)),
-        contentAlignment = Alignment.Center,
-    ) {
+    val view = neuralInfoPresentation(diagnostics, desktopPaired)
+    var details by rememberSaveable { mutableStateOf(false) }
+    BoxWithConstraints(modifier.fillMaxSize().safeDrawingPadding().testTag("brain-info-overlay")) {
+        val landscape = maxWidth > maxHeight
+        val sheetWidth = if (landscape) minOf(360.dp, maxWidth * .48f) else maxWidth - 24.dp
+        val sheetHeight = if (landscape) maxHeight - 24.dp else maxHeight * .56f
         Surface(
-            modifier = Modifier.fillMaxWidth(.92f).padding(12.dp),
-            shape = RoundedCornerShape(28.dp),
+            modifier = Modifier.align(if (landscape) Alignment.CenterEnd else Alignment.BottomCenter)
+                .padding(end = if (landscape) 12.dp else 0.dp, bottom = if (landscape) 0.dp else 12.dp)
+                .width(sheetWidth).height(sheetHeight).testTag("brain-info-sheet"),
+            shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 8.dp,
+            tonalElevation = 6.dp,
         ) {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()).padding(22.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("Brain activity", style = MaterialTheme.typography.headlineSmall)
-                        Text(
-                            "Live aggregate telemetry from Meow's behavior controller",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        Text("Brain activity", style = MaterialTheme.typography.titleLarge)
+                        Text(view.network, style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     IconButton(onClick = onClose) {
                         Icon(Icons.Default.Close, contentDescription = "Close brain activity")
                     }
                 }
-                Spacer(Modifier.height(4.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth().height(74.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.Bottom,
+                Column(
+                    Modifier.weight(1f).verticalScroll(rememberScrollState()).testTag("brain-info-content"),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    bars.forEach { value ->
-                        Box(
-                            Modifier.weight(1f).fillMaxWidth().height((8 + value * 62).dp)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(MaterialTheme.colorScheme.primary.copy(alpha = .45f + value * .5f)),
+                    Text(view.title, style = MaterialTheme.typography.titleSmall,
+                        color = if (view.measurementsAvailable) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurface)
+                    Text(view.explanation, style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (view.showLocalAction) OutlinedButton(onClick = onUseLocalBrain,
+                        modifier = Modifier.fillMaxWidth()) { Text("Start local brain") }
+                    if (view.showPairAction) OutlinedButton(onClick = onPairComputer,
+                        modifier = Modifier.fillMaxWidth()) { Text("Pair computer") }
+                    if (view.measurementsAvailable && diagnostics?.mode == NeuralMode.SHADOW) {
+                        OutlinedButton(onClick = onEnableNeuralControl, modifier = Modifier.fillMaxWidth()) {
+                            Text("Let brain control avatar")
+                        }
+                    }
+                    if (details) {
+                        NeuralInfoDetails(diagnostics, view.measurementsAvailable)
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                            view.metrics.forEach { metric -> NeuralActivityMeter(metric) }
+                        }
+                        Text(
+                            if (!view.measurementsAvailable) "— = unavailable; no activity is being shown."
+                            else if (diagnostics?.substrate == NeuralSubstrate.MALECNS_REMOTE)
+                                "Measured rates · bars span 0–400 Hz"
+                            else "Measured activity · no simulated display effects",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
-                Text(
-                    if (maleCns) "Measured rates · feeding / escape / grooming / wing · 0–400 Hz"
-                    else "Activity visualization · ${((activity * 100).roundToInt())}% mean signal",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                NeuralInfoRow("Mode", d?.mode?.name?.lowercase() ?: "starting")
-                NeuralInfoRow("Network", d?.substrate?.name?.lowercase() ?: "—")
-                NeuralInfoRow("Core units", if (core == null) "—" else "$units  ·  $silent silent  ·  $saturation saturated")
-                NeuralInfoRow("Simulation", if (d == null) "—" else "${d.steps} steps  ·  p95 ${d.p95StepMicros} µs")
-                NeuralInfoRow("Current action", d?.currentAction?.name?.lowercase() ?: "idle")
-                NeuralInfoRow("Thermal tier", d?.thermalTier?.toString() ?: "—")
-                if (maleCns) {
-                    Text(core?.status ?: "Waiting for Meow", style = MaterialTheme.typography.bodySmall)
-                    NeuralInfoRow("Source", "MaleCNS v1.0 · retained graph")
-                    NeuralInfoRow("Brain time", "${(core?.extra?.get("malecns.sim_ms") ?: 0f).roundToInt()} ms simulated")
-                    NeuralInfoRow("Meow compute", "${(core?.extra?.get("malecns.compute_ms") ?: 0f).roundToInt()} ms / step")
-                    NeuralInfoRow("Fallback", d?.fallback?.name?.lowercase()?.replace('_', ' ') ?: "—")
+                inputNotice?.takeIf { it.isNotBlank() }?.let {
+                    Text(it, Modifier.padding(top = 5.dp).testTag("brain-input-notice"),
+                        style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                 }
-                if (d?.substrate == com.example.meowmba.core.neural.NeuralSubstrate.BANC_EXPERIMENTAL) {
-                    NeuralInfoRow("BANC wing power", "${((core?.extra?.get("banc.wing_power") ?: 0f) * 100).roundToInt()}%")
-                    NeuralInfoRow("Circuit source", "76 neurons · 515 pairs · 3,316 counts")
+                Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = onPet, enabled = view.interactionEnabled, modifier = Modifier.weight(1f)) {
+                        Text("Pet")
+                    }
+                    OutlinedButton(onClick = onFeed, enabled = view.interactionEnabled, modifier = Modifier.weight(1f)) {
+                        Text("Feed")
+                    }
                 }
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    if (maleCns) "Measured population firing rates from the MaleCNS simulation. The retained graph has 90.3 million anatomical synapse counts; neuron dynamics and avatar retargeting are modeled. Runs 50 ms of brain time per response, independently of animation time. Data: Janelia FlyEM, Cambridge/MRC LMB and Google Research, CC BY 4.0. Simulator: Blendi Remade / fal.ai, MIT."
-                    else if (d?.substrate == com.example.meowmba.core.neural.NeuralSubstrate.BANC_EXPERIMENTAL)
-                        "The bars summarize the running BANC anatomical-path adapter. Its topology comes from BANC, while connection signs, timing and visual motor retargeting are synthetic. It is not FlyWire or a literal spike trace."
-                    else "The bars summarize the synthetic running core; they are not a literal FlyWire spike trace. The separate BANC extract is available as an experimental network option.",
-                    style = MaterialTheme.typography.bodySmall,
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = onOpenSettings, modifier = Modifier.weight(1f)) { Text("Settings") }
+                    OutlinedButton(onClick = { details = !details }, modifier = Modifier.weight(1f)) {
+                        Text(if (details) "Less detail" else "Details")
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
+private fun NeuralActivityMeter(metric: BrainActivityMetric) {
+    Column(Modifier.fillMaxWidth().testTag("brain-metric-${metric.id}").semantics(mergeDescendants = true) {
+        contentDescription = "${metric.label}, ${if (metric.value == null) "unavailable" else metric.displayValue}"
+    }) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(metric.label, style = MaterialTheme.typography.labelMedium)
+            Text(metric.displayValue, style = MaterialTheme.typography.labelMedium)
+        }
+        Box(Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)) {
+            // Zero remains an empty track. Missing/stopped telemetry has no colored fill.
+            metric.fraction?.takeIf { it > 0f }?.let { fraction ->
+                Box(Modifier.fillMaxWidth(fraction).height(5.dp).background(MaterialTheme.colorScheme.primary))
+            }
+        }
+    }
+}
+
+@Composable
+private fun NeuralInfoDetails(d: NeuralDiagnostics?, measured: Boolean) {
+    val core = d?.core
+    val remote = d?.substrate == NeuralSubstrate.MALECNS_REMOTE
+    NeuralInfoRow("Core units", core?.units?.toString() ?: "—")
+    NeuralInfoRow("Measured steps", d?.steps?.toString() ?: "—")
+    NeuralInfoRow("Current action", if (measured) d?.currentAction?.name?.lowercase()?.replace('_', ' ') ?: "—" else "—")
+    NeuralInfoRow("Phone step p95", d?.let { "${it.p95StepMicros} µs" } ?: "—")
+    NeuralInfoRow("Thermal state", when (d?.thermalTier) {
+        null -> "—"
+        0 -> "Normal"
+        1 -> "Saving power"
+        else -> "Cooling"
+    })
+    if (remote) {
+        core?.status?.takeIf { it.isNotBlank() }?.let {
+            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        fun measuredTime(key: String): String = core?.extra?.get(key)
+            ?.takeIf { measured && it.isFinite() && it >= 0f }?.let { "${it.roundToInt()} ms" } ?: "—"
+        NeuralInfoRow("Simulated brain time", measuredTime("malecns.sim_ms"))
+        NeuralInfoRow("Meow compute per reply", measuredTime("malecns.compute_ms"))
+    }
+    Text(
+        when (d?.substrate) {
+            NeuralSubstrate.MALECNS_REMOTE -> "These are measured population firing rates, not a map of individual synapses. The retained MaleCNS graph contains 90.3 million anatomical synapse counts. Neuron dynamics and avatar movement are modeled; brain time runs independently of animation time. Data: Janelia FlyEM, Cambridge/MRC LMB and Google Research, CC BY 4.0. Simulator: Blendi Remade / fal.ai, MIT."
+            NeuralSubstrate.BANC_EXPERIMENTAL -> "These are aggregate values from the BANC anatomical-path adapter: 76 neurons, 515 connection pairs and 3,316 anatomical counts. Connection signs, timing and avatar movement are authored assumptions. This is not a map of individual synapses or a literal biological spike trace."
+            else -> "These are measured aggregate values from a small synthetic network, not a map of individual synapses or a biological fly brain. Active units means units above the core's silence threshold."
+        },
+        modifier = Modifier.testTag("brain-details-explanation"),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+@Composable
 private fun NeuralInfoRow(label: String, value: String) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, Modifier.weight(1f), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, Modifier.weight(1.4f), style = MaterialTheme.typography.labelMedium, textAlign = TextAlign.End)
+        Text(label, Modifier.weight(1f), style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, Modifier.weight(1.2f), style = MaterialTheme.typography.labelMedium, textAlign = TextAlign.End)
     }
 }

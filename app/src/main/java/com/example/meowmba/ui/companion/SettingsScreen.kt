@@ -135,6 +135,8 @@ fun SettingsScreen(
     onNeuralSubstrate: (com.example.meowmba.core.neural.NeuralSubstrate) -> Unit = {},
     onNeuralTrace: (Boolean) -> Unit = {},
     onNeuralReset: () -> Unit = {},
+    onOpenBrain: () -> Unit = {},
+    initialPage: String? = null,
     lumenReflexV2: Boolean = false,
     onLumenReflexV2Change: (Boolean) -> Unit = {},
     agenticRuntimeV1: Boolean = false,
@@ -189,7 +191,9 @@ fun SettingsScreen(
     onSaved: () -> Unit = {},
     onClose: () -> Unit
 ) {
-    var page by rememberSaveable { mutableStateOf<String?>(null) }
+    var page by rememberSaveable(initialPage) {
+        mutableStateOf(initialPage?.takeIf { requested -> SETTINGS_CATEGORIES.any { it.title == requested } })
+    }
     var opencodeKey by remember { mutableStateOf(secureStorage.getApiKey("opencode") ?: "") }
     var defaultBrain by remember { mutableStateOf(secureStorage.getPreference("default_brain") ?: "auto") }
     var brainMenuOpen by remember { mutableStateOf(false) }
@@ -265,6 +269,13 @@ fun SettingsScreen(
             }
             }
             if (page == "Neural / Lumen") {
+                OutlinedButton(onClick = onOpenBrain, modifier = Modifier.fillMaxWidth()) {
+                    Text("Open Brain activity")
+                }
+                Text("Watch the avatar and send Pet or Feed inputs. The computer brain pauses while settings cover the avatar.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(12.dp))
                 NeuralSettingsSection(
                     mode = neuralMode, substrate = neuralSubstrate, traceConsent = neuralTraceConsent,
                     diagnostics = neuralDiagnostics, showNeuralCoreControls = true,

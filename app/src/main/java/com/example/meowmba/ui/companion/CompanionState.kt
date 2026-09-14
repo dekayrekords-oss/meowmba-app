@@ -108,11 +108,16 @@ data class CompanionState(
     val errorMessage: String? = null,
     val showTiles: Boolean = false,
     val showSettings: Boolean = false,
+    /** Optional category requested by a contextual setup action. */
+    val settingsInitialPage: String? = null,
     val showModelManager: Boolean = false,
     val showPrivacyDashboard: Boolean = false,
     val showAvatarScreen: Boolean = false,
     /** Lightweight live neural activity panel, opened from the tile grid. */
     val showNeuralInfo: Boolean = false,
+    val neuralDesktopPaired: Boolean = false,
+    /** Confirms input submission, never claims a measured neural response. */
+    val neuralInputNotice: String? = null,
     /** Which eye style the face is drawn in. Persisted across launches. */
     val avatarStyle: AvatarStyle = AvatarStyle.DEFAULT,
     val avatarAnimal: AvatarAnimal = AvatarAnimal.NONE,
@@ -539,6 +544,10 @@ enum class CompanionEmotion {
     DETERMINED,
     RELIEVED
 }
+
+/** Partial chat and Brain overlays leave the rendered avatar scene visible. */
+fun avatarSceneVisible(state: CompanionState): Boolean =
+    faceModeActive(state.copy(isChatExpanded = false, showNeuralInfo = false))
 
 /**
  * True when the bare companion face is what's on screen — no overlay panels,

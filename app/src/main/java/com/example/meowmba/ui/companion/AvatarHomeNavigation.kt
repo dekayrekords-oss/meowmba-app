@@ -14,4 +14,5 @@ internal fun CompanionState.atAvatarHome() = copy(
     showProjectsScreen = false, showToolsScreen = false, showRobotScreen = false,
     showConnectorsScreen = false, showVaultScreen = false, showBrowser = false,
     showAvatarScreen = false, showAppDrawer = false, showVoiceModelScreen = false,
+    showNeuralInfo = false, settingsInitialPage = null, neuralInputNotice = null,
 )
