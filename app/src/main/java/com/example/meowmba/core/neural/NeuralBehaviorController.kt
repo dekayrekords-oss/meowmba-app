@@ -273,7 +273,10 @@ class NeuralBehaviorController(
             encoder.reset()
         }
         if (newMode == NeuralMode.NEURAL) clearFallback()
-        if (newMode == NeuralMode.LEGACY) published = legacy.bias()
+        if (newMode == NeuralMode.LEGACY) {
+            experimentalWingPower = 0f
+            published = legacy.bias()
+        }
     }
 
     @Synchronized
@@ -281,6 +284,8 @@ class NeuralBehaviorController(
         if (newSubstrate == substrate) return
         substrate = newSubstrate
         core = coreFactory(newSubstrate)
+        // A circuit-specific render value must never continue after its core is replaced.
+        experimentalWingPower = 0f
         encoder.reset()
         arbiter.reset()
         bus.clear()
