@@ -1,5 +1,18 @@
 # Agent execution plan — immersive companion revision
 
+## September 13: Build 113 cartoon worlds ready for phone installation
+
+Three new cartoon habitats add the snack lab, cosmic laundry and oddball diner,
+with funny scenery, a tappable spring toy in each, shared neural PLAY/TOUCH
+events, and matching uncluttered native 3D rooms for FULL_FLY. Existing rooms
+and user preferences remain. Thirty-seven local render/world/interaction tests
+and 41 final server tests pass; debug and instrumentation packages are built.
+Eight native room/picker captures were reviewed. The phone remains Build 112:
+the user asked to continue without the disconnected device. Read
+[MEOW_BUILD_113_PASS_DOWN.md](characters/MEOW_BUILD_113_PASS_DOWN.md) for asset
+provenance, portrait framing/geometry lessons, package identity and the remaining
+physical/GLES installation checks. Build 112 neural pairing remains pending.
+
 ## September 13: Build 112 installed; MaleCNS server route verified
 
 The retained MaleCNS graph is integrated through the pinned, paired Desktop

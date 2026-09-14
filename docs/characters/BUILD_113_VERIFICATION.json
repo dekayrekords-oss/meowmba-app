@@ -1,0 +1,101 @@
+{
+  "build": 113,
+  "versionName": "1.3.81",
+  "sourceCommit": "6635c12",
+  "installed": false,
+  "installedPhoneBuildLastVerified": 112,
+  "deviceStatus": "User requested continuing without the disconnected phone",
+  "package": "package: name='com.example.meowmba' versionCode='113' versionName='1.3.81' platformBuildVersionName='17' platformBuildVersionCode='37' compileSdkVersion='37' compileSdkVersionCodename='17'",
+  "localFocusedTests": {
+    "tests": 37,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "serverFocusedTests": {
+    "tests": 41,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "initialLocalFailure": "Four unchanged appearance-preference tests could not initialize Mockito self-attachment on the Mac test JVM; all four passed on Meow. No assertions disabled.",
+  "androidInstrumentation": "Assembled, signature verified; new real-GLES acceptance test not executed",
+  "protectedRuntimeEntriesUnchanged": 53,
+  "artwork": [
+    {
+      "id": "cartoon_snack_lab",
+      "sha256": "ded5e3040e2512d632ddfe9e99aaf7807b3479549ee039d4431ee80805e4227d",
+      "width": 1536,
+      "height": 1024,
+      "sourceTableAnchor": 0.6630859375,
+      "sourceFocusX": 0.23
+    },
+    {
+      "id": "cartoon_laundromat",
+      "sha256": "aae099eb916496845738adaf4ff1a4d2d74086c937898fc3c6b63d7280d28e03",
+      "width": 1536,
+      "height": 1024,
+      "sourceTableAnchor": 0.6689453125,
+      "sourceFocusX": 0.5
+    },
+    {
+      "id": "cartoon_diner",
+      "sha256": "3b41791cbace4b1733746757de52b7fb6e3894160eda0e8dd5b9e5e84d39a27d",
+      "width": 1536,
+      "height": 1024,
+      "sourceTableAnchor": 0.6484375,
+      "sourceFocusX": 0.18
+    }
+  ],
+  "signerSha256": "b7850d5fb645df9f5d12525db1b10e457b0ee7f3aa50bbf4294ff31dae3379ff",
+  "artifacts": {
+    "meowmba-113.apk": {
+      "bytes": 447376477,
+      "sha256": "6b70d74b5bc7175ef6e82024499af6e54b5eac2999e531e473f54d2d20fc8a40"
+    },
+    "tests113.apk": {
+      "bytes": 2739070,
+      "sha256": "c3a19ae4a249960b1909f4ede54395965bcc4de9ee436bafdf23c7ac9bee4d74"
+    }
+  },
+  "nativePreviews": [
+    {
+      "path": "build-out/habitat/build113/native-previews/cartoon_diner-landscape-play.png",
+      "sha256": "f6d357b18e9c42ca286fc1111e80895dd91f244a820c6e73e80c6b9a54ae9a48"
+    },
+    {
+      "path": "build-out/habitat/build113/native-previews/cartoon_diner-portrait-play.png",
+      "sha256": "20484038d8b04ab2ac21c27cfece1d10f75f4cefbd469e84ed5f9a1482e3e592"
+    },
+    {
+      "path": "build-out/habitat/build113/native-previews/cartoon_laundromat-landscape-play.png",
+      "sha256": "4ea7853a916e73e5cf0ed48249c06755c8fd5bb5e4e1ddeeb69fa5a4631dfab3"
+    },
+    {
+      "path": "build-out/habitat/build113/native-previews/cartoon_laundromat-portrait-play.png",
+      "sha256": "a29443f1f4a802562338aa8b7b125dad9884ee8b8065efe2b6da0951e32abdea"
+    },
+    {
+      "path": "build-out/habitat/build113/native-previews/cartoon_snack_lab-landscape-play.png",
+      "sha256": "0bebb361ce719ea79a585a0c8b198a4f4cc48be9329c968176aa6a6f04f387d9"
+    },
+    {
+      "path": "build-out/habitat/build113/native-previews/cartoon_snack_lab-portrait-play.png",
+      "sha256": "d7f9df247a5af743fe5d3fa815451879d824ed88dee73933f9b94fd3230970b1"
+    },
+    {
+      "path": "build-out/habitat/build113/native-previews/picker-compact.png",
+      "sha256": "9740966e50f34bfd00d9206bbb9c652033b6441133a8ba2960698840ad38c6e6"
+    },
+    {
+      "path": "build-out/habitat/build113/native-previews/picker-landscape.png",
+      "sha256": "c33e4295491f9d85a40a7a5638fd8bc6deb15deac223d0df5746e44a048f0067"
+    }
+  ],
+  "pending": [
+    "Phone install and physical touch/occlusion check",
+    "Actual GLES new-room test/capture review",
+    "Sustained thermal/battery validation",
+    "Existing Build 112 phone bridge pairing"
+  ]
+}

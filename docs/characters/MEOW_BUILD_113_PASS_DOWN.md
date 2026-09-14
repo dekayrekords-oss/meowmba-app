@@ -2,8 +2,8 @@
 
 The user requested more cartoon backgrounds, one interactive scene and a couple
 with funny background objects. This adds three original rooms without replacing
-any existing selection. Source implementation is ready; final build/verification
-evidence is appended below by the integrator. Build 112 remains on the phone;
+any existing selection. Build 113 assembled successfully with 41 focused host
+tests passing; native room/picker captures were reviewed. Build 112 remains on the phone;
 the user's previous direction was to continue without the disconnected device.
 
 ## What changed, how and why
@@ -93,4 +93,42 @@ payloads. Verify target SHA-256, existing signing certificate and protected
 runtime entries before offering installation. Recheck the installed version
 before a later `adb install -r`; do not downgrade a newer build.
 
-Final verification, signed APK identity and source commit: pending append.
+## Final verification
+
+Source commit: `6635c12`. The final local rendering/world/interaction run passed
+37 tests, zero failures/errors/skips. The final server run passed those plus all
+four appearance-preference tests: **41 tests, zero failures/errors/skips**.
+Both debug APK and instrumentation APK assembly passed. The initial Mac JVM
+attachment issue was confined to test execution; all four affected tests passed
+on Meow. No assertions were removed or disabled.
+
+Eight native captures under `app/build/reports/cartoon113/` and
+`build-out/habitat/build113/native-previews/` cover three room/toy views in
+portrait and landscape, plus both picker widths. Real source-pixel checks verify
+the images loaded. Reviewed the final portrait crop of the banana and UFO
+pancakes, responsive picker, clean play plane and visible toys. Measured art
+anchors and hash provenance are committed in the manifest. The GPU test is
+compiled into `tests113.apk` but was not executed without a device.
+
+Final server artifact SHA-256:
+
+- App: `6b70d74b5bc7175ef6e82024499af6e54b5eac2999e531e473f54d2d20fc8a40`.
+- Instrumentation: `c3a19ae4a249960b1909f4ede54395965bcc4de9ee436bafdf23c7ac9bee4d74`.
+- App delta: 9,167,044 bytes,
+  `ff64808dbacf9b79c2a086924ae26bb64a562ab6cc63c7bae7e61dc048469e07`.
+- Test delta: 154,999 bytes,
+  `88d9e0124ba95f6b6730028a4835b3aa63097c42e08d3b3e2131cbb4cfdcf9f2`.
+
+Local reconstruction matched both server hashes exactly. Both APK signatures
+verify with certificate SHA-256
+`b7850d5fb645df9f5d12525db1b10e457b0ee7f3aa50bbf4294ff31dae3379ff`.
+All 53 protected native/model entries match Build 112 by CRC and size, and all
+three packaged paintings match their committed provenance hashes. The app is
+`build-out/habitat/meowmba-113.apk`; instrumentation is
+`build-out/habitat/tests113.apk`. Machine-readable results are in
+`BUILD_113_VERIFICATION.json`. New installation remains pending; do not mistake
+the Build 112 install receipt for Build 113 acceptance. On a later connected
+phone, first inspect the new rooms with Lumen and FULL_FLY, run the added GLES
+test and review its captures. Check tapping the toys while the avatar crosses
+them, swipe navigation, 50–300% avatar sizes and portrait/landscape before
+claiming physical interactive/graphics acceptance.
