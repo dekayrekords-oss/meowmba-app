@@ -281,7 +281,8 @@ UNIT
     mkdir -p "$HOME/.config/systemd/user"
     cp "$unit_src" "$HOME/.config/systemd/user/meow-computer.service"
     if systemctl --user daemon-reload 2>/dev/null \
-      && systemctl --user enable --now meow-computer.service 2>/dev/null; then
+      && systemctl --user enable meow-computer.service 2>/dev/null \
+      && systemctl --user restart meow-computer.service 2>/dev/null; then
       log "systemd --user meow-computer.service enabled"
     else
       warn "could not enable systemd user unit — start manually: python3 $WORKSPACE/bin/meow-computer-worker.py"
@@ -289,7 +290,7 @@ UNIT
   elif have_cmd systemctl && [[ "$(id -u)" -eq 0 ]]; then
     cp "$unit_src" /etc/systemd/system/meow-computer.service
     systemctl daemon-reload || true
-    systemctl enable --now meow-computer.service || warn "system unit start failed"
+    systemctl enable meow-computer.service && systemctl restart meow-computer.service || warn "system unit start failed"
   else
     warn "systemd not available — use docker-compose or run the worker by hand"
   fi
@@ -314,12 +315,7 @@ services:
     restart: unless-stopped
 COMPOSE
   log "docker-compose.yml written"
-  if have_cmd docker && docker info >/dev/null 2>&1; then
-    (cd "$WORKSPACE" && docker compose up -d) && log "docker compose up -d OK" \
-      || warn "docker compose failed — systemd/manual worker is fine"
-  else
-    log "docker not usable — skipped compose up"
-  fi
+  log "Docker configuration available for manual use; systemd owns this installation."
 }
 
 write_marker() {
@@ -336,7 +332,9 @@ write_marker() {
 }
 JSON
   # Convenience symlink for discoverability
-  ln -sfn "$WORKSPACE" "$HOME/meow-computer" 2>/dev/null || true
+  if [[ "$WORKSPACE" != "$HOME/meow-computer" && ! -e "$HOME/meow-computer" ]]; then
+    ln -s "$WORKSPACE" "$HOME/meow-computer"
+  fi
 }
 
 # --- main ---
@@ -350,7 +348,7 @@ fi
 install_worker
 write_compose
 write_systemd_unit
-write_marker
+rm -f "$WORKSPACE/COMPUTER_READY.json"
 
 # Start worker if nothing listening yet
 HEALTH_URL="http://${MEOW_COMPUTER_HOST}:${MEOW_COMPUTER_PORT}/health"
@@ -370,6 +368,7 @@ if ! probe_worker; then
 fi
 
 if probe_worker; then
+  write_marker
   echo
   log "READY — health OK at $PROBE_URL"
   if [[ "$MEOW_COMPUTER_HOST" == "127.0.0.1" || "$MEOW_COMPUTER_HOST" == "localhost" ]]; then
@@ -377,6 +376,7 @@ if probe_worker; then
   fi
 else
   warn "worker not responding yet; start: MEOW_COMPUTER_HOST=$MEOW_COMPUTER_HOST MEOW_COMPUTER_PORT=$MEOW_COMPUTER_PORT python3 $WORKSPACE/bin/meow-computer-worker.py"
+  exit 1
 fi
 log "Worker requires its private .worker-token in an HTTP profile; SSH profiles use SSH credentials."
 log "install complete workspace=$WORKSPACE"

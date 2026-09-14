@@ -38,11 +38,11 @@ class Computer120DeviceTest {
                 flags.setAgenticRuntimeV1(true)
                 scenario.onActivity { vm.runOnComputer("printf meow120_verified") }
                 awaitStopped()
-                assertTrue(vm.uiState.value.captionText, vm.uiState.value.captionText.contains("Computer completed"))
-                assertTrue(vm.uiState.value.captionText, vm.uiState.value.captionText.contains("meow120_verified"))
+                assertTrue(vm.uiState.value.captionText, vm.uiState.value.captionText.orEmpty().contains("Computer completed"))
+                assertTrue(vm.uiState.value.captionText, vm.uiState.value.captionText.orEmpty().contains("meow120_verified"))
                 scenario.onActivity { vm.runOnComputer("printf meow120_failed; exit 7") }
                 awaitStopped()
-                assertTrue(vm.uiState.value.captionText, vm.uiState.value.captionText.contains("BLOCKED"))
+                assertTrue(vm.uiState.value.captionText, vm.uiState.value.captionText.orEmpty().contains("BLOCKED"))
                 scenario.onActivity { vm.runOnComputer("sleep 3; printf meow120_late") }
                 Thread.sleep(300)
                 scenario.onActivity { vm.cancelAgenticComputerChat() }
