@@ -122,3 +122,17 @@ Physical verification remains required for front/cover lens selection,
 portrait/landscape/fold mapping, real ML Kit face and mouth detection, Android
 camera-indicator shutdown, and sustained heat. These changes do not verify a
 particular phone configuration or remove the thermal pause.
+
+## Integrator test follow-up
+
+The integrator reported that all 15 new pipeline tests and the camera privacy
+and status tests passed in the first 247-check run. Ten older VisionPipelineTest
+cases failed during unrelated `AgenticRuntime.from` initialization, before
+their vision assertions, because their mock Context did not provide preferences.
+The fixture now uses the existing ScopedCompanionAndroidMocks for bounded
+clock/log mocks and temporary AgenticRuntime isolation. Created ViewModel scopes
+are cancelled before restoring that fixture, the idle-animation property is
+restored, and IO work uses the same test dispatcher. All original routing,
+provider-selection and honest no-camera assertions remain unchanged. This is
+a fixture repair, not a production null-handling change. Integrator retest of
+the repaired older suite is pending.

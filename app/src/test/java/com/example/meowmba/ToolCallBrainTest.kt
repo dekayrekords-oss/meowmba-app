@@ -308,15 +308,18 @@ class AgentBrainViewModelTest {
 
     private val testDispatcher = UnconfinedTestDispatcher()
     private lateinit var fakeTts: VoicePipelineTest.FakeSpeechSynthesizer
+    private lateinit var androidMocks: ScopedCompanionAndroidMocks
 
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
+        androidMocks = ScopedCompanionAndroidMocks { testDispatcher.scheduler.currentTime }
         fakeTts = VoicePipelineTest.FakeSpeechSynthesizer()
     }
 
     @After
     fun tearDown() {
+        androidMocks.close()
         Dispatchers.resetMain()
     }
 

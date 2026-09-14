@@ -195,3 +195,20 @@ manifest before opening a new pairing window. For stalled switching, inspect
 the ViewModel busy gate and creation of a new transport/core, not just sequence
 reset. Never print the encrypted record, pairing payload or raw remote errors
 into screenshots, Git, logs or passdown files.
+
+
+### First-build endpoint validation correction
+
+The first integrated Android build exposed two failing hostile-host tests.
+Java's multi-component URI constructor does **not** treat its host argument
+as an opaque host: `user@fly.example` becomes a real user-info component,
+`fly.example/path` becomes a different path, and `?`/`#` become query/fragment
+components. Checking only `uri.host != null` therefore accepted all four.
+This behavior was reproduced directly with the installed JDK, without making
+network requests. The correction validates DNS labels or the restricted IPv6
+literal syntax before URI construction, then verifies exact host, port, path
+and the absence of user-info, query and fragment afterward. Every original
+hostile-input assertion remains, with additional percent-encoding, embedded
+port, bracketed-DNS, control-character and backslash cases. Root reruns the
+actual Android suites; do not weaken these tests or rely on URI construction
+alone as a security boundary in future endpoint editors.

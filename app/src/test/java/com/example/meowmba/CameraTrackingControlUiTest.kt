@@ -3,6 +3,7 @@ package com.example.meowmba
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -20,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import com.example.meowmba.core.vision.FaceTrackingStatus
 import com.example.meowmba.ui.companion.CameraTrackingControl
 import com.example.meowmba.ui.theme.MeowmbaTheme
+import com.example.meowmba.ui.theme.Surface
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -39,7 +41,10 @@ class CameraTrackingControlUiTest {
         val density = LocalDensity.current
         CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale ?: density.fontScale)) {
             MeowmbaTheme(darkTheme = true) {
-                Box(Modifier.fillMaxSize().testTag("camera-control-viewport"), contentAlignment = Alignment.BottomEnd) { content() }
+                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background,
+                    contentColor = MaterialTheme.colorScheme.onBackground) {
+                    Box(Modifier.fillMaxSize().testTag("camera-control-viewport"), contentAlignment = Alignment.BottomEnd) { content() }
+                }
             }
         }
     }

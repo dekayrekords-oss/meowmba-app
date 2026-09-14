@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -24,6 +25,7 @@ import com.example.meowmba.ui.companion.MaleCnsServerControls
 import com.example.meowmba.ui.companion.MaleCnsServerUiState
 import com.example.meowmba.ui.companion.NeuralSettingsSection
 import com.example.meowmba.ui.theme.MeowmbaTheme
+import com.example.meowmba.ui.theme.Surface
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -46,7 +48,10 @@ class MaleCnsServerUiTest {
         val density = LocalDensity.current
         CompositionLocalProvider(LocalDensity provides Density(density.density, if (largeText) 1.4f else density.fontScale)) {
             MeowmbaTheme(darkTheme = true) {
-                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) { content() }
+                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background,
+                    contentColor = MaterialTheme.colorScheme.onBackground) {
+                    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) { content() }
+                }
             }
         }
     }

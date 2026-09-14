@@ -90,9 +90,23 @@ object DesktopBridgeProtocol {
     fun endpointUrl(host: String, port: Int, path: String): URL {
         require(host.isNotBlank() && host == host.trim() && host.length <= 253) { "Invalid bridge host" }
         require(port in 1..65535 && path in setOf("/pair", "/rpc")) { "Invalid bridge endpoint" }
-        val bare = host.removeSurrounding("[", "]")
+        val bracketed = host.startsWith("[") && host.endsWith("]")
+        val bare = if (bracketed) host.substring(1, host.lastIndex) else host
+        // URI's component constructor reparses @, /, ? and # inside its host argument;
+        // a non-null uri.host alone can therefore accept credentials or a different path.
+        // Reject delimiters before construction, then verify every generated component.
+        if (':' in bare) {
+            require(bare.matches(Regex("[0-9a-fA-F:.]+(?:%[A-Za-z0-9_.~-]+)?"))) { "Invalid bridge host" }
+        } else {
+            require(!bracketed && bare.removeSuffix(".").split('.').all {
+                it.matches(Regex("[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"))
+            }) { "Invalid bridge host" }
+        }
         val uri = URI("https", null, bare, port, path, null, null)
-        require(!uri.host.isNullOrBlank()) { "Invalid bridge host" }
+        require(uri.host?.removeSurrounding("[", "]") == bare && uri.rawUserInfo == null &&
+            uri.port == port && uri.rawPath == path && uri.rawQuery == null && uri.rawFragment == null) {
+            "Invalid bridge host"
+        }
         return uri.toURL()
     }
 

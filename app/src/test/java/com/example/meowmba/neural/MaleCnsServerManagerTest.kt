@@ -151,8 +151,9 @@ class MaleCnsServerManagerTest {
 
     @Test fun unsupportedHostSyntaxFailsBeforeAnyNetworkOperation() = runBlocking {
         val f = Fixture(Backend(null))
-        for (host in listOf("https://host.example", "user@host.example", "host.example/path", "host.example?x=1")) {
-            assertTrue(f.manager.pairServer(payload(host), "Phone").isFailure)
+        for (host in listOf("https://host.example", "user@host.example", "host.example/path", "host.example?x=1",
+            "host.example#fragment", "host.example%2fpath", "host.example:443")) {
+            assertTrue("Invalid host must not start pairing: $host", f.manager.pairServer(payload(host), "Phone").isFailure)
         }
         assertEquals(0, f.backend.pairs); assertTrue(f.backend.steps.isEmpty())
     }
