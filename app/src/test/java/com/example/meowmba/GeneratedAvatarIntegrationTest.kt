@@ -191,6 +191,26 @@ class GeneratedAvatarIntegrationTest {
         assertTrue(tool.definition.timeoutMs >= 95_000)
     }
 
+    @Test fun `cancelled provider cleanup errors cannot replace a later choice status`() = runTest {
+        fixture {
+            val model = model()
+            val released = CompletableDeferred<Unit>()
+            model.currentProvider = Provider {
+                withContext(NonCancellable) { released.await() }
+                throw IllegalStateException("Late provider cleanup failure")
+            }
+            val old = async(dispatcher) { model.generateAvatarForm("a striped dragon") }
+            model.setAvatarAnimal(AvatarAnimal.WIZARD)
+            released.complete(Unit)
+            runCatching { old.await() }
+            assertTrue(old.isCancelled)
+            assertEquals(AvatarAnimal.WIZARD, model.uiState.value.avatarAnimal)
+            assertFalse(model.uiState.value.avatarFormError)
+            assertNull(model.uiState.value.avatarFormMessage)
+            assertTrue(store.list().isEmpty())
+        }
+    }
+
     @Test fun `generated hit placement tracks zoom and habitat position in both orientations`() {
         for ((w, h) in listOf(360f to 800f, 840f to 360f)) for (scale in listOf(.5f, 2f, 3f)) {
             for (pose in listOf(null, FullFlyPose(x = .75f, y = .4f))) {

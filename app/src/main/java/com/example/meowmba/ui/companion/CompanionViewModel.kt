@@ -10326,15 +10326,15 @@ class CompanionViewModel(
                 val status = "Creating your cartoon form…"
                 _uiState.value = _uiState.value.copy(avatarFormGenerating = true, avatarFormError = false,
                     avatarFormMessage = status, captionText = status)
+                fun ensureOwner() {
+                    if (generation != avatarFormGeneration || stop.isStopRequested || scopeId != conversationId() || appInBackground)
+                        throw kotlinx.coroutines.CancellationException("Avatar transformation superseded")
+                }
                 try {
                     require(com.example.meowmba.core.agent.runtime.AvatarFormRequest.isDescription(request)) {
                         "Describe one avatar appearance in 1–500 characters."
                     }
                     if (store == null) return@coroutineScope avatarFormFailure("Avatar storage is unavailable. Your current form is unchanged.")
-                    fun ensureOwner() {
-                        if (generation != avatarFormGeneration || stop.isStopRequested || scopeId != conversationId() || appInBackground)
-                            throw kotlinx.coroutines.CancellationException("Avatar transformation superseded")
-                    }
                     val saved = withContext(ioDispatcher) { store.find(request) }
                     ensureOwner()
                     if (saved != null) {
@@ -10362,10 +10362,12 @@ class CompanionViewModel(
                     applyGeneratedAvatar(form, store.list(), "Now wearing ${form.name}. Saved to Your forms.")
                     ToolResult.Success("Lumen is now ${form.name}, a generated cartoon interpretation. Saved for reuse; the same brain and reactions continue.")
                 } catch (_: kotlinx.coroutines.TimeoutCancellationException) {
+                    ensureOwner()
                     avatarFormFailure("Avatar creation timed out. Your current form is unchanged; try a simpler description.")
                 } catch (cancelled: kotlinx.coroutines.CancellationException) {
                     throw cancelled
                 } catch (_: Exception) {
+                    ensureOwner()
                     // Provider errors may contain endpoint/auth details; never put them on the avatar.
                     avatarFormFailure("Could not create and save that cartoon form. Check your selected AI model, try a simpler description, or remove a saved form if all 24 slots are full.")
                 } finally {
