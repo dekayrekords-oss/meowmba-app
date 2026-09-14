@@ -1,5 +1,17 @@
 # Agent execution plan — immersive companion revision
 
+## September 13: Build 111 cartoon app interface
+
+The user extended the cartoon direction to all app controls and requested
+quieter scenes. Shared native Material adapters, outlined menu/setting cards,
+stronger typography, simpler room art and home controls are implemented.
+Forty focused UI/placement tests pass, with native render review across four
+widths, dark/light and large text. See
+[MEOW_BUILD_111_PASS_DOWN.md](characters/MEOW_BUILD_111_PASS_DOWN.md) for exact
+implementation, debugging guidance, provenance and build/install status.
+Build 110 was verified and packaged; Build 109 is still the last confirmed
+installed version. Older checkpoints below remain historical.
+
 ## September 13: paused before build 110 for model switch
 
 The next request covers experimental BANC integration, larger/polished habitat

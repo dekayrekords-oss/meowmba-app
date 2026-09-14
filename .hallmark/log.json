@@ -1,0 +1,12 @@
+[
+  {
+    "date": "2026-09-13",
+    "scope": "app",
+    "genre": "playful",
+    "macrostructure": "native workbench",
+    "theme": "Meow cartoon console",
+    "enrichment": "none in menus; two simplified game illustrations",
+    "brief": "Apply the cartoon feel across menus and controls, simplify scenes",
+    "nativeAdaptation": "Retain system font scaling, Material input semantics, navigation, and optional Professional palette"
+  }
+]

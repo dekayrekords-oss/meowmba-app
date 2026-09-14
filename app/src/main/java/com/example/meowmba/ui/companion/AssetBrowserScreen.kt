@@ -1,5 +1,9 @@
 package com.example.meowmba.ui.companion
 
+import com.example.meowmba.ui.theme.Card
+import com.example.meowmba.ui.theme.OutlinedCard
+import com.example.meowmba.ui.theme.Surface
+
 import android.app.Application
 import android.graphics.BitmapFactory
 import android.net.Uri

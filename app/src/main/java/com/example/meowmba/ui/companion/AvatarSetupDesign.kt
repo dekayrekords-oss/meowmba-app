@@ -2,6 +2,8 @@
  * genre: modern-minimal · macrostructure: native workbench · design-system: design.md */
 package com.example.meowmba.ui.companion
 
+import com.example.meowmba.ui.theme.FilterChip
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable

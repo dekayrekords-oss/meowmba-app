@@ -1,0 +1,10 @@
+{
+  "date": "2026-09-13",
+  "framework": "Android Compose Material3; native adaptation",
+  "fontSource": "app/src/main/java/com/example/meowmba/ui/theme/Type.kt",
+  "paletteSource": "app/src/main/java/com/example/meowmba/ui/theme/Theme.kt",
+  "system": "design.md",
+  "spacing": "4dp base; existing 8/12/20/24dp setup rhythm",
+  "motion": "Existing native gestures and paused scene clocks; no new UI timer",
+  "authorization": "User asked for the established cartoon scene feel throughout the app"
+}

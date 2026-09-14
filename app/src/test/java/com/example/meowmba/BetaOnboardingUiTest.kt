@@ -49,8 +49,9 @@ class BetaOnboardingUiTest {
         compose.onNodeWithText("AI needs a key").assertExists()
         compose.onNodeWithText("Get a free key").assertExists()
         compose.onNodeWithText("Start using Meow", substring = true).assertExists()
-        compose.onNodeWithText("Keep going", substring = true).assertExists()
-        compose.onNodeWithText("Keep going", substring = true).performClick()
+        // Match the action, not the explanatory sentence that also says "Keep going".
+        compose.onNodeWithText("Keep going").assertExists()
+        compose.onNodeWithText("Keep going").performScrollTo().performClick()
         compose.onNodeWithText("GitHub for projects").assertExists()
         compose.onNodeWithText("Skip for now").assertExists()
     }

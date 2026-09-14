@@ -1,5 +1,8 @@
 package com.example.meowmba.ui.companion
 
+import com.example.meowmba.ui.theme.OutlinedButton
+import com.example.meowmba.ui.theme.Card
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable

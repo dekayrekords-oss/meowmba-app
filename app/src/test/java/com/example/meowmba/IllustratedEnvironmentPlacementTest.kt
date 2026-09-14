@@ -33,13 +33,17 @@ class IllustratedEnvironmentPlacementTest {
     @Test fun finalBeachAndBedroomUseTheirMeasuredAssetEdges() {
         assertEquals(982f / 1536f, illustratedSourceTableAnchor(BackgroundAnimation.BEACH), 0f)
         assertEquals(887f / 1536f, illustratedSourceTableAnchor(BackgroundAnimation.BEDROOM), 0f)
-        assertEquals(.70f, illustratedSourceTableAnchor(BackgroundAnimation.CARTOON_NOOK), 0f)
+        assertEquals(612f / 941f, illustratedSourceTableAnchor(BackgroundAnimation.CARTOON_NOOK), 0f)
+        assertEquals(604f / 941f, illustratedSourceTableAnchor(BackgroundAnimation.CARTOON_GALLEY), 0f)
     }
 
     @Test fun landscapeArtKeepsTheInteractivePlaneVisibleOnFoldAspect() {
-        val p = illustratedRoomPlacement(1672, 941, 2208f, 1768f, .70f)
-        assertEquals(1768f * PET_ENVIRONMENT_TABLE_Y, p.y + p.height * .70f, .001f)
-        assertTrue(p.width >= 2208f && p.height >= 1768f)
+        for (room in listOf(BackgroundAnimation.CARTOON_NOOK, BackgroundAnimation.CARTOON_GALLEY)) {
+            val anchor = illustratedSourceTableAnchor(room)
+            val p = illustratedRoomPlacement(1672, 941, 2208f, 1768f, anchor)
+            assertEquals(1768f * PET_ENVIRONMENT_TABLE_Y, p.y + p.height * anchor, .001f)
+            assertTrue(p.width >= 2208f && p.height >= 1768f)
+        }
     }
 
     @Test fun everyMeasuredRoomRetainsContactAndCoverageAtExtremeAspectRatios() {

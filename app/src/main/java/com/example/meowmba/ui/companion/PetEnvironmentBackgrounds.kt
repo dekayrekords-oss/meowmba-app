@@ -137,6 +137,21 @@ class PetEnvironmentBackgroundPainter {
                 repeat(5) { i -> line(.04f, .15f, -.11f + i * .065f, .20f + .065f * sin(i.toFloat()) + .008f * sin(s * TAU), 0xFF537D61, .023f) }
                 oval(.81f, .71f, .095f, .033f, 0xFFAD9C83)
             }
+            BackgroundAnimation.CARTOON_NOOK, BackgroundAnimation.CARTOON_GALLEY -> {
+                // Quiet loading fallback matches the new art, with the same empty play plane.
+                oval(.21f, .06f, .58f, .52f, 0xFF243C44)
+                oval(.235f, .085f, .53f, .47f,
+                    if (animation == BackgroundAnimation.CARTOON_NOOK) 0xFF84D2DF else 0xFF294E79)
+                oval(.57f, .15f, .09f, .07f, 0xFFB4DECC)
+                if (animation == BackgroundAnimation.CARTOON_NOOK) {
+                    repeat(4) { i -> rect(.02f + i * .035f, .34f, .025f, .15f, 0xFFB99752) }
+                    rect(.01f, .49f, .16f, .015f, 0xFF775434)
+                    oval(.86f, .49f, .19f, .22f, 0xFFD78846)
+                } else {
+                    rect(.86f, .22f, .14f, .49f, 0xFF6FB4AC)
+                    line(.88f, .40f, .88f, .49f, 0xFF243C44, .007f)
+                }
+            }
             else -> {
                 window(.70f, .13f, .23f, .28f, Color(0xFF404C76), t)
                 oval(.835f, .17f, .045f, .030f, 0xFFBEB5BD)

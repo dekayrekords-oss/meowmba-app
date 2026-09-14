@@ -1,7 +1,12 @@
 package com.example.meowmba.ui.companion
 
+import com.example.meowmba.ui.theme.Button
+import com.example.meowmba.ui.theme.OutlinedButton
+import com.example.meowmba.ui.theme.Surface
+
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -370,15 +375,17 @@ fun CompanionScreen(
                     .align(Alignment.BottomEnd)
                     .imePadding()
                     .padding(16.dp)
+                    .border(2.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape),
+                colors = IconButtonDefaults.iconButtonColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.Chat,
                     contentDescription = "Open chat",
-                    tint = Color(0x55CFF9FF)
+                    tint = MaterialTheme.colorScheme.onSurface
                 )
             }
 
-            // Camera preview toggle (bottom-end, above chat)
+            // Capture controls: the camera action releases/enables capture, independent of chat.
             MicKillButton(
                 enabled = uiState.isMicEnabled,
                 onEnabledChange = viewModel::setMicEnabled,
@@ -391,6 +398,8 @@ fun CompanionScreen(
                     .align(Alignment.BottomEnd)
                     .imePadding()
                     .padding(bottom = 72.dp, end = 16.dp)
+                    .border(2.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape),
+                colors = IconButtonDefaults.iconButtonColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Icon(
                     imageVector = if (uiState.isCameraEnabled) Icons.Default.Videocam else Icons.Default.VideocamOff,

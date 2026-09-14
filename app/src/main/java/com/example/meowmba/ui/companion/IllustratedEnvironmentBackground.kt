@@ -83,7 +83,8 @@ internal fun illustratedSourceTableAnchor(animation: BackgroundAnimation): Float
     BackgroundAnimation.BEACH -> 982f / 1536f
     BackgroundAnimation.BEDROOM -> 887f / 1536f
     // New landscape art carries a deliberately broad, nearly level counter.
-    BackgroundAnimation.CARTOON_NOOK, BackgroundAnimation.CARTOON_GALLEY -> .70f
+    BackgroundAnimation.CARTOON_NOOK -> 612f / 941f
+    BackgroundAnimation.CARTOON_GALLEY -> 604f / 941f
     else -> .69f
 }
 

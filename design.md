@@ -1,21 +1,37 @@
 <!-- Hallmark · pre-emit critique: P4 H4 E3 S4 R5 V4 -->
-# Meow avatar setup design
+# Meow cartoon interface design
 
-Scope: native Compose AvatarScreen and BackgroundScreen, preserving existing
-routes, theme preferences, renderers, actions and state ownership.
+Scope: native Compose app menus, settings, chat, onboarding and tools. The
+September 13 user request extends the original cartoon rooms across the app's
+interface. Existing routes, preferences, actions and state ownership remain.
 
-The two screens use one quiet game-console workbench: an honest selected preview,
-clear mode choices, immediately applied controls, then progressive disclosure for
-specialist settings. The existing MaterialTheme remains the source of color and
-typography. This native adaptation uses Compose tokens rather than unused CSS.
+Genre: playful. Structure: native game-console workbench. Audience: the phone's
+companion owner; primary action: return to and interact with the avatar. Bold
+ink contours, warm paper/light or deep teal/dark surfaces, lime selections,
+aqua and amber accents, and strong sans headings carry the cartoon feel.
+Labels and descriptions stay plain and readable. There is no decorative
+illustration inside settings; the avatar lives in the habitat.
+
+The requested swipe-down card remains the navigation entry, with an explicit
+Avatar return action and an adaptive grid. Settings use focused category pages;
+specialist details stay progressively disclosed. This native adaptation uses
+Compose tokens rather than introducing unused web stylesheets or custom widgets
+with weaker accessibility semantics.
 
 ## Tokens
 
 `AvatarSetupTokens`: compact 8dp, item 12dp, section 24dp, page 20dp, corner 20dp.
-Color roles: background, surface, surfaceVariant, onSurface, onSurfaceVariant,
-primary, primaryContainer, onPrimaryContainer, outlineVariant. Typography roles:
-headlineSmall, titleMedium, bodyMedium, bodySmall, labelLarge. No new fonts or
-palette overrides. Selected states pair visible labels/checkmarks with color.
+Color and shape roles are locked in `ui/theme/Theme.kt`; `CartoonTokens` defines
+the shared ink (#172D34), 2dp contour and 3dp solid button base. All consumers
+use named MaterialTheme roles. Dark surfaces range from #182A32 to #3B5960;
+light surfaces range from #F3EEDC to #FFFAEB. Selection containers are #354E36
+dark / #D3EAA7 light. Text pairs are explicit in both appearances. The existing
+Professional appearance remains an optional calmer palette; it uses the same
+controls and spacing. There is no forced preference reset.
+
+System sans typography preserves Android font fallback and scaling. Headings
+use bold/extra-bold; labels use bold; descriptions retain normal weight. The
+native workbench hierarchy is in `ui/theme/Type.kt`.
 
 ## Structure
 
@@ -31,18 +47,30 @@ those same original rooms with explicit play-mode selection.
 
 ## Interaction and accessibility
 
-Selections apply immediately. No save dialogs, celebratory toast, automatic
-scroll reveal, or new animation timers. Material controls retain native pressed,
-focused, disabled and selected behavior. Content has no fixed height; preview
+Selections apply immediately. No new save dialogs, celebratory toast, automatic
+scroll reveal, or animation timers. `CartoonControls.kt` delegates to Material3
+and preserves native pressed, focused, disabled and selected behavior. Buttons
+settle by 2dp on press without a running animation; native input, switch, slider,
+error, loading, success, focus and hover behavior is retained. Controls have no
+fixed text height; preview
 art uses aspect ratios. Choice columns adapt to width and font scale. Text wraps
 in descriptions; primary short action labels remain readable. Scroll containers
 keep large-font controls reachable. Web-only eight-state/loading recipes do not
 invent loading or error states for synchronous local preference controls.
 
-## Verification limits
+## Scene restraint
 
-Static code review checks retained callbacks and options, responsive sizing,
-named colors and focus semantics. The sole build owner must run Compose tests
-and inspect 320/375/414/768dp, dark/light, large-font and Fold layouts before
-claiming visual acceptance. The critique above is a design review, not proof of
-rendered or device results.
+Cartoon Sky Nook and Cartoon Space Galley have empty foreground tables and quiet
+central airspace. The game owns the moving glass/book/ball; the illustration must
+never duplicate them. Measured image anchors align the table with the habitat's
+0.78 contact plane. Only two faint window glints animate in each cartoon room;
+indoor motes and beach highlights are reduced elsewhere. The renderer uses the
+existing paused/thermal-aware scene clock and bounded image cache.
+
+## Verification
+
+`CartoonInterfaceUiTest` exercises the menu, settings round trip, Avatar return,
+native disabled/selected semantics and native screenshots at 320/375/414/768dp,
+dark/light and 1.4x text. Existing setup, settings, chat, mic privacy and placement
+tests remain release gates. Record exact results in the Build 111 passdown.
+Screenshots are native Robolectric evidence, separate from physical-phone checks.

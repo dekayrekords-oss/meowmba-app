@@ -46,49 +46,49 @@ private val ProfessionalLight = lightColorScheme(
     outline = Color(0xFF738485), outlineVariant = Color(0xFFD4DDD8),
 )
 
-// Companion keeps its established green identity in both appearances. Container/on-
-// container pairs are explicit so controls no longer inherit unrelated purple defaults.
+// Cartoon console: deep ink, warm paper, lime selections and aqua/amber accents.
+// On-colors are explicit so the same native controls work in dark and light modes.
 private val DarkColorScheme = darkColorScheme(
-    primary = Color(0xFF72D486), onPrimary = Color(0xFF073A18),
-    primaryContainer = Color(0xFF17472A), onPrimaryContainer = Color(0xFFB8F4C3),
-    secondary = Color(0xFFB6CBB9), onSecondary = Color(0xFF213526),
-    secondaryContainer = Color(0xFF344B3A), onSecondaryContainer = Color(0xFFD4E8D6),
-    tertiary = Color(0xFFE0C48D), onTertiary = Color(0xFF3D2E0D),
-    tertiaryContainer = Color(0xFF574323), onTertiaryContainer = Color(0xFFF7E0B4),
-    background = Color(0xFF101713), onBackground = Color(0xFFE3EBE4),
-    surface = Color(0xFF17201B), onSurface = Color(0xFFE3EBE4),
-    surfaceContainerLowest = Color(0xFF0C120F), surfaceContainerLow = Color(0xFF17201B),
-    surfaceContainer = Color(0xFF1D2922), surfaceContainerHigh = Color(0xFF26342B),
-    surfaceContainerHighest = Color(0xFF304136),
-    surfaceVariant = Color(0xFF29372E), onSurfaceVariant = Color(0xFFBCCCBF),
-    outline = Color(0xFF8B9C8F), outlineVariant = Color(0xFF3D4D42),
-    inverseSurface = Color(0xFFE0E9E1), inverseOnSurface = Color(0xFF27352B),
-    inversePrimary = Color(0xFF27673B), surfaceTint = Color(0xFF72D486),
+    primary = Color(0xFFC6EB78), onPrimary = Color(0xFF20351C),
+    primaryContainer = Color(0xFF354E36), onPrimaryContainer = Color(0xFFE1F8BA),
+    secondary = Color(0xFF81D8CE), onSecondary = Color(0xFF123C3C),
+    secondaryContainer = Color(0xFF264F55), onSecondaryContainer = Color(0xFFC7F4ED),
+    tertiary = Color(0xFFFFC56F), onTertiary = Color(0xFF422D15),
+    tertiaryContainer = Color(0xFF55412C), onTertiaryContainer = Color(0xFFFFE2B5),
+    background = Color(0xFF182A32), onBackground = Color(0xFFF6F0DF),
+    surface = Color(0xFF213740), onSurface = Color(0xFFF6F0DF),
+    surfaceContainerLowest = Color(0xFF14252B), surfaceContainerLow = Color(0xFF263E47),
+    surfaceContainer = Color(0xFF2B444C), surfaceContainerHigh = Color(0xFF324E55),
+    surfaceContainerHighest = Color(0xFF3B5960),
+    surfaceVariant = Color(0xFF2B444C), onSurfaceVariant = Color(0xFFBED0CD),
+    outline = Color(0xFF9CB9B4), outlineVariant = Color(0xFF718E91),
+    inverseSurface = Color(0xFFF4EEDB), inverseOnSurface = CartoonTokens.ink,
+    inversePrimary = Color(0xFF315A38), surfaceTint = Color.Transparent,
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = Color(0xFF27673B), onPrimary = Color.White,
-    primaryContainer = Color(0xFFD1EED6), onPrimaryContainer = Color(0xFF123D21),
-    secondary = Color(0xFF4E6755), onSecondary = Color.White,
-    secondaryContainer = Color(0xFFDEEBDF), onSecondaryContainer = Color(0xFF213526),
-    tertiary = Color(0xFF785C29), onTertiary = Color.White,
-    tertiaryContainer = Color(0xFFF3E3BF), onTertiaryContainer = Color(0xFF3D2E0D),
-    background = Color(0xFFF5F8F2), onBackground = Color(0xFF1D2921),
-    surface = Color(0xFFFDFEF9), onSurface = Color(0xFF1D2921),
-    surfaceContainerLowest = Color(0xFFFDFEF9), surfaceContainerLow = Color(0xFFF0F5EC),
-    surfaceContainer = Color(0xFFEAF1E6), surfaceContainerHigh = Color(0xFFE3EBDE),
-    surfaceContainerHighest = Color(0xFFDAE5D6),
-    surfaceVariant = Color(0xFFE3EBE0), onSurfaceVariant = Color(0xFF4C5E50),
-    outline = Color(0xFF718674), outlineVariant = Color(0xFFC9D6C8),
-    inverseSurface = Color(0xFF29372E), inverseOnSurface = Color(0xFFE9F0E7),
-    inversePrimary = Color(0xFF8BDD9C), surfaceTint = Color(0xFF27673B),
+    primary = Color(0xFF315A38), onPrimary = Color(0xFFFAF9EC),
+    primaryContainer = Color(0xFFD3EAA7), onPrimaryContainer = Color(0xFF213A26),
+    secondary = Color(0xFF226268), onSecondary = Color.White,
+    secondaryContainer = Color(0xFFC4E7E1), onSecondaryContainer = Color(0xFF193C42),
+    tertiary = Color(0xFF86501C), onTertiary = Color.White,
+    tertiaryContainer = Color(0xFFFFD699), onTertiaryContainer = Color(0xFF4D3019),
+    background = Color(0xFFF3EEDC), onBackground = CartoonTokens.ink,
+    surface = Color(0xFFFFFAEB), onSurface = CartoonTokens.ink,
+    surfaceContainerLowest = Color(0xFFFFFCF3), surfaceContainerLow = Color(0xFFF9F4E5),
+    surfaceContainer = Color(0xFFEAE8D8), surfaceContainerHigh = Color(0xFFDFE4D6),
+    surfaceContainerHighest = Color(0xFFD2DECE),
+    surfaceVariant = Color(0xFFE7EAD9), onSurfaceVariant = Color(0xFF475D60),
+    outline = Color(0xFF587174), outlineVariant = Color(0xFF334C50),
+    inverseSurface = Color(0xFF243C44), inverseOnSurface = Color(0xFFF8F0DD),
+    inversePrimary = Color(0xFFC6EB78), surfaceTint = Color.Transparent,
 )
 
 private val WorkbenchShapes = Shapes(
     extraSmall = RoundedCornerShape(8.dp),
     small = RoundedCornerShape(12.dp),
-    medium = RoundedCornerShape(16.dp),
-    large = RoundedCornerShape(20.dp),
+    medium = RoundedCornerShape(14.dp),
+    large = RoundedCornerShape(18.dp),
     extraLarge = RoundedCornerShape(24.dp),
 )
 
@@ -96,7 +96,7 @@ private val WorkbenchShapes = Shapes(
 fun MeowmbaTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = true,
+    dynamicColor: Boolean = false,
     professional: Boolean = false,
     content: @Composable () -> Unit
 ) {

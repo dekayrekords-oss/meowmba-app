@@ -1,5 +1,10 @@
 package com.example.meowmba.ui.companion
 
+import com.example.meowmba.ui.theme.Button
+import com.example.meowmba.ui.theme.OutlinedButton
+import com.example.meowmba.ui.theme.Card
+import com.example.meowmba.ui.theme.FilterChip
+
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.*

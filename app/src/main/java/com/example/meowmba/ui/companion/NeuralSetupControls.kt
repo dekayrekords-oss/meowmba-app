@@ -1,5 +1,9 @@
 package com.example.meowmba.ui.companion
 
+import com.example.meowmba.ui.theme.OutlinedButton
+import com.example.meowmba.ui.theme.FilterChip
+import com.example.meowmba.ui.theme.Surface
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup

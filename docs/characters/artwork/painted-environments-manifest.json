@@ -101,24 +101,34 @@
   },
   {
     "id": "cartoon_nook",
-    "sourcePath": "/Users/bobrossjr/.codex/generated_images/01a0979c-e527-70a2-8488-49fd078dc68d/exec-78f9a621-140a-4ebd-8a87-dcf77d066a13.png",
-    "prompt": "Original high-budget adult animated sci-fi cartoon reading nook; thick expressive ink outlines, bright cel shading, wonky perspective, large water glass/book/ball and clear center airspace. No characters, text, logos, watermark, UI or photorealism. Do not imitate a named franchise.",
-    "sourceTableAnchor": 0.70,
-    "sha256": "ce79b8102f35695e97c5270bf909971055e5a50c02af10d685b9a87bf3bd9d50",
+    "sourcePath": "/Users/bobrossjr/.codex/generated_images/01a0979c-e527-70a2-8488-49fd078dc68d/exec-0f7b8379-b1fb-4888-bb78-abc280cbcc94.png",
+    "prompt": "Use case: precise-object-edit. Asset: existing game background edit. Simplify this original cartoon sky reading nook substantially. Keep its wide 16:9 composition, warm teal and honey colours, bold black contour lines, central round window, ONE distant ringed planet and soft sky, simple reading-nook identity. Change ornate painted details to clean flat cel-shaded adult sci-fi cartoon shapes. REMOVE ALL objects from foreground table including glass, book, ball, coasters; leave a broad COMPLETELY EMPTY tabletop for separately rendered interactive objects. Remove most shelves/books, plants, ornaments, cushions, tiny details and extra planets/islands. Just one small bookshelf at far left with five large books, one simple orange seat at far right. Quiet large areas of solid colour. Keep central 65 percent airspace completely open without clutter. Foreground table starts at exactly 70 percent image height at its straight horizontal BACK edge, then extends to bottom frame; no objects or dark holes on tabletop. Beautiful restrained confident cartoon line work, clean deliberate composition. No characters, no lettering, no logos. Keep wide image dimensions. This is final project art, not a mockup.",
+    "sourceTableAnchor": 0.6503719447396387,
+    "sha256": "6dfdb5c9e47e493ef0fe0b82a1c6a789a8ea8767ff0b99c1d68a1b598e8c641f",
     "width": 1672,
     "height": 941,
     "assetPath": "app/src/main/assets/backgrounds/painted/cartoon_nook.png",
-    "generator": "built-in image_gen"
+    "generator": "built-in image_gen; precise-object-edit",
+    "previousVersion": {
+      "sourcePath": "/Users/bobrossjr/.codex/generated_images/01a0979c-e527-70a2-8488-49fd078dc68d/exec-78f9a621-140a-4ebd-8a87-dcf77d066a13.png",
+      "sha256": "ce79b8102f35695e97c5270bf909971055e5a50c02af10d685b9a87bf3bd9d50",
+      "prompt": "Original high-budget adult animated sci-fi cartoon reading nook; thick expressive ink outlines, bright cel shading, wonky perspective, large water glass/book/ball and clear center airspace. No characters, text, logos, watermark, UI or photorealism. Do not imitate a named franchise."
+    }
   },
   {
     "id": "cartoon_galley",
-    "sourcePath": "/Users/bobrossjr/.codex/generated_images/01a0979c-e527-70a2-8488-49fd078dc68d/exec-54fccc99-e527-4e08-bb28-d0a84dffead7.png",
-    "prompt": "Original high-budget adult animated sci-fi cartoon spaceship kitchen; thick expressive ink outlines, bright cel shading, playful perspective, oversized water glass/book/ball, clean center airspace. No characters, text, logos, watermark, UI or photorealism. Do not imitate a named franchise.",
-    "sourceTableAnchor": 0.70,
-    "sha256": "513ae79ef5dedc15a16b4f1091a277ac113d7df4bad29c1540e83b49fe6580a5",
+    "sourcePath": "/Users/bobrossjr/.codex/generated_images/01a0979c-e527-70a2-8488-49fd078dc68d/exec-3b43c00e-258f-4a2b-ac04-929b60055176.png",
+    "prompt": "Use case: precise-object-edit. Asset: game background. Simplify this existing original cartoon spaceship galley drastically while keeping its wide 16:9 layout, bold dark contour line and teal, cream, warm orange palette. Transform it toward restrained flat cel-shaded sci-fi animation background art with big simple shapes. Keep one central big porthole with one ringed planet and very few stars on a quiet blue sky. Keep a simple closed teal fridge far right and simple low cupboards far left. Remove ALL jars, plants, countertop gadgets, tiny controls, shelves, glowing tubes, bowls, clutter, and foreground props. The ENTIRE foreground tabletop must be bare: NO glass, NO book, NO ball, NO coaster, NO objects. These objects will be rendered interactively by the game. Make the tabletop back edge straight horizontal around 70 percent image height then extend table all the way down. Central 65 percent is clear uncluttered open air for the fly avatar, behind it a mostly blank quiet wall and sky. Sparse, confident clean silhouette shapes. Quality animation layout, no noisy texture. No characters, no text, no logos, no stickers. Keep wide output. Preserve room theme and camera, simplify only.",
+    "sourceTableAnchor": 0.6418703506907545,
+    "sha256": "a6ea0aaca28c9c7f6f856db4623d632363f83cd7bcebf156f053a750a657cadb",
     "width": 1672,
     "height": 941,
     "assetPath": "app/src/main/assets/backgrounds/painted/cartoon_galley.png",
-    "generator": "built-in image_gen"
+    "generator": "built-in image_gen; precise-object-edit",
+    "previousVersion": {
+      "sourcePath": "/Users/bobrossjr/.codex/generated_images/01a0979c-e527-70a2-8488-49fd078dc68d/exec-54fccc99-e527-4e08-bb28-d0a84dffead7.png",
+      "sha256": "513ae79ef5dedc15a16b4f1091a277ac113d7df4bad29c1540e83b49fe6580a5",
+      "prompt": "Original high-budget adult animated sci-fi cartoon spaceship kitchen; thick expressive ink outlines, bright cel shading, playful perspective, oversized water glass/book/ball, clean center airspace. No characters, text, logos, watermark, UI or photorealism. Do not imitate a named franchise."
+    }
   }
 ]

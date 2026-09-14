@@ -43,6 +43,8 @@ internal class PetEnvironmentAtmosphere {
         BackgroundAnimation.OBSERVATORY to PetEnvironmentMaterial(0xFF182840, 0xFF0C1429, 0xFF4C5B76),
         BackgroundAnimation.BEACH to PetEnvironmentMaterial(0xFF295967, 0xFF173640, 0xFFAE8F62),
         BackgroundAnimation.BEDROOM to PetEnvironmentMaterial(0xFF443850, 0xFF231E34, 0xFF826E76),
+        BackgroundAnimation.CARTOON_NOOK to PetEnvironmentMaterial(0xFF83D1E0, 0xFFBCE6D8, 0xFFC98C45),
+        BackgroundAnimation.CARTOON_GALLEY to PetEnvironmentMaterial(0xFF345E7B, 0xFF839CA2, 0xFFE5AB51),
     )
     private val beam = Path().apply {
         moveTo(.07f, .12f); lineTo(.23f, .12f); lineTo(.48f, .76f); lineTo(.27f, .76f); close()
@@ -71,7 +73,7 @@ internal class PetEnvironmentAtmosphere {
         }
     }
 
-    /** Eight or fewer ambient accents. All phases come from the established room clock. */
+    /** Sparse edge accents keep the face legible. All phases use the established room clock. */
     fun drawDetails(scope: DrawScope, animation: BackgroundAnimation, clock: Float, slow: Float) = with(scope) {
         when (animation) {
             BackgroundAnimation.KITCHEN, BackgroundAnimation.LIBRARY, BackgroundAnimation.GREENHOUSE,
@@ -79,7 +81,7 @@ internal class PetEnvironmentAtmosphere {
                 // Local light catches drifting motes at the room edges, away from face features.
                 val warm = animation == BackgroundAnimation.LIBRARY || animation == BackgroundAnimation.CAFE || animation == BackgroundAnimation.BEDROOM
                 val color = if (warm) Color(0xFFC6A574) else Color(0xFFACC7B2)
-                repeat(8) { i ->
+                repeat(3) { i ->
                     val side = if (i % 2 == 0) .13f else .88f
                     val phase = clock * TAU + i * 1.61f
                     val x = side + sin(phase) * .046f
@@ -119,13 +121,21 @@ internal class PetEnvironmentAtmosphere {
                 }
             }
             BackgroundAnimation.BEACH -> {
-                repeat(8) { i ->
+                repeat(3) { i ->
                     val phase = clock * TAU + i * .83f
                     val x = .56f + i * .039f + sin(phase) * .008f
                     val y = .53f + i % 4 * .043f
                     drawLine(Color(0xFFE0C992), Offset(x * size.width, y * size.height),
                         Offset((x + .018f) * size.width, y * size.height),
                         1.1f * size.minDimension / 320f, alpha = .18f + .12f * sin(phase))
+                }
+            }
+            BackgroundAnimation.CARTOON_NOOK, BackgroundAnimation.CARTOON_GALLEY -> {
+                // Just two low-contrast glints in the window; no field of particles over the fly.
+                repeat(2) { i ->
+                    val center = Offset((.38f + i * .23f) * size.width, (.17f + i * .08f) * size.height)
+                    val alpha = .12f + .12f * (1f + sin(slow * TAU + i * 2f))
+                    drawCircle(Color(0xFFEDF4D8), size.minDimension * .0025f, center, alpha = alpha)
                 }
             }
             else -> Unit
