@@ -99,6 +99,33 @@ class AgenticRuntime private constructor(
         }
     }
 
+    /**
+     * Auto-tick until DONE | BLOCKED | WAITING_APPROVAL | CANCELLED, or budgets
+     * exhaust / [isCancelled]. Used by chat Computer/agentic path. Does not drive
+     * from the Lumen frame loop.
+     */
+    fun tickUntilTerminal(
+        goalId: String,
+        isCancelled: () -> Boolean = { false },
+    ): AgenticGoal? {
+        if (!enabled) return null
+        val initial = store.getGoal(goalId) ?: return null
+        return AgenticAutoTick.run(
+            initial = initial,
+            tick = { _ -> tick(goalId) },
+            isCancelled = isCancelled,
+            onCancel = { g ->
+                store.appendEvent(goalId, type = "cancelled", detail = "auto-tick cancelled")
+                store.updateGoal(g.copy(status = GoalStatus.CANCELLED)) ?: g.copy(status = GoalStatus.CANCELLED)
+            },
+            onBudgetExhausted = { g ->
+                store.appendEvent(goalId, type = "budget_exhausted", detail = "auto-tick stop")
+                store.updateGoal(g.copy(status = GoalStatus.BLOCKED)) ?: g.copy(status = GoalStatus.BLOCKED)
+            },
+            maxGuard = (initial.budgets.maxSteps + 2).coerceAtMost(32),
+        )
+    }
+
     fun sshCapability(): AgenticSshCapability = AgenticSshCapability.probe(jschAvailable = true)
 
     fun modelConfigSnapshot(storage: SecureStorageManager): AgenticModelConfig.Snapshot =
@@ -237,9 +264,16 @@ class AgenticRuntime private constructor(
 
         if (proposal.isNoop) {
             store.appendEvent(goalId, type = "noop", detail = proposal.reason.take(200))
-            if (budgets.exhausted()) {
-                status = GoalStatus.BLOCKED
-                store.appendEvent(goalId, type = "budget_exhausted", detail = "steps/tools budget hit")
+            val hadOkTool = events.any { ev ->
+                ev.type in setOf("computer_exec", "local_shell", "ssh_exec", "https_runtime") &&
+                    (ev.detail.startsWith("ok") || ev.detail.contains("ok exit="))
+            }
+            when {
+                budgets.exhausted() -> {
+                    status = GoalStatus.BLOCKED
+                    store.appendEvent(goalId, type = "budget_exhausted", detail = "steps/tools budget hit")
+                }
+                hadOkTool -> status = GoalStatus.DONE
             }
             return store.updateGoal(
                 goal.copy(status = status, budgets = budgets, approvalGranted = approvalGranted),
@@ -393,7 +427,8 @@ class AgenticRuntime private constructor(
                         append(' ')
                         append(result.output.take(400))
                     }
-                    status = if (result.ok) GoalStatus.RUNNING else GoalStatus.BLOCKED
+                    // One successful Computer tool call settles the chat auto-tick goal.
+                    status = if (result.ok) GoalStatus.DONE else GoalStatus.BLOCKED
                     memoryIndex.note(goalId, "computer_exec ok=${result.ok}")
                 } else {
                     val result = TermuxRunCommandHelper.execSh(appContext, script)
@@ -405,7 +440,7 @@ class AgenticRuntime private constructor(
                         is SshExecResult.NotEnabled -> "not_enabled"
                     }
                     status = when (result) {
-                        is SshExecResult.Ok -> GoalStatus.RUNNING
+                        is SshExecResult.Ok -> GoalStatus.DONE
                         else -> GoalStatus.BLOCKED
                     }
                     memoryIndex.note(goalId, "computer_exec fallback=${result::class.simpleName}")

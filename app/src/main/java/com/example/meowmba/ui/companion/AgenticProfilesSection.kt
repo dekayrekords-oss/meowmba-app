@@ -66,8 +66,9 @@ fun AgenticProfilesSection(
     Column(modifier = modifier.fillMaxWidth().padding(vertical = 8.dp)) {
         Text("Agentic connection profiles", style = MaterialTheme.typography.titleMedium)
         Text(
-            "SSH targets for agentic runtime. Passwords are stored under a credential ref " +
-                "in encrypted prefs — never in Room or event logs.",
+            "SSH targets for agentic runtime (preferred day-to-day path). Passwords are stored " +
+                "under a credential ref in encrypted prefs — never in Room or event logs. " +
+                "HTTPS_RUNTIME needs a reachable base URL (not 127.0.0.1 on meow); worker port 18766.",
             style = MaterialTheme.typography.bodySmall,
         )
         Spacer(Modifier.height(8.dp))

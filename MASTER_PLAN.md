@@ -1,5 +1,26 @@
 # MEOWMBA MASTER PLAN
 
+## September 14, 2026 — Computer P0 (preview 96) — Grok-ish reachability
+
+Goal: make Computer + agentic path day-to-day usable on Fold + host meow (same *idea* as a cloud computer agent; early maturity). Flags stay default **OFF**.
+
+- [x] Move Meow Computer HTTPS worker default off Bridge UDP **8766** → worker port **18766** (`ComputerProfileMarks`, `computer/install.sh` + assets).
+- [x] Reachability honesty: SSH ConnectionProfile is primary day-to-day; HTTPS_RUNTIME demoted with NetBird bind / `ssh -L` hints; optional `--bind` / `MEOW_COMPUTER_HOST` (default `127.0.0.1`).
+- [x] Chat auto-tick when Agentic ON: tick until DONE | BLOCKED | WAITING_APPROVAL within budgets; cancel; scrubbed truncated stdout (`AgenticAutoTick` / `tickUntilTerminal`).
+- [x] Preview debug-only `onVariants` versionCode **96**; Play `defaultConfig` stays **1.3.81 / 85**.
+- [x] Docs: [COMPUTER_P0_FOLD_CHECKLIST.md](docs/COMPUTER_P0_FOLD_CHECKLIST.md), YOUR_COMPUTER / TERMINAL_CLONE / computer README updates.
+- [x] PR: https://github.com/dekayrekords-oss/meowmba-app/pull/1 (`feat/computer-p0-reachability-autotick` → `feat/lumen-reflex-agentic`).
+- [ ] Fold E2E from checklist (Termux Computer and/or SSH meow) — not device-verified yet.
+- [ ] Reinstall/restart existing meow workers still on **8766** onto **18766**.
+- [ ] Ship Preview 96 APK to Fold apk-serve (`/home/prog/apk-serve/preview.apk`) when owner asks.
+- [ ] Merge PR #1 when owner accepts.
+- [ ] P1 next (not started): workspace file tools, stronger multi-step planner, unify web tools into agentic loop.
+
+Do **not**: custom proot/tmux forks, FlyWire, LLM-per-frame Computer drive, bump Play without owner ask, expose worker `0.0.0.0` without auth.
+
+Branch HEAD at plan write: `796b851` on `feat/computer-p0-reachability-autotick`.
+
+
 ## September 7, 2026 — cross-device control preview (1.3.40, code 44)
 
 - [x] Build and install code44 on the connected SM_F966U1, retaining user data and local models.

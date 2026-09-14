@@ -607,6 +607,9 @@ class CompanionViewModel(
             } ?: emptyList()
         }.getOrDefault(emptyList())
     private var followUpJob: Job? = null
+    /** Chat → agentic auto-tick; cancel stops further ticks. */
+    private var agenticAutoTickJob: Job? = null
+    @Volatile private var agenticAutoTickCancelRequested: Boolean = false
 
     /** Ambient sky refresh loop; null when the ambient scene is off. */
     private var ambientWeatherJob: Job? = null
@@ -2641,6 +2644,8 @@ class CompanionViewModel(
      * Uses last stdin/stdout time on the Computer guest session.
      */
     private fun syncComputerIdleWatch() {
+        agenticAutoTickCancelRequested = true
+        agenticAutoTickJob?.cancel()
         computerIdleWatchJob?.cancel()
         computerIdleWatchJob = null
         val storage = secureStorage ?: return
@@ -3199,12 +3204,14 @@ class CompanionViewModel(
 
     private fun runAgenticComputerTickFromChat(text: String) {
         followUpJob?.cancel()
+        agenticAutoTickJob?.cancel()
+        agenticAutoTickCancelRequested = false
         _uiState.value = _uiState.value.copy(
             interactionState = InteractionState.THINKING,
             captionText = text,
             emotion = CompanionEmotion.DETERMINED,
         )
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        agenticAutoTickJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             persistTurn(com.example.meowmba.core.database.MessageRole.USER, text)
             val storage = secureStorage ?: return@launch
             val runtime = AgenticRuntime.from(storage.context)
@@ -3223,38 +3230,78 @@ class CompanionViewModel(
                 )
                 return@launch
             }
-            val updated = runtime.tick(goal.id)
+            val updated = runtime.tickUntilTerminal(goal.id) {
+                agenticAutoTickCancelRequested || !isActive
+            }
             val events = runtime.listEvents(goal.id)
-            val toolOut = events.lastOrNull {
-                it.type == "computer_exec" || it.type == "local_shell" || it.type == "ssh_exec"
+            val toolOut = events.asReversed().firstOrNull {
+                it.type == "computer_exec" || it.type == "local_shell" || it.type == "ssh_exec" ||
+                    it.type == "https_runtime"
             }?.detail.orEmpty()
+            // Truncate + scrub obvious secret-looking fragments before chat.
+            val safeOut = scrubAgenticChatOutput(toolOut).take(3500)
             val awaiting = updated?.status == GoalStatus.WAITING_APPROVAL
+            val cancelled = updated?.status == GoalStatus.CANCELLED || agenticAutoTickCancelRequested
             val body = when {
+                cancelled ->
+                    "Agentic cancelled for '${goal.title.take(60)}'."
                 awaiting ->
                     "Agentic waiting for approval on '${goal.title.take(60)}'. " +
                         "Approve in Settings → Neural / Lumen → Agentic."
-                toolOut.isNotBlank() -> "Computer / agentic:\n${toolOut.take(3500)}"
+                safeOut.isNotBlank() -> "Computer / agentic:\n$safeOut"
                 else ->
-                    "Agentic tick: status=${updated?.status ?: "?"} " +
-                        "(no tool output yet — try Tick again in Agentic tasks)."
+                    "Agentic finished: status=${updated?.status ?: "?"} " +
+                        "(no tool output — check Agentic tasks)."
             }
             persistTurn(com.example.meowmba.core.database.MessageRole.ASSISTANT, body)
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                 _uiState.value = _uiState.value.copy(
                     interactionState = InteractionState.IDLE,
                     captionText = body.take(240),
+                    emotion = when {
+                        cancelled -> CompanionEmotion.IDLE
+                        awaiting -> CompanionEmotion.CONCERNED
+                        updated?.status == GoalStatus.DONE -> CompanionEmotion.PROUD
+                        updated?.status == GoalStatus.BLOCKED -> CompanionEmotion.CONCERNED
+                        else -> CompanionEmotion.IDLE
+                    },
                 )
                 publishChat()
                 refreshAgenticPresenceHint()
             }
             speak(
                 when {
+                    cancelled -> "Cancelled that Computer step."
                     awaiting -> "Waiting for your approval on that agentic step."
-                    toolOut.isNotBlank() -> "Ran that on Computer. Output is in chat and the Terminal."
-                    else -> "Agentic took a step. Check Agentic tasks if you need another tick."
+                    safeOut.isNotBlank() -> "Ran that on Computer. Output is in chat and the Terminal."
+                    updated?.status == GoalStatus.DONE -> "Done on Computer."
+                    else -> "Agentic stopped. Check Agentic tasks for details."
                 },
             )
         }
+    }
+
+    /** Cancel in-flight chat auto-tick (also cancels the open goal when possible). */
+    fun cancelAgenticComputerChat() {
+        agenticAutoTickCancelRequested = true
+        agenticAutoTickJob?.cancel()
+        agenticAutoTickJob = null
+        _uiState.value = _uiState.value.copy(
+            interactionState = InteractionState.IDLE,
+            captionText = "Agentic cancelled",
+        )
+    }
+
+    private fun scrubAgenticChatOutput(raw: String): String {
+        if (raw.isBlank()) return raw
+        // Drop lines that look like secrets; never echo credential material.
+        val lines = raw.lineSequence().filterNot { line ->
+            val l = line.lowercase()
+            "password=" in l || "api_key" in l || "apikey" in l ||
+                "authorization:" in l || "private_key" in l || "begin rsa" in l ||
+                "begin openssh" in l || "secret=" in l
+        }
+        return lines.joinToString("\n").take(8_192)
     }
 
     /** Explicit action: run the last typed / given line on Computer (Agentic ON). */

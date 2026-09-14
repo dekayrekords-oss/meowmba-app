@@ -147,6 +147,9 @@ fun NeuralSettingsSection(
             onConfirmInstallPrompt = onComputerConfirmInstallPrompt,
         )
 
+        Text("Computer chat runs bounded steps when Agentic is on. It stops for approval, failure or completion. Use Stop Computer to prevent further steps.",
+            style = MaterialTheme.typography.bodySmall)
+
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("Computer", style = MaterialTheme.typography.titleSmall)
             Text(

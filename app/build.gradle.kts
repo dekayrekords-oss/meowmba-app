@@ -220,10 +220,10 @@ androidComponents {
     onVariants(selector().withBuildType("debug")) { variant ->
         // Fold still has the old id. Release / Play stays com.meow.meowmba.
         variant.applicationId.set("com.example.meowmba")
-        // Phone already has preview 1.3.81 (85); bump debug-only so in-place
+        // Combined Computer + avatar update; bump debug-only so in-place
         // upgrade is allowed without changing release defaultConfig (85).
         variant.outputs.forEach { output ->
-            output.versionCode.set(119)
+            output.versionCode.set(120)
         }
     }
 }

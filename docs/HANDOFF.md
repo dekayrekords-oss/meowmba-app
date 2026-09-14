@@ -4,6 +4,34 @@
 > The "Recent builds" section is regenerated automatically by scripts/autobuild.sh
 > after every commit; everything else is maintained by hand at each phase.
 
+## Current status — 2026-09-14 (Computer P0 / preview 96)
+
+**Active branch:** `feat/computer-p0-reachability-autotick` (PR #1 into `feat/lumen-reflex-agentic`)  
+**HEAD (P0):** `796b851` — chat auto-tick + preview 96 (prior: facial-tracking Preview 95 `27bcc94` on parent branch)  
+**Packages:** Preview `com.example.meowmba` debug versionCode **96** · Play `com.meow.meowmba` **1.3.81 / 85** (unchanged)  
+**Device:** Galaxy Z Fold SM-F966U1 (Android 16); NetBird host **meow** `100.77.97.236`
+
+### Computer / agentic (just landed)
+- Worker port **18766** (Desktop Bridge discovery stays UDP **8766**).
+- Day-to-day remote path: **SSH** to meow. HTTPS_RUNTIME needs NetBird bind or `ssh -L 18766:127.0.0.1:18766`.
+- Chat auto-ticks agentic Computer goals to DONE|BLOCKED|WAITING_APPROVAL when `agentic_runtime_v1` is ON; cancel supported.
+- Flags `agentic_runtime_v1` / `lumen_reflex_v2` still default **OFF**.
+- Fold checklist: `docs/COMPUTER_P0_FOLD_CHECKLIST.md` — **not run yet**.
+- Preview 96 APK **not** shipped to apk-serve yet.
+
+### Canonical hosts (keep converged)
+- Homelab worktree (build): `/home/claude/meowmba-release-1.3.81` on **meow** (NetBird `100.77.97.236`, LAN `192.168.1.69`)
+- Bare git: `/home/claude/git/meowmba-app.git` · GitHub: `dekayrekords-oss/meowmba-app`
+- Preview serve: `/home/prog/apk-serve/preview.apk` via `:8765` (`get-preview.html`)
+- Box mirror: `/workspace/meowmba-app`
+- SSH as **prog** (lowercase); release signing under `/home/claude/secrets/meowmba/` — never print passwords
+- Preview debug keystore: `/home/prog/.android/debug.keystore` (SHA-256 `b7850d5f…`) — never Claude preview-alt
+
+### Next for the next engineer
+1. Run Fold E2E checklist (or ship Preview 96 to apk-serve first).
+2. Merge PR #1 when accepted.
+3. P1: workspace `file_read`/`file_write`, better multi-step loop — see MASTER_PLAN Computer P0 section.
+
 ## What this app is
 MEOWMBA (`com.example.meowmba`) is an on-device cat-companion voice assistant:
 wake word ("hey meow" + variants), Silero VAD + speaker-verification gates,
