@@ -170,12 +170,26 @@ class RemoteModelProvider(
     override suspend fun generate(prompt: String): ModelResponse {
         val full = StringBuilder()
         var result: ModelResponse = ModelResponse.Error("No response")
-        generateStreaming(prompt).collect { response ->
-            when (response) {
-                is ModelResponse.Partial -> full.append(response.text)
-                is ModelResponse.Complete -> result = ModelResponse.Complete(full.toString())
-                is ModelResponse.Error -> result = response
+        try {
+            generateStreaming(prompt).collect { response ->
+                when (response) {
+                    is ModelResponse.Partial -> {
+                        // Bound aggregation so a runaway invent/stream cannot OOM the process.
+                        if (full.length + response.text.length > MAX_GENERATE_CHARS) {
+                            result = ModelResponse.Error("$name response exceeded $MAX_GENERATE_CHARS characters")
+                            throw CancellationException("response too large")
+                        }
+                        full.append(response.text)
+                    }
+                    is ModelResponse.Complete -> result = ModelResponse.Complete(full.toString())
+                    is ModelResponse.Error -> result = response
+                }
             }
+        } catch (cancelled: CancellationException) {
+            if (result is ModelResponse.Error && (result as ModelResponse.Error).message.contains("exceeded")) {
+                return result
+            }
+            throw cancelled
         }
         return result
     }
@@ -278,6 +292,7 @@ class RemoteModelProvider(
         "Unreachable: ${e.message ?: "network error"}"
     }
     companion object {
+        private const val MAX_GENERATE_CHARS = 48_000
         const val TAG = "RemoteModel"
         internal fun parseAnthropicDecision(body: String, validate: (String) -> Boolean): ModelResponse = runCatching {
             val obj = Json.parseToJsonElement(body).jsonObject
@@ -334,7 +349,7 @@ class RemoteModelProvider(
 data class OllamaRequest(val model: String, val prompt: String, val stream: Boolean = true)
 
 @Serializable
-data class OpenAIRequest(val model: String, val messages: List<OpenAIMessage>, val stream: Boolean)
+data class OpenAIRequest(val model: String, val messages: List<OpenAIMessage>, val stream: Boolean, val max_tokens: Int? = 2600)
 
 @Serializable
 data class OpenAIMessage(val role: String, val content: String)

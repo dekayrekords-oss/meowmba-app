@@ -10285,8 +10285,11 @@ class CompanionViewModel(
                     val selected = currentProvider ?: return@coroutineScope avatarFormFailure(
                         "Choose a working AI model in LLM settings to create a new form. Presets and saved forms work without one.")
                     val prompt = com.example.meowmba.core.agent.tools.AvatarFormInventor.prompt(request)
+                    // Prefer a fast invent lane when available; complex forms need JSON quickly under 90s.
+                    val inventPrefer = preferredFastRouteId() ?: preferredChatRouteId()
                     val provider = if (selected is com.example.meowmba.core.agent.OmniRoute)
-                        selected.plan(prompt, preferRouteId = preferredChatRouteId()).firstOrNull()?.provider
+                        selected.plan(prompt, preferRouteId = inventPrefer).firstOrNull()?.provider
+                            ?: selected.plan(prompt, preferRouteId = preferredChatRouteId()).firstOrNull()?.provider
                             ?: return@coroutineScope avatarFormFailure("No AI model is configured for avatar creation. Check LLM settings.")
                         else selected
                     val inventor = com.example.meowmba.core.agent.tools.AvatarFormInventor { input ->
@@ -10307,10 +10310,26 @@ class CompanionViewModel(
                     avatarFormFailure("Avatar creation timed out. Your current form is unchanged; try a simpler description.")
                 } catch (cancelled: kotlinx.coroutines.CancellationException) {
                     throw cancelled
-                } catch (_: Exception) {
+                } catch (_: OutOfMemoryError) {
+                    // Harder forms + unbounded streams used to kill the process; keep the app alive.
                     ensureOwner()
-                    // Provider errors may contain endpoint/auth details; never put them on the avatar.
-                    avatarFormFailure("Could not create and save that cartoon form. Check your selected AI model, try a simpler description, or remove a saved form if all 24 slots are full.")
+                    System.gc()
+                    avatarFormFailure("That form was too complex for memory. Try a simpler description with fewer details.")
+                } catch (error: Exception) {
+                    ensureOwner()
+                    // Safe, short reason — never dump endpoint/auth details onto the avatar caption.
+                    val reason = error.message?.filterNot { it.isISOControl() }?.take(120)?.takeIf { it.isNotBlank() }
+                    avatarFormFailure(
+                        if (reason != null && (reason.contains("HTTP", ignoreCase = true) ||
+                                reason.contains("schema", ignoreCase = true) ||
+                                reason.contains("JSON", ignoreCase = true) ||
+                                reason.contains("exceeded", ignoreCase = true) ||
+                                reason.contains("finish", ignoreCase = true) ||
+                                reason.contains("slots", ignoreCase = true)))
+                            "Could not create that cartoon form: $reason. Try a simpler description."
+                        else
+                            "Could not create and save that cartoon form. Check your selected AI model, try a simpler description, or remove a saved form if all 24 slots are full.",
+                    )
                 } finally {
                     if (generation == avatarFormGeneration) {
                         avatarFormWork = null
