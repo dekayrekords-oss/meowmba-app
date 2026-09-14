@@ -57,10 +57,12 @@ class Computer120DeviceTest {
                 scenario.onActivity { vm.runOnComputer("sleep 3; printf ${marker}_late") }
                 Thread.sleep(300)
                 scenario.onActivity { vm.cancelAgenticComputerChat() }
-                val stopped = vm.uiState.value.captionText
                 Thread.sleep(4500)
                 assertFalse(vm.uiState.value.computerTaskRunning)
-                assertEquals("Late result replaced cancellation", stopped, vm.uiState.value.captionText)
+                // Speech captions may legitimately fade; cancellation must prevent a late saved reply.
+                assertFalse("Cancelled command published a late result", vm.uiState.value.chatMessages.any {
+                    it.isCompanion && it.text.contains("${marker}_late")
+                })
                 assertEquals(camera, storage.getBooleanPreference("camera_enabled", false))
             } finally {
                 scenario.onActivity { vm.cancelAgenticComputerChat(); vm.setComputerPowerState(power) }
