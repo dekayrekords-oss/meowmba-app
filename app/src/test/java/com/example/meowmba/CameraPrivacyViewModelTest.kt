@@ -130,4 +130,39 @@ class CameraPrivacyViewModelTest {
         verify(nextCamera, never()).setCaptureEnabled(true)
         verify(nextCamera, never()).setFaceTrackingEnabled(true)
     }
+
+    @Test fun brainMonitorKeepsAuthorizedTrackingButFullMenusPauseAndRestoreIt() = runTest(dispatcher) {
+        val camera = camera()
+        val vm = model(camera)
+        vm.setCameraEnabled(true)
+        clearInvocations(camera)
+        vm.toggleNeuralInfo()
+        runCurrent()
+        verify(camera, never()).setFaceTrackingEnabled(false)
+        vm.openNeuralSettingsFromInfo()
+        runCurrent()
+        verify(camera).setFaceTrackingEnabled(false)
+        vm.returnToAvatar()
+        runCurrent()
+        verify(camera, atLeastOnce()).setFaceTrackingEnabled(true)
+        assertTrue(vm.uiState.value.isCameraEnabled)
+    }
+
+    @Test fun backgroundAndHiddenStageCannotRestartCameraUntilVisibleAgain() = runTest(dispatcher) {
+        val camera = camera()
+        val vm = model(camera)
+        vm.setCameraEnabled(true)
+        vm.releaseWakeMicForBackground()
+        clearInvocations(camera)
+        vm.resumeFaceTrackingIfEnabled()
+        verify(camera, never()).setFaceTrackingEnabled(true)
+        vm.reclaimWakeMicForForeground()
+        vm.setAvatarPerformanceStageAllowed(false)
+        clearInvocations(camera)
+        vm.resumeFaceTrackingIfEnabled()
+        verify(camera, never()).setFaceTrackingEnabled(true)
+        vm.setAvatarPerformanceStageAllowed(true)
+        verify(camera).setFaceTrackingEnabled(true)
+        assertTrue(vm.uiState.value.isCameraEnabled)
+    }
 }

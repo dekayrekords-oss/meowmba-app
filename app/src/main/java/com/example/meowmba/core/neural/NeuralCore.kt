@@ -9,7 +9,7 @@ enum class NeuralSubstrate {
      * counts. It is not FlyWire and does not claim physiological flight control.
      */
     BANC_EXPERIMENTAL,
-    /** Retained MaleCNS graph stepped on Meow through the paired desktop. */
+    /** MaleCNS graph stepped on a selected compatible server or the paired desktop. */
     MALECNS_REMOTE,
 }
 

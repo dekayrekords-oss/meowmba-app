@@ -59,8 +59,11 @@ fun NeuralInfoPanel(
     onOpenSettings: () -> Unit = {},
     onPairComputer: () -> Unit = {},
     onEnableNeuralControl: () -> Unit = {},
+    remoteServerPaired: Boolean = desktopPaired,
+    remoteServerName: String? = null,
+    onSetupBrainServer: () -> Unit = onPairComputer,
 ) {
-    val view = neuralInfoPresentation(diagnostics, desktopPaired)
+    val view = neuralInfoPresentation(diagnostics, desktopPaired, remoteServerPaired, remoteServerName)
     var details by rememberSaveable { mutableStateOf(false) }
     BoxWithConstraints(modifier.fillMaxSize().safeDrawingPadding().testTag("brain-info-overlay")) {
         val landscape = maxWidth > maxHeight
@@ -96,8 +99,8 @@ fun NeuralInfoPanel(
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (view.showLocalAction) OutlinedButton(onClick = onUseLocalBrain,
                         modifier = Modifier.fillMaxWidth()) { Text("Start local brain") }
-                    if (view.showPairAction) OutlinedButton(onClick = onPairComputer,
-                        modifier = Modifier.fillMaxWidth()) { Text("Pair computer") }
+                    if (view.showPairAction) OutlinedButton(onClick = onSetupBrainServer,
+                        modifier = Modifier.fillMaxWidth()) { Text("Set up brain server") }
                     if (view.measurementsAvailable && diagnostics?.mode == NeuralMode.SHADOW) {
                         OutlinedButton(onClick = onEnableNeuralControl, modifier = Modifier.fillMaxWidth()) {
                             Text("Let brain control avatar")
@@ -191,7 +194,7 @@ private fun NeuralInfoDetails(d: NeuralDiagnostics?, measured: Boolean) {
             NeuralInfoRow(label, hz?.let { "${it.roundToInt()} Hz" } ?: "—")
         }
         NeuralInfoRow("Simulated brain time", measuredTime("malecns.sim_ms"))
-        NeuralInfoRow("Meow compute per reply", measuredTime("malecns.compute_ms"))
+        NeuralInfoRow("Server compute per reply", measuredTime("malecns.compute_ms"))
     }
     Text(
         when (d?.substrate) {

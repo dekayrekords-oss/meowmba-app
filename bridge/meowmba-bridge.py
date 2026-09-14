@@ -51,6 +51,8 @@ import base64
 import hashlib
 import hmac
 import json
+import ipaddress
+import re
 import os
 import secrets
 import shutil
@@ -140,6 +142,31 @@ def _lan_ip() -> str:
         return "127.0.0.1"
     finally:
         s.close()
+
+
+def _advertise_host(value: str) -> str:
+    """Owner-selected connection address, never a URL, command or automatic trust source."""
+    if not value or value != value.strip() or len(value) > 253:
+        raise argparse.ArgumentTypeError("advertise host must be a DNS name or IP address")
+    bare = value[1:-1] if value.startswith('[') and value.endswith(']') else value
+    try:
+        return str(ipaddress.ip_address(bare))
+    except ValueError:
+        labels = bare.rstrip('.').split('.')
+        if not all(re.fullmatch(r'[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?', label) for label in labels):
+            raise argparse.ArgumentTypeError("advertise host must be a DNS name or IP address")
+        return bare
+
+
+def _pairing_payload(cfg: dict, advertised_host: str | None = None) -> dict:
+    return {
+        "v": 1,
+        "host": _advertise_host(advertised_host) if advertised_host is not None else _lan_ip(),
+        "port": cfg["port"],
+        "name": cfg["name"],
+        "pair_token": _pair_state["token"],
+        "cert_sha256": _cert_fingerprint(),
+    }
 
 
 def _load_config() -> dict:
@@ -1061,6 +1088,8 @@ def main() -> None:
         help="deprecated alias for --pair; an owner-confirmed code is always required")
     ap.add_argument("--unpair", action="store_true", help="forget the paired phone and exit")
     ap.add_argument("--port", type=int, default=None, help=f"listen port (default {DEFAULT_PORT})")
+    ap.add_argument("--advertise-host", type=_advertise_host,
+        help="DNS or VPN/IP address printed in the pairing payload; does not change the listener or trust policy")
     args = ap.parse_args()
 
     if args.unpair:
@@ -1077,14 +1106,7 @@ def main() -> None:
         _pair_state["token"] = _make_pair_code()
         _pair_state["expires"] = time.time() + PAIR_TOKEN_TTL_S
         _pair_state["attempts"] = 0
-        payload = {
-            "v": 1,
-            "host": _lan_ip(),
-            "port": cfg["port"],
-            "name": cfg["name"],
-            "pair_token": _pair_state["token"],
-            "cert_sha256": _cert_fingerprint(),
-        }
+        payload = _pairing_payload(cfg, args.advertise_host)
         blob = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode()
         print("═" * 64)
         print("  PAIRING WINDOW OPEN (10 minutes, single use)")

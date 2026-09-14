@@ -826,17 +826,15 @@ class CompanionViewModel(
      */
     @Volatile private var neuralTraceRecorder: FeatureTraceRecorder? = null
     private val maleCnsBridge = secureStorage?.let { DesktopBridgeManager(it) }
+    private val maleCnsServerManager = secureStorage?.let { MaleCnsServerManager(it) }
+    @Volatile private var neuralServerOperationBusy = false
     private val nervousSystem = NeuralBehaviorController(
         coreFactory = { substrate -> when (substrate) {
             NeuralSubstrate.RATE -> LeakyRecurrentCore(NeuralCheckpoint.default())
             NeuralSubstrate.SPIKING -> SpikingCore(NeuralCheckpoint.defaultSpiking())
             NeuralSubstrate.BANC_EXPERIMENTAL -> BancExperimentalCore()
-            NeuralSubstrate.MALECNS_REMOTE -> MaleCnsRemoteCore(viewModelScope, maleCnsBridge?.let { bridge ->
-                object : MaleCnsTransport {
-                    override suspend fun step(request: MaleCnsRequest) = bridge.maleCnsStep(request)
-                    override suspend fun stop(session: String) = bridge.maleCnsStop(session)
-                }
-            }, graph = MaleCnsGraphProfile.FULL)
+            NeuralSubstrate.MALECNS_REMOTE -> MaleCnsRemoteCore(viewModelScope,
+                maleCnsServerManager?.createTransport(), graph = MaleCnsGraphProfile.FULL)
         } },
         initialMode = secureStorage?.getPreference(NeuralModeStore.KEY_MODE)?.let {
             runCatching { NeuralMode.valueOf(it) }.getOrNull()
@@ -913,8 +911,57 @@ class CompanionViewModel(
     }
     fun resetNeuralController() {
         setNeuralTraceConsent(false)
-        nervousSystem.resetNeuralState()
+        if (nervousSystem.substrate == NeuralSubstrate.MALECNS_REMOTE) nervousSystem.recreateCurrentSubstrate()
+        else nervousSystem.resetNeuralState()
         _uiState.update { it.copy(neuralDiagnostics = nervousSystem.diagnostics()) }
+    }
+
+    fun refreshMaleCnsServer() {
+        val selection = maleCnsServerManager?.selection()
+        val previous = _uiState.value.maleCnsServer
+        if (!neuralServerOperationBusy && nervousSystem.substrate == NeuralSubstrate.MALECNS_REMOTE &&
+            (previous.useDedicated != (selection?.useDedicated ?: false) ||
+                previous.paired != (selection?.paired == true) || previous.endpoint != selection?.endpoint.orEmpty())) {
+            nervousSystem.recreateCurrentSubstrate()
+        }
+        _uiState.update { state -> state.copy(maleCnsServer = state.maleCnsServer.copy(
+            useDedicated = selection?.useDedicated ?: false,
+            serverName = selection?.serverName.orEmpty(), endpoint = selection?.endpoint.orEmpty(),
+            paired = selection?.paired == true), neuralDesktopPaired = maleCnsBridge?.isPaired() == true) }
+    }
+
+    fun pairMaleCnsServer(payload: String) = runMaleCnsServerOperation { manager ->
+        manager.pairServer(payload, android.os.Build.MODEL ?: "Memba phone")
+    }
+    fun usePairedComputerForMaleCns() = runMaleCnsServerOperation { it.usePairedComputer() }
+    fun testMaleCnsServer() = runMaleCnsServerOperation { it.testConnection() }
+
+    private fun runMaleCnsServerOperation(operation: suspend (MaleCnsServerManager) -> Result<String>) {
+        if (neuralServerOperationBusy) return
+        val manager = maleCnsServerManager ?: run {
+            _uiState.update { it.copy(maleCnsServer = it.maleCnsServer.copy(
+                message = "Server settings are unavailable in this session. Reopen Memba.", isError = true)) }
+            return
+        }
+        neuralServerOperationBusy = true
+        nervousSystem.pauseExternalWork()
+        _uiState.update { it.copy(maleCnsServer = it.maleCnsServer.copy(busy = true, message = null, isError = false)) }
+        viewModelScope.launch {
+            try {
+                val result = operation(manager)
+                _uiState.update { it.copy(maleCnsServer = it.maleCnsServer.copy(
+                    message = result.getOrNull() ?: result.exceptionOrNull()?.message ?: "Server connection failed.",
+                    isError = result.isFailure)) }
+            } finally {
+                // A transport snapshots its host and credentials. Replacing the core also
+                // discards the previous server's outstanding replies and motor readout.
+                if (nervousSystem.substrate == NeuralSubstrate.MALECNS_REMOTE) nervousSystem.recreateCurrentSubstrate()
+                refreshMaleCnsServer()
+                neuralServerOperationBusy = false
+                _uiState.update { it.copy(maleCnsServer = it.maleCnsServer.copy(busy = false),
+                    neuralDiagnostics = nervousSystem.diagnostics()) }
+            }
+        }
     }
     fun setNeuralTraceConsent(enabled: Boolean) {
         if (enabled && nervousSystem.substrate == NeuralSubstrate.MALECNS_REMOTE) {
@@ -1132,6 +1179,9 @@ class CompanionViewModel(
     /** Hidden stories are cancelled, so resuming cannot replay an old entrance. */
     fun setAvatarPerformanceStageAllowed(allowed: Boolean) {
         avatarPerformanceStageAllowed = allowed
+        if (_uiState.value.isCameraEnabled) {
+            if (allowed) resumeFaceTrackingIfEnabled() else visionManager?.setFaceTrackingEnabled(false)
+        }
         if (!allowed && !_uiState.value.showNeuralInfo) nervousSystem.pauseExternalWork()
         if (!allowed && (_uiState.value.activeAnimation != null || _uiState.value.activeComposed != null ||
                 _uiState.value.emotionPreview != null)) stopAvatarPerformance()
@@ -1238,6 +1288,11 @@ class CompanionViewModel(
             while (true) {
                 kotlinx.coroutines.delay(60_000L)
                 runCatching { releaseIdleLocalBrain() }
+            }
+        }
+        viewModelScope.launch {
+            visionManager?.trackingStatus?.collect { status ->
+                _uiState.update { it.copy(cameraTrackingStatus = status) }
             }
         }
         // Vision owns visual grace and expires it independently of incoming camera frames.
@@ -1546,15 +1601,17 @@ class CompanionViewModel(
         viewModelScope.launch {
             _uiState.map { faceModeActive(it) }.distinctUntilChanged().drop(1).collect { face ->
                 updateVoiceListeningMode()
-                // Camera + ML Kit is the heat hog. Pause it whenever the
-                // face is covered (apps drawer, settings, …) so the grid
-                // is not fighting the ISP for CPU.
-                if (!face) {
-                    visionManager?.setFaceTrackingEnabled(false)
-                } else if (_uiState.value.isCameraEnabled) {
-                    visionManager?.setFaceTrackingEnabled(true)
-                }
             }
+        }
+
+        viewModelScope.launch {
+            _uiState.map { avatarSceneVisible(it) }
+                .distinctUntilChanged().drop(1).collect { visible ->
+                    // Brain and partial chat leave the avatar visible. Full menus suspend
+                    // analysis; returning to the avatar restores the existing camera choice.
+                    if (_uiState.value.isCameraEnabled && visible) resumeFaceTrackingIfEnabled()
+                    else visionManager?.setFaceTrackingEnabled(false)
+                }
         }
 
         viewModelScope.launch {
@@ -1753,7 +1810,7 @@ class CompanionViewModel(
                 // (Advance [last] first — on resume the drives must ease from
                 // now, not integrate the whole time we were away.)
                 if (appInBackground || (nervousSystem.substrate == NeuralSubstrate.MALECNS_REMOTE &&
-                        !avatarPerformanceStageAllowed && !_uiState.value.showNeuralInfo)) {
+                        (neuralServerOperationBusy || (!avatarPerformanceStageAllowed && !_uiState.value.showNeuralInfo)))) {
                     nervousSystem.pauseExternalWork()
                     last = now
                     continue
@@ -1774,7 +1831,11 @@ class CompanionViewModel(
                     else -> nervousSystem.clearIntent()
                 }
                 com.example.meowmba.core.diagnostics.LoopTelemetry.measure("drives.tick") {
-                    nervousSystem.tick((now - last).coerceIn(0L, 250L))
+                    synchronized(nervousSystem) {
+                        if (neuralServerOperationBusy && nervousSystem.substrate == NeuralSubstrate.MALECNS_REMOTE)
+                            nervousSystem.pauseExternalWork()
+                        else nervousSystem.tick((now - last).coerceIn(0L, 250L))
+                    }
                     if (now - lastNeuralDiagnosticsMs >= 1000L) {
                         lastNeuralDiagnosticsMs = now
                         _uiState.update { it.copy(neuralDiagnostics = nervousSystem.diagnostics()) }
@@ -4807,6 +4868,7 @@ class CompanionViewModel(
         stopAvatarPerformance()
         resetMouthEnergy()
         appInBackground = true
+        visionManager?.setFaceTrackingEnabled(false)
         nervousSystem.pauseExternalWork()
         finishNoting("Notes stopped when the app left the screen")
         motionSense?.stop()
@@ -4853,6 +4915,7 @@ class CompanionViewModel(
         stopAvatarPerformance()
         resetMouthEnergy()
         appInBackground = true
+        visionManager?.setFaceTrackingEnabled(false)
         nervousSystem.pauseExternalWork()
         finishNoting("Notes stopped when the app left the screen")
         motionSense?.stop()
@@ -8477,7 +8540,7 @@ class CompanionViewModel(
     fun resumeFaceTrackingIfEnabled() {
         visionManager?.setCaptureEnabled(_uiState.value.isCameraEnabled)
         if (!_uiState.value.isCameraEnabled) return
-        if (!faceModeActive(_uiState.value)) return
+        if (appInBackground || !avatarPerformanceStageAllowed || !avatarSceneVisible(_uiState.value)) return
         val vm = visionManager ?: return
         if (!vm.hasPermission()) return
         vm.setUseFrontCamera(true)
@@ -9129,6 +9192,7 @@ class CompanionViewModel(
 
     /** Opens the interactive monitor without changing the saved brain or sensor choices. */
     fun toggleNeuralInfo() {
+        refreshMaleCnsServer()
         _uiState.update { it.copy(showNeuralInfo = !it.showNeuralInfo, showTiles = false,
             showSettings = false, settingsInitialPage = null, neuralInputNotice = null,
             neuralDesktopPaired = maleCnsBridge?.isPaired() == true,
@@ -9153,7 +9217,7 @@ class CompanionViewModel(
         return !appInBackground && d.mode != NeuralMode.LEGACY && d.fallback == FallbackReason.NONE &&
             com.example.meowmba.core.thermal.ThermalGovernor.currentTier().ordinal < 2 &&
             (d.substrate != NeuralSubstrate.MALECNS_REMOTE ||
-                (maleCnsBridge?.isPaired() == true && d.core.extra["malecns.connected"] == 1f))
+                (!neuralServerOperationBusy && maleCnsServerManager?.selection()?.paired == true && d.core.extra["malecns.connected"] == 1f))
     }
 
     fun petBrainFromInfo() {

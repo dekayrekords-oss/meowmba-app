@@ -319,6 +319,16 @@ class NeuralBehaviorController(
         clearFallback()
     }
 
+    /** Replace an external endpoint without changing the user's selected network or mode. */
+    @Synchronized
+    fun recreateCurrentSubstrate() {
+        core.pause()
+        core = coreFactory(substrate)
+        lastReadout = FloatArray(0)
+        published = legacy.bias()
+        resetNeuralState()
+    }
+
     /** Forget the neural state (not the legacy drives) and clear any sticky fallback. */
     @Synchronized
     fun resetNeuralState() {

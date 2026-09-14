@@ -49,6 +49,11 @@ import kotlinx.coroutines.launch
 fun SettingsScreen(
     secureStorage: SecureStorageManager,
     companionName: String = "Meow",
+    maleCnsServer: MaleCnsServerUiState = MaleCnsServerUiState(),
+    onPairMaleCnsServer: (String) -> Unit = {},
+    onUsePairedComputerForMaleCns: () -> Unit = {},
+    onTestMaleCnsServer: () -> Unit = {},
+    onPairComputerForMaleCns: () -> Unit = {},
     coverAvatarEnabled: Boolean = false,
     onCoverAvatarChange: (Boolean) -> Unit = {},
     wakeWordEnabled: Boolean = false,
@@ -277,6 +282,11 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(12.dp))
                 NeuralSettingsSection(
+                    maleCnsServer = maleCnsServer,
+                    onPairMaleCnsServer = onPairMaleCnsServer,
+                    onUsePairedComputerForMaleCns = onUsePairedComputerForMaleCns,
+                    onTestMaleCnsServer = onTestMaleCnsServer,
+                    onPairComputer = onPairComputerForMaleCns,
                     mode = neuralMode, substrate = neuralSubstrate, traceConsent = neuralTraceConsent,
                     diagnostics = neuralDiagnostics, showNeuralCoreControls = true,
                     onModeChanged = onNeuralMode, onSubstrateChanged = onNeuralSubstrate,

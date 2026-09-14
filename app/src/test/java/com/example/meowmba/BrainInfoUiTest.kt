@@ -150,7 +150,7 @@ class BrainInfoUiTest {
             NeuralInfoPanel(d, {}, desktopPaired = false, onPairComputer = { paired++ },
                 onUseLocalBrain = { started++ })
         } }
-        rule.onNodeWithText("Computer not paired").assertIsDisplayed()
+        rule.onNodeWithText("Brain server not paired").assertIsDisplayed()
         rule.onNodeWithText("Pet").assertIsNotEnabled()
         rule.onNodeWithText("Feed").assertIsNotEnabled()
         assertTrue(neuralInfoPresentation(d, false).metrics.all { it.value == null })
@@ -159,7 +159,7 @@ class BrainInfoUiTest {
         render("remote-unpaired")
         rule.onNodeWithText("Start local brain").performScrollTo().performClick()
         assertEquals(1, started)
-        rule.onNodeWithText("Pair computer").performScrollTo().performClick()
+        rule.onNodeWithText("Set up brain server").performScrollTo().performClick()
         assertEquals(1, paired)
     }
 
@@ -168,10 +168,10 @@ class BrainInfoUiTest {
         rule.setContent { MeowmbaTheme(darkTheme = true) { NeuralInfoPanel(current, {}, desktopPaired = true) } }
         rule.onNodeWithText("Pet").assertIsEnabled()
         rule.runOnIdle { current = snapshot(remote = true, connected = false, fallback = FallbackReason.REMOTE_UNAVAILABLE) }
-        rule.onNodeWithText("Meow unavailable · Classic active").assertIsDisplayed()
+        rule.onNodeWithText("Server unavailable · Classic active").assertIsDisplayed()
         rule.onNodeWithText("Pet").assertIsNotEnabled()
         rule.onNodeWithText("Feed").assertIsNotEnabled()
-        rule.onNodeWithText("Pair computer").assertDoesNotExist()
+        rule.onNodeWithText("Set up brain server").assertDoesNotExist()
         rule.onNodeWithText("Start local brain").assertExists()
         assertTrue(neuralInfoPresentation(current, true).metrics.all { it.value == null })
         render("remote-unavailable")
@@ -201,6 +201,35 @@ class BrainInfoUiTest {
         assertEquals(1, feed)
         rule.onNodeWithText("Settings").assertIsDisplayed()
         render("landscape-malecns-rates")
+    }
+
+    @Test fun dedicatedServerWorksWithoutDesktopPairingAndShowsItsActualName() {
+        val d = snapshot(remote = true, connected = true)
+        rule.setContent { MeowmbaTheme(darkTheme = true) {
+            NeuralInfoPanel(d, {}, desktopPaired = false, remoteServerPaired = true, remoteServerName = "Lab server")
+        } }
+        rule.onNodeWithText("MaleCNS · Lab server").assertIsDisplayed()
+        rule.onNodeWithText("Neural · controlling avatar").assertIsDisplayed()
+        rule.onNodeWithText("Pet").assertIsEnabled()
+        rule.onNodeWithText("Set up brain server").assertDoesNotExist()
+        assertTrue(neuralInfoPresentation(d, false, remoteServerPaired = true).measurementsAvailable)
+    }
+
+    @Test fun unpairedSelectedServerCannotUseAnUnrelatedDesktopPairing() {
+        var settings = 0
+        var legacyPairing = 0
+        val d = snapshot(remote = true, connected = true)
+        rule.setContent { MeowmbaTheme(darkTheme = true) {
+            NeuralInfoPanel(d, {}, desktopPaired = true, remoteServerPaired = false,
+                onPairComputer = { legacyPairing++ }, onSetupBrainServer = { settings++ })
+        } }
+        rule.onNodeWithText("Brain server not paired").assertIsDisplayed()
+        rule.onNodeWithText("Pet").assertIsNotEnabled()
+        rule.onNodeWithText("Feed").assertIsNotEnabled()
+        assertTrue(neuralInfoPresentation(d, true, remoteServerPaired = false).metrics.all { it.value == null })
+        rule.onNodeWithText("Set up brain server").performScrollTo().performClick()
+        assertEquals(1, settings)
+        assertEquals(0, legacyPairing)
     }
 
     private fun snapshot(

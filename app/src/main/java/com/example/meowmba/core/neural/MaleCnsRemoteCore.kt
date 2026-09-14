@@ -61,6 +61,7 @@ data class MaleCnsSnapshot(val simMs: Float, val computeMs: Float, val active: I
 }
 
 interface MaleCnsTransport {
+    val description: String get() = "neural server"
     suspend fun step(request: MaleCnsRequest): Result<MaleCnsSnapshot>
     suspend fun stop(session: String)
 }
@@ -83,7 +84,7 @@ class MaleCnsRemoteCore(
     private var sample: MaleCnsSnapshot? = null
     private var sampleInputMs = Long.MIN_VALUE
     private var foodUntil = 0L
-    private var status = "Waiting for the paired computer and Meow"
+    private var status = "Waiting for the selected neural server"
 
     @Synchronized fun noteFood() { foodUntil = nowMs() + 2000L }
     @Synchronized override fun ready(): Boolean = sample != null && nowMs() - sampleInputMs in 0L..1800L
@@ -104,17 +105,17 @@ class MaleCnsRemoteCore(
         pending = scope.launch(dispatcher) {
             val result = try { transport.step(request) }
             catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { Result.failure(IllegalStateException("Meow unavailable")) }
+            catch (_: Exception) { Result.failure(IllegalStateException("Neural server unavailable")) }
             synchronized(this@MaleCnsRemoteCore) {
                 if (request.session != session) return@synchronized
                 val measured = result.getOrNull()
                 if (measured != null && measured.graph == graph && nowMs() - now in 0L..1800L) {
                     sample = measured; sampleInputMs = now
-                    status = "Connected · Meow through your paired computer"
+                    status = "Connected · ${transport.description}"
                 } else {
                     sample = null
                     status = if (measured != null) "Reply expired · using Classic while reconnecting"
-                        else "Meow unavailable · check the paired computer connection"
+                        else "Neural server unavailable · check its connection in Neural setup"
                     nextAttempt = nowMs() + 2500L
                 }
             }

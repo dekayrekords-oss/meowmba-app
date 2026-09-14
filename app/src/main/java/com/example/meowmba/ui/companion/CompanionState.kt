@@ -116,6 +116,9 @@ data class CompanionState(
     /** Lightweight live neural activity panel, opened from the tile grid. */
     val showNeuralInfo: Boolean = false,
     val neuralDesktopPaired: Boolean = false,
+    val maleCnsServer: MaleCnsServerUiState = MaleCnsServerUiState(),
+    val cameraTrackingStatus: com.example.meowmba.core.vision.FaceTrackingStatus =
+        com.example.meowmba.core.vision.FaceTrackingStatus.OFF,
     /** Confirms input submission, never claims a measured neural response. */
     val neuralInputNotice: String? = null,
     /** Which eye style the face is drawn in. Persisted across launches. */

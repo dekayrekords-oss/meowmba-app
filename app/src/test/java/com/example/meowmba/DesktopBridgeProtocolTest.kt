@@ -71,6 +71,18 @@ class DesktopBridgeProtocolTest {
         assertTrue(DesktopBridgeProtocol.decodePairingPayload(badPort).isFailure)
     }
 
+    @Test fun `server endpoints support DNS IPv4 and IPv6 without allowing URL injection`() {
+        assertEquals("https://fly.example:8765/rpc", DesktopBridgeProtocol.endpointUrl("fly.example", 8765, "/rpc").toString())
+        assertEquals("https://100.77.97.236:8765/rpc", DesktopBridgeProtocol.endpointUrl("100.77.97.236", 8765, "/rpc").toString())
+        assertEquals("https://[2001:db8::1]:8765/rpc", DesktopBridgeProtocol.endpointUrl("2001:db8::1", 8765, "/rpc").toString())
+        assertEquals("https://[::1]:8765/pair", DesktopBridgeProtocol.endpointUrl("[::1]", 8765, "/pair").toString())
+        for (host in listOf("https://fly.example", "user@fly.example", "fly.example/path", "fly.example?key=secret", "fly.example#fragment", " fly.example ")) {
+            assertTrue(runCatching { DesktopBridgeProtocol.endpointUrl(host, 8765, "/rpc") }.isFailure)
+        }
+        assertTrue(runCatching { DesktopBridgeProtocol.endpointUrl("fly.example", 0, "/rpc") }.isFailure)
+        assertTrue(runCatching { DesktopBridgeProtocol.endpointUrl("fly.example", 8765, "/redirect") }.isFailure)
+    }
+
     // --------------------------------------------------------------
     // Signing (Python interop vectors)
     // --------------------------------------------------------------

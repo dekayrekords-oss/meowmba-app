@@ -120,6 +120,9 @@ fun CompanionScreen(
         onDispose { viewModel.setBodyStageAllowed(false) }
     }
 
+    LaunchedEffect(uiState.showSettings, uiState.showNeuralInfo) {
+        if (uiState.showSettings || uiState.showNeuralInfo) viewModel.refreshMaleCnsServer()
+    }
     val isNeo = uiState.avatarStyle == AvatarStyle.NEO
     val hasUserBg = uiState.background.kind !=
         com.example.meowmba.core.background.BackgroundKind.NONE
@@ -404,21 +407,14 @@ fun CompanionScreen(
                 modifier = Modifier.align(Alignment.BottomEnd).imePadding()
                     .padding(bottom = 128.dp, end = 16.dp),
             )
-            IconButton(
-                onClick = { viewModel.setCameraEnabled(!uiState.isCameraEnabled) },
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .imePadding()
-                    .padding(bottom = 72.dp, end = 16.dp)
-                    .border(2.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape),
-                colors = IconButtonDefaults.iconButtonColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Icon(
-                    imageVector = if (uiState.isCameraEnabled) Icons.Default.Videocam else Icons.Default.VideocamOff,
-                    contentDescription = if (uiState.isCameraEnabled) "Turn camera off" else "Turn camera on",
-                    tint = if (uiState.isCameraEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            CameraTrackingControl(
+                enabled = uiState.isCameraEnabled,
+                status = uiState.cameraTrackingStatus,
+                onToggle = { viewModel.setCameraEnabled(!uiState.isCameraEnabled) },
+                onRetry = viewModel::resumeFaceTrackingIfEnabled,
+                modifier = Modifier.align(Alignment.BottomEnd).imePadding()
+                    .padding(bottom = 72.dp, end = 16.dp),
+            )
 
         // Live camera preview — draggable PiP so it can sit anywhere on screen.
         val density = LocalDensity.current
@@ -766,6 +762,9 @@ fun CompanionScreen(
                 diagnostics = uiState.neuralDiagnostics,
                 onClose = viewModel::toggleNeuralInfo,
                 desktopPaired = uiState.neuralDesktopPaired,
+                remoteServerPaired = uiState.maleCnsServer.paired,
+                remoteServerName = uiState.maleCnsServer.serverName,
+                onSetupBrainServer = viewModel::openNeuralSettingsFromInfo,
                 inputNotice = uiState.neuralInputNotice,
                 onUseLocalBrain = viewModel::startLocalBrainFromInfo,
                 onEnableNeuralControl = viewModel::enableNeuralControlFromInfo,
@@ -896,6 +895,11 @@ fun CompanionScreen(
                 onVideoServerUrlChange = { viewModel.setVideoServerUrl(it) },
                 onBackgroundListeningChange = { viewModel.setBackgroundListeningEnabled(it) },
                 onUsbAutoBridgeChange = { viewModel.setUsbAutoBridge(it) },
+                maleCnsServer = uiState.maleCnsServer,
+                onPairMaleCnsServer = viewModel::pairMaleCnsServer,
+                onUsePairedComputerForMaleCns = viewModel::usePairedComputerForMaleCns,
+                onTestMaleCnsServer = viewModel::testMaleCnsServer,
+                onPairComputerForMaleCns = viewModel::openBrainPairingFromInfo,
                 neuralMode = uiState.neuralMode, neuralSubstrate = uiState.neuralSubstrate,
                 neuralTraceConsent = uiState.neuralTraceConsent, neuralDiagnostics = uiState.neuralDiagnostics,
                 onNeuralMode = viewModel::setNeuralMode, onNeuralSubstrate = viewModel::setNeuralSubstrate,

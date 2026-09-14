@@ -22,7 +22,6 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
 import com.example.meowmba.core.thermal.ThermalGovernor
 import com.google.mlkit.vision.common.InputImage
-import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.vision.face.Face
 import com.google.mlkit.vision.face.FaceDetection
 import com.google.mlkit.vision.face.FaceDetector
@@ -312,10 +311,15 @@ internal fun remapEulerToDisplay(
  * says what happened instead of pretending.
  */
 
-class VisionManager(
+class VisionManager internal constructor(
     private val context: Context,
-    private val lifecycleOwner: LifecycleOwner
+    private val lifecycleOwner: LifecycleOwner,
+    private val cameraProvider: () -> com.google.common.util.concurrent.ListenableFuture<ProcessCameraProvider>,
 ) {
+    constructor(context: Context, lifecycleOwner: LifecycleOwner) : this(
+        context, lifecycleOwner, { ProcessCameraProvider.getInstance(context) },
+    )
+
     private val captureGate = CameraCaptureGate()
     private var imageCapture: ImageCapture? = null
     private var preview: Preview? = null
@@ -378,9 +382,13 @@ class VisionManager(
 
     private val _faceTrack = MutableStateFlow<FaceTrack?>(null)
     private val _sceneLuma = MutableStateFlow<Int?>(null)
+    private val _trackingStatus = MutableStateFlow(FaceTrackingStatus.OFF)
 
     /** Latest attention target; missing faces may hold visual gaze briefly with hasFace=false. */
     val faceTrack: StateFlow<FaceTrack?> = _faceTrack.asStateFlow()
+
+    /** Bound/requested and detected are different states; a toggle is not a face observation. */
+    val trackingStatus: StateFlow<FaceTrackingStatus> = _trackingStatus.asStateFlow()
 
     /** Mean luma of the analysis frame, 0..255. For the auto headlight. */
     val sceneLuma: StateFlow<Int?> = _sceneLuma.asStateFlow()
@@ -399,7 +407,11 @@ class VisionManager(
     fun setCaptureEnabled(enabled: Boolean) {
         if (closed) return
         captureGate.setEnabled(enabled)
-        if (enabled) return
+        if (enabled) {
+            if (_trackingStatus.value == FaceTrackingStatus.OFF) _trackingStatus.value = FaceTrackingStatus.PAUSED
+            return
+        }
+        _trackingStatus.value = FaceTrackingStatus.OFF
         _faceTrackingEnabled = false
         trackingSession.stop()
         freshnessWatchdog?.cancel(false)
@@ -450,7 +462,7 @@ class VisionManager(
     var followOnly = false
         private set
 
-    private fun detectorOptions(follow: Boolean): FaceDetectorOptions =
+    internal fun detectorOptions(follow: Boolean): FaceDetectorOptions =
         if (follow) {
             FaceDetectorOptions.Builder()
                 .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
@@ -461,10 +473,12 @@ class VisionManager(
                 .enableTracking()
                 .build()
         } else {
+            // Talker selection reads mouth landmarks; disabling them made every
+            // mouth-open sample zero even when a face was detected correctly.
             FaceDetectorOptions.Builder()
                 .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
                 .setContourMode(FaceDetectorOptions.CONTOUR_MODE_NONE)
-                .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_NONE)
+                .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL)
                 .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_ALL)
                 .setMinFaceSize(0.08f)
                 .enableTracking()
@@ -480,6 +494,7 @@ class VisionManager(
         if (!_faceTrackingEnabled) return
         trackingSession.invalidate()
         clearAttention()
+        _trackingStatus.value = if (thermalPaused) FaceTrackingStatus.COOLING else FaceTrackingStatus.WAITING_FOR_FRAMES
         faceDetector?.close()
         faceDetector = FaceDetection.getClient(detectorOptions(on))
         android.util.Log.i("MeowVision", "followOnly=$on (time/thermal budget, pose=${!on})")
@@ -488,8 +503,8 @@ class VisionManager(
     /**
      * Start or stop continuous face tracking. When enabled the front camera is
      * used and a stable visual target is published to [faceTrack].
-     * @return true if tracking is actually running (permission + bound), false if
-     * disabled or blocked on missing CAMERA permission.
+     * @return true if the tracking request was accepted. Binding is asynchronous;
+     * [trackingStatus] reports whether frames and a face actually arrive.
      */
     @Synchronized
     fun setFaceTrackingEnabled(enabled: Boolean): Boolean {
@@ -497,12 +512,25 @@ class VisionManager(
         android.util.Log.i("VM", "setFaceTrackingEnabled($enabled) cur=$_faceTrackingEnabled perm=${hasPermission()}")
         if (enabled && !hasPermission()) {
             if (_faceTrackingEnabled) setFaceTrackingEnabled(false)
+            _trackingStatus.value = FaceTrackingStatus.PERMISSION_REQUIRED
             return false
         }
         if (enabled == _faceTrackingEnabled) {
+            // The UI's explicit Retry keeps the user's camera choice ON. A
+            // previous async failure must not make that request an inert no-op.
+            // Healthy/starting/thermal sessions retain idempotent behavior.
+            if (enabled && _trackingStatus.value == FaceTrackingStatus.ERROR) {
+                unbind()
+                bindPreviewAsync()
+            }
             return _faceTrackingEnabled && hasPermission()
         }
         _faceTrackingEnabled = enabled
+        _trackingStatus.value = when {
+            enabled -> FaceTrackingStatus.STARTING
+            captureGate.captureToken() == null -> FaceTrackingStatus.OFF
+            else -> FaceTrackingStatus.PAUSED
+        }
         if (enabled) trackingSession.start() else trackingSession.stop()
         freshnessWatchdog?.cancel(false)
         freshnessWatchdog = null
@@ -588,6 +616,7 @@ class VisionManager(
     fun close() {
         if (closed) return
         closed = true
+        _trackingStatus.value = FaceTrackingStatus.OFF
         captureGate.setEnabled(false)
         _faceTrackingEnabled = false
         trackingSession.stop()
@@ -654,7 +683,10 @@ class VisionManager(
         val pause = thermalStatus >= android.os.PowerManager.THERMAL_STATUS_MODERATE
         if (pause != thermalPaused) {
             thermalPaused = pause
-            if (pause) unbind() else bindPreviewAsync()
+            if (pause) {
+                _trackingStatus.value = FaceTrackingStatus.COOLING
+                unbind()
+            } else bindPreviewAsync()
             android.util.Log.i("MeowVision", "automatic camera thermal pause=$pause")
         }
         if (thermalPaused) return
@@ -662,7 +694,10 @@ class VisionManager(
         val staleTrack = track != null && !AttentionFreshness.isFresh(track.observedAtElapsedMs, nowMs)
         val stalledCamera = lastDetectionAtElapsedMs >= 0L &&
             !AttentionFreshness.isFresh(lastDetectionAtElapsedMs, nowMs)
-        if (staleTrack || stalledCamera) clearAttention()
+        if (staleTrack || stalledCamera) {
+            clearAttention()
+            _trackingStatus.value = FaceTrackingStatus.WAITING_FOR_FRAMES
+        }
     }
 
     /**
@@ -818,6 +853,8 @@ class VisionManager(
         } catch (e: Exception) {
             frameInFlight.set(false)
             proxy.close()
+            clearAttention()
+            _trackingStatus.value = FaceTrackingStatus.ERROR
             android.util.Log.w("MeowVision", "face processing could not start", e)
             return
         }
@@ -829,28 +866,29 @@ class VisionManager(
         } else {
             null
         }
-        val done = if (poseTask != null) Tasks.whenAllComplete(faceTask, poseTask) else faceTask
-        done.addOnCompleteListener(analysisExecutor) {
-            try {
-                val faces = if (faceTask.isSuccessful) {
-                    faceTask.result ?: emptyList()
-                } else {
-                    emptyList()
-                }
-                val pose = if (poseTask?.isSuccessful == true) poseTask.result else null
+        completeFaceFirst(
+            faceTask, poseTask, analysisExecutor,
+            publish = { faces, pose, error ->
                 synchronized(this) {
                     if (imageAnalysis === analysis && targetRot == analysis.targetRotation &&
                         displayDeg == displayRotationDegrees() &&
-                        trackingSession.accepts(generation, observedAtElapsedMs, android.os.SystemClock.elapsedRealtime())
+                        trackingSession.active && trackingSession.generation == generation
                     ) {
-                        publishDetections(proxy, faces, pose, cameraRot, displayDeg, targetRot, observedAtElapsedMs)
+                        if (error != null) {
+                            clearAttention()
+                            _trackingStatus.value = FaceTrackingStatus.ERROR
+                            android.util.Log.w("MeowVision", "face processing failed", error)
+                        } else if (trackingSession.accepts(generation, observedAtElapsedMs, android.os.SystemClock.elapsedRealtime())) {
+                            publishDetections(proxy, faces, pose, cameraRot, displayDeg, targetRot, observedAtElapsedMs)
+                        }
                     }
                 }
-            } finally {
+            },
+            release = {
                 frameInFlight.set(false)
                 proxy.close()
-            }
-        }
+            },
+        )
     }
 
     private fun publishDetections(
@@ -904,6 +942,7 @@ class VisionManager(
         val pick = attentionTarget.select(seen, speechLikely, now)
         // Pair the exact detection, including unknown (-1) IDs; never silently select a different box.
         val face = pick.face?.let { selected -> detections.firstOrNull { it.first === selected }?.second }
+        _trackingStatus.value = if (face != null) FaceTrackingStatus.TRACKING else FaceTrackingStatus.NO_FACE
         if (pick.changed) {
             hasSmooth = false
             hasFrameSmooth = false
@@ -1247,7 +1286,12 @@ class VisionManager(
             bindPreviewAsync()
         } else {
             preview?.setSurfaceProvider(null)
+            preview = null
             unbind()
+            // Disposing a viewfinder is not permission to stop authorized gaze.
+            // unbind() leaves the requested tracking flag true, so a later resume
+            // is intentionally a no-op; replace the session here without Preview.
+            if (_faceTrackingEnabled && imageAnalysis != null) bindPreviewAsync()
         }
     }
 
@@ -1297,17 +1341,26 @@ class VisionManager(
     private fun bindPreviewAsync() {
         if (closed) return
         val binding = captureGate.nextBinding() ?: return
-        val future = ProcessCameraProvider.getInstance(context)
+        if (_faceTrackingEnabled) _trackingStatus.value = FaceTrackingStatus.STARTING
+        val future = cameraProviderOrReportFailure() ?: return
         future.addListener(
             {
                 synchronized(this) {
-                    if (closed || !captureGate.acceptsBinding(binding) || !hasPermission()) return@synchronized
+                    if (closed || !captureGate.acceptsBinding(binding)) return@synchronized
+                    if (!hasPermission()) {
+                        _trackingStatus.value = FaceTrackingStatus.PERMISSION_REQUIRED
+                        return@synchronized
+                    }
                     try {
                         val provider = future.get()
                         thermalStatus = ThermalGovernor.currentStatus()
                         thermalPaused = thermalStatus >= android.os.PowerManager.THERMAL_STATUS_MODERATE
                         provider.unbindAll()
-                        if (thermalPaused) { clearAttention(); return@synchronized }
+                        if (thermalPaused) {
+                            clearAttention()
+                            _trackingStatus.value = FaceTrackingStatus.COOLING
+                            return@synchronized
+                        }
                         val selector = resolveSelector(provider)
                         val useCases = mutableListOf<androidx.camera.core.UseCase>()
                         preview?.let { p -> p.surfaceProvider?.let { useCases.add(p) } }
@@ -1317,8 +1370,11 @@ class VisionManager(
                         if (useCases.isNotEmpty() && captureGate.acceptsBinding(binding)) {
                             provider.bindToLifecycle(lifecycleOwner, selector, *useCases.toTypedArray())
                             boundSelector = selector
+                            if (_faceTrackingEnabled) _trackingStatus.value = FaceTrackingStatus.WAITING_FOR_FRAMES
                         }
                     } catch (e: Exception) {
+                        clearAttention()
+                        _trackingStatus.value = FaceTrackingStatus.ERROR
                         android.util.Log.w("VisionManager", "bindPreviewAsync failed: ${e.message}", e)
                     }
                 }
@@ -1326,6 +1382,19 @@ class VisionManager(
             ContextCompat.getMainExecutor(context)
         )
     }
+
+    /** Provider initialization can fail before it returns a future. Keep those
+     * synchronous failures on the same observable path as async bind failures.
+     */
+    private fun cameraProviderOrReportFailure(): com.google.common.util.concurrent.ListenableFuture<ProcessCameraProvider>? =
+        try {
+            cameraProvider()
+        } catch (e: Exception) {
+            clearAttention()
+            if (!closed && captureGate.captureToken() != null) _trackingStatus.value = FaceTrackingStatus.ERROR
+            android.util.Log.w("VisionManager", "camera provider unavailable", e)
+            null
+        }
 
     private suspend fun bindIfNeeded(token: Long): ImageCapture {
         check(!closed && captureGate.acceptsCapture(token)) { "Camera is switched off" }
@@ -1336,7 +1405,7 @@ class VisionManager(
         val binding = captureGate.nextBinding() ?: error("Camera is switched off")
         val provider = withTimeoutOrNull(10_000) {
             suspendCancellableCoroutine<ProcessCameraProvider> { cont ->
-                val future = ProcessCameraProvider.getInstance(context)
+                val future = cameraProvider()
                 future.addListener(
                     { cont.resume(future.get()) },
                     ContextCompat.getMainExecutor(context)
@@ -1460,7 +1529,7 @@ class VisionManager(
         // Never block the calling (main) thread on the provider future — a stale
         // camera session must not wedge the crash-alert coroutine. Queue the
         // unbind via the provider's listener instead.
-        val future = ProcessCameraProvider.getInstance(context)
+        val future = cameraProviderOrReportFailure() ?: return
         future.addListener(
             { synchronized(this) {
                 // A later bind performs its own unbind; this stale callback must

@@ -1,5 +1,14 @@
 # Agent execution plan — immersive companion revision
 
+## September 13: Build 118 portable MaleCNS servers and face tracking
+
+In progress: independent authenticated neural-server pairing with the existing
+paired computer retained as default; portable advertised DNS/VPN host pairing;
+preview-detach/face-result/landmark tracking fixes and visible camera status.
+Camera OFF, thermal limits and the existing desktop connection remain explicit.
+Root is running focused integration tests and will archive verified packages on
+Meow. Read [MEOW_BUILD_118_PASS_DOWN.md](characters/MEOW_BUILD_118_PASS_DOWN.md).
+
 ## September 13: Build 117 play worlds and app drawer
 
 Four new original illustrated cartoon habitats (Portal Arcade, Moon Garden,

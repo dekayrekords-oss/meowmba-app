@@ -36,11 +36,14 @@ internal data class NeuralInfoPresentation(
     val metrics: List<BrainActivityMetric>,
 )
 
-internal fun neuralInfoPresentation(d: NeuralDiagnostics?, desktopPaired: Boolean): NeuralInfoPresentation {
+internal fun neuralInfoPresentation(
+    d: NeuralDiagnostics?, desktopPaired: Boolean,
+    remoteServerPaired: Boolean = desktopPaired, remoteServerName: String? = null,
+): NeuralInfoPresentation {
     val remote = d?.substrate == NeuralSubstrate.MALECNS_REMOTE
     val classic = d?.mode == NeuralMode.LEGACY
     val cooling = d != null && (d.thermalTier >= 2 || d.fallback == FallbackReason.THERMAL_SUSPENDED)
-    val connected = remote && desktopPaired && d?.core?.extra?.get("malecns.connected") == 1f
+    val connected = remote && remoteServerPaired && d?.core?.extra?.get("malecns.connected") == 1f
     val fallback = d != null && d.fallback != FallbackReason.NONE
     val measured = d != null && !classic && !cooling && !fallback &&
         (if (remote) connected else d.steps > 0 && d.core.units > 0)
@@ -48,14 +51,14 @@ internal fun neuralInfoPresentation(d: NeuralDiagnostics?, desktopPaired: Boolea
         d == null -> "Waiting for brain status" to "The controller has not sent its first update yet."
         classic -> "Classic · brain off" to "Classic controls the avatar. Start a local brain to try neural reactions."
         cooling -> "Paused for cooling" to "Neural activity resumes when the phone cools. Inputs are paused too."
-        remote && !desktopPaired -> "Computer not paired" to "MaleCNS needs your paired computer and Meow. A local brain works offline."
+        remote && !remoteServerPaired -> "Brain server not paired" to "Choose your paired computer or connect a compatible MaleCNS server in Neural settings. A local brain works offline."
         fallback && d.fallback != FallbackReason.REMOTE_UNAVAILABLE -> "Classic fallback · check brain" to when (d.fallback) {
             FallbackReason.NON_FINITE_OUTPUT -> "The network returned an invalid value. Start the local brain again or check Neural settings."
             FallbackReason.DEADLINE -> "The network took too long to respond. Start the local brain again or check Neural settings."
             else -> "The network could not complete a step. Start the local brain again or check Neural settings."
         }
         remote && (d.fallback == FallbackReason.REMOTE_UNAVAILABLE || !connected) ->
-            "Meow unavailable · Classic active" to "No fresh brain reply. Check the paired computer and Meow, or use a local brain."
+            "Server unavailable · Classic active" to "No fresh brain reply. Test the selected MaleCNS server in Neural settings, or use a local brain."
         !measured -> "Starting local brain" to "Waiting for the first measured step."
         d.mode == NeuralMode.SHADOW -> "Shadow · observing" to "The brain reacts to inputs; Classic still controls the avatar."
         else -> "Neural · controlling avatar" to "Pet or feed your avatar and watch the measured activity respond."
@@ -80,13 +83,13 @@ internal fun neuralInfoPresentation(d: NeuralDiagnostics?, desktopPaired: Boolea
             NeuralSubstrate.RATE -> "Recurrent · on this phone"
             NeuralSubstrate.SPIKING -> "Spiking · on this phone"
             NeuralSubstrate.BANC_EXPERIMENTAL -> "BANC circuit · on this phone"
-            NeuralSubstrate.MALECNS_REMOTE -> "MaleCNS · runs on Meow"
+            NeuralSubstrate.MALECNS_REMOTE -> "MaleCNS · ${remoteServerName?.takeIf { it.isNotBlank() } ?: "remote server"}"
             null -> "Behavior network"
         },
         measurementsAvailable = measured,
         interactionEnabled = measured,
         showLocalAction = d == null || classic || (!cooling && (!measured && (remote || fallback))),
-        showPairAction = remote && !desktopPaired,
+        showPairAction = remote && !remoteServerPaired,
         metrics = metrics,
     )
 }

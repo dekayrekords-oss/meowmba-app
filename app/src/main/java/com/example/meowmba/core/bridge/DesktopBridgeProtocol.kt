@@ -5,6 +5,8 @@ import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import java.net.URI
+import java.net.URL
 import java.security.MessageDigest
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
@@ -72,6 +74,8 @@ object DesktopBridgeProtocol {
                 Result.failure(IllegalArgumentException("unsupported payload version ${parsed.v} (expected 1)"))
             parsed.host.isBlank() ->
                 Result.failure(IllegalArgumentException("payload has no host"))
+            runCatching { endpointUrl(parsed.host, parsed.port, "/pair") }.isFailure ->
+                Result.failure(IllegalArgumentException("payload host or port is invalid"))
             parsed.port !in 1..65535 ->
                 Result.failure(IllegalArgumentException("payload port ${parsed.port} is invalid"))
             parsed.pairToken.isBlank() ->
@@ -80,6 +84,16 @@ object DesktopBridgeProtocol {
                 Result.failure(IllegalArgumentException("payload certificate fingerprint is malformed"))
             else -> Result.success(parsed)
         }
+    }
+
+    /** A host is an endpoint, never a URL containing credentials, paths or query strings. */
+    fun endpointUrl(host: String, port: Int, path: String): URL {
+        require(host.isNotBlank() && host == host.trim() && host.length <= 253) { "Invalid bridge host" }
+        require(port in 1..65535 && path in setOf("/pair", "/rpc")) { "Invalid bridge endpoint" }
+        val bare = host.removeSurrounding("[", "]")
+        val uri = URI("https", null, bare, port, path, null, null)
+        require(!uri.host.isNullOrBlank()) { "Invalid bridge host" }
+        return uri.toURL()
     }
 
     // ------------------------------------------------------------------

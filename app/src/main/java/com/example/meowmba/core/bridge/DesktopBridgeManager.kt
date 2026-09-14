@@ -13,7 +13,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
-import java.net.URL
 import java.security.SecureRandom
 import java.security.cert.CertificateException
 import java.security.cert.X509Certificate
@@ -51,6 +50,17 @@ class DesktopBridgeManager(
         if (connectedHost == "127.0.0.1") "USB tunnel" else "network"
 
     data class PairedBridge(val host: String, val port: Int, val name: String, val certSha256: String)
+
+    /** Snapshot credentials never appear in UI state, diagnostics or generated toString output. */
+    internal class PairedCredentials(val bridge: PairedBridge, val secretB64: String) {
+        override fun toString(): String = "PairedCredentials(redacted)"
+    }
+
+    internal fun pairedCredentials(): PairedCredentials? = pairedBridge()?.let { bridge ->
+        secureStorage.getPreference(KEY_SECRET)?.takeIf { it.isNotBlank() }?.let {
+            PairedCredentials(bridge, it)
+        }
+    }
 
     data class BridgeStatus(
         val name: String,
@@ -140,7 +150,19 @@ class DesktopBridgeManager(
     private suspend fun pairWith(
         host: String, port: Int, name: String, certSha256: String,
         token: String, phoneName: String
-    ): Result<String> = withContext(Dispatchers.IO) {
+    ): Result<String> = requestPairing(host, port, name, certSha256, token, phoneName).map { credentials ->
+        savePairing(credentials.bridge.host, credentials.bridge.port, credentials.bridge.name,
+            credentials.bridge.certSha256, credentials.secretB64)
+        credentials.bridge.name
+    }
+
+    /** Neural pairing is staged until a full graph probe passes; desktop prefs remain untouched. */
+    internal suspend fun pairCandidate(payload: DesktopBridgeProtocol.PairingPayload,
+        phoneName: String): Result<PairedCredentials> = requestPairing(payload.host, payload.port,
+        payload.name, payload.certSha256, payload.pairToken, phoneName)
+
+    private suspend fun requestPairing(host: String, port: Int, name: String, certSha256: String,
+        token: String, phoneName: String): Result<PairedCredentials> = withContext(Dispatchers.IO) {
         val secret = ByteArray(32).also { SecureRandom().nextBytes(it) }
         val body = buildJsonObject {
             put("token", token)
@@ -150,7 +172,10 @@ class DesktopBridgeManager(
 
         val result = runCatching {
             post(host, port, "/pair", body, certSha256, emptyMap())
-        }.getOrElse { return@withContext Result.failure(Exception("desktop unreachable: ${it.message}")) }
+        }.getOrElse {
+            if (it is kotlinx.coroutines.CancellationException) throw it
+            return@withContext Result.failure(Exception("desktop unreachable: ${it.message}"))
+        }
 
         when (result.first) {
             200 -> {
@@ -161,12 +186,8 @@ class DesktopBridgeManager(
                 if (desktopName == null) {
                     return@withContext Result.failure(Exception("desktop sent an unreadable pairing reply"))
                 }
-                secureStorage.savePreference(KEY_HOST, host)
-                secureStorage.savePreference(KEY_PORT, port.toString())
-                secureStorage.savePreference(KEY_NAME, desktopName.ifBlank { name })
-                secureStorage.savePreference(KEY_CERT, certSha256.lowercase())
-                secureStorage.savePreference(KEY_SECRET, DesktopBridgeProtocol.b64EncodeStd(secret))
-                Result.success(desktopName.ifBlank { name })
+                Result.success(PairedCredentials(PairedBridge(host, port, desktopName.ifBlank { name },
+                    certSha256.lowercase()), DesktopBridgeProtocol.b64EncodeStd(secret)))
             }
             403 -> Result.failure(Exception("pairing rejected — wrong or expired code; check the desktop"))
             409 -> Result.failure(Exception("desktop has no open pairing window — start it with --pair"))
@@ -191,6 +212,19 @@ class DesktopBridgeManager(
     suspend fun maleCnsStop(session: String) {
         rpc("malecns_stop", mapOf("session" to session), 2000)
     }
+
+    /** The same pinned identity handles both this session's updates and its final stop. */
+    internal fun maleCnsTransport(credentials: PairedCredentials): com.example.meowmba.core.neural.MaleCnsTransport =
+        object : com.example.meowmba.core.neural.MaleCnsTransport {
+            override val description: String = credentials.bridge.name.ifBlank { credentials.bridge.host }.replace(Regex("[\\p{Cntrl}]"), " ").take(80)
+            override suspend fun step(request: com.example.meowmba.core.neural.MaleCnsRequest) =
+                rpc("malecns_step", request.parameters(), 10_000, credentials).mapCatching {
+                    com.example.meowmba.core.neural.MaleCnsSnapshot.parse(it, request)
+                }
+            override suspend fun stop(session: String) {
+                rpc("malecns_stop", mapOf("session" to session), 2_000, credentials)
+            }
+        }
 
     suspend fun status(): Result<BridgeStatus> = rpc("status").mapCatching { body ->
         val obj = Json.parseToJsonElement(body).jsonObject
@@ -351,11 +385,13 @@ class DesktopBridgeManager(
         }
 
     /** Signed POST /rpc. Returns raw response body on HTTP 200. */
-    private suspend fun rpc(method: String, params: Map<String, Any?> = emptyMap(), readTimeoutMs: Int = 15_000): Result<String> = withContext(Dispatchers.IO) {
-        val bridge = pairedBridge()
+    private suspend fun rpc(method: String, params: Map<String, Any?> = emptyMap(),
+        readTimeoutMs: Int = 15_000, credentials: PairedCredentials? = null): Result<String> = withContext(Dispatchers.IO) {
+        val pairing = credentials ?: pairedCredentials()
             ?: return@withContext Result.failure(Exception("not paired — pair a desktop bridge first"))
+        val bridge = pairing.bridge
         val secret = try {
-            DesktopBridgeProtocol.b64Decode(secureStorage.getPreference(KEY_SECRET)!!)
+            DesktopBridgeProtocol.b64Decode(pairing.secretB64)
         } catch (e: Exception) {
             return@withContext Result.failure(Exception("stored bridge secret is corrupt — unpair and re-pair"))
         }
@@ -435,7 +471,7 @@ class DesktopBridgeManager(
         sslContext.init(null, arrayOf(trustManager), null)
 
         suspend fun connect(endpoint: String): HttpsURLConnection {
-        val conn = (URL("https://$endpoint:$port$path").openConnection() as HttpsURLConnection).apply {
+        val conn = (DesktopBridgeProtocol.endpointUrl(endpoint, port, path).openConnection() as HttpsURLConnection).apply {
             sslSocketFactory = sslContext.socketFactory
             // Certificate is pinned by fingerprint; hostname checking adds nothing here.
             hostnameVerifier = HostnameVerifier { _, _ -> true }
@@ -443,6 +479,7 @@ class DesktopBridgeManager(
             readTimeout = readTimeoutMs
             requestMethod = "POST"
             doOutput = true
+            instanceFollowRedirects = false
             // Streaming disables HttpURLConnection's automatic POST replay.
             setFixedLengthStreamingMode(body.size)
             setRequestProperty("Content-Type", "application/json")

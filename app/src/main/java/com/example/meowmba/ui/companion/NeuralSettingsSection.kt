@@ -94,6 +94,11 @@ fun NeuralSettingsSection(
     onComputerOpenDesktop: (String) -> Unit = {},
     onComputerConfirmInstallPrompt: () -> Unit = {},
     modifier: Modifier = Modifier,
+    maleCnsServer: MaleCnsServerUiState = MaleCnsServerUiState(),
+    onPairMaleCnsServer: (String) -> Unit = {},
+    onUsePairedComputerForMaleCns: () -> Unit = {},
+    onTestMaleCnsServer: () -> Unit = {},
+    onPairComputer: () -> Unit = {},
 ) {
     Column(
         modifier = modifier
@@ -113,6 +118,8 @@ fun NeuralSettingsSection(
             onModeChanged, onSubstrateChanged, onTraceConsentChanged, onReset,
             lumenReflexV2, onLumenReflexV2Change, reflexGain, onReflexGainChange,
             avatarFpsTarget, onAvatarFpsTargetChange,
+            maleCnsServer, onPairMaleCnsServer, onUsePairedComputerForMaleCns,
+            onTestMaleCnsServer, onPairComputer,
         )
         var advanced by rememberSaveable { mutableStateOf(false) }
         TextButton(onClick = { advanced = !advanced }) {
