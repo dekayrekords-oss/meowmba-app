@@ -33,7 +33,9 @@ Detailed implementation and troubleshooting:
 
 The Mac could not save images or small shell heredocs despite APFS reporting some
 free space. Only reproducible local Gradle, compiled Kotlin and KSP caches were
-removed (about69MB). Earlier APKs, user data and generated images were preserved.
+removed (about69MB), followed by about247MB of Gradle9.4.1 generated-JAR and Java
+compilation caches through an approved scoped cleanup. Earlier APKs, downloaded
+dependencies, signing stores, user data and generated images were preserved.
 Builds run on Meow's existing private checkout. Signed APKs are archived there;
 local evidence is small JSON/PNG files. Do not reconstruct another full APK on
 this Mac without adequate free space. Use Python `-c` for emergency cache cleanup
@@ -46,3 +48,27 @@ after the Meow run. Host tests do not establish the installed Google version's
 UI, actual network results, native GPU behavior or sustained device heat/battery.
 Preserve phone data and pairing when installing an update. Prior verified phone:
 Build112. No new brain/model, sensor, robot, account or permission workflow.
+
+## Integration findings
+
+The first run passed119/122. All habitat and Google-launcher checks passed.
+One new UI test used an unsupported search phrase; its input now uses the
+existing supported “search for” grammar, without altering global command rules.
+The older scene-pause test tried to construct AndroidKeyStore on the host before
+testing its clock. A scoped encrypted-storage construction mock now allows the
+real lifecycle, cadence and thermal-listener assertions to execute unchanged.
+
+Visual review found the two-column compact favorite layout too tall. The drawer
+now fits three columns at320dp and uses smaller favorite tiles, with a static
+aqua/lime console detail. A deep-scroll regression prompted remembered grid
+navigation: user query/folder/sort/filter/submission changes reveal their actions;
+initial/restored scroll and background catalog refresh do not jump. Successful
+empty PackageManager refreshes now write an empty disk cache, preventing removed
+apps reappearing. Missing favorites can be removed only through an explicit
+Organize action after a successful scan, never automatically.
+
+The second run passed124/125; folder naming still kept Compose busy immediately
+on opening. Its field now has bounded full-width layout with an external label
+and character counter instead of nested floating/supporting labels. Validation,
+folder callbacks and the full create/add/remove/rename/delete/Back assertions
+remain intact. The final verification below records the result of this repair.

@@ -79,11 +79,23 @@ large, so the base grid minimum is now 88 dp (three columns at 320), favorite
 icons are 42 dp with reduced padding, and a small static cut-panel header accent
 strengthens the existing space-console theme. Large text still expands tracks.
 
-The first full rerun isolated one native non-idle failure when opening the naming
-dialog; all other drawer callbacks and dialogs passed. Naming now uses an explicit
-full-width field with its label and counter outside the floating-label/supporting-
-text measurement path. The name remains accessible, the 24-character limit and
-disabled-empty Save assertion are preserved. Root must record the confirming run.
+The full rerun isolated one native non-idle failure when opening the naming dialog;
+all other drawer callbacks and dialogs passed. The attempted bounded-field change
+did not fix it. A temporary standalone Material3 AlertDialog/OutlinedTextField
+diagnostic reproduced the failure without the drawer: only 2 outer compositions
+and 1 dialog composition, but 372,849 layouts and 372,855 snapshot applies over
+60 seconds. This is a modal text-field layout loop in the native host/framework
+path, not a drawer state recomposition loop. Initial manual-clock cases did not
+drain the Android queue and provide no additional behavioral evidence. The
+temporary diagnostic is removed after recording these exact results.
+
+Naming now uses an inline editor at the top of the same drawer grid. It opens
+within Organize, retains accessible name input, the 24-character limit, empty-name
+validation, Save/Cancel and keyboard Done, and never opens a second text-input
+window. Navigation scrolls to the editor, while Back cancels editing before
+returning from a folder or closing the drawer. CRUD assertions remain intact and
+now also check Back cancellation without mutations; the test captures the inline
+editor before input. Root must record the confirming run.
 
 The first four exercise 320/375/414/768 dp, both appearances and 1.4x text,
 including landscape. They reach the eighth favorite and last app, assert

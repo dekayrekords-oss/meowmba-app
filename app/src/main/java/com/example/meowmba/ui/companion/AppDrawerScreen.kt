@@ -130,7 +130,7 @@ fun AppDrawerScreen(
     var renamingFolderId by rememberSaveable { mutableStateOf<String?>(null) }
     var folderName by rememberSaveable { mutableStateOf("") }
     val gridState = rememberLazyGridState()
-    val navigation = listOf(query, sort, typeFilter, openFolderId, submitted)
+    val navigation = listOf(query, sort, typeFilter, openFolderId, submitted, namingFolder, renamingFolderId)
     var previousNavigation by remember { mutableStateOf(navigation) }
     // Reveal the new query/folder's actions; restoration and background refresh keep position.
     LaunchedEffect(navigation) {
@@ -175,14 +175,36 @@ fun AppDrawerScreen(
     val hint = DrawerQuery.hint(query, visible.size, exact?.label ?: visible.singleOrNull()?.label)
     val presentTypes = remember(apps) { apps.map { it.type }.toSet().sortedBy { it.ordinal } }
 
-    fun goBack() { if (openFolder != null) openFolderId = null else onClose() }
-    BackHandler(enabled = !namingFolder && actionApp == null && actionFolder == null) { goBack() }
+    fun cancelFolderEditor() {
+        namingFolder = false
+        renamingFolderId = null
+        namingForPackage = null
+    }
+    fun goBack() {
+        when {
+            namingFolder -> cancelFolderEditor()
+            openFolder != null -> openFolderId = null
+            else -> onClose()
+        }
+    }
+    BackHandler(enabled = actionApp == null && actionFolder == null) { goBack() }
     fun openApp(app: DrawerApp) { onLaunchApp?.invoke(app.packageName) ?: launchApp(context, app.packageName) }
     fun beginFolder(pkg: String? = null) {
+        organizing = true
         namingForPackage = pkg
         renamingFolderId = null
         folderName = ""
         namingFolder = true
+    }
+    fun saveFolderName() {
+        val name = folderName.trim()
+        if (name.isNotEmpty()) {
+            val renameId = renamingFolderId
+            if (renameId != null) onRenameFolder(renameId, name) else onCreateFolder(name, namingForPackage)
+            cancelFolderEditor()
+            keyboard?.hide()
+            focus.clearFocus()
+        }
     }
     fun submit(raw: String = query) {
         val q = raw.trim()
@@ -207,8 +229,8 @@ fun AppDrawerScreen(
         Surface(color = colors.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (openFolder != null) IconButton(onClick = { openFolderId = null }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back to all apps")
+                    if (openFolder != null) IconButton(onClick = { goBack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, if (namingFolder) "Cancel folder editing" else "Back to all apps")
                     } else DrawerOrbit(Modifier.size(36.dp))
                     Column(Modifier.weight(1f)) {
                         Text(openFolder?.name ?: "App drawer", style = MaterialTheme.typography.titleLarge,
@@ -260,6 +282,15 @@ fun AppDrawerScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            if (namingFolder) item(key = "folder-editor", span = { GridItemSpan(maxLineSpan) }) {
+                DrawerFolderEditor(
+                    title = if (renamingFolderId == null) "New folder" else "Rename folder",
+                    name = folderName,
+                    onNameChanged = { folderName = it.take(24) },
+                    onSave = { saveFolderName() },
+                    onCancel = { cancelFolderEditor(); keyboard?.hide(); focus.clearFocus() },
+                )
+            }
             item(key = "search-actions", span = { GridItemSpan(maxLineSpan) }) {
                 Column {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -415,40 +446,36 @@ fun AppDrawerScreen(
         AlertDialog(onDismissRequest = { actionFolder = null }, title = { Text(folder.name) },
             text = { Column {
                 Text("Manage this folder. Its apps stay installed.", style = MaterialTheme.typography.bodyMedium)
-                DialogLine("Rename") { folderName = folder.name; namingForPackage = null; renamingFolderId = folder.id; namingFolder = true; actionFolder = null }
+                DialogLine("Rename") { organizing = true; folderName = folder.name; namingForPackage = null; renamingFolderId = folder.id; namingFolder = true; actionFolder = null }
                 DialogLine("Delete folder") { if (openFolderId == folder.id) openFolderId = null; onDeleteFolder(folder.id); actionFolder = null }
             } }, confirmButton = { TextButton(onClick = { actionFolder = null }) { Text("Close") } },
         )
     }
-    if (namingFolder) AlertDialog(onDismissRequest = { namingFolder = false },
-        title = { Text(if (renamingFolderId != null) "Rename folder" else "New folder") },
-        text = {
-            // Keep the dialog's intrinsic sizing separate from TextField's floating-label
-            // measurements. The external label/counter also stay visible while editing.
-            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Folder name", style = MaterialTheme.typography.labelLarge)
-                OutlinedTextField(
-                    value = folderName,
-                    onValueChange = { folderName = it.take(24) },
-                    singleLine = true,
-                    placeholder = { Text("e.g. Mission control") },
-                    modifier = Modifier.fillMaxWidth().testTag("folder-name")
-                        .semantics { contentDescription = "Folder name" },
-                )
-                Text("${folderName.length}/24", style = MaterialTheme.typography.labelSmall,
-                    color = colors.onSurfaceVariant)
+}
+
+/** Inline editing avoids a second text-input window and keeps organization in context. */
+@Composable
+private fun DrawerFolderEditor(title: String, name: String, onNameChanged: (String) -> Unit,
+    onSave: () -> Unit, onCancel: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    Surface(shape = RoundedCornerShape(18.dp), color = colors.surfaceContainerHigh,
+        modifier = Modifier.testTag("folder-editor")) {
+        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold)
+            Text("Folder name", style = MaterialTheme.typography.labelLarge)
+            OutlinedTextField(value = name, onValueChange = onNameChanged, singleLine = true,
+                placeholder = { Text("e.g. Mission control") },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { if (name.isNotBlank()) onSave() }),
+                modifier = Modifier.fillMaxWidth().testTag("folder-name").semantics { contentDescription = "Folder name" })
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(enabled = name.isNotBlank(), onClick = onSave) { Text("Save") }
+                TextButton(onClick = onCancel) { Text("Cancel") }
+                Spacer(Modifier.weight(1f))
+                Text("${name.length}/24", style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
             }
-        },
-        confirmButton = { TextButton(enabled = folderName.isNotBlank(), onClick = {
-            val name = folderName.trim()
-            if (name.isNotEmpty()) {
-                val renameId = renamingFolderId
-                if (renameId != null) onRenameFolder(renameId, name) else onCreateFolder(name, namingForPackage)
-                namingFolder = false; renamingFolderId = null; namingForPackage = null
-            }
-        }) { Text("Save") } },
-        dismissButton = { TextButton(onClick = { namingFolder = false }) { Text("Cancel") } },
-    )
+        }
+    }
 }
 
 @Composable

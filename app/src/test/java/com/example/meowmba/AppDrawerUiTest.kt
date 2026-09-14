@@ -164,6 +164,13 @@ class AppDrawerUiTest {
         rule.onNodeWithText("Organize").performClick()
         rule.onNodeWithText("New folder").performClick()
         rule.onNodeWithText("Save").assertIsNotEnabled()
+        render("folder-editor")
+        rule.runOnIdle { rule.activity.onBackPressedDispatcher.onBackPressed() }
+        rule.onNodeWithTag("folder-editor").assertDoesNotExist()
+        assertEquals(listOf(folder), folders)
+        assertEquals(0, closes)
+        rule.onNodeWithText("New folder").performClick()
+        rule.onNodeWithText("Save").assertIsNotEnabled()
         rule.onNodeWithTag("folder-name").performTextInput("Mission control")
         rule.onNodeWithText("Save").performClick()
         assertEquals("Mission control", folders.last().name)
