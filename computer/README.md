@@ -1,7 +1,8 @@
 # Meow Computer (server package)
 
 Gives Meowmba a **persistent Linux workspace** on a machine you already SSH into.
-This is the same idea as Grok Bot’s computer: a real Linux runtime the app can use.
+This is the same idea as a cloud computer agent: a real Linux runtime the app can use.
+**Maturity: preview.** Stock Termux only; no FlyWire / custom proot forks.
 
 ## What you get
 
@@ -29,10 +30,23 @@ Or from the Meowmba app: **Settings → Your Computer →** enter SSH details �
 The script runs as **your SSH user**. It never requests phone root and never
 writes secrets into git.
 
+## Port / bind
+
+Default worker port is **18766** (Desktop Bridge discovery stays on UDP **8766**).
+Default bind is `127.0.0.1`. Override:
+
+```bash
+MEOW_COMPUTER_HOST=100.77.97.236 MEOW_COMPUTER_PORT=18766 bash computer/install.sh
+# or
+bash computer/install.sh --bind 100.77.97.236 --port 18766
+```
+
+Fold cannot hit meow's localhost — use NetBird bind, SSH `-L`, or prefer SSH profiles.
+
 ## Health check
 
 ```bash
-curl -s http://127.0.0.1:8766/health
+curl -s http://127.0.0.1:18766/health
 ```
 
 ## Power / service
