@@ -1,0 +1,52 @@
+{
+  "build": 119,
+  "code_committed": true,
+  "latest_source_commit": "6425d6b",
+  "last_built_checkout": "9fc5ff1",
+  "last_built_production_change": "69f52c8",
+  "status": "Implemented; final acceptance rerun and archive blocked by Meow SSH banner timeout",
+  "latest_test_run": {
+    "tests": 235,
+    "passed": 233,
+    "failures": 2,
+    "errors": 0,
+    "failed_tests": [
+      "AgentViewModelTest.voice command to create a file runs the full approval loop end to end",
+      "AgentViewModelTest.task status question uses real task evidence without a chat model"
+    ],
+    "failure_cause": "Both tools completed, but old tests lacked a mocked Android SystemClock for speech expression handling. Fixture repaired in 6425d6b; rerun not yet completed."
+  },
+  "new_form_test_status": "All generated form/schema/store/render/setup/inventor/tool/cancellation/integration tests passed in the 235-test run.",
+  "apk_assembled": true,
+  "signature_and_protected_assets_checked": false,
+  "final_archive_created": false,
+  "phone_installed": false,
+  "last_verified_phone_build": 112,
+  "phone_status": "ADB devices returned no devices",
+  "ssh_status": {
+    "host": "100.77.97.236",
+    "user": "prog",
+    "tcp_connection_seconds": 0.05,
+    "banner_received": false,
+    "banner_read_timeout_seconds": 8,
+    "retries": "SSH banner timeouts with 8, 15 and 30 second connection deadlines, including QoS-disabled retry"
+  },
+  "live_model_generation": {
+    "success": false,
+    "model": "Qwen3.8-Flash-Next",
+    "regular_attempts": 3,
+    "regular_deadline_seconds": 80,
+    "streaming_deadline_seconds": 90,
+    "content_characters": 0,
+    "reasoning_characters": 0,
+    "service_changed": false
+  },
+  "render_previews": [
+    "build-out/habitat/build119/generated-avatars/generated-forms-contact.png",
+    "build-out/habitat/build119/forms119/create-form-portrait.png",
+    "build-out/habitat/build119/forms119/creating-with-saved-forms.png",
+    "build-out/habitat/build119/forms119/generation-failure-retry.png",
+    "build-out/habitat/build119/forms119/saved-forms-landscape-large-text.png"
+  ],
+  "note": "Do not present assembled packages as verified/installed. The native examples and deterministic provider fixtures are not successful live AI output."
+}

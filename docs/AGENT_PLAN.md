@@ -1,5 +1,18 @@
 # Agent execution plan — immersive companion revision
 
+## September 13: Build 119 arbitrary cartoon forms; server finalization blocked
+
+Voice/text and Avatar setup can create, validate, animate, save and reuse new
+cartoon forms using the selected AI model. The same Lumen brain and privacy
+settings continue. All new checks pass; the latest broader run passed 233/235,
+with two old speech-test clock fixtures now repaired but awaiting rerun. Both
+APKs assembled, but Meow stopped returning SSH banners before final acceptance,
+signing/asset verification and archive. Its existing live model also timed out
+without output. Not installed; last verified phone remains 112. Resume from
+[MEOW_BUILD_119_PASS_DOWN.md](characters/MEOW_BUILD_119_PASS_DOWN.md), which
+records exact limitations, fixes and finalization steps. Do not call this a
+verified release or successful live model generation yet.
+
 ## September 13: Build 118 portable MaleCNS servers and face tracking
 
 Independent authenticated neural-server selection now preserves the existing
