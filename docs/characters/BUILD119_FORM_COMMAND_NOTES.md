@@ -17,7 +17,11 @@ characters and route it through the existing audited `avatar.form` tool.
 Examples include `turn into a green dragon with red and gold wings`, `become a
 coffee cup wearing a purple hat`, and `change the avatar to a tiny spaceship`.
 The ambiguous conversational verb `be` remains conservative (`be a CEO` and
-`be my friend` are not appearance changes). Quoted stories, negations, media
+`be my friend` are not appearance changes). Bare professional roles such as
+`become a doctor` stay conversational; `change avatar to doctor` or `turn into a
+cartoon doctor` is explicit. Visible nouns (`stop sign`, `open book`, `play
+button`) and absent body features (`dragon without wings`) remain descriptive
+without allowing coordinated actions or negative transformation requests. Quoted stories, negations, media
 file requests and compound external actions are rejected as a whole rather
 than executing their first positive fragment. Description conjunctions and
 accessories remain valid (`with a book`, `red and gold wings`).
@@ -66,7 +70,7 @@ fallback design masquerading as the requested form.
 
 Worker static check: `git diff --check` passed. The worker did not build or run
 Gradle; one root build owner is required. Root should include
-`AvatarFormToolTest` (20 tests) and `AvatarFormInventorTest` (10 tests), along
+`AvatarFormToolTest` (22 tests) and `AvatarFormInventorTest` (10 tests), along
 with `ToolCallPromptTest`, `OfficeHelpersTest` and `FruitFlyAvatarTest`.
 
 The new checks cover rich descriptions, command gating, real tool routing,

@@ -42,6 +42,8 @@ object AvatarFormRequest {
         "parrot", "penguin", "raven", "horse", "pony", "deer", "mouse", "rat", "hamster",
         "badger", "skunk", "ferret", "otter", "frog", "lizard", "turtle", "elephant",
         "giraffe", "monkey", "lemur", "ring-tailed lemur", "koala", "kangaroo", "dinosaur")
+    private val conversationalRoles = setOf("doctor", "professional", "lawyer", "ceo", "teacher",
+        "therapist", "coach", "assistant", "engineer", "expert", "manager", "nurse", "counselor")
     private val forbiddenWords = setOf(
         "no", "not", "never", "dont", "don't", "cannot", "cant", "can't", "stop", "avoid",
         "or", "then", "also", "but", "except", "unless", "if", "when", "while",
@@ -52,10 +54,25 @@ object AvatarFormRequest {
         "send", "delete", "walk", "run", "jump", "play", "make", "write", "search", "download",
         "upload", "install", "execute", "browse", "ignore", "instructions", "prompt", "tool",
     )
+    // Verbs can name visible things. Mask only the bounded visual noun phrase
+    // during validation, while preserving the original words sent to the model.
+    // 'open book' is an appearance; 'open settings' remains an extra action.
+    private val visualNoun = Regex(
+        "\\b(?:open|stop|play|run|walk|jump|send|delete|save|close|record|search|download|upload|" +
+            "pause|cancel|call|email|text|message|read|write) +(book|door|window|box|jar|bottle|chest|" +
+            "sign|button|icon|symbol|label|logo|badge|key|switch|control|indicator)(?:s)?\\b",
+    )
+    private val absentFeature = Regex(
+        "\\b(?:with no|without(?: any| a| an| the)?) +(?:(?:large|small|tiny|big|long|short|red|green|blue|" +
+            "gold|golden|silver|black|white|purple|pink|orange|yellow|glowing|metal|metallic) +){0,2}" +
+            "(?:wings?|arms?|legs?|tails?|horns?|fur|hair|antennae?|antennas?|ears?|eyes?|mouths?|" +
+            "hats?|helmets?|faces?|handles?|fins?|feet|teeth|whiskers?|claws?|spikes?|scales?|clothes|" +
+            "shoes?|boots?|gloves?|caps?|buttons?|patterns?|stripes?|spots?)\\b",
+    )
     private val additionalAction = Regex(
-        "(?:^| |,)and +(?:please +)?(?:compose|email|text|call|message|launch|remind|schedule|" +
+        "(?:^| |,)and +(?:please +)?(?:open|stop|play|run|walk|jump|send|delete|search|download|upload|record|pause|write|compose|email|text|call|message|launch|remind|schedule|" +
             "purchase|buy|pay|transfer|navigate|order|cancel|book|turn|change|set|move|close|save|read|find|reveal)(?: |$)|" +
-            ", *(?:please +)?(?:compose|email|text|call|message|launch|remind|schedule|purchase|buy|pay|transfer|" +
+            ", *(?:please +)?(?:open|stop|play|run|walk|jump|send|delete|search|download|upload|record|pause|write|compose|email|text|call|message|launch|remind|schedule|purchase|buy|pay|transfer|" +
             "navigate|order|cancel|book|turn|change|set|move|close|save|read|find|reveal)(?: |$)",
     )
     private val mediaSuffix = Regex("(?:^| )(?:image|images|picture|pictures|photo|photos|photograph|photographs|video|videos|movie|film|gif|drawing|portrait|artwork|animation|clip|file|asset)$")
@@ -77,6 +94,7 @@ object AvatarFormRequest {
         val rawTarget = match.groupValues[2]
         val requested = rawTarget.replaceFirst(article, "")
         if (!isDescription(requested)) return null
+        if (match.groupValues[1] in setOf("become", "look like") && requested in conversationalRoles) return null
         if (match.groupValues[1] == "be" && AvatarAnimal.resolve(requested) == null) {
             if (rawTarget == requested || requested !in otherSpecies) return null
         }
@@ -90,7 +108,13 @@ object AvatarFormRequest {
         if (AvatarAnimal.resolve(normalized) != null) return true
         if (!descriptionCharacters.matches(normalized) || normalized.endsWith('\'') || normalized.endsWith(',')) return false
         if (normalized.startsWith("my ") || normalized.startsWith("your ") || normalized.startsWith("our ")) return false
-        if (words.findAll(normalized).any { it.value in forbiddenWords }) return false
+        val visuallyQualified = visualNoun.replace(normalized, "visible feature")
+        val commandWords = absentFeature.replace(visuallyQualified) { match ->
+            // An attribute must follow an actual subject; a naked negative
+            // request cannot become permission for a positive transformation.
+            if (match.range.first > 0) "visible feature" else match.value
+        }
+        if (words.findAll(commandWords).any { it.value in forbiddenWords }) return false
         if (additionalAction.containsMatchIn(normalized)) return false
         if (mediaSuffix.containsMatchIn(normalized) || mediaContext.containsMatchIn(normalized)) return false
         return !nonAppearanceSuffix.containsMatchIn(normalized)

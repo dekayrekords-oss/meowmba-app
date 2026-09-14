@@ -288,4 +288,37 @@ class AvatarFormToolTest {
         assertEquals(0, generatedCalls)
     }
 
+
+    @Test fun `visual nouns and absent body features remain valid appearance descriptions`() = runTest {
+        val descriptions = listOf("stop sign", "open book", "robot with a play button",
+            "dragon with no wings", "dragon without wings", "dragon without any red wings",
+            "robot with a delete icon", "coffee cup without a handle")
+        descriptions.forEach { description ->
+            assertEquals(description, AvatarFormRequest.parse("turn into a $description"))
+            var actual: String? = null
+            val tool = AvatarFormTool({ org.junit.Assert.fail("Expected generated form") }) { value, _ ->
+                actual = value
+                ToolResult.Success("Applied")
+            }
+            assertTrue(tool.execute(mapOf("animal" to description)) is ToolResult.Success)
+            assertEquals(description, actual)
+        }
+        listOf("turn into a dog without barking", "turn into not a cat", "turn into anything except a cat",
+            "turn into a robot and open settings", "turn into a robot with no wings and send an email",
+            "turn into a stop sign and delete my files", "turn into a book and play music",
+            "turn into a robot and open book").forEach {
+            assertNull(it, AvatarFormRequest.parse(it))
+        }
+    }
+
+
+    @Test fun `ambiguous professional roles stay conversational until an appearance is explicit`() {
+        listOf("become a doctor", "look like a professional", "be a CEO", "be a lawyer").forEach {
+            assertNull(it, AvatarFormRequest.parse(it))
+        }
+        val requests = mapOf("turn into a cartoon doctor" to "cartoon doctor",
+            "change avatar to doctor" to "doctor", "become a cartoon doctor with a purple coat" to "cartoon doctor with a purple coat")
+        requests.forEach { (text, expected) -> assertEquals(text, expected, AvatarFormRequest.parse(text)) }
+    }
+
 }
