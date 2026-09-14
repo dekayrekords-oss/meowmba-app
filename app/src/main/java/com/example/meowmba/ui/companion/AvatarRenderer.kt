@@ -217,6 +217,7 @@ fun AvatarRenderer(
     nervousBias: () -> BehaviorBias = { REST_BIAS },
     /** Experimental BANC wing-power activity, sampled only while drawing. */
     neuralWingPower: () -> Float = { 0f },
+    neuralFlyMotor: () -> com.example.meowmba.core.neural.FlyMotorIntent = { com.example.meowmba.core.neural.FlyMotorIntent.NONE },
     /** Rich vision/social/speech/touch/motion feed for Lumen reflex v2 (read during draw). */
     reflexFeed: () -> ReflexSensoryFeed = { ReflexSensoryFeed() },
     reflexGain: Float = 1f,
@@ -1020,7 +1021,7 @@ fun AvatarRenderer(
                 val care = state.petCare
                 val adjusted = if (care.careEnabled) bias.copy(arousal = bias.arousal * (.5f + .5f * care.energy)) else bias
                 val world = if (habitatEnabled) fly3DWorld.step(tSec, state.habitatCommand, adjusted,
-                    state.petPlayPreference, state.habitatBackgroundId, neuralWingPower()) else null
+                    state.petPlayPreference, state.habitatBackgroundId, neuralWingPower(), neuralFlyMotor()) else null
                 val p = world?.pose
                 val radians = (kotlin.math.PI / 180.0).toFloat()
                 val published = Fly3DFrame(timeSeconds = world?.elapsed ?: tSec,
@@ -1032,6 +1033,7 @@ fun AvatarRenderer(
                     wingPhase=p?.wingPhase, leftBlink=(1f-frame.leftOpen).coerceIn(0f,1f),
                     rightBlink=(1f-frame.rightOpen).coerceIn(0f,1f), smile=frame.smile, concern=frame.concern,
                     antennaLift=frame.earLift, antennaLag=frame.earLag,
+                    grooming=p?.grooming ?: 0f,
                     blink=(1f-(frame.leftOpen+frame.rightOpen)*.5f).coerceIn(0f,1f),mouth=frame.mouthOpen,
                     reach=p?.reach ?: 0f,holding=p?.holding,backgroundId=state.habitatBackgroundId,props=world?.props,
                     handX=p?.handX,handY=p?.handY,handZ=p?.handZ,

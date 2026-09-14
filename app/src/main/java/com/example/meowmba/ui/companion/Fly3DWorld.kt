@@ -1,6 +1,7 @@
 package com.example.meowmba.ui.companion
 
 import com.example.meowmba.core.behavior.BehaviorBias
+import com.example.meowmba.core.neural.FlyMotorIntent
 import kotlin.math.*
 
 /** Chest-root pose, world units, +Y up / +Z toward camera. Angles in degrees. */
@@ -12,6 +13,7 @@ internal data class Fly3DPose(
     val reach: Float = 0f, val holding: String? = null,
     val handX: Float = .42f, val handY: Float = 1.8f, val handZ: Float = .2f,
     val gazeYaw: Float = 0f,
+    val grooming: Float = 0f,
 )
 
 /** Prop XYZ denotes its base; contact at base + .10 along Y. */
@@ -40,6 +42,8 @@ internal class Fly3DWorld {
     private var approached = false
     private var tapRemaining = 0f
     private var holdOffset = Fly3DTarget(0f, -.1f, 0f)
+    private var neuralHeading = 0f
+    private var brainHadControl = false
 
     fun snapshot(): Fly3DWorldSnapshot = frame
 
@@ -50,7 +54,8 @@ internal class Fly3DWorld {
     }
 
     fun step(timeSec: Float, command: HabitatCommand, bias: BehaviorBias,
-        playPreference: Float = 0f, backgroundId: String = "kitchen", wingDrive: Float = 0f): Fly3DWorldSnapshot {
+        playPreference: Float = 0f, backgroundId: String = "kitchen", wingDrive: Float = 0f,
+        motorIntent: FlyMotorIntent = FlyMotorIntent.NONE): Fly3DWorldSnapshot {
         if (!timeSec.isFinite()) return frame
         val prior = lastTime
         if (prior != null && timeSec <= prior) return frame
@@ -62,7 +67,8 @@ internal class Fly3DWorld {
         }
         frame = frame.copy(backgroundId = backgroundId)
         val steps = ceil(dt / .01f).toInt().coerceAtLeast(1)
-        repeat(steps) { advance(dt / steps, bias.arousal.finite(.4f).coerceIn(0f, 1f), playPreference.finite(0f).coerceIn(-1f, 1f), wingDrive.finite(0f).coerceIn(0f, 1f)) }
+        val motor = motorIntent.bounded()
+        repeat(steps) { advance(dt / steps, bias.arousal.finite(.4f).coerceIn(0f, 1f), playPreference.finite(0f).coerceIn(-1f, 1f), wingDrive.finite(0f).coerceIn(0f, 1f), motor) }
         return frame
     }
 
@@ -87,7 +93,7 @@ internal class Fly3DWorld {
             target = Fly3DTarget(frame.pose.x.coerceIn(-1.8f, 1.8f), TABLE_CHEST, frame.pose.z.coerceIn(-.7f, .7f))
     }
 
-    private fun advance(dt: Float, activity: Float, preference: Float, wingDrive: Float) {
+    private fun advance(dt: Float, activity: Float, preference: Float, wingDrive: Float, motor: FlyMotorIntent) {
         if (dt <= 0f) return
         actionAge += dt
         tapRemaining = (tapRemaining - dt).coerceAtLeast(0f)
@@ -95,9 +101,30 @@ internal class Fly3DWorld {
         var props = frame.props.map { integrateProp(it, dt) }
         val prop = props.firstOrNull { it.kind == targetKind }
         val old = frame.pose
+        // Explicit touches, food/prop requests and rest retain control of their
+        // destinations. Only free exploration accepts measured motor proposals.
+        val neuralControl = motor.active && frame.action == HabitatAction.EXPLORE &&
+            tapRemaining == 0f && targetKind == null && old.holding == null
+        if (neuralControl && !brainHadControl) neuralHeading = old.yaw
+        brainHadControl = neuralControl
         val contactGround = if (prop != null && prop.y < .6f) FLOOR_CHEST else TABLE_CHEST
         if (prop != null && !approached) {
             target = Fly3DTarget((prop.x - .42f).coerceIn(-2.35f, 2.35f), contactGround, (prop.z - .2f).coerceIn(-1.3f, 1.3f))
+        } else if (neuralControl) {
+            neuralHeading = (neuralHeading + motor.turn * 85f * dt) % 360f
+            val lift = max(motor.takeoff, max(motor.jump, motor.escape))
+            val settle = max(motor.landing, motor.grooming * (1f - lift))
+            val travel = (motor.forward - motor.backward + motor.escape * .6f)
+                .coerceIn(-1f, 1f) * (1f - motor.halt)
+            val heading = neuralHeading / DEG
+            target = Fly3DTarget(
+                (old.x + sin(heading) * travel * .85f).coerceIn(-2.4f, 2.4f),
+                when {
+                    settle > .25f && settle > lift -> TABLE_CHEST
+                    lift > .25f -> (old.y + lift * .8f).coerceAtMost(3.7f)
+                    else -> old.y
+                },
+                (old.z + cos(heading) * travel * .85f).coerceIn(-1.4f, 1.4f))
         } else if (frame.action == HabitatAction.EXPLORE && tapRemaining == 0f) {
             val speed = .30f + activity * .11f + preference * .035f
             val phase = elapsed * speed
@@ -124,7 +151,8 @@ internal class Fly3DWorld {
         val horizontal = hypot(vx, vz)
         // Return frontward during held/perched moments; cruising turns show real depth.
         val presenting = approached || grounded || sin(elapsed * .4f) > .88f
-        val desiredYaw = if (presenting || horizontal < .035f || targetKind != null) 0f else atan2(vx, vz) * DEG
+        val desiredYaw = if (neuralControl) neuralHeading
+            else if (presenting || horizontal < .035f || targetKind != null) 0f else atan2(vx, vz) * DEG
         val yaw = old.yaw + angleDelta(old.yaw, desiredYaw).coerceIn(-95f * dt, 95f * dt)
         val bank = (angleDelta(old.yaw, desiredYaw) * -.22f).coerceIn(-24f, 24f) * flight
         val near = distance(x, y, z, target.x, target.y, target.z) < .18f
@@ -175,7 +203,8 @@ internal class Fly3DWorld {
             // rhythm. Kinematic flight remains bounded authored animation.
             (old.wingPhase + dt * (6f + flight * 34f + wingDrive * 16f)) % TAU,
             walkPhase,
-            reach, holding, hx, hy, hz, (-yaw).coerceIn(-35f, 35f))
+            reach, holding, hx, hy, hz, (-yaw).coerceIn(-35f, 35f),
+            ease(old.grooming, if (neuralControl && grounded) motor.grooming else 0f, dt, 5f))
         frame = frame.copy(pose = pose, props = props, elapsed = elapsed)
     }
 

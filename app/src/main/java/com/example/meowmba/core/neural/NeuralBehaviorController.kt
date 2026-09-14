@@ -263,6 +263,11 @@ class NeuralBehaviorController(
      * biological muscle command or robot-control output. */
     fun wingMotorNow(): Float = if (mode == NeuralMode.NEURAL && fallback == FallbackReason.NONE && core.ready()) experimentalWingPower else 0f
 
+    @Synchronized fun flyMotorNow(): FlyMotorIntent =
+        if (mode == NeuralMode.NEURAL && fallback == FallbackReason.NONE && core.ready())
+            (core as? MaleCnsRemoteCore)?.flyMotorNow() ?: FlyMotorIntent.NONE
+        else FlyMotorIntent.NONE
+
     @Synchronized fun noteFood() { (core as? MaleCnsRemoteCore)?.noteFood() }
     @Synchronized fun feedingMotorNow(): Float =
         if (mode == NeuralMode.NEURAL && fallback == FallbackReason.NONE && core.ready())

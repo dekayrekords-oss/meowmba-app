@@ -165,6 +165,7 @@ private fun NeuralActivityMeter(metric: BrainActivityMetric) {
 private fun NeuralInfoDetails(d: NeuralDiagnostics?, measured: Boolean) {
     val core = d?.core
     val remote = d?.substrate == NeuralSubstrate.MALECNS_REMOTE
+    val fullGraph = core?.extra?.get("malecns.full_graph") == 1f
     NeuralInfoRow("Core units", core?.units?.toString() ?: "—")
     NeuralInfoRow("Measured steps", d?.steps?.toString() ?: "—")
     NeuralInfoRow("Current action", if (measured) d?.currentAction?.name?.lowercase()?.replace('_', ' ') ?: "—" else "—")
@@ -181,12 +182,20 @@ private fun NeuralInfoDetails(d: NeuralDiagnostics?, measured: Boolean) {
         }
         fun measuredTime(key: String): String = core?.extra?.get(key)
             ?.takeIf { measured && it.isFinite() && it >= 0f }?.let { "${it.roundToInt()} ms" } ?: "—"
+        NeuralInfoRow("Graph", if (fullGraph) "Full annotated graph" else "Retained graph")
+        NeuralInfoRow("Connection pairs", if (fullGraph) "25,862,574" else "6,287,749")
+        NeuralInfoRow("Anatomical synapse counts", if (fullGraph) "125,024,863" else "90,296,905")
+        for ((key, label) in listOf("forward" to "Forward", "backward" to "Backward",
+            "halt" to "Stop", "landing" to "Land", "takeoff" to "Take off", "groom2" to "Antenna grooming")) {
+            val hz = core?.extra?.get("malecns.${key}_hz")?.takeIf { measured && it.isFinite() }
+            NeuralInfoRow(label, hz?.let { "${it.roundToInt()} Hz" } ?: "—")
+        }
         NeuralInfoRow("Simulated brain time", measuredTime("malecns.sim_ms"))
         NeuralInfoRow("Meow compute per reply", measuredTime("malecns.compute_ms"))
     }
     Text(
         when (d?.substrate) {
-            NeuralSubstrate.MALECNS_REMOTE -> "These are measured population firing rates, not a map of individual synapses. The retained MaleCNS graph contains 90.3 million anatomical synapse counts. Neuron dynamics and avatar movement are modeled; brain time runs independently of animation time. Data: Janelia FlyEM, Cambridge/MRC LMB and Google Research, CC BY 4.0. Simulator: Blendi Remade / fal.ai, MIT."
+            NeuralSubstrate.MALECNS_REMOTE -> "These are measured population firing rates, not a map of individual synapses. MaleCNS includes annotated brain, optic-lobe and ventral nerve cord neurons. The full graph restores weak connections and self-connections at confidence ≥0.5; unannotated fragments are excluded. Neuron dynamics and avatar movement are modeled; brain time runs independently of animation time. Data: Janelia FlyEM, Cambridge/MRC LMB and Google Research, CC BY 4.0. Simulator: Blendi Remade / fal.ai, MIT."
             NeuralSubstrate.BANC_EXPERIMENTAL -> "These are aggregate values from the BANC anatomical-path adapter: 76 neurons, 515 connection pairs and 3,316 anatomical counts. Connection signs, timing and avatar movement are authored assumptions. This is not a map of individual synapses or a literal biological spike trace."
             else -> "These are measured aggregate values from a small synthetic network, not a map of individual synapses or a biological fly brain. Active units means units above the core's silence threshold."
         },

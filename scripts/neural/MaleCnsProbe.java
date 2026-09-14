@@ -16,23 +16,23 @@ public final class MaleCnsProbe {
         if (!condition) throw new IllegalStateException(detail);
     }
 
-    private static Connectome load(String path) throws Exception {
+    private static Connectome load(String path, boolean full) throws Exception {
         Connectome c;
         try (var stream = new FileInputStream(path)) { c = Connectome.load(stream); }
         require(c.dataset.equals("male-cns:v1.0"), "Dataset mismatch");
-        require(c.n == 176422 && c.nEdges == 6287749, "Graph counts changed");
+        require(c.n == 176422 && c.nEdges == (full ? 25862574 : 6287749), "Graph counts changed");
         long synapses = 0;
         require(c.rowPtr[0] == 0, "Invalid first CSR offset");
         for (int i = 0; i < c.n; i++) {
             require(i == 0 || c.bodyId[i] > c.bodyId[i - 1], "IDs not strictly sorted");
             require(c.rowPtr[i] <= c.rowPtr[i + 1], "Invalid CSR ordering");
             for (int k = c.rowPtr[i]; k < c.rowPtr[i + 1]; k++) {
-                require(c.postIdx[k] >= 0 && c.postIdx[k] < c.n && c.postIdx[k] != i, "Invalid edge");
-                require(c.synapseCount(k) >= 5, "Threshold mismatch");
+                require(c.postIdx[k] >= 0 && c.postIdx[k] < c.n && (full || c.postIdx[k] != i), "Invalid edge");
+                require(c.synapseCount(k) >= (full ? 1 : 5), "Threshold mismatch");
                 synapses += c.synapseCount(k);
             }
         }
-        require(synapses == 90296905, "Anatomical count mismatch");
+        require(synapses == (full ? 125024863 : 90296905), "Anatomical count mismatch");
         return c;
     }
 
@@ -109,12 +109,12 @@ public final class MaleCnsProbe {
     }
 
     public static void main(String[] args) throws Exception {
-        require(args.length == 4, "Expected data path, scenario, mode, duration ms");
+        require(args.length == 4 || (args.length == 5 && args[4].equals("full")), "Expected data path, scenario, mode, duration ms");
         String scenario = args[1], mode = args[2];
         int duration = Integer.parseInt(args[3]);
         require(duration >= 600 && duration <= 5000 && duration % 50 == 0, "Invalid duration");
         require(mode.equals("off") || mode.equals("on") || mode.equals("reset") || mode.equals("ablated"), "Invalid mode");
-        Connectome c = load(args[0]);
+        Connectome c = load(args[0], args.length == 5);
         if (mode.equals("ablated")) Arrays.fill(c.weight, (short) 0);
         LifConfig cfg = new LifConfig();
         cfg.dtMs = .5; cfg.threads = 1; cfg.seed = 20260903L;

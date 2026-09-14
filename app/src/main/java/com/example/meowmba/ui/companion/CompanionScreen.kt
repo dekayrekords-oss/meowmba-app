@@ -1372,6 +1372,7 @@ private fun AvatarMotionHost(
             nervousBias = viewModel::nervousBiasNow,
             neuralGaze = viewModel::neuralGazeNow,
             neuralWingPower = viewModel::neuralWingPowerNow,
+            neuralFlyMotor = viewModel::neuralFlyMotorNow,
             onPet = viewModel::onAvatarPetted,
             onPlay = { viewModel.playCompanionTrick("peekaboo") },
             onHabitatAction = viewModel::habitatAction,

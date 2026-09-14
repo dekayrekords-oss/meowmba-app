@@ -26,7 +26,10 @@ def main():
     parser.add_argument("--run-live", action="store_true", help="exercise the live worker while the phone is inactive")
     parser.add_argument("--helper-dir", type=Path, default=Path.home() / ".meowmba-bridge")
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--graph", choices=("retained", "full"), default="retained")
     args = parser.parse_args()
+    full = args.graph == "full"
+    asset = "8860e68b59e454d8d4e8bd601dd7a3cb9049d18516f1ea8df34eabe1ae400d08" if full else ASSET
     if not args.run_live:
         parser.error("Pass --run-live only when the phone's remote brain is inactive")
     config = json.loads((args.helper_dir / "config.json").read_text())
@@ -69,7 +72,7 @@ def main():
         ("food_and_touch", {"food": 1, "touch": 1}, 40),
     ]
     report = dict(scope="Live authenticated Mac helper to Meow; phone disconnected, no Android acceptance",
-                  asset_sha256=ASSET, episodes={})
+                  asset_sha256=asset, graph=args.graph, episodes={})
     status, _, _ = rpc("malecns_step", {}, signed=False)
     assert status == 401, "Unsigned request was not rejected"
     report["unsigned_rejected"] = True
@@ -81,11 +84,13 @@ def main():
             for seq in range(1, count + 1):
                 request = dict(session=session, seq=seq, **dict.fromkeys(SENSES, 0))
                 request.update(stimulus)
+                if full: request["graph"] = "full"
                 status, result, elapsed = rpc("malecns_step", request)
                 assert status == 200, f"{name} request failed with HTTP {status}"
                 assert result["session"] == session and result["seq"] == seq
-                assert result["asset_sha256"] == ASSET and result["neurons"] == 176422
-                assert result["pairs"] == 6287749 and result["synapses"] == 90296905
+                assert result["asset_sha256"] == asset and result["neurons"] == 176422
+                assert result["pairs"] == (25862574 if full else 6287749) and result["synapses"] == (125024863 if full else 90296905)
+                assert result["protocol"] == (2 if full else 1) and result["graph"] == args.graph
                 assert result["sim_ms"] == seq * 50
                 assert all(math.isfinite(v) for v in result.values() if isinstance(v, (int, float)))
                 rows.append(dict(round_trip_ms=elapsed, **measurement(result), compute_ms=result["compute_ms"]))
@@ -97,6 +102,12 @@ def main():
             report["episodes"][name] = rows
         finally:
             rpc("malecns_stop", {"session": session})
+    timings = [r["round_trip_ms"] for rows in report["episodes"].values() for r in rows[1:]]
+    compute = sorted(r["compute_ms"] for rows in report["episodes"].values() for r in rows)
+    report["steady_round_trip_max_ms"] = max(timings)
+    report["compute_p95_ms"] = compute[math.ceil(.95 * len(compute))-1]
+    assert max(timings) <= 1800, "Steady replies exceed Android freshness limit"
+    assert report["compute_p95_ms"] <= (300 if full else 200), "Compute exceeds profile cadence budget"
     assert max(r["feed_hz"] for r in report["episodes"]["food"]) > 0
     assert max(r["groom_hz"] for r in report["episodes"]["touch"]) > 0
     assert max(r["escape_hz"] for r in report["episodes"]["loom"]) > 0
@@ -106,6 +117,7 @@ def main():
     try:
         request = dict(session=session, seq=1, **dict.fromkeys(SENSES, 0))
         request["food"] = 1
+        if full: request["graph"] = "full"
         code, reset, _ = rpc("malecns_step", request)
         assert code == 200 and measurement(reset) == first_food, "Restart changed deterministic neural state"
         report["restart_deterministic"] = True

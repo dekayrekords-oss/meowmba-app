@@ -15,8 +15,12 @@ FIELDS = ('food', 'touch', 'loom_left', 'loom_right', 'motion_left', 'motion_rig
 
 
 def validate(params):
-    if not isinstance(params, dict) or set(params) != {'session', 'seq', *FIELDS}:
+    required = {'session', 'seq', *FIELDS}
+    if not isinstance(params, dict) or set(params) not in (required, required | {'graph'}):
         raise ValueError('Expected a neural session, sequence and six sensory values')
+    graph = params.get('graph', 'retained')
+    if not isinstance(graph, str) or graph not in ('retained', 'full'):
+        raise ValueError('Expected the retained or full neural graph')
     if not isinstance(params['session'], str) or not re.fullmatch(r'[a-f0-9-]{36}', params['session']):
         raise ValueError('Invalid neural session')
     if type(params['seq']) is not int or not 1 <= params['seq'] <= 9007199254740991:
@@ -25,7 +29,11 @@ def validate(params):
         value = params[key]
         if type(value) not in (int, float) or not math.isfinite(value) or not 0 <= value <= 1:
             raise ValueError('Invalid sensory value')
-    return '\t'.join([params['session'], str(params['seq']), *[str(float(params[k])) for k in FIELDS]]) + '\n'
+    fields = [params['session'], str(params['seq']), *[str(float(params[k])) for k in FIELDS]]
+    # The eight-column protocol stays byte-compatible with the installed phone.
+    # A fixed profile selector is the only extension; file paths remain local config.
+    if graph == 'full': fields.append('full')
+    return '\t'.join(fields) + '\n'
 
 
 class MaleCnsController:
@@ -94,8 +102,10 @@ class MaleCnsController:
                     response.extend(byte)
                 else: raise ValueError('Oversized neural response')
             result = json.loads(response)
-            if result.get('session') != params['session'] or result.get('seq') != params['seq'] or 'error' in result:
+            if not isinstance(result, dict) or result.get('session') != params['session'] or result.get('seq') != params['seq'] or 'error' in result:
                 raise ValueError('Neural session or sequence mismatch')
+            if params.get('graph', 'retained') == 'full' and (result.get('protocol') != 2 or result.get('graph') != 'full'):
+                raise ValueError('Full neural graph unavailable or mismatched')
             self._timer = threading.Timer(self._idle_seconds, self._idle_stop, args=(self._generation,))
             self._timer.daemon = True
             self._timer.start()

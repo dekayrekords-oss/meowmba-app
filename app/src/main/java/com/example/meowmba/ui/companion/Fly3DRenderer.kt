@@ -31,6 +31,7 @@ data class Fly3DFrame(
     val leftBlink: Float? = null, val rightBlink: Float? = null,
     val smile: Float = 0f, val concern: Float = 0f,
     val antennaLift: Float = 0f, val antennaLag: Float = 0f,
+    val grooming: Float = 0f,
 )
 
 /** GLES2 mesh renderer. Host uses RENDERMODE_WHEN_DIRTY and publishes [frame] before
@@ -687,10 +688,11 @@ class Fly3DRenderer : GLSurfaceView.Renderer {
             hand(backHandX,backHandY,-.09f,.09f)
             // Front hands lift/gesture with reach, preserving elbow articulation.
             val held = side > 0 && f.holding != null
-            val ik = side > 0 && hasHandTarget
-            val handX = if (ik) localHand[0] else sx*(if (held) .78f else .82f + reach*.22f)
-            val handY = if (ik) localHand[1] else if (held) .09f else .04f+reach*.47f+flight*.13f+sin(phase+side)*.045f
-            val handZ = if (ik) localHand[2] else if (held) .43f else .19f+reach*.15f
+            val groom = if (f.holding == null && reach < .1f) f.grooming.safe().coerceIn(0f,1f) else 0f
+            val ik = side > 0 && hasHandTarget && groom < .01f
+            val handX = (if (ik) localHand[0] else sx*(if (held) .78f else .82f + reach*.22f)) * (1f-groom) + sx*.30f*groom
+            val handY = (if (ik) localHand[1] else if (held) .09f else .04f+reach*.47f+flight*.13f+sin(phase+side)*.045f) * (1f-groom) + (.88f+sin(phase*1.3f+side)*.07f)*groom
+            val handZ = (if (ik) localHand[2] else if (held) .43f else .19f+reach*.15f) * (1f-groom) + .40f*groom
             val elbowX = if (ik) (.43f+handX)*.5f+.12f else sx*.67f
             val elbowY = if (ik) (.21f+handY)*.5f+.10f else .08f+reach*.23f
             val elbowZ = if (ik) (.07f+handZ)*.5f else .16f

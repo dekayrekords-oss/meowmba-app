@@ -15,6 +15,25 @@ class MaleCnsTest(unittest.TestCase):
         req = self.request(); req['command'] = 'shell'
         with self.assertRaises(ValueError): validate(req)
 
+    def test_legacy_and_explicit_retained_requests_keep_eight_columns(self):
+        request = self.request()
+        legacy = validate(request)
+        self.assertEqual(8, len(legacy.rstrip('\n').split('\t')))
+        request['graph'] = 'retained'
+        self.assertEqual(legacy, validate(request))
+
+    def test_full_selector_is_one_fixed_extra_column(self):
+        request = self.request(); request['graph'] = 'full'
+        fields = validate(request).rstrip('\n').split('\t')
+        self.assertEqual(9, len(fields))
+        self.assertEqual('full', fields[-1])
+
+    def test_invalid_graphs_or_graph_paths_are_rejected(self):
+        for graph in ('', 'FULL', 'unknown', '../full.flyb.gz', 'full\tcommand', None, True, 1, ['full'], {'graph': 'full'}):
+            with self.subTest(graph=graph):
+                request = self.request(); request['graph'] = graph
+                with self.assertRaises(ValueError): validate(request)
+
     def test_disabled_worker_never_launches(self):
         c = MaleCnsController(popen=lambda *a, **k: self.fail('launched disabled worker'))
         with self.assertRaises(ValueError): c.step(self.request(), {})
@@ -34,12 +53,34 @@ class MaleCnsTest(unittest.TestCase):
         finally: c.stop()
 
     def test_mismatched_or_malformed_response_closes_worker(self):
-        for response in ['{}', 'not-json', '{"session":"other","seq":1}']:
+        for response in ['{}', '[]', 'null', 'not-json', '{"session":"other","seq":1}']:
             c = MaleCnsController()
             config = dict(malecns_enabled=True, malecns_worker_argv=[sys.executable, '-u', '-c',
                 'import sys;sys.stdin.readline();print(' + repr(response) + ',flush=True)'])
             with self.assertRaises((ValueError, RuntimeError)): c.step(self.request(), config)
             self.assertIsNone(c._process)
+
+    def test_full_request_rejects_silent_retained_fallback(self):
+        for extra in ({}, {'protocol': 1, 'graph': 'retained'}, {'protocol': 2, 'graph': 'retained'}, {'protocol': 1, 'graph': 'full'}):
+            c = MaleCnsController()
+            result = dict(session='a' * 36, seq=1, **extra)
+            config = dict(malecns_enabled=True, malecns_worker_argv=[sys.executable, '-u', '-c',
+                'import sys;sys.stdin.readline();print(' + repr(json.dumps(result)) + ',flush=True)'])
+            request = self.request(); request['graph'] = 'full'
+            try:
+                with self.assertRaises(ValueError): c.step(request, config)
+                self.assertIsNone(c._process)
+            finally: c.stop()
+
+    def test_full_request_passes_selector_and_measured_profile(self):
+        c = MaleCnsController()
+        code = ('import sys,json\nfor line in sys.stdin:\n'
+                ' f=line.strip().split("\\t");print(json.dumps(dict(session=f[0],seq=int(f[1]),protocol=2,graph=f[8])),flush=True)')
+        config = dict(malecns_enabled=True, malecns_worker_argv=[sys.executable, '-u', '-c', code])
+        request = self.request(); request['graph'] = 'full'
+        try:
+            self.assertEqual('full', c.step(request, config)['graph'])
+        finally: c.stop()
 
     def test_busy_worker_does_not_queue(self):
         c = MaleCnsController(); c._lock.acquire()

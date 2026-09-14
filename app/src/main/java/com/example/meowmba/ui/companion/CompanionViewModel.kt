@@ -836,7 +836,7 @@ class CompanionViewModel(
                     override suspend fun step(request: MaleCnsRequest) = bridge.maleCnsStep(request)
                     override suspend fun stop(session: String) = bridge.maleCnsStop(session)
                 }
-            })
+            }, graph = MaleCnsGraphProfile.FULL)
         } },
         initialMode = secureStorage?.getPreference(NeuralModeStore.KEY_MODE)?.let {
             runCatching { NeuralMode.valueOf(it) }.getOrNull()
@@ -864,6 +864,15 @@ class CompanionViewModel(
     /** Read by the renderer only; BANC's bounded wing-power activity retargets
      * the visual wing beat and never leaves the avatar presentation layer. */
     fun neuralWingPowerNow(): Float = nervousSystem.wingMotorNow()
+
+    fun neuralFlyMotorNow(): FlyMotorIntent {
+        val state = _uiState.value
+        return if (avatarPerformanceStageAllowed && !appInBackground &&
+            com.example.meowmba.core.thermal.ThermalGovernor.currentTier().ordinal < 2 &&
+            idlePerformanceAllowed(state, _mouthEnergy.value, stageAllowed = true,
+                socialContextAllowed = socialContextAllowed())) nervousSystem.flyMotorNow()
+        else FlyMotorIntent.NONE
+    }
 
     private fun advanceNeuralMotor(nowMs: Long) {
         val state = _uiState.value

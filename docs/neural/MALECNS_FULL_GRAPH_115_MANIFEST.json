@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "graph": "full",
+  "dataset": "male-cns:v1.0",
+  "asset_sha256": "8860e68b59e454d8d4e8bd601dd7a3cb9049d18516f1ea8df34eabe1ae400d08",
+  "asset_size": 79963380,
+  "neurons": 176422,
+  "pairs": 25862574,
+  "synapses": 125024863,
+  "min_pair_synapses": 1,
+  "autapses_removed": false,
+  "roster_sha256": "a21dcf2576c352eda0f4d455683b648ec28272fd7f4918fdfbf2c97aff9df465"
+}

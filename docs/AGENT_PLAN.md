@@ -1,5 +1,18 @@
 # Agent execution plan — immersive companion revision
 
+## September 13: Build 115 full annotated graph integration
+
+The official MaleCNS confidence-0.5 graph is converted and verified: 176,422
+annotated neurons, 25,862,574 directed pairs and 125,024,863 anatomical counts.
+Full worker/replay/ablation checks pass; Android has exact graph verification,
+measured 3D body retargeting and a 400 ms full-graph cadence. The preserved
+retained profile supports older phones. Local Android acceptance passed 33
+tests; private server assembly and live bridge acceptance are being finalized.
+Read [MEOW_FULL_GRAPH_INTEGRATION_115_PASS_DOWN.md](neural/MEOW_FULL_GRAPH_INTEGRATION_115_PASS_DOWN.md).
+The phone remains disconnected/last verified Build 112; no installation or
+phone pairing claim. This is fixed-weight point-neuron simulation, not a
+complete biological animal or newly learned conversation memory.
+
 ## September 13: Build 114 Brain repair verified and ready
 
 Brain now reserves a visible avatar viewport, exposes real Pet/Feed events and
