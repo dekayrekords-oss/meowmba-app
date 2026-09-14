@@ -272,6 +272,11 @@ fun AvatarRenderer(
     val useLumen = state.avatarStyle.isLumen || customAnim?.props?.isNotEmpty() == true
     val lumenRig = remember { LumenRig() }
     val lumenPainter = remember { LumenPainter() }
+    val generatedPainter = remember { GeneratedAvatarPainter() }
+    val generatedScenePainter = remember { InventedScenePainter() }
+    val generatedForm = state.generatedAvatarForm.takeIf { state.avatarStyle == AvatarStyle.LUMEN }
+    val touchGeneratedForm by rememberUpdatedState(generatedForm)
+    val generatedPlacement = remember { arrayOfNulls<GeneratedAvatarPlacement>(1) }
     val fullFlyPainter = remember { FullFlyPainter() }
     val habitatWorld = remember(state.habitatBackgroundId, state.avatarStyle, state.habitatMode) { PetHabitatWorld() }
     val fly3DWorld = remember(state.habitatBackgroundId, state.avatarStyle, state.habitatMode) { Fly3DWorld() }
@@ -690,8 +695,10 @@ fun AvatarRenderer(
                 hypot(point.x - at.x, point.y - at.y) <= unit * 1.05f
             }
             touchStyle.isLumen -> {
-                val local = avatarHitTransform[0].inverse(point)
-                lumenZoneAt(local, width.toInt(), height.toInt(), lumenLastFrame[0]) != AvatarZone.BACKGROUND
+                if (touchGeneratedForm != null) generatedPlacement[0]?.owns(point) == true else {
+                    val local = avatarHitTransform[0].inverse(point)
+                    lumenZoneAt(local, width.toInt(), height.toInt(), lumenLastFrame[0]) != AvatarZone.BACKGROUND
+                }
             }
             else -> {
                 val transform = avatarHitTransform[0]
@@ -977,7 +984,8 @@ fun AvatarRenderer(
                 // Touch is a local gaze target, not camera capture permission.
                 cameraEnabled = state.isCameraEnabled || touchGaze != null || neuralLook != null,
                 emotion = state.emotion, interaction = state.interactionState,
-                animal = state.performanceAnimal ?: if (isCat) AvatarAnimal.CAT else state.avatarAnimal,
+                animal = if (generatedForm != null) AvatarAnimal.NONE else
+                    state.performanceAnimal ?: if (isCat) AvatarAnimal.CAT else state.avatarAnimal,
                 openness = effectivePose.eyeOpen, pupil = if (playingClip) effectivePose.pupilSize else .5f,
                 tilt = if (playingClip) effectivePose.headTiltDeg else 0f,
                 bounce = if (playingClip) effectivePose.bodyBounce else 0f,
@@ -1014,6 +1022,18 @@ fun AvatarRenderer(
             } else composedLumenInput
             val frame = lumenRig.step(tSec, gatedLumenInput)
             lumenLastFrame[0] = frame
+            if (generatedForm != null) {
+                val placement = generatedAvatarPlacement(w, h, frame, avatarScale, flyPose)
+                generatedPlacement[0] = placement
+                generatedPainter.draw(this, generatedForm, frame, tSec, placement.center, placement.unit)
+                if (customAnim != null) generatedScenePainter.draw(this, customAnim,
+                    animTHolder[0].toFloat(), placement.center, placement.unit)
+                // Model-authored shapes cannot cover or impersonate privacy state.
+                lumenPainter.draw(this, frame.copy(presence = 0f), Color(state.avatarEyeColor), Color(state.avatarGlowColor),
+                    cameraOff = !state.isCameraEnabled, micOff = !state.isMicEnabled,
+                    speakerOff = state.isMuted, statusColor = privacyColor)
+                return@Canvas
+            }
             if (state.avatarStyle == AvatarStyle.FULL_FLY && onFly3DFrame != null) {
                 // A complete immutable frame equality gate permits paused appearance changes
                 // while still breaking TextureView's draw/swap/invalidate feedback loop.

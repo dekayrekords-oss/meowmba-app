@@ -124,6 +124,12 @@ data class CompanionState(
     /** Which eye style the face is drawn in. Persisted across launches. */
     val avatarStyle: AvatarStyle = AvatarStyle.DEFAULT,
     val avatarAnimal: AvatarAnimal = AvatarAnimal.NONE,
+    /** Validated, saved cartoon geometry; shares Lumen's brain and animation clock. */
+    val generatedAvatarForm: GeneratedAvatarForm? = null,
+    val savedGeneratedForms: List<GeneratedAvatarForm> = emptyList(),
+    val avatarFormGenerating: Boolean = false,
+    val avatarFormMessage: String? = null,
+    val avatarFormError: Boolean = false,
     /** Temporary costume from an explicit performance; never persisted over the user's choice. */
     val performanceAnimal: AvatarAnimal? = null,
     val appTheme: AppTheme = AppTheme.COMPANION,

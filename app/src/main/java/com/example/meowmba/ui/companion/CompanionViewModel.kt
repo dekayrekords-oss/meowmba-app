@@ -634,6 +634,12 @@ class CompanionViewModel(
     private var customAnimJob: Job? = null
     private var inventionGeneration = 0L
     private var inventionStop = com.example.meowmba.core.agent.LocalInferenceCancellation()
+    private var avatarFormGeneration = 0L
+    private var avatarFormStop = com.example.meowmba.core.agent.LocalInferenceCancellation()
+    private var avatarFormWork: Job? = null
+    private val generatedAvatarStore: GeneratedAvatarStore? by lazy {
+        secureStorage?.context?.filesDir?.let { GeneratedAvatarStore(File(it, "avatar_forms")) }
+    }
     private val performanceRotation = PerformanceRotation()
     private val expressionPlanner = ConversationExpressionPlanner { System.nanoTime() / 1_000_000L }
     private val idlePerformanceSelector = IdlePerformanceSelector(
@@ -1395,6 +1401,10 @@ class CompanionViewModel(
                 neuralMode = nervousSystem.mode,
                 neuralSubstrate = nervousSystem.substrate,
                 avatarAnimal = AvatarAnimal.fromKey(storage.getPreference("avatar_animal")),
+                generatedAvatarForm = runCatching {
+                    storage.getPreference("generated_avatar_id")?.let { generatedAvatarStore?.load(it) }
+                }.getOrNull(),
+                savedGeneratedForms = runCatching { generatedAvatarStore?.list().orEmpty() }.getOrDefault(emptyList()),
                 appTheme = AppTheme.fromKey(storage.getPreference("app_theme")),
                 appearanceMode = AppearanceMode.fromKey(storage.getPreference("appearance_mode")),
                 avatarFeatureColor = AvatarColors.parse(storage.getPreference("avatar_feature_color"), 0xFFE8D5B9L),
@@ -1993,7 +2003,14 @@ class CompanionViewModel(
             // validates and plays them — the same propose/constrain boundary as
             // every other tool. Saved clips persist as plain JSON files.
             val animStore = CustomAnimationStore(File(appContext.filesDir, "custom_animations"))
-            toolRegistry.register(com.example.meowmba.core.agent.tools.AvatarFormTool(::transformAvatar))
+            toolRegistry.register(com.example.meowmba.core.agent.tools.AvatarFormTool(
+                onChange = ::transformAvatar,
+                onGenerate = { request, generation -> generateAvatarForm(request, generation) },
+                validateGeneration = { expected ->
+                    if (expected != null && expected != avatarFormGeneration)
+                        throw kotlinx.coroutines.CancellationException("Avatar transformation superseded")
+                },
+            ))
             toolRegistry.register(com.example.meowmba.core.agent.tools.AvatarInventTool { request, fresh, expectedGeneration ->
                 inventLocalAvatarScene(request, fresh, animStore, expectedGeneration)
             })
@@ -2475,6 +2492,9 @@ class CompanionViewModel(
                         }
                     }
                     TaskStatus.FAILED -> {
+                        if (task.toolId == "avatar.form" && !_uiState.value.avatarFormError) {
+                            avatarFormFailure(task.result?.take(400) ?: "Avatar creation failed. Your current form is unchanged.")
+                        }
                         if (task.toolId == "phone.run_goal" &&
                             com.example.meowmba.core.access.MeowAccessibilityService.instance == null) {
                             _uiState.value = _uiState.value.copy(phoneControlSetupGoal = task.args["goal"])
@@ -3367,6 +3387,7 @@ class CompanionViewModel(
     }
 
     override fun onCleared() {
+        cancelAvatarFormGeneration()
         nervousSystem.pauseExternalWork()
         neuralTraceRecorder?.close(); neuralTraceRecorder = null
         runCatching { secureStorage?.let { AgenticRuntime.from(it.context).computerHost = null } }
@@ -4865,6 +4886,7 @@ class CompanionViewModel(
      * listening at all, with every log line claiming it was.
      */
     fun releaseWakeMicForBackground() {
+        cancelAvatarFormGeneration()
         stopAvatarPerformance()
         resetMouthEnergy()
         appInBackground = true
@@ -4911,6 +4933,7 @@ class CompanionViewModel(
      * WakeWordService capture the follow-up with its mic exemption.
      */
     fun handOffListeningToBackground() {
+        cancelAvatarFormGeneration()
         handedOffToBackground = true
         stopAvatarPerformance()
         resetMouthEnergy()
@@ -6632,6 +6655,7 @@ class CompanionViewModel(
         // Agentic Computer path (chat/voice): shell-like or "Run on Computer".
         if (!_uiState.value.isNoting && !_uiState.value.callMode && maybeHandleAgenticComputerChat(text)) return
         // An accepted human turn owns attention immediately, before routing or a model.
+        cancelAvatarFormGeneration()
         resetMouthEnergy()
         stopAvatarPerformance()
         activeTimingTurn = if (fromVoice && pendingVoiceTimingTurn != 0L) pendingVoiceTimingTurn else interactionTimings.beginTurn()
@@ -7300,15 +7324,35 @@ class CompanionViewModel(
 
     private fun submitAgentIntent(intent: AgentRouter.AgentIntent) {
         val orchestrator = agentOrchestrator ?: run {
+            if (intent.toolId == "avatar.form") avatarFormFailure("Avatar creation is not ready yet. Reopen the app and try again.")
             speak("Agents aren't available in this build — the workspace isn't configured.")
             return
         }
-        val submittedArgs = if (intent.toolId == "avatar.invent") intent.args + ("_invention_generation" to inventionGeneration.toString()) else intent.args
+        if (intent.toolId == "avatar.form") {
+            val message = "Preparing your avatar transformation…"
+            _uiState.value = _uiState.value.copy(avatarFormGenerating = true,
+                avatarFormMessage = message, avatarFormError = false, captionText = message)
+        }
+        val submittedArgs = when (intent.toolId) {
+            "avatar.invent" -> intent.args + ("_invention_generation" to inventionGeneration.toString())
+            "avatar.form" -> intent.args + ("_form_generation" to avatarFormGeneration.toString())
+            else -> intent.args
+        }
         val result = orchestrator.submit(intent.agentId, intent.toolId, submittedArgs, intent.title,
             projectId = _uiState.value.activeProjectId, conversationId = conversationId())
         when (result) {
-            is SubmitResult.Rejected -> speak(result.reason)
+            is SubmitResult.Rejected -> {
+                if (intent.toolId == "avatar.form") {
+                    _uiState.value = _uiState.value.copy(avatarFormGenerating = false)
+                    avatarFormFailure(result.reason)
+                }
+                speak(result.reason)
+            }
             is SubmitResult.Started -> {
+                if (intent.toolId == "avatar.form" && result.queued) {
+                    val message = "Avatar transformation queued. You can cancel it here or choose another form."
+                    _uiState.value = _uiState.value.copy(avatarFormMessage = message, captionText = message)
+                }
                 // avatar.animate / avatar.describe_animation: the animation IS the
                 // response — no preamble, no TTS. Reset to IDLE immediately so wake
                 // word listening restarts; processUserSpeech left us in THINKING.
@@ -7327,7 +7371,7 @@ class CompanionViewModel(
                 if (intent.toolId in setOf("avatar.animate", "avatar.describe_animation", "avatar.form", "avatar.invent")) {
                     _uiState.value = _uiState.value.copy(
                         interactionState = InteractionState.IDLE,
-                        captionText = null,
+                        captionText = if (intent.toolId == "avatar.form") _uiState.value.avatarFormMessage else null,
                         emotion = CompanionEmotion.IDLE,
                     )
                     updateVoiceListeningMode()
@@ -9753,6 +9797,7 @@ class CompanionViewModel(
 
     private fun applyProject(id: Long?, name: String?, conversationId: Long, preserveCreation: Boolean = false) {
         if (conversationId != conversationId()) {
+            cancelAvatarFormGeneration()
             supersedeResponseTurn()
             thinkingWatchdogJob?.cancel()
             _uiState.value = _uiState.value.copy(interactionState = InteractionState.IDLE)
@@ -10196,7 +10241,10 @@ class CompanionViewModel(
 
     /** Which face to draw. Persisted, so it survives a restart. */
     fun setAvatarStyle(style: AvatarStyle) {
-        _uiState.value = _uiState.value.copy(avatarStyle = style)
+        cancelAvatarFormGeneration()
+        secureStorage?.savePreference("generated_avatar_id", "")
+        _uiState.value = _uiState.value.copy(avatarStyle = style, generatedAvatarForm = null,
+            avatarFormMessage = null, avatarFormError = false)
         secureStorage?.savePreference(KEY_AVATAR_STYLE, style.key)
     }
 
@@ -10212,16 +10260,149 @@ class CompanionViewModel(
     }
 
     fun setAvatarAnimal(animal: AvatarAnimal) {
+        invalidateAvatarFormWork()
         stopAvatarPerformance()
         secureStorage?.saveAvatarForm(animal.key)
         _uiState.value = _uiState.value.copy(avatarStyle = AvatarStyle.LUMEN,
-            avatarAnimal = animal, performanceAnimal = null)
+            avatarAnimal = animal, performanceAnimal = null, generatedAvatarForm = null,
+            avatarFormMessage = null, avatarFormError = false)
     }
 
     /** Explicit self-transformation: show the result, never open a media viewer. */
     fun transformAvatar(animal: AvatarAnimal) {
         setAvatarAnimal(animal)
         _uiState.value = _uiState.value.withPanelsClosed()
+    }
+
+    /** Appearance work has its own cancellation scope; ambient acting may continue. */
+    fun cancelAvatarFormGeneration() {
+        invalidateAvatarFormWork()
+        // Cancelling from setup also removes work that has not acquired a tool slot.
+        agentOrchestrator?.let { orchestrator ->
+            orchestrator.tasks.value.filter { it.toolId == "avatar.form" && !it.isTerminal }
+                .forEach { orchestrator.cancel(it.id) }
+        }
+    }
+
+    private fun invalidateAvatarFormWork() {
+        avatarFormGeneration++
+        avatarFormStop.requestStop()
+        avatarFormWork?.cancel()
+        avatarFormWork = null
+        if (_uiState.value.avatarFormGenerating) {
+            val message = "Transformation cancelled. Your avatar is unchanged."
+            _uiState.value = _uiState.value.copy(avatarFormGenerating = false,
+                avatarFormMessage = message, avatarFormError = false,
+                captionText = if (_uiState.value.captionText == _uiState.value.avatarFormMessage) message else _uiState.value.captionText)
+        }
+    }
+
+    fun createAvatarForm(description: String) {
+        // The same policy/audit tool handles typed, spoken and setup requests.
+        cancelAvatarFormGeneration()
+        supersedeResponseTurn()
+        submitAgentIntent(AgentRouter.AgentIntent(AgentRegistry.MAIN, "avatar.form",
+            mapOf("animal" to description.trim()), "Become ${description.trim().take(80)}"))
+    }
+
+    private fun avatarFormFailure(message: String): ToolResult.Failure {
+        _uiState.value = _uiState.value.copy(avatarFormGenerating = false, avatarFormMessage = message, avatarFormError = true,
+            captionText = message)
+        return ToolResult.Failure(message)
+    }
+
+    /** The generation result commits on Main only while it still owns this request. */
+    internal suspend fun generateAvatarForm(request: String, expectedGeneration: Long? = null,
+        store: GeneratedAvatarStore? = generatedAvatarStore): ToolResult =
+        withContext(Dispatchers.Main.immediate) {
+            kotlinx.coroutines.coroutineScope {
+                if (expectedGeneration != null && expectedGeneration != avatarFormGeneration)
+                    throw kotlinx.coroutines.CancellationException("Avatar transformation superseded")
+                invalidateAvatarFormWork()
+                val generation = avatarFormGeneration
+                val scopeId = conversationId()
+                val stop = com.example.meowmba.core.agent.LocalInferenceCancellation().also { avatarFormStop = it }
+                avatarFormWork = kotlinx.coroutines.currentCoroutineContext()[Job]
+                val status = "Creating your cartoon form…"
+                _uiState.value = _uiState.value.copy(avatarFormGenerating = true, avatarFormError = false,
+                    avatarFormMessage = status, captionText = status)
+                try {
+                    require(com.example.meowmba.core.agent.runtime.AvatarFormRequest.isDescription(request)) {
+                        "Describe one avatar appearance in 1–500 characters."
+                    }
+                    if (store == null) return@coroutineScope avatarFormFailure("Avatar storage is unavailable. Your current form is unchanged.")
+                    fun ensureOwner() {
+                        if (generation != avatarFormGeneration || stop.isStopRequested || scopeId != conversationId() || appInBackground)
+                            throw kotlinx.coroutines.CancellationException("Avatar transformation superseded")
+                    }
+                    val saved = withContext(ioDispatcher) { store.find(request) }
+                    ensureOwner()
+                    if (saved != null) {
+                        applyGeneratedAvatar(saved, store.list(), "Now wearing ${saved.name}. Saved form reused.")
+                        return@coroutineScope ToolResult.Success("Lumen is now ${saved.name}. Reused the saved cartoon form.")
+                    }
+                    val selected = currentProvider ?: return@coroutineScope avatarFormFailure(
+                        "Choose a working AI model in LLM settings to create a new form. Presets and saved forms work without one.")
+                    val prompt = com.example.meowmba.core.agent.tools.AvatarFormInventor.prompt(request)
+                    val provider = if (selected is com.example.meowmba.core.agent.OmniRoute)
+                        selected.plan(prompt, preferRouteId = preferredChatRouteId()).firstOrNull()?.provider
+                            ?: return@coroutineScope avatarFormFailure("No AI model is configured for avatar creation. Check LLM settings.")
+                        else selected
+                    val inventor = com.example.meowmba.core.agent.tools.AvatarFormInventor { input ->
+                        if (provider is LiteRtProvider) provider.generateStructured(input) else provider.generate(input)
+                    }
+                    val form = withContext(ioDispatcher + stop) {
+                        withTimeout(90_000L) { inventor.invent(request) }
+                    }
+                    kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                    ensureOwner()
+                    // Bounded 32 KB atomic file write + preference selection are serialized
+                    // with cancellation. No suspended late write can resurrect a cancelled form.
+                    store.save(form, request)
+                    applyGeneratedAvatar(form, store.list(), "Now wearing ${form.name}. Saved to Your forms.")
+                    ToolResult.Success("Lumen is now ${form.name}, a generated cartoon interpretation. Saved for reuse; the same brain and reactions continue.")
+                } catch (_: kotlinx.coroutines.TimeoutCancellationException) {
+                    avatarFormFailure("Avatar creation timed out. Your current form is unchanged; try a simpler description.")
+                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    // Provider errors may contain endpoint/auth details; never put them on the avatar.
+                    avatarFormFailure("Could not create and save that cartoon form. Check your selected AI model, try a simpler description, or remove a saved form if all 24 slots are full.")
+                } finally {
+                    if (generation == avatarFormGeneration) {
+                        avatarFormWork = null
+                        _uiState.value = _uiState.value.copy(avatarFormGenerating = false)
+                    }
+                }
+            }
+        }
+
+    private fun applyGeneratedAvatar(form: GeneratedAvatarForm, saved: List<GeneratedAvatarForm>, message: String) {
+        secureStorage?.saveGeneratedAvatarForm(form.id)
+        stopAvatarPerformance()
+        _uiState.value = _uiState.value.copy(avatarStyle = AvatarStyle.LUMEN,
+            generatedAvatarForm = form, savedGeneratedForms = saved, performanceAnimal = null,
+            avatarFormMessage = message, avatarFormError = false, captionText = message).withPanelsClosed()
+    }
+
+    fun selectGeneratedAvatarForm(id: String) {
+        cancelAvatarFormGeneration()
+        try {
+            val store = generatedAvatarStore ?: error("Avatar storage unavailable")
+            val form = store.load(id) ?: error("Saved form missing")
+            applyGeneratedAvatar(form, store.list(), "Now wearing ${form.name}.")
+        } catch (_: Exception) { avatarFormFailure("This saved form could not be opened. Your current avatar is unchanged.") }
+    }
+
+    fun deleteGeneratedAvatarForm(id: String) {
+        cancelAvatarFormGeneration()
+        try {
+            val store = generatedAvatarStore ?: error("Avatar storage unavailable")
+            require(store.delete(id)) { "Saved form missing" }
+            if (_uiState.value.generatedAvatarForm?.id == id) setAvatarAnimal(_uiState.value.avatarAnimal)
+            _uiState.value = _uiState.value.copy(savedGeneratedForms = store.list(),
+                avatarFormMessage = "Saved form removed.", avatarFormError = false)
+        } catch (_: Exception) { avatarFormFailure("Could not remove this saved form. Try again.") }
     }
 
     fun setAppTheme(theme: AppTheme) {

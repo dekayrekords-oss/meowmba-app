@@ -5,12 +5,15 @@ import com.example.meowmba.core.agent.tools.RiskLevel
 import com.example.meowmba.core.agent.tools.ToolRegistry
 import com.example.meowmba.core.agent.tools.ToolResult
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -121,13 +124,18 @@ class AgentOrchestrator(
     // ── Cancellation ────────────────────────────────────────────────────────
 
     fun cancel(taskId: String) {
-        val task = _tasks.value.find { it.id == taskId } ?: return
-        if (task.isTerminal) return
-        approvals.remove(taskId)?.complete(false)
+        cancelTask(taskId, cancelJob = true)
+    }
+
+    /** Cancellation can originate in a tool, a UI control, or the parent scope. */
+    private fun cancelTask(taskId: String, cancelJob: Boolean) {
+        // Mark terminal before waking/cancelling work: an immediate dispatcher
+        // can otherwise report a denied approval or late success over Cancelled.
+        val task = finishTask(taskId, TaskStatus.CANCELLED, null) ?: return
+        if (cancelJob) jobs.remove(taskId)?.cancel()
+        approvals.remove(taskId)?.cancel()
         approvalQueue.removeAll { it.taskId == taskId }
         if (_pendingApproval.value?.taskId == taskId) showNextApproval()
-        jobs.remove(taskId)?.cancel()
-        updateTask(taskId) { it.copy(status = TaskStatus.CANCELLED, completedAt = System.currentTimeMillis()) }
         audit("task.cancelled", task.agentId, taskId, task.title)
         drainQueue(task.agentId)
     }
@@ -138,13 +146,23 @@ class AgentOrchestrator(
         // Reserve the slot before dispatch: multiple submits can happen before
         // the dispatcher runs the first coroutine (and otherwise exceed the limit).
         updateTask(task.id) { it.copy(status = TaskStatus.RUNNING, startedAt = System.currentTimeMillis()) }
-        jobs[task.id] = scope.launch(com.example.meowmba.core.work.ProjectExecutionContext.element(task.projectId, task.conversationId)) {
+        // Register the job before it can run on Main.immediate. Its completion
+        // callback also handles cancellation before the coroutine body starts.
+        val job = scope.launch(com.example.meowmba.core.work.ProjectExecutionContext.element(task.projectId, task.conversationId),
+            start = CoroutineStart.LAZY) {
             try {
                 runTask(task)
-            } finally {
-                jobs.remove(task.id)
+            } catch (cancelled: CancellationException) {
+                cancelTask(task.id, cancelJob = false)
+                throw cancelled
             }
         }
+        jobs[task.id] = job
+        job.invokeOnCompletion { cause ->
+            jobs.remove(task.id, job)
+            if (cause is CancellationException) cancelTask(task.id, cancelJob = false)
+        }
+        job.start()
     }
 
     private suspend fun runTask(task: AgentTask) {
@@ -216,8 +234,8 @@ class AgentOrchestrator(
         // app (several parse model-authored arguments), so the boundary belongs
         // here rather than in each of the two dozen implementations.
         //
-        // CancellationException is deliberately not caught: swallowing it would
-        // break the timeout above and leave tasks un-cancellable.
+        // Cancellation propagates to launchTask, which releases the task slot
+        // and approval state. An ordinary tool timeout remains a failed task.
         val result = try {
             withTimeoutOrNull(tool.definition.timeoutMs) {
                 tool.execute(task.args)
@@ -240,25 +258,33 @@ class AgentOrchestrator(
     }
 
     private fun completeTask(task: AgentTask, output: String) {
-        val finalTask = updateTask(task.id) {
-            it.copy(status = TaskStatus.COMPLETED, result = output, completedAt = System.currentTimeMillis())
-        }
+        val finalTask = finishTask(task.id, TaskStatus.COMPLETED, output) ?: return
         audit("task.complete", task.agentId, task.id, output.take(120))
-        finalTask?.let { onTaskCompleted?.invoke(it) }
+        onTaskCompleted?.invoke(finalTask)
         drainQueue(task.agentId)
     }
 
     private fun failTask(task: AgentTask, error: String) {
-        val finalTask = updateTask(task.id) {
-            it.copy(status = TaskStatus.FAILED, result = error, completedAt = System.currentTimeMillis())
-        }
+        val finalTask = finishTask(task.id, TaskStatus.FAILED, error) ?: return
         audit("task.fail", task.agentId, task.id, error.take(120))
-        finalTask?.let { onTaskCompleted?.invoke(it) }
+        onTaskCompleted?.invoke(finalTask)
         drainQueue(task.agentId)
+    }
+
+    /** The first terminal result owns audit/callback/queue cleanup; late work cannot resurrect it. */
+    private fun finishTask(id: String, status: TaskStatus, result: String?): AgentTask? {
+        while (true) {
+            val before = _tasks.value
+            val task = before.find { it.id == id } ?: return null
+            if (task.isTerminal) return null
+            val finished = task.copy(status = status, result = result, completedAt = System.currentTimeMillis())
+            if (_tasks.compareAndSet(before, before.map { if (it.id == id) finished else it })) return finished
+        }
     }
 
     /** Start the oldest queued task when a concurrency slot frees up. */
     private fun drainQueue(agentId: String) {
+        if (!scope.isActive) return
         val agent = AgentRegistry.byId(agentId) ?: return
         if (runningCount(agentId) >= agent.maxConcurrentTasks) return
         val next = _tasks.value

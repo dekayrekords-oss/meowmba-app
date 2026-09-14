@@ -97,6 +97,15 @@ fun AvatarScreen(
     onAvatarScale: (Float) -> Unit = {},
     habitatMode: Boolean = false,
     onHabitatMode: (Boolean) -> Unit = {},
+    generatedAvatarForm: GeneratedAvatarForm? = null,
+    savedGeneratedForms: List<GeneratedAvatarForm> = emptyList(),
+    avatarFormGenerating: Boolean = false,
+    avatarFormMessage: String? = null,
+    avatarFormError: Boolean = false,
+    onGenerateForm: (String) -> Unit = {},
+    onCancelGenerateForm: () -> Unit = {},
+    onSelectGeneratedForm: (String) -> Unit = {},
+    onDeleteGeneratedForm: (String) -> Unit = {},
 ) {
     var search by rememberSaveable { mutableStateOf("") }
     var category by rememberSaveable { mutableStateOf("New") }
@@ -117,7 +126,8 @@ fun AvatarScreen(
             Spacer(Modifier.height(AvatarSetupTokens.item))
             Box(Modifier.fillMaxWidth().aspectRatio(1.7f).clip(RoundedCornerShape(AvatarSetupTokens.corner))
                 .background(MaterialTheme.colorScheme.surfaceVariant)) { preview() }
-            Text(if (style.isLumen && style != AvatarStyle.FULL_FLY) "${style.label} · ${if (style == AvatarStyle.LUMEN_CAT) AvatarAnimal.CAT.label else animal.label}" else style.label,
+            Text(generatedAvatarForm?.let { "Lumen · ${it.name}" }
+                ?: if (style.isLumen && style != AvatarStyle.FULL_FLY) "${style.label} · ${if (style == AvatarStyle.LUMEN_CAT) AvatarAnimal.CAT.label else animal.label}" else style.label,
                 style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = AvatarSetupTokens.item))
             Text("Selected · changes apply immediately", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             FlowRow(Modifier.padding(top = AvatarSetupTokens.section), horizontalArrangement = Arrangement.spacedBy(AvatarSetupTokens.compact)) {
@@ -135,11 +145,23 @@ fun AvatarScreen(
                     style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 12.dp))
             }
             if (tab == "Look") {
+                Spacer(Modifier.height(AvatarSetupTokens.item))
+                GeneratedAvatarControls(
+                    current = generatedAvatarForm,
+                    saved = savedGeneratedForms,
+                    busy = avatarFormGenerating,
+                    message = avatarFormMessage,
+                    isError = avatarFormError,
+                    onGenerate = onGenerateForm,
+                    onCancel = onCancelGenerateForm,
+                    onSelect = onSelectGeneratedForm,
+                    onDelete = onDeleteGeneratedForm,
+                )
                 SetupSection("Choose an avatar")
             AvatarStyle.entries.forEach { option ->
                 StyleRow(
                     option = option,
-                    selected = option == style,
+                    selected = generatedAvatarForm == null && option == style,
                     onClick = { onSelectStyle(option) },
                 )
                 Spacer(modifier = Modifier.height(10.dp))
@@ -152,11 +174,11 @@ fun AvatarScreen(
                   FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     AvatarAnimal.entries.forEach { option ->
                         val shown = if (style == AvatarStyle.LUMEN_CAT) AvatarAnimal.CAT else animal
-                        FilterChip(selected = shown == option, onClick = { onSelectAnimal(option) },
+                        FilterChip(selected = generatedAvatarForm == null && shown == option, onClick = { onSelectAnimal(option) },
                             label = { Text(option.label) })
                     }
                   }
-                if (style == AvatarStyle.LUMEN && (animal == AvatarAnimal.CLIPPY || animal == AvatarAnimal.WIZARD)) {
+                if (generatedAvatarForm == null && style == AvatarStyle.LUMEN && (animal == AvatarAnimal.CLIPPY || animal == AvatarAnimal.WIZARD)) {
                     Text(if (animal == AvatarAnimal.CLIPPY)
                         "A springy silver paperclip with expressive eyes. Say ‘turn into Clippy’ to switch here any time."
                     else "A starry hat, flowing beard and magic wand. Say ‘become the wizard’ to switch here any time.",
@@ -173,7 +195,7 @@ fun AvatarScreen(
                 Spacer(Modifier.height(12.dp))
             }
             Spacer(modifier = Modifier.height(18.dp))
-            if (style != AvatarStyle.FULL_FLY) {
+            if (style != AvatarStyle.FULL_FLY && generatedAvatarForm == null) {
             Text(
                 text = "Eye color",
                 color = MaterialTheme.colorScheme.onSurface,

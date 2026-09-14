@@ -68,6 +68,14 @@ class SecureStorageManager(val context: Context) {
     /** Style and anatomy are one reversible preference, including legacy Cat migration. */
     fun saveAvatarForm(animalKey: String) {
         sharedPreferences.edit().putString("pref_avatar_animal", animalKey)
+            .remove("pref_generated_avatar_id")
+            .putString("pref_avatar_style", "lumen").apply()
+    }
+
+    /** The validated file is written first; one preference edit then selects it. */
+    fun saveGeneratedAvatarForm(id: String) {
+        require(id.matches(Regex("[a-f0-9]{64}"))) { "Invalid saved avatar ID" }
+        sharedPreferences.edit().putString("pref_generated_avatar_id", id)
             .putString("pref_avatar_style", "lumen").apply()
     }
 
