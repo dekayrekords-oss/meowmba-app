@@ -6,8 +6,10 @@ The official MaleCNS confidence-0.5 graph is converted and verified: 176,422
 annotated neurons, 25,862,574 directed pairs and 125,024,863 anatomical counts.
 Full worker/replay/ablation checks pass; Android has exact graph verification,
 measured 3D body retargeting and a 400 ms full-graph cadence. The preserved
-retained profile supports older phones. Local Android acceptance passed 33
-tests; private server assembly and live bridge acceptance are being finalized.
+retained profile supports older phones. Final Android acceptance passed 129
+tests, and both signed packages preserve all 53 runtime/15 background assets.
+Both graph profiles passed 124 authenticated sensory updates each; the full
+graph is deployed on Meow and Build115 is ready for phone installation.
 Read [MEOW_FULL_GRAPH_INTEGRATION_115_PASS_DOWN.md](neural/MEOW_FULL_GRAPH_INTEGRATION_115_PASS_DOWN.md).
 The phone remains disconnected/last verified Build 112; no installation or
 phone pairing claim. This is fixed-weight point-neuron simulation, not a

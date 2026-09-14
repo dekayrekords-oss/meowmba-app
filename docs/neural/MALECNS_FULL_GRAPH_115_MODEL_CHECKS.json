@@ -1,0 +1,234 @@
+{
+  "scope": "Full graph point-neuron model implementation checks; not biological validation",
+  "identity": {
+    "schema": 1,
+    "graph": "full",
+    "dataset": "male-cns:v1.0",
+    "asset_sha256": "8860e68b59e454d8d4e8bd601dd7a3cb9049d18516f1ea8df34eabe1ae400d08",
+    "asset_size": 79963380,
+    "neurons": 176422,
+    "pairs": 25862574,
+    "synapses": 125024863,
+    "min_pair_synapses": 1,
+    "autapses_removed": false,
+    "roster_sha256": "a21dcf2576c352eda0f4d455683b648ec28272fd7f4918fdfbf2c97aff9df465"
+  },
+  "checks": {
+    "quiet_is_silent": true,
+    "reset_replays_all_neuron_states": true,
+    "observer_does_not_change_neuron_states": true,
+    "sugar_reaches_feeding": true,
+    "bitter_suppresses_sugar": true,
+    "touch_reaches_grooming": true,
+    "loom_reaches_jump": true,
+    "feeding_requires_connections": true,
+    "jump_requires_connections": true
+  },
+  "results": {
+    "quiet/off": [
+      {
+        "label": "off",
+        "scenario": "quiet",
+        "duration_ms": 600,
+        "spikes": 0,
+        "max_active": 0,
+        "state_sha256": "b9be0aa8550919d5009e56ca2686a02f3ff011a24745715117fa8e2d6946f885",
+        "compute_ms": 3.9921,
+        "tick_p95_ms": 3.2025,
+        "real_time_factor": 150.2956,
+        "mean_population_hz": {
+          "MN9": 0.0,
+          "DNp01": 0.0,
+          "TTMn": 0.0,
+          "DNg62": 0.0,
+          "DNge078": 0.0,
+          "prefix:DNg02": 0.0,
+          "DNa02/L": 0.0,
+          "DNa02/R": 0.0
+        }
+      }
+    ],
+    "sugar/reset": [
+      {
+        "label": "reset",
+        "scenario": "sugar",
+        "duration_ms": 600,
+        "spikes": 76564,
+        "max_active": 149057,
+        "state_sha256": "2d190b22ee9d3c8022f54615d07e7b18c81ec9fd680b1e94b40f820b49708e80",
+        "compute_ms": 1352.6385,
+        "tick_p95_ms": 145.9955,
+        "real_time_factor": 0.4436,
+        "mean_population_hz": {
+          "MN9": 73.33333,
+          "DNp01": 0.0,
+          "TTMn": 0.0,
+          "DNg62": 0.0,
+          "DNge078": 0.0,
+          "prefix:DNg02": 0.17241,
+          "DNa02/L": 1.66667,
+          "DNa02/R": 1.66667
+        }
+      },
+      {
+        "label": "after_reset",
+        "scenario": "sugar",
+        "duration_ms": 600,
+        "spikes": 76564,
+        "max_active": 149057,
+        "state_sha256": "2d190b22ee9d3c8022f54615d07e7b18c81ec9fd680b1e94b40f820b49708e80",
+        "compute_ms": 1293.2239,
+        "tick_p95_ms": 153.8183,
+        "real_time_factor": 0.464,
+        "mean_population_hz": {
+          "MN9": 73.33333,
+          "DNp01": 0.0,
+          "TTMn": 0.0,
+          "DNg62": 0.0,
+          "DNge078": 0.0,
+          "prefix:DNg02": 0.17241,
+          "DNa02/L": 1.66667,
+          "DNa02/R": 1.66667
+        }
+      }
+    ],
+    "sugar_bitter/off": [
+      {
+        "label": "off",
+        "scenario": "sugar_bitter",
+        "duration_ms": 600,
+        "spikes": 705156,
+        "max_active": 153621,
+        "state_sha256": "ae9c8335fb2182886b9eac39a96d0e840185b9270e5152435d648379699480ba",
+        "compute_ms": 2265.768,
+        "tick_p95_ms": 242.993,
+        "real_time_factor": 0.2648,
+        "mean_population_hz": {
+          "MN9": 0.0,
+          "DNp01": 0.0,
+          "TTMn": 0.0,
+          "DNg62": 0.0,
+          "DNge078": 0.0,
+          "prefix:DNg02": 0.11494,
+          "DNa02/L": 0.0,
+          "DNa02/R": 0.0
+        }
+      }
+    ],
+    "groom/off": [
+      {
+        "label": "off",
+        "scenario": "groom",
+        "duration_ms": 600,
+        "spikes": 446580,
+        "max_active": 154279,
+        "state_sha256": "b76d7b2043136ee1ea7381bf406bb2ee28638e200ef3db22a35e29374331d20a",
+        "compute_ms": 2125.0836,
+        "tick_p95_ms": 243.125,
+        "real_time_factor": 0.2823,
+        "mean_population_hz": {
+          "MN9": 2.5,
+          "DNp01": 0.0,
+          "TTMn": 0.0,
+          "DNg62": 142.5,
+          "DNge078": 105.83333,
+          "prefix:DNg02": 0.0,
+          "DNa02/L": 1.66667,
+          "DNa02/R": 0.0
+        }
+      }
+    ],
+    "groom/on": [
+      {
+        "label": "on",
+        "scenario": "groom",
+        "duration_ms": 600,
+        "spikes": 446580,
+        "max_active": 154279,
+        "state_sha256": "b76d7b2043136ee1ea7381bf406bb2ee28638e200ef3db22a35e29374331d20a",
+        "compute_ms": 2135.2097,
+        "tick_p95_ms": 243.577,
+        "real_time_factor": 0.281,
+        "mean_population_hz": {
+          "MN9": 2.5,
+          "DNp01": 0.0,
+          "TTMn": 0.0,
+          "DNg62": 142.5,
+          "DNge078": 105.83333,
+          "prefix:DNg02": 0.0,
+          "DNa02/L": 1.66667,
+          "DNa02/R": 0.0
+        }
+      }
+    ],
+    "loom/off": [
+      {
+        "label": "off",
+        "scenario": "loom",
+        "duration_ms": 600,
+        "spikes": 100322,
+        "max_active": 130099,
+        "state_sha256": "762265338f57856ce569d7347f966b203047b1412b91e463c1975410c97ca1be",
+        "compute_ms": 1308.9527,
+        "tick_p95_ms": 126.6977,
+        "real_time_factor": 0.4584,
+        "mean_population_hz": {
+          "MN9": 0.0,
+          "DNp01": 326.66667,
+          "TTMn": 78.33333,
+          "DNg62": 0.0,
+          "DNge078": 0.0,
+          "prefix:DNg02": 0.0,
+          "DNa02/L": 0.0,
+          "DNa02/R": 0.0
+        }
+      }
+    ],
+    "sugar/ablated": [
+      {
+        "label": "ablated",
+        "scenario": "sugar",
+        "duration_ms": 600,
+        "spikes": 10689,
+        "max_active": 44,
+        "state_sha256": "8270848dad431cefc0a6043faba6c10571feb6fb4f4e4a3e0782a028dd790014",
+        "compute_ms": 29.9943,
+        "tick_p95_ms": 14.7948,
+        "real_time_factor": 20.0038,
+        "mean_population_hz": {
+          "MN9": 0.0,
+          "DNp01": 0.0,
+          "TTMn": 0.0,
+          "DNg62": 0.0,
+          "DNge078": 0.0,
+          "prefix:DNg02": 0.0,
+          "DNa02/L": 0.0,
+          "DNa02/R": 0.0
+        }
+      }
+    ],
+    "loom/ablated": [
+      {
+        "label": "ablated",
+        "scenario": "loom",
+        "duration_ms": 600,
+        "spikes": 13105,
+        "max_active": 46,
+        "state_sha256": "47c1ea380e2b788cee2830300f6151e629eb9e0bd7ed926dada4c8d47560c749",
+        "compute_ms": 53.6675,
+        "tick_p95_ms": 20.5783,
+        "real_time_factor": 11.18,
+        "mean_population_hz": {
+          "MN9": 0.0,
+          "DNp01": 0.0,
+          "TTMn": 0.0,
+          "DNg62": 0.0,
+          "DNge078": 0.0,
+          "prefix:DNg02": 0.0,
+          "DNa02/L": 0.0,
+          "DNa02/R": 0.0
+        }
+      }
+    ]
+  }
+}

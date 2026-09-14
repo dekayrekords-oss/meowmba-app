@@ -168,3 +168,41 @@ not run on the disconnected phone. During review, the grooming hand blend was
 corrected to retain its existing IK baseline throughout the transition; switching
 IK off at a threshold could cause a visible right-arm jump. Final package/test
 identity is recorded in the Build 115 verification file after rebuilding.
+
+
+## Final delivery — ready, not installed
+
+Final Android source is `2c94201e89382f19a910853faeec2ad896acbf5c`
+(integration commit `64799bd98f4a09d39b05542cde8f71867e6bccd9`). Final
+server acceptance again passed **129 tests, zero failures/errors/skips**; both
+APK assemblies passed. Package `com.example.meowmba` is debug versionCode115,
+versionName1.3.81; release85 is unchanged. Both signatures use the existing
+`b7850d5fb645df9f5d12525db1b10e457b0ee7f3aa50bbf4294ff31dae3379ff` certificate.
+All 53 protected runtime members and all 15 painted backgrounds match Build114
+by SHA-256 of uncompressed ZIP content. No full brain asset is packaged on Android.
+
+- App: `build-out/habitat/meowmba-115.apk`, 455,335,425 bytes,
+  SHA-256 `1468395a087ee3844d5cf9c102d08975bbcd6010f0162fcb0c0b1e67d12d5588`.
+- Test: `build-out/habitat/tests115.apk`, 2,740,418 bytes,
+  SHA-256 `fc604d9b4f3c847130b7c84bcc1181ff66bb57706df4ed144980914505b2071e`.
+- Compact final evidence: `docs/characters/BUILD_115_VERIFICATION.json`.
+- Full offline state/ablation evidence: `MALECNS_FULL_GRAPH_115_MODEL_CHECKS.json`.
+- Raw worker/live reports: ignored `build-out/habitat/brain115/` and the Meow
+  research directory. These reports contain numeric stimuli and rates, no secrets.
+
+The APK reconstruction first failed because the Mac had insufficient disk space.
+Only the failed output and regenerable `app/build/intermediates` were removed;
+source, original assets, test reports and previous release packages remain.
+`scripts/apk_delta.py apply` now copies payloads in 1 MiB chunks, verifies each
+copy and the complete target hash, and atomically replaces output only after
+success. It avoids holding both large APKs in RAM and cleans partial output on
+failure. Two tests cover correct multi-chunk/literal reconstruction and four
+corruption cases preserving the prior output. This build-tool fix changes no
+Android source and therefore does not require another APK build.
+
+ADB confirmed no attached phone. Build115 is ready but not installed; last
+verified phone remains112. Use in-place `adb install -r` only in the next
+owner-authorized connected session. Do not clear app data, replace pairing
+secrets or claim secure phone-to-Meow, GLES or battery acceptance from the Mac
+self-client. The existing opt-in device test now checks the full graph, as
+explained above. The user has no robot; no physical tests were attempted.

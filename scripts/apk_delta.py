@@ -3,7 +3,7 @@
 manifest BASEAPK MANIFEST; pack NEWAPK MANIFEST PATCH; apply BASEAPK PATCH OUTPUT.
 The patch is a gzip JSON envelope and literals; APK signing bytes are preserved exactly.
 """
-import sys,json,zipfile,struct,hashlib,gzip,base64,pathlib
+import sys,json,zipfile,struct,hashlib,gzip,base64,pathlib,tempfile,os
 
 def digest(b): return hashlib.sha256(b).hexdigest()
 def entries(path):
@@ -33,19 +33,33 @@ def main(a):
   with gzip.open(a[3],'wb',compresslevel=9) as f:f.write(json.dumps(patch,separators=(',',':')).encode())
   print(json.dumps({'target':patch['target'],'reused':reused,'literal':len(b)-reused,'patchBytes':pathlib.Path(a[3]).stat().st_size}));return
  if mode=='apply':
-  b=pathlib.Path(a[1]).read_bytes()
   with gzip.open(a[2],'rb') as f:p=json.load(f)
-  if digest(b)!=p['base']:raise ValueError('wrong base APK')
-  result=bytearray()
-  for part in p['parts']:
-   if 'copy' in part:
-    off=part['copy'];size=part['size']
-    if off<0 or size<0 or off+size>len(b):raise ValueError('invalid copy range')
-    data=b[off:off+size]
-    if digest(data)!=part['sha256']:raise ValueError('copy checksum mismatch')
-   else:data=base64.b64decode(part['data'],validate=True)
-   result.extend(data)
-  if len(result)!=p['size'] or digest(result)!=p['target']:raise ValueError('result checksum mismatch')
-  pathlib.Path(a[3]).write_bytes(result);print(p['target']);return
+  output=pathlib.Path(a[3]);temporary=None
+  try:
+   with open(a[1],'rb') as source:
+    if hashlib.file_digest(source,'sha256').hexdigest()!=p['base']:raise ValueError('wrong base APK')
+    source.seek(0,2);base_size=source.tell()
+    # Stream payload reuse: holding two ~450MB APKs in RAM forced swap on the
+    # build Mac. A sibling temporary file also prevents a failed check leaving
+    # an incomplete package at the requested output path.
+    with tempfile.NamedTemporaryFile(dir=output.parent,prefix=output.name+'.',suffix='.partial',delete=False) as target:
+     temporary=pathlib.Path(target.name);whole=hashlib.sha256();written=0
+     for part in p['parts']:
+      if 'copy' in part:
+       off=part['copy'];size=part['size']
+       if off<0 or size<0 or off+size>base_size:raise ValueError('invalid copy range')
+       source.seek(off);remaining=size;copied=hashlib.sha256()
+       while remaining:
+        data=source.read(min(1024*1024,remaining))
+        if not data:raise ValueError('incomplete base APK')
+        target.write(data);whole.update(data);copied.update(data);written+=len(data);remaining-=len(data)
+       if copied.hexdigest()!=part['sha256']:raise ValueError('copy checksum mismatch')
+      else:
+       data=base64.b64decode(part['data'],validate=True)
+       target.write(data);whole.update(data);written+=len(data)
+     if written!=p['size'] or whole.hexdigest()!=p['target']:raise ValueError('result checksum mismatch')
+   os.replace(temporary,output);temporary=None;print(p['target']);return
+  finally:
+   if temporary is not None:temporary.unlink(missing_ok=True)
  raise ValueError('expected manifest, pack or apply')
 if __name__=='__main__':main(sys.argv[1:])
