@@ -4,19 +4,22 @@
 > The "Recent builds" section is regenerated automatically by scripts/autobuild.sh
 > after every commit; everything else is maintained by hand at each phase.
 
-## Current status — 2026-09-14 (Epic P1 Connections / Invent / Launcher)
+## Current status — 2026-09-15 (Epic P2 Slice D — Vending Machine)
 
-**Active branch:** `feat/epic-p1-connections-invent-launcher` (forked from `codex/computer-p0-build120` @ `54a8aef` invent-OOM fix)  
+**Active branch:** `feat/epic-p2-vending-machine` (from `feat/epic-p1-connections-invent-launcher` @ `751d508`)  
 **Packages:** Preview `com.example.meowmba` · Play signing not mixed  
 **Flags:** `lumen_reflex_v2` / `agentic_runtime_v1` default **OFF**
 
-### P1 shipped
-- Connections & Memory: section cards; saved SSH selectable list; MaleCNS server-brain picker when paired.
-- Become-anything: prompt max 720; refine-current; limb motion guidance; InventReasonLevel (FAST/BALANCED/THOROUGH).
-- App drawer: most-used panel, never-frequent, list view, subsequence search (`DrawerCatalog.subsequenceLetters`).
+### Slice D shipped
+- Memba **Studio** tile → **Vending** (`VendingMachineScreen`): hub → Avatars (simple | workshop), Props (generate | library), Comics & characters archive.
+- Avatar workshop composes structured parts into invent/refine with InventReasonLevel; simple path still uses `GeneratedAvatarControls` / Become-anything.
+- Props: `PropInventor` + `GeneratedPropForm` + `GeneratedPropStore` (`filesDir/companion_props`, max 32).
 
-### Queued follow-ups (explicitly out of this epic)
-- Studio vending / prop generation machine / deep Tamagotchi / background art motion / files cleanup scope.
+### P1 still on parent branch
+- Connections & Memory refresh; Become-anything refine/reason; launcher frequent apps / subsequence search.
+
+### Queued follow-ups
+- Deep Tamagotchi care (Slice E); background art motion + files cleanup scope (Slice F).
 - Computer P0 Fold E2E + Preview APK ship; agentic workspace file tools.
 
 ### Canonical hosts
