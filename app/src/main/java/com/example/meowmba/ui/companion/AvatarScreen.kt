@@ -102,7 +102,8 @@ fun AvatarScreen(
     avatarFormGenerating: Boolean = false,
     avatarFormMessage: String? = null,
     avatarFormError: Boolean = false,
-    onGenerateForm: (String) -> Unit = {},
+    onGenerateForm: (String, InventReasonLevel) -> Unit = { _, _ -> },
+    onRefineForm: (String, InventReasonLevel) -> Unit = { _, _ -> },
     onCancelGenerateForm: () -> Unit = {},
     onSelectGeneratedForm: (String) -> Unit = {},
     onDeleteGeneratedForm: (String) -> Unit = {},
@@ -156,6 +157,7 @@ fun AvatarScreen(
                     onCancel = onCancelGenerateForm,
                     onSelect = onSelectGeneratedForm,
                     onDelete = onDeleteGeneratedForm,
+                    onRefine = onRefineForm,
                 )
                 SetupSection("Choose an avatar")
             AvatarStyle.entries.forEach { option ->

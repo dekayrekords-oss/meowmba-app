@@ -49,11 +49,32 @@ object DrawerCatalog {
     fun matchesSearch(app: DrawerApp, query: String): Boolean {
         val words = query.lowercase().trim().split(WHITESPACE).filter { it.isNotBlank() }
         if (words.isEmpty()) return true
-        val tokens = app.searchText.split(" ")
+        val tokens = app.searchText.split(" ").filter { it.isNotBlank() }
+        val label = app.label.lowercase()
+        val labelWords = label.split(WHITESPACE).filter { it.isNotBlank() }
+        val haystacks = tokens + labelWords + listOf(label, label.replace(" ", ""))
         return words.all { w ->
-            tokens.any { it == w || (w.length >= 3 && it.startsWith(w)) } ||
-                app.label.lowercase().startsWith(w)
+            tokens.any { it == w || (w.length >= 2 && it.startsWith(w)) } ||
+                label.startsWith(w) ||
+                haystacks.any { subsequenceLetters(it, w) }
         }
+    }
+
+    /**
+     * True when every letter of [needle] appears in order inside [haystack]
+     * (not necessarily contiguous). Lets "bamu Hand" find "Bambu Handy".
+     */
+    fun subsequenceLetters(haystack: String, needle: String): Boolean {
+        if (needle.isEmpty()) return true
+        if (needle.length > haystack.length) return false
+        var i = 0
+        for (c in haystack) {
+            if (c == needle[i]) {
+                i++
+                if (i == needle.length) return true
+            }
+        }
+        return false
     }
 
     fun visible(

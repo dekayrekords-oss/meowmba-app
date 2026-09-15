@@ -55,7 +55,7 @@ class GeneratedAvatarSetupUiTest {
     @Test fun draftAndExamplesDoNotChangeAvatarUntilCreate() {
         val requests = mutableListOf<String>()
         rule.setContent { Frame {
-            GeneratedAvatarControls(null, emptyList(), false, null, false, { requests += it }, {}, {}, {})
+            GeneratedAvatarControls(null, emptyList(), false, null, false, { text, _ -> requests += text }, {}, {}, {})
         } }
         rule.onNodeWithTag("generated-avatar-create").performScrollTo().assertIsNotEnabled()
         rule.onNodeWithText("Purple dragon").performScrollTo().performClick()
@@ -69,10 +69,10 @@ class GeneratedAvatarSetupUiTest {
     @Test fun inputIsBoundedAndSubmittedTrimmed() {
         val requests = mutableListOf<String>()
         rule.setContent { Frame {
-            GeneratedAvatarControls(null, emptyList(), false, null, false, { requests += it }, {}, {}, {})
+            GeneratedAvatarControls(null, emptyList(), false, null, false, { text, _ -> requests += text }, {}, {}, {})
         } }
         val field = rule.onNodeWithTag("generated-avatar-request")
-        field.performScrollTo().performTextInput("x".repeat(700))
+        field.performScrollTo().performTextInput("x".repeat(GeneratedAvatarForms.MAX_REQUEST + 40))
         field.assert(SemanticsMatcher.expectValue(SemanticsProperties.EditableText, AnnotatedString("x".repeat(GeneratedAvatarForms.MAX_REQUEST))))
         field.performTextReplacement("   a silver moon robot   ")
         rule.onNodeWithTag("generated-avatar-create").performScrollTo().performClick()
@@ -85,7 +85,7 @@ class GeneratedAvatarSetupUiTest {
         val restoration = StateRestorationTester(rule)
         var requests = 0
         restoration.setContent { Frame {
-            GeneratedAvatarControls(null, emptyList(), false, null, false, { requests++ }, {}, {}, {})
+            GeneratedAvatarControls(null, emptyList(), false, null, false, { _, _ -> requests++ }, {}, {}, {})
         } }
         rule.onNodeWithTag("generated-avatar-request").performScrollTo().performTextInput("A jellyfish astronaut")
         restoration.emulateSavedInstanceStateRestore()
@@ -100,7 +100,7 @@ class GeneratedAvatarSetupUiTest {
         var busy by mutableStateOf(false)
         rule.setContent { Frame {
             GeneratedAvatarControls(dragon, listOf(dragon, cup), busy, "Creating a new form…", false,
-                { requests += it }, { cancelled++ }, { selected = it }, {})
+                { _, _ -> requests += "" }, { cancelled++ }, { selected = it }, {})
         } }
         rule.onNodeWithText("Tiny spaceship").performScrollTo().performClick()
         rule.runOnIdle { busy = true }
@@ -122,7 +122,7 @@ class GeneratedAvatarSetupUiTest {
         rule.setContent { Frame {
             GeneratedAvatarControls(dragon, listOf(dragon), busy,
                 if (failure) "The selected model could not create a form. Your avatar is unchanged." else null,
-                failure, { requests += it }, {}, {}, {})
+                failure, { text, _ -> requests += text }, {}, {}, {})
         } }
         rule.onNodeWithTag("generated-avatar-request").performScrollTo().performTextInput("An emerald jellyfish")
         rule.onNodeWithTag("generated-avatar-create").performScrollTo().performClick()
@@ -140,7 +140,7 @@ class GeneratedAvatarSetupUiTest {
         val selected = mutableListOf<String>()
         val removed = mutableListOf<String>()
         rule.setContent { Frame {
-            GeneratedAvatarControls(dragon, listOf(dragon, cup), false, null, false, {}, {}, { selected += it }, { removed += it })
+            GeneratedAvatarControls(dragon, listOf(dragon, cup), false, null, false, { _, _ -> }, {}, { selected += it }, { removed += it })
         } }
         rule.onNodeWithTag("generated-avatar-select-dragon").performScrollTo().assertIsSelected()
         rule.onNodeWithTag("generated-avatar-select-cup").performScrollTo().assertIsNotSelected().performClick()
@@ -167,7 +167,7 @@ class GeneratedAvatarSetupUiTest {
     @Test @Config(qualifiers = "w768dp-h420dp")
     fun landscapeLargeTextKeepsDraftCancelAndSavedActionsReachable() {
         rule.setContent { Frame(largeText = true) {
-            GeneratedAvatarControls(dragon, listOf(dragon, cup), true, "Creating a tiny spaceship…", false, {}, {}, {}, {})
+            GeneratedAvatarControls(dragon, listOf(dragon, cup), true, "Creating a tiny spaceship…", false, { _, _ -> }, {}, {}, {})
         } }
         rule.onNodeWithTag("generated-avatar-request").performScrollTo().assertIsDisplayed()
         rule.onNodeWithTag("generated-avatar-cancel").performScrollTo().assertIsDisplayed()

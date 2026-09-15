@@ -781,24 +781,29 @@ fun SettingsScreen(
 
             }
             if (page == "Connections & memory") {
-            // Semantic memory (meow-mem0): share on-device facts with Meow's brain.
-            Text("Semantic memory", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-            Spacer(modifier = Modifier.height(8.dp))
-            SettingsTextField(
-                value = mem0ServerUrl,
-                onValueChange = onMem0ServerUrlChange,
-                label = { Text("Semantic memory server URL (optional)") },
-                modifier = Modifier.fillMaxWidth()
-            )
             Text(
-                text = "Meow's shared semantic memory service, e.g. " +
-                    "http://192.168.1.69:11438. New conversation facts are synced " +
-                    "here so the server-side brain can recall them. Leave blank to " +
-                    "keep memory on-device only.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                "Bridge, servers, shared memory and hosted avatar brains.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-
+            Spacer(Modifier.height(12.dp))
+            SettingsSectionCard(
+                title = "Semantic memory",
+                summary = "Optional meow-mem0 service. Leave blank to keep memory on-device only.",
+            ) {
+                SettingsTextField(
+                    value = mem0ServerUrl,
+                    onValueChange = onMem0ServerUrlChange,
+                    label = { Text("Semantic memory server URL") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    "Example: http://192.168.1.69:11438 — new conversation facts sync so a server-side brain can recall them.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(Modifier.height(12.dp))
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -882,15 +887,59 @@ fun SettingsScreen(
 
             }
             if (page == "Connections & memory") {
-            // Desktop Bridge (Phase 6): pair with a computer running meowmba-bridge.py
-            DesktopBridgeSection(
-                secureStorage,
-                usbAutoBridgeEnabled = usbAutoBridgeEnabled,
-                onUsbAutoBridgeChange = onUsbAutoBridgeChange
-            )
+            SettingsSectionCard(
+                title = "Desktop Bridge",
+                summary = "Pair once with the desktop helper. Network first; USB tunnel when the LAN cannot connect.",
+            ) {
+                DesktopBridgeSection(
+                    secureStorage,
+                    usbAutoBridgeEnabled = usbAutoBridgeEnabled,
+                    onUsbAutoBridgeChange = onUsbAutoBridgeChange,
+                    showHeading = false,
+                )
+            }
+            Spacer(Modifier.height(12.dp))
 
-            Spacer(modifier = Modifier.height(24.dp))
-
+            SettingsSectionCard(
+                title = "Server brains",
+                summary = "Hosted neural brains available when a compatible server is paired.",
+            ) {
+                val maleReady = maleCnsServer.paired
+                Text(
+                    if (maleReady) "MaleCNS is paired${maleCnsServer.serverName.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()}."
+                    else "MaleCNS runs the full fly graph on Meow or another compatible server. Pair it under Neural / Lumen, then select it here.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(enabled = maleReady) { onNeuralSubstrate(com.example.meowmba.core.neural.NeuralSubstrate.MALECNS_REMOTE) }
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RadioButton(
+                        selected = neuralSubstrate == com.example.meowmba.core.neural.NeuralSubstrate.MALECNS_REMOTE,
+                        onClick = { if (maleReady) onNeuralSubstrate(com.example.meowmba.core.neural.NeuralSubstrate.MALECNS_REMOTE) },
+                        enabled = maleReady,
+                    )
+                    Column(Modifier.weight(1f)) {
+                        Text("MaleCNS · server brain", color = MaterialTheme.colorScheme.onSurface)
+                        Text(
+                            if (maleReady) "Use the paired MaleCNS graph for avatar reactions."
+                            else "Unavailable until a MaleCNS server is paired.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                if (neuralSubstrate == com.example.meowmba.core.neural.NeuralSubstrate.MALECNS_REMOTE) {
+                    TextButton(onClick = { onNeuralSubstrate(com.example.meowmba.core.neural.NeuralSubstrate.RATE) }) {
+                        Text("Switch back to local Rate brain")
+                    }
+                }
+            }
+            Spacer(Modifier.height(12.dp))
             }
             if (page == "AI & models") {
             OutlinedButton(onClick = { saveProviders(); onOpenModels() }, modifier = Modifier.fillMaxWidth()) { Text("Open LLM settings") }
@@ -967,60 +1016,141 @@ fun SettingsScreen(
             OutlinedButton(onClick = onOpenModels, modifier = Modifier.fillMaxWidth()) { Text("Open LLM model settings") }
             }
             if (page == "Connections & memory") {
-            // SSH servers meow may manage (encrypted, allowlisted commands only)
-            Text("Servers (SSH)", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-            if (savedServers.isNotEmpty()) {
-                Text("Saved: " + savedServers.joinToString(", "), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f), fontSize = 12.sp)
-            }
-            SettingsTextField(
-                value = sshName, onValueChange = { sshName = it },
-                label = { Text("Server name (how you'll refer to it, e.g. meow-nb)") },
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            SettingsTextField(
-                value = sshHost, onValueChange = { sshHost = it },
-                label = { Text("Host (IP or hostname)") },
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            SettingsTextField(
-                value = sshPort, onValueChange = { sshPort = it },
-                label = { Text("Port") },
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            SettingsTextField(
-                value = sshUser, onValueChange = { sshUser = it },
-                label = { Text("Username") },
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            OutlinedTextField(
-                value = sshPassword, onValueChange = { sshPassword = it },
-                label = { Text("Password (stored encrypted on this phone only)") },
-                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            OutlinedButton(
-                onClick = {
-                    val port = sshPort.toIntOrNull() ?: 22
-                    if (sshName.isNotBlank() && sshHost.isNotBlank() && sshUser.isNotBlank()) {
-                        sshRegistry.save(
-                            com.example.meowmba.core.ssh.SshHost(
-                                name = sshName.trim(), host = sshHost.trim(),
-                                port = port, user = sshUser.trim(), password = sshPassword,
-                            )
-                        )
-                        savedServers = sshRegistry.list().map { it.name }
-                        sshHost = ""; sshUser = ""; sshPassword = ""
+            SettingsSectionCard(
+                title = "Servers (SSH)",
+                summary = "Previously connected hosts stay saved. Tap one to edit, or add a new server. Passwords stay encrypted on this phone.",
+            ) {
+                val hosts = remember(savedServers) { sshRegistry.list() }
+                if (hosts.isEmpty()) {
+                    Text("No saved servers yet.", style = MaterialTheme.typography.bodySmall)
+                } else {
+                    Text("Saved connections", style = MaterialTheme.typography.titleSmall)
+                    hosts.forEach { host ->
+                        val selected = sshName.equals(host.name, ignoreCase = true) && sshHost == host.host
+                        Surface(
+                            shape = MaterialTheme.shapes.medium,
+                            color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    sshName = host.name
+                                    sshHost = host.host
+                                    sshPort = host.port.toString()
+                                    sshUser = host.user
+                                    sshPassword = host.password
+                                },
+                        ) {
+                            Row(
+                                Modifier.fillMaxWidth().padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(host.name, style = MaterialTheme.typography.titleSmall)
+                                    Text(
+                                        "${host.user}@${host.host}:${host.port}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                TextButton(onClick = {
+                                    sshRegistry.delete(host.name)
+                                    savedServers = sshRegistry.list().map { it.name }
+                                    if (sshName.equals(host.name, ignoreCase = true)) {
+                                        sshName = ""; sshHost = ""; sshUser = ""; sshPassword = ""
+                                    }
+                                }) { Text("Remove") }
+                            }
+                        }
                     }
-                },
-            ) { Text("Save server") }
+                }
+                Text(
+                    if (hosts.any { it.name.equals(sshName, ignoreCase = true) }) "Edit connection" else "Add connection",
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                SettingsTextField(
+                    value = sshName, onValueChange = { sshName = it },
+                    label = { Text("Server name (e.g. meow-nb)") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                SettingsTextField(
+                    value = sshHost, onValueChange = { sshHost = it },
+                    label = { Text("Host (IP or hostname)") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                SettingsTextField(
+                    value = sshPort, onValueChange = { sshPort = it },
+                    label = { Text("Port") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                SettingsTextField(
+                    value = sshUser, onValueChange = { sshUser = it },
+                    label = { Text("Username") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = sshPassword, onValueChange = { sshPassword = it },
+                    label = { Text("Password (encrypted on this phone)") },
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = {
+                            val port = sshPort.toIntOrNull() ?: 22
+                            if (sshName.isNotBlank() && sshHost.isNotBlank() && sshUser.isNotBlank()) {
+                                sshRegistry.save(
+                                    com.example.meowmba.core.ssh.SshHost(
+                                        name = sshName.trim(), host = sshHost.trim(),
+                                        port = port, user = sshUser.trim(), password = sshPassword,
+                                    ),
+                                )
+                                savedServers = sshRegistry.list().map { it.name }
+                                sshPassword = ""
+                            }
+                        },
+                    ) { Text("Save server") }
+                    TextButton(onClick = {
+                        sshName = ""; sshHost = ""; sshPort = "22"; sshUser = ""; sshPassword = ""
+                    }) { Text("Clear form") }
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
 
-            Spacer(modifier = Modifier.height(24.dp))
-
+            if (connectionProfiles.isNotEmpty() || agenticRuntimeV1) {
+                SettingsSectionCard(
+                    title = "Agentic connection profiles",
+                    summary = "SSH targets used when task automation is enabled. Edit under Neural / Lumen → Computer & task tools, or pick a saved profile below to reuse host details.",
+                ) {
+                    if (connectionProfiles.isEmpty()) {
+                        Text("No agentic profiles yet. Enable agentic runtime in Neural / Lumen to add one.", style = MaterialTheme.typography.bodySmall)
+                    } else {
+                        connectionProfiles.forEach { profile ->
+                            Surface(
+                                shape = MaterialTheme.shapes.medium,
+                                color = MaterialTheme.colorScheme.surface,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        sshName = profile.displayName
+                                        sshHost = profile.host
+                                        sshPort = profile.port.toString()
+                                        sshUser = profile.username
+                                    },
+                            ) {
+                                Column(Modifier.padding(12.dp)) {
+                                    Text(profile.displayName, style = MaterialTheme.typography.titleSmall)
+                                    Text(
+                                        "${profile.username}@${profile.host}:${profile.port}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+            }
             }
             Spacer(modifier = Modifier.height(40.dp))
             
@@ -1041,7 +1171,8 @@ fun SettingsScreen(
 fun DesktopBridgeSection(
     secureStorage: SecureStorageManager,
     usbAutoBridgeEnabled: Boolean = false,
-    onUsbAutoBridgeChange: ((Boolean) -> Unit)? = null
+    onUsbAutoBridgeChange: ((Boolean) -> Unit)? = null,
+    showHeading: Boolean = true,
 ) {
     val bridgeManager = remember { DesktopBridgeManager(secureStorage) }
     var paired by remember { mutableStateOf(bridgeManager.pairedBridge()) }
@@ -1051,9 +1182,11 @@ fun DesktopBridgeSection(
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    Text("Desktop Bridge", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-    Spacer(modifier = Modifier.height(4.dp))
-    Text("Pair once with the desktop helper's code. If the network cannot connect, Meow tries the same trusted Mac through a configured USB tunnel. Keep the helper running; USB debugging and the Mac tunnel must be enabled.", style = MaterialTheme.typography.bodySmall)
+    if (showHeading) {
+        Text("Desktop Bridge", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+        Spacer(modifier = Modifier.height(4.dp))
+        Text("Pair once with the desktop helper's code. If the network cannot connect, Meow tries the same trusted Mac through a configured USB tunnel. Keep the helper running; USB debugging and the Mac tunnel must be enabled.", style = MaterialTheme.typography.bodySmall)
+    }
     Text("Bridge 0.9 supports Logic workflows through its menus, track and region controls, plugin Controls view and export dialogs. Each edit has an approval and audit receipt. WAV checks include loudness and true peak when the Mac has libebur128. Enable Logic in the Mac helper and grant Accessibility. Custom controls and finished mixes still need review.", style = MaterialTheme.typography.bodySmall)
 
     val current = paired
@@ -1623,6 +1756,21 @@ internal fun ProviderEndpointField(
     )
 }
 
+
+
+@Composable
+private fun SettingsSectionCard(title: String, summary: String, content: @Composable () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+            Text(summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            content()
+        }
+    }
+}
 
 /** Route-id → display label for the "Default brain" selector. */
 private fun brainLabel(id: String): String = BRAIN_CHOICES.firstOrNull { it.first == id }?.second ?: "Auto"

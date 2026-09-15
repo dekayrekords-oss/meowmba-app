@@ -56,8 +56,8 @@ class AvatarFormToolTest {
         assertEquals("arctic fox", AvatarFormRequest.parse("turn into an arctic fox"))
         assertEquals("ring-tailed lemur", AvatarFormRequest.parse("look like a ring-tailed lemur"))
         assertEquals("very very very large mythical dragon", AvatarFormRequest.parse("become a very very very large mythical dragon"))
-        assertNull(AvatarFormRequest.parse("become a " + "x".repeat(501)))
-        assertNull(AvatarFormRequest.parse(" ".repeat(651) + "be a cat"))
+        assertNull(AvatarFormRequest.parse("become a " + "x".repeat(AvatarFormRequest.MAX_DESCRIPTION_LENGTH + 1)))
+        assertNull(AvatarFormRequest.parse(" ".repeat(AvatarFormRequest.MAX_DESCRIPTION_LENGTH + 151) + "be a cat"))
     }
 
     @Test fun `casual pets third party changes and quoted wishes are not form requests`() {

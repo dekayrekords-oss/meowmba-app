@@ -39,6 +39,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.example.meowmba.ui.theme.Button
 import com.example.meowmba.ui.theme.FilterChip
+import com.example.meowmba.ui.theme.OutlinedButton
 import com.example.meowmba.ui.theme.Surface
 
 /** A draft is never applied on typing or restoration. Only explicit Create/selection changes the form. */
@@ -50,18 +51,30 @@ internal fun GeneratedAvatarControls(
     busy: Boolean,
     message: String?,
     isError: Boolean,
-    onGenerate: (String) -> Unit,
+    onGenerate: (String, InventReasonLevel) -> Unit,
     onCancel: () -> Unit,
     onSelect: (String) -> Unit,
     onDelete: (String) -> Unit,
+    onRefine: (String, InventReasonLevel) -> Unit = { _, _ -> },
+    initialReasonLevel: InventReasonLevel = InventReasonLevel.BALANCED,
 ) {
     var request by rememberSaveable { mutableStateOf("") }
+    var refineRequest by rememberSaveable { mutableStateOf("") }
+    var reasonKey by rememberSaveable { mutableStateOf(initialReasonLevel.name) }
+    val reasonLevel = InventReasonLevel.fromKey(reasonKey)
     val keyboard = LocalSoftwareKeyboardController.current
     val canGenerate = request.isNotBlank() && !busy
+    val canRefine = current != null && refineRequest.isNotBlank() && !busy
     val submit = {
         if (canGenerate) {
             keyboard?.hide()
-            onGenerate(request.trim())
+            onGenerate(request.trim(), reasonLevel)
+        }
+    }
+    val submitRefine = {
+        if (canRefine) {
+            keyboard?.hide()
+            onRefine(refineRequest.trim(), reasonLevel)
         }
     }
     Surface(
@@ -72,10 +85,22 @@ internal fun GeneratedAvatarControls(
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Become anything", style = MaterialTheme.typography.titleLarge)
             Text(
-                "Describe a creature, character or object. Your selected AI model draws a new cartoon form for Lumen, with the same brain and memory.",
+                "Describe a creature, character or object. Your selected AI model draws a new cartoon form for Lumen, with the same brain and memory. Forms include movable parts (head, body, arms, legs, tail) when the subject has them.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Text("Reason level", style = MaterialTheme.typography.titleSmall)
+            Text(reasonLevel.detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.testTag("generated-avatar-reason")) {
+                InventReasonLevel.entries.forEach { level ->
+                    FilterChip(
+                        selected = reasonLevel == level,
+                        enabled = !busy,
+                        onClick = { reasonKey = level.name },
+                        label = { Text(level.label) },
+                    )
+                }
+            }
             OutlinedTextField(
                 value = request,
                 onValueChange = { request = it.take(GeneratedAvatarForms.MAX_REQUEST) },
@@ -85,7 +110,7 @@ internal fun GeneratedAvatarControls(
                 placeholder = { Text("A purple dragon with tiny wings") },
                 supportingText = { Text("${request.length}/${GeneratedAvatarForms.MAX_REQUEST} · Describe colors and distinctive features.") },
                 minLines = 2,
-                maxLines = 5,
+                maxLines = 6,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { submit() }),
             )
@@ -104,6 +129,32 @@ internal fun GeneratedAvatarControls(
                 enabled = canGenerate,
                 modifier = Modifier.fillMaxWidth().testTag("generated-avatar-create"),
             ) { Text(if (busy) "Creating your form…" else "Create & become") }
+            if (current != null) {
+                Text("Refine current form", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Wearing ${current.name}. Add another prompt to iterate this drawing instead of starting over.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedTextField(
+                    value = refineRequest,
+                    onValueChange = { refineRequest = it.take(GeneratedAvatarForms.MAX_REQUEST) },
+                    modifier = Modifier.fillMaxWidth().testTag("generated-avatar-refine"),
+                    enabled = !busy,
+                    label = { Text("How should this form change?") },
+                    placeholder = { Text("Add a longer curling tail and peach wing membranes") },
+                    supportingText = { Text("${refineRequest.length}/${GeneratedAvatarForms.MAX_REQUEST}") },
+                    minLines = 2,
+                    maxLines = 4,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { submitRefine() }),
+                )
+                OutlinedButton(
+                    onClick = submitRefine,
+                    enabled = canRefine,
+                    modifier = Modifier.fillMaxWidth().testTag("generated-avatar-refine-submit"),
+                ) { Text(if (busy) "Refining…" else "Refine & keep wearing") }
+            }
             if (busy) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth().testTag("generated-avatar-progress"))
                 Text("Your current avatar stays here while the new form is created.", style = MaterialTheme.typography.bodySmall)

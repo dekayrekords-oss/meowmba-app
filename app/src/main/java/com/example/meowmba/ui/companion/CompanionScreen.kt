@@ -79,6 +79,7 @@ fun CompanionScreen(
     // shared overlay layer, so they live at the screen root.
     val pinnedApps by viewModel.pinnedPackages.collectAsState()
     val drawerFolders by viewModel.drawerFolders.collectAsState()
+    val drawerUsage by viewModel.drawerUsage.collectAsState()
 
     // Foldable split: on the unfolded inner display (wide, >=600dp) the
     // agent browser lives in the right half while the companion keeps the
@@ -740,6 +741,7 @@ fun CompanionScreen(
                 avatarFormMessage = uiState.avatarFormMessage,
                 avatarFormError = uiState.avatarFormError,
                 onGenerateForm = viewModel::createAvatarForm,
+                onRefineForm = viewModel::refineAvatarForm,
                 onCancelGenerateForm = viewModel::cancelAvatarFormGeneration,
                 onSelectGeneratedForm = viewModel::selectGeneratedAvatarForm,
                 onDeleteGeneratedForm = viewModel::deleteGeneratedAvatarForm,
@@ -1128,6 +1130,16 @@ fun CompanionScreen(
                 onRemoveFromFolder = { id, pkg -> viewModel.removeAppFromDrawerFolder(id, pkg) },
                 onRenameFolder = { id, name -> viewModel.renameDrawerFolder(id, name) },
                 onDeleteFolder = { viewModel.deleteDrawerFolder(it) },
+                frequentPackages = DrawerUsage.frequentPackages(
+                    drawerUsage,
+                    installed = drawerUsage.launches.keys,
+                ),
+                neverFrequentPackages = drawerUsage.neverFrequent,
+                onHideFromFrequent = viewModel::hideFromFrequentApps,
+                onSetNeverFrequent = viewModel::setNeverFrequentApp,
+                onAllowFrequent = viewModel::allowFrequentApp,
+                onRecordLaunch = viewModel::recordDrawerLaunch,
+
                 onSubmitQuery = { raw, count, label ->
                     viewModel.submitDrawerQuery(raw, count, label)
                 },
