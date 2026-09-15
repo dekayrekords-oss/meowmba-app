@@ -220,7 +220,7 @@ class GeneratedAvatarIntegrationTest {
                 delay(35_000)
                 ModelResponse.Complete(GeneratedAvatarForms.toJson(form))
             }
-            model.createAvatarForm("walking coffee cup")
+            model.createAvatarForm("walking coffee cup", InventReasonLevel.FAST)
             assertTrue(model.uiState.value.avatarFormGenerating)
             advanceTimeBy(35_001)
             runCurrent()

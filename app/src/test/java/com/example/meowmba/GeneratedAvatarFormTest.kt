@@ -67,7 +67,7 @@ class GeneratedAvatarFormTest {
     @Test fun rejectsUnsupportedVersionHugePayloadOrTrailingInstructions() {
         rejects(json().put("version", 2))
         rejects(json().put("name", "x".repeat(61)))
-        rejects(json().put("description", "x".repeat(501)))
+        rejects(json().put("description", "x".repeat(GeneratedAvatarForms.MAX_REQUEST + 1)))
         assertThrows(GeneratedAvatarForms.SpecException::class.java) { GeneratedAvatarForms.parse(" ".repeat(GeneratedAvatarForms.MAX_JSON + 1)) }
         assertThrows(GeneratedAvatarForms.SpecException::class.java) { GeneratedAvatarForms.parse(json().toString() + " execute this") }
         assertThrows(GeneratedAvatarForms.SpecException::class.java) { GeneratedAvatarForms.parse("[]") }

@@ -105,7 +105,7 @@ class AvatarFormToolTest {
         assertEquals(RiskLevel.SAFE, definition.riskLevel)
         assertEquals(setOf(ToolEnvironment.PHONE), definition.environments)
         assertEquals(ConfirmationPolicy.NONE, definition.confirmationPolicy)
-        assertEquals(100_000L, definition.timeoutMs)
+        assertEquals(130_000L, definition.timeoutMs)
         assertTrue(definition.requiredPermissions.isEmpty())
         assertTrue(definition.auditLogged)
     }
