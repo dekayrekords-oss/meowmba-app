@@ -45,3 +45,5 @@ Overheating is not resolved. Prior free OpenRouter generation returned keepalive
 Evidence directory: `/Users/prog/Meowmba-Releases/release129-20260914/`.
 Release build directory: `/home/prog/meowmba-release129-20260914` (isolated, pinned native sources, existing external signing and Meta SDK configuration).
 Existing Play destination: `com.meow.meowmba`, closed-testing Alpha. Upload/submission/availability are separate states and must be recorded from actual results.
+
+Final state: build130 uploaded, processed, and submission confirmed by Play's **Changes in review** heading. Exactly one Alpha rollout change was submitted; no production/internal track changes. Quick checks and Google approval remain pending. The private PR is ready for review and remains open; no merge was requested or performed.

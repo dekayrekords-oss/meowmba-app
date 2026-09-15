@@ -11,4 +11,12 @@ Built on Meow in `/home/prog/meowmba-release129-20260914` from branch `codex/rel
 
 All packaged native libraries pass the 16 KB ELF alignment check; required voice/image JNI libraries and image exports are present. All 61 assets match the installed phone122 baseline. The debug package preserves all 74 native/model entries. Release additionally contains the required Meta wearable SDK.
 
-Play destination remains the existing closed-testing Alpha track. The owner's requested realistic agent scenario passed on preview130; see `RELEASE_1.3.82_ACCEPTANCE.md`. Build130 upload has begun. A valid signed artifact is not proof of store acceptance, review submission or tester availability; record the final console result separately.
+Play destination remains the existing closed-testing Alpha track. The owner's requested realistic agent scenario passed on preview130; see `RELEASE_1.3.82_ACCEPTANCE.md`.
+
+## Confirmed Play submission, 2026-09-14
+
+Uploaded and processed version130 (1.3.82). Play showed zero release errors and zero lost supported devices. One non-blocking warning reports a significant increase in download size. Retained the required runtimes; size reduction remains follow-up work.
+
+Saved the existing Alpha track's full rollout (100%), then clicked **Submit 1 change for review** and confirmed **Send changes for review**. The console now shows **Changes in review**, with exactly one change: **1.3.82 – Computer and business-agent reliability**, **Closed testing - Alpha**, **Start full rollout**. Managed publishing remains off. Quick checks were still running (up to 14 minutes shown) when submission was confirmed. Google review/approval and tester availability are pending; do not describe this as already live or as a production rollout.
+
+Console: https://play.google.com/console/u/0/developers/5214154317103934390/app/4972949930318434862/publishing

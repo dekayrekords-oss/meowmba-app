@@ -27,7 +27,20 @@
       "recoveredFrom": "initial CSV action with missing arguments"
     }
   },
-  "play": "Upload started to existing closed-testing Alpha; submission pending",
+  "play": {
+    "status": "Changes in review",
+    "track": "Closed testing - Alpha",
+    "versionCode": 130,
+    "rolloutPercent": 100,
+    "submittedChanges": 1,
+    "lostSupportedDevices": 0,
+    "warnings": [
+      "Increased download size"
+    ],
+    "quickChecks": "pending",
+    "googleApproval": "pending",
+    "liveForTesters": false
+  },
   "release": {
     "versionCode": 130,
     "versionName": "1.3.82",
