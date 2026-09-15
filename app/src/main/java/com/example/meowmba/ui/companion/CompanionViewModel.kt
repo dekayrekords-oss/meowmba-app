@@ -2886,6 +2886,7 @@ class CompanionViewModel(
             ) {
                 _uiState.value = _uiState.value.copy(
                     agenticPresenceHint = null,
+                    agenticDismissibleRevision = null,
                     agenticPendingApprovalGoalId = null,
                     agenticPendingApprovalTitle = null,
                 )
@@ -2893,14 +2894,29 @@ class CompanionViewModel(
             return
         }
         val runtime = AgenticRuntime.from(storage.context)
-        val presence = CompanionAgenticHooks.fromRuntime(runtime)
+        val acknowledged = storage.getPreference("acknowledged_task_notices").orEmpty()
+            .lineSequence().filter { it.isNotBlank() }.toSet()
+        val presence = CompanionAgenticHooks.fromRuntime(runtime, acknowledged)
         val waiting = runtime.listWaitingApproval().firstOrNull()
         _uiState.value = _uiState.value.copy(
             agenticPresenceHint = presence.hint.ifBlank { null },
+            agenticDismissibleRevision = presence.dismissibleRevision,
             agenticPendingApprovalGoalId = waiting?.id,
             agenticPendingApprovalTitle = waiting?.title,
         )
     }
+
+    /** A notice acknowledgement does not approve, retry, cancel or erase the task. */
+    fun dismissAgenticPresenceHint() {
+        val revision = _uiState.value.agenticDismissibleRevision ?: return
+        val storage = secureStorage ?: return
+        val previous = storage.getPreference("acknowledged_task_notices").orEmpty()
+            .lineSequence().filter { it.isNotBlank() && it != revision }.toList()
+        storage.savePreference("acknowledged_task_notices", (previous + revision).takeLast(100).joinToString("\n"))
+        refreshAgenticPresenceHint()
+    }
+
+    fun openAgenticTaskDetails() = openBrainSettingsCategory("Neural / Lumen")
 
     fun approveAgenticGoal(goalId: String) {
         val storage = secureStorage ?: return

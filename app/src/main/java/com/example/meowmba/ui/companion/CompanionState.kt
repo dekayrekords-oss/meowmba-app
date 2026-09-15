@@ -442,6 +442,7 @@ data class CompanionState(
      * Empty when flag OFF. Does not drive SSH or Lumen frame loop.
      */
     val agenticPresenceHint: String? = null,
+    val agenticDismissibleRevision: String? = null,
     /**
      * Short Lumen reflex summary when lumen_reflex_v2 is ON (e.g. face · talk).
      * Null when flag OFF or nothing notable. Does not drive SSH.

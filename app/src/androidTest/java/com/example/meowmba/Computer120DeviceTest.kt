@@ -50,6 +50,12 @@ class Computer120DeviceTest {
                 awaitStopped()
                 val success = awaitReply("${marker}_verified")
                 assertTrue(success, success.contains("Computer completed"))
+                // The actual Computer host creates, edits and reads a unique project file.
+                val workspace = "meow-acceptance-$marker"
+                scenario.onActivity { vm.runOnComputer("mkdir -p $workspace && printf ${marker}_draft > $workspace/draft.txt && printf _edited >> $workspace/draft.txt && cat $workspace/draft.txt && rm $workspace/draft.txt && rmdir $workspace") }
+                awaitStopped()
+                val edited = awaitReply("${marker}_draft_edited")
+                assertTrue(edited, edited.contains("Computer completed"))
                 scenario.onActivity { vm.runOnComputer("printf ${marker}_failed; exit 7") }
                 awaitStopped()
                 val failure = awaitReply("${marker}_failed")
@@ -66,7 +72,10 @@ class Computer120DeviceTest {
                 assertEquals(camera, storage.getBooleanPreference("camera_enabled", false))
             } finally {
                 scenario.onActivity { vm.cancelAgenticComputerChat(); vm.setComputerPowerState(power) }
+                val runtime = com.example.meowmba.core.agentic.AgenticRuntime.from(context)
+                runtime.listOpenGoals().filter { it.title.contains(marker) }.forEach { runtime.cancelGoal(it.id) }
                 flags.setAgenticRuntimeV1(wasEnabled)
+                scenario.onActivity { vm.refreshAgenticPresenceHint() }
             }
         }
     }

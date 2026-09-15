@@ -668,6 +668,8 @@ fun CompanionScreen(
         ) {
             PresenceHintChip(
                 hint = presenceHint,
+                onReview = if (uiState.agenticPresenceHint != null) viewModel::openAgenticTaskDetails else null,
+                onDismiss = if (uiState.agenticDismissibleRevision != null) viewModel::dismissAgenticPresenceHint else null,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .safeDrawingPadding()

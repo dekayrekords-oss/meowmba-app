@@ -1,6 +1,9 @@
 package com.example.meowmba.ui.companion
 
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import com.example.meowmba.ui.theme.Surface
@@ -19,6 +22,8 @@ import androidx.compose.ui.unit.sp
 fun PresenceHintChip(
     hint: String,
     modifier: Modifier = Modifier,
+    onReview: (() -> Unit)? = null,
+    onDismiss: (() -> Unit)? = null,
 ) {
     Surface(
         modifier = modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -26,13 +31,17 @@ fun PresenceHintChip(
         shape = RoundedCornerShape(20.dp),
         tonalElevation = 2.dp,
     ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
             text = hint,
             color = Color.White,
             fontSize = 12.sp,
             style = MaterialTheme.typography.labelMedium,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            modifier = Modifier.weight(1f, fill = false).padding(horizontal = 12.dp, vertical = 6.dp),
             maxLines = 2,
         )
+        onReview?.let { TextButton(onClick = it) { Text("Review", color = Color.White) } }
+        onDismiss?.let { TextButton(onClick = it) { Text("Dismiss", color = Color.White) } }
+        }
     }
 }
