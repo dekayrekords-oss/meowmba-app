@@ -1,0 +1,90 @@
+{
+  "date": "2026-09-15",
+  "versionCode": 135,
+  "versionName": "1.3.82",
+  "sourceBase": "a668e0e00056af57d024300ae151d2e514e17c8c",
+  "sourceFiles": "source-files.json",
+  "sourceMatch": {
+    "mac": true,
+    "meowDebug": true,
+    "meowRelease": true,
+    "files": 17
+  },
+  "jvm": {
+    "suites": 365,
+    "tests": 2546,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "newTests": 8,
+  "build": {
+    "debug": "passed",
+    "androidTest": "passed",
+    "release": "passed",
+    "releaseVitalLint": "passed",
+    "debugElapsedSeconds": 95,
+    "releaseElapsedSeconds": 112
+  },
+  "runtime": {
+    "debug": {
+      "baseline": "meow-preview134.apk",
+      "candidate": "meow-preview135.apk",
+      "protectedEntries": 75,
+      "missing": [],
+      "changed": [],
+      "generatedProfilesChanged": [],
+      "apkSha256": "c1e40dbd39fdef9f1ffcfc7339ed2664204da4a73bb6472b55388346a0f6791e",
+      "passed": true
+    },
+    "release": {
+      "baseline": "meowmba-1.3.82-code134-release.apk",
+      "candidate": "meowmba-1.3.82-code135-release.apk",
+      "protectedEntries": 149,
+      "missing": [],
+      "changed": [],
+      "generatedProfilesChanged": [
+        "assets/dexopt/baseline.prof",
+        "assets/dexopt/baseline.profm"
+      ],
+      "apkSha256": "793eda54698c6897349d9af40d4d154cc99056a98260ec56a4cc173dc9b7a1e5",
+      "passed": true
+    }
+  },
+  "phone": {
+    "serial": "RFCY61NJEVM",
+    "transport": "USB",
+    "regularPackage": "com.meow.meowmba",
+    "regularInstalledCode": 135,
+    "regularLastUpdateTime": "2026-09-15 14:36:53",
+    "debugInstalledCode": 135,
+    "debugLastUpdateTime": "2026-09-15 14:34:40",
+    "install": "in-place -r; no data clearing",
+    "releaseCertificateSha256": "2103e4b14acf74a462218b25f2a04419856c5c2648d13db14f6ff8c4fa247fc0",
+    "interactivePackage": "com.example.meowmba",
+    "observed": [
+      "Computer first-row menu tile",
+      "Computer & task tools hub",
+      "Separate phone/server setup choice",
+      "Phone setup Step 1 of 3",
+      "Installed Termux detected"
+    ],
+    "changedPreferences": false,
+    "externalActions": "No server connection/test/install, task execution, key entry or Termux launch. Existing navigation overlay left alone."
+  },
+  "nativePreviews": [
+    "hub-light",
+    "phone-prepare-dark",
+    "server-checked-dark",
+    "server-large-text",
+    "power-landscape",
+    "menu-light"
+  ],
+  "limits": [
+    "UI server tests use synthetic callbacks, not a new live SSH installation.",
+    "Minified release installed and signature verified; interactive walkthrough used preview package.",
+    "No new thermal endurance, voice accuracy or full Logic editing acceptance."
+  ],
+  "play": "Recorded code130 Alpha submission unchanged; no upload in this task",
+  "artifacts": "/Users/prog/Meowmba-Releases/computer135-20260915"
+}

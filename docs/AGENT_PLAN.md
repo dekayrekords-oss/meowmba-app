@@ -1,5 +1,14 @@
 # Agent execution plan — immersive companion revision
 
+## September 15: focused Computer hub and setup — Build 135
+
+Computer is now a first-row menu tile and a dedicated Settings destination.
+Its hub separates setup, tasks/approvals, task AI, saved connections, power and
+diagnostics. Phone/server setup uses three steps with collapsed advanced fields,
+saved non-secret drafts and explicit connection verification before installation.
+See [COMPUTER_SETUP_135_PASS_DOWN.md](COMPUTER_SETUP_135_PASS_DOWN.md) and the
+matching verification receipts for tests, packaging and phone checks.
+
 ## September 15: stationary habitats and Care switch — Build 134
 
 Care switches between saved Backdrop and Habitat modes. Painted room images

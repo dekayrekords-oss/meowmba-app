@@ -458,6 +458,8 @@ data class CompanionState(
     val computerPowerState: com.example.meowmba.core.config.ComputerPowerState =
         com.example.meowmba.core.config.ComputerPowerState.Idle,
     val computerIdleMinutes: Int = 5,
+    val computerSettingsRevision: Long = 0,
+    val computerVerifiedProfile: com.example.meowmba.core.agentic.ConnectionProfile? = null,
     val computerSetupStatus: com.example.meowmba.core.computer.ComputerSetupStatus =
         com.example.meowmba.core.computer.ComputerSetupStatus.NotSetUp,
     val computerStatusDetail: String = "",

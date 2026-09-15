@@ -103,6 +103,7 @@ fun TileItem(item: MembaTile, onClick: () -> Unit) {
 data class MembaTile(val name: String, val icon: ImageVector, val color: Color)
 
 val tileItems: List<MembaTile> @Composable get() = listOf(
+    MembaTile("Computer", Icons.Default.Computer, MaterialTheme.colorScheme.primary),
     MembaTile("Memory", Icons.Default.Terminal, MaterialTheme.colorScheme.primary),
     MembaTile("Files", Icons.Default.FolderOpen, MaterialTheme.colorScheme.secondary),
     MembaTile("Vending", Icons.Default.Storefront, MaterialTheme.colorScheme.tertiary),

@@ -2916,7 +2916,7 @@ class CompanionViewModel(
         refreshAgenticPresenceHint()
     }
 
-    fun openAgenticTaskDetails() = openBrainSettingsCategory("Neural / Lumen")
+    fun openAgenticTaskDetails() = openComputerTools()
 
     fun approveAgenticGoal(goalId: String) {
         val storage = secureStorage ?: return
@@ -2942,6 +2942,7 @@ class CompanionViewModel(
         val storage = secureStorage ?: return
         if (!FeatureFlags.from(storage.context).agenticRuntimeV1) return
         AgenticRuntime.from(storage.context).saveConnectionProfile(profile)
+        _uiState.update { it.copy(computerSettingsRevision = it.computerSettingsRevision + 1) }
         refreshAgenticPresenceHint()
     }
 
@@ -2949,6 +2950,7 @@ class CompanionViewModel(
         val storage = secureStorage ?: return
         if (!FeatureFlags.from(storage.context).agenticRuntimeV1) return
         AgenticRuntime.from(storage.context).deleteConnectionProfile(id)
+        _uiState.update { it.copy(computerSettingsRevision = it.computerSettingsRevision + 1) }
     }
 
     fun saveAgenticCredential(credentialRef: String, secret: String) {
@@ -3262,7 +3264,7 @@ class CompanionViewModel(
     fun runOnComputer(command: String) {
         val storage = secureStorage ?: return
         if (!FeatureFlags.from(storage.context).agenticRuntimeV1) {
-            speak("Turn on Agentic in Settings → Neural / Lumen to run chat on Computer.")
+            speak("Turn on Agentic in Computer → Tasks & approvals to run chat on Computer.")
             return
         }
         val cmd = command.trim()
@@ -3383,6 +3385,7 @@ class CompanionViewModel(
         if (apiKeyRef.isNotBlank() && apiKeySecret.isNotBlank()) {
             SecureStorageCredentialResolver.saveCredential(storage, apiKeyRef, apiKeySecret)
         }
+        _uiState.update { it.copy(computerSettingsRevision = it.computerSettingsRevision + 1) }
         AgenticRuntime.invalidate()
         refreshAgenticPresenceHint()
     }
@@ -9304,6 +9307,20 @@ class CompanionViewModel(
         _uiState.update { it.copy(neuralInputNotice = "Food sent to the brain") }
     }
 
+    fun openComputerTools() {
+        refreshComputerPhoneProbe()
+        refreshAgenticPresenceHint()
+        openBrainSettingsCategory(COMPUTER_TOOLS_TITLE)
+    }
+
+    fun openComputerTerminal(profile: com.example.meowmba.core.agentic.ConnectionProfile? = null) {
+        _uiState.update { it.copy(showSettings = false, settingsInitialPage = null, showTiles = false, showNeuralInfo = false) }
+        openChat()
+        _companionTerminalPaneRequest.value += 1L
+        connectCompanionTerminal(profile?.let { CompanionTerminalTarget.AgenticProfile(it).id }
+            ?: CompanionTerminalTarget.LOCAL_ID)
+    }
+
     fun openNeuralSettingsFromInfo() = openBrainSettingsCategory("Neural / Lumen")
 
     fun openBrainPairingFromInfo() = openBrainSettingsCategory("Connections & memory")
@@ -11932,143 +11949,99 @@ class CompanionViewModel(
         val storage = secureStorage ?: return null
         val id = storage.getPreference(com.example.meowmba.core.computer.ComputerProfileMarks.PREF_PROFILE_ID)
             ?.takeIf { it.isNotBlank() } ?: return null
-        return runCatching { listAgenticConnectionProfiles().firstOrNull { it.id == id } }.getOrNull()
+        return runCatching {
+            val db = com.example.meowmba.core.database.MeowmbaDatabase.getDatabase(storage.context)
+            com.example.meowmba.core.agentic.RoomConnectionProfileStore(db.connectionProfileDao()).get(id)
+        }.getOrNull()
     }
 
     fun refreshComputerPhoneProbe() {
         val ctx = secureStorage?.context ?: return
         val (summary, ready) = com.example.meowmba.ui.companion.YourComputerViewModelHooks.phoneProbeSummary(ctx)
-        val s = _uiState.value
-        _uiState.value = s.copy(
-            computerPhoneProbeSummary = summary,
-            computerPhoneReady = ready,
-            computerSetupStatus = when {
-                ready -> com.example.meowmba.core.computer.ComputerSetupStatus.Ready
-                s.computerSetupStatus == com.example.meowmba.core.computer.ComputerSetupStatus.Installing ->
-                    s.computerSetupStatus
-                computerSavedProfileOrNull() != null ->
-                    com.example.meowmba.core.computer.ComputerSetupStatus.Connected
-                else -> com.example.meowmba.core.computer.ComputerSetupStatus.NotSetUp
-            },
-        )
+        _uiState.update { it.copy(computerPhoneProbeSummary = summary, computerPhoneReady = ready) }
+    }
+
+    private var computerSetupJob: kotlinx.coroutines.Job? = null
+
+    private suspend fun persistComputerConnection(
+        profile: com.example.meowmba.core.agentic.ConnectionProfile, secret: String,
+    ): com.example.meowmba.core.agentic.ConnectionProfile {
+        val storage = requireNotNull(secureStorage) { "Secure storage unavailable." }
+        val db = com.example.meowmba.core.database.MeowmbaDatabase.getDatabase(storage.context)
+        val store = com.example.meowmba.core.agentic.RoomConnectionProfileStore(db.connectionProfileDao())
+        return YourComputerViewModelHooks.saveProfile(store, storage,
+            com.example.meowmba.core.agentic.SecureStorageCredentialResolver(storage), profile, secret)
     }
 
     fun saveComputerProfile(profile: com.example.meowmba.core.agentic.ConnectionProfile, secret: String) {
-        val storage = secureStorage ?: return
-        viewModelScope.launch(Dispatchers.IO) {
-            val store = runCatching {
-                val db = com.example.meowmba.core.database.MeowmbaDatabase.getDatabase(storage.context)
-                com.example.meowmba.core.agentic.RoomConnectionProfileStore(db.connectionProfileDao())
-            }.getOrNull()
-            if (store == null) {
-                withContext(Dispatchers.Main) {
-                    _uiState.value = _uiState.value.copy(
-                        computerSetupStatus = com.example.meowmba.core.computer.ComputerSetupStatus.Error,
-                        computerStatusDetail = "Connection profile store unavailable.",
-                    )
-                }
-                return@launch
-            }
-            val creds = com.example.meowmba.core.agentic.SecureStorageCredentialResolver(storage)
-            val saved = com.example.meowmba.ui.companion.YourComputerViewModelHooks.saveProfile(
-                store, storage, creds, profile, secret,
-            )
-            withContext(Dispatchers.Main) {
-                _uiState.value = _uiState.value.copy(
-                    computerStatusDetail = "Saved Computer profile ${saved.displayName}.",
-                    computerSetupStatus = com.example.meowmba.core.computer.ComputerSetupStatus.Connected,
-                    computerShowInstallPrompt = saved.type ==
-                        com.example.meowmba.core.agentic.ConnectionProfileType.SSH,
-                )
-            }
-        }
+        runComputerSetup(profile, secret, "save")
     }
 
     fun testComputerConnection(profile: com.example.meowmba.core.agentic.ConnectionProfile, secret: String) {
-        val storage = secureStorage ?: return
-        if (secret.isNotEmpty()) {
-            com.example.meowmba.core.agentic.SecureStorageCredentialResolver.saveCredential(
-                storage, profile.credentialRef, secret,
-            )
-        }
-        viewModelScope.launch(Dispatchers.IO) {
-            val creds = com.example.meowmba.core.agentic.SecureStorageCredentialResolver(storage)
-            val result = com.example.meowmba.ui.companion.YourComputerViewModelHooks.testOrInstall(
-                storage.context, creds, profile, install = false, onLog = {},
-            )
-            withContext(Dispatchers.Main) {
-                result.fold(
-                    onSuccess = {
-                        _uiState.value = _uiState.value.copy(
-                            computerSetupStatus = com.example.meowmba.core.computer.ComputerSetupStatus.Connected,
-                            computerStatusDetail = it,
-                            computerShowInstallPrompt = true,
-                        )
-                    },
-                    onFailure = {
-                        _uiState.value = _uiState.value.copy(
-                            computerSetupStatus = com.example.meowmba.core.computer.ComputerSetupStatus.Error,
-                            computerStatusDetail = it.message ?: "Test failed",
-                        )
-                    },
-                )
-            }
-        }
+        runComputerSetup(profile, secret, "test")
     }
 
     fun installComputerOnServer(profile: com.example.meowmba.core.agentic.ConnectionProfile, secret: String) {
-        val storage = secureStorage ?: return
-        if (secret.isNotEmpty()) {
-            com.example.meowmba.core.agentic.SecureStorageCredentialResolver.saveCredential(
-                storage, profile.credentialRef, secret,
-            )
+        if (!sameComputerConnection(profile, _uiState.value.computerVerifiedProfile)) {
+            _uiState.update { it.copy(computerStatusDetail = "Test this connection before installing Computer.") }
+            return
         }
-        viewModelScope.launch(Dispatchers.IO) {
-            withContext(Dispatchers.Main) {
-                _uiState.value = _uiState.value.copy(
-                    computerSetupStatus = com.example.meowmba.core.computer.ComputerSetupStatus.Installing,
-                    computerInstallLog = "",
-                    computerStatusDetail = "Installing…",
-                    computerShowInstallPrompt = false,
-                )
-            }
-            val creds = com.example.meowmba.core.agentic.SecureStorageCredentialResolver(storage)
-            val result = com.example.meowmba.ui.companion.YourComputerViewModelHooks.testOrInstall(
-                storage.context,
-                creds,
-                profile,
-                install = true,
-                onLog = { chunk ->
-                    kotlinx.coroutines.runBlocking(Dispatchers.Main) {
-                        _uiState.value = _uiState.value.copy(
-                            computerInstallLog = (_uiState.value.computerInstallLog + chunk).takeLast(60_000),
-                        )
+        runComputerSetup(profile, secret, "install")
+    }
+
+    /** One explicit operation at a time, saved profile identity shared by test and install. */
+    private fun runComputerSetup(profile: com.example.meowmba.core.agentic.ConnectionProfile, secret: String, operation: String) {
+        val storage = secureStorage ?: return
+        if (computerSetupJob?.isActive == true) return
+        val installing = operation == "install"
+        _uiState.update { it.copy(
+            computerSetupStatus = if (installing) com.example.meowmba.core.computer.ComputerSetupStatus.Installing
+                else com.example.meowmba.core.computer.ComputerSetupStatus.Checking,
+            computerStatusDetail = when (operation) { "install" -> "Installing…"; "save" -> "Saving connection…"; else -> "Checking connection…" },
+            computerInstallLog = if (installing) "" else it.computerInstallLog,
+            computerVerifiedProfile = if (installing) it.computerVerifiedProfile else null,
+            computerShowInstallPrompt = false,
+        ) }
+        computerSetupJob = viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val saved = persistComputerConnection(profile, secret)
+                val result = if (operation == "save") Result.success("Connection saved. Test it when you are ready.") else {
+                    val credentials = com.example.meowmba.core.agentic.SecureStorageCredentialResolver(storage)
+                    YourComputerViewModelHooks.testOrInstall(storage.context, credentials, saved, installing) { chunk ->
+                        _uiState.update { it.copy(computerInstallLog = (it.computerInstallLog + chunk).takeLast(60_000)) }
                     }
-                },
-            )
-            withContext(Dispatchers.Main) {
-                result.fold(
-                    onSuccess = {
-                        com.example.meowmba.core.computer.ComputerProfileMarks.mark(storage, profile.id)
-                        _uiState.value = _uiState.value.copy(
-                            computerSetupStatus = com.example.meowmba.core.computer.ComputerSetupStatus.Ready,
-                            computerStatusDetail = it,
-                        )
-                    },
-                    onFailure = {
-                        _uiState.value = _uiState.value.copy(
-                            computerSetupStatus = com.example.meowmba.core.computer.ComputerSetupStatus.Error,
-                            computerStatusDetail = it.message ?: "Install failed",
-                        )
-                    },
-                )
+                }
+                result.fold(onSuccess = { detail ->
+                    val verified = if (operation == "save") null else {
+                        val db = com.example.meowmba.core.database.MeowmbaDatabase.getDatabase(storage.context)
+                        com.example.meowmba.core.agentic.RoomConnectionProfileStore(db.connectionProfileDao()).get(saved.id) ?: saved
+                    }
+                    _uiState.update { it.copy(
+                        computerSetupStatus = when (operation) {
+                            "save" -> com.example.meowmba.core.computer.ComputerSetupStatus.Saved
+                            "install" -> com.example.meowmba.core.computer.ComputerSetupStatus.Ready
+                            else -> com.example.meowmba.core.computer.ComputerSetupStatus.Connected
+                        },
+                        computerStatusDetail = detail,
+                        computerVerifiedProfile = verified,
+                        computerShowInstallPrompt = operation == "test" && saved.type == com.example.meowmba.core.agentic.ConnectionProfileType.SSH,
+                    ) }
+                }, onFailure = { error ->
+                    _uiState.update { it.copy(computerSetupStatus = com.example.meowmba.core.computer.ComputerSetupStatus.Error,
+                        computerStatusDetail = error.message ?: "Connection failed.", computerVerifiedProfile = null) }
+                })
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                _uiState.update { it.copy(computerSetupStatus = com.example.meowmba.core.computer.ComputerSetupStatus.Error,
+                    computerStatusDetail = error.message ?: "Connection failed.", computerVerifiedProfile = null) }
             }
         }
     }
 
     fun confirmComputerInstallPrompt() {
-        val p = computerSavedProfileOrNull() ?: return
-        installComputerOnServer(p, "")
+        val profile = computerSavedProfileOrNull() ?: return
+        installComputerOnServer(profile, "")
     }
 
     fun openComputerDesktopUrl(url: String) {

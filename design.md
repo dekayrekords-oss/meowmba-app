@@ -95,3 +95,19 @@ Terminal, weather controls, inventory, agent status and remaining settings badge
 use semantic colors in both appearances. Avatar art, weather artwork, terminal
 syntax and third-party Android/system interfaces keep their own visual purpose.
 The optional Professional palette continues to use the same shared controls.
+
+## September 15: Computer navigation and guided setup
+
+Computer is the first main-menu tile and a dedicated Settings category. Its
+hub contains separate destinations for Setup, Tasks & approvals, AI for tasks,
+Saved connections, and Power & sleep. Logs and technical diagnostics have their
+own secondary page. Neural / Lumen keeps avatar controls and a direct Computer
+button rather than embedding the Computer forms.
+
+Setup begins with This phone or A Linux server. Each path has three short steps
+with progress and back navigation. Advanced connection fields stay collapsed.
+The fixed header, independent page scrolling, wrapped action rows, keyboard
+insets and saved non-secret drafts support narrow screens and large text.
+Credentials remain in memory until explicit save/test and are never included
+in saved screen state. Saved, checking, connected and installed are distinct
+states; installation requires a successful check of the current connection.

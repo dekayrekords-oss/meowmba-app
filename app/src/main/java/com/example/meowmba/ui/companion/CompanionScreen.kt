@@ -580,6 +580,7 @@ fun CompanionScreen(
                 viewModel.onAvatarZoneClick(AvatarZone.BACKGROUND)
                 when (tileName) {
                     "Settings" -> viewModel.toggleSettings()
+                    "Computer" -> viewModel.openComputerTools()
                     "LLM", "Hardware" -> viewModel.toggleModelManager()
                     "Brain" -> viewModel.toggleNeuralInfo()
                     "Privacy" -> viewModel.togglePrivacyDashboard()
@@ -963,11 +964,10 @@ fun CompanionScreen(
                 onComputerSaveProfile = viewModel::saveComputerProfile,
                 onComputerTestConnection = viewModel::testComputerConnection,
                 onComputerInstall = viewModel::installComputerOnServer,
-                onComputerOpenTerminal = {
-                    viewModel.connectCompanionTerminal(
-                        com.example.meowmba.ui.companion.CompanionTerminalTarget.LOCAL_ID
-                    )
-                },
+                onComputerOpenTerminal = { viewModel.openComputerTerminal() },
+                onComputerOpenServerTerminal = viewModel::openComputerTerminal,
+                onRefreshComputerPhone = viewModel::refreshComputerPhoneProbe,
+                computerVerifiedProfile = uiState.computerVerifiedProfile,
                 onComputerOpenDesktop = viewModel::openComputerDesktopUrl,
                 onComputerConfirmInstallPrompt = viewModel::confirmComputerInstallPrompt,
                 lumenReflexGain = uiState.lumenReflexGain,

@@ -54,6 +54,8 @@ object ComputerProfileMarks {
 
 enum class ComputerSetupStatus {
     NotSetUp,
+    Saved,
+    Checking,
     Connected,
     Installing,
     Ready,
@@ -63,6 +65,8 @@ enum class ComputerSetupStatus {
 fun ComputerSetupStatus.toHumanSentence(): String = when (this) {
     ComputerSetupStatus.NotSetUp ->
         "Not set up yet. Install Termux on this phone, or add a Linux server."
+    ComputerSetupStatus.Saved -> "Connection saved. Test it before using the server."
+    ComputerSetupStatus.Checking -> "Checking the server connection…"
     ComputerSetupStatus.Connected ->
         "Connected. You can open the terminal or keep working."
     ComputerSetupStatus.Installing ->

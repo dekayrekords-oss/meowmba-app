@@ -42,7 +42,7 @@ class AgenticNotice129DeviceTest {
                 assertTrue(vm.uiState.value.agenticDismissibleRevision!!.startsWith(goal.id))
                 scenario.onActivity { vm.openAgenticTaskDetails() }
                 assertTrue(vm.uiState.value.showSettings)
-                assertEquals("Neural / Lumen", vm.uiState.value.settingsInitialPage)
+                assertEquals("Computer & task tools", vm.uiState.value.settingsInitialPage)
             }
         } finally {
             runtime.cancelGoal(goal.id)
