@@ -57,9 +57,19 @@ class WorkflowModelBrain(private val model: suspend (BusinessAgent) -> ModelProv
         var failure = "No model response"
         var retryPrompt = prompt
         val schema = decisionSchema(agent, frame, run, tools, team)
-        repeat(3) { attempt ->
+        // Remote controllers already repair one malformed function proposal.
+        // Do not multiply those requests or retry network/credit errors here.
+        val attempts = if (provider is RemoteModelProvider) 1 else 3
+        repeat(attempts) { attempt ->
             try {
-                when (val reply = if (provider is LiteRtProvider) provider.generateStructured(retryPrompt, schema) else provider.generate(retryPrompt)) {
+                val reply = when (provider) {
+                    is LiteRtProvider -> provider.generateStructured(retryPrompt, schema)
+                    is RemoteModelProvider -> provider.generateToolDecision(retryPrompt, schema) {
+                        runCatching { parse(it) }.isSuccess
+                    }
+                    else -> provider.generate(retryPrompt)
+                }
+                when (reply) {
                     is ModelResponse.Complete -> {
                         val decision = parse(reply.text)
                         return if (decision.action == "delegate") decision.copy(agentId = delegateAliases[decision.agentId] ?: error("Unknown delegate alias")) else decision
@@ -69,8 +79,8 @@ class WorkflowModelBrain(private val model: suspend (BusinessAgent) -> ModelProv
                 }
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) { failure = e.message ?: "Invalid model response" }
-            retryPrompt = prompt + "\nYour last response could not be accepted. Return ONE valid JSON decision, with balanced braces and string-valued args. Do not add commentary or unknown fields."
-            if (attempt < 2) delay(1000L * (attempt + 1))
+            retryPrompt = prompt + "\nYour last response could not be accepted. Return ONE valid JSON decision, with balanced braces and string-valued args. The action must be exactly tool, delegate, finish or blocked. Do not add commentary or unknown fields."
+            if (attempt < attempts - 1) delay(1000L * (attempt + 1))
         }
         error(failure)
     }
@@ -128,7 +138,14 @@ class WorkflowModelBrain(private val model: suspend (BusinessAgent) -> ModelProv
         fun parse(raw: String): WorkDecision {
             val text = raw.trim().removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
             require(text.length <= 120_000) { "Model decision is too large" }
-            return Json.decodeFromString<WorkDecision>(text)
+            return Json.decodeFromString<WorkDecision>(text).also {
+                require(it.action in setOf("tool", "delegate", "finish", "blocked")) { "Unknown workflow action" }
+                when (it.action) {
+                    "tool" -> require(it.tool.isNotBlank()) { "Missing tool id" }
+                    "delegate" -> require(it.agentId.isNotBlank() && it.goal.isNotBlank()) { "Missing delegate or task" }
+                    "finish", "blocked" -> require(it.summary.isNotBlank()) { "Missing decision summary" }
+                }
+            }
         }
     }
 }

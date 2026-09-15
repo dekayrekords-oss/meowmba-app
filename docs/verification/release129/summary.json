@@ -1,6 +1,6 @@
 {
   "unitTests": {
-    "tests": 2520,
+    "tests": 2523,
     "failures": 0,
     "errors": 0,
     "skipped": 0
@@ -17,7 +17,22 @@
     "authenticatedWorker": "passed after fixing temporary credential provisioning",
     "gmailLaunch": "passed without inbox read",
     "deterministicWorkflowPolicy": "passed",
-    "realBusinessScenario": "pending: no local conversation model; configured free cloud test paused by MODERATE thermal status"
+    "realBusinessScenario": {
+      "status": "PASSED",
+      "provider": "openrouter/free",
+      "elapsedMs": 69278,
+      "approvals": 1,
+      "unpaidTotal": "56.75",
+      "messagesSent": 0,
+      "recoveredFrom": "initial CSV action with missing arguments"
+    }
   },
-  "play": "not uploaded: real scenario gate pending"
+  "play": "Upload started to existing closed-testing Alpha; submission pending",
+  "release": {
+    "versionCode": 130,
+    "versionName": "1.3.82",
+    "signature": "verified existing upload certificate",
+    "bundletool": "passed",
+    "startup": "signed minified release installed over code85 and cold-launched in 620ms, no new process crash"
+  }
 }

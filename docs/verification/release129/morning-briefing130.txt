@@ -1,0 +1,13 @@
+Morning Briefing - 14 September 2026
+
+Unpaid Orders:
+- Order A101: Alex Sample - $21.50
+- Order A103: Casey Sample - $35.25
+
+Total Outstanding: $56.75
+
+Draft Follow-ups:
+1. To Alex Sample (Order A101): Hi Alex, we noticed your order A101 for $21.50 is still unpaid. Could you please settle this at your earliest convenience? Thank you!
+2. To Casey Sample (Order A103): Hi Casey, your order A103 for $35.25 is pending. We'd appreciate if you could complete payment soon. Looking forward to resolving this.
+
+Please review and address these overdue items.
