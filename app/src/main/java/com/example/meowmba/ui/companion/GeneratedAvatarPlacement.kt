@@ -15,7 +15,7 @@ internal fun generatedAvatarPlacement(width: Float, height: Float, frame: LumenF
     val h = height.coerceAtLeast(1f)
     val size = minOf(w, h)
     val zoom = scale.takeIf { it.isFinite() }?.coerceIn(.5f, 3f) ?: 2f
-    val unit = size * .42f * zoom * if (habitat == null) 1f else .55f
+    val unit = size * .42f * zoom * if (habitat == null) 1f else .55f * HABITAT_AVATAR_MAGNIFICATION
     val intended = habitat?.let { Offset(it.x * w, it.y * h) } ?: lumenCenter(w, h, frame)
     val margin = minOf(unit * .55f, size * .47f)
     return GeneratedAvatarPlacement(Offset(intended.x.coerceIn(margin, w - margin),

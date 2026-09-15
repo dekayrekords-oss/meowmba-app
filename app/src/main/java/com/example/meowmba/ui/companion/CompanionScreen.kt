@@ -196,6 +196,7 @@ fun CompanionScreen(
         if (!habitatCovered && !uiState.showNeuralInfo) {
             PetCarePanel(
                 habitatMode = uiState.habitatMode, onTrick = viewModel::playCompanionTrick,
+                onHabitatMode = viewModel::setHabitatMode,
                 care = uiState.petCare, motionPaused = !avatarWorkAllowed, onCareChanged = viewModel::setPetCare,
                 onAction = viewModel::habitatAction, onFeedback = viewModel::petFeedback,
                 onLearningChanged = viewModel::setPetLearning, learningEnabled = uiState.petLearningEnabled,

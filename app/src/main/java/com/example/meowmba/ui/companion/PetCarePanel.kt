@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.outlined.AutoAwesome
 import com.example.meowmba.ui.theme.FilledTonalButton
 import androidx.compose.material3.Icon
+import com.example.meowmba.ui.theme.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import com.example.meowmba.ui.theme.Surface
@@ -72,6 +73,7 @@ fun PetCarePanel(
     habitatMode: Boolean = true,
     onTrick: (String) -> Unit = {},
     formKey: String? = null,
+    onHabitatMode: (Boolean) -> Unit = {},
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     var flash by rememberSaveable { mutableStateOf<String?>(null) }
@@ -106,6 +108,13 @@ fun PetCarePanel(
                     Text("Gentle needs · never dies", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 TextButton(onClick = { expanded = false }) { Text("Close") }
+            }
+            Text("Avatar space", style = MaterialTheme.typography.labelLarge)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(selected = !habitatMode, onClick = { onHabitatMode(false) },
+                    label = { Text("Backdrop") }, modifier = Modifier.weight(1f))
+                FilterChip(selected = habitatMode, onClick = { onHabitatMode(true) },
+                    label = { Text("Habitat") }, modifier = Modifier.weight(1f))
             }
             if (motionPaused) {
                 Text("Motion is resting while the phone settles. Care still works.", style = MaterialTheme.typography.bodySmall)

@@ -1,5 +1,14 @@
 # Agent execution plan — immersive companion revision
 
+## September 15: stationary habitats and Care switch — Build 134
+
+Care switches between saved Backdrop and Habitat modes. Painted room images
+stay fixed while source-anchored objects animate across all nineteen habitats;
+the avatar's habitat root is 30% larger. Aquarium/arcade 3D counterparts are
+updated too. All2538 JVM tests pass. See
+[HABITAT_MOTION_134_PASS_DOWN.md](HABITAT_MOTION_134_PASS_DOWN.md) and its receipts
+for native frame comparisons, viewport-fit limits, packaging and phone checks.
+
 ## September 14: onboarding and menu consistency — Build 133
 
 First-run setup now covers the current features, requires avatar selection and

@@ -6,6 +6,7 @@ import android.opengl.Matrix
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 import kotlin.math.abs
+import kotlin.math.PI
 import kotlin.math.acos
 import kotlin.math.cos
 import kotlin.math.max
@@ -197,7 +198,7 @@ class Fly3DRenderer : GLSurfaceView.Renderer {
             Matrix.rotateM(model,0,f.pitch.safe().coerceIn(-.25f,.25f)*DEGREES,1f,0f,0f)
             Matrix.rotateM(model,0,f.roll.safe().coerceIn(-.18f,.18f)*DEGREES,0f,0f,1f)
         } else {
-            val gameScale=requestedScale*1.22f
+            val gameScale=habitatFlyScale(requestedScale)
             unit=.50f*gameScale
             // Root height compensation preserves grounded feet; world-space grip stays authoritative.
             val groundCompensation=.545f*(gameScale-1f)*(1f-f.flight.safe().coerceIn(0f,1f))
@@ -227,7 +228,7 @@ class Fly3DRenderer : GLSurfaceView.Renderer {
         if(!f.stageMode) {
             val ground=if(abs(f.x)<2.1f && abs(f.z)<1f && f.y>1.2f).8f else 0f
             val height=max(.0f,f.y.safe(2f)-.545f-ground)
-            shadowData[0]=f.x.safe(); shadowData[1]=f.z.safe(); shadowData[2]=.35f+height*.12f
+            shadowData[0]=f.x.safe(); shadowData[1]=f.z.safe(); shadowData[2]=.35f*HABITAT_AVATAR_MAGNIFICATION+height*.12f
             shadowData[3]=.27f/(1f+height*.9f); shadowPlanes[0]=ground
             val props=f.props
             if(props!=null) {
@@ -382,8 +383,32 @@ class Fly3DRenderer : GLSurfaceView.Renderer {
         box(0f,3.13f,-2.43f,2.10f,1.37f,.065f,0x294452)
         box(0f,3.13f,-2.34f,1.98f,1.25f,.025f,if(aquarium)0x2A7489 else 0x283C59,outline=false)
         // Recessed moon and a sill: quiet center, clear depth cues at the room edges.
-        ellipsoid(1.37f,3.86f,-2.28f,.29f,.29f,.035f,0xE8D8A8,outline=false)
-        ellipsoid(1.44f,3.92f,-2.23f,.08f,.09f,.015f,0xBDAE97,outline=false)
+        if (aquarium) {
+            // Small alien swimmers and rising bubbles stay within the recessed glass.
+            for (i in 0..2) {
+                val phase=sceneTime*.19f+i*2.1f
+                val x=sin(phase)*1.35f
+                val y=2.40f+i*.56f+sin(phase*2f)*.10f
+                push(); Matrix.translateM(model,0,x,y,-2.24f)
+                Matrix.rotateM(model,0,sin(phase)*65f,0f,1f,0f)
+                ellipsoid(0f,0f,0f,.16f,.085f,.035f,if(i==1)0x86D3BE else 0xE9A5BB,outline=false)
+                ellipsoid(-.17f,sin(sceneTime*2f+i)*.015f,0f,.075f,.075f,.020f,0xA6D9D6,outline=false)
+                segment(.07f,.035f,.01f,.11f,.13f,.01f,.015f,0x50728C,outline=false)
+                ellipsoid(.11f,.14f,.025f,.04f,.043f,.025f,CREAM,outline=false)
+                ellipsoid(.12f,.145f,.047f,.014f,.020f,.008f,INK,outline=false); pop()
+                val rise=(sceneTime*.10f+i*.333f)%1f
+                val radius=.023f*sin(rise*PI.toFloat()).coerceAtLeast(0f)
+                ellipsoid(-1.65f+i*1.62f+sin(phase)*.025f,1.98f+rise*2.17f,-2.22f,
+                    radius,radius,.012f,0xB5EDE1,outline=false)
+            }
+        } else {
+            ellipsoid(1.37f,3.86f,-2.28f,.29f,.29f,.035f,0xE8D8A8,outline=false)
+            ellipsoid(1.44f,3.92f,-2.23f,.08f,.09f,.015f,0xBDAE97,outline=false)
+            for (i in 0..2) {
+                val r=.018f+.008f*sin(sceneTime*.7f+i)
+                ellipsoid(-1.30f+i*.88f,3.47f+(i%2)*.50f,-2.27f,r,r,.01f,0xDCEEC2,outline=false)
+            }
+        }
         box(0f,1.72f,-2.21f,2.20f,.060f,.15f,0x8FB4AA)
         // Angled braces frame rather than subdivide the avatar's open airspace.
         segment(-3.95f,.30f,-2.14f,-3.52f,4.40f,-2.14f,.10f,0xB0C4B1)
@@ -404,7 +429,7 @@ class Fly3DRenderer : GLSurfaceView.Renderer {
                 box(2.70f,1.49f,-1.54f,.41f,.43f,.030f,0x243B4A)
                 for(side in intArrayOf(-1,1)) {
                     ellipsoid(2.70f+side*.18f,1.51f,-1.48f,.10f,.15f,.025f,CREAM)
-                    ellipsoid(2.70f+side*.18f,1.51f,-1.445f,.03f,.075f,.015f,INK,outline=false)
+                    ellipsoid(2.70f+side*.18f+sin(sceneTime*.8f)*.033f,1.51f,-1.445f,.03f,.075f,.015f,INK,outline=false)
                     ellipsoid(2.70f+side*.24f,.75f,-1.51f,.09f,.06f,.045f,if(side<0)0xDA817C else 0xBCD985)
                 }
             }
