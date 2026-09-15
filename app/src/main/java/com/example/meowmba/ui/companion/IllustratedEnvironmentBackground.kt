@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.ImageDecoder
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -11,10 +12,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.platform.LocalContext
@@ -25,10 +26,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import kotlin.math.PI
-import kotlin.math.cos
 import kotlin.math.max
-import kotlin.math.sin
 import kotlin.math.roundToInt
 
 /**
@@ -47,42 +45,66 @@ internal fun IllustratedEnvironmentBackground(
     val context = LocalContext.current.applicationContext
     var bitmap by remember(animation, thumbnail) { mutableStateOf<Bitmap?>(null) }
     val fallback = remember { PetEnvironmentBackgroundPainter() }
-    val atmosphere = remember { PetEnvironmentAtmosphere() }
+    val objects = remember { HabitatObjectAnimations() }
     LaunchedEffect(context, animation, thumbnail) {
         bitmap = IllustratedRoomCache.load(context, animation, if (thumbnail) THUMBNAIL_EDGE else ROOM_EDGE)
     }
     val image = remember(bitmap) { bitmap?.asImageBitmap() }
-    Canvas(modifier) {
-        val t = roomPhase(clock())
-        val s = roomPhase(slow())
-        // Tasteful ambient drift (~0.6–0.9% of edge). Respects scene clock pause/thermal.
-        val driftX = sin(s * 2f * PI.toFloat()) * size.width * 0.006f
-        val driftY = cos(s * 2f * PI.toFloat()) * size.height * 0.0035f
-        if (image == null) {
-            fallback.draw(this, animation, t, s)
-        } else {
-            val placement = illustratedRoomPlacement(image.width, image.height, size.width, size.height,
-                illustratedSourceTableAnchor(animation), illustratedSourceFocusX(animation))
-            // Anchored cover maps each measured image ledge to the world's .78 plane.
-            // Center-crop would silently move the contact plane on a landscape Fold.
-            clipRect {
-                drawImage(
-                    image,
-                    dstOffset = IntOffset((placement.x + driftX).roundToInt(), (placement.y + driftY).roundToInt()),
-                    dstSize = IntSize(placement.width.roundToInt().coerceAtLeast(1), placement.height.roundToInt().coerceAtLeast(1)),
-                    filterQuality = FilterQuality.High,
-                )
-                clipRect(bottom = size.height * PET_ENVIRONMENT_TABLE_Y) {
-                    atmosphere.drawLight(this, animation, s)
-                    atmosphere.drawDetails(this, animation, t, s)
-                    // Soft shimmer veil — low alpha, slow phase, never near face contrast.
-                    val shimmer = 0.018f + 0.012f * (0.5f + 0.5f * sin((s + t * 0.35f) * 2f * PI.toFloat()))
-                    drawRect(
-                        color = Color.White.copy(alpha = shimmer),
-                        size = Size(size.width, size.height * PET_ENVIRONMENT_TABLE_Y * 0.55f),
-                    )
-                }
-            }
+    if (image == null) {
+        Canvas(modifier) {
+            fallback.draw(this, animation, roomPhase(clock()), roomPhase(slow()))
+        }
+    } else {
+        IllustratedRoomLayers(image, animation, objects, clock, modifier)
+    }
+}
+
+/** Retain the stationary image's display list independently of the moving details.
+ * No offscreen bitmap, lower resolution, changed phase or reduced frame rate.
+ */
+@Composable
+internal fun IllustratedRoomLayers(image: ImageBitmap, animation: BackgroundAnimation,
+    objects: HabitatObjectAnimations, clock: () -> Float, modifier: Modifier = Modifier) {
+    Box(modifier) {
+        Canvas(Modifier.matchParentSize().graphicsLayer()) {
+            drawIllustratedRoomImage(image, roomPlacement(image, animation))
+        }
+        Canvas(Modifier.matchParentSize().graphicsLayer()) {
+            drawIllustratedRoomObjects(animation, objects, roomPlacement(image, animation), roomPhase(clock()))
+        }
+    }
+}
+
+private fun DrawScope.roomPlacement(image: ImageBitmap, animation: BackgroundAnimation) =
+    illustratedRoomPlacement(image.width, image.height, size.width, size.height,
+        illustratedSourceTableAnchor(animation), illustratedSourceFocusX(animation))
+
+/** Shared native paint path used by the screen and pixel-level stationary-room checks. */
+internal fun DrawScope.drawIllustratedRoom(image: ImageBitmap, animation: BackgroundAnimation,
+    objects: HabitatObjectAnimations, phase: Float) {
+    val placement = roomPlacement(image, animation)
+    drawIllustratedRoomImage(image, placement)
+    drawIllustratedRoomObjects(animation, objects, placement, phase)
+}
+
+private fun DrawScope.drawIllustratedRoomImage(image: ImageBitmap, placement: IllustratedRoomPlacement) {
+    // Anchored cover maps each measured image ledge to the world's .78 plane.
+    // Center-crop would silently move the contact plane on a landscape Fold.
+    clipRect {
+        drawImage(
+            image,
+            dstOffset = IntOffset(placement.x.roundToInt(), placement.y.roundToInt()),
+            dstSize = IntSize(placement.width.roundToInt().coerceAtLeast(1), placement.height.roundToInt().coerceAtLeast(1)),
+            filterQuality = FilterQuality.High,
+        )
+    }
+}
+
+private fun DrawScope.drawIllustratedRoomObjects(animation: BackgroundAnimation,
+    objects: HabitatObjectAnimations, placement: IllustratedRoomPlacement, phase: Float) {
+    clipRect {
+        clipRect(bottom = size.height * PET_ENVIRONMENT_TABLE_Y) {
+            objects.draw(this, animation, placement, phase)
         }
     }
 }

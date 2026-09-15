@@ -19,12 +19,20 @@ data class AgenticPresence(
     val hint: String,
     val primaryStatus: GoalStatus? = null,
     val openGoalCount: Int = 0,
+    val dismissibleRevision: String? = null,
 )
 
 object CompanionAgenticHooks {
 
-    fun fromGoals(goals: List<AgenticGoal>): AgenticPresence {
-        if (goals.isEmpty()) {
+    /** Acknowledgement hides only this blocked revision; retrying must surface a new failure. */
+    fun revision(goal: AgenticGoal): String = "${goal.id}:${goal.status}:${goal.updatedAt}"
+
+    fun fromGoals(goals: List<AgenticGoal>, acknowledged: Set<String> = emptySet()): AgenticPresence {
+        val visible = goals.filter {
+            it.status !in setOf(GoalStatus.DONE, GoalStatus.CANCELLED) &&
+                !(it.status == GoalStatus.BLOCKED && revision(it) in acknowledged)
+        }
+        if (visible.isEmpty()) {
             return AgenticPresence(
                 emotion = null,
                 hint = "",
@@ -32,8 +40,9 @@ object CompanionAgenticHooks {
                 openGoalCount = 0,
             )
         }
-        // Priority: waiting_approval > blocked > running > open
-        val primary = goals.minBy { priority(it.status) }
+        // Old failures must not cover current work. Among failures, show the newest first.
+        val primary = visible.sortedWith(compareBy<AgenticGoal> { priority(it.status) }
+            .thenByDescending { it.updatedAt }.thenBy { it.id }).first()
         val emotion = when (primary.status) {
             GoalStatus.WAITING_APPROVAL -> CompanionEmotion.ALERT
             GoalStatus.BLOCKED -> CompanionEmotion.CONCERNED
@@ -44,11 +53,11 @@ object CompanionAgenticHooks {
         }
         val hint = when (primary.status) {
             GoalStatus.WAITING_APPROVAL ->
-                "Agentic: waiting for approval on '" + primary.title.take(40) + "'"
+                "Task needs approval: " + primary.title.take(60)
             GoalStatus.BLOCKED ->
-                "Agentic: blocked on '" + primary.title.take(40) + "'"
+                "Task stopped: " + primary.title.take(60)
             GoalStatus.RUNNING ->
-                "Agentic: working on '" + primary.title.take(40) + "'"
+                "Working on: " + primary.title.take(60)
             GoalStatus.OPEN ->
                 "Agentic: ${goals.size} open goal(s)"
             GoalStatus.DONE ->
@@ -61,20 +70,21 @@ object CompanionAgenticHooks {
             hint = hint,
             primaryStatus = primary.status,
             openGoalCount = goals.size,
+            dismissibleRevision = primary.takeIf { it.status == GoalStatus.BLOCKED }?.let(::revision),
         )
     }
 
-    fun fromRuntime(runtime: AgenticRuntime): AgenticPresence {
+    fun fromRuntime(runtime: AgenticRuntime, acknowledged: Set<String> = emptySet()): AgenticPresence {
         if (!runtime.enabled) {
             return AgenticPresence(emotion = null, hint = "")
         }
-        return fromGoals(runtime.listOpenGoals())
+        return fromGoals(runtime.listOpenGoals(), acknowledged)
     }
 
     private fun priority(status: GoalStatus): Int = when (status) {
         GoalStatus.WAITING_APPROVAL -> 0
-        GoalStatus.BLOCKED -> 1
-        GoalStatus.RUNNING -> 2
+        GoalStatus.RUNNING -> 1
+        GoalStatus.BLOCKED -> 2
         GoalStatus.OPEN -> 3
         GoalStatus.DONE -> 4
         GoalStatus.CANCELLED -> 5

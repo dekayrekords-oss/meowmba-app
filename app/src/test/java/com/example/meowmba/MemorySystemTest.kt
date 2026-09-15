@@ -175,6 +175,8 @@ class MemoryCoreTest {
 @OptIn(ExperimentalCoroutinesApi::class)
 class MemoryViewModelTest {
 
+    private val models = TestCompanionModels()
+
     private val testDispatcher = UnconfinedTestDispatcher()
     private lateinit var fakeTts: VoicePipelineTest.FakeSpeechSynthesizer
     private lateinit var repo: MemoryRepository
@@ -188,12 +190,13 @@ class MemoryViewModelTest {
 
     @After
     fun tearDown() {
+        models.close()
         Dispatchers.resetMain()
     }
 
     @Test
     fun `remember that stores a semantic memory and confirms aloud`() = runTest {
-        val vm = CompanionViewModel(ttsManager = fakeTts, memoryRepository = repo)
+        val vm = CompanionViewModel(elapsedRealtimeMs = { System.nanoTime() / 1_000_000L }, ttsManager = fakeTts, memoryRepository = repo).also(models::add)
         vm.onUserTextSubmitted("remember that I like green tea")
         advanceUntilIdle()
 
@@ -203,7 +206,7 @@ class MemoryViewModelTest {
 
     @Test
     fun `remember this reuses the last assistant statement`() = runTest {
-        val vm = CompanionViewModel(ttsManager = fakeTts, memoryRepository = repo)
+        val vm = CompanionViewModel(elapsedRealtimeMs = { System.nanoTime() / 1_000_000L }, ttsManager = fakeTts, memoryRepository = repo).also(models::add)
         vm.onUserTextSubmitted("hello")
         advanceUntilIdle() // companion answered; lastAssistantText is set
 
@@ -214,7 +217,7 @@ class MemoryViewModelTest {
 
     @Test
     fun `paused memory blocks remember commands with an explanation`() = runTest {
-        val vm = CompanionViewModel(ttsManager = fakeTts, memoryRepository = repo)
+        val vm = CompanionViewModel(elapsedRealtimeMs = { System.nanoTime() / 1_000_000L }, ttsManager = fakeTts, memoryRepository = repo).also(models::add)
         vm.setMemoryPaused(true)
         vm.onUserTextSubmitted("remember that I like green tea")
         advanceUntilIdle()

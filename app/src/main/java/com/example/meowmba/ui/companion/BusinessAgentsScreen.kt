@@ -8,6 +8,7 @@ import com.example.meowmba.ui.theme.Surface
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import com.example.meowmba.ui.theme.AlertDialog
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier

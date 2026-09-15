@@ -141,6 +141,8 @@ class HermesProtocolTest {
 @OptIn(ExperimentalCoroutinesApi::class)
 class HermesRoutingViewModelTest {
 
+    private val models = TestCompanionModels()
+
     private val testDispatcher = UnconfinedTestDispatcher()
     private lateinit var fakeTts: VoicePipelineTest.FakeSpeechSynthesizer
 
@@ -152,17 +154,18 @@ class HermesRoutingViewModelTest {
 
     @After
     fun tearDown() {
+        models.close()
         Dispatchers.resetMain()
     }
 
     @Test
     fun `declining hermes falls back to the on-device brain honestly`() = runTest {
         val workspaceRoot = Files.createTempDirectory("hermes_vm_ws").toFile()
-        val vm = CompanionViewModel(
+        val vm = CompanionViewModel(elapsedRealtimeMs = { System.nanoTime() / 1_000_000L },
             ttsManager = fakeTts,
             workspaceRoot = workspaceRoot,
             ioDispatcher = testDispatcher
-        )
+        ).also(models::add)
         // Hermes configured, but the endpoint declines everything (stands in
         // for unreachable / no-tool responses without real sockets)
         vm.setHermesAgentUrl("http://hermes.local:8642")
@@ -188,11 +191,11 @@ class HermesRoutingViewModelTest {
     @Test
     fun `agent brain toggle off means keyword routing only, even with hermes set`() = runTest {
         val workspaceRoot = Files.createTempDirectory("hermes_vm_ws2").toFile()
-        val vm = CompanionViewModel(
+        val vm = CompanionViewModel(elapsedRealtimeMs = { System.nanoTime() / 1_000_000L },
             ttsManager = fakeTts,
             workspaceRoot = workspaceRoot,
             ioDispatcher = testDispatcher
-        )
+        ).also(models::add)
         vm.setHermesAgentUrl("http://127.0.0.1:1")
         vm.setAgentBrainEnabled(false)
 
@@ -206,11 +209,11 @@ class HermesRoutingViewModelTest {
     @Test
     fun `keyword commands still bypass the brain entirely`() = runTest {
         val workspaceRoot = Files.createTempDirectory("hermes_vm_ws3").toFile()
-        val vm = CompanionViewModel(
+        val vm = CompanionViewModel(elapsedRealtimeMs = { System.nanoTime() / 1_000_000L },
             ttsManager = fakeTts,
             workspaceRoot = workspaceRoot,
             ioDispatcher = testDispatcher
-        )
+        ).also(models::add)
         vm.setHermesAgentUrl("http://127.0.0.1:1")
 
         vm.onUserTextSubmitted("create file called direct.txt")

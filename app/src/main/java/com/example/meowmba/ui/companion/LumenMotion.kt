@@ -374,9 +374,9 @@ internal fun lumenUnit(width: Float, height: Float, frame: LumenFrame): Float {
     return baseline + (fitted - baseline) * costume
 }
 
-private data class LumenEnvelope(val x: Float, val top: Float, val bottom: Float)
+internal data class LumenEnvelope(val x: Float, val top: Float, val bottom: Float)
 
-private fun lumenEnvelope(frame: LumenFrame): LumenEnvelope {
+internal fun lumenEnvelope(frame: LumenFrame): LumenEnvelope {
     val costume = maxOf(frame.cat, frame.dog, frame.form.costume).coerceIn(0f, 1f)
     val halfWidth = (.41f + frame.dog * .12f + frame.form.eyeMask * .045f +
         frame.form.pigSkin * .06f + frame.form.robotShell * .05f + frame.form.fruitFly * .20f + frame.form.clippy * .09f + frame.form.wizard * .12f +

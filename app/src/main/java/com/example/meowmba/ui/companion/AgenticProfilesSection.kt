@@ -12,6 +12,7 @@ import androidx.compose.material3.MaterialTheme
 import com.example.meowmba.ui.theme.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,6 +38,8 @@ fun AgenticProfilesSection(
     onSaveCredential: (credentialRef: String, secret: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var editing by remember { mutableStateOf(false) }
+    var advanced by remember { mutableStateOf(false) }
     var editingId by remember { mutableStateOf<String?>(null) }
     var displayName by remember { mutableStateOf("") }
     var host by remember { mutableStateOf("") }
@@ -64,11 +67,9 @@ fun AgenticProfilesSection(
     fun clearForm() = load(null)
 
     Column(modifier = modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-        Text("Agentic connection profiles", style = MaterialTheme.typography.titleMedium)
+        Text("Saved SSH connections", style = MaterialTheme.typography.titleMedium)
         Text(
-            "SSH targets for agentic runtime (preferred day-to-day path). Passwords are stored " +
-                "under a credential ref in encrypted prefs — never in Room or event logs. " +
-                "HTTPS_RUNTIME needs a reachable base URL (not 127.0.0.1 on meow); worker port 18766.",
+            "Choose a saved connection or add another server for tasks.",
             style = MaterialTheme.typography.bodySmall,
         )
         Spacer(Modifier.height(8.dp))
@@ -84,27 +85,31 @@ fun AgenticProfilesSection(
                     Column(Modifier.weight(1f)) {
                         Text(p.displayName, style = MaterialTheme.typography.bodyMedium)
                         Text(
-                            "${p.username}@${p.host}:${p.port} · ref=${p.credentialRef}",
+                            "${p.username}@${p.host}:${p.port}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         val fp = p.hostKeyFingerprint
                         if (!fp.isNullOrBlank()) {
                             Text(
-                                "hostKey=${fp.take(24)}…",
+                                "Server key pinned",
                                 style = MaterialTheme.typography.labelSmall,
                             )
                         }
                     }
-                    OutlinedButton(onClick = { load(p) }) { Text("Edit") }
+                    OutlinedButton(onClick = { load(p); editing = true }) { Text("Edit") }
                     OutlinedButton(onClick = { onDeleteProfile(p.id); if (editingId == p.id) clearForm() }) {
-                        Text("Del")
+                        Text("Delete")
                     }
                 }
             }
         }
 
         Spacer(Modifier.height(12.dp))
+        if (!editing) {
+            Button(onClick = { clearForm(); editing = true }) { Text("Add connection") }
+        }
+        if (editing) {
         Text(
             if (editingId == null) "Add SSH profile" else "Edit profile",
             style = MaterialTheme.typography.titleSmall,
@@ -120,13 +125,6 @@ fun AgenticProfilesSection(
             value = host,
             onValueChange = { host = it },
             label = { Text("Host") },
-            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-            singleLine = true,
-        )
-        OutlinedTextField(
-            value = port,
-            onValueChange = { port = it.filter { ch -> ch.isDigit() }.take(5) },
-            label = { Text("Port") },
             modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
             singleLine = true,
         )
@@ -152,6 +150,15 @@ fun AgenticProfilesSection(
             singleLine = true,
             visualTransformation = PasswordVisualTransformation(),
         )
+        TextButton(onClick = { advanced = !advanced }) { Text(if (advanced) "Hide advanced options" else "Advanced connection options") }
+        if (advanced) {
+        OutlinedTextField(
+            value = port,
+            onValueChange = { port = it.filter { ch -> ch.isDigit() }.take(5) },
+            label = { Text("Port") },
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+            singleLine = true,
+        )
         OutlinedTextField(
             value = fingerprint,
             onValueChange = { fingerprint = it },
@@ -164,6 +171,7 @@ fun AgenticProfilesSection(
             Text("Pin host key on first connect (TOFU)")
         }
 
+        }
         Row(modifier = Modifier.padding(top = 8.dp)) {
             Button(
                 onClick = {
@@ -189,14 +197,15 @@ fun AgenticProfilesSection(
                         password = ""
                     }
                     status = "Saved profile ${profile.displayName}."
-                    clearForm()
+                    clearForm(); editing = false
                 },
             ) { Text("Save profile") }
             Spacer(Modifier.padding(8.dp))
-            OutlinedButton(onClick = { clearForm() }) { Text("Clear") }
+            OutlinedButton(onClick = { clearForm(); editing = false }) { Text("Cancel") }
         }
         status?.let {
             Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
+        }
         }
     }
 }

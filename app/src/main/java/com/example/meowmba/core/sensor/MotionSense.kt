@@ -64,6 +64,7 @@ class MotionSense(context: Context) : RobotPoseSource {
     private var smoothRoll = 0f
     /** Low-passed gravity vector — the orientation reference for every channel. */
     private val gravity = FloatArray(3)
+    private val linear = FloatArray(3)
     /** Last valid screen-plane tilt; held while the phone is too flat to read one. */
     private var screenLean = 0f
     private var smoothLeanG = 0f
@@ -92,7 +93,9 @@ class MotionSense(context: Context) : RobotPoseSource {
             if (event.sensor.type != Sensor.TYPE_ACCELEROMETER) return
             if (event.timestamp <= lastAccelNs) return
             lastAccelNs = event.timestamp
-            val (x, y, z) = floatArrayOf(event.values[0], event.values[1], event.values[2])
+            val x = event.values[0]
+            val y = event.values[1]
+            val z = event.values[2]
             val magnitude = sqrt(x * x + y * y + z * z)
             if (!magnitude.isFinite()) return
             if (!gravityReady) {
@@ -132,11 +135,9 @@ class MotionSense(context: Context) : RobotPoseSource {
             // the same car-plane math the driving detector uses. Turns push
             // laterally, braking pushes longitudinally — both continuous, so the
             // avatar can track the force instead of waiting for a threshold.
-            val linear = floatArrayOf(
-                x - gravity[0],
-                y - gravity[1],
-                z - gravity[2],
-            )
+            linear[0] = x - gravity[0]
+            linear[1] = y - gravity[1]
+            linear[2] = z - gravity[2]
             val car = com.example.meowmba.core.car.CarDynamics.decompose(linear, gravity)
             smoothLeanG += (car.lateralG - smoothLeanG) * FORCE_LOW_PASS
             smoothSurgeG += (car.longitudinalG - smoothSurgeG) * FORCE_LOW_PASS

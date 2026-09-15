@@ -2,393 +2,189 @@ package com.example.meowmba.ui.companion
 
 import android.content.Intent
 import android.net.Uri
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import com.example.meowmba.ui.theme.Button
-import androidx.compose.material3.MaterialTheme
-import com.example.meowmba.ui.theme.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.meowmba.core.agentic.ConnectionProfile
 import com.example.meowmba.core.agentic.ConnectionProfileType
 import com.example.meowmba.core.computer.ComputerProfileMarks
 import com.example.meowmba.core.computer.ComputerSetupStatus
+import com.example.meowmba.ui.theme.Button
+import com.example.meowmba.ui.theme.OutlinedButton
+import com.example.meowmba.ui.theme.FilterChip
+import com.example.meowmba.ui.theme.Card
 import com.example.meowmba.core.computer.TermuxComputerLinks
-import com.example.meowmba.core.computer.toHumanSentence
-import com.example.meowmba.core.config.ComputerPowerState
 import java.util.UUID
 
-/**
- * Settings category **Your Computer** — phone-first Termux/PRoot, optional server.
- *
- * Does not own first-run onboarding screens; shares [TermuxComputerLinks] with them.
- */
+/** One setup step at a time; non-secret drafts survive rotation, credentials stay in memory. */
 @Composable
-fun YourComputerSettingsSection(
-    phoneProbeSummary: String = "Checking this phone…",
-    phoneReady: Boolean = false,
-    status: ComputerSetupStatus = ComputerSetupStatus.NotSetUp,
-    statusDetail: String = "",
-    installLog: String = "",
-    computerPower: ComputerPowerState = ComputerPowerState.Idle,
-    vncUrl: String? = null,
-    savedComputerProfile: ConnectionProfile? = null,
-    onSaveComputerProfile: (ConnectionProfile, passwordOrEmpty: String) -> Unit = { _, _ -> },
-    onTestConnection: (ConnectionProfile, passwordOrEmpty: String) -> Unit = { _, _ -> },
-    onInstallComputer: (ConnectionProfile, passwordOrEmpty: String) -> Unit = { _, _ -> },
-    onOpenTerminal: () -> Unit = {},
-    onOpenDesktop: (String) -> Unit = {},
-    onPowerChange: (ComputerPowerState) -> Unit = {},
-    onConfirmInstallPrompt: () -> Unit = {},
-    showInstallPrompt: Boolean = false,
-    modifier: Modifier = Modifier,
+@OptIn(ExperimentalLayoutApi::class)
+internal fun YourComputerSettingsSection(
+    step: ComputerToolsPage,
+    onNavigate: (ComputerToolsPage) -> Unit,
+    phoneProbeSummary: String,
+    phoneReady: Boolean,
+    status: ComputerSetupStatus,
+    statusDetail: String,
+    savedComputerProfile: ConnectionProfile?,
+    verifiedProfile: ConnectionProfile?,
+    onSaveComputerProfile: (ConnectionProfile, String) -> Unit,
+    onTestConnection: (ConnectionProfile, String) -> Unit,
+    onInstallComputer: (ConnectionProfile, String) -> Unit,
+    onOpenTerminal: () -> Unit,
+    onOpenServerTerminal: (ConnectionProfile) -> Unit,
+    onRefreshPhone: () -> Unit,
 ) {
     val context = LocalContext.current
-    var displayName by remember(savedComputerProfile?.id) {
-        mutableStateOf(savedComputerProfile?.displayName ?: "My Computer")
-    }
-    var host by remember(savedComputerProfile?.id) { mutableStateOf(savedComputerProfile?.host.orEmpty()) }
-    var port by remember(savedComputerProfile?.id) {
-        mutableStateOf((savedComputerProfile?.port ?: 22).toString())
-    }
-    var username by remember(savedComputerProfile?.id) {
-        mutableStateOf(savedComputerProfile?.username.orEmpty())
-    }
-    var credentialRef by remember(savedComputerProfile?.id) {
-        mutableStateOf(savedComputerProfile?.credentialRef?.ifBlank { "computer_main" } ?: "computer_main")
-    }
-    var workspacePath by remember(savedComputerProfile?.id) {
-        mutableStateOf(
-            savedComputerProfile?.workspaceRoot
-                ?: ComputerProfileMarks.DEFAULT_REMOTE_WORKSPACE,
-        )
-    }
-    var authMode by remember { mutableStateOf("password") } // password | key
+    val clipboard = LocalClipboardManager.current
+    val sourceId = savedComputerProfile?.id
+    val draftId = rememberSaveable(sourceId) { sourceId ?: UUID.randomUUID().toString() }
+    var displayName by rememberSaveable(sourceId) { mutableStateOf(savedComputerProfile?.displayName ?: "My Computer") }
+    var host by rememberSaveable(sourceId) { mutableStateOf(savedComputerProfile?.host.orEmpty()) }
+    var port by rememberSaveable(sourceId) { mutableStateOf((savedComputerProfile?.port ?: 22).toString()) }
+    var username by rememberSaveable(sourceId) { mutableStateOf(savedComputerProfile?.username.orEmpty()) }
+    var credentialRef by rememberSaveable(sourceId) { mutableStateOf(savedComputerProfile?.credentialRef?.ifBlank { "computer_main" } ?: "computer_main") }
+    var workspace by rememberSaveable(sourceId) { mutableStateOf(savedComputerProfile?.workspaceRoot ?: ComputerProfileMarks.DEFAULT_REMOTE_WORKSPACE) }
+    var type by rememberSaveable(sourceId) { mutableStateOf(savedComputerProfile?.type ?: ConnectionProfileType.SSH) }
+    var authMode by rememberSaveable { mutableStateOf("password") }
+    var advanced by rememberSaveable { mutableStateOf(false) }
     var secret by remember { mutableStateOf("") }
-    var profileType by remember(savedComputerProfile?.id) {
-        mutableStateOf(savedComputerProfile?.type ?: ConnectionProfileType.SSH)
-    }
-
-    fun draftProfile(): ConnectionProfile = ConnectionProfile(
-        id = savedComputerProfile?.id ?: UUID.randomUUID().toString(),
-        displayName = displayName.trim().ifBlank { "My Computer" },
-        type = profileType,
-        host = host.trim(),
-        port = port.toIntOrNull() ?: if (profileType == ConnectionProfileType.HTTPS_RUNTIME) ComputerProfileMarks.WORKER_PORT else 22,
-        username = username.trim().ifBlank { "user" },
-        credentialRef = credentialRef.trim().ifBlank { "computer_main" },
-        workspaceRoot = workspacePath.trim().ifBlank { null },
-        pinHostKeyOnFirstConnect = true,
+    var notice by remember { mutableStateOf<String?>(null) }
+    val busy = status == ComputerSetupStatus.Checking || status == ComputerSetupStatus.Installing
+    val validPort = port.toIntOrNull()?.let { it in 1..65535 } == true
+    val addressValid = host.isNotBlank() && !host.any { it.isWhitespace() } && validPort
+    val authValid = (type != ConnectionProfileType.SSH || username.isNotBlank()) && credentialRef.isNotBlank()
+    val profile = ConnectionProfile(draftId, displayName.trim().ifBlank { "My Computer" }, type,
+        host.trim(), port.toIntOrNull() ?: 22, username.trim(), credentialRef.trim(),
         hostKeyFingerprint = savedComputerProfile?.hostKeyFingerprint,
-    )
+        workspaceRoot = workspace.trim().ifBlank { ComputerProfileMarks.DEFAULT_REMOTE_WORKSPACE },
+        pinHostKeyOnFirstConnect = savedComputerProfile?.pinHostKeyOnFirstConnect ?: true)
+    val checked = sameComputerConnection(profile, verifiedProfile) &&
+        status in listOf(ComputerSetupStatus.Connected, ComputerSetupStatus.Ready) && secret.isEmpty()
 
     fun openUrl(url: String) {
-        runCatching {
-            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-        }
+        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+            .onFailure { notice = "Could not open the link. Try again after choosing a browser." }
+    }
+    fun openTermux() {
+        val launch=context.packageManager.getLaunchIntentForPackage(TermuxComputerLinks.TERMUX_PACKAGE)
+        if(launch == null) openUrl(TermuxComputerLinks.TERMUX_FDROID)
+        else runCatching { context.startActivity(launch) }.onFailure { notice="Could not open Termux." }
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        Text("Your Computer", style = MaterialTheme.typography.titleLarge)
-        Text(
-            TermuxComputerLinks.MATURITY_PREVIEW_NOTE,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            TermuxComputerLinks.HOWTO_PHONE_SHORT,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-
-        StatusCard(status = status, detail = statusDetail)
-
-        // ---- 1) On this phone ----
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("1 · On this phone", style = MaterialTheme.typography.titleMedium)
-            Text(
-                phoneProbeSummary,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                TermuxComputerLinks.TERMUX_BOOTSTRAP_STEPS,
-                style = MaterialTheme.typography.bodySmall,
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Button(onClick = { openUrl(TermuxComputerLinks.TERMUX_FDROID) }) {
-                    Text(TermuxComputerLinks.BUTTON_INSTALL_TERMUX)
+    Column(verticalArrangement=Arrangement.spacedBy(14.dp), modifier=Modifier.fillMaxWidth()) {
+        when(step) {
+            ComputerToolsPage.SETUP -> {
+                Text("Where should your Computer run?", style=MaterialTheme.typography.titleLarge)
+                Text("Choose one to get started. You can add the other later.", style=MaterialTheme.typography.bodyMedium)
+                ComputerDestinationCard("This phone", "Use Termux for a Linux workspace on your phone.", IconsForComputer.phone) {
+                    onNavigate(ComputerToolsPage.PHONE_INSTALL)
                 }
-                OutlinedButton(onClick = { openUrl(TermuxComputerLinks.TERMUX_GITHUB_RELEASES) }) {
-                    Text("GitHub releases")
-                }
-                OutlinedButton(onClick = { openUrl(TermuxComputerLinks.TERMUX_NETBIRD) }) {
-                    Text(TermuxComputerLinks.BUTTON_NETBIRD)
-                }
-                OutlinedButton(onClick = {
-                    val launch = context.packageManager
-                        .getLaunchIntentForPackage(TermuxComputerLinks.TERMUX_PACKAGE)
-                        ?.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                    if (launch != null) {
-                        runCatching { context.startActivity(launch) }
-                    } else {
-                        openUrl(TermuxComputerLinks.TERMUX_FDROID)
+                ComputerDestinationCard("A Linux server", savedComputerProfile?.let { "Continue with ${it.displayName}, or edit its connection." }
+                    ?: "Connect a computer you own using SSH.", IconsForComputer.server) { onNavigate(ComputerToolsPage.SERVER_ADDRESS) }
+            }
+            ComputerToolsPage.PHONE_INSTALL -> {
+                StepHint("Phone setup",1,3)
+                Text("Install Termux", style=MaterialTheme.typography.titleLarge)
+                Text("Termux provides the Linux environment. Return here once it is installed.")
+                Text(if(phoneReady) "Termux is available on this phone." else "Termux has not been detected yet.",
+                    color=MaterialTheme.colorScheme.onSurfaceVariant)
+                Button(onClick={openUrl(TermuxComputerLinks.TERMUX_FDROID)},modifier=Modifier.fillMaxWidth()) { Text("Get Termux") }
+                TextButton(onClick={openUrl(TermuxComputerLinks.TERMUX_GITHUB_RELEASES)}) { Text("Alternative: GitHub download") }
+                OutlinedButton(onClick=onRefreshPhone,modifier=Modifier.fillMaxWidth()) { Text("Check installation") }
+                Button(onClick={onNavigate(ComputerToolsPage.PHONE_PREPARE)},enabled=phoneReady,modifier=Modifier.fillMaxWidth()) { Text("Continue") }
+            }
+            ComputerToolsPage.PHONE_PREPARE -> {
+                StepHint("Phone setup",2,3)
+                Text("Prepare Linux",style=MaterialTheme.typography.titleLarge)
+                Text("Copy these commands, paste them in Termux, and wait for installation to finish. This downloads Linux packages.")
+                Card { Text(TermuxComputerLinks.BOOTSTRAP_COMMANDS,Modifier.padding(14.dp),style=MaterialTheme.typography.bodySmall.copy(fontFamily=FontFamily.Monospace)) }
+                Button(onClick={clipboard.setText(AnnotatedString(TermuxComputerLinks.BOOTSTRAP_COMMANDS));notice="Commands copied."},modifier=Modifier.fillMaxWidth()) { Text("Copy setup commands") }
+                OutlinedButton(onClick={openTermux()},modifier=Modifier.fillMaxWidth()) { Text("Open Termux") }
+                TextButton(onClick={advanced=!advanced}) { Text(if(advanced) "Hide connection help" else "Help connecting Termux") }
+                if(advanced) Text("If Meow cannot connect, allow Termux's RUN_COMMAND access and its external-app setting. The Terminal reports whether it reached Linux or only the phone sandbox.",style=MaterialTheme.typography.bodySmall)
+                Button(onClick={onNavigate(ComputerToolsPage.PHONE_OPEN)},modifier=Modifier.fillMaxWidth()) { Text("I finished these steps") }
+            }
+            ComputerToolsPage.PHONE_OPEN -> {
+                StepHint("Phone setup",3,3)
+                Text("Try your Computer",style=MaterialTheme.typography.titleLarge)
+                Text("Open Terminal to check the connection and start working. Installing Termux alone does not confirm that Linux is ready.")
+                Button(onClick=onOpenTerminal,modifier=Modifier.fillMaxWidth()) { Text("Open phone Terminal") }
+                OutlinedButton(onClick=onRefreshPhone,modifier=Modifier.fillMaxWidth()) { Text("Check phone again") }
+                Text(phoneProbeSummary,style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            ComputerToolsPage.SERVER_ADDRESS -> {
+                StepHint("Server setup",1,3)
+                Text("Which server?",style=MaterialTheme.typography.titleLarge)
+                OutlinedTextField(displayName,{displayName=it},label={Text("Connection name")},singleLine=true,modifier=Modifier.fillMaxWidth())
+                OutlinedTextField(host,{host=it},label={Text(if(type==ConnectionProfileType.SSH) "Server address" else "Server URL")},
+                    placeholder={Text(if(type==ConnectionProfileType.SSH) "my-server or 192.168.1.10" else "https://server.example")},singleLine=true,modifier=Modifier.fillMaxWidth())
+                TextButton(onClick={advanced=!advanced}) { Text(if(advanced) "Hide advanced connection options" else "Advanced connection options") }
+                if(advanced) {
+                    FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                        FilterChip(type==ConnectionProfileType.SSH,{type=ConnectionProfileType.SSH;if(port=="18766")port="22"},label={Text("SSH")})
+                        FilterChip(type==ConnectionProfileType.HTTPS_RUNTIME,{type=ConnectionProfileType.HTTPS_RUNTIME;if(port=="22")port="18766"},label={Text("HTTP worker")})
                     }
-                }) {
-                    Text(TermuxComputerLinks.BUTTON_OPEN_TERMUX)
+                    OutlinedTextField(port,{port=it.filter(Char::isDigit).take(5)},label={Text("Port")},isError=!validPort,singleLine=true,modifier=Modifier.fillMaxWidth())
+                    OutlinedTextField(workspace,{workspace=it},label={Text("Workspace folder")},singleLine=true,modifier=Modifier.fillMaxWidth())
+                    if(type==ConnectionProfileType.HTTPS_RUNTIME) Text("Use the full worker URL reachable from this phone. This is a separate connection from the desktop bridge.",style=MaterialTheme.typography.bodySmall)
                 }
+                Button(onClick={advanced=false;onNavigate(ComputerToolsPage.SERVER_SIGN_IN)},enabled=addressValid&&!busy,modifier=Modifier.fillMaxWidth()) { Text("Continue") }
             }
-            TextButton(onClick = { openUrl(TermuxComputerLinks.TERMUX_FDROID) }) {
-                Text(TermuxComputerLinks.BUTTON_SETUP_GUIDE + " (F-Droid page)")
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onOpenTerminal, enabled = phoneReady || status == ComputerSetupStatus.Ready) {
-                    Text("Open Terminal")
-                }
-                PowerRow(computerPower = computerPower, onPowerChange = onPowerChange)
-            }
-        }
-
-        Spacer(Modifier.height(4.dp))
-
-        // ---- 2) Optional server ----
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("2 · Linux server (optional)", style = MaterialTheme.typography.titleMedium)
-            Text(
-                TermuxComputerLinks.SERVER_HOWTO_SHORT,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            OutlinedTextField(
-                value = displayName,
-                onValueChange = { displayName = it },
-                label = { Text("Display name") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            OutlinedTextField(
-                value = host,
-                onValueChange = { host = it },
-                label = {
-                    Text(
-                        if (profileType == ConnectionProfileType.HTTPS_RUNTIME) {
-                            "Host or base URL"
-                        } else {
-                            "Host"
-                        },
-                    )
-                },
-                placeholder = {
-                    if (profileType == ConnectionProfileType.HTTPS_RUNTIME) {
-                        Text("http://${ComputerProfileMarks.EXAMPLE_NETBIRD_HOST}:${ComputerProfileMarks.WORKER_PORT}")
+            ComputerToolsPage.SERVER_SIGN_IN -> {
+                StepHint("Server setup",2,3)
+                Text("Sign in",style=MaterialTheme.typography.titleLarge)
+                Text(host,style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                if(type==ConnectionProfileType.SSH) {
+                    OutlinedTextField(username,{username=it},label={Text("Username")},singleLine=true,modifier=Modifier.fillMaxWidth())
+                    FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                        FilterChip(authMode=="password",{authMode="password"},label={Text("Password")})
+                        FilterChip(authMode=="key",{authMode="key"},label={Text("Private key")})
                     }
-                },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            OutlinedTextField(
-                value = port,
-                onValueChange = { port = it.filter { ch -> ch.isDigit() }.take(5) },
-                label = { Text("Port") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            OutlinedTextField(
-                value = username,
-                onValueChange = { username = it },
-                label = { Text("Username") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Auth", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(end = 8.dp))
-                OutlinedButton(onClick = { authMode = "password" }) {
-                    Text(if (authMode == "password") "Password ✓" else "Password")
                 }
-                Spacer(Modifier.padding(4.dp))
-                OutlinedButton(onClick = { authMode = "key" }) {
-                    Text(if (authMode == "key") "Key ref ✓" else "Key ref")
-                }
+                OutlinedTextField(secret,{secret=it},label={Text(if(type==ConnectionProfileType.HTTPS_RUNTIME) "Access token" else if(authMode=="key") "Private key" else "Password")},
+                    visualTransformation=PasswordVisualTransformation(),singleLine=authMode!="key",maxLines=5,modifier=Modifier.fillMaxWidth())
+                Text("Leave blank to reuse a saved credential. New credentials are stored encrypted when you save or test.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                TextButton(onClick={advanced=!advanced}) { Text(if(advanced) "Hide saved credential options" else "Saved credential options") }
+                if(advanced) OutlinedTextField(credentialRef,{credentialRef=it.filter { c->c.isLetterOrDigit()||c=='_'||c=='-' }},label={Text("Saved credential name")},singleLine=true,modifier=Modifier.fillMaxWidth())
+                Button(onClick={advanced=false;onNavigate(ComputerToolsPage.SERVER_REVIEW)},enabled=authValid&&!busy,modifier=Modifier.fillMaxWidth()) { Text("Review connection") }
             }
-            OutlinedTextField(
-                value = credentialRef,
-                onValueChange = {
-                    credentialRef = it.filter { ch -> ch.isLetterOrDigit() || ch == '_' || ch == '-' }
-                },
-                label = { Text("Credential ref") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            OutlinedTextField(
-                value = secret,
-                onValueChange = { secret = it },
-                label = {
-                    Text(if (authMode == "password") "Password (SecureStorage)" else "Private key material (SecureStorage)")
-                },
-                singleLine = authMode == "password",
-                visualTransformation = PasswordVisualTransformation(),
-                modifier = Modifier.fillMaxWidth(),
-            )
-            OutlinedTextField(
-                value = workspacePath,
-                onValueChange = { workspacePath = it },
-                label = { Text("Workspace path (optional)") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(
-                    onClick = {
-                        profileType = ConnectionProfileType.SSH
-                        if (port == ComputerProfileMarks.WORKER_PORT.toString()) port = "22"
-                    },
-                ) { Text(if (profileType == ConnectionProfileType.SSH) "SSH ✓ (preferred)" else "SSH (preferred)") }
-                OutlinedButton(
-                    onClick = {
-                        profileType = ConnectionProfileType.HTTPS_RUNTIME
-                        if (port == "22") port = ComputerProfileMarks.WORKER_PORT.toString()
-                    },
-                ) {
-                    Text(
-                        if (profileType == ConnectionProfileType.HTTPS_RUNTIME) {
-                            "HTTPS runtime ✓"
-                        } else {
-                            "HTTPS runtime (advanced)"
-                        },
-                    )
+            ComputerToolsPage.SERVER_REVIEW -> {
+                StepHint("Server setup",3,3)
+                Text(profile.displayName,style=MaterialTheme.typography.titleLarge)
+                Text(if(type==ConnectionProfileType.SSH) "${profile.username}@${profile.host}:${profile.port}" else profile.host)
+                Text("Workspace: ${profile.workspaceRoot}",style=MaterialTheme.typography.bodySmall)
+                Text(if(checked) "Connection checked successfully." else "Test the connection before installing a server workspace.",style=MaterialTheme.typography.bodyMedium)
+                Button(onClick={onTestConnection(profile,secret);secret=""},enabled=addressValid&&authValid&&!busy,modifier=Modifier.fillMaxWidth()) {
+                    Text(if(status==ComputerSetupStatus.Checking) "Checking connection…" else "Save & test connection")
+                }
+                OutlinedButton(onClick={onSaveComputerProfile(profile,secret);secret="";notice="Save requested. Test the connection when you are ready."},enabled=!busy,modifier=Modifier.fillMaxWidth()) { Text("Save for later") }
+                if(type==ConnectionProfileType.SSH) {
+                    Text("Optional: Install Computer uploads the workspace installer to this server and runs it there.",style=MaterialTheme.typography.bodySmall)
+                    Button(onClick={onInstallComputer(profile,"")},enabled=checked&&!busy,modifier=Modifier.fillMaxWidth()) { Text(if(status==ComputerSetupStatus.Installing) "Installing…" else "Install Computer") }
+                    OutlinedButton(onClick={onOpenServerTerminal(profile)},enabled=checked&&!busy,modifier=Modifier.fillMaxWidth()) { Text("Open server Terminal") }
+                }
+                if(statusDetail.isNotBlank()) {
+                    Text(if(status==ComputerSetupStatus.Error) "Connection needs attention" else "Connection status",style=MaterialTheme.typography.titleSmall)
+                    Text(statusDetail,style=MaterialTheme.typography.bodySmall,color=if(status==ComputerSetupStatus.Error)MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            if (profileType == ConnectionProfileType.HTTPS_RUNTIME) {
-                Text(
-                    TermuxComputerLinks.HTTPS_RUNTIME_HINT,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    "Host may be a full base URL (http://100.77.97.236:${ComputerProfileMarks.WORKER_PORT}).",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                val p = draftProfile()
-                OutlinedButton(onClick = { onSaveComputerProfile(p, secret) }) { Text("Save") }
-                Button(onClick = { onTestConnection(p, secret) }) { Text("Test") }
-                Button(
-                    onClick = { onInstallComputer(p, secret) },
-                    enabled = profileType == ConnectionProfileType.SSH,
-                ) { Text("Install Computer") }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onOpenTerminal) { Text("Open Terminal") }
-                if (!vncUrl.isNullOrBlank()) {
-                    OutlinedButton(onClick = { onOpenDesktop(vncUrl); openUrl(vncUrl) }) { Text("Open Desktop") }
-                }
-            }
+            else -> Unit
         }
-
-        if (showInstallPrompt) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    TermuxComputerLinks.INSTALL_PROMPT,
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Button(onClick = onConfirmInstallPrompt) { Text("Install Meow Computer") }
-            }
-        }
-
-        if (installLog.isNotBlank()) {
-            Text("Install log", style = MaterialTheme.typography.titleSmall)
-            val scroll = rememberScrollState()
-            Text(
-                installLog,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 80.dp, max = 220.dp)
-                    .verticalScroll(scroll)
-                    .padding(8.dp),
-                style = MaterialTheme.typography.bodySmall.copy(
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 11.sp,
-                ),
-            )
-        }
+        notice?.let { Text(it,style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.primary) }
     }
 }
 
 @Composable
-private fun StatusCard(status: ComputerSetupStatus, detail: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(
-            when (status) {
-                ComputerSetupStatus.NotSetUp -> "Status · Not set up"
-                ComputerSetupStatus.Connected -> "Status · Connected"
-                ComputerSetupStatus.Installing -> "Status · Installing"
-                ComputerSetupStatus.Ready -> "Status · Ready"
-                ComputerSetupStatus.Error -> "Status · Error"
-            },
-            style = MaterialTheme.typography.titleSmall,
-        )
-        Text(
-            status.toHumanSentence(),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        if (detail.isNotBlank()) {
-            Text(detail, style = MaterialTheme.typography.bodySmall)
-        }
-    }
-}
-
-@Composable
-private fun PowerRow(
-    computerPower: ComputerPowerState,
-    onPowerChange: (ComputerPowerState) -> Unit,
-) {
-    Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text("Power", style = MaterialTheme.typography.bodySmall)
-        TextButton(onClick = { onPowerChange(ComputerPowerState.On) }) {
-            Text(if (computerPower == ComputerPowerState.On) "On ✓" else "On")
-        }
-        TextButton(onClick = { onPowerChange(ComputerPowerState.Idle) }) {
-            Text(if (computerPower == ComputerPowerState.Idle) "Idle ✓" else "Idle")
-        }
-        TextButton(onClick = { onPowerChange(ComputerPowerState.Off) }) {
-            Text(if (computerPower == ComputerPowerState.Off) "Off ✓" else "Off")
-        }
-    }
+private fun StepHint(name:String,step:Int,total:Int) {
+    Text("$name · Step $step of $total",style=MaterialTheme.typography.labelLarge,color=MaterialTheme.colorScheme.primary)
+    LinearProgressIndicator(progress={step.toFloat()/total},modifier=Modifier.fillMaxWidth())
 }

@@ -64,7 +64,8 @@ class GeneratedAvatarStoreTest {
         store.save(named, "../../sentinel")
         assertEquals("preserve", sentinel.readText()); assertEquals(named, store.find("../../sentinel"))
         assertNull(store.load("../sentinel")); assertFalse(store.delete("../sentinel"))
-        assertThrows(IllegalArgumentException::class.java) { store.save(base, "x".repeat(501)) }
+        store.save(base, "x".repeat(GeneratedAvatarForms.MAX_REQUEST))
+        assertThrows(IllegalArgumentException::class.java) { store.save(base, "x".repeat(GeneratedAvatarForms.MAX_REQUEST + 1)) }
     }
 
     @Test fun deletingOneFormPreservesTheOthers() {

@@ -26,6 +26,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import com.example.meowmba.ui.theme.DropdownMenu
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -191,6 +192,9 @@ fun SettingsScreen(
     onComputerTestConnection: (ConnectionProfile, String) -> Unit = { _, _ -> },
     onComputerInstall: (ConnectionProfile, String) -> Unit = { _, _ -> },
     onComputerOpenTerminal: () -> Unit = {},
+    onComputerOpenServerTerminal: (ConnectionProfile) -> Unit = {},
+    onRefreshComputerPhone: () -> Unit = {},
+    computerVerifiedProfile: ConnectionProfile? = null,
     onComputerOpenDesktop: (String) -> Unit = {},
     onComputerConfirmInstallPrompt: () -> Unit = {},
     onSaved: () -> Unit = {},
@@ -227,6 +231,48 @@ fun SettingsScreen(
         if (page != null) page = null else onClose()
     }
     BackHandler(onBack = back)
+
+    if (page == COMPUTER_TOOLS_TITLE) {
+        ComputerToolsScreen(
+            onClose = { page = null },
+            agenticRuntimeV1 = agenticRuntimeV1,
+            onAgenticRuntimeV1Change = onAgenticRuntimeV1Change,
+            connectionProfiles = connectionProfiles,
+            onSaveConnectionProfile = onSaveConnectionProfile,
+            onDeleteConnectionProfile = onDeleteConnectionProfile,
+            onSaveAgenticCredential = onSaveAgenticCredential,
+            agenticGoals = agenticGoals,
+            agenticModelConfig = agenticModelConfig,
+            sshCapabilitySummary = sshCapabilitySummary,
+            onCreateAgenticGoal = onCreateAgenticGoal,
+            onTickAgenticGoal = onTickAgenticGoal,
+            onTickOpenAgenticGoals = onTickOpenAgenticGoals,
+            onApproveAgenticGoal = onApproveAgenticGoal,
+            onRejectAgenticGoal = onRejectAgenticGoal,
+            onRefreshAgenticTasks = onRefreshAgenticTasks,
+            onSaveAgenticModelConfig = onSaveAgenticModelConfig,
+            computerPhoneProbeSummary = computerPhoneProbeSummary,
+            computerPhoneReady = computerPhoneReady,
+            computerSetupStatus = computerSetupStatus,
+            computerStatusDetail = computerStatusDetail,
+            computerInstallLog = computerInstallLog,
+            computerVncUrl = computerVncUrl,
+            computerSavedProfile = computerSavedProfile,
+            onComputerSaveProfile = onComputerSaveProfile,
+            onComputerTestConnection = onComputerTestConnection,
+            onComputerInstall = onComputerInstall,
+            onComputerOpenTerminal = onComputerOpenTerminal,
+            onComputerOpenDesktop = onComputerOpenDesktop,
+            computerPower = computerPower,
+            onComputerPowerChange = onComputerPowerChange,
+            computerIdleMinutes = computerIdleMinutes,
+            onComputerIdleMinutesChange = onComputerIdleMinutesChange,
+            onComputerOpenServerTerminal = onComputerOpenServerTerminal,
+            onRefreshComputerPhone = onRefreshComputerPhone,
+            computerVerifiedProfile = computerVerifiedProfile,
+        )
+        return
+    }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -293,46 +339,11 @@ fun SettingsScreen(
                     onTraceConsentChanged = onNeuralTrace, onReset = onNeuralReset,
                     lumenReflexV2 = lumenReflexV2,
                     onLumenReflexV2Change = onLumenReflexV2Change,
-                    agenticRuntimeV1 = agenticRuntimeV1,
-                    onAgenticRuntimeV1Change = onAgenticRuntimeV1Change,
-                    connectionProfiles = connectionProfiles,
-                    onSaveConnectionProfile = onSaveConnectionProfile,
-                    onDeleteConnectionProfile = onDeleteConnectionProfile,
-                    onSaveAgenticCredential = onSaveAgenticCredential,
-                    agenticGoals = agenticGoals,
-                    agenticModelConfig = agenticModelConfig,
-                    sshCapabilitySummary = sshCapabilitySummary,
-                    onCreateAgenticGoal = onCreateAgenticGoal,
-                    onTickAgenticGoal = onTickAgenticGoal,
-                    onTickOpenAgenticGoals = onTickOpenAgenticGoals,
-                    onApproveAgenticGoal = onApproveAgenticGoal,
-                    onRejectAgenticGoal = onRejectAgenticGoal,
-                    onRefreshAgenticTasks = onRefreshAgenticTasks,
-                    onSaveAgenticModelConfig = onSaveAgenticModelConfig,
                     reflexGain = lumenReflexGain,
                     onReflexGainChange = onLumenReflexGainChange,
                     avatarFpsTarget = avatarFpsTarget,
                     onAvatarFpsTargetChange = onAvatarFpsTargetChange,
-
-                    computerPhoneProbeSummary = computerPhoneProbeSummary,
-                    computerPhoneReady = computerPhoneReady,
-                    computerSetupStatus = computerSetupStatus,
-                    computerStatusDetail = computerStatusDetail,
-                    computerInstallLog = computerInstallLog,
-                    computerPowerState = computerPowerState,
-                    computerVncUrl = computerVncUrl,
-                    computerSavedProfile = computerSavedProfile,
-                    computerShowInstallPrompt = computerShowInstallPrompt,
-                    onComputerSaveProfile = onComputerSaveProfile,
-                    onComputerTestConnection = onComputerTestConnection,
-                    onComputerInstall = onComputerInstall,
-                    onComputerOpenTerminal = onComputerOpenTerminal,
-                    onComputerOpenDesktop = onComputerOpenDesktop,
-                    onComputerConfirmInstallPrompt = onComputerConfirmInstallPrompt,
-                    computerPower = computerPower,
-                    onComputerPowerChange = onComputerPowerChange,
-                    computerIdleMinutes = computerIdleMinutes,
-                    onComputerIdleMinutesChange = onComputerIdleMinutesChange,
+                    onOpenComputerTools = { page = COMPUTER_TOOLS_TITLE },
                 )
             }
             if (page == "Help & feedback") BetaHelpCard()
@@ -1119,10 +1130,10 @@ fun SettingsScreen(
             if (connectionProfiles.isNotEmpty() || agenticRuntimeV1) {
                 SettingsSectionCard(
                     title = "Agentic connection profiles",
-                    summary = "SSH targets used when task automation is enabled. Edit under Neural / Lumen → Computer & task tools, or pick a saved profile below to reuse host details.",
+                    summary = "SSH targets used when task automation is enabled. Edit under Computer & task tools → Saved connections, or pick a saved profile below to reuse host details.",
                 ) {
                     if (connectionProfiles.isEmpty()) {
-                        Text("No agentic profiles yet. Enable agentic runtime in Neural / Lumen to add one.", style = MaterialTheme.typography.bodySmall)
+                        Text("No agentic profiles yet. Open Computer & task tools → Saved connections to add one.", style = MaterialTheme.typography.bodySmall)
                     } else {
                         connectionProfiles.forEach { profile ->
                             Surface(
@@ -1420,7 +1431,7 @@ fun BridgeWorkspaceBrowser(bridgeManager: DesktopBridgeManager) {
             Text(
                 "No workspace roots declared on the desktop — add them to ~/.meowmba-bridge/config.json",
                 style = MaterialTheme.typography.bodySmall,
-                color = Color(0xFFD29922)
+                color = MaterialTheme.colorScheme.tertiary
             )
         }
         Text(currentPath, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontFamily = FontFamily.Monospace)
@@ -1566,6 +1577,10 @@ internal fun OpenRouterModelPicker(
             ),
         )
         ExposedDropdownMenu(
+            shape = MaterialTheme.shapes.medium,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            border = com.example.meowmba.ui.theme.cartoonBorder(),
+            tonalElevation = 0.dp,
             expanded = expanded && (shown.isNotEmpty() || query.isNotBlank()),
             onDismissRequest = { expanded = false; query = "" },
         ) {
@@ -1600,12 +1615,12 @@ internal fun OpenRouterModelPicker(
 @Composable
 private fun KeyStatusBadge(configured: Boolean, providerName: String) {
     Surface(
-        color = if (configured) Color(0xFF4CAF50).copy(alpha = 0.15f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f),
+        color = if (configured) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f),
         shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
     ) {
         Text(
             text = if (configured) "\u2713 Connected" else "Not set",
-            color = if (configured) Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurfaceVariant,
+            color = if (configured) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.labelSmall,
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
         )
@@ -1778,12 +1793,13 @@ private fun brainLabel(id: String): String = BRAIN_CHOICES.firstOrNull { it.firs
 private data class SettingsCategory(val title: String, val summary: String, val icon: ImageVector)
 private val SETTINGS_CATEGORIES = listOf(
     SettingsCategory("Voice & behavior", "Wake phrase, conversation and listening", Icons.Default.Mic),
+    SettingsCategory(COMPUTER_TOOLS_TITLE, "Computer setup, tasks, connections and power", Icons.Default.Computer),
     SettingsCategory("AI & models", "LLM settings, agent routing and downloads", Icons.Default.Psychology),
     SettingsCategory("Images", "AI Horde, Cloudflare and on-phone images", Icons.Default.Image),
     SettingsCategory("Music & video", "Media-generation services", Icons.Default.Movie),
     SettingsCategory("Phone & device", "App control, access and device behavior", Icons.Default.PhoneAndroid),
     SettingsCategory("Appearance", "Dark/light mode, themes and avatars", Icons.Default.Palette),
-    SettingsCategory("Neural / Lumen", "Lumen reflex, Computer power, nervous-system toggles", Icons.Default.Bolt),
+    SettingsCategory("Neural / Lumen", "Avatar reactions, neural brain and sensitivity", Icons.Default.Bolt),
     SettingsCategory("Connections & memory", "Desktop bridge, servers and shared memory", Icons.Default.Link),
     SettingsCategory("Driving", "Drive mode and emergency contact", Icons.Default.DirectionsCar),
     SettingsCategory("Help & feedback", "Beta help, testing and support", Icons.Default.HelpOutline),

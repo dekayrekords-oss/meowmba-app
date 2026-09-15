@@ -1,0 +1,86 @@
+{
+  "status": "BLOCKED",
+  "note": "Sticker rolls are 3 below minimum target (2 available vs 5 target). Shipping boxes are at or above minimum (20 available vs 10 target, shortage 0).",
+  "agents": [
+    {
+      "name": "Accounts specialist",
+      "model": "openrouter/free"
+    },
+    {
+      "name": "Stock specialist",
+      "model": "openrouter/free"
+    },
+    {
+      "name": "Shop manager",
+      "model": "openrouter/free"
+    }
+  ],
+  "steps": [
+    {
+      "id": "s1",
+      "agentId": "accounts",
+      "tool": "files.read",
+      "status": "SUCCEEDED",
+      "args": {
+        "path": "orders.csv",
+        "offset": "],"
+      },
+      "output": "File: orders.csv; characters 0..72 of 72; end of file\norder,amount,status\nA101,21.50,unpaid\nA102,40.00,paid\nA103,35.25,unpaid\n"
+    },
+    {
+      "id": "s2",
+      "agentId": "accounts",
+      "tool": "files.csv_summary",
+      "status": "SUCCEEDED",
+      "args": {
+        "path": "orders.csv",
+        "amount_column": "amount",
+        "filter_column": "status",
+        "filter_value": "unpaid"
+      },
+      "output": "Rows in file: 3\nSelected rows: 2\nSum of amount: 56.75\nFilter: status equals unpaid (case-insensitive)"
+    },
+    {
+      "id": "s3",
+      "agentId": "accounts",
+      "tool": "agent.validation",
+      "status": "REJECTED",
+      "args": {},
+      "output": "Use exact successful evidence IDs: s1, s2. The attempted finish was rejected. Continue the current goal if more work remains."
+    },
+    {
+      "id": "s4",
+      "agentId": "accounts",
+      "tool": "agent.validation",
+      "status": "REJECTED",
+      "args": {},
+      "output": "Use exact successful evidence IDs: s1, s2. The attempted finish was rejected. Continue the current goal if more work remains."
+    },
+    {
+      "id": "s5",
+      "agentId": "accounts",
+      "tool": "files.read",
+      "status": "SUCCEEDED",
+      "args": {
+        "path": "stock.txt"
+      },
+      "output": "File: stock.txt; characters 0..95 of 95; end of file\nSticker rolls: 2 available; minimum target 5. Shipping boxes: 20 available; minimum target 10.\n"
+    },
+    {
+      "id": "s6",
+      "agentId": "accounts",
+      "tool": "agent.validation",
+      "status": "REJECTED",
+      "args": {},
+      "output": "Use exact successful evidence IDs: s1, s2, s5. The attempted finish was rejected. Continue the current goal if more work remains."
+    },
+    {
+      "id": "s7",
+      "agentId": "accounts",
+      "tool": "agent.result",
+      "status": "SUCCEEDED",
+      "args": {},
+      "output": "Agent summary: orders.csv contains two unpaid orders: A101 for 21.50 and A103 for 35.25. The exact unpaid total is 56.75.\nRecorded tool evidence:\ns1 files.read: File: orders.csv; characters 0..72 of 72; end of file\norder,amount,status\nA101,21.50,unpaid\nA102,40.00,paid\nA103,35.25,unpaid\n\ns2 files.csv_summary: Rows in file: 3\nSelected rows: 2\nSum of amount: 56.75\nFilter: status equals unpaid (case-insensitive)"
+    }
+  ]
+}

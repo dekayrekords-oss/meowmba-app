@@ -37,12 +37,12 @@ object YourComputerViewModelHooks {
             (probeKind?.contains("TERMUX", true) == true) ||
             (probeKind?.contains("PROOT", true) == true)
         val summary = when {
-            ready && probeKind != null ->
-                "Termux / PRoot guest detected ($probeKind). This phone can be your Computer."
+            probeKind == LocalLinuxKind.TERMUX_LINUX.name ->
+                "Termux's shell is available. Open Terminal to check your Linux workspace."
             ready ->
-                "Termux is installed. Open Terminal → Computer, or finish proot-distro setup."
+                "Termux is installed. Open Terminal to check access and finish Linux setup."
             else ->
-                "No Termux guest yet. Install Termux from F-Droid or GitHub, then open Terminal → Computer."
+                "Termux has not been detected. Use Set up Computer → This phone to get started."
         }
         return summary to ready
     }

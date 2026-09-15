@@ -1,0 +1,14 @@
+{
+  "app/build.gradle.kts": "295bfaa5cd2c801570818c01fa589c8a1ea3682422f00539ff913d578448cffd",
+  "app/src/main/java/com/example/meowmba/ui/companion/AvatarRenderer.kt": "9976c12c17a2c6ff2cff30097fc4b66b3aa11f9add451234414e7c585bdd7553",
+  "app/src/main/java/com/example/meowmba/ui/companion/CartoonHabitatGags.kt": "f5fbae345ef0723aef71b3960c58125cd3843eb1333c7020314093e48d83a7a3",
+  "app/src/main/java/com/example/meowmba/ui/companion/CompanionScreen.kt": "fe440281c52522483a26fa5d38b9ac7ed8d0105bd6cf87121265ce88e6b37ed4",
+  "app/src/main/java/com/example/meowmba/ui/companion/Fly3DRenderer.kt": "5d700348dc0db82a877fee854161d6c46b3483bf35dfb93d067478df60c568a6",
+  "app/src/main/java/com/example/meowmba/ui/companion/GeneratedAvatarPlacement.kt": "352f04eb20e4af501f39efdb26b127984b7e0005a6c1cc55e10b1e3447c9a1ff",
+  "app/src/main/java/com/example/meowmba/ui/companion/IllustratedEnvironmentBackground.kt": "7cab8f75ed97790d9ff20cb0adb1003bb77660c3520ef5fd1c208bb8fe8967d9",
+  "app/src/main/java/com/example/meowmba/ui/companion/PetCarePanel.kt": "3357be2036612292ae5b8ec4c92b2df265ea3e86c5010dfa4cd47d88aa2e186e",
+  "app/src/main/java/com/example/meowmba/ui/companion/HabitatAvatarScale.kt": "4061234f05df2518464628e0eff7af4b0e6edc0eab47a46577e4311d3467204b",
+  "app/src/main/java/com/example/meowmba/ui/companion/HabitatObjectAnimations.kt": "350cbf612e3e3350f9a51d958f9812e2cf8227513558059bd782d700d3d04bf0",
+  "app/src/test/java/com/example/meowmba/HabitatMotionTest.kt": "c6c7e1f69a002b357f8f8b550ac4edc9d3b5ba8a24ce5299095aa1abf51111ea",
+  "app/src/test/java/com/example/meowmba/PetCareModeUiTest.kt": "be60933476eec92a11d366e44cefcb548b50242bd21c17b0f809a063542faf91"
+}

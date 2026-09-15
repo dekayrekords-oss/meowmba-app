@@ -289,8 +289,9 @@ internal class CartoonHabitatGag(private val kind: CartoonGagKind) {
  */
 internal fun cartoonFlyOwnsPoint(point: Offset, width: Float, height: Float, frame: Fly3DFrame): Boolean {
     val scale = frame.avatarScale.takeIf { it.isFinite() }?.coerceIn(.5f, 3f) ?: 2f
-    val unit = .61f * scale
-    val groundedOffset = .545f * (scale * 1.22f - 1f) * (1f - frame.flight.coerceIn(0f, 1f))
+    val gameScale = habitatFlyScale(scale)
+    val unit = .50f * gameScale
+    val groundedOffset = .545f * (gameScale - 1f) * (1f - frame.flight.coerceIn(0f, 1f))
     val rootY = frame.y + groundedOffset
     val center = cartoonProjectHabitatPoint(frame.x, rootY + unit * .12f, frame.z, width, height) ?: return true
     val front = cartoonProjectHabitatPoint(frame.x + unit * 1.6f, rootY + unit * .12f,

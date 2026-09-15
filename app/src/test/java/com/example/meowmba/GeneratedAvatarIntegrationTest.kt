@@ -135,6 +135,38 @@ class GeneratedAvatarIntegrationTest {
         }
     }
 
+    @Test fun `equipping a prop preserves a generated avatar and survives restart until put away`() = runTest {
+        fixture {
+            val form = GeneratedAvatarExamples.dragon()
+            store.save(form, "dragon")
+            val props = GeneratedPropStore(File(folder, "companion_props"))
+            val prop = GeneratedPropForms.parse(GeneratedPropForms.toJson(GeneratedPropForm(
+                "", "Coffee", "A small cup", GeneratedPropCategory.HELD, "Hold it",
+                GeneratedAvatarExamples.coffeeCup().parts.take(2))))
+            props.save(prop, "cup")
+            val model = model()
+            model.selectGeneratedAvatarForm(form.id)
+            model.equipProp(prop.id)
+            assertEquals(form, model.uiState.value.generatedAvatarForm)
+            assertEquals(prop, model.uiState.value.equippedProp)
+            assertEquals(prop.id, values["equipped_prop_id"])
+            val restored = model()
+            assertEquals(form, restored.uiState.value.generatedAvatarForm)
+            assertEquals(prop, restored.uiState.value.equippedProp)
+            restored.equipProp("missing")
+            assertTrue(restored.uiState.value.propInventError)
+            assertEquals(prop, restored.uiState.value.equippedProp)
+            restored.equipProp(null)
+            assertNull(model().uiState.value.equippedProp)
+            assertEquals(form, restored.uiState.value.generatedAvatarForm)
+            restored.equipProp(prop.id)
+            restored.deleteProp(prop.id)
+            assertNull(restored.uiState.value.equippedProp)
+            assertNull(model().uiState.value.equippedProp)
+            assertNull(props.load(prop.id))
+        }
+    }
+
     @Test fun `a later preset cancels even a noncooperative model without a late save`() = runTest {
         fixture {
             val model = model()
@@ -153,6 +185,67 @@ class GeneratedAvatarIntegrationTest {
             assertNull(model.uiState.value.generatedAvatarForm)
             assertTrue(store.list().isEmpty())
             assertFalse(model.uiState.value.avatarFormGenerating)
+        }
+    }
+
+    @Test fun `optional review timeout preserves completed avatar and prop designs`() = runTest {
+        fixture {
+            val model = model()
+            val form = GeneratedAvatarExamples.coffeeCup()
+            var calls = 0
+            model.currentProvider = Provider {
+                if (++calls == 1) ModelResponse.Complete(GeneratedAvatarForms.toJson(form)) else awaitCancellation()
+            }
+            val work = async(dispatcher) { model.generateAvatarForm("a dancing cup", reasonLevel = InventReasonLevel.BALANCED) }
+            advanceTimeBy(90_001); runCurrent()
+            assertTrue(work.await() is ToolResult.Success)
+            assertEquals(form, model.uiState.value.generatedAvatarForm)
+            assertTrue(model.uiState.value.avatarFormMessage.orEmpty().contains("Extra polish timed out"))
+            assertFalse(model.uiState.value.avatarFormGenerating)
+
+            val prop = GeneratedPropForms.parse(GeneratedPropForms.toJson(GeneratedPropForm(
+                "", "Cup", "", GeneratedPropCategory.HELD, "Hold it", form.parts.take(2))))
+            calls = 0
+            model.currentProvider = Provider {
+                if (++calls == 1) ModelResponse.Complete(GeneratedPropForms.toJson(prop)) else awaitCancellation()
+            }
+            model.inventProp("a blue cup", "held", "", InventReasonLevel.BALANCED)
+            advanceTimeBy(75_001); runCurrent()
+            assertEquals(prop, model.uiState.value.savedProps.single())
+            assertFalse(model.uiState.value.propInventError)
+            assertFalse(model.uiState.value.propInventGenerating)
+            assertTrue(model.uiState.value.propInventMessage.orEmpty().contains("Extra polish timed out"))
+        }
+    }
+
+    @Test fun `user cancellation during optional polish never saves the candidate`() = runTest {
+        fixture {
+            val model = model()
+            val form = GeneratedAvatarExamples.coffeeCup()
+            var calls = 0
+            model.currentProvider = Provider {
+                if (++calls == 1) ModelResponse.Complete(GeneratedAvatarForms.toJson(form)) else awaitCancellation()
+            }
+            val work = async(dispatcher) { model.generateAvatarForm("a dancing cup", reasonLevel = InventReasonLevel.BALANCED) }
+            assertEquals(2, calls)
+            model.setAvatarAnimal(AvatarAnimal.CLIPPY)
+            runCatching { work.await() }
+            assertTrue(work.isCancelled)
+            assertTrue(store.list().isEmpty())
+            assertEquals(AvatarAnimal.CLIPPY, model.uiState.value.avatarAnimal)
+
+            val prop = GeneratedPropForms.parse(GeneratedPropForms.toJson(GeneratedPropForm(
+                "", "Cup", "", GeneratedPropCategory.HELD, "Hold it", form.parts.take(2))))
+            calls = 0
+            model.currentProvider = Provider {
+                if (++calls == 1) ModelResponse.Complete(GeneratedPropForms.toJson(prop)) else awaitCancellation()
+            }
+            model.inventProp("a blue cup", "held", "", InventReasonLevel.BALANCED)
+            assertEquals(2, calls)
+            model.cancelPropInvent()
+            advanceTimeBy(75_001); runCurrent()
+            assertTrue(model.uiState.value.savedProps.isEmpty())
+            assertFalse(model.uiState.value.propInventGenerating)
         }
     }
 

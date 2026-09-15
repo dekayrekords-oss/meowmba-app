@@ -1,0 +1,100 @@
+{
+  "date": "2026-09-15",
+  "versionName": "1.3.82",
+  "versionCode": 134,
+  "sourceBase": "a3832545aad6d4b447a84c61e0c4eb643ece120f",
+  "sourceFiles": "source-files.json",
+  "sourceMatch": {
+    "mac": true,
+    "meowDebug": true,
+    "meowRelease": true,
+    "files": 12
+  },
+  "jvm": {
+    "tests": 2538,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "jvmSuites": 363,
+  "build": {
+    "debug": "passed",
+    "androidTest": "passed",
+    "release": "passed",
+    "releaseVitalLint": "passed",
+    "debugElapsedSeconds": 86,
+    "releaseElapsedSeconds": 77
+  },
+  "runtime": {
+    "debug": {
+      "baseline": "meow-preview133.apk",
+      "candidate": "meow-preview134.apk",
+      "protectedEntries": 75,
+      "missing": [],
+      "changed": [],
+      "generatedProfilesChanged": [],
+      "apkSha256": "2934f816f8d31fa577f621e7fb7a3e17cdb696e60022a44d73510ff246f6397b",
+      "passed": true
+    },
+    "release": {
+      "baseline": "meowmba-1.3.82-code133-release.apk",
+      "candidate": "meowmba-1.3.82-code134-release.apk",
+      "protectedEntries": 149,
+      "missing": [],
+      "changed": [],
+      "generatedProfilesChanged": [
+        "assets/dexopt/baseline.prof",
+        "assets/dexopt/baseline.profm"
+      ],
+      "apkSha256": "bfad384457bc3d17ec966afdec23b5a68391353a46138c39909d1ce323929078",
+      "passed": true
+    }
+  },
+  "phone": {
+    "serial": "RFCY61NJEVM",
+    "transport": "USB",
+    "regularPackage": "com.meow.meowmba",
+    "regularInstalledCode": 134,
+    "regularLastUpdateTime": "2026-09-15 14:16:09",
+    "debugInstalledCode": 134,
+    "install": "in-place -r; no data clearing",
+    "releaseCertificateSha256": "2103e4b14acf74a462218b25f2a04419856c5c2648d13db14f6ff8c4fa247fc0",
+    "gpu": {
+      "suite": "Fly3DGpuTest",
+      "passed": 5,
+      "failed": 0,
+      "seconds": 11.727,
+      "surface": "headless EGL pbuffer on phone hardware"
+    },
+    "interactiveCareCheck": "Not performed on the phone; another app and navigation were in use. Two native Robolectric UI checks and captures passed. No foreground navigation was changed."
+  },
+  "motion": {
+    "rooms": 19,
+    "viewports": [
+      "360x800",
+      "800x360"
+    ],
+    "foregroundUnchanged": true,
+    "portraitChangedPixelRange": [
+      93,
+      3075
+    ],
+    "pixelsPerFrame": 288000,
+    "loopEndpointIdentical": true,
+    "clockPauseReplayIdentical": true,
+    "landscapeWindowOutsideCrop": [
+      "kitchen",
+      "library",
+      "cafe",
+      "observatory",
+      "beach",
+      "bedroom"
+    ]
+  },
+  "play": "Recorded code130 Alpha submission unchanged; no store upload in this task",
+  "limits": [
+    "2D full-fly viewport containment can cap oversized characters.",
+    "Native graphics and finite render checks are not all-day battery/heat or voice accuracy acceptance."
+  ],
+  "artifacts": "/Users/prog/Meowmba-Releases/habitat134-20260915"
+}

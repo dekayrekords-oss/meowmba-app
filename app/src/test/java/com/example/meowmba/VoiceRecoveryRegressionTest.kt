@@ -46,7 +46,7 @@ class VoiceRecoveryRegressionTest {
         Dispatchers.setMain(dispatcher)
         val engine = Engine()
         val tts = VoicePipelineTest.FakeSpeechSynthesizer()
-        val vm = CompanionViewModel(captureEngine = engine, ttsManager = tts, ioDispatcher = dispatcher)
+        val vm = CompanionViewModel(elapsedRealtimeMs = { System.nanoTime() / 1_000_000L }, captureEngine = engine, ttsManager = tts, ioDispatcher = dispatcher)
         try { block(vm, engine, tts) } finally { vm.viewModelScope.cancel(); Dispatchers.resetMain() }
     }
     @Test fun repeatedForegroundRequestsShareOnePendingMicStartAndMuteCancelsIt() = runTest { withVm { vm, engine, _ ->

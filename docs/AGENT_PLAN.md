@@ -1,5 +1,60 @@
 # Agent execution plan — immersive companion revision
 
+## September 15: idle processing with unchanged animation — Builds 136–138
+
+The owner's visual-preservation constraint governs this change: unchanged
+animation cadence, effects and sensor behavior. Stationary habitat display lists
+are retained, force values are read in drawing instead of recomposing the avatar,
+hidden diagnostic snapshots are suppressed, and sensor arrays are reused.
+Sampled profiling also identified96 repeated iris colour conversions per frame;
+build137 caches their exact values without changing the drawing. Build138 removes
+temporary animation keyframe lists while preserving exact sampling results.
+All 2,547 JVM checks passed on137; 39 targeted checks passed after the final138
+sampler change, including 76 exact habitat pixel comparisons. See
+[IDLE_LOAD_138_PASS_DOWN.md](IDLE_LOAD_138_PASS_DOWN.md) for measured CPU results
+and packaging/phone evidence; this is not an all-day thermal guarantee.
+
+## September 15: focused Computer hub and setup — Build 135
+
+Computer is now a first-row menu tile and a dedicated Settings destination.
+Its hub separates setup, tasks/approvals, task AI, saved connections, power and
+diagnostics. Phone/server setup uses three steps with collapsed advanced fields,
+saved non-secret drafts and explicit connection verification before installation.
+See [COMPUTER_SETUP_135_PASS_DOWN.md](COMPUTER_SETUP_135_PASS_DOWN.md) and the
+matching verification receipts for tests, packaging and phone checks.
+
+## September 15: stationary habitats and Care switch — Build 134
+
+Care switches between saved Backdrop and Habitat modes. Painted room images
+stay fixed while source-anchored objects animate across all nineteen habitats;
+the avatar's habitat root is 30% larger. Aquarium/arcade 3D counterparts are
+updated too. All2538 JVM tests pass. See
+[HABITAT_MOTION_134_PASS_DOWN.md](HABITAT_MOTION_134_PASS_DOWN.md) and its receipts
+for native frame comparisons, viewport-fit limits, packaging and phone checks.
+
+## September 14: onboarding and menu consistency — Build 133
+
+First-run setup now covers the current features, requires avatar selection and
+reviews automatic sizing before optional adjustment. Current provider cards and
+real computer/neural pairing routes replace disconnected setup fields. Shared
+menus, dialogs and sheets follow the existing cartoon theme in both appearances.
+The full2533-test Android suite passes. See
+[ONBOARDING_THEME_133_PASS_DOWN.md](ONBOARDING_THEME_133_PASS_DOWN.md) and its
+verification receipt for exact packaging/installation and the locked-phone
+visual-check limitation. Earlier checkpoints follow.
+
+## September 14 Arizona / September 15 UTC: preview128 repair checkpoint installed
+
+The audit's52 Android test failures are resolved. Preview128 is installed in place
+on RFCY61NJEVM;2516 full Android checks and14 core phone checks pass. Generated
+props can be previewed/equipped/removed, transport cancellation and completion are
+repaired, and closed chat/invisible-avatar work is reduced. Configured Gemini ASR
+is selected and verified after restart. See
+[MEOW_REPAIR_128_PASS_DOWN.md](MEOW_REPAIR_128_PASS_DOWN.md) for exact packaging,
+private Git destination and the remaining free-generation, thermal, pairing,
+Computer P1 and full Logic/business limitations. Earlier checkpoints below are
+historical; this is not a store-release or all-day battery signoff.
+
 ## September 13: Build 119 forms pass 261 local checks; server finalization blocked
 
 Voice/text and Avatar setup can create, validate, animate, save and reuse new

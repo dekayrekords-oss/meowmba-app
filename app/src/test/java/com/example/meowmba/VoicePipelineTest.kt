@@ -142,7 +142,7 @@ class VoicePipelineTest {
         // SpeechService is the legacy playback/wake lane; explicitly provide
         // the modern capture backend too. Never enable a removed platform
         // fallback in production just to make these tests listen.
-        viewModel = CompanionViewModel(speechService = fakeStt, captureEngine = fakeStt,
+        viewModel = CompanionViewModel(elapsedRealtimeMs = { System.nanoTime() / 1_000_000L }, speechService = fakeStt, captureEngine = fakeStt,
             ttsManager = fakeTts, ioDispatcher = testDispatcher)
     }
 

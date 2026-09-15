@@ -177,6 +177,8 @@ fun AvatarRenderer(
     onHabitatAction: (HabitatAction) -> Unit = {},
     onFly3DFrame: ((Fly3DFrame) -> Unit)? = null,
     paused: Boolean = false,
+    /** Setup-only settled anatomy. Used with paused=true; does not alter live morphs or privacy. */
+    restingPreview: Boolean = false,
     faceGazeX: Float? = null,
     faceGazeY: Float? = null,
     /**
@@ -202,6 +204,9 @@ fun AvatarRenderer(
     pointerEnabled: Boolean = true,
     /** Longitudinal force, -1..1 (+ = braking throw). Braking lurches the head. */
     motionLurch: Float = 0f,
+    /** Sample forces during drawing, without recomposing the complete avatar per sensor event. */
+    motionLeanState: State<Float>? = null,
+    motionLurchState: State<Float>? = null,
     /** Monotonic sensor time, read during draw so a heartbeat does not recompose the face. */
     motionObservedAtMs: State<Long>? = null,
     motionScreenLean: State<Float>? = null,
@@ -658,7 +663,8 @@ fun AvatarRenderer(
         val relativeLean = com.example.meowmba.core.sensor.MotionMath.displayRelativeLean(
             motionScreenLean?.value ?: 0f, displayRotation)
         return driveRig.step(clockSec, android.os.SystemClock.elapsedRealtime(),
-            motionObservedAtMs?.value ?: 0L, state.driving, motionLean, motionLurch,
+            motionObservedAtMs?.value ?: 0L, state.driving,
+            motionLeanState?.value ?: motionLean, motionLurchState?.value ?: motionLurch,
             (-relativeLean * 0.35f).coerceIn(-14f, 14f))
     }
 
@@ -1022,12 +1028,14 @@ fun AvatarRenderer(
                 onReflexSummary?.invoke(lumenReflexBridge.summaryLabel())
                 modulated
             } else composedLumenInput
-            val frame = lumenRig.step(tSec, gatedLumenInput)
+            val frame = if (paused && restingPreview) restingAvatarFrame(state.avatarStyle, state.avatarAnimal)
+                else lumenRig.step(tSec, gatedLumenInput)
             lumenLastFrame[0] = frame
             if (generatedForm != null) {
                 val placement = generatedAvatarPlacement(w, h, frame, avatarScale, flyPose)
                 generatedPlacement[0] = placement
                 generatedPainter.draw(this, generatedForm, frame, tSec, placement.center, placement.unit)
+                state.equippedProp?.let { generatedPainter.drawProp(this, it, frame, tSec, placement.center, placement.unit) }
                 if (customAnim != null) generatedScenePainter.draw(this, customAnim,
                     animTHolder[0].toFloat(), placement.center, placement.unit)
                 // Model-authored shapes cannot cover or impersonate privacy state.
@@ -1072,7 +1080,7 @@ fun AvatarRenderer(
                 return@Canvas
             }
             if (state.avatarStyle == AvatarStyle.FULL_FLY) {
-                val fullPose = (flyPose ?: FullFlyPose(scale = 1.8f)).let { it.copy(scale = it.scale * avatarScale) }
+                val fullPose = (flyPose ?: FullFlyPose(scale = 1.8f)).let { it.copy(scale = it.scale * avatarScale * if (habitatEnabled) HABITAT_AVATAR_MAGNIFICATION else 1f) }
                 lastFullFlyPose[0] = fullPose
                 fullFlyPainter.draw(this, frame, fullPose)
                 // Shared renderer keeps privacy marks fixed; hide only its face.
@@ -1084,14 +1092,16 @@ fun AvatarRenderer(
             if (flyPose != null) {
                 val original = lumenCenter(w, h, frame)
                 val destination = Offset(flyPose.x * w, flyPose.y * h)
-                avatarHitTransform[0] = AvatarHitTransform(original, destination, .40f * avatarScale)
+                avatarHitTransform[0] = AvatarHitTransform(original, destination, habitatFaceScale(avatarScale))
                 translate(destination.x - original.x, destination.y - original.y) {
-                    scale(.40f * avatarScale, .40f * avatarScale, original) {
+                    scale(habitatFaceScale(avatarScale), habitatFaceScale(avatarScale), original) {
                         lumenPainter.draw(this, frame, Color(state.avatarEyeColor), Color(state.avatarGlowColor),
                             featureColor = Color(state.avatarFeatureColor), performance = lumenPerformance,
                             progress = progress, inventedScene = customAnim, inventedTimeMs = animTHolder[0].toFloat())
                     }
                 }
+                state.equippedProp?.let { generatedPainter.drawProp(this, it, frame, tSec,
+                    destination, lumenUnit(w, h, frame) * habitatFaceScale(avatarScale)) }
                 lumenPainter.draw(this, frame.copy(presence = 0f), Color(state.avatarEyeColor), Color(state.avatarGlowColor),
                     cameraOff = !state.isCameraEnabled, micOff = !state.isMicEnabled,
                     speakerOff = state.isMuted, statusColor = privacyColor)
@@ -1103,6 +1113,8 @@ fun AvatarRenderer(
                         featureColor = Color(state.avatarFeatureColor), performance = lumenPerformance,
                         progress = progress, inventedScene = customAnim, inventedTimeMs = animTHolder[0].toFloat())
                 }
+                state.equippedProp?.let { generatedPainter.drawProp(this, it, frame, tSec,
+                    center, lumenUnit(w, h, frame) * avatarScale) }
                 lumenPainter.draw(this, frame.copy(presence = 0f), Color(state.avatarEyeColor), Color(state.avatarGlowColor),
                     cameraOff = !state.isCameraEnabled, micOff = !state.isMicEnabled,
                     speakerOff = state.isMuted, statusColor = privacyColor)
@@ -1116,7 +1128,7 @@ fun AvatarRenderer(
                 faceCy + ambient.offY + lurchAnim * R * 0.12f,
             )
             val orbSpeaking = effectivePose.mouth == MouthMode.SPEAKING
-            val sceneScale = avatarScale * if (flyPose != null) .4f else 1f
+            val sceneScale = if (flyPose != null) habitatFaceScale(avatarScale) else avatarScale
             avatarHitTransform[0] = AvatarHitTransform(center, center, sceneScale)
             scale(sceneScale, sceneScale, center) {
             particleSim.draw(
@@ -1283,7 +1295,7 @@ fun AvatarRenderer(
             // an impact or the breath's compression, lengthens and narrows on
             // the rise, conserving the silhouette's area either way.
             val (squashX, squashY) = squashStretch(gPose.squash.coerceIn(-0.3f, 0.3f))
-            val sceneScale = avatarScale * if (flyPose != null) .4f else 1f
+            val sceneScale = if (flyPose != null) habitatFaceScale(avatarScale) else avatarScale
             avatarHitTransform[0] = AvatarHitTransform(center, center, sceneScale)
             scale(sceneScale, sceneScale, center) {
             rotate(gPose.headTiltDeg, pivot = center) {
@@ -1318,7 +1330,7 @@ fun AvatarRenderer(
 
         val classicCenter = Offset(cx, cy)
         val classicDestination = flyPose?.let { Offset(it.x * w, it.y * h) } ?: classicCenter
-        val classicScale = avatarScale * if (flyPose != null) .4f else 1f
+        val classicScale = if (flyPose != null) habitatFaceScale(avatarScale) else avatarScale
         avatarHitTransform[0] = AvatarHitTransform(classicCenter, classicDestination, classicScale)
         translate(classicDestination.x - classicCenter.x, classicDestination.y - classicCenter.y) {
         scale(classicScale, classicScale, classicCenter) {

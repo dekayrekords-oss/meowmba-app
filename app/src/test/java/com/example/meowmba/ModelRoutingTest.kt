@@ -149,6 +149,8 @@ class SelfVoiceFilterTest {
 @OptIn(ExperimentalCoroutinesApi::class)
 class ModelRoutingViewModelTest {
 
+    private val models = TestCompanionModels()
+
     private val testDispatcher = UnconfinedTestDispatcher()
 
     @Before
@@ -158,12 +160,13 @@ class ModelRoutingViewModelTest {
 
     @After
     fun tearDown() {
+        models.close()
         Dispatchers.resetMain()
     }
 
     @Test
     fun `provider error surfaces OFFLINE then recovers to idle`() = runTest {
-        val vm = CompanionViewModel()
+        val vm = CompanionViewModel().also(models::add)
         vm.showProviderError("connection refused")
 
         assertEquals(InteractionState.OFFLINE, vm.uiState.value.interactionState)
@@ -177,7 +180,7 @@ class ModelRoutingViewModelTest {
 
     @Test
     fun `connection test without secure storage reports honestly`() = runTest {
-        val vm = CompanionViewModel()
+        val vm = CompanionViewModel().also(models::add)
         vm.runCloudConnectionTest()
         assertEquals("Secure storage unavailable", vm.uiState.value.connectionTestResult)
         assertFalse(vm.uiState.value.connectionTestRunning)
@@ -185,7 +188,7 @@ class ModelRoutingViewModelTest {
 
     @Test
     fun `local model check reports missing file honestly`() = runTest {
-        val vm = CompanionViewModel()
+        val vm = CompanionViewModel().also(models::add)
         vm.runLocalModelCheck()
         assertTrue(vm.uiState.value.connectionTestResult?.contains("not found") == true)
     }

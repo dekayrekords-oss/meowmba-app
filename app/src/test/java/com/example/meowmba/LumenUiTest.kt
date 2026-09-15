@@ -67,6 +67,7 @@ class LumenUiTest {
         compose.onNodeWithText("Eye color").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Animal color").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Glow color").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Animations").performScrollTo().performClick()
         compose.onNodeWithText("Search all animations").performScrollTo().performTextInput("snow")
         compose.onNodeWithText("Snow Wonder").performScrollTo().performClick()
         compose.runOnIdle { assertEquals("Snow Wonder", played) }

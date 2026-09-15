@@ -1,0 +1,19 @@
+{
+  "status": "PAUSED",
+  "note": "Waiting for the phone to cool or leave power-saving mode",
+  "agents": [
+    {
+      "name": "Accounts specialist",
+      "model": "nvidia/nemotron-3-super-120b-a12b:free"
+    },
+    {
+      "name": "Stock specialist",
+      "model": "nvidia/nemotron-3-super-120b-a12b:free"
+    },
+    {
+      "name": "Shop manager",
+      "model": "nvidia/nemotron-3-super-120b-a12b:free"
+    }
+  ],
+  "steps": []
+}

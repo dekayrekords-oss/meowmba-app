@@ -21,6 +21,44 @@ class GeneratedAvatarPainter {
     private val expression = Path()
     private val ink = Color(0xFF182032)
 
+    /** Reuses the avatar clock and primitive painter. The anchor is a contact
+     * point on the prop; its category selects a bounded contact on the face. */
+    fun drawProp(scope: DrawScope, prop: GeneratedPropForm, frame: LumenFrame,
+        timeSec: Float, center: Offset, unit: Float, preview: Boolean = false) = with(scope) {
+        if (!unit.isFinite() || unit <= 0f || !center.x.isFinite() || !center.y.isFinite()) return@with
+        val alpha = frame.presence.clean().coerceIn(0f, 1f)
+        if (alpha < .005f) return@with
+        val target = if (preview) Offset.Zero else when (prop.category) {
+            GeneratedPropCategory.WEARABLE -> Offset(0f, -.30f)
+            GeneratedPropCategory.HELD -> Offset(.28f, .25f)
+            GeneratedPropCategory.TOY -> Offset(.26f, .36f)
+            GeneratedPropCategory.SCENE -> Offset(-.30f, .28f)
+        }
+        val roll = if (preview || prop.category == GeneratedPropCategory.SCENE) 0f else lumenRoll(frame)
+        val radians = roll * (kotlin.math.PI / 180.0).toFloat()
+        val rotatedTarget = Offset(target.x * kotlin.math.cos(radians) - target.y * sin(radians),
+            target.x * sin(radians) + target.y * kotlin.math.cos(radians))
+        val contact = center + rotatedTarget * unit
+        // Includes rotated corners, animated limbs and stroke. Fit around the
+        // contact so edge travel cannot send generated geometry offscreen.
+        val radius = prop.parts.maxOfOrNull { p ->
+            kotlin.math.hypot(p.x - prop.anchorX, p.y - prop.anchorY) +
+                kotlin.math.hypot(p.width, p.height) * .5f + p.stroke + .03f
+        }?.coerceAtLeast(.1f) ?: return@with
+        val available = minOf(contact.x, contact.y, size.width - contact.x, size.height - contact.y).coerceAtLeast(0f)
+        val scale = minOf(unit * if (preview) .85f else .65f, available / radius)
+        if (scale <= 0f) return@with
+        translate(contact.x, contact.y) {
+            rotate(roll, Offset.Zero) {
+                scale(scale, scale, Offset.Zero) {
+                    translate(-prop.anchorX, -prop.anchorY) {
+                        prop.parts.forEach { drawPart(it, frame, timeSec.clean(), alpha) }
+                    }
+                }
+            }
+        }
+    }
+
     /** Caller shares [center] and [unit] with hit testing and draws system privacy marks afterward. */
     fun draw(scope: DrawScope, form: GeneratedAvatarForm, frame: LumenFrame, timeSec: Float,
         center: Offset, unit: Float) = with(scope) {

@@ -1,0 +1,19 @@
+{
+  "app/build.gradle.kts": "2d9595c63ff171193982daf3adb9e8885d872f3b309744415f42cb1166f3fcbe",
+  "app/src/androidTest/java/com/example/meowmba/AgenticNotice129DeviceTest.kt": "4b2d024e18914e7fc525bb238b333550d959d44db608fc6a9f588f77bc06e99b",
+  "app/src/main/java/com/example/meowmba/core/computer/ComputerProfileMarks.kt": "7d504f2a58adb6afe0e8675485049caf3d388e4093d8226af4672bc156f9195e",
+  "app/src/main/java/com/example/meowmba/ui/companion/AgenticProfilesSection.kt": "dfbb2e5410b1aabcf154fbc04caa7d4cd94d8a53b8cf86b65b7ef680704f50f3",
+  "app/src/main/java/com/example/meowmba/ui/companion/AgenticTasksSection.kt": "7d4c21d77b90d1352a10c2c440566c384f5091c02acd15fc91551d4611e078ff",
+  "app/src/main/java/com/example/meowmba/ui/companion/BackgroundTiles.kt": "b4a57c66ea411c0092307da947b8b23a017a186f3037b219812f6cffa42a8700",
+  "app/src/main/java/com/example/meowmba/ui/companion/CompanionScreen.kt": "06fb360866423c2a591ba7655fd1ebb4162792a36773d0536a61b2a9ef392f75",
+  "app/src/main/java/com/example/meowmba/ui/companion/CompanionState.kt": "daa452d1b091702b01a6b6e6ea37c33624a2455cf21a3d40b83254df5442f734",
+  "app/src/main/java/com/example/meowmba/ui/companion/CompanionViewModel.kt": "96bce2a7b6eaf711d121a15d76d13961b0cf1507426fb4db56fb6068b15f7df1",
+  "app/src/main/java/com/example/meowmba/ui/companion/NeuralSettingsSection.kt": "0557639eab146fa72eaa6c0446f2c010311532926c862e6940a5d9aeb60d246b",
+  "app/src/main/java/com/example/meowmba/ui/companion/SettingsScreen.kt": "5245cb5e1524c59eed572f2be36b40242a7c7501fcb54864965b6564362eb6cb",
+  "app/src/main/java/com/example/meowmba/ui/companion/YourComputerSettingsSection.kt": "e4c47bc00402ece8d1fd109930bc07be9827bab7670f58ff7a88387dcf232ec4",
+  "app/src/main/java/com/example/meowmba/ui/companion/YourComputerViewModelHooks.kt": "736a4660d07ed4eea84d68698f783397ac0400cf8eb227ebe9a65dbc8520c92e",
+  "app/src/main/java/com/example/meowmba/ui/companion/ComputerToolsNavigation.kt": "54cf8fb2844e3ba4c82d9f8b57d1ace62017b0d73814194360cf2b78e4c808e5",
+  "app/src/main/java/com/example/meowmba/ui/companion/ComputerToolsScreen.kt": "db485fab3755d1b0369f19f536abb35766d901f3e773877b1538a644e461f6ad",
+  "app/src/test/java/com/example/meowmba/ComputerConnectionIdentityTest.kt": "71378362f0af78909dd33d00ba35a10b050158e09e7d57797597489dfcf6d13a",
+  "app/src/test/java/com/example/meowmba/ComputerSetup135UiTest.kt": "468c040cab402c78b0aeedc40f5f11616a56686fcf32bc17abab500ea9c8f322"
+}

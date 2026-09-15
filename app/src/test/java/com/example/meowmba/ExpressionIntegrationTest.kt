@@ -26,7 +26,7 @@ class ExpressionIntegrationTest {
     private suspend fun TestScope.withVm(block: suspend TestScope.(CompanionViewModel, Delivery) -> Unit) {
         Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
         val tts = Delivery()
-        val vm = CompanionViewModel(ttsManager = tts, ioDispatcher = UnconfinedTestDispatcher(testScheduler))
+        val vm = CompanionViewModel(elapsedRealtimeMs = { System.nanoTime() / 1_000_000L }, ttsManager = tts, ioDispatcher = UnconfinedTestDispatcher(testScheduler))
         try { block(vm, tts) } finally { vm.viewModelScope.cancel(); Dispatchers.resetMain() }
     }
     @Test fun seriousTurnBlocksUnsolicitedTricksButRequestedScenesStillPlay() = runTest {

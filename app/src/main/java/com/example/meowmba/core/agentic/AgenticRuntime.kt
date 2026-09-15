@@ -544,6 +544,11 @@ class AgenticRuntime internal constructor(
         @Volatile
         private var INSTANCE: AgenticRuntime? = null
 
+        /** Disabling Computer must release its callback without constructing Room. */
+        fun clearComputerHostIfCreated() {
+            synchronized(this) { INSTANCE?.computerHost = null }
+        }
+
         fun from(context: Context): AgenticRuntime {
             val app = context.applicationContext
             return INSTANCE ?: synchronized(this) {

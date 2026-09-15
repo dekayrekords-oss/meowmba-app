@@ -1,0 +1,7 @@
+{
+  "internetRead": "https:\/\/example.com",
+  "linkVerified": "iana.org",
+  "formPosted": "item=stickers&quantity=12",
+  "receiptRead": "TEST-QUOTE-42",
+  "scope": "Production Android WebView; internet read plus local synthetic form; no real booking or message"
+}

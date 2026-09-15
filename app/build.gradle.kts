@@ -93,8 +93,8 @@ android {
         // 85 > 84 so the affect/valence + pet wiring installs as a genuine
         // in-place upgrade, and so it is distinguishable on-device from 84 (which
         // has the drives but not the reply affect or the touch sense).
-        versionCode = 85
-        versionName = "1.3.81"
+        versionCode = 138
+        versionName = "1.3.82"
 
         buildConfigField("boolean", "HAS_MWDAT_SDK", hasMwdat.toString())
         manifestPlaceholders["mwdat_application_id"] = mwdatApplicationId
@@ -223,7 +223,7 @@ androidComponents {
         // Combined Computer + avatar update; bump debug-only so in-place
         // upgrade is allowed without changing release defaultConfig (85).
         variant.outputs.forEach { output ->
-            output.versionCode.set(124)
+            output.versionCode.set(138)
         }
     }
 }
@@ -390,6 +390,7 @@ dependencies {
     implementation(libs.mlkit.face.detection)
     implementation(libs.mlkit.pose.detection)
     implementation(libs.ktor.client.android)
+    implementation(libs.ktor.client.okhttp)
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
     testImplementation(libs.junit)

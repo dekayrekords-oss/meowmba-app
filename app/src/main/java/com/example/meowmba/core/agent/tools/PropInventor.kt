@@ -14,12 +14,18 @@ import org.json.JSONObject
  * reduce OOM risk; host owns timeout and persistence.
  */
 class PropInventor(private val generate: suspend (String) -> ModelResponse) {
+    /** A host timeout may retain a completed, validated design while optional
+     * polish is running. This is never a partial stream or unvalidated JSON. */
+    @Volatile var lastValidated: GeneratedPropForm? = null
+        private set
+
     suspend fun invent(
         request: String,
         reasonLevel: InventReasonLevel = InventReasonLevel.BALANCED,
         categoryHint: String? = null,
         detail: String? = null,
     ): GeneratedPropForm {
+        lastValidated = null
         require(request.isNotBlank() && request.length <= GeneratedPropForms.MAX_REQUEST) {
             "Describe one prop in 1-${GeneratedPropForms.MAX_REQUEST} characters"
         }
@@ -52,6 +58,7 @@ class PropInventor(private val generate: suspend (String) -> ModelResponse) {
             if (best != null) break
         }
         var form = best ?: throw (lastError ?: IllegalStateException("Prop invent failed"))
+        lastValidated = form
         form = review(form, ask, reasonLevel)
         return form
     }
@@ -78,6 +85,7 @@ class PropInventor(private val generate: suspend (String) -> ModelResponse) {
             } catch (_: IllegalArgumentException) {
                 current
             }
+            lastValidated = current
         }
         return current
     }

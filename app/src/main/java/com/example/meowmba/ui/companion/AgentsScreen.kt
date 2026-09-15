@@ -154,7 +154,7 @@ private fun AgentCard(
     val (label, color) = when {
         !agent.available -> "UNAVAILABLE" to MaterialTheme.colorScheme.error
         installed == 0 -> "NO TOOLS" to MaterialTheme.colorScheme.error
-        installed < agent.allowedTools.size -> "PARTIAL" to Color(0xFFD29922)
+        installed < agent.allowedTools.size -> "PARTIAL" to MaterialTheme.colorScheme.tertiary
         else -> "TOOLS READY" to MaterialTheme.colorScheme.primary
     }
     Surface(
@@ -208,7 +208,7 @@ private fun TaskCard(task: AgentTask, onCancel: () -> Unit) {
     val (label, color) = when (task.status) {
         TaskStatus.QUEUED -> "QUEUED" to MaterialTheme.colorScheme.onSurfaceVariant
         TaskStatus.RUNNING -> "RUNNING" to MaterialTheme.colorScheme.primary
-        TaskStatus.WAITING_APPROVAL -> "NEEDS YOU" to Color(0xFFD29922)
+        TaskStatus.WAITING_APPROVAL -> "NEEDS YOU" to MaterialTheme.colorScheme.tertiary
         TaskStatus.COMPLETED -> "DONE" to MaterialTheme.colorScheme.primary
         TaskStatus.FAILED -> "FAILED" to MaterialTheme.colorScheme.error
         TaskStatus.CANCELLED -> "CANCELLED" to MaterialTheme.colorScheme.onSurfaceVariant

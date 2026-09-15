@@ -59,6 +59,9 @@ class LumenPainter {
         // rendering keeps its cheap direct-to-canvas path. Privacy stays visible.
         val stretch = lumenStretch(frame)
         scale(1f / stretch, stretch, center) {
+        // Privacy-only passes are used by 3D and generated avatars every frame.
+        // An alpha-zero saveLayer still builds every lens and anatomy path.
+        if (frame.presence > 0f) {
         val fading = frame.presence < 0.995f
         if (fading) {
             presencePaint.alpha = frame.presence.coerceIn(0f, 1f)
@@ -106,6 +109,7 @@ class LumenPainter {
             }
         }
         if (fading) drawContext.canvas.restore()
+        }
         if (inventedScene != null && inventedScene.props.isNotEmpty()) {
             rotate(frame.screenRoll, center) { inventedScenes.draw(this, inventedScene, inventedTimeMs, center, unit) }
         }
@@ -256,11 +260,13 @@ class LumenPainter {
                         style = Stroke(rx * .023f))
                     // Irregular long/short fibres are cached directions; nothing
                     // shimmers or rolls a random number at display refresh rate.
+                    val brightFibre = m.fibre.copy(alpha = .21f * (1f - shape.dark) * (1f - f.form.fruitFly) * (1f - helper))
+                    val dimFibre = m.fibre.copy(alpha = .10f * (1f - shape.dark) * (1f - f.form.fruitFly) * (1f - helper))
                     for (i in irisDirections.indices) {
                         val direction = irisDirections[i]
                         val root = .48f + (i % 5) * .024f
                         val tip = .89f + (i % 3) * .018f
-                        drawLine(lerp(color, Color.White, .42f).copy(alpha = (if (i % 3 == 0) .21f else .10f) * (1f - shape.dark) * (1f - f.form.fruitFly) * (1f - helper)),
+                        drawLine(if (i % 3 == 0) brightFibre else dimFibre,
                             direction * (irisR * root), direction * (irisR * tip), rx * .009f, StrokeCap.Round)
                     }
                     val pr = irisR * (.56f + (f.pupil - .5f) * .40f) * shape.pupilScale * (1f - .24f * f.form.fruitFly)

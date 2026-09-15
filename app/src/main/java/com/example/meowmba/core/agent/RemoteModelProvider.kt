@@ -2,6 +2,7 @@ package com.example.meowmba.core.agent
 
 import android.util.Log
 import io.ktor.client.*
+import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.*
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
@@ -52,7 +53,10 @@ class RemoteModelProvider(
      */
     private val normalizedBase: String = baseUrl.trimEnd('/').removeSuffix("/v1")
 
-    private val client = clientOverride ?: HttpClient {
+    // Build122 crashed in Android's URLConnection/AsyncTimeout while a timed-out
+    // stream was being closed by Ktor's cancellation handler. Select the bundled
+    // OkHttp engine explicitly so cancellation uses Call.cancel(), not that path.
+    private val client = clientOverride ?: HttpClient(OkHttp) {
         followRedirects = false
         install(ContentNegotiation) {
             json(Json { ignoreUnknownKeys = true })
@@ -96,8 +100,12 @@ class RemoteModelProvider(
             val channel = response.bodyAsChannel()
             while (!channel.isClosedForRead) {
                 val line = channel.readLine() ?: break
-                StreamParsers.parseOllamaLine(line)?.let { emit(it) }
+                StreamParsers.parseOllamaLine(line)?.let {
+                    emit(it)
+                    if (it is ModelResponse.Complete || it is ModelResponse.Error) return@execute
+                }
             }
+            emit(ModelResponse.Error("$name connection ended before the reply completed."))
         }
     }
 
@@ -119,8 +127,14 @@ class RemoteModelProvider(
             val channel = response.bodyAsChannel()
             while (!channel.isClosedForRead) {
                 val line = channel.readLine() ?: break
-                StreamParsers.parseOpenAISseLine(line)?.let { emit(it) }
+                StreamParsers.parseOpenAISseLine(line)?.let {
+                    emit(it)
+                    // SSE completion/error is terminal even when a proxy leaves
+                    // the body open. Waiting for EOF can strand chat and invent.
+                    if (it is ModelResponse.Complete || it is ModelResponse.Error) return@execute
+                }
             }
+            emit(ModelResponse.Error("$name connection ended before the reply completed."))
         }
     }
 
@@ -181,7 +195,12 @@ class RemoteModelProvider(
                         }
                         full.append(response.text)
                     }
-                    is ModelResponse.Complete -> result = ModelResponse.Complete(full.toString())
+                    is ModelResponse.Complete -> {
+                        // Ollama may carry its final characters on the done line.
+                        result = if (full.length + response.text.length > MAX_GENERATE_CHARS)
+                            ModelResponse.Error("$name response exceeded $MAX_GENERATE_CHARS characters")
+                        else ModelResponse.Complete(full.toString() + response.text)
+                    }
                     is ModelResponse.Error -> result = response
                 }
             }
@@ -308,7 +327,10 @@ class RemoteModelProvider(
         }.getOrElse { ModelResponse.Error("${it.message}. No action executed.") }
 
         internal fun toolDecisionBody(model: String, prompt: String, schema: String): JsonObject = buildJsonObject {
-            put("model", model); put("stream", false); put("max_tokens", 900)
+            // Reasoning providers count internal reasoning in this ceiling too.
+            // 900 tokens could expire before a valid tool proposal was emitted.
+            // Keep requests bounded while leaving room for the final arguments.
+            put("model", model); put("stream", false); put("max_tokens", 4096)
             putJsonArray("messages") { add(buildJsonObject { put("role", "user"); put("content", prompt) }) }
             putJsonArray("tools") { add(buildJsonObject {
                 put("type", "function")
@@ -318,7 +340,9 @@ class RemoteModelProvider(
             put("parallel_tool_calls", false)
         }
         internal fun parseToolDecision(body: String, validate: (String) -> Boolean = { PhoneAgentLoop.parseAction(it) != null }): ModelResponse = runCatching {
-            val message = Json.parseToJsonElement(body).jsonObject["choices"]!!.jsonArray.first().jsonObject["message"]!!.jsonObject
+            val choice = Json.parseToJsonElement(body).jsonObject["choices"]!!.jsonArray.first().jsonObject
+            check(choice["finish_reason"]?.jsonPrimitive?.contentOrNull != "length") { "Model exhausted the decision token budget. No action executed" }
+            val message = choice["message"]!!.jsonObject
             val rawCalls=message["tool_calls"]
             check(rawCalls==null || rawCalls==JsonNull || rawCalls is JsonArray) { "Invalid tool-call envelope" }
             val calls = rawCalls as? JsonArray

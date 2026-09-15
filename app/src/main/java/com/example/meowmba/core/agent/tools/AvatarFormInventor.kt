@@ -17,10 +17,15 @@ import org.json.JSONObject
  * and supersession checks.
  */
 class AvatarFormInventor(private val generate: suspend (String) -> ModelResponse) {
+    /** Only complete validated geometry is eligible for timeout recovery. */
+    @Volatile var lastValidated: GeneratedAvatarForm? = null
+        private set
+
     suspend fun invent(
         request: String,
         reasonLevel: InventReasonLevel = InventReasonLevel.BALANCED,
     ): GeneratedAvatarForm {
+        lastValidated = null
         require(AvatarFormRequest.isDescription(request)) {
             "Describe one avatar appearance in 1-${AvatarFormRequest.MAX_DESCRIPTION_LENGTH} characters"
         }
@@ -66,6 +71,7 @@ class AvatarFormInventor(private val generate: suspend (String) -> ModelResponse
             if (best != null) break
         }
         var form = best ?: throw (lastError ?: IllegalStateException("Avatar invent failed"))
+        lastValidated = form
         form = review(form, request, reasonLevel, baseJson = null)
         return form
     }
@@ -79,6 +85,7 @@ class AvatarFormInventor(private val generate: suspend (String) -> ModelResponse
         changeRequest: String,
         reasonLevel: InventReasonLevel = InventReasonLevel.BALANCED,
     ): GeneratedAvatarForm {
+        lastValidated = null
         require(AvatarFormRequest.isDescription(changeRequest)) {
             "Describe one avatar appearance change in 1-${AvatarFormRequest.MAX_DESCRIPTION_LENGTH} characters"
         }
@@ -98,6 +105,7 @@ class AvatarFormInventor(private val generate: suspend (String) -> ModelResponse
             currentCoroutineContext().ensureActive()
             parseResponse(complete(repair))
         }
+        lastValidated = form
         form = review(form, changeRequest, reasonLevel, baseJson = baseJson)
         return form
     }
@@ -144,6 +152,7 @@ class AvatarFormInventor(private val generate: suspend (String) -> ModelResponse
             } catch (_: IllegalArgumentException) {
                 current // keep last good form
             }
+            lastValidated = current
         }
         return current
     }

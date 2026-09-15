@@ -59,7 +59,7 @@ class PossibleBugReportsTest {
         val dispatcher = UnconfinedTestDispatcher(testScheduler)
         Dispatchers.setMain(dispatcher)
         val root = temp.newFolder()
-        val vm = CompanionViewModel(workspaceRoot = root, ioDispatcher = dispatcher,
+        val vm = CompanionViewModel(elapsedRealtimeMs = { System.nanoTime() / 1_000_000L }, workspaceRoot = root, ioDispatcher = dispatcher,
             ttsManager = VoicePipelineTest.FakeSpeechSynthesizer())
         try {
             vm.setMicEnabled(false)

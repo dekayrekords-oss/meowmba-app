@@ -56,7 +56,7 @@ class ProjectCreationViewModelTest {
 
     private fun vm(dao: Dao, planner: Planner, root: File = temp.newFolder(),
         tts: VoicePipelineTest.FakeSpeechSynthesizer = VoicePipelineTest.FakeSpeechSynthesizer()) =
-        CompanionViewModel(workspaceRoot = root, projectDao = dao, ioDispatcher = dispatcher, ttsManager = tts)
+        CompanionViewModel(elapsedRealtimeMs = { System.nanoTime() / 1_000_000L }, workspaceRoot = root, projectDao = dao, ioDispatcher = dispatcher, ttsManager = tts)
             .also { it.currentProvider = planner; models += it }
 
     @Test fun duplicateCreationKeepsOneRecordOnePlanAndOneConfirmation() = runTest {

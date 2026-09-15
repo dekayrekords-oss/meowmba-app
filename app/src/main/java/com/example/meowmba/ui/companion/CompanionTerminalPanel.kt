@@ -18,7 +18,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material3.DropdownMenu
+import com.example.meowmba.ui.theme.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -112,10 +112,10 @@ fun CompanionTerminalPanel(
         else -> "disconnected"
     }
     val statusColor = when (status) {
-        CompanionTerminalStatus.Disconnected -> Color(0xFF8B949E)
-        CompanionTerminalStatus.Connecting -> Color(0xFFD29922)
-        CompanionTerminalStatus.Connected -> Color(0xFF3FB950)
-        CompanionTerminalStatus.Error -> Color(0xFFF85149)
+        CompanionTerminalStatus.Disconnected -> MaterialTheme.colorScheme.onSurfaceVariant
+        CompanionTerminalStatus.Connecting -> MaterialTheme.colorScheme.tertiary
+        CompanionTerminalStatus.Connected -> MaterialTheme.colorScheme.primary
+        CompanionTerminalStatus.Error -> MaterialTheme.colorScheme.error
     }
 
     LaunchedEffect(scrollback) {
@@ -136,7 +136,7 @@ fun CompanionTerminalPanel(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(Color(0xFF0D1117))
+            .background(MaterialTheme.colorScheme.background)
             .padding(8.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -144,7 +144,7 @@ fun CompanionTerminalPanel(
                 onClick = { menuOpen = true },
                 enabled = !connected && !connecting,
             ) {
-                Text(selected.label, color = Color(0xFF58A6FF), fontSize = 12.sp)
+                Text(selected.label, color = MaterialTheme.colorScheme.secondary, fontSize = 12.sp)
             }
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                 targets.forEach { t ->
@@ -165,20 +165,20 @@ fun CompanionTerminalPanel(
             if (!statusDetail.isNullOrBlank() && status == CompanionTerminalStatus.Error) {
                 Text(
                     " · ${statusDetail.take(48)}",
-                    style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = Color(0xFFF85149)),
+                    style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = MaterialTheme.colorScheme.error),
                     maxLines = 1,
                 )
             }
             if (computerSelected) {
                 val onColor = if (computerPower == com.example.meowmba.core.config.ComputerPowerState.On) {
-                    Color(0xFF3FB950)
+                    MaterialTheme.colorScheme.primary
                 } else {
-                    Color(0xFF8B949E)
+                    MaterialTheme.colorScheme.onSurfaceVariant
                 }
                 val offColor = if (computerPower == com.example.meowmba.core.config.ComputerPowerState.Off) {
-                    Color(0xFFF85149)
+                    MaterialTheme.colorScheme.error
                 } else {
-                    Color(0xFF8B949E)
+                    MaterialTheme.colorScheme.onSurfaceVariant
                 }
                 TextButton(
                     onClick = { onComputerPower(com.example.meowmba.core.config.ComputerPowerState.On) },
@@ -196,7 +196,7 @@ fun CompanionTerminalPanel(
             Spacer(Modifier.weight(1f))
             if (connected || connecting) {
                 TextButton(onClick = onDisconnect) {
-                    Text("Disconnect", fontSize = 12.sp, color = Color(0xFFF85149))
+                    Text("Disconnect", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
                 }
             } else {
                 TextButton(onClick = { onConnect(selected.id) }) {
@@ -209,12 +209,12 @@ fun CompanionTerminalPanel(
                             "Connect"
                         },
                         fontSize = 12.sp,
-                        color = Color(0xFF3FB950),
+                        color = MaterialTheme.colorScheme.primary,
                     )
                 }
             }
             TextButton(onClick = onClear) {
-                Text("Clear", fontSize = 12.sp, color = Color(0xFF8B949E))
+                Text("Clear", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
 
@@ -242,7 +242,7 @@ fun CompanionTerminalPanel(
                     style = TextStyle(
                         fontFamily = FontFamily.Monospace,
                         fontSize = 12.sp,
-                        color = Color(0xFFC9D1D9),
+                        color = MaterialTheme.colorScheme.onSurface,
                         lineHeight = 16.sp,
                     ),
                 )
@@ -263,7 +263,7 @@ fun CompanionTerminalPanel(
                     style = TextStyle(
                         fontFamily = FontFamily.Monospace,
                         fontSize = 12.sp,
-                        color = Color(0xFF484F58),
+                        color = MaterialTheme.colorScheme.outlineVariant,
                     ),
                 )
             }
@@ -276,9 +276,9 @@ fun CompanionTerminalPanel(
                 textStyle = TextStyle(
                     fontFamily = FontFamily.Monospace,
                     fontSize = 12.sp,
-                    color = Color(0xFFE6EDF3),
+                    color = MaterialTheme.colorScheme.onSurface,
                 ),
-                cursorBrush = SolidColor(Color(0xFF58A6FF)),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.secondary),
                 singleLine = true,
                 enabled = connected,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
@@ -291,14 +291,14 @@ fun CompanionTerminalPanel(
                 Text(
                     "Ctrl-C",
                     fontSize = 11.sp,
-                    color = if (connected) Color(0xFFD29922) else Color(0xFF484F58),
+                    color = if (connected) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.outlineVariant,
                 )
             }
             IconButton(enabled = connected && draft.isNotEmpty(), onClick = { submit() }) {
                 Icon(
                     Icons.AutoMirrored.Filled.Send,
                     contentDescription = "Send to stdin",
-                    tint = if (connected && draft.isNotEmpty()) Color(0xFF58A6FF) else Color(0xFF484F58),
+                    tint = if (connected && draft.isNotEmpty()) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.outlineVariant,
                 )
             }
         }
@@ -311,7 +311,7 @@ fun CompanionTerminalPanel(
                         val idx = history.lastIndex - historyIndex
                         if (idx in history.indices) draft = history[idx]
                     },
-                ) { Text("Prev", fontSize = 11.sp, color = Color(0xFF8B949E)) }
+                ) { Text("Prev", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 Spacer(Modifier.width(4.dp))
                 TextButton(
                     onClick = {
@@ -324,7 +324,7 @@ fun CompanionTerminalPanel(
                             if (idx in history.indices) draft = history[idx]
                         }
                     },
-                ) { Text("Next", fontSize = 11.sp, color = Color(0xFF8B949E)) }
+                ) { Text("Next", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
         }
     }

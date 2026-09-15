@@ -3,6 +3,8 @@ package com.example.meowmba.ui.companion
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import com.example.meowmba.ui.theme.Button
@@ -15,6 +17,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -28,6 +31,7 @@ import com.example.meowmba.core.agentic.GoalStatus
  * approve/reject waiting SSH, and configure the optional HTTP model adapter.
  */
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 fun AgenticTasksSection(
     goals: List<AgenticGoal>,
     modelConfig: AgenticModelConfig.Snapshot,
@@ -40,8 +44,9 @@ fun AgenticTasksSection(
     onRefresh: () -> Unit,
     onSaveModelConfig: (baseUrl: String, apiKeyRef: String, apiKeySecret: String, modelName: String) -> Unit,
     modifier: Modifier = Modifier,
+    modelOnly: Boolean = false,
 ) {
-    var title by remember { mutableStateOf("") }
+    var title by rememberSaveable { mutableStateOf("") }
     var baseUrl by remember(modelConfig.baseUrl) { mutableStateOf(modelConfig.baseUrl) }
     var apiKeyRef by remember(modelConfig.apiKeyRef) { mutableStateOf(modelConfig.apiKeyRef) }
     var apiKeySecret by remember { mutableStateOf("") }
@@ -53,15 +58,10 @@ fun AgenticTasksSection(
         modifier = modifier.fillMaxWidth().padding(vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        if (!modelOnly) {
         Text("Tasks", style = MaterialTheme.typography.titleSmall)
         Text(
-            "Title → Create → Tick (one planner step) → Approve if SSH needs it.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-
-        Text(
-            sshCapabilitySummary,
+            "Describe a task, create it, then run its next step. Review any approval request before continuing.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -69,12 +69,12 @@ fun AgenticTasksSection(
         OutlinedTextField(
             value = title,
             onValueChange = { title = it },
-            label = { Text("New goal title") },
+            label = { Text("What should Meow do?") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
 
-        Row(
+        FlowRow(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -87,24 +87,24 @@ fun AgenticTasksSection(
                     }
                     onCreateGoal(t)
                     title = ""
-                    status = "Created goal"
+                    status = "Task submitted"
                     refreshNonce++
                     onRefresh()
                 },
-            ) { Text("Create") }
+            ) { Text("Create task") }
             OutlinedButton(
                 onClick = {
                     onTickOpenGoals()
-                    status = "Ticked open goals"
+                    status = "Requested the next step for open tasks"
                     refreshNonce++
                     onRefresh()
                 },
-            ) { Text("Tick") }
+            ) { Text("Run next step") }
             OutlinedButton(onClick = { refreshNonce++; onRefresh() }) { Text("Refresh") }
         }
 
         if (goals.isEmpty()) {
-            Text("No open goals.", style = MaterialTheme.typography.bodySmall)
+            Text("No tasks yet.", style = MaterialTheme.typography.bodySmall)
         } else {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 goals.forEach { g ->
@@ -112,17 +112,23 @@ fun AgenticTasksSection(
                         modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
-                        Text(
-                            "${g.title.take(60)}  [${g.status}]  " +
-                                "steps=${g.budgets.stepsUsed}/${g.budgets.maxSteps}",
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(g.title, style = MaterialTheme.typography.titleSmall)
+                        val stateLabel = when(g.status) {
+                            GoalStatus.OPEN -> "Ready"
+                            GoalStatus.RUNNING -> "Working"
+                            GoalStatus.BLOCKED -> "Needs attention"
+                            GoalStatus.WAITING_APPROVAL -> "Waiting for your approval"
+                            GoalStatus.DONE -> "Completed"
+                            GoalStatus.CANCELLED -> "Cancelled"
+                        }
+                        Text("$stateLabel · ${g.budgets.stepsUsed} of ${g.budgets.maxSteps} steps",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedButton(onClick = {
                                 onTickGoal(g.id)
-                                status = "Ticked ${g.id.take(8)}"
+                                status = "Next step requested"
                                 onRefresh()
-                            }) { Text("Tick") }
+                            }) { Text("Run next step") }
                             if (g.status == GoalStatus.WAITING_APPROVAL) {
                                 Button(onClick = {
                                     onApproveGoal(g.id)
@@ -139,10 +145,11 @@ fun AgenticTasksSection(
             }
         }
 
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("Model", style = MaterialTheme.typography.titleSmall)
+        }
+        if (modelOnly) Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Task planning model", style = MaterialTheme.typography.titleSmall)
             Text(
-                "Optional OpenAI-compatible URL + key ref. Empty = stub.",
+                "Use an OpenAI-compatible provider for task planning. Without a configured model, only the built-in planner is available.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -182,14 +189,14 @@ fun AgenticTasksSection(
                     status = if (baseUrl.isNotBlank() && apiKeyRef.isNotBlank()) {
                         "Saved HTTP model config (ref=$apiKeyRef)"
                     } else {
-                        "Cleared / incomplete — using stub"
+                        "Configuration incomplete — using the built-in planner"
                     }
                     onRefresh()
                 },
             ) { Text("Save model") }
             Text(
                 if (modelConfig.configured) "Active: HTTP (${modelConfig.modelName})"
-                else "Active: stub",
+                else "Using the built-in planner",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

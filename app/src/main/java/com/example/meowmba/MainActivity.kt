@@ -317,12 +317,16 @@ class MainActivity : ComponentActivity() {
                         secureStorage = secureStorage,
                         onboardingVisible = wizardVisible,
                     )
+                    // Retain the current step while the user peeks at Terminal.
+                    val wizardState = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
                     // Onboarding wizard: full-screen overlay above everything.
                     if (wizardVisible) {
+                        wizardState.SaveableStateProvider("setup") {
                         com.example.meowmba.ui.onboarding.SetupWizardRoute(
                             onEnablePermissions = { checkPermissions() },
                             onFinished = {
                                 com.example.meowmba.core.setup.SetupWiring.markOnboardingDone(this@MainActivity)
+                                wizardState.removeState("setup")
                                 viewModel.reloadSetupConfiguration()
                                 needsOnboarding = false
                                 pauseWizardForTerminal = false
@@ -330,6 +334,7 @@ class MainActivity : ComponentActivity() {
                             },
                             onOpenChat = {
                                 com.example.meowmba.core.setup.SetupWiring.markOnboardingDone(this@MainActivity)
+                                wizardState.removeState("setup")
                                 viewModel.reloadSetupConfiguration()
                                 needsOnboarding = false
                                 pauseWizardForTerminal = false
@@ -338,16 +343,35 @@ class MainActivity : ComponentActivity() {
                             },
                             onOpenTerminal = {
                                 com.example.meowmba.core.setup.SetupWiring.markOnboardingDone(this@MainActivity)
+                                wizardState.removeState("setup")
                                 viewModel.reloadSetupConfiguration()
                                 needsOnboarding = false
                                 pauseWizardForTerminal = false
                                 if (showOnboarding) viewModel.toggleSetupWizard()
                                 viewModel.openCompanionTerminalFromOnboarding()
                             },
+                            onOpenConnectionsSetup = {
+                                wizardState.removeState("setup")
+                                viewModel.reloadSetupConfiguration()
+                                needsOnboarding = false
+                                pauseWizardForTerminal = false
+                                if (showOnboarding) viewModel.toggleSetupWizard()
+                                viewModel.openBrainPairingFromInfo()
+                            },
+                            onOpenNeuralSetup = {
+                                wizardState.removeState("setup")
+                                viewModel.reloadSetupConfiguration()
+                                needsOnboarding = false
+                                pauseWizardForTerminal = false
+                                if (showOnboarding) viewModel.toggleSetupWizard()
+                                viewModel.openNeuralSettingsFromInfo()
+                            },
                             onStartOpenCode = {
                                 pauseWizardForTerminal = true
                                 viewModel.startOpenCodeInCompanionTerminal(finishWizard = false)
                             },
+                            onAnimalPicked = viewModel::setAvatarAnimal,
+                            onAvatarSized = viewModel::setAvatarScale,
                             onAvatarPicked = { style ->
                                 viewModel.setAvatarStyle(style)
                             },
@@ -362,6 +386,7 @@ class MainActivity : ComponentActivity() {
                             },
                             modifier = Modifier.fillMaxSize(),
                         )
+                        }
                     }
                 }
             }

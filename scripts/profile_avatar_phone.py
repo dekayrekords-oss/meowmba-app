@@ -10,6 +10,10 @@ header={'label':a.label,'epoch':time.time(),'pid':pid,'package':adb('shell','dum
 # Keep only version fields and resumed activity; omit unrelated app/account state.
 header['package']='\n'.join(x.strip() for x in header['package'].splitlines() if any(k in x for k in ('versionCode=','versionName=','lastUpdateTime=')))
 header['activity']='\n'.join(x.strip() for x in header['activity'].splitlines() if 'mResumedActivity' in x or 'topResumedActivity' in x)
+def graphics():
+ raw=adb('shell','dumpsys','gfxinfo',pkg)
+ return {'monotonic':time.monotonic(), 'summary':'\n'.join(x.strip() for x in raw.splitlines() if x.strip().startswith(('Stats since:', 'Total frames rendered:', 'Janky frames:', '50th percentile:', '90th percentile:', '95th percentile:', '99th percentile:', '50th gpu percentile:', '95th gpu percentile:')))}
+header['graphics_before']=graphics()
 rows=[]; start=time.monotonic()
 while time.monotonic()-start<a.seconds:
  t=time.monotonic()
@@ -19,6 +23,7 @@ while time.monotonic()-start<a.seconds:
  sample['battery_temp']='\n'.join(x.strip() for x in sample['battery_temp'].splitlines() if x.strip().startswith(('temperature:', 'level:', 'USB powered:')))
  rows.append(sample)
  time.sleep(max(0,2-(time.monotonic()-t)))
+header['graphics_after']=graphics()
 header['top']=adb('shell','top','-H','-b','-n','1','-p',pid) if pid else ''
 header['meminfo']=adb('shell','dumpsys','meminfo',pkg)
 header['thermal_end']=adb('shell','dumpsys','thermalservice')

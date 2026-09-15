@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Videocam
+import com.example.meowmba.ui.theme.AlertDialog
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -112,7 +113,7 @@ fun MemoryScreen(
                 },
                 color = when {
                     state.mem0Linked -> MaterialTheme.colorScheme.primary
-                    state.mem0ServerUrl.isNotBlank() -> Color(0xFFD29922)
+                    state.mem0ServerUrl.isNotBlank() -> MaterialTheme.colorScheme.tertiary
                     else -> MaterialTheme.colorScheme.onSurfaceVariant
                 },
                 fontSize = 12.sp
@@ -283,8 +284,8 @@ private fun MemoryCard(memory: MemoryEntity, onDelete: () -> Unit) {
     val typeColor = when (memory.type) {
         MemoryType.SEMANTIC -> MaterialTheme.colorScheme.primary
         MemoryType.EPISODIC -> MaterialTheme.colorScheme.primary
-        MemoryType.PROJECT -> Color(0xFFD29922)
-        MemoryType.PREFERENCE -> Color(0xFFBC8CFF)
+        MemoryType.PROJECT -> MaterialTheme.colorScheme.tertiary
+        MemoryType.PREFERENCE -> MaterialTheme.colorScheme.secondary
     }
     val dateFormat = remember { SimpleDateFormat("MMM d, HH:mm", Locale.getDefault()) }
 

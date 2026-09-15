@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.VideocamOff
 import androidx.compose.material.icons.filled.Sync
+import com.example.meowmba.ui.theme.AlertDialog
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -74,6 +75,9 @@ fun CompanionScreen(
     val terminalUiScrollback by viewModel.companionTerminalScrollback.collectAsState()
     val terminalUiConnectedTargetId by viewModel.companionTerminalConnectedTargetId.collectAsState()
     val terminalPaneRequest by viewModel.companionTerminalPaneRequest.collectAsState()
+    val terminalTargets by rememberTerminalTargets(viewModel, uiState.isChatExpanded) {
+        viewModel.listCompanionTerminalTargets()
+    }
     val showOnboarding by viewModel.showOnboarding.collectAsState()
     // Pinned apps + drawer folders are used by both the base surfaces and the
     // shared overlay layer, so they live at the screen root.
@@ -134,7 +138,7 @@ fun CompanionScreen(
         uiState.appTheme == AppTheme.PROFESSIONAL -> MaterialTheme.colorScheme.background
         uiState.avatarStyle.isLumen -> MaterialTheme.colorScheme.background
         isNeo && !hasUserBg -> Color(0x03000000)
-        else -> Color(0xFF0D1117)
+        else -> MaterialTheme.colorScheme.background
     }
     Box(
         modifier = Modifier
@@ -192,6 +196,7 @@ fun CompanionScreen(
         if (!habitatCovered && !uiState.showNeuralInfo) {
             PetCarePanel(
                 habitatMode = uiState.habitatMode, onTrick = viewModel::playCompanionTrick,
+                onHabitatMode = viewModel::setHabitatMode,
                 care = uiState.petCare, motionPaused = !avatarWorkAllowed, onCareChanged = viewModel::setPetCare,
                 onAction = viewModel::habitatAction, onFeedback = viewModel::petFeedback,
                 onLearningChanged = viewModel::setPetLearning, learningEnabled = uiState.petLearningEnabled,
@@ -264,7 +269,7 @@ fun CompanionScreen(
             if (privacyFlags.isNotEmpty()) {
                 Text(
                     text = privacyFlags.joinToString("  ·  "),
-                    color = Color(0xFFF85149).copy(alpha = 0.8f),
+                    color = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace,
@@ -276,7 +281,7 @@ fun CompanionScreen(
 
             if (uiState.isNoting) {
                 Surface(
-                    color = Color(0xFF1F6FEB),
+                    color = MaterialTheme.colorScheme.secondaryContainer,
                     shape = RoundedCornerShape(20.dp),
                     modifier = Modifier
                         .align(Alignment.TopCenter)
@@ -288,7 +293,7 @@ fun CompanionScreen(
                     ) {
                         Text(
                             text = "Local notes · recording",
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 16.sp,
                         )
@@ -299,7 +304,7 @@ fun CompanionScreen(
                             Icon(
                                 imageVector = Icons.Filled.Close,
                                 contentDescription = "Stop taking notes and save a local summary",
-                                tint = Color.White,
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
                             )
                         }
                     }
@@ -308,7 +313,7 @@ fun CompanionScreen(
 
             if (uiState.policeAlert != null) {
                 Surface(
-                    color = Color(0xFFE3B341),
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier
                         .align(Alignment.TopCenter)
@@ -317,7 +322,7 @@ fun CompanionScreen(
                 ) {
                     Text(
                         text = uiState.policeAlert ?: "",
-                        color = Color(0xFF1A1400),
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 16.sp,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
@@ -473,14 +478,14 @@ fun CompanionScreen(
                             modifier = Modifier
                                 .width(160.dp)
                                 .height(16.dp)
-                                .background(Color(0xAA0D1117)),
+                                .background(MaterialTheme.colorScheme.surfaceContainerLow),
                             contentAlignment = Alignment.Center,
                         ) {
                             Box(
                                 modifier = Modifier
                                     .width(36.dp)
                                     .height(4.dp)
-                                    .background(Color(0x66CFF9FF), RoundedCornerShape(2.dp)),
+                                    .background(MaterialTheme.colorScheme.outline, RoundedCornerShape(2.dp)),
                             )
                         }
                         Viewfinder(
@@ -543,13 +548,13 @@ fun CompanionScreen(
                     .align(Alignment.BottomCenter)
                     .padding(16.dp)
                     .fillMaxWidth(),
-                color = Color(0xE61B1F24),
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
                 shape = RoundedCornerShape(16.dp),
             ) {
                 Column(Modifier.padding(16.dp)) {
                     Text(
                         text = uiState.voicePackLabel ?: "Getting voice models…",
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onSurface,
                         fontSize = 14.sp,
                     )
                     val p = uiState.voicePackProgress
@@ -575,6 +580,7 @@ fun CompanionScreen(
                 viewModel.onAvatarZoneClick(AvatarZone.BACKGROUND)
                 when (tileName) {
                     "Settings" -> viewModel.toggleSettings()
+                    "Computer" -> viewModel.openComputerTools()
                     "LLM", "Hardware" -> viewModel.toggleModelManager()
                     "Brain" -> viewModel.toggleNeuralInfo()
                     "Privacy" -> viewModel.togglePrivacyDashboard()
@@ -665,6 +671,8 @@ fun CompanionScreen(
         ) {
             PresenceHintChip(
                 hint = presenceHint,
+                onReview = if (uiState.agenticPresenceHint != null) viewModel::openAgenticTaskDetails else null,
+                onDismiss = if (uiState.agenticDismissibleRevision != null) viewModel::dismissAgenticPresenceHint else null,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .safeDrawingPadding()
@@ -956,11 +964,10 @@ fun CompanionScreen(
                 onComputerSaveProfile = viewModel::saveComputerProfile,
                 onComputerTestConnection = viewModel::testComputerConnection,
                 onComputerInstall = viewModel::installComputerOnServer,
-                onComputerOpenTerminal = {
-                    viewModel.connectCompanionTerminal(
-                        com.example.meowmba.ui.companion.CompanionTerminalTarget.LOCAL_ID
-                    )
-                },
+                onComputerOpenTerminal = { viewModel.openComputerTerminal() },
+                onComputerOpenServerTerminal = viewModel::openComputerTerminal,
+                onRefreshComputerPhone = viewModel::refreshComputerPhoneProbe,
+                computerVerifiedProfile = uiState.computerVerifiedProfile,
                 onComputerOpenDesktop = viewModel::openComputerDesktopUrl,
                 onComputerConfirmInstallPrompt = viewModel::confirmComputerInstallPrompt,
                 lumenReflexGain = uiState.lumenReflexGain,
@@ -1191,7 +1198,7 @@ fun CompanionScreen(
             onMicClick = { viewModel.onChatMicClick() },
             callActive = uiState.callMode,
             onCallClick = { viewModel.toggleCallMode() },
-            terminalTargets = viewModel.listCompanionTerminalTargets(),
+            terminalTargets = terminalTargets,
             terminalStatus = terminalUiStatus,
             terminalStatusDetail = terminalUiStatusDetail,
             terminalScrollback = terminalUiScrollback,
@@ -1267,9 +1274,9 @@ fun CompanionScreen(
                 border = androidx.compose.foundation.BorderStroke(
                     1.dp,
                     if (approval.riskLevel == com.example.meowmba.core.agent.tools.RiskLevel.DESTRUCTIVE) {
-                        Color(0xFFF85149)
+                        MaterialTheme.colorScheme.error
                     } else {
-                        Color(0xFFD29922)
+                        MaterialTheme.colorScheme.tertiary
                     }
                 ),
                 modifier = Modifier
@@ -1360,8 +1367,8 @@ private fun AvatarMotionHost(
     val motionSampleTime = viewModel.motionObservedAtMs.collectAsState()
     val view = androidx.compose.ui.platform.LocalView.current
     val displayRotation = LocalConfiguration.current.let { view.display?.rotation ?: 0 }
-    val motionLean by viewModel.motionLean.collectAsState()
-    val motionLurch by viewModel.motionLurch.collectAsState()
+    val motionLean = viewModel.motionLean.collectAsState()
+    val motionLurch = viewModel.motionLurch.collectAsState()
     val shakeCount by viewModel.avatarShakeCount.collectAsState()
     val faceGaze by viewModel.faceGaze.collectAsState()
     // Deliberately NOT `by`: delegating would read the value here, in
@@ -1402,8 +1409,8 @@ private fun AvatarMotionHost(
             facePitchDeg = facePose?.pitchDeg,
             faceRollDeg = facePose?.rollDeg,
             faceScale = facePose?.scale,
-            motionLean = motionLean,
-            motionLurch = motionLurch,
+            motionLeanState = motionLean,
+            motionLurchState = motionLurch,
             motionObservedAtMs = motionSampleTime,
             nervousBias = viewModel::nervousBiasNow,
             neuralGaze = viewModel::neuralGazeNow,
@@ -1422,8 +1429,8 @@ private fun AvatarMotionHost(
             onReflexSummary = viewModel::onReflexSummary,
         )
         if (flyError != null) {
-            androidx.compose.material3.Text("3D graphics unavailable: $flyError", color=Color.White,
-                modifier=Modifier.align(Alignment.Center).background(Color(0xff20332f)).padding(16.dp))
+            androidx.compose.material3.Text("3D graphics unavailable: $flyError", color=MaterialTheme.colorScheme.onSurface,
+                modifier=Modifier.align(Alignment.Center).background(MaterialTheme.colorScheme.surfaceContainerHigh).padding(16.dp))
         }
     }
 }

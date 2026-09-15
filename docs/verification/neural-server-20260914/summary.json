@@ -1,0 +1,88 @@
+{
+  "schema": 1,
+  "packageSha256": "31b1180c4f0d0f63fb8a358ca02a1eee90d35b60062ee857662168aa95cf7eea",
+  "server": "100.77.97.236:8785",
+  "unitTests": {
+    "tests": 2526,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "worker": {
+    "retained": {
+      "identity": {
+        "asset_sha256": "e33df182bed7a6f3ea279daf4790a82b05706d3d41e819a6a80c0473e8c559f3",
+        "neurons": 176422,
+        "pairs": 6287749,
+        "synapses": 90296905
+      },
+      "checks": {
+        "quiet_is_silent": true,
+        "food_reaches_feeding": true,
+        "touch_reaches_grooming": true,
+        "loom_reaches_jump": true,
+        "lateral_motion_is_directional": true,
+        "steady_compute_within_budget": true,
+        "steady_responses_fresh": true
+      },
+      "cold_request_ms": 334.1296040453017,
+      "compute_p95_ms": 116.654,
+      "steady_round_trip_max_ms": 128.47604101989418
+    },
+    "full": {
+      "identity": {
+        "schema": 1,
+        "graph": "full",
+        "dataset": "male-cns:v1.0",
+        "asset_sha256": "8860e68b59e454d8d4e8bd601dd7a3cb9049d18516f1ea8df34eabe1ae400d08",
+        "asset_size": 79963380,
+        "neurons": 176422,
+        "pairs": 25862574,
+        "synapses": 125024863,
+        "min_pair_synapses": 1,
+        "autapses_removed": false,
+        "roster_sha256": "a21dcf2576c352eda0f4d455683b648ec28272fd7f4918fdfbf2c97aff9df465"
+      },
+      "checks": {
+        "quiet_is_silent": true,
+        "food_reaches_feeding": true,
+        "touch_reaches_grooming": true,
+        "loom_reaches_jump": true,
+        "lateral_motion_is_directional": true,
+        "steady_compute_within_budget": true,
+        "steady_responses_fresh": true
+      },
+      "cold_request_ms": 682.1932379971258,
+      "compute_p95_ms": 255.78,
+      "steady_round_trip_max_ms": 350.0497810309753
+    }
+  },
+  "bridge": {
+    "scope": "Live authenticated neural service; phone inactive, no Android acceptance",
+    "asset_sha256": "8860e68b59e454d8d4e8bd601dd7a3cb9049d18516f1ea8df34eabe1ae400d08",
+    "graph": "full",
+    "unsigned_rejected": true,
+    "duplicate_cached": true,
+    "steady_round_trip_max_ms": 390.787,
+    "compute_p95_ms": 288.232,
+    "restart_deterministic": true
+  },
+  "team": {
+    "status": "COMPLETE",
+    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    "agents": 3,
+    "execution": "sequential",
+    "elapsedMs": 104242,
+    "approvedWrites": 1,
+    "reportVerified": true,
+    "automaticAgentCreation": false
+  },
+  "installed": {
+    "releaseCode": 132,
+    "debugCode": 132,
+    "releaseSha256": "5d9020a6616a6971ddea5396ed74a8929b69b43b51de460bdc977e66e2b2b34b",
+    "releaseColdLaunchMs": 414,
+    "releasePairingUiVerifiedOnCode": 131,
+    "postUpgradeVisualBlockedByKeyguard": true
+  }
+}

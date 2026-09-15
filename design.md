@@ -74,3 +74,40 @@ native disabled/selected semantics and native screenshots at 320/375/414/768dp,
 dark/light and 1.4x text. Existing setup, settings, chat, mic privacy and placement
 tests remain release gates. Record exact results in the Build 111 passdown.
 Screenshots are native Robolectric evidence, separate from physical-phone checks.
+
+## September 14: onboarding and remaining submenus
+
+First run now opens with a feature tour, explicit avatar/animal selection, then
+anatomy-aware automatic fitting. Users review a display-proportioned preview,
+can inspect it at full screen, and may reveal a size slider or restore auto-fit.
+Computer, permissions, AI providers, GitHub and verified server pairing follow
+as optional setup. A quick completion path still requires choosing an avatar
+and reviewing size. Existing completed users are not enrolled again.
+
+The native settled preview uses the same anatomy and envelope as the live
+renderer without warming up a morph, starting sensors, or running an animation
+clock. Only confirmed size is persisted. The Terminal peek retains wizard
+state, and completing setup clears that transient state for a fresh later visit.
+
+Dropdowns, searchable model menus, dialogs and modal sheets now share the ink
+border, rounded shapes and surface roles. Voice/model setup, browser chrome,
+Terminal, weather controls, inventory, agent status and remaining settings badges
+use semantic colors in both appearances. Avatar art, weather artwork, terminal
+syntax and third-party Android/system interfaces keep their own visual purpose.
+The optional Professional palette continues to use the same shared controls.
+
+## September 15: Computer navigation and guided setup
+
+Computer is the first main-menu tile and a dedicated Settings category. Its
+hub contains separate destinations for Setup, Tasks & approvals, AI for tasks,
+Saved connections, and Power & sleep. Logs and technical diagnostics have their
+own secondary page. Neural / Lumen keeps avatar controls and a direct Computer
+button rather than embedding the Computer forms.
+
+Setup begins with This phone or A Linux server. Each path has three short steps
+with progress and back navigation. Advanced connection fields stay collapsed.
+The fixed header, independent page scrolling, wrapped action rows, keyboard
+insets and saved non-secret drafts support narrow screens and large text.
+Credentials remain in memory until explicit save/test and are never included
+in saved screen state. Saved, checking, connected and installed are distinct
+states; installation requires a successful check of the current connection.
