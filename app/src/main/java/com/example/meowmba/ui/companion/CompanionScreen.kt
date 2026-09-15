@@ -1137,6 +1137,7 @@ fun CompanionScreen(
                     installed = drawerUsage.launches.keys,
                 ),
                 neverFrequentPackages = drawerUsage.neverFrequent,
+                launchCounts = drawerUsage.launches,
                 onHideFromFrequent = viewModel::hideFromFrequentApps,
                 onSetNeverFrequent = viewModel::setNeverFrequentApp,
                 onAllowFrequent = viewModel::allowFrequentApp,

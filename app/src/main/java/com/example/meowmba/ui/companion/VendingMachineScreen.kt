@@ -392,7 +392,7 @@ object AvatarWorkshopPrompt {
         }
         part("Head", head); part("Body", body); part("Arms", arms); part("Legs", legs); part("Tail", tail)
         freeform.trim().takeIf { it.isNotEmpty() }?.let { append(". ").append(it) }
-        append(". Include movable parts with motion tags for head/body/arms/legs/tail when present.")
+        append(". Include movable parts with motion tags body/arm/leg/tail/wing/float (never motion head; head-adjacent shapes use still or body).")
     }.take(GeneratedAvatarForms.MAX_REQUEST)
 }
 

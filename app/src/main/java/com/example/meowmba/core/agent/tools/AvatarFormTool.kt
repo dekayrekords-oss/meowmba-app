@@ -11,12 +11,12 @@ import kotlinx.coroutines.CancellationException
  */
 class AvatarFormTool(
     private val onChange: (AvatarAnimal) -> Unit,
-    private val onGenerate: (suspend (String, Long?) -> ToolResult)?,
+    private val onGenerate: (suspend (String, Long?, String?) -> ToolResult)?,
     private val validateGeneration: (Long?) -> Unit,
 ) : Tool {
     constructor(onChange: (AvatarAnimal) -> Unit) : this(onChange, null, {})
     constructor(onChange: (AvatarAnimal) -> Unit, onGenerate: suspend (String, Long?) -> ToolResult) :
-        this(onChange, onGenerate, {})
+        this(onChange, { req, gen, _ -> onGenerate(req, gen) }, {})
 
     private val supported: String
         get() = AvatarAnimal.entries.joinToString(", ") {
@@ -40,7 +40,7 @@ class AvatarFormTool(
         confirmationPolicy = ConfirmationPolicy.NONE,
         // Host creation has a 90-second deadline; the orchestrator must leave
         // time to validate, persist and report that result rather than cut it at 30s.
-        timeoutMs = 100_000L,
+        timeoutMs = 130_000L, // thorough invent may run ~120s
     )
 
     override suspend fun execute(args: Map<String, String>): ToolResult {
@@ -64,7 +64,7 @@ class AvatarFormTool(
                 val generate = onGenerate ?: return ToolResult.Failure(
                     "Unsupported avatar form '$requested' in this host: new-form generation is unavailable. Supported forms: $supported.",
                 )
-                generate(requested, generation)
+                generate(requested, generation, args["reason_level"])
             }
         } catch (cancelled: CancellationException) {
             // A stopped/superseded generation must never become a false success.

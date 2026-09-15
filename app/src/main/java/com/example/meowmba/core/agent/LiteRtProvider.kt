@@ -133,9 +133,34 @@ class LiteRtProvider(
 
     /** JSON/tool decisions retain their separate output budget and constrained response format. */
     suspend fun generateStructured(prompt: String, jsonSchema: String = "{\"type\":\"object\"}"): ModelResponse {
+        val full = StringBuilder()
         var result: ModelResponse = ModelResponse.Error("No model response")
-        stream(prompt, limitSentences = false, jsonSchema = jsonSchema).collect {
-            if (it is ModelResponse.Complete || it is ModelResponse.Error) result = it
+        try {
+            stream(prompt, limitSentences = false, jsonSchema = jsonSchema).collect {
+                when (it) {
+                    is ModelResponse.Partial -> {
+                        if (full.length + it.text.length > MAX_STRUCTURED_CHARS) {
+                            result = ModelResponse.Error("$name response exceeded $MAX_STRUCTURED_CHARS characters")
+                            throw CancellationException("structured response too large")
+                        }
+                        full.append(it.text)
+                    }
+                    is ModelResponse.Complete -> {
+                        val text = when {
+                            it.text.isNotBlank() -> it.text
+                            full.isNotEmpty() -> full.toString()
+                            else -> ""
+                        }
+                        result = ModelResponse.Complete(text)
+                    }
+                    is ModelResponse.Error -> result = it
+                }
+            }
+        } catch (cancelled: CancellationException) {
+            if (result is ModelResponse.Error && (result as ModelResponse.Error).message.contains("exceeded")) {
+                return result
+            }
+            throw cancelled
         }
         return result
     }
@@ -156,6 +181,7 @@ class LiteRtProvider(
     fun close() { release() }
 
     private companion object {
+        const val MAX_STRUCTURED_CHARS = 48_000
         const val MAX_REPLY_SENTENCES = 3
         val SENTENCES = Regex("""(?<=[.!?])\s+""")
     }
