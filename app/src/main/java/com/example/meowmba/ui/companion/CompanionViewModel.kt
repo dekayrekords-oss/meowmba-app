@@ -2042,9 +2042,9 @@ class CompanionViewModel(
             val animStore = CustomAnimationStore(File(appContext.filesDir, "custom_animations"))
             toolRegistry.register(com.example.meowmba.core.agent.tools.AvatarFormTool(
                 onChange = ::transformAvatar,
-                onGenerate = { request, generation ->
+                onGenerate = { request, generation, reasonKey ->
                     val level = InventReasonLevel.fromKey(
-                        secureStorage?.getPreference(KEY_INVENT_REASON),
+                        reasonKey ?: secureStorage?.getPreference(KEY_INVENT_REASON),
                     )
                     generateAvatarForm(request, generation, reasonLevel = level)
                 },
@@ -10406,25 +10406,26 @@ class CompanionViewModel(
                     avatarFormFailure("Avatar creation timed out. Your current form is unchanged; try a simpler description.")
                 } catch (cancelled: kotlinx.coroutines.CancellationException) {
                     throw cancelled
-                } catch (_: OutOfMemoryError) {
-                    // Harder forms + unbounded streams used to kill the process; keep the app alive.
+                } catch (error: Throwable) {
+                    // OutOfMemoryError / StackOverflowError / unexpected Errors used to kill the process.
                     ensureOwner()
-                    System.gc()
-                    avatarFormFailure("That form was too complex for memory. Try a simpler description with fewer details.")
-                } catch (error: Exception) {
-                    ensureOwner()
-                    // Safe, short reason — never dump endpoint/auth details onto the avatar caption.
+                    if (error is OutOfMemoryError) System.gc()
                     val reason = error.message?.filterNot { it.isISOControl() }?.take(120)?.takeIf { it.isNotBlank() }
                     avatarFormFailure(
-                        if (reason != null && (reason.contains("HTTP", ignoreCase = true) ||
+                        when {
+                            error is OutOfMemoryError || reason?.contains("memory", ignoreCase = true) == true ->
+                                "That form was too complex for memory. Try Faster reason level or a simpler description."
+                            reason != null && (reason.contains("HTTP", ignoreCase = true) ||
                                 reason.contains("schema", ignoreCase = true) ||
                                 reason.contains("JSON", ignoreCase = true) ||
                                 reason.contains("exceeded", ignoreCase = true) ||
                                 reason.contains("finish", ignoreCase = true) ||
-                                reason.contains("slots", ignoreCase = true)))
-                            "Could not create that cartoon form: $reason. Try a simpler description."
-                        else
-                            "Could not create and save that cartoon form. Check your selected AI model, try a simpler description, or remove a saved form if all 24 slots are full.",
+                                reason.contains("slots", ignoreCase = true) ||
+                                reason.contains("motion", ignoreCase = true)) ->
+                                "Could not create that cartoon form: $reason. Try a simpler description."
+                            else ->
+                                "Could not create and save that cartoon form. Check your selected AI model, try a simpler description, or remove a saved form if all 24 slots are full."
+                        },
                     )
                 } finally {
                     if (generation == avatarFormGeneration) {
@@ -10591,16 +10592,16 @@ class CompanionViewModel(
                 propInventFailure("Prop invent timed out. Try a simpler description.")
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
-            } catch (_: OutOfMemoryError) {
+            } catch (error: Throwable) {
                 ensureOwner()
-                System.gc()
-                propInventFailure("That prop was too complex for memory. Try fewer details.")
-            } catch (error: Exception) {
-                ensureOwner()
+                if (error is OutOfMemoryError) System.gc()
                 val reason = error.message?.filterNot { it.isISOControl() }?.take(120)?.takeIf { it.isNotBlank() }
                 propInventFailure(
-                    if (reason != null) "Could not invent that prop: $reason"
-                    else "Could not invent and save that prop. Check your AI model or free a library slot.",
+                    when {
+                        error is OutOfMemoryError -> "That prop was too complex for memory. Try fewer details."
+                        reason != null -> "Could not invent that prop: $reason"
+                        else -> "Could not invent and save that prop. Check your AI model or free a library slot."
+                    },
                 )
             } finally {
                 if (generation == propInventGeneration) {

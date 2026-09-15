@@ -59,8 +59,7 @@ object GeneratedAvatarForms {
             val shape = GeneratedAvatarShape.entries.firstOrNull { it.name.lowercase(Locale.ROOT) == p.opt("shape") }
                 ?: fail("Part $index shape must be ellipse, round_rect or polygon")
             val motion = if (!p.has("motion")) GeneratedAvatarMotion.STILL else
-                GeneratedAvatarMotion.entries.firstOrNull { it.name.lowercase(Locale.ROOT) == p.opt("motion") }
-                    ?: fail("Part $index has an unsupported motion")
+                parseMotion(p.opt("motion"), index)
             val x = number(p, "x", -.5f, .5f); val y = number(p, "y", -.5f, .5f)
             val width = number(p, "width", .01f, 1f); val height = number(p, "height", .01f, 1f)
             val rotation = number(p, "rotation", -180f, 180f, 0f)
@@ -162,6 +161,28 @@ object GeneratedAvatarForms {
         if (!Regex("#[0-9a-fA-F]{6}").matches(raw)) fail("$key must be a #RRGGBB color")
         return 0xFF000000 or raw.drop(1).toLong(16)
     }
+
+    /**
+     * Models prompted about "head/body/arms/legs" often emit motion "head",
+     * which is not in the schema. Coerce known aliases so invent does not enter
+     * repair loops that multiply LLM payloads and OOM the process.
+     */
+    private fun parseMotion(raw: Any?, index: Int): GeneratedAvatarMotion {
+        val key = (raw as? String)?.trim()?.lowercase(Locale.ROOT)
+            ?: fail("Part $index has an unsupported motion")
+        GeneratedAvatarMotion.entries.firstOrNull { it.name.lowercase(Locale.ROOT) == key }?.let { return it }
+        return when (key) {
+            "head", "face", "neck" -> GeneratedAvatarMotion.STILL
+            "torso", "chest", "trunk" -> GeneratedAvatarMotion.BODY
+            "hand", "hands", "limb", "paw", "handle", "fin" -> GeneratedAvatarMotion.ARM
+            "foot", "feet", "leg_pair" -> GeneratedAvatarMotion.LEG
+            "wings" -> GeneratedAvatarMotion.WING
+            "steam", "smoke", "hover", "bob" -> GeneratedAvatarMotion.FLOAT
+            "ears", "horn", "horns" -> GeneratedAvatarMotion.ANTENNA
+            else -> fail("Part $index has an unsupported motion")
+        }
+    }
+
     private fun fail(message: String): Nothing = throw SpecException(message)
 }
 

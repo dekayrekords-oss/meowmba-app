@@ -158,6 +158,13 @@ private fun searchTextFor(
     if (tokens.any { it in AI_MARKERS }) {
         extras += AI_MARKERS
     }
+    val pkgLower = packageName.lowercase()
+    val labelLower = label.lowercase()
+    if (pkgLower.contains("messaging") || pkgLower.endsWith(".mms") || pkgLower.contains(".sms") ||
+        labelLower == "messages" || labelLower.endsWith(" messages") || labelLower == "message"
+    ) {
+        extras += listOf("messages", "message", "sms", "mms", "texting")
+    }
     return (tokens + categoryWords.split(" ").filter { it.isNotBlank() } + extras)
         .distinct()
         .joinToString(" ")

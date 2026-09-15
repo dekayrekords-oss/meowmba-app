@@ -86,4 +86,18 @@ class GeneratedAvatarFormTest {
     private fun rejects(json: JSONObject) {
         assertThrows(GeneratedAvatarForms.SpecException::class.java) { GeneratedAvatarForms.parse(json.toString()) }
     }
+
+    @Test
+    fun `motion head aliases coerce instead of failing schema`() {
+        val json = """
+            {"version":1,"name":"Fox","description":"A fox","parts":[
+              {"shape":"ellipse","x":0.0,"y":-0.1,"width":0.3,"height":0.28,"fill":"#E8A878","outline":"#202230","stroke":0.012,"rotation":0,"motion":"head","phase":0},
+              {"shape":"ellipse","x":0.0,"y":0.15,"width":0.4,"height":0.45,"fill":"#E8A878","outline":"#202230","stroke":0.012,"rotation":0,"motion":"body","phase":0}
+            ],"face":{"x":0,"y":-0.07,"eye_spacing":0.16,"eye_width":0.12,"eye_height":0.16,"mouth_y":0.15,"mouth_width":0.14,"iris":"#4A354A"}}
+        """.trimIndent()
+        val form = GeneratedAvatarForms.parse(json)
+        assertEquals(GeneratedAvatarMotion.STILL, form.parts[0].motion)
+        assertEquals(GeneratedAvatarMotion.BODY, form.parts[1].motion)
+    }
+
 }

@@ -108,9 +108,21 @@ object GeneratedPropForms {
         keys(part, setOf("shape", "x", "y", "width", "height", "fill", "outline", "stroke", "rotation", "motion", "phase", "points"), "part $index")
         val shape = GeneratedAvatarShape.entries.firstOrNull { it.name.lowercase(Locale.ROOT) == part.opt("shape") }
             ?: fail("Part $index shape must be ellipse, round_rect or polygon")
-        val motion = if (!part.has("motion")) GeneratedAvatarMotion.STILL else
-            GeneratedAvatarMotion.entries.firstOrNull { it.name.lowercase(Locale.ROOT) == part.opt("motion") }
+        val motion = if (!part.has("motion")) GeneratedAvatarMotion.STILL else {
+            val key = (part.opt("motion") as? String)?.trim()?.lowercase(Locale.ROOT)
                 ?: fail("Part $index has an unsupported motion")
+            GeneratedAvatarMotion.entries.firstOrNull { it.name.lowercase(Locale.ROOT) == key }
+                ?: when (key) {
+                    "head", "face", "neck" -> GeneratedAvatarMotion.STILL
+                    "torso", "chest" -> GeneratedAvatarMotion.BODY
+                    "hand", "hands", "limb", "paw", "handle" -> GeneratedAvatarMotion.ARM
+                    "foot", "feet" -> GeneratedAvatarMotion.LEG
+                    "wings" -> GeneratedAvatarMotion.WING
+                    "steam", "smoke", "hover", "bob" -> GeneratedAvatarMotion.FLOAT
+                    "ears", "horn", "horns" -> GeneratedAvatarMotion.ANTENNA
+                    else -> fail("Part $index has an unsupported motion")
+                }
+        }
         val x = number(part, "x", -.5f, .5f); val y = number(part, "y", -.5f, .5f)
         val width = number(part, "width", .01f, 1f); val height = number(part, "height", .01f, 1f)
         val rotation = number(part, "rotation", -180f, 180f, 0f)

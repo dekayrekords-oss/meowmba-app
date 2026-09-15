@@ -113,6 +113,8 @@ fun AppDrawerScreen(
     onLaunchApp: ((String) -> Unit)? = null,
     frequentPackages: List<String> = emptyList(),
     neverFrequentPackages: Set<String> = emptySet(),
+    /** Package → launch count for search ranking (most-used boost). */
+    launchCounts: Map<String, Int> = emptyMap(),
     onHideFromFrequent: (String) -> Unit = {},
     onSetNeverFrequent: (String, Boolean) -> Unit = { _, _ -> },
     onAllowFrequent: (String) -> Unit = {},
@@ -176,7 +178,7 @@ fun AppDrawerScreen(
 
     val openFolder = folders.firstOrNull { it.id == openFolderId }
     val scoped = if (openFolder == null) apps else apps.filter { it.packageName in openFolder.packages }
-    val visible = remember(query, scoped, sort, typeFilter) { DrawerCatalog.visible(scoped, query, sort, typeFilter) }
+    val visible = remember(query, scoped, sort, typeFilter, launchCounts) { DrawerCatalog.visible(scoped, query, sort, typeFilter, launchCounts) }
     val shownFolders = if (openFolder == null && typeFilter == null) DrawerCatalog.matchingFolders(folders, query) else emptyList()
     val favoriteApps = if (openFolder == null && query.isBlank() && typeFilter == null) {
         pins.distinct().take(8).mapNotNull { pkg -> apps.firstOrNull { it.packageName == pkg } }
@@ -251,7 +253,7 @@ fun AppDrawerScreen(
         submitted = true
         focus.clearFocus()
         keyboard?.hide()
-        val matches = DrawerCatalog.visible(scoped, q, sort, typeFilter)
+        val matches = DrawerCatalog.visible(scoped, q, sort, typeFilter, launchCounts)
         val match = matches.firstOrNull { it.label.equals(q, ignoreCase = true) }
         onSubmitQuery(q, matches.size, match?.label ?: matches.singleOrNull()?.label)
     }
