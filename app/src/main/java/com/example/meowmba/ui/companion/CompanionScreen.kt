@@ -197,6 +197,8 @@ fun CompanionScreen(
                 onLearningChanged = viewModel::setPetLearning, learningEnabled = uiState.petLearningEnabled,
                 feedbackNotice = uiState.petFeedbackNotice,
                 onResetLearning = viewModel::resetPetLearning,
+                formKey = uiState.generatedAvatarForm?.let { "generated" }
+                    ?: (uiState.performanceAnimal ?: uiState.avatarAnimal).key,
                 modifier = Modifier.align(Alignment.TopStart).safeDrawingPadding().padding(start = 12.dp, top = 64.dp),
             )
         }

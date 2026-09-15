@@ -1,5 +1,28 @@
 # MEOWMBA MASTER PLAN
 
+## September 15, 2026 — Epic P3 / Slices E+F: Deep care + background motion + files scope
+
+Branch: `feat/epic-p3-care-motion-files` (from `feat/epic-p2-vending-machine` @ `76aba32`). Preview package `com.example.meowmba`. Flags `lumen_reflex_v2` / `agentic_runtime_v1` remain default **OFF**. No FlyWire.
+
+### Done (Slice E — Deep play/care)
+- [x] Richer needs meters: Food, Energy, Mood, Affection, Hygiene with time-based decay (persist `pet_care_v1` v2; v1 migrates).
+- [x] Care actions with feedback: Feed, Play, Rest, Clean, Talk (+ habitat Read/Drink/Nudge/Explore); form-aware reaction lines.
+- [x] Polished `PetCarePanel` Compose UX (meters, action chips, reaction card) — still optional Care mode; pet never dies.
+- [x] Avatar bias reacts to affection/hygiene/energy/mood when care is on.
+
+### Done (Slice F — Background motion + files scope)
+- [x] Minimal ambient motion: illustrated room parallax drift + soft shimmer; aurora/starfield/nebula gentle wash (scene clock / pause / thermal respected).
+- [x] Files: **Local files** vs **All files on phone** scope chips; library cleanup vs MediaStore phone cleanup suggestions; AI organize stays library-only.
+
+### Epic status
+- [x] P1 Connections / Invent / Launcher
+- [x] P2 Vending Machine (Slice D)
+- [x] P3 Care + motion + files (E+F)
+- Epic complete pending merge + Preview APK ship (APK build may be on separate habitat worktree).
+
+### Still queued outside this epic
+- [ ] Computer agentic P1 workspace file tools (from Computer P0 notes)
+
 ## September 15, 2026 — Epic P2 / Slice D: Vending Machine (props + avatar workshop)
 
 Branch: `feat/epic-p2-vending-machine` (from `feat/epic-p1-connections-invent-launcher` @ `751d508`). Preview package `com.example.meowmba`. Flags `lumen_reflex_v2` / `agentic_runtime_v1` remain default **OFF**. No FlyWire.
@@ -11,10 +34,10 @@ Branch: `feat/epic-p2-vending-machine` (from `feat/epic-p1-connections-invent-la
 - [x] Prop library UI; OOM/timeout hardening mirrors avatar invent.
 - [x] Former Studio comics/characters kept as a vending lane (not hard-deleted).
 
-### Still queued after Slice D
-- [ ] Deep Tamagotchi care overhaul (Slice E)
-- [ ] Background art motion (Slice F)
-- [ ] Files cleanup local vs all-phone (Slice F)
+### Still queued after Slice D (historical — E+F shipped on epic-p3)
+- [x] Deep Tamagotchi care overhaul (Slice E) → `feat/epic-p3-care-motion-files`
+- [x] Background art motion (Slice F)
+- [x] Files cleanup local vs all-phone (Slice F)
 - [ ] Computer agentic P1 workspace file tools (from Computer P0 notes)
 
 ## September 14, 2026 — Epic P1: Connections / Invent / Launcher
@@ -35,9 +58,9 @@ Branch: `feat/epic-p1-connections-invent-launcher` (from `codex/computer-p0-buil
 ### Queued / out of scope for P1 (Slice D shipped on epic-p2)
 - ~~Studio → vending machine for props+avatars workshop~~ → Slice D
 - ~~Prop generation machine~~ → Slice D
-- Deep Tamagotchi care overhaul
-- Background art motion
-- Files cleanup local vs all-phone
+- ~~Deep Tamagotchi care overhaul~~ → Slice E
+- ~~Background art motion~~ → Slice F
+- ~~Files cleanup local vs all-phone~~ → Slice F
 - Computer agentic P1 (workspace `file_read`/`file_write`, stronger multi-step planner) — still queued from Computer P0 notes
 
 

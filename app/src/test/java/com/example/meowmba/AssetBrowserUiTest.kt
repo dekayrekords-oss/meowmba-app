@@ -30,6 +30,8 @@ class AssetBrowserUiTest {
             AssetBrowserScreen(askAi = { calls++; "{\"matches\":[]}" }, onProjects = {}, onClose = {})
         } }
         compose.onNodeWithText("AI file manager").assertExists()
+        compose.onNodeWithText("Local files").assertExists()
+        compose.onNodeWithText("All files on phone").assertExists()
         compose.onNodeWithText("Search your files").performTextInput("cat photos")
         compose.onNodeWithText("AI search").performClick()
         compose.onNodeWithText("Uses your configured AI provider", substring = true).assertExists()

@@ -966,8 +966,10 @@ fun AvatarRenderer(
             val care = state.petCare
             val caredBias = if (care.careEnabled) bias.copy(
                 arousal = (bias.arousal * (.5f + .5f * care.energy)).coerceIn(0f, 1f),
-                restWeight = bias.restWeight + (1f - care.energy) * .5f,
-                valence = (bias.valence * .6f + (care.happiness - .5f) * .6f).coerceIn(-1f, 1f),
+                restWeight = bias.restWeight + (1f - care.energy) * .5f + (1f - care.hygiene) * .15f,
+                valence = (bias.valence * .5f + (care.happiness - .5f) * .4f + (care.affection - .5f) * .3f).coerceIn(-1f, 1f),
+                followGain = (bias.followGain * (.7f + .3f * care.affection)).coerceIn(0f, 1.5f),
+                blinkRateScale = (bias.blinkRateScale * (.85f + .3f * (1f - care.hygiene))).coerceIn(.5f, 1.8f),
             ) else bias
             habitatWorld.step(tSec, state.habitatCommand, caredBias, w, h, state.petPlayPreference).also {
                 habitatWorld.drawProps(this, state.avatarStyle == AvatarStyle.FULL_FLY)
@@ -1039,7 +1041,10 @@ fun AvatarRenderer(
                 // while still breaking TextureView's draw/swap/invalidate feedback loop.
                 val bias = nervousBias()
                 val care = state.petCare
-                val adjusted = if (care.careEnabled) bias.copy(arousal = bias.arousal * (.5f + .5f * care.energy)) else bias
+                val adjusted = if (care.careEnabled) bias.copy(
+                    arousal = bias.arousal * (.5f + .5f * care.energy),
+                    valence = (bias.valence * .5f + (care.happiness - .5f) * .3f + (care.affection - .5f) * .3f).coerceIn(-1f, 1f),
+                ) else bias
                 val world = if (habitatEnabled) fly3DWorld.step(tSec, state.habitatCommand, adjusted,
                     state.petPlayPreference, state.habitatBackgroundId, neuralWingPower(), neuralFlyMotor()) else null
                 val p = world?.pose

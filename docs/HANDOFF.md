@@ -4,26 +4,27 @@
 > The "Recent builds" section is regenerated automatically by scripts/autobuild.sh
 > after every commit; everything else is maintained by hand at each phase.
 
-## Current status — 2026-09-15 (Epic P2 Slice D — Vending Machine)
+## Current status — 2026-09-15 (Epic P3 Slices E+F — Care / motion / files)
 
-**Active branch:** `feat/epic-p2-vending-machine` (from `feat/epic-p1-connections-invent-launcher` @ `751d508`)  
+**Active branch:** `feat/epic-p3-care-motion-files` (from `feat/epic-p2-vending-machine` @ `76aba32`)  
 **Packages:** Preview `com.example.meowmba` · Play signing not mixed  
 **Flags:** `lumen_reflex_v2` / `agentic_runtime_v1` default **OFF**
 
-### Slice D shipped
-- Memba **Studio** tile → **Vending** (`VendingMachineScreen`): hub → Avatars (simple | workshop), Props (generate | library), Comics & characters archive.
-- Avatar workshop composes structured parts into invent/refine with InventReasonLevel; simple path still uses `GeneratedAvatarControls` / Become-anything.
-- Props: `PropInventor` + `GeneratedPropForm` + `GeneratedPropStore` (`filesDir/companion_props`, max 32).
+### Slices E+F shipped
+- **Care:** Food / Energy / Mood / Affection / Hygiene meters; Feed / Play / Rest / Clean / Talk; time decay + persist; form-aware reactions; premium `PetCarePanel`.
+- **Motion:** Subtle illustrated-room parallax + shimmer; ambient wash on aurora/starfield/nebula (clock-gated).
+- **Files:** Local library vs All-phone scope; library cleanup vs MediaStore phone suggestions; AI organize remains local-only.
 
-### P1 still on parent branch
-- Connections & Memory refresh; Become-anything refine/reason; launcher frequent apps / subsequence search.
+### Epic complete (pending merge / Preview APK)
+P1 + P2 (Vending) + P3 (E+F). Preview APK may still be building on meow habitat worktree — do not disturb `/home/claude/meowmba-fly-habitat` while that job runs.
 
-### Queued follow-ups
-- Deep Tamagotchi care (Slice E); background art motion + files cleanup scope (Slice F).
-- Computer P0 Fold E2E + Preview APK ship; agentic workspace file tools.
+### Parent / related
+- Slice D Vending on `feat/epic-p2-vending-machine`.
+- Computer P0 Fold E2E + agentic workspace file tools still queued.
 
 ### Canonical hosts
-- Invent lineage worktree: `/home/claude/meowmba-fly-habitat` on meow
+- Invent lineage / APK worktree: `/home/claude/meowmba-fly-habitat` on meow (**do not checkout/reset/gradle there during APK job**)
+- Optional compile worktree: `/home/claude/meowmba-epic-ef` (create via `git worktree add` if needed)
 - Box: `/workspace/meowmba-app`
 - Bare: `/home/prog/git/meowmba-app.git` · `/home/claude/git/meowmba-app.git` · GitHub `dekayrekords-oss/meowmba-app`
 

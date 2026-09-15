@@ -8,19 +8,27 @@ import android.provider.OpenableColumns
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.meowmba.core.files.*
+import com.example.meowmba.core.cleanup.PhoneCleanup
 import com.example.meowmba.core.media.ArtifactViewer
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import java.io.File
 
+enum class FilesOrganizeScope { LOCAL, PHONE }
+
 data class LinkedAsset(val uri: Uri, val name: String, val folder: Boolean, val bytes: Long)
+data class PhoneCleanupRow(val label: String, val detail: String, val bytes: Long)
 data class AssetBrowserState(
     val entries: List<AssetEntry> = emptyList(), val truncated: Boolean = false,
     val busy: Boolean = false, val message: String? = null,
     val aiResults: List<AssetEntry>? = null, val moves: List<AssetMove> = emptyList(),
     val cleanup: List<CleanupCandidate>? = null, val trash: List<TrashEntry> = emptyList(),
     val linkedFolders: List<String> = emptyList(), val linkedItems: List<LinkedAsset> = emptyList(),
-    val linkedUri: Uri? = null
+    val linkedUri: Uri? = null,
+    val organizeScope: FilesOrganizeScope = FilesOrganizeScope.LOCAL,
+    val phoneCleanup: List<PhoneCleanupRow> = emptyList(),
+    val phoneCleanupNotes: List<String> = emptyList(),
+    val mediaPermissionNeeded: Boolean = false,
 )
 
 class AssetBrowserViewModel(application: Application) : AndroidViewModel(application) {
@@ -64,12 +72,17 @@ class AssetBrowserViewModel(application: Application) : AndroidViewModel(applica
             snapshot.copy(entries = snapshot.entries.map { entry -> names[entry.path]?.let { entry.copy(name = it) } ?: entry })
         }
         val trash = withContext(Dispatchers.IO) { library.trashItems() }
+        val scope = when (prefs.getString("organize_scope", "LOCAL")) {
+            "PHONE" -> FilesOrganizeScope.PHONE
+            else -> FilesOrganizeScope.LOCAL
+        }
         _state.update { it.copy(entries = scan.entries, truncated = scan.truncated, trash = trash,
-            linkedFolders = prefs.getStringSet("folders", emptySet()).orEmpty().sorted()) }
+            linkedFolders = prefs.getStringSet("folders", emptySet()).orEmpty().sorted(),
+            organizeScope = scope) }
     }
     fun refresh() = job { reload() }
-    fun clearResults() { _state.update { it.copy(aiResults = null, moves = emptyList(), cleanup = null) } }
-    fun dismissPlan() { _state.update { it.copy(moves = emptyList(), cleanup = null) } }
+    fun clearResults() { _state.update { it.copy(aiResults = null, moves = emptyList(), cleanup = null, phoneCleanup = emptyList(), phoneCleanupNotes = emptyList()) } }
+    fun dismissPlan() { _state.update { it.copy(moves = emptyList(), cleanup = null, phoneCleanup = emptyList(), phoneCleanupNotes = emptyList()) } }
     fun message(text: String) { _state.update { it.copy(message = text) } }
     fun createFolder(path: String) = job { withContext(Dispatchers.IO) { library.createFolder(path) }; reload() }
     fun open(item: AssetEntry) {
@@ -111,9 +124,75 @@ class AssetBrowserViewModel(application: Application) : AndroidViewModel(applica
         }
         message("Exported ${item.name}. The library copy is unchanged.")
     }
+    fun setOrganizeScope(scope: FilesOrganizeScope) {
+        prefs.edit().putString("organize_scope", scope.name).apply()
+        _state.update {
+            it.copy(
+                organizeScope = scope,
+                cleanup = if (scope == FilesOrganizeScope.LOCAL) it.cleanup else null,
+                phoneCleanup = if (scope == FilesOrganizeScope.PHONE) it.phoneCleanup else emptyList(),
+                phoneCleanupNotes = if (scope == FilesOrganizeScope.PHONE) it.phoneCleanupNotes else emptyList(),
+                message = when (scope) {
+                    FilesOrganizeScope.LOCAL -> "Local library — app-private workspace only."
+                    FilesOrganizeScope.PHONE -> "Phone files — MediaStore + connected folders (read-only until imported)."
+                },
+            )
+        }
+    }
     fun cleanup() = job {
-        val (items, limited) = withContext(Dispatchers.IO) { library.cleanup() }
-        _state.update { it.copy(cleanup = items, message = if (limited) "Partial scan: file count, depth or 1 GB duplicate-comparison limit reached." else "Review suggestions. Large and empty files may still be important.") }
+        when (_state.value.organizeScope) {
+            FilesOrganizeScope.LOCAL -> {
+                val (items, limited) = withContext(Dispatchers.IO) { library.cleanup() }
+                _state.update {
+                    it.copy(
+                        cleanup = items,
+                        phoneCleanup = emptyList(),
+                        phoneCleanupNotes = emptyList(),
+                        mediaPermissionNeeded = false,
+                        message = if (limited) "Partial scan: file count, depth or 1 GB duplicate-comparison limit reached."
+                        else "Review suggestions in your local library. Large and empty files may still be important.",
+                    )
+                }
+            }
+            FilesOrganizeScope.PHONE -> {
+                val mediaOk = PhoneCleanup.hasMediaPermission(context)
+                if (!mediaOk) {
+                    _state.update {
+                        it.copy(
+                            cleanup = null,
+                            phoneCleanup = emptyList(),
+                            phoneCleanupNotes = listOf("Need photo/file access to scan phone media. Allow it, then Clean up again."),
+                            mediaPermissionNeeded = true,
+                            message = "Phone cleanup needs media permission. Connected folders below still work read-only.",
+                        )
+                    }
+                    return@job
+                }
+                val plan = withContext(Dispatchers.IO) { PhoneCleanup.scan(context, "all") }
+                val rows = plan.items.take(40).map { item ->
+                    PhoneCleanupRow(
+                        label = item.label,
+                        detail = item.why + if (item.kind.isNotBlank()) " · ${item.kind}" else "",
+                        bytes = item.bytes,
+                    )
+                }
+                _state.update {
+                    it.copy(
+                        cleanup = null,
+                        phoneCleanup = rows,
+                        phoneCleanupNotes = plan.notes,
+                        mediaPermissionNeeded = false,
+                        message = if (rows.isEmpty()) PhoneCleanup.format(plan)
+                        else "Found ${rows.size} phone items worth a look. Deletes always go through Android confirm sheets.",
+                    )
+                }
+            }
+        }
+    }
+    fun organizePhoneApps(existing: List<DrawerFolder>, apps: List<DrawerApp>, onDone: (List<DrawerFolder>, String) -> Unit) = job {
+        val (next, msg) = withContext(Dispatchers.IO) { PhoneCleanup.organizeApps(existing, apps) }
+        onDone(next, msg)
+        _state.update { it.copy(message = msg) }
     }
     fun moveFiles(plans: List<AssetMove>) = job {
         val failed = mutableListOf<String>(); var done = 0

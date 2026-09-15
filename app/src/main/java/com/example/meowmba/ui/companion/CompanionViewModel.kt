@@ -1025,22 +1025,44 @@ class CompanionViewModel(
             HabitatAction.FEED, HabitatAction.DRINK -> current.feed(now)
             HabitatAction.PLAY, HabitatAction.READ -> current.play(now)
             HabitatAction.REST -> current.rest(now)
+            HabitatAction.CLEAN -> current.clean(now)
+            HabitatAction.TALK -> current.talk(now)
             else -> current.advance(now)
         }
         lastPetActivity = when (action) {
             HabitatAction.FEED, HabitatAction.DRINK -> "feed"
             HabitatAction.PLAY, HabitatAction.READ -> "play"
             HabitatAction.REST -> "rest"
+            HabitatAction.CLEAN -> "clean"
+            HabitatAction.TALK -> "talk"
             else -> "explore"
         }
         nervousSystem.onStimulus(com.example.meowmba.core.behavior.Stimulus.TOUCH, .3f)
         if (action == HabitatAction.FEED) nervousSystem.noteFood()
-        if (action == HabitatAction.PLAY || action == HabitatAction.FEED) nervousSystem.noteAffect(.5f)
+        if (action == HabitatAction.PLAY || action == HabitatAction.FEED || action == HabitatAction.TALK) {
+            nervousSystem.noteAffect(.5f)
+        }
+        if (action == HabitatAction.TALK) {
+            nervousSystem.onStimulus(com.example.meowmba.core.behavior.Stimulus.SPOKEN_TO, .4f)
+        }
         secureStorage?.savePreference("pet_care_v1", care.encode())
-        _uiState.update { it.copy(petCare = care, habitatCommand = HabitatCommand(it.habitatCommand.id + 1L, action)) }
-        if (!_uiState.value.habitatMode && action in setOf(HabitatAction.FEED, HabitatAction.REST)) {
-            playAnimationNamed(if (action == HabitatAction.REST) "drowsy_drift" else "content_smile",
-                userRequested = revealAvatar)
+        val formKey = _uiState.value.generatedAvatarForm?.let { "generated" }
+            ?: (_uiState.value.performanceAnimal ?: _uiState.value.avatarAnimal).key
+        _uiState.update {
+            it.copy(
+                petCare = care,
+                habitatCommand = HabitatCommand(it.habitatCommand.id + 1L, action),
+                petFeedbackNotice = if (care.careEnabled) care.reaction(formKey) else it.petFeedbackNotice,
+            )
+        }
+        if (!_uiState.value.habitatMode && action in setOf(HabitatAction.FEED, HabitatAction.REST, HabitatAction.CLEAN, HabitatAction.TALK)) {
+            val clip = when (action) {
+                HabitatAction.REST -> "drowsy_drift"
+                HabitatAction.CLEAN -> "content_smile"
+                HabitatAction.TALK -> "fond_nuzzle"
+                else -> "content_smile"
+            }
+            playAnimationNamed(clip, userRequested = revealAvatar)
         }
     }
     fun playCompanionTrick(name: String) {
