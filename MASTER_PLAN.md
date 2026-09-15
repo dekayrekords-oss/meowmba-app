@@ -1,5 +1,29 @@
 # MEOWMBA MASTER PLAN
 
+## September 14, 2026 — Epic P1: Connections / Invent / Launcher
+
+Branch: `feat/epic-p1-connections-invent-launcher` (from `codex/computer-p0-build120` @ invent-OOM lineage). Preview package `com.example.meowmba`. Flags `lumen_reflex_v2` / `agentic_runtime_v1` remain default **OFF**. No FlyWire.
+
+### Done (P1)
+- [x] Connections & Memory settings UI refresh (section cards, hierarchy, spacing).
+- [x] Persist previously connected SSH servers; selectable saved list fills edit form; agentic profiles also selectable for host reuse.
+- [x] Expose **MaleCNS** as a selectable server brain on Connections when paired (substrate → `MALECNS_REMOTE`).
+- [x] Become-anything: invent prompt limit raised modestly (500 → **720**).
+- [x] Refine a worn generated avatar with additional prompts.
+- [x] Invent prompts require movable parts (head/body/arms/legs/tail or subject-equivalent) with motion tags.
+- [x] Quality/speed **reason level** (Faster / Balanced / Higher quality) wired into generate + refine.
+- [x] Launcher: most-used panel (~top 2 rows), remove / never-frequent, long-press controls, list/grid toggle.
+- [x] Drawer search: subsequence letter matching across query tokens.
+
+### Queued / out of scope (document only — not in this PR)
+- Studio → vending machine for props+avatars workshop
+- Prop generation machine
+- Deep Tamagotchi care overhaul
+- Background art motion
+- Files cleanup local vs all-phone
+- Computer agentic P1 (workspace `file_read`/`file_write`, stronger multi-step planner) — still queued from Computer P0 notes
+
+
 ## September 14, 2026 — Computer P0 (preview 96) — Grok-ish reachability
 
 Goal: make Computer + agentic path day-to-day usable on Fold + host meow (same *idea* as a cloud computer agent; early maturity). Flags stay default **OFF**.

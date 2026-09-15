@@ -33,7 +33,7 @@ data class GeneratedAvatarForm(
 object GeneratedAvatarForms {
     const val MAX_JSON = 32_768
     const val MAX_PARTS = 32
-    const val MAX_REQUEST = 500
+    const val MAX_REQUEST = 720
     const val MAX_SAVED = 24
     class SpecException(message: String) : IllegalArgumentException(message)
 

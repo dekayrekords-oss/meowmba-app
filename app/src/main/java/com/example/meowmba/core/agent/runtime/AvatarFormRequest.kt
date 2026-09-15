@@ -10,7 +10,7 @@ import java.util.Locale
  * permission to execute just their positive transformation fragment.
  */
 object AvatarFormRequest {
-    const val MAX_DESCRIPTION_LENGTH = 500
+    const val MAX_DESCRIPTION_LENGTH = 720
     private val spaces = Regex("\\s+")
     private val politeQuestion = Regex("^(?:can|could|would|will) you (?:please )?")
     private val pleaseStart = Regex("^please(?:,)? +")

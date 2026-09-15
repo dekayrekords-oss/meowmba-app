@@ -4,33 +4,25 @@
 > The "Recent builds" section is regenerated automatically by scripts/autobuild.sh
 > after every commit; everything else is maintained by hand at each phase.
 
-## Current status — 2026-09-14 (Computer P0 / preview 96)
+## Current status — 2026-09-14 (Epic P1 Connections / Invent / Launcher)
 
-**Active branch:** `feat/computer-p0-reachability-autotick` (PR #1 into `feat/lumen-reflex-agentic`)  
-**HEAD (P0):** `796b851` — chat auto-tick + preview 96 (prior: facial-tracking Preview 95 `27bcc94` on parent branch)  
-**Packages:** Preview `com.example.meowmba` debug versionCode **96** · Play `com.meow.meowmba` **1.3.81 / 85** (unchanged)  
-**Device:** Galaxy Z Fold SM-F966U1 (Android 16); NetBird host **meow** `100.77.97.236`
+**Active branch:** `feat/epic-p1-connections-invent-launcher` (forked from `codex/computer-p0-build120` @ `54a8aef` invent-OOM fix)  
+**Packages:** Preview `com.example.meowmba` · Play signing not mixed  
+**Flags:** `lumen_reflex_v2` / `agentic_runtime_v1` default **OFF**
 
-### Computer / agentic (just landed)
-- Worker port **18766** (Desktop Bridge discovery stays UDP **8766**).
-- Day-to-day remote path: **SSH** to meow. HTTPS_RUNTIME needs NetBird bind or `ssh -L 18766:127.0.0.1:18766`.
-- Chat auto-ticks agentic Computer goals to DONE|BLOCKED|WAITING_APPROVAL when `agentic_runtime_v1` is ON; cancel supported.
-- Flags `agentic_runtime_v1` / `lumen_reflex_v2` still default **OFF**.
-- Fold checklist: `docs/COMPUTER_P0_FOLD_CHECKLIST.md` — **not run yet**.
-- Preview 96 APK **not** shipped to apk-serve yet.
+### P1 shipped
+- Connections & Memory: section cards; saved SSH selectable list; MaleCNS server-brain picker when paired.
+- Become-anything: prompt max 720; refine-current; limb motion guidance; InventReasonLevel (FAST/BALANCED/THOROUGH).
+- App drawer: most-used panel, never-frequent, list view, subsequence search (`DrawerCatalog.subsequenceLetters`).
 
-### Canonical hosts (keep converged)
-- Homelab worktree (build): `/home/claude/meowmba-release-1.3.81` on **meow** (NetBird `100.77.97.236`, LAN `192.168.1.69`)
-- Bare git: `/home/claude/git/meowmba-app.git` · GitHub: `dekayrekords-oss/meowmba-app`
-- Preview serve: `/home/prog/apk-serve/preview.apk` via `:8765` (`get-preview.html`)
-- Box mirror: `/workspace/meowmba-app`
-- SSH as **prog** (lowercase); release signing under `/home/claude/secrets/meowmba/` — never print passwords
-- Preview debug keystore: `/home/prog/.android/debug.keystore` (SHA-256 `b7850d5f…`) — never Claude preview-alt
+### Queued follow-ups (explicitly out of this epic)
+- Studio vending / prop generation machine / deep Tamagotchi / background art motion / files cleanup scope.
+- Computer P0 Fold E2E + Preview APK ship; agentic workspace file tools.
 
-### Next for the next engineer
-1. Run Fold E2E checklist (or ship Preview 96 to apk-serve first).
-2. Merge PR #1 when accepted.
-3. P1: workspace `file_read`/`file_write`, better multi-step loop — see MASTER_PLAN Computer P0 section.
+### Canonical hosts
+- Invent lineage worktree: `/home/claude/meowmba-fly-habitat` on meow
+- Box: `/workspace/meowmba-app`
+- Bare: `/home/prog/git/meowmba-app.git` · `/home/claude/git/meowmba-app.git` · GitHub `dekayrekords-oss/meowmba-app`
 
 ## What this app is
 MEOWMBA (`com.example.meowmba`) is an on-device cat-companion voice assistant:

@@ -28,7 +28,7 @@ class AvatarFormTool(
         displayName = "Change avatar form",
         description = "Change the saved on-screen avatar when the user explicitly asks to become, " +
             "turn into, or look like something. Give the complete visual description in animal, " +
-            "including colors and accessories (up to 500 characters). Built-in forms are immediate: $supported. " +
+            "including colors and accessories (up to 720 characters). Built-in forms are immediate: $supported. " +
             "Other descriptions use the selected AI model to design and save a new animated cartoon form; " +
             "saved matching forms can be reused. This is the same companion and brain with a new appearance. " +
             "It is not an image/video file generator or physical robot action. For short 'act like' or " +
@@ -46,10 +46,10 @@ class AvatarFormTool(
     override suspend fun execute(args: Map<String, String>): ToolResult {
         val requested = args["animal"]?.trim()
         if (requested.isNullOrEmpty()) {
-            return ToolResult.Failure("Describe the avatar's new form in 'animal' (1-500 characters).")
+            return ToolResult.Failure("Describe the avatar's new form in 'animal' (1-720 characters).")
         }
         if (!AvatarFormRequest.isDescription(requested)) {
-            return ToolResult.Failure("Describe one avatar appearance in 1-500 characters, with colors or accessories. Send other actions separately.")
+            return ToolResult.Failure("Describe one avatar appearance in 1-720 characters, with colors or accessories. Send other actions separately.")
         }
         val animal = AvatarAnimal.resolve(requested)
         return try {

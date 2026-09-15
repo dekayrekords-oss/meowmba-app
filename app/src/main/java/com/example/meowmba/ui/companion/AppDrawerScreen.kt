@@ -111,6 +111,12 @@ fun AppDrawerScreen(
     onVoiceConsumed: () -> Unit = {},
     installedApps: List<DrawerApp>? = null,
     onLaunchApp: ((String) -> Unit)? = null,
+    frequentPackages: List<String> = emptyList(),
+    neverFrequentPackages: Set<String> = emptySet(),
+    onHideFromFrequent: (String) -> Unit = {},
+    onSetNeverFrequent: (String, Boolean) -> Unit = { _, _ -> },
+    onAllowFrequent: (String) -> Unit = {},
+    onRecordLaunch: (String) -> Unit = {},
 ) {
     val context = LocalContext.current
     val focus = LocalFocusManager.current
@@ -122,6 +128,7 @@ fun AppDrawerScreen(
     var typeFilter by rememberSaveable { mutableStateOf<DrawerAppType?>(null) }
     var openFolderId by rememberSaveable { mutableStateOf<String?>(null) }
     var organizing by rememberSaveable { mutableStateOf(false) }
+    var listView by rememberSaveable { mutableStateOf(false) }
     var sortMenu by remember { mutableStateOf(false) }
     var typeMenu by remember { mutableStateOf(false) }
     var actionApp by remember { mutableStateOf<DrawerApp?>(null) }
@@ -174,6 +181,12 @@ fun AppDrawerScreen(
     val favoriteApps = if (openFolder == null && query.isBlank() && typeFilter == null) {
         pins.distinct().take(8).mapNotNull { pkg -> apps.firstOrNull { it.packageName == pkg } }
     } else emptyList()
+    val frequentApps = if (openFolder == null && query.isBlank() && typeFilter == null) {
+        frequentPackages
+            .filter { pkg -> pkg !in pins } // favorites already have their own row
+            .mapNotNull { pkg -> apps.firstOrNull { it.packageName == pkg } }
+            .take(DrawerUsage.FREQUENT_LIMIT)
+    } else emptyList()
     val missingPins = if (!loading && !loadFailed) {
         pins.distinct().filter { pkg -> apps.none { it.packageName == pkg } }
     } else emptyList()
@@ -194,7 +207,10 @@ fun AppDrawerScreen(
         }
     }
     BackHandler(enabled = actionApp == null && actionFolder == null) { goBack() }
-    fun openApp(app: DrawerApp) { onLaunchApp?.invoke(app.packageName) ?: launchApp(context, app.packageName) }
+    fun openApp(app: DrawerApp) {
+        onRecordLaunch(app.packageName)
+        onLaunchApp?.invoke(app.packageName) ?: launchApp(context, app.packageName)
+    }
     fun beginFolder(pkg: String? = null) {
         organizing = true
         namingForPackage = pkg
@@ -316,7 +332,7 @@ fun AppDrawerScreen(
         }
         val gridMinimum = (88f * LocalDensity.current.fontScale.coerceIn(1f, 1.8f)).dp
         LazyVerticalGrid(
-            columns = GridCells.Adaptive(gridMinimum),
+            columns = if (listView) GridCells.Fixed(1) else GridCells.Adaptive(gridMinimum),
             state = gridState,
             modifier = Modifier.weight(1f).fillMaxWidth().testTag("drawer-grid"),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
@@ -401,6 +417,9 @@ fun AppDrawerScreen(
                         }
                         FilterChip(organizing, { organizing = !organizing }, { Text(if (organizing) "Done" else "Organize", maxLines = 1) },
                             leadingIcon = { Icon(if (organizing) Icons.Default.Check else Icons.Default.Edit, null, Modifier.size(18.dp)) })
+                        FilterChip(listView, { listView = !listView }, { Text(if (listView) "Grid" else "List", maxLines = 1) },
+                            leadingIcon = { Icon(if (listView) Icons.Default.GridView else Icons.Default.ViewList, null, Modifier.size(18.dp)) },
+                            modifier = Modifier.testTag("drawer-view-toggle"))
                     }
                     if (organizing) {
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -422,6 +441,15 @@ fun AppDrawerScreen(
                 }
                 items(favoriteApps, key = { "pin:${it.packageName}" }) { app ->
                     DrawerAppTile(app, "pin:${app.packageName}", true, "", organizing,
+                        compact = true, onClick = { openApp(app) }, onOptions = { actionApp = app })
+                }
+            }
+            if (frequentApps.isNotEmpty()) {
+                item(key = "frequent-heading", span = { GridItemSpan(maxLineSpan) }) {
+                    DrawerSection("Most used", "Top ${frequentApps.size}", Icons.Default.History)
+                }
+                items(frequentApps, key = { "freq:${it.packageName}" }) { app ->
+                    DrawerAppTile(app, "freq:${app.packageName}", app.packageName in pins, "Frequent", organizing,
                         compact = true, onClick = { openApp(app) }, onOptions = { actionApp = app })
                 }
             }
@@ -465,8 +493,8 @@ fun AppDrawerScreen(
                     onClick = { openApp(app) }, onOptions = { actionApp = app })
             }
             item(key = "help", span = { GridItemSpan(maxLineSpan) }) {
-                Text(if (organizing) "Options let you pin apps and manage folders. Apps stay installed when a folder is removed."
-                    else "Hold an app for shortcuts, or choose Organize to show its options.",
+                Text(if (organizing) "Options let you pin apps, manage folders, and control the most-used panel. Apps stay installed when a folder is removed."
+                    else "Hold an app for pin, move, or most-used controls. Use List for a single-column view.",
                     style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant, modifier = Modifier.padding(vertical = 12.dp))
             }
         }
@@ -478,6 +506,17 @@ fun AppDrawerScreen(
                 val pinned = app.packageName in pins
                 DialogLine(if (pinned) "Unpin from favorites" else if (pins.distinct().size >= 8) "Favorites full (8)" else "Pin to favorites",
                     enabled = pinned || pins.distinct().size < 8) { onTogglePin(app.packageName); actionApp = null }
+                val inFrequent = app.packageName in frequentPackages
+                val neverFreq = app.packageName in neverFrequentPackages
+                if (inFrequent) {
+                    DialogLine("Remove from most used") { onHideFromFrequent(app.packageName); actionApp = null }
+                }
+                DialogLine(
+                    if (neverFreq) "Allow on most-used panel" else "Never show in most used",
+                ) {
+                    if (neverFreq) onAllowFrequent(app.packageName) else onSetNeverFrequent(app.packageName, true)
+                    actionApp = null
+                }
                 folders.forEach { folder ->
                     val already = app.packageName in folder.packages
                     DialogLine(if (already) "Remove from ${folder.name}" else "Add to ${folder.name}") {

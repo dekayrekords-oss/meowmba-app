@@ -827,6 +827,8 @@ class CompanionViewModel(
     val pinnedPackages: kotlinx.coroutines.flow.StateFlow<List<String>> = _pinnedPackages.asStateFlow()
     private val _drawerFolders = MutableStateFlow<List<DrawerFolder>>(emptyList())
     val drawerFolders: kotlinx.coroutines.flow.StateFlow<List<DrawerFolder>> = _drawerFolders.asStateFlow()
+    private val _drawerUsage = MutableStateFlow(DrawerUsage.Snapshot())
+    val drawerUsage: kotlinx.coroutines.flow.StateFlow<DrawerUsage.Snapshot> = _drawerUsage.asStateFlow()
 
     private val moodEngine = com.example.meowmba.core.personality.MoodEngine()
 
@@ -2011,7 +2013,12 @@ class CompanionViewModel(
             val animStore = CustomAnimationStore(File(appContext.filesDir, "custom_animations"))
             toolRegistry.register(com.example.meowmba.core.agent.tools.AvatarFormTool(
                 onChange = ::transformAvatar,
-                onGenerate = { request, generation -> generateAvatarForm(request, generation) },
+                onGenerate = { request, generation ->
+                    val level = InventReasonLevel.fromKey(
+                        secureStorage?.getPreference(KEY_INVENT_REASON),
+                    )
+                    generateAvatarForm(request, generation, reasonLevel = level)
+                },
                 validateGeneration = { expected ->
                     if (expected != null && expected != avatarFormGeneration)
                         throw kotlinx.coroutines.CancellationException("Avatar transformation superseded")
@@ -2177,6 +2184,7 @@ class CompanionViewModel(
             _drawerFolders.value = DrawerCatalog.parseFolders(
                 secureStorage?.getPreference(KEY_DRAWER_FOLDERS),
             )
+            _drawerUsage.value = DrawerUsage.parse(secureStorage?.getPreference(KEY_DRAWER_USAGE))
 
             // IMU: lean with the phone, startle on shake. RobotPoseSource for
             // the future body lives behind MotionSense's interface.
@@ -3902,6 +3910,31 @@ class CompanionViewModel(
         }
         _pinnedPackages.value = next
         secureStorage?.savePreference(KEY_PINNED_APPS, next.joinToString(","))
+    }
+
+    fun recordDrawerLaunch(packageName: String) {
+        if (packageName.isBlank()) return
+        val next = DrawerUsage.recordLaunch(_drawerUsage.value, packageName)
+        _drawerUsage.value = next
+        secureStorage?.savePreference(KEY_DRAWER_USAGE, DrawerUsage.encode(next))
+    }
+
+    fun hideFromFrequentApps(packageName: String) {
+        val next = DrawerUsage.hideFromFrequent(_drawerUsage.value, packageName)
+        _drawerUsage.value = next
+        secureStorage?.savePreference(KEY_DRAWER_USAGE, DrawerUsage.encode(next))
+    }
+
+    fun setNeverFrequentApp(packageName: String, never: Boolean) {
+        val next = DrawerUsage.setNeverFrequent(_drawerUsage.value, packageName, never)
+        _drawerUsage.value = next
+        secureStorage?.savePreference(KEY_DRAWER_USAGE, DrawerUsage.encode(next))
+    }
+
+    fun allowFrequentApp(packageName: String) {
+        val next = DrawerUsage.allowFrequent(_drawerUsage.value, packageName)
+        _drawerUsage.value = next
+        secureStorage?.savePreference(KEY_DRAWER_USAGE, DrawerUsage.encode(next))
     }
 
     fun createDrawerFolder(name: String, firstPackage: String? = null) {
@@ -10238,12 +10271,34 @@ class CompanionViewModel(
         }
     }
 
-    fun createAvatarForm(description: String) {
+    fun createAvatarForm(description: String, reasonLevel: InventReasonLevel = InventReasonLevel.BALANCED) {
         // The same policy/audit tool handles typed, spoken and setup requests.
         cancelAvatarFormGeneration()
         supersedeResponseTurn()
+        secureStorage?.savePreference(KEY_INVENT_REASON, reasonLevel.name)
         submitAgentIntent(AgentRouter.AgentIntent(AgentRegistry.MAIN, "avatar.form",
-            mapOf("animal" to description.trim()), "Become ${description.trim().take(80)}"))
+            mapOf(
+                "animal" to description.trim(),
+                "reason_level" to reasonLevel.name,
+            ), "Become ${description.trim().take(80)}"))
+    }
+
+    fun refineAvatarForm(changeRequest: String, reasonLevel: InventReasonLevel = InventReasonLevel.BALANCED) {
+        cancelAvatarFormGeneration()
+        supersedeResponseTurn()
+        secureStorage?.savePreference(KEY_INVENT_REASON, reasonLevel.name)
+        val current = _uiState.value.generatedAvatarForm
+        if (current == null) {
+            avatarFormFailure("Wear a generated form before refining it.")
+            return
+        }
+        viewModelScope.launch {
+            generateAvatarForm(
+                request = changeRequest.trim(),
+                reasonLevel = reasonLevel,
+                refineFrom = current,
+            )
+        }
     }
 
     private fun avatarFormFailure(message: String): ToolResult.Failure {
@@ -10254,7 +10309,9 @@ class CompanionViewModel(
 
     /** The generation result commits on Main only while it still owns this request. */
     internal suspend fun generateAvatarForm(request: String, expectedGeneration: Long? = null,
-        store: GeneratedAvatarStore? = generatedAvatarStore): ToolResult =
+        store: GeneratedAvatarStore? = generatedAvatarStore,
+        reasonLevel: InventReasonLevel = InventReasonLevel.fromKey(secureStorage?.getPreference(KEY_INVENT_REASON)),
+        refineFrom: GeneratedAvatarForm? = null): ToolResult =
         withContext(Dispatchers.Main.immediate) {
             kotlinx.coroutines.coroutineScope {
                 if (expectedGeneration != null && expectedGeneration != avatarFormGeneration)
@@ -10273,14 +10330,16 @@ class CompanionViewModel(
                 }
                 try {
                     require(com.example.meowmba.core.agent.runtime.AvatarFormRequest.isDescription(request)) {
-                        "Describe one avatar appearance in 1–500 characters."
+                        "Describe one avatar appearance in 1–${com.example.meowmba.core.agent.runtime.AvatarFormRequest.MAX_DESCRIPTION_LENGTH} characters."
                     }
                     if (store == null) return@coroutineScope avatarFormFailure("Avatar storage is unavailable. Your current form is unchanged.")
-                    val saved = withContext(ioDispatcher) { store.find(request) }
-                    ensureOwner()
-                    if (saved != null) {
-                        applyGeneratedAvatar(saved, store.list(), "Now wearing ${saved.name}. Saved form reused.")
-                        return@coroutineScope ToolResult.Success("Lumen is now ${saved.name}. Reused the saved cartoon form.")
+                    if (refineFrom == null) {
+                        val saved = withContext(ioDispatcher) { store.find(request) }
+                        ensureOwner()
+                        if (saved != null) {
+                            applyGeneratedAvatar(saved, store.list(), "Now wearing ${saved.name}. Saved form reused.")
+                            return@coroutineScope ToolResult.Success("Lumen is now ${saved.name}. Reused the saved cartoon form.")
+                        }
                     }
                     val selected = currentProvider ?: return@coroutineScope avatarFormFailure(
                         "Choose a working AI model in LLM settings to create a new form. Presets and saved forms work without one.")
@@ -10295,8 +10354,16 @@ class CompanionViewModel(
                     val inventor = com.example.meowmba.core.agent.tools.AvatarFormInventor { input ->
                         if (provider is LiteRtProvider) provider.generateStructured(input) else provider.generate(input)
                     }
+                    val timeoutMs = when (reasonLevel) {
+                        InventReasonLevel.FAST -> 75_000L
+                        InventReasonLevel.BALANCED -> 90_000L
+                        InventReasonLevel.THOROUGH -> 120_000L
+                    }
                     val form = withContext(ioDispatcher + stop) {
-                        withTimeout(90_000L) { inventor.invent(request) }
+                        withTimeout(timeoutMs) {
+                            if (refineFrom != null) inventor.refine(refineFrom, request, reasonLevel)
+                            else inventor.invent(request, reasonLevel)
+                        }
                     }
                     kotlinx.coroutines.currentCoroutineContext().ensureActive()
                     ensureOwner()
@@ -11867,6 +11934,8 @@ SAFE if the scene looks like a normal road, car interior, sidewalk, or room, or 
 
         private const val KEY_PINNED_APPS = "pinned_apps"
         private const val KEY_DRAWER_FOLDERS = "drawer_folders"
+        private const val KEY_DRAWER_USAGE = "drawer_usage_v1"
+        private const val KEY_INVENT_REASON = "invent_reason_level"
         private const val KEY_CAMERA_ENABLED = "camera_enabled"
 
         /** OpenRouter — the standalone cloud brain (openrouter.ai). No /v1 suffix:
