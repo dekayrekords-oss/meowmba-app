@@ -181,6 +181,7 @@ class LiteRtProvider(
     fun close() { release() }
 
     private companion object {
+        const val MAX_STRUCTURED_CHARS = 48_000
         const val MAX_REPLY_SENTENCES = 3
         val SENTENCES = Regex("""(?<=[.!?])\s+""")
     }
