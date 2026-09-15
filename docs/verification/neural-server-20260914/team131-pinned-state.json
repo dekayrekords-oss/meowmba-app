@@ -1,0 +1,30 @@
+{
+  "status": "BLOCKED",
+  "note": "Unexpected JSON token at offset 4: Expected EOF after parsing, but had a instead at path: $\nJSON input: We are the Accounts specialist. We.....",
+  "agents": [
+    {
+      "name": "Accounts specialist",
+      "model": "nvidia/nemotron-3-super-120b-a12b:free"
+    },
+    {
+      "name": "Stock specialist",
+      "model": "nvidia/nemotron-3-super-120b-a12b:free"
+    },
+    {
+      "name": "Shop manager",
+      "model": "nvidia/nemotron-3-super-120b-a12b:free"
+    }
+  ],
+  "steps": [
+    {
+      "id": "s1",
+      "agentId": "accounts",
+      "tool": "files.read",
+      "status": "SUCCEEDED",
+      "args": {
+        "path": "orders.csv"
+      },
+      "output": "File: orders.csv; characters 0..72 of 72; end of file\norder,amount,status\nA101,21.50,unpaid\nA102,40.00,paid\nA103,35.25,unpaid\n"
+    }
+  ]
+}

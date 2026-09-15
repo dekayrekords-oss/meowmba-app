@@ -327,7 +327,10 @@ class RemoteModelProvider(
         }.getOrElse { ModelResponse.Error("${it.message}. No action executed.") }
 
         internal fun toolDecisionBody(model: String, prompt: String, schema: String): JsonObject = buildJsonObject {
-            put("model", model); put("stream", false); put("max_tokens", 900)
+            // Reasoning providers count internal reasoning in this ceiling too.
+            // 900 tokens could expire before a valid tool proposal was emitted.
+            // Keep requests bounded while leaving room for the final arguments.
+            put("model", model); put("stream", false); put("max_tokens", 4096)
             putJsonArray("messages") { add(buildJsonObject { put("role", "user"); put("content", prompt) }) }
             putJsonArray("tools") { add(buildJsonObject {
                 put("type", "function")
@@ -337,7 +340,9 @@ class RemoteModelProvider(
             put("parallel_tool_calls", false)
         }
         internal fun parseToolDecision(body: String, validate: (String) -> Boolean = { PhoneAgentLoop.parseAction(it) != null }): ModelResponse = runCatching {
-            val message = Json.parseToJsonElement(body).jsonObject["choices"]!!.jsonArray.first().jsonObject["message"]!!.jsonObject
+            val choice = Json.parseToJsonElement(body).jsonObject["choices"]!!.jsonArray.first().jsonObject
+            check(choice["finish_reason"]?.jsonPrimitive?.contentOrNull != "length") { "Model exhausted the decision token budget. No action executed" }
+            val message = choice["message"]!!.jsonObject
             val rawCalls=message["tool_calls"]
             check(rawCalls==null || rawCalls==JsonNull || rawCalls is JsonArray) { "Invalid tool-call envelope" }
             val calls = rawCalls as? JsonArray

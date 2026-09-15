@@ -1,0 +1,8 @@
+{
+  "endpoint": "100.77.97.236:8785",
+  "fullGraphVerified": true,
+  "neurons": 176422,
+  "feedMaxHz": 70,
+  "groomMaxHz": 210,
+  "transport": "Phone pinned TLS and HMAC, private network"
+}

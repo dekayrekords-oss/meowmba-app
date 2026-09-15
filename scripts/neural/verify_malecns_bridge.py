@@ -27,6 +27,7 @@ def main():
     parser.add_argument("--helper-dir", type=Path, default=Path.home() / ".meowmba-bridge")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--graph", choices=("retained", "full"), default="retained")
+    parser.add_argument("--host", default="127.0.0.1", help="Actual bound server address; TLS pin remains mandatory")
     args = parser.parse_args()
     full = args.graph == "full"
     asset = "8860e68b59e454d8d4e8bd601dd7a3cb9049d18516f1ea8df34eabe1ae400d08" if full else ASSET
@@ -49,7 +50,7 @@ def main():
         if signed:
             headers.update({"X-Meowmba-Timestamp": timestamp,
                             "X-Meowmba-Signature": base64.b64encode(hmac.new(secret, message, hashlib.sha256).digest()).decode()})
-        connection = http.client.HTTPSConnection("127.0.0.1", int(config.get("port", 8765)), context=context, timeout=12)
+        connection = http.client.HTTPSConnection(args.host, int(config.get("port", 8765)), context=context, timeout=12)
         started = time.monotonic()
         try:
             connection.connect()
@@ -71,7 +72,7 @@ def main():
         ("loom", {"loom_left": 1, "loom_right": 1}, 20),
         ("food_and_touch", {"food": 1, "touch": 1}, 40),
     ]
-    report = dict(scope="Live authenticated Mac helper to Meow; phone disconnected, no Android acceptance",
+    report = dict(scope="Live authenticated neural service; phone inactive, no Android acceptance",
                   asset_sha256=asset, graph=args.graph, episodes={})
     status, _, _ = rpc("malecns_step", {}, signed=False)
     assert status == 401, "Unsigned request was not rejected"

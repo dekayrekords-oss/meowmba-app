@@ -10,6 +10,7 @@ import sys
 import zipfile
 from pathlib import Path
 
+GENERATED_PROFILES = {"assets/dexopt/baseline.prof", "assets/dexopt/baseline.profm"}
 
 def verify(baseline: Path, candidate: Path) -> dict:
     with zipfile.ZipFile(baseline) as before, zipfile.ZipFile(candidate) as after:
@@ -18,6 +19,11 @@ def verify(baseline: Path, candidate: Path) -> dict:
         missing = [n for n in entries if n not in after.namelist()]
         changed = [n for n in entries if n not in missing and
                    hashlib.sha256(before.read(n)).digest() != hashlib.sha256(after.read(n)).digest()]
+        # R8-generated ART profiles describe the new DEX and legitimately change
+        # with code. Still require their presence; all model/native assets remain
+        # byte-for-byte protected, including any other member under dexopt/.
+        generated = [n for n in changed if n in GENERATED_PROFILES]
+        changed = [n for n in changed if n not in GENERATED_PROFILES]
     if not any(n.startswith("lib/") for n in entries):
         raise ValueError("Baseline contains no native libraries; choose the installed full APK")
     digest = hashlib.sha256()
@@ -26,6 +32,7 @@ def verify(baseline: Path, candidate: Path) -> dict:
             digest.update(block)
     return {"baseline": baseline.name, "candidate": candidate.name,
             "protectedEntries": len(entries), "missing": missing, "changed": changed,
+            "generatedProfilesChanged": generated,
             "apkSha256": digest.hexdigest(),
             "passed": not missing and not changed}
 
