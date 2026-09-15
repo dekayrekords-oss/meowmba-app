@@ -269,7 +269,7 @@ class AvatarFormToolTest {
     @Test fun `queued stale preset and generated request cannot overwrite a newer selection`() = runTest {
         var presetCalls = 0
         var generatedCalls = 0
-        val tool = AvatarFormTool(onChange = { presetCalls++ }, onGenerate = { _, _ ->
+        val tool = AvatarFormTool(onChange = { presetCalls++ }, onGenerate = { _, _, _ ->
             generatedCalls++
             ToolResult.Success("Generated")
         }, validateGeneration = { generation ->

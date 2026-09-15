@@ -184,12 +184,12 @@ class GeneratedAvatarIntegrationTest {
         val route = requireNotNull(AgentRouter.route("turn into a turquoise dragon with peach wings"))
         assertEquals("turquoise dragon with peach wings", route.args["animal"])
         var changed = false
-        val tool = AvatarFormTool(onChange = { changed = true }, onGenerate = { _, _ -> ToolResult.Success("ok") },
+        val tool = AvatarFormTool(onChange = { changed = true }, onGenerate = { _, _, _ -> ToolResult.Success("ok") },
             validateGeneration = { if (it != 5L) throw CancellationException("Stale request") })
         val result = runCatching { tool.execute(mapOf("animal" to "clippy", "_form_generation" to "4")) }
         assertTrue(result.exceptionOrNull() is CancellationException)
         assertFalse(changed)
-        assertTrue(tool.definition.timeoutMs >= 95_000)
+        assertTrue(tool.definition.timeoutMs >= 120_000)
     }
 
     @Test fun `cancelled provider cleanup errors cannot replace a later choice status`() = runTest {
