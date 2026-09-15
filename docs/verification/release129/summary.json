@@ -1,0 +1,23 @@
+{
+  "unitTests": {
+    "tests": 2520,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "python": {
+    "computerWorker": 5,
+    "logicAdapter": 45,
+    "failures": 0
+  },
+  "phone": {
+    "noticeCleanup": "passed: 5 known test goals cancelled, audit retained",
+    "noticeRevisionPersistence": "passed",
+    "computerExecuteEditReadCancelPersist": "passed",
+    "authenticatedWorker": "passed after fixing temporary credential provisioning",
+    "gmailLaunch": "passed without inbox read",
+    "deterministicWorkflowPolicy": "passed",
+    "realBusinessScenario": "pending: no local conversation model; configured free cloud test paused by MODERATE thermal status"
+  },
+  "play": "not uploaded: real scenario gate pending"
+}

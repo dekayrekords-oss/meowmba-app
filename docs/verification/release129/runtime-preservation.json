@@ -1,0 +1,9 @@
+{
+  "baseline": "phone-before-preview122.apk",
+  "candidate": "meow-preview129.apk",
+  "protectedEntries": 74,
+  "missing": [],
+  "changed": [],
+  "apkSha256": "b2951f7902a8b3eb8f09beb7eac33f096a2dbf6b905429766cd919fec8b825b6",
+  "passed": true
+}
