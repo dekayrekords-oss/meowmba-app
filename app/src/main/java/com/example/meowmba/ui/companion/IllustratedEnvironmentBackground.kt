@@ -12,6 +12,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.drawscope.clipRect
@@ -23,7 +25,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlin.math.PI
+import kotlin.math.cos
 import kotlin.math.max
+import kotlin.math.sin
 import kotlin.math.roundToInt
 
 /**
@@ -50,6 +55,9 @@ internal fun IllustratedEnvironmentBackground(
     Canvas(modifier) {
         val t = roomPhase(clock())
         val s = roomPhase(slow())
+        // Tasteful ambient drift (~0.6–0.9% of edge). Respects scene clock pause/thermal.
+        val driftX = sin(s * 2f * PI.toFloat()) * size.width * 0.006f
+        val driftY = cos(s * 2f * PI.toFloat()) * size.height * 0.0035f
         if (image == null) {
             fallback.draw(this, animation, t, s)
         } else {
@@ -58,12 +66,21 @@ internal fun IllustratedEnvironmentBackground(
             // Anchored cover maps each measured image ledge to the world's .78 plane.
             // Center-crop would silently move the contact plane on a landscape Fold.
             clipRect {
-                drawImage(image, dstOffset = IntOffset(placement.x.roundToInt(), placement.y.roundToInt()),
+                drawImage(
+                    image,
+                    dstOffset = IntOffset((placement.x + driftX).roundToInt(), (placement.y + driftY).roundToInt()),
                     dstSize = IntSize(placement.width.roundToInt().coerceAtLeast(1), placement.height.roundToInt().coerceAtLeast(1)),
-                    filterQuality = FilterQuality.High)
+                    filterQuality = FilterQuality.High,
+                )
                 clipRect(bottom = size.height * PET_ENVIRONMENT_TABLE_Y) {
                     atmosphere.drawLight(this, animation, s)
                     atmosphere.drawDetails(this, animation, t, s)
+                    // Soft shimmer veil — low alpha, slow phase, never near face contrast.
+                    val shimmer = 0.018f + 0.012f * (0.5f + 0.5f * sin((s + t * 0.35f) * 2f * PI.toFloat()))
+                    drawRect(
+                        color = Color.White.copy(alpha = shimmer),
+                        size = Size(size.width, size.height * PET_ENVIRONMENT_TABLE_Y * 0.55f),
+                    )
                 }
             }
         }

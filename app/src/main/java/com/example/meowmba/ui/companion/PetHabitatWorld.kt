@@ -12,7 +12,7 @@ import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.sin
 
-enum class HabitatAction { FEED, PLAY, REST, READ, DRINK, NUDGE, RELEASE, EXPLORE }
+enum class HabitatAction { FEED, PLAY, REST, READ, DRINK, CLEAN, TALK, NUDGE, RELEASE, EXPLORE }
 data class HabitatCommand(val id: Long = 0, val action: HabitatAction = HabitatAction.EXPLORE)
 internal data class HabitatObjectSnapshot(val kind: String, val x: Float, val y: Float,
     val vx: Float, val vy: Float, val held: Boolean, val angle: Float)
@@ -127,7 +127,7 @@ internal class PetHabitatWorld {
             it.x = (x + pose.facing * handX * unit / width).coerceIn(.04f, .96f)
             it.y = (y + (.075f + drop + (if (it.kind == "glass") .06f else .085f)) * unit / height).coerceIn(.04f, FLOOR)
         }
-        if (!approaching && actionAge > 6f && action in listOf(HabitatAction.FEED, HabitatAction.PLAY, HabitatAction.NUDGE)) {
+        if (!approaching && actionAge > 6f && action in listOf(HabitatAction.FEED, HabitatAction.PLAY, HabitatAction.NUDGE, HabitatAction.CLEAN, HabitatAction.TALK)) {
             action = HabitatAction.EXPLORE; roamAge = 4f
         }
         return pose
@@ -138,8 +138,8 @@ internal class PetHabitatWorld {
         releaseHeld()
         action = next; actionAge = 0f; approaching = false
         targetKind = when (next) {
-            HabitatAction.READ -> "book"
-            HabitatAction.DRINK, HabitatAction.NUDGE -> "glass"
+            HabitatAction.READ, HabitatAction.TALK -> "book"
+            HabitatAction.DRINK, HabitatAction.NUDGE, HabitatAction.CLEAN -> "glass"
             HabitatAction.PLAY -> "ball"
             else -> null
         }
@@ -148,8 +148,9 @@ internal class PetHabitatWorld {
             approachFacing = if ((props.firstOrNull { it.kind == targetKind }?.x ?: .5f) >= pose.x) 1f else -1f
         }
         when (next) {
-            HabitatAction.REST -> { targetX = .50f; targetY = .65f }
+            HabitatAction.REST, HabitatAction.TALK -> { targetX = .50f; targetY = .65f }
             HabitatAction.FEED -> { targetX = .50f; targetY = .61f; approaching = true; foodRemaining = 12f }
+            HabitatAction.CLEAN -> { targetX = .62f; targetY = .61f }
             HabitatAction.EXPLORE, HabitatAction.RELEASE -> { targetX = .58f; targetY = .40f; roamAge = 4f }
             else -> Unit
         }

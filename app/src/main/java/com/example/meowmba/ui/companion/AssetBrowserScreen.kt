@@ -116,9 +116,34 @@ fun AssetBrowserScreen(askAi: suspend (String) -> String, onProjects: () -> Unit
                 singleLine = true, placeholder = { Text("Search your files", maxLines = 1) }, leadingIcon = { Icon(Icons.Default.Search, null) },
                 trailingIcon = { if (query.isNotBlank()) IconButton(onClick = { query = ""; vm.clearResults() }) { Icon(Icons.Default.Clear, "Clear search") } }, shape = RoundedCornerShape(20.dp))
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                AssistChip(onClick = { aiMode = false }, enabled = !state.busy && query.isNotBlank(), label = { Text("AI search") }, leadingIcon = { Icon(Icons.Default.AutoAwesome, null, Modifier.size(18.dp)) })
-                AssistChip(onClick = { aiMode = true }, enabled = !state.busy, label = { Text("AI organize") })
-                AssistChip(onClick = vm::cleanup, enabled = !state.busy, label = { Text("Clean up") }, leadingIcon = { Icon(Icons.Default.CleaningServices, null, Modifier.size(18.dp)) })
+                FilterChip(
+                    selected = state.organizeScope == FilesOrganizeScope.LOCAL,
+                    onClick = { vm.setOrganizeScope(FilesOrganizeScope.LOCAL) },
+                    enabled = !state.busy,
+                    label = { Text("Local files") },
+                    leadingIcon = if (state.organizeScope == FilesOrganizeScope.LOCAL) {{ Icon(Icons.Default.Folder, null, Modifier.size(18.dp)) }} else null,
+                )
+                FilterChip(
+                    selected = state.organizeScope == FilesOrganizeScope.PHONE,
+                    onClick = { vm.setOrganizeScope(FilesOrganizeScope.PHONE) },
+                    enabled = !state.busy,
+                    label = { Text("All files on phone") },
+                    leadingIcon = if (state.organizeScope == FilesOrganizeScope.PHONE) {{ Icon(Icons.Default.PhoneAndroid, null, Modifier.size(18.dp)) }} else null,
+                )
+            }
+            Text(
+                if (state.organizeScope == FilesOrganizeScope.LOCAL)
+                    "Clean up & AI organize apply to your Meow library (app-private)."
+                else
+                    "Clean up scans phone media via MediaStore. Connect folders for read-only browsing; import to organize with AI.",
+                Modifier.padding(horizontal = 16.dp),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                AssistChip(onClick = { aiMode = false }, enabled = !state.busy && query.isNotBlank() && state.organizeScope == FilesOrganizeScope.LOCAL, label = { Text("AI search") }, leadingIcon = { Icon(Icons.Default.AutoAwesome, null, Modifier.size(18.dp)) })
+                AssistChip(onClick = { aiMode = true }, enabled = !state.busy && state.organizeScope == FilesOrganizeScope.LOCAL, label = { Text("AI organize") })
+                AssistChip(onClick = vm::cleanup, enabled = !state.busy, label = { Text(if (state.organizeScope == FilesOrganizeScope.LOCAL) "Clean up library" else "Clean up phone") }, leadingIcon = { Icon(Icons.Default.CleaningServices, null, Modifier.size(18.dp)) })
             }
             if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             state.message?.let { Text(it, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -143,7 +168,19 @@ fun AssetBrowserScreen(askAi: suspend (String) -> String, onProjects: () -> Unit
                         } }
                     }
                     item { Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text("Phone folders", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                if (state.organizeScope == FilesOrganizeScope.PHONE) "Phone files & folders" else "Phone folders",
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                            if (state.organizeScope == FilesOrganizeScope.PHONE) {
+                                Text(
+                                    "Browse connected folders or run Clean up phone for MediaStore suggestions.",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
                         TextButton(onClick = { folderPicker.launch(null) }, enabled = !state.busy) { Text("Connect folder") }
                     } }
                     items(state.linkedFolders, key = { "linked:$it" }) { link ->
@@ -221,6 +258,43 @@ fun AssetBrowserScreen(askAi: suspend (String) -> String, onProjects: () -> Unit
         text = { Text("Uses your configured AI provider, which may run in the cloud. Sends only names, paths, types and sizes for up to 200 ${if (chosen.isEmpty()) "recent library files" else "selected files"}. No file contents are sent. ${if (organize) "You will review every proposed move. Nothing is changed automatically." else "Results are based on metadata, not visual recognition."}") },
         confirmButton = { TextButton(onClick = { aiMode = null; vm.askAi(query.ifBlank { "Organize loose files into clear folders by type and topic" }, organize, chosen, askAi) }) { Text("Continue") } },
         dismissButton = { TextButton(onClick = { aiMode = null }) { Text("Cancel") } }) }
+    if (state.phoneCleanup.isNotEmpty() || state.phoneCleanupNotes.isNotEmpty()) {
+        AlertDialog(
+            onDismissRequest = vm::dismissPlan,
+            title = { Text("Phone cleanup suggestions") },
+            text = {
+                LazyColumn(Modifier.heightIn(max = 420.dp)) {
+                    item {
+                        Text(
+                            "Suggestions only — media deletes use Android’s system confirm sheet. Unused apps open the uninstall prompt.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    items(state.phoneCleanupNotes) { note ->
+                        Text(note, Modifier.padding(vertical = 4.dp), style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (state.phoneCleanup.isEmpty()) {
+                        item { Text("No obvious phone media candidates right now.", Modifier.padding(top = 8.dp)) }
+                    }
+                    items(state.phoneCleanup, key = { "${it.label}:${it.bytes}:${it.detail}" }) { row ->
+                        Column(Modifier.padding(vertical = 6.dp)) {
+                            Text(row.label, style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                (if (row.bytes > 0) "${assetSize(row.bytes)} · " else "") + row.detail,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = vm::dismissPlan) { Text("Got it") } },
+            dismissButton = {
+                if (state.organizeScope == FilesOrganizeScope.PHONE) {
+                    TextButton(onClick = { folderPicker.launch(null); vm.dismissPlan() }) { Text("Connect folder") }
+                }
+            },
+        )
+    }
     state.cleanup?.let { candidates ->
         var picked by remember(candidates) { mutableStateOf(setOf<String>()) }
         AlertDialog(onDismissRequest = vm::dismissPlan, title = { Text("Review cleanup") }, text = {

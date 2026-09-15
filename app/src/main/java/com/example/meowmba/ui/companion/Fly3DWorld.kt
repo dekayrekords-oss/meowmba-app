@@ -80,6 +80,8 @@ internal class Fly3DWorld {
             HabitatAction.READ -> "book"
             HabitatAction.DRINK -> "glass"
             HabitatAction.FEED -> "fruit"
+            HabitatAction.CLEAN -> "glass"
+            HabitatAction.TALK -> "book"
             HabitatAction.PLAY, HabitatAction.NUDGE -> "ball"
             else -> null
         }

@@ -55,6 +55,7 @@ fun AnimatedBackground(animation: BackgroundAnimation, modifier: Modifier = Modi
         when (animation) {
             BackgroundAnimation.AURORA -> {
                 Canvas(Modifier.fillMaxSize()) { skyWash(auroraSky) }
+                Canvas(Modifier.fillMaxSize()) { gentleParallaxWash(slow) }
                 Canvas(Modifier.fillMaxSize()) { stars(field, clock, 0.55f) }
                 Canvas(Modifier.fillMaxSize().blur(30.dp)) { aurora(clock, slow, 1.35f, 0.55f) }
                 Canvas(Modifier.fillMaxSize().blur(10.dp)) { aurora(clock + 0.37f, slow, 0.9f, 0.85f) }
@@ -62,6 +63,7 @@ fun AnimatedBackground(animation: BackgroundAnimation, modifier: Modifier = Modi
 
             BackgroundAnimation.STARFIELD -> {
                 Canvas(Modifier.fillMaxSize()) { skyWash(deepSky) }
+                Canvas(Modifier.fillMaxSize()) { gentleParallaxWash(slow) }
                 Canvas(Modifier.fillMaxSize().blur(14.dp)) { stars(field, clock * 0.6f, 1.4f) }
                 Canvas(Modifier.fillMaxSize()) { stars(field, clock, 1f) }
                 Canvas(Modifier.fillMaxSize()) { shootingStar(slow) }
@@ -69,6 +71,7 @@ fun AnimatedBackground(animation: BackgroundAnimation, modifier: Modifier = Modi
 
             BackgroundAnimation.NEBULA -> {
                 Canvas(Modifier.fillMaxSize()) { skyWash(deepSky) }
+                Canvas(Modifier.fillMaxSize()) { gentleParallaxWash(slow) }
                 Canvas(Modifier.fillMaxSize().blur(40.dp)) { nebula(slow) }
                 Canvas(Modifier.fillMaxSize()) { stars(field, clock, 0.9f) }
             }
@@ -298,6 +301,20 @@ fun weatherSwatch(id: String): List<Color> = when (id) {
     "dust" -> listOf(Color(0xFF8A6A3B), Color(0xFF4A3720))
     "storm" -> listOf(Color(0xFF4C3B6E), Color(0xFF241B38))
     else -> listOf(Color(0xFF475569), Color(0xFF29323F))
+}
+
+
+/** Ultra-soft luminance wash for ambient backgrounds — battery-friendly, not a second particle system. */
+private fun DrawScope.gentleParallaxWash(slow: Float) {
+    val a = 0.025f + 0.02f * (0.5f + 0.5f * sin(slow * 2f * PI.toFloat()))
+    val dx = sin(slow * 2f * PI.toFloat()) * size.width * 0.02f
+    drawRect(
+        brush = Brush.radialGradient(
+            colors = listOf(Color.White.copy(alpha = a), Color.Transparent),
+            center = Offset(size.width * 0.5f + dx, size.height * 0.35f),
+            radius = size.minDimension * 0.55f,
+        )
+    )
 }
 
 private const val BG_CYCLE_MS = 22_000
