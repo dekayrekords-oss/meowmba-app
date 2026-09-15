@@ -1,5 +1,19 @@
 # MEOWMBA MASTER PLAN
 
+## September 14 Arizona / September 15 UTC — audit repair preview128
+
+Installed preview128 over USB, preserving app data and all74 native/model/asset
+entries. Private branch `codex/repair128-voice-props-performance` includes transport
+cancellation/completion repairs, usable generated props, validated-design timeout
+recovery, disabled-runtime initialization repair, and two measured rendering/UI
+cost fixes. Full Android suite:2516 passed. Core phone acceptance:14 passed.
+
+This is a stabilization checkpoint, not completion of the broader roadmap.
+Free-route live generation, sustained power/heat, neural pairing, Computer P1 and
+full Logic/business workflows remain open. Read
+[the complete repair and acceptance record](docs/MEOW_REPAIR_128_PASS_DOWN.md)
+before building from an older checkout or treating a passing fixture as live AI.
+
 ## September 15, 2026 — Epic P3 / Slices E+F: Deep care + background motion + files scope
 
 Branch: `feat/epic-p3-care-motion-files` (from `feat/epic-p2-vending-machine` @ `76aba32`). Preview package `com.example.meowmba`. Flags `lumen_reflex_v2` / `agentic_runtime_v1` remain default **OFF**. No FlyWire.

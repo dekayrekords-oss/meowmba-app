@@ -1,0 +1,60 @@
+{
+  "event": "complete",
+  "elapsedMs": 120016,
+  "samples": 13,
+  "foregroundSamples": 12,
+  "unpluggedSamples": 0,
+  "activeMotionSamples": 11,
+  "severeThermalSamples": 0,
+  "presentedFrames": 1462,
+  "cancelled": false,
+  "averagePresentedFps": 12.181709105452606,
+  "cpuPercentOfOneCore": 71.07302359685376,
+  "chargeUsedMicroAh": null,
+  "batteryMeasurementValid": false,
+  "sustainedForegroundMotionGate": false,
+  "loops": [
+    {
+      "feature": "asr.decode",
+      "iterations": 245,
+      "busyMs": 4953,
+      "windowMs": 117720
+    },
+    {
+      "feature": "drives.tick",
+      "iterations": 615,
+      "busyMs": 358,
+      "windowMs": 125771
+    },
+    {
+      "feature": "neural.step",
+      "iterations": 615,
+      "busyMs": 130,
+      "windowMs": 125773
+    },
+    {
+      "feature": "neural.legacy",
+      "iterations": 615,
+      "busyMs": 45,
+      "windowMs": 125774
+    },
+    {
+      "feature": "asr.chunk",
+      "iterations": 1247,
+      "busyMs": 0,
+      "windowMs": 124689
+    },
+    {
+      "feature": "asr.gate_skip",
+      "iterations": 1002,
+      "busyMs": 0,
+      "windowMs": 124689
+    },
+    {
+      "feature": "asr.decoding_chunk",
+      "iterations": 245,
+      "busyMs": 0,
+      "windowMs": 117789
+    }
+  ]
+}

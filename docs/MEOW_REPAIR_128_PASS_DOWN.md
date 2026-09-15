@@ -109,7 +109,7 @@ or simulate battery unplug to obtain a passing result.
 ## Work that is not closed by this repair
 
 - The first live fishing-prop test on126 timed out on the configured OpenRouter
-  route at~103s. Final128 live generation results belong below; mocks/render
+  route at~103s. Final128 live generation also timed out; mocks/render
   fixtures do not substitute for actual model output.
 - Unplugged matched thermal/battery endurance, noisy/far-field speech, long
   silence, interruption and real-user transcription accuracy need sustained
@@ -133,4 +133,33 @@ or simulate battery unplug to obtain a passing result.
 - APK SHA256: `584f2f043dc7138250fd9f8dc16753b126c1494035f582e59f68490d39229ff4`.
   Signature and package/code128 independently checked. Runtime comparison against
   the actual installed122 APK:74 entries, zero missing, zero changed.
-- Final phone installation and acceptance are in progress; update before handoff.
+- Installed128 on RFCY61NJEVM over USB at21:28:59 Arizona time, with no data
+  clearing.14 core phone checks passed again. One additional live invent check
+  failed:the selected `openrouter/free` route, Higher quality, produced no
+  validated fishing prop within102.9s. No success was fabricated or preset
+  substituted. Validated-design timeout recovery is separately regression tested.
+- A direct non-streaming JSON request to the same free route returnedHTTP200
+  but only176 whitespace characters and zero non-whitespace characters in45.8s.
+  This independently reproduced a provider response that stays alive without
+  delivering a design. The first diagnostic had only a per-read timeout and was
+  explicitly stopped; the corrected diagnostic has a total budget and bounded
+  response storage. No paid fallback or model preference change occurred.
+  OpenRouter documents that [its free router randomly chooses compatible free
+  models](https://openrouter.ai/docs/cookbook/get-started/free-models-router-playground),
+  including filtering for requested structured output. JSON mode did not resolve
+  the observed lack of output in this test.
+- Final cloud ASR after installation:Gemini cloud,4/4 synthetic phrases,2184ms.
+  Local capture/restart and native Whisper tests also passed. The OpenAI key is
+  absent; do not describe this as OpenAI voice or broad speech-accuracy parity.
+- Neural acceptance now checks the production dedicated-server selection rather
+  than the older desktop-only precondition. Result:paired=false,dedicated=false,
+  empty endpoint. Pairing is required; no remote or physical mode was activated.
+- Final120-second foreground check:12/13 foreground samples,1462 presented
+  frames(~12.2fps),71.1% of one core, no severe thermal samples. Charging invalidates
+  battery measurement; foreground/sustained-motion gate failed. The run was not
+  profiled. The app still needs power/performance work and an unplugged matched
+  run; do not claim overheating is fixed or compare this to125 as a controlled A/B.
+- Temporary worker test credential and USB/SSH forwarding were removed. The raw
+  evidence is retained privately in the release directory. Source checkpoint
+  `a192734` was pushed to the private Meow branch; later documentation/test-only
+  commits finalize this record.100.77.97.236 remained unreachable over SSH.

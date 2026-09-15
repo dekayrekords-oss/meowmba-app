@@ -46,9 +46,14 @@ class Repair125ServicesDeviceTest {
                         val out = StringBuilder()
                         val buffer = CharArray(4096)
                         while (out.length < 65_536) {
+                            require(android.os.SystemClock.elapsedRealtime() - started < 45_000) {
+                                "Free JSON probe exceeded 45-second total response budget"
+                            }
                             val count = reader.read(buffer, 0, minOf(buffer.size, 65_536 - out.length))
                             if (count < 0) break
                             out.append(buffer, 0, count)
+                            report.put("responseCharacters", out.length)
+                                .put("nonWhitespaceCharacters", out.count { !it.isWhitespace() })
                         }
                         out.toString()
                     }

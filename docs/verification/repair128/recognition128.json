@@ -1,0 +1,10 @@
+{
+  "backend": "gemini_cloud",
+  "synthetic": true,
+  "openAiKeyConfigured": false,
+  "openRouterKeyConfigured": true,
+  "elapsedMs": 2184,
+  "transcript": "Remember that I like green tea. Where are we right now? Open my calendar.",
+  "recognizedPhrases": 4,
+  "totalPhrases": 4
+}

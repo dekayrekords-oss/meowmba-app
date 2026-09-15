@@ -1,5 +1,17 @@
 # Agent execution plan — immersive companion revision
 
+## September 14 Arizona / September 15 UTC: preview128 repair checkpoint installed
+
+The audit's52 Android test failures are resolved. Preview128 is installed in place
+on RFCY61NJEVM;2516 full Android checks and14 core phone checks pass. Generated
+props can be previewed/equipped/removed, transport cancellation and completion are
+repaired, and closed chat/invisible-avatar work is reduced. Configured Gemini ASR
+is selected and verified after restart. See
+[MEOW_REPAIR_128_PASS_DOWN.md](MEOW_REPAIR_128_PASS_DOWN.md) for exact packaging,
+private Git destination and the remaining free-generation, thermal, pairing,
+Computer P1 and full Logic/business limitations. Earlier checkpoints below are
+historical; this is not a store-release or all-day battery signoff.
+
 ## September 13: Build 119 forms pass 261 local checks; server finalization blocked
 
 Voice/text and Avatar setup can create, validate, animate, save and reuse new

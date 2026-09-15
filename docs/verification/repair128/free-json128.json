@@ -1,0 +1,8 @@
+{
+  "model": "openrouter\/free",
+  "httpStatus": 200,
+  "responseCharacters": 176,
+  "nonWhitespaceCharacters": 0,
+  "error": "Free JSON probe exceeded 45-second total response budget",
+  "elapsedMs": 45794
+}
