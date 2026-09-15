@@ -1,0 +1,11 @@
+648a0111389c2f481c6f9a8104e98e93667aafc3616474d12f0639f7b02dcaf5  app/build.gradle.kts
+5c97141e25454cb3465e7ce58e53ef951a2e37bd950d3b22fdcc9a47a34afdf6  app/src/main/java/com/example/meowmba/core/sensor/MotionSense.kt
+b60787c14e650b9b77ad7ba0f1e3cd8aa43fe799a714e5d68fa7ec3cc6e0cfbb  app/src/main/java/com/example/meowmba/ui/companion/AvatarRenderer.kt
+39e72dce098de71d5ea4ea5e70ab48a95b5522c802de3678c6aeba001159f8ce  app/src/main/java/com/example/meowmba/ui/companion/CompanionScreen.kt
+c0eb4715ec785a62a74e2f3b1da6bb8a02ae7b52ab68066f17723e065659fb4c  app/src/main/java/com/example/meowmba/ui/companion/CompanionViewModel.kt
+bfeabc2172c41962402ed7af97384a91d4a296faf4587e7fcb5c59759e0b66ea  app/src/main/java/com/example/meowmba/ui/companion/IllustratedEnvironmentBackground.kt
+c3321cc9bea99cc5504327056312e5f7677d75908a6e6b9aefd7f46b11ab9248  app/src/test/java/com/example/meowmba/IdleRendering136Test.kt
+68e7ceefcb5fe515bfc1e299d475f33c51a3e91dcab43e45c14df0692cb90749  app/src/main/java/com/example/meowmba/ui/companion/LumenEyeMaterials.kt
+7ca9b0ab719a8535e30513293ee373080bd1af81eaa72619ea7425d5d972c180  app/src/main/java/com/example/meowmba/ui/companion/LumenAvatar.kt
+7f679f56be8ace6f397b0200cd51d9c7e16e979ca4924979c65ed77c6fc65016  app/src/main/java/com/example/meowmba/ui/companion/CustomAnimation.kt
+d31246d97758da885dc5838c003040159933ebcd11ac2d150906a1ea42777352  app/src/test/java/com/example/meowmba/AnimationSampling138Test.kt

@@ -1,0 +1,18 @@
+{
+  "versionCode": 138,
+  "versionName": "1.3.82",
+  "transport": "USB",
+  "method": "adb install -r",
+  "dataCleared": false,
+  "preview": {
+    "package": "com.example.meowmba",
+    "lastUpdateTime": "2026-09-15 15:25:25",
+    "certificateSha256": "b7850d5fb645df9f5d12525db1b10e457b0ee7f3aa50bbf4294ff31dae3379ff"
+  },
+  "release": {
+    "package": "com.meow.meowmba",
+    "lastUpdateTime": "2026-09-15 15:29:50",
+    "certificateSha256": "2103e4b14acf74a462218b25f2a04419856c5c2648d13db14f6ff8c4fa247fc0"
+  },
+  "playUploaded": false
+}

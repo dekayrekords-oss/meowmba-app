@@ -1,0 +1,10 @@
+{
+  "baseline": "meow-preview135.apk",
+  "candidate": "meow-preview137.apk",
+  "protectedEntries": 75,
+  "missing": [],
+  "changed": [],
+  "generatedProfilesChanged": [],
+  "apkSha256": "ebf7ff05efe4d7c03eef99542770899b0eeb7862e0417acfb6ef4ed12cb4b814",
+  "passed": true
+}

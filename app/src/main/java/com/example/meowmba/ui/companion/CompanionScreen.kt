@@ -1367,8 +1367,8 @@ private fun AvatarMotionHost(
     val motionSampleTime = viewModel.motionObservedAtMs.collectAsState()
     val view = androidx.compose.ui.platform.LocalView.current
     val displayRotation = LocalConfiguration.current.let { view.display?.rotation ?: 0 }
-    val motionLean by viewModel.motionLean.collectAsState()
-    val motionLurch by viewModel.motionLurch.collectAsState()
+    val motionLean = viewModel.motionLean.collectAsState()
+    val motionLurch = viewModel.motionLurch.collectAsState()
     val shakeCount by viewModel.avatarShakeCount.collectAsState()
     val faceGaze by viewModel.faceGaze.collectAsState()
     // Deliberately NOT `by`: delegating would read the value here, in
@@ -1409,8 +1409,8 @@ private fun AvatarMotionHost(
             facePitchDeg = facePose?.pitchDeg,
             faceRollDeg = facePose?.rollDeg,
             faceScale = facePose?.scale,
-            motionLean = motionLean,
-            motionLurch = motionLurch,
+            motionLeanState = motionLean,
+            motionLurchState = motionLurch,
             motionObservedAtMs = motionSampleTime,
             nervousBias = viewModel::nervousBiasNow,
             neuralGaze = viewModel::neuralGazeNow,

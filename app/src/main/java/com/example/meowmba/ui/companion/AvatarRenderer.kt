@@ -204,6 +204,9 @@ fun AvatarRenderer(
     pointerEnabled: Boolean = true,
     /** Longitudinal force, -1..1 (+ = braking throw). Braking lurches the head. */
     motionLurch: Float = 0f,
+    /** Sample forces during drawing, without recomposing the complete avatar per sensor event. */
+    motionLeanState: State<Float>? = null,
+    motionLurchState: State<Float>? = null,
     /** Monotonic sensor time, read during draw so a heartbeat does not recompose the face. */
     motionObservedAtMs: State<Long>? = null,
     motionScreenLean: State<Float>? = null,
@@ -660,7 +663,8 @@ fun AvatarRenderer(
         val relativeLean = com.example.meowmba.core.sensor.MotionMath.displayRelativeLean(
             motionScreenLean?.value ?: 0f, displayRotation)
         return driveRig.step(clockSec, android.os.SystemClock.elapsedRealtime(),
-            motionObservedAtMs?.value ?: 0L, state.driving, motionLean, motionLurch,
+            motionObservedAtMs?.value ?: 0L, state.driving,
+            motionLeanState?.value ?: motionLean, motionLurchState?.value ?: motionLurch,
             (-relativeLean * 0.35f).coerceIn(-14f, 14f))
     }
 

@@ -1,5 +1,19 @@
 # Agent execution plan — immersive companion revision
 
+## September 15: idle processing with unchanged animation — Builds 136–138
+
+The owner's visual-preservation constraint governs this change: unchanged
+animation cadence, effects and sensor behavior. Stationary habitat display lists
+are retained, force values are read in drawing instead of recomposing the avatar,
+hidden diagnostic snapshots are suppressed, and sensor arrays are reused.
+Sampled profiling also identified96 repeated iris colour conversions per frame;
+build137 caches their exact values without changing the drawing. Build138 removes
+temporary animation keyframe lists while preserving exact sampling results.
+All 2,547 JVM checks passed on137; 39 targeted checks passed after the final138
+sampler change, including 76 exact habitat pixel comparisons. See
+[IDLE_LOAD_138_PASS_DOWN.md](IDLE_LOAD_138_PASS_DOWN.md) for measured CPU results
+and packaging/phone evidence; this is not an all-day thermal guarantee.
+
 ## September 15: focused Computer hub and setup — Build 135
 
 Computer is now a first-row menu tile and a dedicated Settings destination.
