@@ -13,7 +13,7 @@ class EmotionalInteractionTest {
         Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
         val tts=VoicePipelineTest.FakeSpeechSynthesizer()
         val engine=VoicePipelineTest.FakeSpeechEngine()
-        val vm=CompanionViewModel(ttsManager=tts,speechService=engine,captureEngine=engine,
+        val vm=CompanionViewModel(elapsedRealtimeMs = { System.nanoTime() / 1_000_000L }, ttsManager=tts,speechService=engine,captureEngine=engine,
             ioDispatcher=UnconfinedTestDispatcher(testScheduler))
         try { block(vm,tts,engine) } finally { vm.viewModelScope.cancel();Dispatchers.resetMain() }
     }

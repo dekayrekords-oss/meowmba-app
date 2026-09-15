@@ -1028,6 +1028,7 @@ fun AvatarRenderer(
                 val placement = generatedAvatarPlacement(w, h, frame, avatarScale, flyPose)
                 generatedPlacement[0] = placement
                 generatedPainter.draw(this, generatedForm, frame, tSec, placement.center, placement.unit)
+                state.equippedProp?.let { generatedPainter.drawProp(this, it, frame, tSec, placement.center, placement.unit) }
                 if (customAnim != null) generatedScenePainter.draw(this, customAnim,
                     animTHolder[0].toFloat(), placement.center, placement.unit)
                 // Model-authored shapes cannot cover or impersonate privacy state.
@@ -1092,6 +1093,8 @@ fun AvatarRenderer(
                             progress = progress, inventedScene = customAnim, inventedTimeMs = animTHolder[0].toFloat())
                     }
                 }
+                state.equippedProp?.let { generatedPainter.drawProp(this, it, frame, tSec,
+                    destination, lumenUnit(w, h, frame) * .40f * avatarScale) }
                 lumenPainter.draw(this, frame.copy(presence = 0f), Color(state.avatarEyeColor), Color(state.avatarGlowColor),
                     cameraOff = !state.isCameraEnabled, micOff = !state.isMicEnabled,
                     speakerOff = state.isMuted, statusColor = privacyColor)
@@ -1103,6 +1106,8 @@ fun AvatarRenderer(
                         featureColor = Color(state.avatarFeatureColor), performance = lumenPerformance,
                         progress = progress, inventedScene = customAnim, inventedTimeMs = animTHolder[0].toFloat())
                 }
+                state.equippedProp?.let { generatedPainter.drawProp(this, it, frame, tSec,
+                    center, lumenUnit(w, h, frame) * avatarScale) }
                 lumenPainter.draw(this, frame.copy(presence = 0f), Color(state.avatarEyeColor), Color(state.avatarGlowColor),
                     cameraOff = !state.isCameraEnabled, micOff = !state.isMicEnabled,
                     speakerOff = state.isMuted, statusColor = privacyColor)

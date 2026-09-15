@@ -254,8 +254,11 @@ fun AppDrawerScreen(
         focus.clearFocus()
         keyboard?.hide()
         val matches = DrawerCatalog.visible(scoped, q, sort, typeFilter, launchCounts)
-        val match = matches.firstOrNull { it.label.equals(q, ignoreCase = true) }
-        onSubmitQuery(q, matches.size, match?.label ?: matches.singleOrNull()?.label)
+        val exact = matches.filter { it.label.equals(q, ignoreCase = true) }
+        // Related aliases remain browsable, but must not make an exact request
+        // ambiguous. Two genuinely identical labels still require a choice.
+        val candidates = exact.ifEmpty { matches }
+        onSubmitQuery(q, candidates.size, candidates.singleOrNull()?.label)
     }
     LaunchedEffect(listening, listenPartial) {
         if (listening && !listenPartial.isNullOrBlank()) { query = listenPartial; submitted = false }

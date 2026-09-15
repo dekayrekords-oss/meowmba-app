@@ -12,6 +12,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.test.resetMain
 
 /**
  * Unit tests for the avatar animation state machine: the mapping from
@@ -118,11 +120,17 @@ class AvatarStateMachineTest {
  * eyes -> camera privacy, mouth -> mute, forehead -> settings,
  * background -> tiles. Plus the swipe entry points and privacy dashboard.
  */
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class CompanionZoneTest {
+
+    private val models = TestCompanionModels()
+    private val dispatcher = kotlinx.coroutines.test.UnconfinedTestDispatcher()
+    @org.junit.Before fun setup() { kotlinx.coroutines.Dispatchers.setMain(dispatcher) }
+    @org.junit.After fun cleanup() { models.close(); kotlinx.coroutines.Dispatchers.resetMain() }
 
     @Test
     fun `ear tap toggles microphone privacy`() {
-        val vm = CompanionViewModel()
+        val vm = CompanionViewModel().also(models::add)
         assertTrue(vm.uiState.value.isMicEnabled)
         vm.onAvatarZoneClick(AvatarZone.EAR_LEFT)
         assertFalse(vm.uiState.value.isMicEnabled)
@@ -132,18 +140,21 @@ class CompanionZoneTest {
     }
 
     @Test
-    fun `eye tap toggles camera privacy`() {
-        val vm = CompanionViewModel()
+    fun `eye tap cannot advertise capture without a camera backend`() {
+        val vm = CompanionViewModel().also(models::add)
         assertFalse(vm.uiState.value.isCameraEnabled)
         vm.onAvatarZoneClick(AvatarZone.EYE_LEFT)
-        assertTrue(vm.uiState.value.isCameraEnabled)
+        assertFalse(vm.uiState.value.isCameraEnabled)
+        assertFalse(vm.uiState.value.cameraPermissionRequested)
+        vm.setCameraEnabled(false)
+        assertFalse(vm.uiState.value.cameraPermissionRequested)
         vm.onAvatarZoneClick(AvatarZone.EYE_RIGHT)
         assertFalse(vm.uiState.value.isCameraEnabled)
     }
 
     @Test
     fun `mouth tap toggles speech mute`() {
-        val vm = CompanionViewModel()
+        val vm = CompanionViewModel().also(models::add)
         assertFalse(vm.uiState.value.isMuted)
         vm.onAvatarZoneClick(AvatarZone.MOUTH)
         assertTrue(vm.uiState.value.isMuted)
@@ -151,7 +162,7 @@ class CompanionZoneTest {
 
     @Test
     fun `forehead toggles settings and background toggles tiles`() {
-        val vm = CompanionViewModel()
+        val vm = CompanionViewModel().also(models::add)
         vm.onAvatarZoneClick(AvatarZone.FOREHEAD)
         assertTrue(vm.uiState.value.showSettings)
         vm.onAvatarZoneClick(AvatarZone.BACKGROUND)
@@ -160,7 +171,7 @@ class CompanionZoneTest {
 
     @Test
     fun `privacy dashboard switches drive the same state as touch zones`() {
-        val vm = CompanionViewModel()
+        val vm = CompanionViewModel().also(models::add)
         vm.setMicEnabled(false)
         assertFalse(vm.uiState.value.isMicEnabled)
         vm.setCameraEnabled(false)
@@ -173,7 +184,7 @@ class CompanionZoneTest {
 
     @Test
     fun `openChat and openTiles only open, never close`() {
-        val vm = CompanionViewModel()
+        val vm = CompanionViewModel().also(models::add)
         vm.openChat()
         assertTrue(vm.uiState.value.isChatExpanded)
         vm.openChat()
@@ -187,7 +198,7 @@ class CompanionZoneTest {
 
     @Test
     fun `blank chat input is ignored`() {
-        val vm = CompanionViewModel()
+        val vm = CompanionViewModel().also(models::add)
         vm.onUserTextSubmitted("   ")
         assertEquals(InteractionState.IDLE, vm.uiState.value.interactionState)
     }

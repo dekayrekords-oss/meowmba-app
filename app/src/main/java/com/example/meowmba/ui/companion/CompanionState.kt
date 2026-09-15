@@ -133,6 +133,7 @@ data class CompanionState(
     val avatarFormError: Boolean = false,
     /** Vending-machine companion props (filesDir/companion_props). */
     val savedProps: List<GeneratedPropForm> = emptyList(),
+    val equippedProp: GeneratedPropForm? = null,
     val propInventGenerating: Boolean = false,
     val propInventMessage: String? = null,
     val propInventError: Boolean = false,

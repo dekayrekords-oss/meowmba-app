@@ -228,6 +228,8 @@ class CompanionViewModel(
     private val captureEngine: SpeechEngine? = null,
     private val weatherService: com.example.meowmba.core.weather.WeatherRepository? = null,
     private val noteVault: VaultRepository? = null,
+    /** Same time base as camera timestamps; plain-JVM tests supply their own clock. */
+    private val elapsedRealtimeMs: () -> Long = android.os.SystemClock::elapsedRealtime,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(CompanionState())
 
@@ -1145,11 +1147,11 @@ class CompanionViewModel(
         lastAffectEmotion = emotion
         lastEmotionArousal = arousal
         if (changed) {
-            emotionPulseUntilElapsedMs = android.os.SystemClock.elapsedRealtime() + 2_400L
+            emotionPulseUntilElapsedMs = elapsedRealtimeMs() + 2_400L
         }
         publishReflexSensory(
             track = visionManager?.faceTrack?.value,
-            nowElapsedMs = android.os.SystemClock.elapsedRealtime(),
+            nowElapsedMs = elapsedRealtimeMs(),
         )
         return emotion
     }
@@ -1166,10 +1168,10 @@ class CompanionViewModel(
     fun onAvatarPetted() {
         nervousSystem.onStimulus(com.example.meowmba.core.behavior.Stimulus.TOUCH)
         nervousSystem.noteAffect(ConversationAffect.valence(CompanionEmotion.AFFECTIONATE))
-        affectionUntilElapsedMs = android.os.SystemClock.elapsedRealtime() + 1_800L
+        affectionUntilElapsedMs = elapsedRealtimeMs() + 1_800L
         publishReflexSensory(
             track = visionManager?.faceTrack?.value,
-            nowElapsedMs = android.os.SystemClock.elapsedRealtime(),
+            nowElapsedMs = elapsedRealtimeMs(),
         )
     }
 
@@ -1340,7 +1342,7 @@ class CompanionViewModel(
         // Vision owns visual grace and expires it independently of incoming camera frames.
         viewModelScope.launch {
             visionManager?.faceTrack?.collect { observed ->
-                val nowFace = android.os.SystemClock.elapsedRealtime()
+                val nowFace = elapsedRealtimeMs()
                 val track = observed?.takeIf {
                     com.example.meowmba.core.vision.AttentionFreshness.isFresh(it.observedAtElapsedMs, nowFace)
                 }
@@ -1442,6 +1444,9 @@ class CompanionViewModel(
                 }.getOrNull(),
                 savedGeneratedForms = runCatching { generatedAvatarStore?.list().orEmpty() }.getOrDefault(emptyList()),
                 savedProps = runCatching { generatedPropStore?.list().orEmpty() }.getOrDefault(emptyList()),
+                equippedProp = runCatching {
+                    storage.getPreference("equipped_prop_id")?.let { generatedPropStore?.load(it) }
+                }.getOrNull(),
                 appTheme = AppTheme.fromKey(storage.getPreference("app_theme")),
                 appearanceMode = AppearanceMode.fromKey(storage.getPreference("appearance_mode")),
                 avatarFeatureColor = AvatarColors.parse(storage.getPreference("avatar_feature_color"), 0xFFE8D5B9L),
@@ -2096,7 +2101,7 @@ class CompanionViewModel(
                     if (_uiState.value.avatarStyle.isLumen) {
                         // A quiet attentive face does not erupt into random dramatic
                         // costumes, sad stories or fake celebrations between turns.
-                        idlePerformanceSelector.pick(android.os.SystemClock.elapsedRealtime(),
+                        idlePerformanceSelector.pick(elapsedRealtimeMs(),
                             scenesEnabled = _uiState.value.idleScenesEnabled, playfulness = _uiState.value.playfulness)?.title
                     } else {
                     val saved = animStore.list()
@@ -2325,7 +2330,7 @@ class CompanionViewModel(
                     if (_uiState.value.lumenReflexV2Enabled) {
                         publishReflexSensory(
                             track = visionManager?.faceTrack?.value,
-                            nowElapsedMs = android.os.SystemClock.elapsedRealtime(),
+                            nowElapsedMs = elapsedRealtimeMs(),
                         )
                     }
                 }
@@ -2706,7 +2711,7 @@ class CompanionViewModel(
                     ComputerPowerStore.MIN_IDLE,
                     ComputerPowerStore.MAX_IDLE,
                 ) * 60_000L
-                val idleFor = android.os.SystemClock.elapsedRealtime() - session.lastIoElapsedMs
+                val idleFor = elapsedRealtimeMs() - session.lastIoElapsedMs
                 if (idleFor >= limitMs) {
                     live.setState(ComputerPowerState.Idle)
                     refreshComputerPowerMirror()
@@ -2729,7 +2734,7 @@ class CompanionViewModel(
         }
         publishReflexSensory(
             track = visionManager?.faceTrack?.value,
-            nowElapsedMs = android.os.SystemClock.elapsedRealtime(),
+            nowElapsedMs = elapsedRealtimeMs(),
         )
     }
 
@@ -2757,7 +2762,7 @@ class CompanionViewModel(
 
     fun onReflexSummary(label: String?) {
         if (!_uiState.value.lumenReflexV2Enabled) return
-        val now = android.os.SystemClock.elapsedRealtime()
+        val now = elapsedRealtimeMs()
         if (label == _uiState.value.reflexSummary) return
         if (now - lastReflexSummaryEmitMs < 250L && label != null) return
         lastReflexSummaryEmitMs = now
@@ -3043,6 +3048,10 @@ class CompanionViewModel(
      */
     private fun bindAgenticComputerHost() {
         val storage = secureStorage ?: return
+        if (!FeatureFlags(storage).agenticRuntimeV1) {
+            AgenticRuntime.clearComputerHostIfCreated()
+            return
+        }
         val runtime = AgenticRuntime.from(storage.context)
         if (!runtime.enabled) {
             runtime.computerHost = null
@@ -3076,8 +3085,8 @@ class CompanionViewModel(
                 if (isCancelled()) return@runBlocking ComputerExecResult(false, "Cancelled")
                 if (connected) {
                     sendCompanionTerminalLine(frame.wrap(trimmed))
-                    val deadline = android.os.SystemClock.elapsedRealtime() + timeoutMs.coerceIn(3_000L, 60_000L)
-                    while (android.os.SystemClock.elapsedRealtime() < deadline) {
+                    val deadline = elapsedRealtimeMs() + timeoutMs.coerceIn(3_000L, 60_000L)
+                    while (elapsedRealtimeMs() < deadline) {
                         if (isCancelled()) return@runBlocking ComputerExecResult(false,
                             "Cancelled further steps; the current command may still finish")
                         frame.result(_companionTerminalScrollback.value)?.let { return@runBlocking it }
@@ -3118,8 +3127,8 @@ class CompanionViewModel(
     }
 
     private suspend fun awaitComputerSessionConnected(timeoutMs: Long): Boolean {
-        val deadline = android.os.SystemClock.elapsedRealtime() + timeoutMs
-        while (android.os.SystemClock.elapsedRealtime() < deadline) {
+        val deadline = elapsedRealtimeMs() + timeoutMs
+        while (elapsedRealtimeMs() < deadline) {
             val session = companionTerminalSession
             if (
                 session != null &&
@@ -10357,6 +10366,7 @@ class CompanionViewModel(
                     if (generation != avatarFormGeneration || stop.isStopRequested || scopeId != conversationId() || appInBackground)
                         throw kotlinx.coroutines.CancellationException("Avatar transformation superseded")
                 }
+                var inventor: com.example.meowmba.core.agent.tools.AvatarFormInventor? = null
                 try {
                     require(com.example.meowmba.core.agent.runtime.AvatarFormRequest.isDescription(request)) {
                         "Describe one avatar appearance in 1–${com.example.meowmba.core.agent.runtime.AvatarFormRequest.MAX_DESCRIPTION_LENGTH} characters."
@@ -10380,9 +10390,9 @@ class CompanionViewModel(
                             ?: selected.plan(prompt, preferRouteId = preferredChatRouteId()).firstOrNull()?.provider
                             ?: return@coroutineScope avatarFormFailure("No AI model is configured for avatar creation. Check LLM settings.")
                         else selected
-                    val inventor = com.example.meowmba.core.agent.tools.AvatarFormInventor { input ->
+                    val activeInventor = com.example.meowmba.core.agent.tools.AvatarFormInventor { input ->
                         if (provider is LiteRtProvider) provider.generateStructured(input) else provider.generate(input)
-                    }
+                    }.also { inventor = it }
                     val timeoutMs = when (reasonLevel) {
                         InventReasonLevel.FAST -> 75_000L
                         InventReasonLevel.BALANCED -> 90_000L
@@ -10390,8 +10400,8 @@ class CompanionViewModel(
                     }
                     val form = withContext(ioDispatcher + stop) {
                         withTimeout(timeoutMs) {
-                            if (refineFrom != null) inventor.refine(refineFrom, request, reasonLevel)
-                            else inventor.invent(request, reasonLevel)
+                            if (refineFrom != null) activeInventor.refine(refineFrom, request, reasonLevel)
+                            else activeInventor.invent(request, reasonLevel)
                         }
                     }
                     kotlinx.coroutines.currentCoroutineContext().ensureActive()
@@ -10403,7 +10413,15 @@ class CompanionViewModel(
                     ToolResult.Success("Lumen is now ${form.name}, a generated cartoon interpretation. Saved for reuse; the same brain and reactions continue.")
                 } catch (_: kotlinx.coroutines.TimeoutCancellationException) {
                     ensureOwner()
-                    avatarFormFailure("Avatar creation timed out. Your current form is unchanged; try a simpler description.")
+                    val ready = inventor?.lastValidated
+                    if (ready != null && store != null) {
+                        try {
+                            store.save(ready, request)
+                            val message = "Now wearing ${ready.name}. Extra polish timed out; saved the completed design."
+                            applyGeneratedAvatar(ready, store.list(), message)
+                            ToolResult.Success(message)
+                        } catch (_: Exception) { avatarFormFailure("Could not save the completed design. Try again or free a library slot.") }
+                    } else avatarFormFailure("Avatar creation timed out. Your current form is unchanged; try a simpler description.")
                 } catch (cancelled: kotlinx.coroutines.CancellationException) {
                     throw cancelled
                 } catch (error: Throwable) {
@@ -10496,6 +10514,7 @@ class CompanionViewModel(
         try {
             val store = generatedPropStore ?: error("Prop storage unavailable")
             store.delete(id)
+            if (_uiState.value.equippedProp?.id == id) equipProp(null)
             _uiState.value = _uiState.value.copy(
                 savedProps = store.list(),
                 propInventMessage = "Removed prop from library.",
@@ -10507,6 +10526,22 @@ class CompanionViewModel(
                 propInventMessage = reason ?: "Could not remove that prop.",
                 propInventError = true,
             )
+        }
+    }
+
+    fun equipProp(id: String?) {
+        try {
+            val prop = id?.let { generatedPropStore?.load(it) ?: error("That prop is unavailable. Generate it again.") }
+            secureStorage?.savePreference("equipped_prop_id", prop?.id.orEmpty())
+            // The Use button names the floating-avatar destination explicitly.
+            // Native 3D attachments require a separate rig; do not fake them.
+            if (prop != null && _uiState.value.avatarStyle !in setOf(AvatarStyle.LUMEN, AvatarStyle.LUMEN_CAT)) {
+                setAvatarStyle(AvatarStyle.LUMEN)
+            }
+            _uiState.update { it.copy(equippedProp = prop, propInventError = false,
+                propInventMessage = prop?.let { p -> "Using ${p.name}." } ?: "Prop put away.") }
+        } catch (error: Exception) {
+            propInventFailure(error.message ?: "Could not use that prop.")
         }
     }
 
@@ -10539,6 +10574,7 @@ class CompanionViewModel(
                 if (generation != propInventGeneration || stop.isStopRequested || appInBackground)
                     throw kotlinx.coroutines.CancellationException("Prop invent superseded")
             }
+            var inventor: com.example.meowmba.core.agent.tools.PropInventor? = null
             try {
                 require(prompt.isNotBlank() && prompt.length <= GeneratedPropForms.MAX_REQUEST) {
                     "Describe one prop in 1–${GeneratedPropForms.MAX_REQUEST} characters."
@@ -10565,9 +10601,9 @@ class CompanionViewModel(
                         ?: selected.plan(composed, preferRouteId = preferredChatRouteId()).firstOrNull()?.provider
                         ?: return@coroutineScope propInventFailure("No AI model is configured for prop invent. Check LLM settings.")
                     else selected
-                val inventor = com.example.meowmba.core.agent.tools.PropInventor { input ->
+                val activeInventor = com.example.meowmba.core.agent.tools.PropInventor { input ->
                     if (provider is LiteRtProvider) provider.generateStructured(input) else provider.generate(input)
-                }
+                }.also { inventor = it }
                 val timeoutMs = when (reasonLevel) {
                     InventReasonLevel.FAST -> 60_000L
                     InventReasonLevel.BALANCED -> 75_000L
@@ -10575,7 +10611,7 @@ class CompanionViewModel(
                 }
                 val form = withContext(ioDispatcher + stop) {
                     withTimeout(timeoutMs) {
-                        inventor.invent(prompt, reasonLevel, categoryHint = category, detail = detail)
+                        activeInventor.invent(prompt, reasonLevel, categoryHint = category, detail = detail)
                     }
                 }
                 kotlinx.coroutines.currentCoroutineContext().ensureActive()
@@ -10589,7 +10625,15 @@ class CompanionViewModel(
                 )
             } catch (_: kotlinx.coroutines.TimeoutCancellationException) {
                 ensureOwner()
-                propInventFailure("Prop invent timed out. Try a simpler description.")
+                val ready = inventor?.lastValidated
+                val store = generatedPropStore
+                if (ready != null && store != null) {
+                    try {
+                        store.save(ready, prompt)
+                        _uiState.update { it.copy(savedProps = store.list(), propInventError = false,
+                            propInventMessage = "Saved ${ready.name}. Extra polish timed out; the completed prop is ready to use.") }
+                    } catch (_: Exception) { propInventFailure("Could not save the completed prop. Try again or free a library slot.") }
+                } else propInventFailure("Prop invent timed out. Try a simpler description.")
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
             } catch (error: Throwable) {
@@ -10796,7 +10840,7 @@ class CompanionViewModel(
     private fun syncDrivingSnapshot(s: com.example.meowmba.core.car.DrivingState) {
         val active = s.isDriving && s.carModeEnabled
         if (!active) driveCardSuppressed = false
-        val now = if (active) android.os.SystemClock.elapsedRealtime() else 0L
+        val now = if (active) elapsedRealtimeMs() else 0L
         val incoming = if (active) driveReactionFor(s.speedMph, s.lateralG, s.longitudinalG) else DriveReaction.NONE
         val (reaction, startedAt) = if (active) nextDriveReaction(
             _uiState.value.driveReaction, driveReactionStartedAtMs, incoming, now,
@@ -12042,8 +12086,8 @@ class CompanionViewModel(
         val local = CompanionTerminalTarget.LOCAL_ID
         connectCompanionTerminal(local)
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            val deadline = android.os.SystemClock.elapsedRealtime() + 20_000L
-            while (android.os.SystemClock.elapsedRealtime() < deadline) {
+            val deadline = elapsedRealtimeMs() + 20_000L
+            while (elapsedRealtimeMs() < deadline) {
                 val session = companionTerminalSession
                 val ready = session != null &&
                     session.status.value == CompanionTerminalStatus.Connected &&

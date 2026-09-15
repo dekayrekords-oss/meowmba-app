@@ -59,6 +59,9 @@ class LumenPainter {
         // rendering keeps its cheap direct-to-canvas path. Privacy stays visible.
         val stretch = lumenStretch(frame)
         scale(1f / stretch, stretch, center) {
+        // Privacy-only passes are used by 3D and generated avatars every frame.
+        // An alpha-zero saveLayer still builds every lens and anatomy path.
+        if (frame.presence > 0f) {
         val fading = frame.presence < 0.995f
         if (fading) {
             presencePaint.alpha = frame.presence.coerceIn(0f, 1f)
@@ -106,6 +109,7 @@ class LumenPainter {
             }
         }
         if (fading) drawContext.canvas.restore()
+        }
         if (inventedScene != null && inventedScene.props.isNotEmpty()) {
             rotate(frame.screenRoll, center) { inventedScenes.draw(this, inventedScene, inventedTimeMs, center, unit) }
         }

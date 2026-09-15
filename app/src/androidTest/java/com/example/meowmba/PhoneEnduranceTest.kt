@@ -68,6 +68,7 @@ class PhoneEnduranceTest {
         var originallyKeptAwake = false
         var viewModel: CompanionViewModel? = null
         var originalStyle: AvatarStyle? = null
+        var originalGeneratedForm: String? = null
         var originalHabitat = false
         var notice: TextView? = null
         val cancelled = AtomicBoolean(false)
@@ -81,6 +82,7 @@ class PhoneEnduranceTest {
                 viewModel = ViewModelProvider(activity)[CompanionViewModel::class.java]
                 if (fixedFly) viewModel?.let { vm ->
                     originalStyle = vm.uiState.value.avatarStyle
+                    originalGeneratedForm = vm.uiState.value.generatedAvatarForm?.id
                     originalHabitat = vm.uiState.value.habitatMode
                     vm.setAvatarStyle(AvatarStyle.FULL_FLY)
                     vm.setHabitatMode(true)
@@ -185,6 +187,7 @@ class PhoneEnduranceTest {
                 if (fixedFly && viewModel?.uiState?.value?.avatarStyle == AvatarStyle.FULL_FLY &&
                     viewModel?.uiState?.value?.habitatMode == true) originalStyle?.let {
                     viewModel?.setAvatarStyle(it); viewModel?.setHabitatMode(originalHabitat)
+                    originalGeneratedForm?.let { id -> viewModel?.selectGeneratedAvatarForm(id) }
                 }
             }
             scenario.onActivity { if (!originallyKeptAwake) it.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }

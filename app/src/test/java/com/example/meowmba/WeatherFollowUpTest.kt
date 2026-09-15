@@ -18,7 +18,7 @@ class WeatherFollowUpTest {
         `when`(weather.fetch()).thenReturn(WeatherRepository.Result.Failed("Location access is off."))
         `when`(weather.fetchPlace("New River Arizona")).thenReturn(WeatherRepository.Result.Failed("Offline."))
         val tts = VoicePipelineTest.FakeSpeechSynthesizer()
-        val vm = CompanionViewModel(weatherService = weather, ttsManager = tts)
+        val vm = CompanionViewModel(elapsedRealtimeMs = { System.nanoTime() / 1_000_000L }, weatherService = weather, ttsManager = tts)
         try {
             vm.onUserTextSubmitted("what's the weather")
             assertTrue(tts.spokenTexts.last().contains("city and state"))

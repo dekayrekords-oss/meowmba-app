@@ -35,6 +35,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -156,6 +157,9 @@ fun VendingMachineScreen(
                 VendingPage.PROP_LIBRARY -> {
                     PropLibraryPanel(
                         props = uiState.savedProps,
+                        equippedId = uiState.equippedProp?.id,
+                        onUse = { viewModel.equipProp(it); if (!viewModel.uiState.value.propInventError) onClose() },
+                        onPutAway = { viewModel.equipProp(null) },
                         onDelete = viewModel::deleteProp,
                         modifier = Modifier.weight(1f),
                     )
@@ -472,6 +476,9 @@ private fun PropGeneratePanel(
 @Composable
 private fun PropLibraryPanel(
     props: List<GeneratedPropForm>,
+    equippedId: String?,
+    onUse: (String) -> Unit,
+    onPutAway: () -> Unit,
     onDelete: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -492,6 +499,10 @@ private fun PropLibraryPanel(
             items(props, key = { it.id }) { prop ->
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        val painter = remember { GeneratedAvatarPainter() }
+                        androidx.compose.foundation.Canvas(Modifier.fillMaxWidth().height(140.dp).testTag("prop-preview:${prop.id}")) {
+                            painter.drawProp(this, prop, LumenFrame(), 0f, center, minOf(size.width, size.height), preview = true)
+                        }
                         Text(prop.name, style = MaterialTheme.typography.titleMedium)
                         Text(
                             "${prop.category.name.lowercase()} · ${prop.description.take(120)}",
@@ -501,7 +512,12 @@ private fun PropLibraryPanel(
                         if (prop.useHint.isNotBlank()) {
                             Text("Use: ${prop.useHint}", style = MaterialTheme.typography.bodySmall)
                         }
-                        OutlinedButton(onClick = { onDelete(prop.id) }) { Text("Remove") }
+                        if (equippedId == prop.id) {
+                            OutlinedButton(onClick = onPutAway) { Text("Put away") }
+                        } else {
+                            Button(onClick = { onUse(prop.id) }) { Text("Use with floating avatar") }
+                        }
+                        OutlinedButton(onClick = { onDelete(prop.id) }) { Text("Remove from library") }
                     }
                 }
             }

@@ -4,7 +4,6 @@ import android.content.Intent
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
-import com.example.meowmba.core.bridge.DesktopBridgeManager
 import com.example.meowmba.core.neural.*
 import com.example.meowmba.core.security.SecureStorageManager
 import com.example.meowmba.ui.companion.*
@@ -21,7 +20,13 @@ class MaleCnsDeviceTest {
         assumeTrue(args.getString("maleCnsLive") == "true")
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val storage = SecureStorageManager(context)
-        assertTrue("Pair the computer bridge first", DesktopBridgeManager(storage).isPaired())
+        // Build118 added a dedicated neural server independent of the desktop
+        // bridge. Test the same selection used by the production controller.
+        val selection = MaleCnsServerManager(storage).selection()
+        File(context.getExternalFilesDir(null), "repair128-neural-selection.json").writeText(
+            JSONObject().put("paired", selection.paired).put("dedicated", selection.useDedicated)
+                .put("server", selection.serverName).put("endpoint", selection.endpoint).toString(2))
+        assertTrue("Pair the selected neural server or computer bridge first", selection.paired)
         val oldMode = storage.getPreference(NeuralModeStore.KEY_MODE).orEmpty()
         val oldCore = storage.getPreference(NeuralModeStore.KEY_SUBSTRATE).orEmpty()
         val oldCare = storage.getPreference("pet_care_v1").orEmpty()

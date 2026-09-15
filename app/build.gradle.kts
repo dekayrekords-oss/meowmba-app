@@ -223,7 +223,7 @@ androidComponents {
         // Combined Computer + avatar update; bump debug-only so in-place
         // upgrade is allowed without changing release defaultConfig (85).
         variant.outputs.forEach { output ->
-            output.versionCode.set(124)
+            output.versionCode.set(128)
         }
     }
 }
@@ -390,6 +390,7 @@ dependencies {
     implementation(libs.mlkit.face.detection)
     implementation(libs.mlkit.pose.detection)
     implementation(libs.ktor.client.android)
+    implementation(libs.ktor.client.okhttp)
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
     testImplementation(libs.junit)

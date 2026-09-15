@@ -30,6 +30,8 @@ import org.mockito.ArgumentMatchers.anyString
 @OptIn(ExperimentalCoroutinesApi::class)
 class CompanionViewModelTest {
 
+    private val models = TestCompanionModels()
+
     private val testDispatcher = UnconfinedTestDispatcher()
     private val mockSecureStorage = mock(SecureStorageManager::class.java)
     private val mockContext = mock(Context::class.java)
@@ -47,20 +49,21 @@ class CompanionViewModelTest {
 
     @After
     fun tearDown() {
+        models.close()
         MicOwner.resetForTest()
         Dispatchers.resetMain()
     }
 
     @Test
     fun `initial state is IDLE`() = runTest {
-        val viewModel = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
+        val viewModel = CompanionViewModel(elapsedRealtimeMs = { System.nanoTime() / 1_000_000L }, secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository).also(models::add)
         assertEquals(InteractionState.IDLE, viewModel.uiState.value.interactionState)
         assertEquals(CompanionEmotion.IDLE, viewModel.uiState.value.emotion)
     }
 
     @Test
     fun `mic click transitions to LISTENING`() = runTest {
-        val viewModel = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
+        val viewModel = CompanionViewModel(elapsedRealtimeMs = { System.nanoTime() / 1_000_000L }, secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository).also(models::add)
         viewModel.onMicClick()
         assertEquals(InteractionState.LISTENING, viewModel.uiState.value.interactionState)
         assertEquals(CompanionEmotion.ALERT, viewModel.uiState.value.emotion)
@@ -68,13 +71,13 @@ class CompanionViewModelTest {
 
     @Test
     fun `opening the memory screen reports a real MetaMemory link`() = runTest {
-        val viewModel = CompanionViewModel(
+        val viewModel = CompanionViewModel(elapsedRealtimeMs = { System.nanoTime() / 1_000_000L },
             metaMemoryConnector = object : MetaMemoryConnector {
                 override suspend fun isAvailable() = true
                 override suspend fun push(memories: List<MemoryEntity>) = Result.success(0)
                 override suspend fun pull() = Result.success(emptyList<MemoryEntity>())
             }
-        )
+        ).also(models::add)
         assertFalse(viewModel.uiState.value.metaMemoryLinked)
         viewModel.toggleMemoryScreen()
         assertTrue(viewModel.uiState.value.metaMemoryLinked)
@@ -83,7 +86,7 @@ class CompanionViewModelTest {
     @Test
     fun `the MetaMemory link is reported false when there is no connector to ask`() = runTest {
         // No storage/repository → the honest no-op connector → never claims a link.
-        val viewModel = CompanionViewModel()
+        val viewModel = CompanionViewModel(elapsedRealtimeMs = { System.nanoTime() / 1_000_000L }, ).also(models::add)
         viewModel.toggleMemoryScreen()
         assertFalse(viewModel.uiState.value.metaMemoryLinked)
     }
@@ -92,7 +95,7 @@ class CompanionViewModelTest {
     fun `a requested animation closes the chat sheet so the face is visible`() = runTest {
         // The sheet covers the bottom 60% — face included. Real tasks played in
         // the audit log while the user read chat and saw nothing.
-        val viewModel = CompanionViewModel()
+        val viewModel = CompanionViewModel(elapsedRealtimeMs = { System.nanoTime() / 1_000_000L }, ).also(models::add)
         viewModel.toggleChat()
         assertTrue(viewModel.uiState.value.isChatExpanded)
         viewModel.playCustomAnimation(
@@ -108,7 +111,7 @@ class CompanionViewModelTest {
         // The reported bug: Settings shut itself every time the cat performed.
         // Idle performances come through the same function, so revealing the
         // face must be opt-in rather than the default.
-        val viewModel = CompanionViewModel()
+        val viewModel = CompanionViewModel(elapsedRealtimeMs = { System.nanoTime() / 1_000_000L }, ).also(models::add)
         viewModel.toggleSettings()
         viewModel.toggleChat()
         assertTrue(viewModel.uiState.value.showSettings)
@@ -127,7 +130,7 @@ class CompanionViewModelTest {
     fun `an idle performance never fires while a panel is covering the face`() = runTest {
         // faceModeActive is the gate: performing behind Settings is invisible
         // work, and the fix for it must not be to close Settings.
-        val viewModel = CompanionViewModel()
+        val viewModel = CompanionViewModel(elapsedRealtimeMs = { System.nanoTime() / 1_000_000L }, ).also(models::add)
         viewModel.toggleSettings()
         assertFalse(
             "idle must not play while a panel is open",
@@ -141,7 +144,7 @@ class CompanionViewModelTest {
         // Manager, Privacy, Memory, Weather, Background, Nav, Agents, Vault)
         // is a later Box child than AvatarRenderer, so any one left open
         // paints over the face exactly like the chat sheet used to.
-        val viewModel = CompanionViewModel()
+        val viewModel = CompanionViewModel(elapsedRealtimeMs = { System.nanoTime() / 1_000_000L }, ).also(models::add)
         viewModel.openTiles()
         viewModel.toggleSettings()
         viewModel.toggleModelManager()
@@ -173,7 +176,7 @@ class CompanionViewModelTest {
 
     @Test
     fun `setImageServerUrl trims and persists the URL`() = runTest {
-        val viewModel = CompanionViewModel(secureStorage = mockSecureStorage)
+        val viewModel = CompanionViewModel(elapsedRealtimeMs = { System.nanoTime() / 1_000_000L }, secureStorage = mockSecureStorage).also(models::add)
         viewModel.setImageServerUrl("  http://192.168.1.10:9100  ")
         assertEquals("http://192.168.1.10:9100", viewModel.uiState.value.imageServerUrl)
         verify(mockSecureStorage).savePreference("image_server_url", "http://192.168.1.10:9100")
@@ -181,7 +184,7 @@ class CompanionViewModelTest {
 
     @Test
     fun `setMusicServerUrl trims and persists the URL`() = runTest {
-        val viewModel = CompanionViewModel(secureStorage = mockSecureStorage)
+        val viewModel = CompanionViewModel(elapsedRealtimeMs = { System.nanoTime() / 1_000_000L }, secureStorage = mockSecureStorage).also(models::add)
         viewModel.setMusicServerUrl("  http://192.168.1.10:9200/  ")
         assertEquals("http://192.168.1.10:9200", viewModel.uiState.value.musicServerUrl)
         verify(mockSecureStorage).savePreference("music_server_url", "http://192.168.1.10:9200")
@@ -189,7 +192,7 @@ class CompanionViewModelTest {
 
     @Test
     fun `setVideoServerUrl trims trailing slashes and persists the URL`() = runTest {
-        val viewModel = CompanionViewModel(secureStorage = mockSecureStorage)
+        val viewModel = CompanionViewModel(elapsedRealtimeMs = { System.nanoTime() / 1_000_000L }, secureStorage = mockSecureStorage).also(models::add)
         viewModel.setVideoServerUrl("  http://192.168.1.10:9300/  ")
         assertEquals("http://192.168.1.10:9300", viewModel.uiState.value.videoServerUrl)
         verify(mockSecureStorage).savePreference("video_server_url", "http://192.168.1.10:9300")
@@ -197,13 +200,13 @@ class CompanionViewModelTest {
 
     @Test
     fun `preferServerImageGen defaults to false`() = runTest {
-        val viewModel = CompanionViewModel(secureStorage = mockSecureStorage)
+        val viewModel = CompanionViewModel(elapsedRealtimeMs = { System.nanoTime() / 1_000_000L }, secureStorage = mockSecureStorage).also(models::add)
         assertFalse(viewModel.uiState.value.preferServerImageGen)
     }
 
     @Test
     fun `setPreferServerImageGen updates state`() = runTest {
-        val viewModel = CompanionViewModel(secureStorage = mockSecureStorage)
+        val viewModel = CompanionViewModel(elapsedRealtimeMs = { System.nanoTime() / 1_000_000L }, secureStorage = mockSecureStorage).also(models::add)
         viewModel.setPreferServerImageGen(true)
         assertTrue(viewModel.uiState.value.preferServerImageGen)
         verify(mockSecureStorage).saveBooleanPreference("prefer_server_image_gen", true)
@@ -215,7 +218,7 @@ class CompanionViewModelTest {
         // isMicEnabled back on WITHOUT calling startWakeStandby(), leaving the wake
         // phrase dead until the next background/foreground cycle — which reads from
         // the user's side exactly as "the wake word stopped working".
-        val viewModel = CompanionViewModel(secureStorage = mockSecureStorage)
+        val viewModel = CompanionViewModel(elapsedRealtimeMs = { System.nanoTime() / 1_000_000L }, secureStorage = mockSecureStorage).also(models::add)
         viewModel.setWakeWordEnabled(true)
         // Face mode defaults to always-on listening (no wake phrase, no MicOwner),
         // which is the other half of the re-enable path. This regression is about
