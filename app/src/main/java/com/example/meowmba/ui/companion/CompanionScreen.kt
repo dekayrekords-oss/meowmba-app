@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.VideocamOff
 import androidx.compose.material.icons.filled.Sync
+import com.example.meowmba.ui.theme.AlertDialog
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -137,7 +138,7 @@ fun CompanionScreen(
         uiState.appTheme == AppTheme.PROFESSIONAL -> MaterialTheme.colorScheme.background
         uiState.avatarStyle.isLumen -> MaterialTheme.colorScheme.background
         isNeo && !hasUserBg -> Color(0x03000000)
-        else -> Color(0xFF0D1117)
+        else -> MaterialTheme.colorScheme.background
     }
     Box(
         modifier = Modifier
@@ -267,7 +268,7 @@ fun CompanionScreen(
             if (privacyFlags.isNotEmpty()) {
                 Text(
                     text = privacyFlags.joinToString("  ·  "),
-                    color = Color(0xFFF85149).copy(alpha = 0.8f),
+                    color = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace,
@@ -279,7 +280,7 @@ fun CompanionScreen(
 
             if (uiState.isNoting) {
                 Surface(
-                    color = Color(0xFF1F6FEB),
+                    color = MaterialTheme.colorScheme.secondaryContainer,
                     shape = RoundedCornerShape(20.dp),
                     modifier = Modifier
                         .align(Alignment.TopCenter)
@@ -291,7 +292,7 @@ fun CompanionScreen(
                     ) {
                         Text(
                             text = "Local notes · recording",
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 16.sp,
                         )
@@ -302,7 +303,7 @@ fun CompanionScreen(
                             Icon(
                                 imageVector = Icons.Filled.Close,
                                 contentDescription = "Stop taking notes and save a local summary",
-                                tint = Color.White,
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
                             )
                         }
                     }
@@ -311,7 +312,7 @@ fun CompanionScreen(
 
             if (uiState.policeAlert != null) {
                 Surface(
-                    color = Color(0xFFE3B341),
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier
                         .align(Alignment.TopCenter)
@@ -320,7 +321,7 @@ fun CompanionScreen(
                 ) {
                     Text(
                         text = uiState.policeAlert ?: "",
-                        color = Color(0xFF1A1400),
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 16.sp,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
@@ -476,14 +477,14 @@ fun CompanionScreen(
                             modifier = Modifier
                                 .width(160.dp)
                                 .height(16.dp)
-                                .background(Color(0xAA0D1117)),
+                                .background(MaterialTheme.colorScheme.surfaceContainerLow),
                             contentAlignment = Alignment.Center,
                         ) {
                             Box(
                                 modifier = Modifier
                                     .width(36.dp)
                                     .height(4.dp)
-                                    .background(Color(0x66CFF9FF), RoundedCornerShape(2.dp)),
+                                    .background(MaterialTheme.colorScheme.outline, RoundedCornerShape(2.dp)),
                             )
                         }
                         Viewfinder(
@@ -546,13 +547,13 @@ fun CompanionScreen(
                     .align(Alignment.BottomCenter)
                     .padding(16.dp)
                     .fillMaxWidth(),
-                color = Color(0xE61B1F24),
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
                 shape = RoundedCornerShape(16.dp),
             ) {
                 Column(Modifier.padding(16.dp)) {
                     Text(
                         text = uiState.voicePackLabel ?: "Getting voice models…",
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onSurface,
                         fontSize = 14.sp,
                     )
                     val p = uiState.voicePackProgress
@@ -1272,9 +1273,9 @@ fun CompanionScreen(
                 border = androidx.compose.foundation.BorderStroke(
                     1.dp,
                     if (approval.riskLevel == com.example.meowmba.core.agent.tools.RiskLevel.DESTRUCTIVE) {
-                        Color(0xFFF85149)
+                        MaterialTheme.colorScheme.error
                     } else {
-                        Color(0xFFD29922)
+                        MaterialTheme.colorScheme.tertiary
                     }
                 ),
                 modifier = Modifier
@@ -1427,8 +1428,8 @@ private fun AvatarMotionHost(
             onReflexSummary = viewModel::onReflexSummary,
         )
         if (flyError != null) {
-            androidx.compose.material3.Text("3D graphics unavailable: $flyError", color=Color.White,
-                modifier=Modifier.align(Alignment.Center).background(Color(0xff20332f)).padding(16.dp))
+            androidx.compose.material3.Text("3D graphics unavailable: $flyError", color=MaterialTheme.colorScheme.onSurface,
+                modifier=Modifier.align(Alignment.Center).background(MaterialTheme.colorScheme.surfaceContainerHigh).padding(16.dp))
         }
     }
 }

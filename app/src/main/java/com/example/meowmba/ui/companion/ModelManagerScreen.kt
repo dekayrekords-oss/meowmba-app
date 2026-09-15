@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Speed
+import com.example.meowmba.ui.theme.ModalBottomSheet
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -260,7 +261,7 @@ fun ModelManagerScreen(
                 onClick = onClose,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(8.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3))
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
             ) {
                 Text("Close Manager")
             }
@@ -292,7 +293,7 @@ private fun VoiceRecognitionEntryCard(
             Icon(
                 Icons.Default.Mic,
                 contentDescription = null,
-                tint = if (isCloud) Color(0xFFD29922) else MaterialTheme.colorScheme.primary,
+                tint = if (isCloud) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(22.dp),
             )
             Spacer(Modifier.width(14.dp))
@@ -350,7 +351,7 @@ fun LoadedModelCard(
                 )
                 val (label, color) = when (status) {
                     LoadStatus.ACTIVE -> "ACTIVE" to MaterialTheme.colorScheme.primary
-                    LoadStatus.STANDBY -> "STANDBY" to Color(0xFFD29922)
+                    LoadStatus.STANDBY -> "STANDBY" to MaterialTheme.colorScheme.tertiary
                     LoadStatus.NOT_CONFIGURED -> "NOT CONFIGURED" to MaterialTheme.colorScheme.error
                 }
                 Surface(color = color.copy(alpha = 0.15f), shape = RoundedCornerShape(4.dp)) {
@@ -457,13 +458,13 @@ fun CatalogModelItem(
                     modifier = Modifier.weight(1f)
                 )
                 if (option.recommended) {
-                    Badge(Color(0xFF238636), "DEFAULT · AUTO")
+                    Badge(MaterialTheme.colorScheme.primary, "DEFAULT · AUTO")
                 }
                 if (option.requiresHfToken) {
-                    Badge(Color(0xFFD29922), "HF TOKEN")
+                    Badge(MaterialTheme.colorScheme.tertiary, "HF TOKEN")
                 }
                 if (option.runtime == com.example.meowmba.core.agent.LocalModelRuntime.NEEDLE) {
-                    Badge(Color(0xFF8957E5), "NEEDLE")
+                    Badge(MaterialTheme.colorScheme.secondary, "NEEDLE")
                 }
             }
             Text(option.description, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
@@ -735,9 +736,9 @@ private fun MetaGlassesCard(viewModel: CompanionViewModel) {
                         else -> "OFF"
                     },
                     color = when {
-                        !hasSdk -> Color(0xFF6E7681)
+                        !hasSdk -> MaterialTheme.colorScheme.onSurfaceVariant
                         streaming || connected -> MaterialTheme.colorScheme.primary
-                        else -> Color(0xFF6E7681)
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
                     },
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
@@ -765,7 +766,7 @@ private fun MetaGlassesCard(viewModel: CompanionViewModel) {
                     "Glasses camera support is not included in this installation. " +
                         "It requires an app update, not an API key in Settings. " +
                         "You can still select the paired Bluetooth microphone on the Voice Recognition page; availability depends on your phone and connection.",
-                    color = Color(0xFFD29922),
+                    color = MaterialTheme.colorScheme.tertiary,
                     fontSize = 11.sp,
                 )
             } else {

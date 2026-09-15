@@ -1,0 +1,59 @@
+{
+  "versionCode": 133,
+  "versionName": "1.3.82",
+  "tests": {
+    "tests": 2533,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "nativeUiChecks": {
+    "themes": [
+      "dark",
+      "light"
+    ],
+    "landscape": true,
+    "largeText": 1.6,
+    "requiredSelection": true,
+    "automaticThenManualFit": true,
+    "fullScreenPreviewDismissal": true,
+    "savedInstanceRestoration": true
+  },
+  "phoneUiCheck": {
+    "status": "pending",
+    "reason": "Owner phone is locked; no security bypass or data clearing."
+  },
+  "releaseBuild": "passed",
+  "playStore": {
+    "latestSubmittedCode": 130,
+    "uploaded133": false
+  },
+  "releaseLintVital": "passed",
+  "sourceManifestVerifiedOn": [
+    "Mac worktree",
+    "Meow debug build checkout",
+    "Meow release build checkout"
+  ],
+  "installation": {
+    "device": "RFCY61NJEVM",
+    "package": "com.meow.meowmba",
+    "versionCode": 133,
+    "versionName": "1.3.82",
+    "lastUpdateTime": "2026-09-14 23:02:35 America/Phoenix",
+    "method": "USB adb install -r",
+    "result": "Success",
+    "clearedData": false,
+    "coldLaunchMs": 290,
+    "coldLaunchResult": "ok",
+    "keyguardShowing": true,
+    "debugPackageInstalledCode": 132
+  },
+  "signing": {
+    "releaseCertificateSha256": "2103e4b14acf74a462218b25f2a04419856c5c2648d13db14f6ff8c4fa247fc0",
+    "debugCertificateSha256": "b7850d5fb645df9f5d12525db1b10e457b0ee7f3aa50bbf4294ff31dae3379ff"
+  },
+  "artifacts": {
+    "debug": "ee12f33ebcc213b1dd85e35cf3d83dd34516f630dbe00579c85b5652c510ffc1",
+    "release": "76a1c6377702004ea32cb014761c754cedafe944b1d2f60602b716c54e7fc073"
+  }
+}

@@ -4,6 +4,7 @@
 package com.example.meowmba.ui.theme
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -151,3 +152,59 @@ fun Surface(
     interactionSource: MutableInteractionSource? = null, content: @Composable () -> Unit,
 ) = androidx.compose.material3.Surface(onClick, modifier, enabled, shape, color, contentColor,
     tonalElevation, shadowElevation, border, interactionSource, content)
+
+/** Menus and modal sub-pages use the same outlined surfaces as the launcher cards. */
+@Composable
+fun DropdownMenu(
+    expanded: Boolean, onDismissRequest: () -> Unit, modifier: Modifier = Modifier,
+    offset: androidx.compose.ui.unit.DpOffset = androidx.compose.ui.unit.DpOffset.Zero,
+    scrollState: androidx.compose.foundation.ScrollState = androidx.compose.foundation.rememberScrollState(),
+    properties: androidx.compose.ui.window.PopupProperties = androidx.compose.ui.window.PopupProperties(focusable = true),
+    content: @Composable ColumnScope.() -> Unit,
+) = androidx.compose.material3.DropdownMenu(
+    expanded = expanded, onDismissRequest = onDismissRequest, modifier = modifier,
+    offset = offset, scrollState = scrollState, properties = properties,
+    shape = MaterialTheme.shapes.medium, containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+    tonalElevation = 0.dp, border = cartoonBorder(), content = content,
+)
+
+@Composable
+fun AlertDialog(
+    onDismissRequest: () -> Unit, confirmButton: @Composable () -> Unit,
+    modifier: Modifier = Modifier, dismissButton: (@Composable () -> Unit)? = null,
+    icon: (@Composable () -> Unit)? = null, title: (@Composable () -> Unit)? = null,
+    text: (@Composable () -> Unit)? = null, shape: Shape = MaterialTheme.shapes.extraLarge,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainerLow,
+    iconContentColor: Color = MaterialTheme.colorScheme.secondary,
+    titleContentColor: Color = MaterialTheme.colorScheme.onSurface,
+    textContentColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    tonalElevation: Dp = 0.dp,
+    properties: androidx.compose.ui.window.DialogProperties = androidx.compose.ui.window.DialogProperties(),
+) = androidx.compose.material3.AlertDialog(
+    onDismissRequest = onDismissRequest, confirmButton = confirmButton,
+    modifier = modifier.cartoonOutline(shape),
+    dismissButton = dismissButton, icon = icon, title = title, text = text,
+    shape = shape, containerColor = containerColor, iconContentColor = iconContentColor,
+    titleContentColor = titleContentColor, textContentColor = textContentColor,
+    tonalElevation = tonalElevation, properties = properties,
+)
+
+@Composable
+private fun Modifier.cartoonOutline(shape: Shape): Modifier =
+    this.border(cartoonBorder(), shape)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ModalBottomSheet(
+    onDismissRequest: () -> Unit, modifier: Modifier = Modifier,
+    sheetState: SheetState = rememberModalBottomSheetState(),
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainerLow,
+    contentColor: Color = contentColorFor(containerColor),
+    content: @Composable ColumnScope.() -> Unit,
+) = androidx.compose.material3.ModalBottomSheet(
+    onDismissRequest = onDismissRequest,
+    modifier = modifier.cartoonOutline(MaterialTheme.shapes.extraLarge),
+    sheetState = sheetState, shape = MaterialTheme.shapes.extraLarge,
+    containerColor = containerColor, contentColor = contentColor,
+    tonalElevation = 0.dp, content = content,
+)

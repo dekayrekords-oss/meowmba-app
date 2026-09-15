@@ -177,6 +177,8 @@ fun AvatarRenderer(
     onHabitatAction: (HabitatAction) -> Unit = {},
     onFly3DFrame: ((Fly3DFrame) -> Unit)? = null,
     paused: Boolean = false,
+    /** Setup-only settled anatomy. Used with paused=true; does not alter live morphs or privacy. */
+    restingPreview: Boolean = false,
     faceGazeX: Float? = null,
     faceGazeY: Float? = null,
     /**
@@ -1022,7 +1024,8 @@ fun AvatarRenderer(
                 onReflexSummary?.invoke(lumenReflexBridge.summaryLabel())
                 modulated
             } else composedLumenInput
-            val frame = lumenRig.step(tSec, gatedLumenInput)
+            val frame = if (paused && restingPreview) restingAvatarFrame(state.avatarStyle, state.avatarAnimal)
+                else lumenRig.step(tSec, gatedLumenInput)
             lumenLastFrame[0] = frame
             if (generatedForm != null) {
                 val placement = generatedAvatarPlacement(w, h, frame, avatarScale, flyPose)

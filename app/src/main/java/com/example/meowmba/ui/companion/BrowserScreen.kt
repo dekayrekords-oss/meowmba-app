@@ -171,7 +171,7 @@ private fun LiveCodePanel(kind: String, code: String) {
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 160.dp, max = 280.dp)
-            .background(Color(0xFF010409))
+            .background(MaterialTheme.colorScheme.background)
             .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
         Text(
@@ -183,7 +183,7 @@ private fun LiveCodePanel(kind: String, code: String) {
         SelectionContainer {
             Text(
                 text = body,
-                color = Color(0xFFC9D1D9),
+                color = MaterialTheme.colorScheme.onSurface,
                 fontSize = 11.sp,
                 fontFamily = FontFamily.Monospace,
                 lineHeight = 14.sp,

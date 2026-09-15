@@ -67,7 +67,7 @@ fun RobotScreen(
                 .verticalScroll(rememberScrollState())
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Android, contentDescription = null, tint = Color(0xFF4DB6AC), modifier = Modifier.size(30.dp))
+                Icon(Icons.Default.Android, contentDescription = null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(30.dp))
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
                     "Robot base",

@@ -72,7 +72,7 @@ private fun ToolRow(tool: RoutineUi, onToggle: (Boolean) -> Unit) {
             modifier = Modifier.padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Default.Build, contentDescription = null, tint = Color(0xFFFFD600), modifier = Modifier.size(28.dp))
+            Icon(Icons.Default.Build, contentDescription = null, tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(28.dp))
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(tool.name, color = MaterialTheme.colorScheme.onSurface, fontSize = 16.sp)

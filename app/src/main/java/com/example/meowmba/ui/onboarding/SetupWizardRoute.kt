@@ -57,6 +57,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.runtime.rememberCoroutineScope
 import com.example.meowmba.ui.companion.AvatarStyle
+import com.example.meowmba.ui.companion.AvatarAnimal
+import com.example.meowmba.ui.companion.autoAvatarScale
+import androidx.compose.foundation.layout.BoxWithConstraints
 
 /**
  * First-run and Settings → Start setup walkthrough.
@@ -64,12 +67,14 @@ import com.example.meowmba.ui.companion.AvatarStyle
  * Shown by [com.example.meowmba.MainActivity] when
  * [SetupWiring.needsOnboarding] is true, or on demand from Settings.
  *
- * One idea per screen. Large type. Kid-friendly words. Computer (phone) first,
- * then OpenCode in the in-app Terminal, then an AI key (with a clear stop),
- * then optional avatar + background. Neural / AgentBrain / connectors stay hidden.
+ * Feature tour, explicit avatar choice and automatic display fitting, followed
+ * by optional Computer, permissions, providers, GitHub and verified pairing.
+ * Completing setup is not a claim that an AI or external service is connected.
  */
 private enum class FirstRunPage {
     Hi,
+    Features,
+    AvatarSize,
     GetTermux,
     CopyCommands,
     IDidThat,
@@ -80,7 +85,6 @@ private enum class FirstRunPage {
     Avatar,
     Background,
     OptionalServer,
-    ServerFields,
     Done,
 }
 
@@ -91,9 +95,13 @@ fun SetupWizardRoute(
     onEnablePermissions: () -> Unit = {},
     onOpenChat: () -> Unit = onFinished,
     onOpenTerminal: () -> Unit = onFinished,
+    onOpenConnectionsSetup: () -> Unit = onFinished,
+    onOpenNeuralSetup: () -> Unit = onFinished,
     /** Connect Computer PTY and auto-install/launch OpenCode (may peek Terminal). */
     onStartOpenCode: () -> Unit = {},
     onAvatarPicked: (AvatarStyle) -> Unit = {},
+    onAnimalPicked: (AvatarAnimal) -> Unit = {},
+    onAvatarSized: (Float) -> Unit = {},
     onBackgroundPicked: (BackgroundSelection) -> Unit = {},
     /** Persist GitHub connector token the same way Connections does. */
     onGitHubTokenSaved: (String) -> Unit = {},
@@ -103,49 +111,49 @@ fun SetupWizardRoute(
     val current = remember(page) {
         runCatching { FirstRunPage.valueOf(page) }.getOrDefault(FirstRunPage.Hi)
     }
+    var history by rememberSaveable { mutableStateOf(arrayListOf<String>()) }
     var copied by rememberSaveable { mutableStateOf(false) }
     var termuxOk by remember { mutableStateOf(termuxInstalled(context)) }
     var openCodeStarted by rememberSaveable { mutableStateOf(false) }
     val storage = remember { SecureStorageManager(context) }
-    var host by rememberSaveable { mutableStateOf("") }
-    var user by rememberSaveable { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var apiKey by remember { mutableStateOf(storage.getApiKey("opencode").orEmpty()) }
     var githubToken by remember { mutableStateOf(storage.getApiKey(GitHubProjectSetup.STORAGE_KEY).orEmpty()) }
     var githubRepoName by rememberSaveable { mutableStateOf("meowmba-projects") }
     var githubLinkUrl by rememberSaveable { mutableStateOf("") }
     var githubStatus by rememberSaveable { mutableStateOf("") }
     var githubBusy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    var avatarChoice by rememberSaveable { mutableStateOf(AvatarStyle.DEFAULT.key) }
+    var avatarChoice by rememberSaveable { mutableStateOf(AvatarStyle.fromKey(storage.getPreference("avatar_style")).key) }
+    var animalChoice by rememberSaveable { mutableStateOf(storage.getPreference("avatar_animal") ?: AvatarAnimal.NONE.key) }
+    var avatarConfirmed by rememberSaveable { mutableStateOf(false) }
+    var sizeConfirmed by rememberSaveable { mutableStateOf(false) }
+    var manualSize by rememberSaveable { mutableStateOf<Float?>(null) }
+    var adjustingSize by rememberSaveable { mutableStateOf(false) }
+    val selectedStyle = AvatarStyle.fromKey(avatarChoice)
+    val selectedAnimal = AvatarAnimal.entries.firstOrNull { it.key == animalChoice } ?: AvatarAnimal.NONE
     var backgroundChoice by rememberSaveable {
-        mutableStateOf(BackgroundAnimation.AURORA.id)
+        mutableStateOf(storage.getPreference("background_value").orEmpty())
     }
 
     fun go(next: FirstRunPage) {
-        page = next.name
+        if (page != next.name) {
+            history = ArrayList(history + page)
+            page = next.name
+        }
     }
 
     fun finish() {
-        SetupWiring.markOnboardingDone(context)
-        onFinished()
+        // Even the quick path includes an explicit avatar choice and size review.
+        go(when {
+            !avatarConfirmed -> FirstRunPage.Avatar
+            !sizeConfirmed -> FirstRunPage.AvatarSize
+            else -> FirstRunPage.Done
+        })
     }
 
     fun back() {
-        when (current) {
-            FirstRunPage.Hi -> finish()
-            FirstRunPage.GetTermux -> go(FirstRunPage.Hi)
-            FirstRunPage.CopyCommands -> go(FirstRunPage.GetTermux)
-            FirstRunPage.IDidThat -> go(FirstRunPage.CopyCommands)
-            FirstRunPage.OpenCode -> go(FirstRunPage.IDidThat)
-            FirstRunPage.Mic -> go(FirstRunPage.OpenCode)
-            FirstRunPage.ApiKey -> go(FirstRunPage.Mic)
-            FirstRunPage.GitHub -> go(FirstRunPage.ApiKey)
-            FirstRunPage.Avatar -> go(FirstRunPage.GitHub)
-            FirstRunPage.Background -> go(FirstRunPage.Avatar)
-            FirstRunPage.OptionalServer -> go(FirstRunPage.Background)
-            FirstRunPage.ServerFields -> go(FirstRunPage.OptionalServer)
-            FirstRunPage.Done -> go(FirstRunPage.ApiKey)
+        history.lastOrNull()?.let { previous ->
+            page = previous
+            history = ArrayList(history.dropLast(1))
         }
     }
 
@@ -155,6 +163,11 @@ fun SetupWizardRoute(
         modifier = modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background,
     ) {
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+        val screenWidth = maxWidth.value
+        val screenHeight = maxHeight.value
+        val fittedSize = autoAvatarScale(screenWidth, screenHeight, selectedStyle, selectedAnimal)
+        val shownSize = manualSize ?: fittedSize
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -171,7 +184,10 @@ fun SetupWizardRoute(
                     TextButton(onClick = { back() }, enabled = current != FirstRunPage.Hi) {
                         Text("Back")
                     }
-                    TextButton(onClick = { finish() }) { Text("Skip") }
+                    if (current == FirstRunPage.Avatar || current == FirstRunPage.AvatarSize) {
+                        Text("Avatar setup", style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else TextButton(onClick = { finish() }) { Text("Finish later") }
                 }
             } else {
                 Spacer(Modifier.height(12.dp))
@@ -185,13 +201,29 @@ fun SetupWizardRoute(
             ) {
                 when (current) {
                     FirstRunPage.Hi -> KidPage(
-                        title = "Hi.",
-                        body = "This is your helper. It lives on this phone.",
+                        title = "Meet your Meow.",
+                        body = "Your companion, creative space and personal assistant. Let’s make it yours.",
                         primary = "Let’s go",
-                        onPrimary = { go(FirstRunPage.GetTermux) },
+                        onPrimary = { go(FirstRunPage.Features) },
+                    )
+                    FirstRunPage.Features -> SetupFeaturesPage { go(FirstRunPage.Avatar) }
+                    FirstRunPage.AvatarSize -> AvatarFitPage(
+                        style = selectedStyle, animal = selectedAnimal,
+                        scale = shownSize, automaticScale = fittedSize,
+                        screenWidth = screenWidth, screenHeight = screenHeight,
+                        adjusting = adjustingSize, onAdjust = { adjustingSize = true },
+                        onScale = { manualSize = it },
+                        onAuto = { manualSize = null; adjustingSize = false },
+                        onNext = {
+                            storage.savePreference("avatar_scale", shownSize.toString())
+                            onAvatarSized(shownSize)
+                            sizeConfirmed = true
+                            go(FirstRunPage.Background)
+                        },
                     )
                     FirstRunPage.GetTermux -> GetTermuxPage(
                         termuxOk = termuxOk,
+                        onLater = { go(FirstRunPage.Mic) },
                         onRefresh = { termuxOk = termuxInstalled(context) },
                         onGetFdroid = { openUrl(context, TermuxComputerLinks.TERMUX_FDROID) },
                         onGetGithub = { openUrl(context, TermuxComputerLinks.TERMUX_GITHUB_RELEASES) },
@@ -282,20 +314,10 @@ fun SetupWizardRoute(
                         secondary = "Not now",
                         onSecondary = { go(FirstRunPage.ApiKey) },
                     )
-                    FirstRunPage.ApiKey -> ApiKeyPage(
-                        apiKey = apiKey,
-                        onApiKey = { apiKey = it },
-                        onGetKey = { openUrl(context, TermuxComputerLinks.OPENCODE_ZEN_KEY_URL) },
-                        onSaveAndDone = {
-                            saveOpenCodeKey(storage, apiKey)
-                            go(FirstRunPage.Done)
-                        },
-                        onSaveAndKeepGoing = {
-                            saveOpenCodeKey(storage, apiKey)
-                            go(FirstRunPage.GitHub)
-                        },
-                        onSkipDone = { go(FirstRunPage.Done) },
-                        onSkipKeepGoing = { go(FirstRunPage.GitHub) },
+                    FirstRunPage.ApiKey -> SetupProvidersPage(
+                        storage = storage,
+                        onNext = { go(FirstRunPage.GitHub) },
+                        onLater = { go(FirstRunPage.Done) },
                     )
                     FirstRunPage.GitHub -> GitHubPage(
                         token = githubToken,
@@ -325,7 +347,7 @@ fun SetupWizardRoute(
                                         storage.getApiKey(GitHubProjectSetup.STORAGE_KEY).orEmpty()
                                     }
                                     if (saved.isNotBlank()) onGitHubTokenSaved(saved)
-                                    go(FirstRunPage.Avatar)
+                                    go(FirstRunPage.OptionalServer)
                                 }
                             }
                         },
@@ -336,21 +358,31 @@ fun SetupWizardRoute(
                             }
                             val result = GitHubProjectSetup.saveLinkedRepo(storage, githubLinkUrl)
                             githubStatus = result.message
-                            if (result.ok) go(FirstRunPage.Avatar)
+                            if (result.ok) go(FirstRunPage.OptionalServer)
                         },
                         onSkip = {
                             GitHubProjectSetup.markSkipped(storage)
-                            go(FirstRunPage.Avatar)
+                            go(FirstRunPage.OptionalServer)
                         },
                     )
-                    FirstRunPage.Avatar -> AvatarPickPage(
-                        selectedKey = avatarChoice,
-                        onSelect = { style ->
+                    FirstRunPage.Avatar -> SetupAvatarPage(
+                        style = selectedStyle, animal = selectedAnimal,
+                        confirmed = avatarConfirmed,
+                        onStyle = { style ->
                             avatarChoice = style.key
+                            avatarConfirmed = true; sizeConfirmed = false; manualSize = null; adjustingSize = false
+                            storage.savePreference("generated_avatar_id", "")
                             storage.savePreference("avatar_style", style.key)
                             onAvatarPicked(style)
                         },
-                        onNext = { go(FirstRunPage.Background) },
+                        onAnimal = { animal ->
+                            avatarChoice = AvatarStyle.LUMEN.key
+                            animalChoice = animal.key
+                            avatarConfirmed = true; sizeConfirmed = false; manualSize = null; adjustingSize = false
+                            storage.saveAvatarForm(animal.key)
+                            onAnimalPicked(animal)
+                        },
+                        onNext = { go(FirstRunPage.AvatarSize) },
                     )
                     FirstRunPage.Background -> BackgroundPickPage(
                         selectedId = backgroundChoice,
@@ -372,41 +404,39 @@ fun SetupWizardRoute(
                             storage.savePreference("background_value", "")
                             onBackgroundPicked(selection)
                         },
-                        onNext = { go(FirstRunPage.OptionalServer) },
+                        onNext = { go(FirstRunPage.GetTermux) },
                     )
                     FirstRunPage.OptionalServer -> KidPage(
-                        title = "Have a computer on the internet?",
-                        body = "You do not need one. This phone is enough.",
-                        primary = "No, I’m done",
+                        title = "Connect a computer or neural server",
+                        body = "Optional. Pair a desktop for remote tools, or connect a full fly-graph server for the avatar. The setup screen verifies the connection before it is used.",
+                        primary = "Finish setup",
                         onPrimary = { go(FirstRunPage.Done) },
-                        secondary = "Yes",
-                        onSecondary = { go(FirstRunPage.ServerFields) },
-                    )
-                    FirstRunPage.ServerFields -> ServerFieldsPage(
-                        host = host,
-                        user = user,
-                        password = password,
-                        onHost = { host = it },
-                        onUser = { user = it },
-                        onPassword = { password = it },
-                        onSave = {
-                            if (host.isNotBlank()) storage.savePreference("onboard_remote_host", host.trim())
-                            if (user.isNotBlank()) storage.savePreference("onboard_remote_user", user.trim())
-                            if (password.isNotBlank()) storage.saveApiKey("onboard_remote", password)
-                            go(FirstRunPage.Done)
+                        secondary = "Pair a computer",
+                        onSecondary = {
+                            SetupWiring.markOnboardingDone(context)
+                            onOpenConnectionsSetup()
                         },
-                        onLater = { go(FirstRunPage.Done) },
+                        tertiary = "Pair a neural server",
+                        onTertiary = {
+                            SetupWiring.markOnboardingDone(context)
+                            onOpenNeuralSetup()
+                        },
                     )
                     FirstRunPage.Done -> KidPage(
-                        title = "You’re ready.",
-                        body = "Chat with your helper, or open Terminal.",
-                        primary = "Chat",
+                        title = "Make yourself at home.",
+                        body = "Swipe down for the menu, right for chat, up for your apps. AI, Computer and connected services work after their setup and connection checks. You can continue setup in Settings anytime.",
+                        primary = "Meet my avatar",
                         onPrimary = {
+                            SetupWiring.markOnboardingDone(context)
+                            onFinished()
+                        },
+                        secondary = "Chat",
+                        onSecondary = {
                             SetupWiring.markOnboardingDone(context)
                             onOpenChat()
                         },
-                        secondary = "Terminal",
-                        onSecondary = {
+                        tertiary = "Terminal",
+                        onTertiary = {
                             SetupWiring.markOnboardingDone(context)
                             onOpenTerminal()
                         },
@@ -415,17 +445,7 @@ fun SetupWizardRoute(
             }
         }
     }
-}
-
-private fun saveOpenCodeKey(storage: SecureStorageManager, raw: String) {
-    val key = raw.trim()
-    if (key.isEmpty()) return
-    // Same store Settings / CloudModelSettings use for OpenCode Zen.
-    storage.saveApiKey("opencode", key)
-    storage.saveModelName("opencode", "big-pickle")
-    storage.savePreference("brain_provider", "bigpickle")
-    storage.savePreference("default_brain", "bigpickle")
-    storage.savePreference("selected_model", "Omniroute (Local router)")
+    }
 }
 
 @Composable
@@ -474,7 +494,7 @@ private fun OpenCodePage(
             KidPrimaryButton(TermuxComputerLinks.BUTTON_OPEN_TERMUX, onOpenTermux)
             OutlinedButton(
                 onClick = onGetNetBird,
-                modifier = Modifier.fillMaxWidth().height(52.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
             ) { Text(TermuxComputerLinks.BUTTON_NETBIRD, style = MaterialTheme.typography.titleMedium) }
             TextButton(onClick = onShowApps) { Text(TermuxComputerLinks.BUTTON_SHOW_APPS) }
         }
@@ -557,7 +577,7 @@ private fun GitHubPage(
         OutlinedButton(
             onClick = onLink,
             enabled = !busy,
-            modifier = Modifier.fillMaxWidth().height(52.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
         ) { Text("Link this repo", style = MaterialTheme.typography.titleMedium) }
         TextButton(onClick = onSkip, enabled = !busy) { Text("Skip for now") }
         if (status.isNotBlank()) {
@@ -568,120 +588,6 @@ private fun GitHubPage(
                 textAlign = TextAlign.Center,
             )
         }
-    }
-}
-
-@Composable
-private fun ApiKeyPage(
-    apiKey: String,
-    onApiKey: (String) -> Unit,
-    onGetKey: () -> Unit,
-    onSaveAndDone: () -> Unit,
-    onSaveAndKeepGoing: () -> Unit,
-    onSkipDone: () -> Unit,
-    onSkipKeepGoing: () -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState()),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Text(
-            "AI needs a key",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.SemiBold,
-            textAlign = TextAlign.Center,
-        )
-        Text(
-            "Chat uses an OpenCode Zen key (same place as Settings). Tap Get a key, copy it, paste here.",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-        KidPrimaryButton("Get a free key", onGetKey)
-        OutlinedTextField(
-            value = apiKey,
-            onValueChange = onApiKey,
-            label = { Text("Paste your key") },
-            singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth(),
-        )
-        KidPrimaryButton(
-            if (apiKey.isBlank()) "Start using Meow" else "Save key · Start using Meow",
-            onClick = if (apiKey.isBlank()) onSkipDone else onSaveAndDone,
-        )
-        OutlinedButton(
-            onClick = if (apiKey.isBlank()) onSkipKeepGoing else onSaveAndKeepGoing,
-            modifier = Modifier.fillMaxWidth().height(52.dp),
-        ) {
-            Text(
-                if (apiKey.isBlank()) "Keep going" else "Save key · Keep going",
-                style = MaterialTheme.typography.titleMedium,
-            )
-        }
-        Text(
-            "Done stops here. Keep going can add GitHub, then a face and a background.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-    }
-}
-
-@Composable
-private fun AvatarPickPage(
-    selectedKey: String,
-    onSelect: (AvatarStyle) -> Unit,
-    onNext: () -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState()),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Text(
-            "Pick a face",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.SemiBold,
-            textAlign = TextAlign.Center,
-        )
-        Text(
-            "Lumen is the default. You can change this later.",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-        AvatarStyle.entries.forEach { style ->
-            val selected = style.key == selectedKey
-            OutlinedButton(
-                onClick = { onSelect(style) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp)
-                    .then(
-                        if (selected) {
-                            Modifier.border(
-                                2.dp,
-                                MaterialTheme.colorScheme.primary,
-                                RoundedCornerShape(12.dp),
-                            )
-                        } else {
-                            Modifier
-                        },
-                    ),
-            ) {
-                Text(
-                    if (selected) "✓ ${style.label}" else style.label,
-                    style = MaterialTheme.typography.titleMedium,
-                )
-            }
-        }
-        KidPrimaryButton("Next", onNext)
     }
 }
 
@@ -722,7 +628,7 @@ private fun BackgroundPickPage(
         )
         OutlinedButton(
             onClick = onNone,
-            modifier = Modifier.fillMaxWidth().height(52.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
         ) {
             Text(
                 if (selectedId.isEmpty()) "✓ None" else "None",
@@ -733,7 +639,7 @@ private fun BackgroundPickPage(
             val selected = anim.id == selectedId
             OutlinedButton(
                 onClick = { onSelect(anim) },
-                modifier = Modifier.fillMaxWidth().height(52.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
             ) {
                 Text(
                     if (selected) "✓ ${anim.label}" else anim.label,
@@ -748,6 +654,7 @@ private fun BackgroundPickPage(
 @Composable
 private fun GetTermuxPage(
     termuxOk: Boolean,
+    onLater: () -> Unit,
     onRefresh: () -> Unit,
     onGetFdroid: () -> Unit,
     onGetGithub: () -> Unit,
@@ -782,11 +689,11 @@ private fun GetTermuxPage(
         KidPrimaryButton(TermuxComputerLinks.BUTTON_GET_TERMUX, onGetFdroid)
         OutlinedButton(
             onClick = onGetGithub,
-            modifier = Modifier.fillMaxWidth().height(52.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
         ) { Text(TermuxComputerLinks.BUTTON_GITHUB_DOWNLOAD, style = MaterialTheme.typography.titleMedium) }
         OutlinedButton(
             onClick = onGetNetBird,
-            modifier = Modifier.fillMaxWidth().height(52.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
         ) { Text(TermuxComputerLinks.BUTTON_NETBIRD, style = MaterialTheme.typography.titleMedium) }
         KidPrimaryButton(TermuxComputerLinks.BUTTON_OPEN_TERMUX) {
             onRefresh()
@@ -794,8 +701,9 @@ private fun GetTermuxPage(
         }
         OutlinedButton(
             onClick = onInstalled,
-            modifier = Modifier.fillMaxWidth().height(52.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
         ) { Text(TermuxComputerLinks.BUTTON_I_INSTALLED, style = MaterialTheme.typography.titleMedium) }
+        TextButton(onClick = onLater) { Text("Set up Computer later") }
         TextButton(onClick = onShowApps) { Text(TermuxComputerLinks.BUTTON_SHOW_APPS) }
         TextButton(onClick = {
             onRefresh()
@@ -843,63 +751,6 @@ private fun CopyCommandsPage(
         KidPrimaryButton(TermuxComputerLinks.BUTTON_OPEN_TERMUX, onOpenTermux)
         KidPrimaryButton(if (copied) "Copied!" else "Copy", onCopy)
         TextButton(onClick = onNext) { Text("Next") }
-    }
-}
-
-@Composable
-private fun ServerFieldsPage(
-    host: String,
-    user: String,
-    password: String,
-    onHost: (String) -> Unit,
-    onUser: (String) -> Unit,
-    onPassword: (String) -> Unit,
-    onSave: () -> Unit,
-    onLater: () -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState()),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Text(
-            "Add that computer later if you want.",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.SemiBold,
-            textAlign = TextAlign.Center,
-        )
-        Text(
-            "Name, user, and secret. Or skip.",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-        OutlinedTextField(
-            value = host,
-            onValueChange = onHost,
-            label = { Text("Computer name") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        OutlinedTextField(
-            value = user,
-            onValueChange = onUser,
-            label = { Text("Your name on it") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        OutlinedTextField(
-            value = password,
-            onValueChange = onPassword,
-            label = { Text("Secret word") },
-            singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth(),
-        )
-        KidPrimaryButton("Save", onSave)
-        TextButton(onClick = onLater) { Text("Add later") }
     }
 }
 

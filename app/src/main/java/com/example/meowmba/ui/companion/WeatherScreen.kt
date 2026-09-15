@@ -96,7 +96,7 @@ fun WeatherScreen(
                     .fillMaxWidth()
                     .height(180.dp)
                     .clip(RoundedCornerShape(20.dp))
-                    .background(Color(0xFF0B0F14))
+                    .background(MaterialTheme.colorScheme.surfaceContainerLowest)
                     .clickable { onCycleCondition() },
             ) {
                 WeatherScene(
@@ -106,7 +106,8 @@ fun WeatherScreen(
                     moonPhase = moon,
                     modifier = Modifier.fillMaxSize(),
                 )
-                Column(modifier = Modifier.align(Alignment.CenterStart).padding(20.dp)) {
+                Column(modifier = Modifier.align(Alignment.CenterStart).padding(12.dp)
+                    .background(MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = .94f), MaterialTheme.shapes.medium).padding(10.dp)) {
                     Row(verticalAlignment = Alignment.Top) {
                         Text(
                             "${shown.temperatureF}",
@@ -122,14 +123,15 @@ fun WeatherScreen(
                         fontSize = 14.sp,
                     )
                     shown.place?.let {
-                        Text(it, color = Color(0xFFB9C4CE), fontSize = 12.sp)
+                        Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                     }
                 }
                 Text(
                     text = "tap to preview conditions",
-                    color = Color(0x99FFFFFF),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 10.sp,
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(10.dp),
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp)
+                        .background(MaterialTheme.colorScheme.surfaceContainerLow, MaterialTheme.shapes.small).padding(6.dp),
                 )
             }
 
@@ -207,7 +209,7 @@ fun WeatherScreen(
                     onCheckedChange = onAmbientChange,
                     colors = SwitchDefaults.colors(
                         checkedThumbColor = MaterialTheme.colorScheme.onSurface,
-                        checkedTrackColor = Color(0xFF2F81F7),
+                        checkedTrackColor = MaterialTheme.colorScheme.primary,
                     ),
                 )
             }
@@ -216,7 +218,7 @@ fun WeatherScreen(
             SectionHeader("Preview")
             Text(
                 "Look at this weather at another hour. Auto follows the real clock.",
-                color = Color(0xFF6E7681),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 11.sp,
             )
             Spacer(Modifier.height(8.dp))
@@ -263,7 +265,7 @@ private fun TimeChip(label: String, selected: Boolean, onClick: () -> Unit) {
         fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
         modifier = Modifier
             .clip(RoundedCornerShape(12.dp))
-            .background(if (selected) Color(0xFF1F6FEB) else MaterialTheme.colorScheme.surface)
+            .background(if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface)
             .border(
                 width = 1.dp,
                 color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,

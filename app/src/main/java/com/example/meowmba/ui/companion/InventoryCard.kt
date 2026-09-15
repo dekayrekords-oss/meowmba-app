@@ -1,5 +1,7 @@
 package com.example.meowmba.ui.companion
 
+import androidx.compose.material3.MaterialTheme
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -64,11 +66,11 @@ fun InventoryCard(
             .fillMaxWidth()
             .background(
                 brush = Brush.verticalGradient(
-                    listOf(Color(0xF21B2430), Color(0xE60D1117)),
+                    listOf(MaterialTheme.colorScheme.surfaceContainerHigh, MaterialTheme.colorScheme.surfaceContainerLow),
                 ),
                 shape = RoundedCornerShape(20.dp),
             )
-            .border(1.dp, Color(0x3358A6FF), RoundedCornerShape(20.dp))
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(20.dp))
             .padding(16.dp)
     ) {
         Column {
@@ -76,7 +78,7 @@ fun InventoryCard(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = item.name,
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onSurface,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 2,
@@ -84,13 +86,13 @@ fun InventoryCard(
                     )
                     Text(
                         text = subtitle(item),
-                        color = Color(0xFF8B949E),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 12.sp,
                     )
                 }
                 StatusPill(item)
                 IconButton(onClick = onDismiss) {
-                    Icon(Icons.Default.Close, "Dismiss", tint = Color(0xFF8B949E))
+                    Icon(Icons.Default.Close, "Dismiss", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
 
@@ -98,7 +100,7 @@ fun InventoryCard(
                 Spacer(Modifier.height(6.dp))
                 Text(
                     text = item.description,
-                    color = Color(0xFFB9C4CE),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 12.sp,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
@@ -112,7 +114,7 @@ fun InventoryCard(
             )
             if (money.isNotEmpty()) {
                 Spacer(Modifier.height(8.dp))
-                Text(money.joinToString("  ·  "), color = Color(0xFF3FB950), fontSize = 13.sp)
+                Text(money.joinToString("  ·  "), color = MaterialTheme.colorScheme.primary, fontSize = 13.sp)
             }
 
             when (editing) {
@@ -155,18 +157,18 @@ fun InventoryCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         "Delete ${item.name} from the inventory?",
-                        color = Color(0xFFF85149),
+                        color = MaterialTheme.colorScheme.error,
                         fontSize = 13.sp,
                         modifier = Modifier.weight(1f),
                     )
                     TextButton(onClick = { confirmingDelete = false }) {
-                        Text("Keep", color = Color(0xFF8B949E), fontSize = 13.sp)
+                        Text("Keep", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
                     }
                     TextButton(onClick = {
                         confirmingDelete = false
                         onAction("delete", mapOf("id" to item.id))
                     }) {
-                        Text("Delete", color = Color(0xFFF85149), fontSize = 13.sp)
+                        Text("Delete", color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
                     }
                 }
             } else {
@@ -212,9 +214,9 @@ private fun subtitle(item: InventoryItem): String = buildList {
 @Composable
 private fun StatusPill(item: InventoryItem) {
     val (label, colour) = when {
-        item.status == "sold" -> "SOLD" to Color(0xFF8B949E)
-        item.forSale || item.status == "listed" -> "FOR SALE" to Color(0xFF3FB950)
-        else -> "OWNED" to Color(0xFF58A6FF)
+        item.status == "sold" -> "SOLD" to MaterialTheme.colorScheme.onSurfaceVariant
+        item.forSale || item.status == "listed" -> "FOR SALE" to MaterialTheme.colorScheme.primary
+        else -> "OWNED" to MaterialTheme.colorScheme.secondary
     }
     Text(
         text = label,
@@ -233,7 +235,7 @@ private fun ActionChip(
     danger: Boolean = false,
     onClick: () -> Unit,
 ) {
-    val tint = if (danger) Color(0xFFF85149) else Color(0xFF58A6FF)
+    val tint = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary
     Text(
         text = label,
         color = tint,
@@ -267,19 +269,19 @@ private fun InlineField(
                 keyboardType = if (numeric) KeyboardType.Number else KeyboardType.Text,
             ),
             colors = TextFieldDefaults.colors(
-                focusedContainerColor = Color(0xFF161B22),
-                unfocusedContainerColor = Color(0xFF161B22),
-                focusedTextColor = Color.White,
-                unfocusedTextColor = Color.White,
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
             ),
             modifier = Modifier.weight(1f),
         )
         Spacer(Modifier.width(8.dp))
         TextButton(onClick = onCancel) {
-            Text("Cancel", color = Color(0xFF8B949E), fontSize = 13.sp)
+            Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
         }
         TextButton(onClick = onCommit) {
-            Text("Save", color = Color(0xFF58A6FF), fontSize = 13.sp)
+            Text("Save", color = MaterialTheme.colorScheme.secondary, fontSize = 13.sp)
         }
     }
 }

@@ -149,8 +149,8 @@ fun VoiceModelScreen(
             // than buried in a tooltip.
             if (state.asrBackend.isCloud) {
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1C1600)),
-                    border = BorderStroke(1.dp, Color(0xFFD29922)),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
@@ -159,13 +159,13 @@ fun VoiceModelScreen(
                             Icon(
                                 Icons.Default.Cloud,
                                 contentDescription = null,
-                                tint = Color(0xFFD29922),
+                                tint = MaterialTheme.colorScheme.tertiary,
                                 modifier = Modifier.size(18.dp),
                             )
                             Spacer(Modifier.width(8.dp))
                             Text(
                                 "Audio leaves this device",
-                                color = Color(0xFFD29922),
+                                color = MaterialTheme.colorScheme.tertiary,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 13.sp,
                             )
@@ -181,7 +181,7 @@ fun VoiceModelScreen(
                             // colour measured ~1.9:1 against it — unreadable, on a privacy
                             // disclosure of all things. The card never flips brightness, so
                             // its text must not either. This cream reads ~13:1 on the amber.
-                            color = Color(0xFFF0DCC0),
+                            color = MaterialTheme.colorScheme.onTertiaryContainer,
                             fontSize = 12.sp,
                         )
                     }
@@ -221,7 +221,7 @@ private fun VoiceBackendCard(
     val accent = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
     Card(
         colors = CardDefaults.cardColors(
-            containerColor = if (selected) Color(0xFF10261A) else MaterialTheme.colorScheme.surface,
+            containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
         ),
         border = BorderStroke(1.dp, accent),
         shape = RoundedCornerShape(12.dp),
@@ -241,8 +241,8 @@ private fun VoiceBackendCard(
                 },
                 contentDescription = null,
                 tint = when {
-                    !enabled -> Color(0xFF6E7681)
-                    status.backend.isCloud -> Color(0xFFD29922)
+                    !enabled -> MaterialTheme.colorScheme.onSurfaceVariant
+                    status.backend.isCloud -> MaterialTheme.colorScheme.tertiary
                     else -> MaterialTheme.colorScheme.primary
                 },
                 modifier = Modifier.size(22.dp),
@@ -251,21 +251,21 @@ private fun VoiceBackendCard(
             Column(Modifier.weight(1f)) {
                 Text(
                     status.backend.displayName,
-                    color = if (enabled) MaterialTheme.colorScheme.onSurface else Color(0xFF6E7681),
+                    color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
                 )
                 Spacer(Modifier.height(3.dp))
                 Text(
                     status.backend.subtitle,
-                    color = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF545D68),
+                    color = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 11.sp,
                 )
                 if (!enabled && status.reason.isNotBlank()) {
                     Spacer(Modifier.height(5.dp))
                     Text(
                         status.reason,
-                        color = Color(0xFFD29922),
+                        color = MaterialTheme.colorScheme.tertiary,
                         fontSize = 11.sp,
                     )
                 }

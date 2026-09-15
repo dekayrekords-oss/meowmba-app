@@ -26,6 +26,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import com.example.meowmba.ui.theme.DropdownMenu
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -1420,7 +1421,7 @@ fun BridgeWorkspaceBrowser(bridgeManager: DesktopBridgeManager) {
             Text(
                 "No workspace roots declared on the desktop — add them to ~/.meowmba-bridge/config.json",
                 style = MaterialTheme.typography.bodySmall,
-                color = Color(0xFFD29922)
+                color = MaterialTheme.colorScheme.tertiary
             )
         }
         Text(currentPath, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontFamily = FontFamily.Monospace)
@@ -1566,6 +1567,10 @@ internal fun OpenRouterModelPicker(
             ),
         )
         ExposedDropdownMenu(
+            shape = MaterialTheme.shapes.medium,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            border = com.example.meowmba.ui.theme.cartoonBorder(),
+            tonalElevation = 0.dp,
             expanded = expanded && (shown.isNotEmpty() || query.isNotBlank()),
             onDismissRequest = { expanded = false; query = "" },
         ) {
@@ -1600,12 +1605,12 @@ internal fun OpenRouterModelPicker(
 @Composable
 private fun KeyStatusBadge(configured: Boolean, providerName: String) {
     Surface(
-        color = if (configured) Color(0xFF4CAF50).copy(alpha = 0.15f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f),
+        color = if (configured) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f),
         shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
     ) {
         Text(
             text = if (configured) "\u2713 Connected" else "Not set",
-            color = if (configured) Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurfaceVariant,
+            color = if (configured) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.labelSmall,
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
         )

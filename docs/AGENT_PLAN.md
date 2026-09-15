@@ -1,5 +1,16 @@
 # Agent execution plan — immersive companion revision
 
+## September 14: onboarding and menu consistency — Build 133
+
+First-run setup now covers the current features, requires avatar selection and
+reviews automatic sizing before optional adjustment. Current provider cards and
+real computer/neural pairing routes replace disconnected setup fields. Shared
+menus, dialogs and sheets follow the existing cartoon theme in both appearances.
+The full2533-test Android suite passes. See
+[ONBOARDING_THEME_133_PASS_DOWN.md](ONBOARDING_THEME_133_PASS_DOWN.md) and its
+verification receipt for exact packaging/installation and the locked-phone
+visual-check limitation. Earlier checkpoints follow.
+
 ## September 14 Arizona / September 15 UTC: preview128 repair checkpoint installed
 
 The audit's52 Android test failures are resolved. Preview128 is installed in place
