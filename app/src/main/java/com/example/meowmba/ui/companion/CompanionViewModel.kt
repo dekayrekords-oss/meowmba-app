@@ -3444,17 +3444,16 @@ class CompanionViewModel(
 
     /** Remembered SSH servers (encrypted). Exposed for the Settings UI. */
     var sshHostRegistry: com.example.meowmba.core.ssh.SshHostRegistry? = null
+        private set
 
     /** Meta glasses → Meow command bridge (prefs + transcript normalize). */
     val metaGlassesMeowBridge: MetaGlassesMeowBridge by lazy {
         MetaGlassesMeowBridge(secureStorage)
     }
 
-        private set
 
     /** IMU awareness — avatar leans with the phone; shake startles the cat. */
     var motionSense: com.example.meowmba.core.sensor.MotionSense? = null
-        private set
 
 
     /** Watches screen-watch frames and turns them into reactions/commentary. */
