@@ -15,11 +15,21 @@ class MetaGlassesMeowBridgeTest {
     @Test
     fun `strips Hey Meta and Hey Meow prefixes`() {
         val prepared = MetaGlassesMeowBridge.normalizeTranscript(
-            "Hey Meta, Hey Meow check disk on the server",
+            "Hey Meta, Hey Meow check disk space",
         )
         assertNotNull(prepared)
         assertTrue(prepared!!.text.contains("check disk", ignoreCase = true))
-        assertEquals(MetaGlassesMeowBridge.CommandIntent.SSH_MEOW, prepared.intent)
+        assertFalse(prepared.text.lowercase().startsWith("hey meta"))
+        assertFalse(prepared.text.lowercase().startsWith("hey meow"))
+        assertEquals(MetaGlassesMeowBridge.CommandIntent.GENERAL, prepared.intent)
+    }
+
+    @Test
+    fun `ssh phrase maps to ssh.meow hint`() {
+        val prepared = MetaGlassesMeowBridge.normalizeTranscript("Hey Meow ssh run uptime on meow")
+        assertNotNull(prepared)
+        assertEquals(MetaGlassesMeowBridge.CommandIntent.SSH_MEOW, prepared!!.intent)
+        assertTrue(prepared.text.contains("ssh.meow"))
     }
 
     @Test
