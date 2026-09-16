@@ -1,5 +1,20 @@
 # MEOWMBA MASTER PLAN
 
+## September 16, 2026 — Meta glasses ↔ Meow bridge (Preview vc126)
+
+Branch: `feat/meta-glasses-meow-bridge` (from `feat/prop-placement-vending-clock` @ `fda4eac`). Preview package `com.example.meowmba`. Flags `lumen_reflex_v2` / `agentic_runtime_v1` remain default **OFF**. No FlyWire.
+
+- [x] Discovery doc: [META_GLASSES_MEOW_BRIDGE.md](docs/META_GLASSES_MEOW_BRIDGE.md) — MWDAT 0.8.0 limits, Hey Meta vs Hey Meow, SSH/OpenCode path.
+- [x] Bridge prefs + transcript normalize (`MetaGlassesMeowBridge`); route into companion tool loop.
+- [x] Tools: `ssh.meow`, `opencode.run`, `server.shell` (reuse SshHostRegistry + AgenticSshPolicy / confirmation).
+- [x] Settings UI on LLM Meta glasses card: connect status, bridge toggle, default meow SSH host.
+- [x] Preview debug `versionCode` **126**.
+- [ ] Fold E2E with physical Ray-Bans + meow SSH (device-dependent).
+- [ ] MWDAT-enabled APK (needs GitHub `read:packages` PAT + Wearables registration) — camera Setup still gated.
+
+Honest limit: “Hey Meta” stays Meta’s assistant; Meow hears glasses via Bluetooth SCO + “Hey Meow” / mic.
+
+
 ## September 15, 2026 — Prop placement / vending animation / background clock (Preview vc125)
 
 Branch: `feat/prop-placement-vending-clock` (from `fix/invent-avatar-crash-and-drawer-search` @ `7748ed3`). Preview package `com.example.meowmba`. Flags `lumen_reflex_v2` / `agentic_runtime_v1` remain default **OFF**. No FlyWire.

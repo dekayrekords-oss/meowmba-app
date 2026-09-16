@@ -223,7 +223,7 @@ androidComponents {
         // Combined Computer + avatar update; bump debug-only so in-place
         // upgrade is allowed without changing release defaultConfig (85).
         variant.outputs.forEach { output ->
-            output.versionCode.set(125)
+            output.versionCode.set(126)
         }
     }
 }

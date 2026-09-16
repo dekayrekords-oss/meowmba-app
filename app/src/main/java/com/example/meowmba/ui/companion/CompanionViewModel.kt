@@ -58,6 +58,11 @@ import com.example.meowmba.core.agent.tools.SetBrightnessTool
 import com.example.meowmba.core.agent.tools.UiAutomationTool
 import com.example.meowmba.core.agent.tools.SshTool
 import com.example.meowmba.core.agent.tools.SshAddHostTool
+import com.example.meowmba.core.agent.tools.SshMeowTool
+import com.example.meowmba.core.agent.tools.OpenCodeRunTool
+import com.example.meowmba.core.agent.tools.ServerShellTool
+import com.example.meowmba.core.agent.tools.MeowServerToolsProbe
+import com.example.meowmba.core.glasses.MetaGlassesMeowBridge
 import com.example.meowmba.core.agent.tools.WeatherTool
 import com.example.meowmba.core.agent.tools.ListSavedPlacesTool
 import com.example.meowmba.core.agent.tools.NavigateTool
@@ -2148,6 +2153,11 @@ class CompanionViewModel(
                 }
                 toolRegistry.register(SshTool(sshHostRegistry!!))
                 toolRegistry.register(SshAddHostTool(sshHostRegistry!!))
+                val defaultMeowHost = { metaGlassesMeowBridge.defaultSshHost.value }
+                toolRegistry.register(SshMeowTool(sshHostRegistry!!, defaultMeowHost))
+                toolRegistry.register(OpenCodeRunTool(sshHostRegistry!!, defaultMeowHost))
+                toolRegistry.register(ServerShellTool(sshHostRegistry!!, defaultMeowHost))
+                MeowServerToolsProbe.registered.set(true)
             }
 
             // Agent-driven browser: the companion can open, click, type and
@@ -3434,6 +3444,12 @@ class CompanionViewModel(
 
     /** Remembered SSH servers (encrypted). Exposed for the Settings UI. */
     var sshHostRegistry: com.example.meowmba.core.ssh.SshHostRegistry? = null
+
+    /** Meta glasses → Meow command bridge (prefs + transcript normalize). */
+    val metaGlassesMeowBridge: MetaGlassesMeowBridge by lazy {
+        MetaGlassesMeowBridge(secureStorage)
+    }
+
         private set
 
     /** IMU awareness — avatar leans with the phone; shake startles the cat. */
@@ -5385,6 +5401,18 @@ class CompanionViewModel(
 
     // ---- Meta glasses (LLM page) ----
 
+    fun setMetaGlassesBridgeEnabled(enabled: Boolean) {
+        metaGlassesMeowBridge.setEnabled(enabled)
+        _uiState.value = _uiState.value.copy(
+            captionText = if (enabled) "Meta → Meow bridge on" else "Meta → Meow bridge off",
+        )
+    }
+
+    fun setMetaGlassesDefaultSshHost(host: String) {
+        metaGlassesMeowBridge.setDefaultSshHost(host)
+        _uiState.value = _uiState.value.copy(captionText = "Default meow SSH host → ${metaGlassesMeowBridge.defaultSshHost.value}")
+    }
+
     /** Connect / start the glasses session (camera + link). Idempotent. */
     fun glassesConnect() {
         glassesController?.ensureCaptureStream()
@@ -6621,20 +6649,28 @@ class CompanionViewModel(
 
     private fun processUserSpeech(raw: String, fromVoice: Boolean = true, finalTranscript: Boolean = false) {
         if (fromVoice && !_uiState.value.isMicEnabled) return
-        val text = com.example.meowmba.core.audio.SpokenText.normalize(raw)
-        if (!(if (finalTranscript) com.example.meowmba.core.audio.SpokenText.isFinalTranscriptUsable(text)
-                else com.example.meowmba.core.audio.SpokenText.isUsable(text))) {
+        val normalizedRaw = com.example.meowmba.core.audio.SpokenText.normalize(raw)
+        // Glasses bridge: strip Hey Meta / Hey Meow and hint ssh/opencode tools when enabled.
+        val bridged = if (fromVoice && metaGlassesMeowBridge.enabled.value) {
+            metaGlassesMeowBridge.prepareCommand(normalizedRaw, bridgeMustBeOn = true)?.text
+        } else null
+        val text = bridged ?: normalizedRaw
+        if (!(if (finalTranscript) com.example.meowmba.core.audio.SpokenText.isFinalTranscriptUsable(
+                // Usability uses the human utterance, not the tool-hint wrapper.
+                normalizedRaw
+            )
+                else com.example.meowmba.core.audio.SpokenText.isUsable(normalizedRaw))) {
             fuLog("processUserSpeech rejected empty/non-speech text")
             if (fromVoice && _uiState.value.interactionState == InteractionState.LISTENING) resetState()
             return
         }
-        if (fromVoice && com.example.meowmba.core.audio.VoiceIntentGuard.needsClarification(text)) {
+        if (fromVoice && com.example.meowmba.core.audio.VoiceIntentGuard.needsClarification(normalizedRaw)) {
             speak("That may have been background audio. If you meant a request for me, please say Meow and repeat it.")
             return
         }
         // Transport-level idempotence (prog): overlapping callbacks and
         // contraction-spelling variants of the same utterance admit once.
-        if (fromVoice && !turnDeduplicator.accept(text)) {
+        if (fromVoice && !turnDeduplicator.accept(normalizedRaw)) {
             fuLog("processUserSpeech dropped duplicate turn")
             if (fromVoice && _uiState.value.interactionState == InteractionState.LISTENING) resetState()
             return
@@ -8496,9 +8532,11 @@ class CompanionViewModel(
     fun onUserTextSubmitted(text: String) {
         if (text.isBlank()) return
         val trimmed = text.trim()
+        val bridged = metaGlassesMeowBridge.prepareCommand(trimmed, bridgeMustBeOn = true)
+        val effective = bridged?.text ?: trimmed
         // Agentic + Computer: shell-like / "Run on Computer" before normal LLM path.
-        if (maybeHandleAgenticComputerChat(trimmed)) return
-        processUserSpeech(trimmed, fromVoice = false)
+        if (maybeHandleAgenticComputerChat(effective)) return
+        processUserSpeech(effective, fromVoice = false)
     }
 
     /**
