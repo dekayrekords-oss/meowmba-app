@@ -226,6 +226,9 @@ data class CompanionState(
     /** Obsidian-style vault notes screen. */
     val showVaultScreen: Boolean = false,
 
+    /** Music / DAW arrange screen (Logic-like studio chrome). */
+    val showMusicDawScreen: Boolean = false,
+
     /**
      * The agent whose history is open on the Agents screen, or null for the roster.
      */
@@ -372,7 +375,8 @@ fun faceModeActive(state: CompanionState): Boolean =
         !state.showWeatherScreen &&
         !state.showNavScreen &&
         !state.showAvatarScreen &&
-        !state.showVaultScreen
+        !state.showVaultScreen &&
+        !state.showMusicDawScreen
 
 /**
  * Additive animation signal for the car: what the cat is reacting to right now.

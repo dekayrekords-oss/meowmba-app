@@ -414,6 +414,7 @@ fun CompanionScreen(
                     "Avatar" -> viewModel.toggleAvatarScreen()
                     "Agents", "Tools" -> viewModel.toggleAgentsScreen()
                     "Notes" -> viewModel.toggleVaultScreen()
+                    "Music", "DAW" -> viewModel.toggleMusicDawScreen()
                 }
             }
         )
@@ -702,6 +703,13 @@ fun CompanionScreen(
                     onClose = { viewModel.toggleVaultScreen() }
                 )
             }
+        }
+
+        if (uiState.showMusicDawScreen) {
+            MusicDawScreen(
+                musicServerUrl = uiState.musicServerUrl,
+                onClose = { viewModel.toggleMusicDawScreen() },
+            )
         }
 
         ChatOverlay(

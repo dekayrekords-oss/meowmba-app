@@ -4550,6 +4550,10 @@ class CompanionViewModel(
         _uiState.value = _uiState.value.copy(showVaultScreen = !_uiState.value.showVaultScreen)
     }
 
+    fun toggleMusicDawScreen() {
+        _uiState.value = _uiState.value.copy(showMusicDawScreen = !_uiState.value.showMusicDawScreen)
+    }
+
     /** User decision on the pending tool approval card. */
     fun resolveApproval(approved: Boolean) {
         agentOrchestrator?.resolveApproval(approved)
@@ -5444,6 +5448,7 @@ class CompanionViewModel(
         showNavScreen = false,
         showAgentsScreen = false,
         showVaultScreen = false,
+        showMusicDawScreen = false,
         showAvatarScreen = false,
     )
 
