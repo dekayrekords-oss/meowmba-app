@@ -1,6 +1,6 @@
 # Meowmba privacy policy
 
-**Last updated:** 2026-08-19
+**Last updated:** 2026-09-06
 
 Meowmba is a voice companion that runs on your phone. This is the policy you can
 host and paste into Play Console.
@@ -12,7 +12,7 @@ host and paste into Play Console.
   or an on-device recognizer.
 - **Camera** — face / hand tracking and photos you ask it to take.
 - **Location** — only for navigation / nearby places when you ask.
-- **Bluetooth** — optional LOOI robot body.
+- **Bluetooth** — optional connected robot base or supported wearable accessory.
 - **Calendar** — only when you ask to read or add events.
 - **Photos / media** — only if you ask to tidy the phone. Deletes use the
   system confirm sheet.
@@ -39,6 +39,12 @@ Only if **you** turn it on in Settings:
 
 - A cloud brain (OpenRouter, OpenAI, BigPickle) — the text you send that
   provider, under *their* policy.
+- Optional image generation — selecting AI Horde sends your image prompt to
+  its community workers. Anonymous use requires accepting the dataset-sharing
+  disclosure; do not submit private information. With a personal key, Meow requests
+  no dataset sharing, but workers still receive the prompt. Selecting Cloudflare
+  sends the prompt to Workers AI under your account. Cloudflare account IDs and API
+  tokens are used to authenticate requests. Generated images are saved on the phone.
 - A Hugging Face token — for model downloads you start.
 - A LAN server you typed (Ollama, Hermes, image/music/video). HTTP is allowed
   **only on your local network**. Public sites must be HTTPS.
@@ -46,6 +52,10 @@ Only if **you** turn it on in Settings:
 
 We do not sell data. We do not run ads. We do not have our own analytics
 backend.
+
+Deleting a local image or clearing app data does not delete information already
+sent to an optional third-party service. Those services govern retention and deletion
+under their own policies. Switching image providers affects new requests only.
 
 ## Children
 

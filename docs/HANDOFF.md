@@ -4,6 +4,46 @@
 > The "Recent builds" section is regenerated automatically by scripts/autobuild.sh
 > after every commit; everything else is maintained by hand at each phase.
 
+## Current status — 2026-09-15 (feat/prop-placement-vending-clock · Preview vc125)
+
+**Active branch:** `feat/prop-placement-vending-clock` (from `fix/invent-avatar-crash-and-drawer-search` @ `7748ed3`)  
+**Packages:** Preview `com.example.meowmba` · Play signing not mixed  
+**Flags:** `lumen_reflex_v2` / `agentic_runtime_v1` default **OFF**
+
+### This slice
+- **Prop placement:** after invent/save, drag prop on current avatar (scale/rotate); persist `anchor` + `attach_scale`/`attach_rotation`; smarter wearable defaults (glasses near eyes).
+- **Vending animation generator:** new lane — prompt + selectable library props + duration/intensity; persists via `CustomAnimationStore`.
+- **Avatar workshop:** preview canvas, Generate from current avatar, selectable props → place on avatar.
+- **Background clock:** `CompanionWallClock` on every non-empty `AppBackground`; tap opens system Clock (AlarmClock + Samsung/Google fallbacks).
+
+### Parent / related
+- Tip base invent crash harden + drawer search (vc124).
+- Epic P1–P3 still in flight on other branches.
+
+## Previous status — 2026-09-15 (Epic P3 Slices E+F — Care / motion / files)
+
+**Active branch:** `feat/epic-p3-care-motion-files` (from `feat/epic-p2-vending-machine` @ `76aba32`)  
+**Packages:** Preview `com.example.meowmba` · Play signing not mixed  
+**Flags:** `lumen_reflex_v2` / `agentic_runtime_v1` default **OFF**
+
+### Slices E+F shipped
+- **Care:** Food / Energy / Mood / Affection / Hygiene meters; Feed / Play / Rest / Clean / Talk; time decay + persist; form-aware reactions; premium `PetCarePanel`.
+- **Motion:** Subtle illustrated-room parallax + shimmer; ambient wash on aurora/starfield/nebula (clock-gated).
+- **Files:** Local library vs All-phone scope; library cleanup vs MediaStore phone suggestions; AI organize remains local-only.
+
+### Epic complete (pending merge / Preview APK)
+P1 + P2 (Vending) + P3 (E+F). Preview APK may still be building on meow habitat worktree — do not disturb `/home/claude/meowmba-fly-habitat` while that job runs.
+
+### Parent / related
+- Slice D Vending on `feat/epic-p2-vending-machine`.
+- Computer P0 Fold E2E + agentic workspace file tools still queued.
+
+### Canonical hosts
+- Invent lineage / APK worktree: `/home/claude/meowmba-fly-habitat` on meow (**do not checkout/reset/gradle there during APK job**)
+- Optional compile worktree: `/home/claude/meowmba-epic-ef` (create via `git worktree add` if needed)
+- Box: `/workspace/meowmba-app`
+- Bare: `/home/prog/git/meowmba-app.git` · `/home/claude/git/meowmba-app.git` · GitHub `dekayrekords-oss/meowmba-app`
+
 ## What this app is
 MEOWMBA (`com.example.meowmba`) is an on-device cat-companion voice assistant:
 wake word ("hey meow" + variants), Silero VAD + speaker-verification gates,

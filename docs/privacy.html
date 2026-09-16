@@ -18,7 +18,7 @@
 
   <main class="wrap">
     <h1>Privacy</h1>
-    <p class="updated">Last updated 19 August 2026. This is the policy for the Android app Meowmba (<code>com.meow.meowmba</code>).</p>
+    <p class="updated">Last updated 6 September 2026. This is the policy for the Android app Meowmba (<code>com.meow.meowmba</code>).</p>
 
     <p>Meowmba is a voice companion that runs on your phone. The developer does not run an account system or an analytics backend. Chat, memories, and API keys stay on the device unless you turn something on in Settings.</p>
 
@@ -27,7 +27,7 @@
       <li><strong>Microphone</strong> — talk to Meow, the wake phrase, optional background listen, and live notes. Dictation may use the phone’s speech service (often Google) or an on-device recognizer.</li>
       <li><strong>Camera</strong> — face and hand tracking, and photos you ask it to take. Tracking runs on the device.</li>
       <li><strong>Location</strong> — only when you ask for directions or nearby places.</li>
-      <li><strong>Bluetooth</strong> — optional LOOI robot body.</li>
+      <li><strong>Bluetooth</strong> — optional connected robot base or supported wearable accessory.</li>
       <li><strong>Calendar</strong> — only when you ask to read or add events.</li>
       <li><strong>Photos / media</strong> — only if you ask to tidy the phone. Deletes use the system confirm sheet.</li>
       <li><strong>Usage access</strong> — only if you ask which unused apps are taking space.</li>
@@ -50,6 +50,8 @@
     <ul>
       <li><strong>A cloud brain</strong> you configure (OpenRouter, OpenAI, BigPickle, or a server you type). That provider sees the text you send, under <em>their</em> policy.</li>
       <li><strong>A Hugging Face token</strong> — for model downloads you start.</li>
+      <li><strong>Optional AI Horde images</strong> — your prompt goes to community workers. Anonymous use requires accepting the dataset-sharing disclosure; do not submit private information. With a personal key, Meow requests no dataset sharing, but workers still receive the prompt.</li>
+      <li><strong>Optional Cloudflare images</strong> — your prompt goes to Workers AI under your account. Your account ID and API token authenticate requests. Generated images are saved on the phone. Switching image providers affects new requests only.</li>
       <li><strong>A LAN server</strong> you typed (Ollama, Hermes, image / music / video). HTTP is allowed only on your own network. Public sites must be HTTPS.</li>
       <li><strong>Maps or search</strong> when you ask for directions or a web lookup.</li>
       <li><strong>Speech recognition</strong> — the system recognizer may send audio to the device vendor while you dictate.</li>
@@ -57,7 +59,7 @@
     <p>We do not sell data. We do not run ads. We do not have our own analytics backend.</p>
 
     <h2>Deletion</h2>
-    <p>Delete chat in the app, or uninstall / clear app storage. There is no server copy to request.</p>
+    <p>Delete chat or generated files in the app, or uninstall / clear app storage. The developer does not keep its own server copy. Clearing local data does not delete information already sent to an optional third-party service; that service governs retention and deletion under its own policy.</p>
 
     <h2>Children</h2>
     <p>Meowmba is not directed at children under 13.</p>

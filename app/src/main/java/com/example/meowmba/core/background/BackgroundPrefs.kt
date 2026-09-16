@@ -38,18 +38,50 @@ enum class BackgroundAnimation(
     val label: String,
     /** Non-null when this is the weather scene pinned to one condition. */
     val condition: WeatherCondition? = null,
+    /** Room scenery with a shared tabletop at 78% of the scene height. */
+    val isPetEnvironment: Boolean = false,
 ) {
     AURORA("aurora", "Aurora"),
     STARFIELD("starfield", "Starfield"),
     NEBULA("nebula", "Nebula"),
     EMBERS("embers", "Embers"),
+    WOODLAND("woodland", "Firefly woodland"),
+    LAGOON("lagoon", "Moonlit lagoon"),
+    RAINY_LOFT("rainy_loft", "Rainy reading loft"),
     CLEAR_SKY("clear", "Clear sky", WeatherCondition.CLEAR),
     CLOUDS("clouds", "Clouds", WeatherCondition.CLOUDY),
     RAIN("rain", "Rain", WeatherCondition.RAIN),
     SNOW("snow", "Snow", WeatherCondition.SNOW),
     FOG("fog", "Fog", WeatherCondition.FOG),
     DUST("dust", "Dust", WeatherCondition.DUST),
-    STORM("storm", "Storm", WeatherCondition.THUNDERSTORM);
+    STORM("storm", "Storm", WeatherCondition.THUNDERSTORM),
+    KITCHEN("kitchen", "Sunlit kitchen", isPetEnvironment = true),
+    LIBRARY("library", "Candlelit library", isPetEnvironment = true),
+    GREENHOUSE("greenhouse", "Glass greenhouse", isPetEnvironment = true),
+    WORKSHOP("workshop", "Clockwork workshop", isPetEnvironment = true),
+    POND("pond", "Lotus pond", isPetEnvironment = true),
+    ORCHARD("orchard", "Peach orchard", isPetEnvironment = true),
+    CAFE("cafe", "Rainy cafe", isPetEnvironment = true),
+    OBSERVATORY("observatory", "Star observatory", isPetEnvironment = true),
+    BEACH("beach", "Seaside deck", isPetEnvironment = true),
+    BEDROOM("bedroom", "Cozy bedroom", isPetEnvironment = true),
+    CARTOON_NOOK("cartoon_nook", "Cartoon sky nook", isPetEnvironment = true),
+    CARTOON_GALLEY("cartoon_galley", "Cartoon space galley", isPetEnvironment = true),
+    CARTOON_SNACK_LAB("cartoon_snack_lab", "Cartoon snack lab", isPetEnvironment = true),
+    CARTOON_LAUNDROMAT("cartoon_laundromat", "Cosmic laundry", isPetEnvironment = true),
+    CARTOON_DINER("cartoon_diner", "Oddball diner", isPetEnvironment = true),
+    CARTOON_PORTAL_ARCADE("cartoon_portal_arcade", "Portal arcade", isPetEnvironment = true),
+    CARTOON_MOON_GARDEN("cartoon_moon_garden", "Moon garden", isPetEnvironment = true),
+    CARTOON_ALIEN_AQUARIUM("cartoon_alien_aquarium", "Alien aquarium", isPetEnvironment = true),
+    CARTOON_METEOR_GARAGE("cartoon_meteor_garage", "Meteor garage", isPetEnvironment = true);
+
+    /** Picker grouping is independent of the stable IDs already stored on the phone. */
+    val isCartoonEnvironment: Boolean
+        get() = when (this) {
+            CARTOON_NOOK, CARTOON_GALLEY, CARTOON_SNACK_LAB, CARTOON_LAUNDROMAT, CARTOON_DINER,
+            CARTOON_PORTAL_ARCADE, CARTOON_MOON_GARDEN, CARTOON_ALIEN_AQUARIUM, CARTOON_METEOR_GARAGE -> true
+            else -> false
+        }
 
     companion object {
         fun byId(id: String?): BackgroundAnimation? = entries.firstOrNull { it.id == id }

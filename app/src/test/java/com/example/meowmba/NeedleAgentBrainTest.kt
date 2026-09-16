@@ -12,6 +12,21 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class NeedleAgentBrainTest {
+    @Test fun `casual chat never loads or calls the native router`() = kotlinx.coroutines.test.runTest {
+        val native = object : com.example.meowmba.core.agent.runtime.NeedleNative {
+            override fun load(bytes: ByteArray): Int = error("Must not load for casual chat")
+            override fun initialize(systemPrompt: String, toolsJson: String): Int = error("Must not initialize")
+            override fun complete(input: String, maxTokens: Int): String? = error("Must not infer")
+            override fun reset() {}
+        }
+        val model = java.nio.file.Files.createTempFile("needle-chat-gate", ".cact").toFile()
+        try {
+            val brain = NeedleAgentBrain(model, native)
+            listOf("Just chillin with the cats.", "I watched a video of cats", "my computer is loud", "(buzzing)").forEach {
+                assertNull(brain.route(it, registry()))
+            }
+        } finally { model.delete() }
+    }
     private fun registry() = ToolRegistry().apply {
         register(object : Tool {
             override val definition = ToolDefinition(

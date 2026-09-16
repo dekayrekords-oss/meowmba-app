@@ -180,7 +180,7 @@ class ModelDownloadViewModelTest {
     @Test
     fun `downloading a catalog model installs it and marks it ready`() = modelTest {
         val vm = viewModel()
-        val option = ModelCatalog.options.first { !it.requiresHfToken }
+        val option = ModelCatalog.options.first { !it.requiresHfToken && it.runtime.canActivate }
 
         vm.downloadModel(option)
         runCurrent()
@@ -227,7 +227,7 @@ class ModelDownloadViewModelTest {
     @Test
     fun `an already-downloaded model is adopted automatically at startup`() = modelTest {
         // Pre-install a catalog model before the ViewModel exists
-        val option = ModelCatalog.options.first()
+        val option = ModelCatalog.options.first { it.runtime.canActivate }
         File(modelsDir, option.fileName).writeBytes(ByteArray(64))
 
         val vm = viewModel()
@@ -238,7 +238,7 @@ class ModelDownloadViewModelTest {
     @Test
     fun `deleting an installed model returns to not-installed honestly`() = modelTest {
         val vm = viewModel()
-        val option = ModelCatalog.options.first { !it.requiresHfToken }
+        val option = ModelCatalog.options.first { !it.requiresHfToken && it.runtime.canActivate }
         vm.downloadModel(option)
         runCurrent()
         assertTrue(vm.uiState.value.loadedModels.localInstalled)

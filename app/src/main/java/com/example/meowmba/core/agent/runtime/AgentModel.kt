@@ -51,7 +51,10 @@ data class AgentTask(
     val startedAt: Long? = null,
     val completedAt: Long? = null,
     val result: String? = null,
-    val log: List<String> = emptyList()
+    val log: List<String> = emptyList(),
+    /** Captured at submission; changing projects never reassigns in-flight work. */
+    val projectId: Long? = null,
+    val conversationId: Long? = null,
 ) {
     val isTerminal: Boolean
         get() = status == TaskStatus.COMPLETED || status == TaskStatus.FAILED ||
@@ -74,7 +77,11 @@ object AgentRegistry {
             // orchestrator's check with "Meow isn't allowed to use vault.note.*".
             allowedTools = setOf(
                 "task.list",
+                "brain.models", "brain.select_model",
+                "business.agents", "business.start", "business.jobs", "business.open",
                 "avatar.animate",
+                "avatar.invent",
+                "avatar.form",
                 "avatar.describe_animation",
                 "vault.note.list",
                 "vault.note.read",
@@ -88,7 +95,7 @@ object AgentRegistry {
         AgentDefinition(
             id = "file", name = "Shelve",
             purpose = "Organizes the workspace: read, write, and delete files (sandboxed).",
-            allowedTools = setOf("file.read", "file.write", "file.delete", "file.list")
+            allowedTools = setOf("file.read", "file.write", "file.delete", "file.list", "file.browser", "file.search", "file.cleanup", "file.move", "file.trash", "file.restore")
         ),
         AgentDefinition(
             id = "memory", name = "Keeper",
@@ -98,12 +105,12 @@ object AgentRegistry {
         AgentDefinition(
             id = "project", name = "Builder",
             purpose = "Creates and organizes project folders and manifests.",
-            allowedTools = setOf("project.create", "file.write", "file.read", "file.list")
+            allowedTools = setOf("project.create", "project.overview", "project.plan", "file.write", "file.read", "file.list", "file.search", "file.move")
         ),
         AgentDefinition(
             id = "coding", name = "Forge",
             purpose = "Helps write, edit, and debug code inside projects.",
-            allowedTools = setOf("file.read", "file.write", "file.list", "project.create")
+            allowedTools = setOf("file.read", "file.write", "file.list", "project.create", "file.search")
         ),
         AgentDefinition(
             id = "research", name = "Scout",
@@ -137,7 +144,7 @@ object AgentRegistry {
         AgentDefinition(
             id = "computer", name = "Bridge",
             purpose = "Controls paired computers through the desktop bridge.",
-            allowedTools = setOf("desktop.write_file", "desktop.run_build", "desktop.run_script", "desktop.control")
+            allowedTools = setOf("desktop.write_file", "desktop.run_build", "desktop.run_script", "desktop.control", "desktop.run_goal", "desktop.blender_scene", "logic.inspect", "logic.edit", "logic.receipt", "logic.verify_audio", "logic.screen", "logic.act", "logic.cancel", "logic.run_goal")
         ),
         AgentDefinition(
             id = "phone", name = "Paws",
@@ -148,13 +155,15 @@ object AgentRegistry {
                 "phone.dnd", "phone.battery", "phone.set_volume", "phone.take_photo",
                 "phone.compose_sms", "phone.dial_call", "phone.media_control", "phone.set_brightness",
                 "phone.cleanup",
+                "phone.bluetooth_devices", "phone.bluetooth_setup",
+                "nav.find_places", "nav.navigate", "nav.save_place", "nav.list_saved_places",
             )
         ),
         AgentDefinition(
             id = "phone_control", name = "Claw",
             purpose = "Operates accessible app screens through taps, typing and navigation. Requires Accessibility and a working model; some app screens cannot be controlled.",
             allowedTools = setOf(
-                "ui.automate", "phone.launch_app", "phone.list_apps"
+                "ui.automate", "phone.launch_app", "phone.list_apps", "phone.run_goal"
             ),
             maxConcurrentTasks = 1
         ),

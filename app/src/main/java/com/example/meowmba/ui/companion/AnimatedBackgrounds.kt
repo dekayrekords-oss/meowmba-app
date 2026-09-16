@@ -1,15 +1,10 @@
 package com.example.meowmba.ui.companion
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -36,27 +31,31 @@ import kotlin.random.Random
  * remains the brightest thing on screen.
  */
 @Composable
-fun AnimatedBackground(animation: BackgroundAnimation, modifier: Modifier = Modifier) {
-    val clock by rememberInfiniteTransition(label = "bg").animateFloat(
-        initialValue = 0f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            tween(BG_CYCLE_MS, easing = LinearEasing), RepeatMode.Restart,
-        ),
-        label = "bg-clock",
-    )
-    val slow by rememberInfiniteTransition(label = "bg-slow").animateFloat(
-        initialValue = 0f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            tween(BG_SLOW_MS, easing = LinearEasing), RepeatMode.Restart,
-        ),
-        label = "bg-slow-clock",
-    )
+fun AnimatedBackground(animation: BackgroundAnimation, modifier: Modifier = Modifier, paused: Boolean = false) {
+    // Ambient particles and washes run on multi-second cycles; 15 FPS is
+    // indistinguishable from 31 and costs less than half the redraws.
+    val sceneClock = rememberSceneClock(paused, interacting = false)
+    // Read inside Canvas, never in composition. Both layers share one clock.
+    val clock by remember(sceneClock) { derivedStateOf { sceneClock.phase(BG_CYCLE_MS) } }
+    val slow by remember(sceneClock) { derivedStateOf { sceneClock.phase(BG_SLOW_MS) } }
+    if (animation.isPetEnvironment) {
+        IllustratedEnvironmentBackground(animation, modifier, clock = { clock }, slow = { slow })
+        return
+    }
+    if (isCompanionSceneBackground(animation)) {
+        val companionScene = remember { CompanionSceneBackgroundPainter() }
+        Box(modifier = modifier) {
+            Canvas(Modifier.fillMaxSize()) { companionScene.draw(this, animation, clock, slow) }
+        }
+        return
+    }
     val field = remember(animation) { BgField(animation.ordinal) }
 
     Box(modifier = modifier) {
         when (animation) {
             BackgroundAnimation.AURORA -> {
                 Canvas(Modifier.fillMaxSize()) { skyWash(auroraSky) }
+                Canvas(Modifier.fillMaxSize()) { gentleParallaxWash(slow) }
                 Canvas(Modifier.fillMaxSize()) { stars(field, clock, 0.55f) }
                 Canvas(Modifier.fillMaxSize().blur(30.dp)) { aurora(clock, slow, 1.35f, 0.55f) }
                 Canvas(Modifier.fillMaxSize().blur(10.dp)) { aurora(clock + 0.37f, slow, 0.9f, 0.85f) }
@@ -64,6 +63,7 @@ fun AnimatedBackground(animation: BackgroundAnimation, modifier: Modifier = Modi
 
             BackgroundAnimation.STARFIELD -> {
                 Canvas(Modifier.fillMaxSize()) { skyWash(deepSky) }
+                Canvas(Modifier.fillMaxSize()) { gentleParallaxWash(slow) }
                 Canvas(Modifier.fillMaxSize().blur(14.dp)) { stars(field, clock * 0.6f, 1.4f) }
                 Canvas(Modifier.fillMaxSize()) { stars(field, clock, 1f) }
                 Canvas(Modifier.fillMaxSize()) { shootingStar(slow) }
@@ -71,6 +71,7 @@ fun AnimatedBackground(animation: BackgroundAnimation, modifier: Modifier = Modi
 
             BackgroundAnimation.NEBULA -> {
                 Canvas(Modifier.fillMaxSize()) { skyWash(deepSky) }
+                Canvas(Modifier.fillMaxSize()) { gentleParallaxWash(slow) }
                 Canvas(Modifier.fillMaxSize().blur(40.dp)) { nebula(slow) }
                 Canvas(Modifier.fillMaxSize()) { stars(field, clock, 0.9f) }
             }
@@ -110,18 +111,13 @@ private fun DrawScope.skyWash(ramp: List<Color>) {
 }
 
 private fun DrawScope.stars(f: BgField, clock: Float, gain: Float) {
+    val glow = RadialGlow.brush(Color.White)
     f.points.forEach { p ->
         val tw = 0.2f + 0.8f * (0.5f + 0.5f * sin((clock + p.phase) * 4f * PI.toFloat()))
         val r = (0.9f + 2.0f * p.scale) * gain
         // Very slow lateral drift so the field is alive without ever looking like motion.
         val c = Offset(wrap01(p.x + clock * 0.02f * p.speed) * size.width, p.y * size.height)
-        drawCircle(
-            brush = Brush.radialGradient(
-                listOf(Color.White.copy(alpha = 0.9f * tw * gain), Color.Transparent),
-                center = c, radius = r,
-            ),
-            radius = r, center = c,
-        )
+        drawRadialGlow(c, r, glow, 0.9f * tw * gain)
     }
 }
 
@@ -268,6 +264,15 @@ private fun DrawScope.embers(f: BgField, clock: Float, slow: Float, scale: Float
  */
 @Composable
 fun AnimationThumbnail(animation: BackgroundAnimation, modifier: Modifier = Modifier) {
+    if (animation.isPetEnvironment) {
+        IllustratedEnvironmentBackground(animation, modifier, clock = { .25f }, slow = { .15f }, thumbnail = true)
+        return
+    }
+    if (isCompanionSceneBackground(animation)) {
+        val companionScene = remember { CompanionSceneBackgroundPainter() }
+        Canvas(modifier) { companionScene.draw(this, animation, .25f, .15f) }
+        return
+    }
     val field = remember(animation) { BgField(animation.ordinal) }
     Canvas(modifier) {
         when (animation) {
@@ -296,6 +301,20 @@ fun weatherSwatch(id: String): List<Color> = when (id) {
     "dust" -> listOf(Color(0xFF8A6A3B), Color(0xFF4A3720))
     "storm" -> listOf(Color(0xFF4C3B6E), Color(0xFF241B38))
     else -> listOf(Color(0xFF475569), Color(0xFF29323F))
+}
+
+
+/** Ultra-soft luminance wash for ambient backgrounds — battery-friendly, not a second particle system. */
+private fun DrawScope.gentleParallaxWash(slow: Float) {
+    val a = 0.025f + 0.02f * (0.5f + 0.5f * sin(slow * 2f * PI.toFloat()))
+    val dx = sin(slow * 2f * PI.toFloat()) * size.width * 0.02f
+    drawRect(
+        brush = Brush.radialGradient(
+            colors = listOf(Color.White.copy(alpha = a), Color.Transparent),
+            center = Offset(size.width * 0.5f + dx, size.height * 0.35f),
+            radius = size.minDimension * 0.55f,
+        )
+    )
 }
 
 private const val BG_CYCLE_MS = 22_000

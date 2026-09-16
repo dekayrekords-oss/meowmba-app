@@ -97,7 +97,7 @@ class OpenAIVisionProvider(
 
     override suspend fun describe(jpegBytes: ByteArray, prompt: String): Result<String> {
         if (apiKey.isNullOrBlank()) {
-            return Result.failure(Exception("No API key configured for OpenAI — add it in Settings"))
+            return Result.failure(Exception("No API key configured for $name — add it in the matching provider card on LLM"))
         }
         return try {
             val body = buildJsonObject {

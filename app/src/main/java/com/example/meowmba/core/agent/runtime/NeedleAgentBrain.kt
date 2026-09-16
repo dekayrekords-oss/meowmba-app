@@ -43,6 +43,7 @@ class NeedleAgentBrain internal constructor(
 
     override suspend fun route(text: String, registry: ToolRegistry): AgentRouter.AgentIntent? =
         withContext(dispatcher) {
+            if (!CommandHeuristics.mightBeCommand(text)) return@withContext null
             lock.withLock {
                 val definitions = registry.definitions()
                 val schema = toolsJson(definitions)

@@ -1,5 +1,7 @@
 package com.example.meowmba.ui.companion
 
+import com.example.meowmba.ui.theme.Surface
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.foundation.layout.*
@@ -21,6 +23,8 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
 
+private enum class CompanionChatPane { Chat, Terminal }
+
 /** Reply first; full history only when requested. Draft lives outside visibility. */
 @Composable
 fun ChatOverlay(
@@ -31,6 +35,7 @@ fun ChatOverlay(
     messages: List<ChatUiMessage> = emptyList(),
     title: String = "Conversation",
     onLeaveProject: (() -> Unit)? = null,
+    onProjectOverview: (() -> Unit)? = null,
     listening: Boolean = false,
     listenPartial: String? = null,
     onMicClick: () -> Unit = {},
@@ -38,7 +43,26 @@ fun ChatOverlay(
     onCallClick: () -> Unit = {},
     liveReply: String? = null,
     thinking: Boolean = false,
+    recognitionIssue: String? = null,
     conversationKey: String = "inbox",
+    terminalTargets: List<CompanionTerminalTarget> = listOf(CompanionTerminalTarget.Local()),
+    terminalStatus: CompanionTerminalStatus = CompanionTerminalStatus.Disconnected,
+    terminalStatusDetail: String? = null,
+    terminalScrollback: String = "",
+    terminalConnectedTargetId: String? = null,
+    onTerminalConnect: ((String) -> Unit)? = null,
+    onTerminalDisconnect: (() -> Unit)? = null,
+    onTerminalSendLine: ((String) -> Unit)? = null,
+    onTerminalInterrupt: (() -> Unit)? = null,
+    onTerminalClear: (() -> Unit)? = null,
+    onTerminalResize: ((Int, Int) -> Unit)? = null,
+    /** Kept for one-shot fallbacks / tests; interactive session preferred. */
+    onRunTerminalCommand: (suspend (String, String) -> String)? = null,
+    computerPower: com.example.meowmba.core.config.ComputerPowerState =
+        com.example.meowmba.core.config.ComputerPowerState.Idle,
+    onComputerPower: (com.example.meowmba.core.config.ComputerPowerState) -> Unit = {},
+    /** Non-zero bumps switch the overlay to the Terminal tab (setup / onboarding). */
+    terminalPaneRequest: Long = 0L,
     modifier: Modifier = Modifier,
 ) {
     // Retain separate drafts for projects as well as across panel collapse.
@@ -47,6 +71,11 @@ fun ChatOverlay(
     )) { mutableStateMapOf<String, String>() }
     val draft = drafts[conversationKey].orEmpty()
     var history by rememberSaveable { mutableStateOf(false) }
+    var pane by rememberSaveable { mutableStateOf(CompanionChatPane.Chat.name) }
+    val currentPane = runCatching { CompanionChatPane.valueOf(pane) }.getOrDefault(CompanionChatPane.Chat)
+    LaunchedEffect(terminalPaneRequest) {
+        if (terminalPaneRequest > 0L) pane = CompanionChatPane.Terminal.name
+    }
     val historyState = rememberLazyListState()
     val replyState = rememberLazyListState()
     val keyboard = LocalSoftwareKeyboardController.current
@@ -57,6 +86,7 @@ fun ChatOverlay(
         when {
             imeVisible -> { keyboard?.hide(); focus.clearFocus() }
             history -> history = false
+            currentPane == CompanionChatPane.Terminal -> pane = CompanionChatPane.Chat.name
             else -> collapse()
         }
     }
@@ -70,24 +100,66 @@ fun ChatOverlay(
         exit = slideOutVertically { it } + fadeOut(), modifier = modifier) {
         // Subtract keyboard/navigation space before sizing the panel.
         BoxWithConstraints(Modifier.fillMaxWidth().navigationBarsPadding().imePadding()) {
-            val limit = if (history) maxHeight * .82f else minOf(maxHeight, 340.dp)
+            val limit = when {
+                currentPane == CompanionChatPane.Terminal -> maxHeight * .78f
+                history -> maxHeight * .82f
+                else -> minOf(maxHeight, 340.dp)
+            }
             Surface(shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
                 color = MaterialTheme.colorScheme.surface, tonalElevation = 4.dp) {
                 Column(Modifier.fillMaxWidth().heightIn(max = limit).padding(horizontal = 12.dp, vertical = 8.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(title, Modifier.weight(1f), maxLines = 1, style = MaterialTheme.typography.titleMedium)
-                        IconButton(onClick = { history = !history }) {
-                            Icon(if (history) Icons.Default.UnfoldLess else Icons.Default.History,
-                                if (history) "Show compact reply" else "Show full conversation")
-                        }
-                        IconButton(onClick = onCallClick) {
-                            Icon(if (callActive) Icons.Default.CallEnd else Icons.Default.Call,
-                                if (callActive) "End voice call" else "Start voice call",
-                                tint = if (callActive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+                        if (currentPane == CompanionChatPane.Chat) {
+                            IconButton(onClick = { history = !history }) {
+                                Icon(if (history) Icons.Default.UnfoldLess else Icons.Default.History,
+                                    if (history) "Show compact reply" else "Show full conversation")
+                            }
+                            IconButton(onClick = onCallClick) {
+                                Icon(if (callActive) Icons.Default.CallEnd else Icons.Default.Call,
+                                    if (callActive) "End voice call" else "Start voice call",
+                                    tint = if (callActive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+                            }
                         }
                         IconButton(onClick = { collapse() }) { Icon(Icons.Default.KeyboardArrowDown, "Collapse chat") }
                     }
-                    if (onLeaveProject != null) TextButton(onClick = onLeaveProject) { Text("Back to inbox") }
+                    TabRow(
+                        selectedTabIndex = if (currentPane == CompanionChatPane.Chat) 0 else 1,
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                    ) {
+                        Tab(
+                            selected = currentPane == CompanionChatPane.Chat,
+                            onClick = { pane = CompanionChatPane.Chat.name },
+                            text = { Text("Chat") },
+                        )
+                        Tab(
+                            selected = currentPane == CompanionChatPane.Terminal,
+                            onClick = { pane = CompanionChatPane.Terminal.name },
+                            text = { Text("Terminal") },
+                        )
+                    }
+                    if (currentPane == CompanionChatPane.Terminal && onTerminalConnect != null) {
+                        CompanionTerminalPanel(
+                            targets = targetsOrLocal(terminalTargets),
+                            status = terminalStatus,
+                            statusDetail = terminalStatusDetail,
+                            scrollback = terminalScrollback,
+                            connectedTargetId = terminalConnectedTargetId,
+                            onConnect = onTerminalConnect,
+                            onDisconnect = onTerminalDisconnect ?: {},
+                            onSendLine = onTerminalSendLine ?: {},
+                            onInterrupt = onTerminalInterrupt ?: {},
+                            onClear = onTerminalClear ?: {},
+                            onResize = onTerminalResize ?: { _, _ -> },
+                            computerPower = computerPower,
+                            onComputerPower = onComputerPower,
+                            modifier = Modifier.weight(1f, fill = true).fillMaxWidth(),
+                        )
+                    } else {
+                    if (onLeaveProject != null) Row(Modifier.fillMaxWidth()) {
+                        onProjectOverview?.let { open -> TextButton(onClick = open, modifier = Modifier.weight(1f)) { Text("Plan & files") } }
+                        TextButton(onClick = onLeaveProject) { Text("Back to inbox") }
+                    }
                     if (callActive) Text("Voice call active", style = MaterialTheme.typography.labelMedium)
                     if (history) {
                         LazyColumn(Modifier.weight(1f, fill = false).fillMaxWidth(), state = historyState, reverseLayout = true) {
@@ -108,6 +180,8 @@ fun ChatOverlay(
                         }
                         if (thinking) Text("Meow is thinking…", style = MaterialTheme.typography.labelMedium)
                     }
+                    recognitionIssue?.let { Text(it, style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error, maxLines = 3) }
                     if (listening && !listenPartial.isNullOrBlank()) Text(listenPartial,
                         maxLines = 2, style = MaterialTheme.typography.bodySmall)
                     Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -127,11 +201,15 @@ fun ChatOverlay(
                             }
                         }) { Icon(Icons.AutoMirrored.Filled.Send, "Send") }
                     }
+                    }
                 }
             }
         }
     }
 }
+
+private fun targetsOrLocal(targets: List<CompanionTerminalTarget>): List<CompanionTerminalTarget> =
+    if (targets.isEmpty()) listOf(CompanionTerminalTarget.Local()) else targets
 
 @Composable
 fun ChatMessage(sender: String, message: String, isCompanion: Boolean, onDelete: (() -> Unit)? = null) {

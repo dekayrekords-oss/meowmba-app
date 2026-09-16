@@ -35,7 +35,8 @@ class DescribeAnimationTool(
         val description = args["description"]?.takeIf { it.isNotBlank() }
             ?: return ToolResult.Failure("Missing 'description' — what animation should I do?")
 
-        val spec = AnimationDescriber.describe(description)
+        val spec = com.example.meowmba.ui.companion.AvatarPerformanceCatalog.resolve(description)?.spec
+            ?: AnimationDescriber.describe(description)
             ?: return ToolResult.Failure(
                 "I don't know how to animate that. Try words like: " +
                 "stretch, jump, bounce, happy, sad, angry, scared, excited, " +

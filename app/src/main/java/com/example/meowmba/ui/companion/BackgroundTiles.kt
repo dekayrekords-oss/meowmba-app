@@ -1,5 +1,9 @@
 package com.example.meowmba.ui.companion
 
+import com.example.meowmba.ui.theme.Card
+import com.example.meowmba.ui.theme.OutlinedButton
+import com.example.meowmba.ui.theme.Surface
+
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -19,6 +23,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 
 /**
  * Tile overlay for Memba ecosystem applications.
@@ -32,8 +38,8 @@ fun BackgroundTiles(
 ) {
     AnimatedVisibility(
         visible = visible,
-        enter = scaleIn() + fadeIn(),
-        exit = scaleOut() + fadeOut(),
+        enter = slideInVertically { -it / 8 } + fadeIn(),
+        exit = slideOutVertically { -it / 8 } + fadeOut(),
         modifier = modifier.fillMaxSize()
     ) {
         Box(
@@ -43,31 +49,32 @@ fun BackgroundTiles(
                 .clickable { onClose() },
             contentAlignment = Alignment.Center
         ) {
-            Column(
+            Surface(
                 modifier = Modifier
                     .safeDrawingPadding()
-                    .fillMaxWidth(0.9f)
-                    .fillMaxHeight(0.7f)
-                    .clip(RoundedCornerShape(32.dp))
-                    .background(MaterialTheme.colorScheme.surface)
-                    .padding(24.dp)
-                    .clickable(enabled = false) { }
+                    .fillMaxWidth(0.92f)
+                    .fillMaxHeight(0.78f),
+                shape = MaterialTheme.shapes.extraLarge,
+                color = MaterialTheme.colorScheme.background,
             ) {
-                Text(
-                    text = "Memba Ecosystem",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-                
-                val themedTiles = tileItems
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(3),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    items(themedTiles) { item ->
-                        TileItem(item, onClick = { onTileClick(item.name) })
+                Column(Modifier.padding(16.dp)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Memba", Modifier.weight(1f), style = MaterialTheme.typography.headlineMedium)
+                        OutlinedButton(onClick = onClose,
+                            modifier = Modifier.semantics { contentDescription = "Return to avatar" }) { Text("Avatar") }
+                    }
+                    Text("Your companion, tools & settings", style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 16.dp))
+                    val themedTiles = tileItems
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(112.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(themedTiles, key = { it.name }) { item ->
+                            TileItem(item, onClick = { onTileClick(item.name) })
+                        }
                     }
                 }
             }
@@ -77,28 +84,19 @@ fun BackgroundTiles(
 
 @Composable
 fun TileItem(item: MembaTile, onClick: () -> Unit) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(horizontal = 8.dp, vertical = 16.dp)
-            .clickable(onClick = onClick)
-    ) {
-        Icon(
-            imageVector = item.icon,
-            contentDescription = item.name,
-            tint = item.color,
-            modifier = Modifier.size(40.dp)
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        // One line: "Background" wrapping to "Backgroun / d" made the whole grid look broken.
-        Text(
-            text = item.name,
-            style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp),
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1
-        )
+    Card(onClick = onClick, modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 14.dp),
+            horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(Modifier.size(42.dp).background(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.shapes.small),
+                contentAlignment = Alignment.Center) {
+                Icon(item.icon, contentDescription = null, tint = item.color, modifier = Modifier.size(26.dp))
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(item.name, style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface, maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+        }
     }
 }
 
@@ -106,17 +104,19 @@ data class MembaTile(val name: String, val icon: ImageVector, val color: Color)
 
 val tileItems: List<MembaTile> @Composable get() = listOf(
     MembaTile("Memory", Icons.Default.Terminal, MaterialTheme.colorScheme.primary),
-    MembaTile("Studio", Icons.Default.Palette, Color(0xFFFF5CA8)),
-    MembaTile("Hardware", Icons.Default.Memory, Color(0xFF00E5FF)),
-    MembaTile("Robot", Icons.Default.Android, Color(0xFF4DB6AC)),
-    MembaTile("Projects", Icons.Default.Folder, Color(0xFF00E676)),
-    MembaTile("Tools", Icons.Default.Build, Color(0xFFFFD600)),
-    MembaTile("Agents", Icons.Default.SmartToy, Color(0xFFAA00FF)),
+    MembaTile("Files", Icons.Default.FolderOpen, MaterialTheme.colorScheme.secondary),
+    MembaTile("Vending", Icons.Default.Storefront, MaterialTheme.colorScheme.tertiary),
+    MembaTile("LLM", Icons.Default.Memory, MaterialTheme.colorScheme.primary),
+    MembaTile("Brain", Icons.Default.Hub, MaterialTheme.colorScheme.secondary),
+    MembaTile("Robot", Icons.Default.Android, MaterialTheme.colorScheme.tertiary),
+    MembaTile("Projects", Icons.Default.Folder, MaterialTheme.colorScheme.primary),
+    MembaTile("Tools", Icons.Default.Build, MaterialTheme.colorScheme.secondary),
+    MembaTile("Agents", Icons.Default.SmartToy, MaterialTheme.colorScheme.tertiary),
     MembaTile("Privacy", Icons.Default.Security, MaterialTheme.colorScheme.primary),
-    MembaTile("Notes", Icons.Default.Book, Color(0xFFD2A8FF)),
-    MembaTile("NAV", Icons.Default.Navigation, Color(0xFFFF6D00)),
-    MembaTile("Weather", Icons.Default.WbSunny, Color(0xFF29B6F6)),
-    MembaTile("Background", Icons.Default.Wallpaper, Color(0xFFEC407A)),
-    MembaTile("Avatar", Icons.Default.Face, Color(0xFF00BFA5)),
-    MembaTile("Settings", Icons.Default.Settings, Color(0xFFBDBDBD))
+    MembaTile("Notes", Icons.Default.Book, MaterialTheme.colorScheme.primary),
+    MembaTile("NAV", Icons.Default.Navigation, MaterialTheme.colorScheme.secondary),
+    MembaTile("Weather", Icons.Default.WbSunny, MaterialTheme.colorScheme.tertiary),
+    MembaTile("Background", Icons.Default.Wallpaper, MaterialTheme.colorScheme.primary),
+    MembaTile("Avatar", Icons.Default.Face, MaterialTheme.colorScheme.secondary),
+    MembaTile("Settings", Icons.Default.Settings, MaterialTheme.colorScheme.tertiary)
 )

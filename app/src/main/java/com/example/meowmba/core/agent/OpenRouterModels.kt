@@ -20,6 +20,7 @@ data class OpenRouterModel(
     val name: String,
     val vision: Boolean,
     val free: Boolean,
+    val tools: Boolean = false,
 )
 
 /**
@@ -67,11 +68,14 @@ object OpenRouterModels {
             if (outputs.isNotEmpty() && "text" !in outputs) return@mapNotNull null
             val pricing = obj["pricing"] as? kotlinx.serialization.json.JsonObject
             val prompt = pricing?.get("prompt")?.jsonPrimitive?.contentOrNull
+            val completion = pricing?.get("completion")?.jsonPrimitive?.contentOrNull
             OpenRouterModel(
                 id = id,
                 name = name,
                 vision = "image" in inputs,
-                free = id.endsWith(":free", ignoreCase = true) || prompt == "0",
+                free = id.endsWith(":free", ignoreCase = true) || (prompt == "0" && completion == "0" &&
+                    (pricing?.get("request")?.jsonPrimitive?.contentOrNull ?: "0") == "0"),
+                tools = (obj["supported_parameters"] as? kotlinx.serialization.json.JsonArray)?.any { it.jsonPrimitive.contentOrNull == "tools" } == true,
             )
         }.sortedWith(
             compareByDescending<OpenRouterModel> { it.free }

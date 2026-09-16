@@ -1,5 +1,9 @@
 package com.example.meowmba.ui.companion
 
+import com.example.meowmba.ui.theme.Button
+import com.example.meowmba.ui.theme.OutlinedButton
+import com.example.meowmba.ui.theme.Card
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -27,7 +31,7 @@ import com.example.meowmba.core.audio.AsrBackend
 import com.example.meowmba.core.audio.AsrBackendStatus
 
 /**
- * Hardware → Voice Recognition.
+ * LLM → Voice Recognition.
  *
  * Picks which speech-to-text engine hears the user. Styling deliberately
  * mirrors [ModelManagerScreen] (same dark palette, monospace title, card
@@ -44,6 +48,10 @@ fun VoiceModelScreen(
     onSelectBackend: (AsrBackend) -> Unit = {},
     onDownloadWhisper: () -> Unit,
     onRepairStreamingModel: () -> Unit,
+    onDownloadLocalVoices: () -> Unit,
+    onSelectLocalVoice: (String) -> Unit,
+    onPreviewLocalVoice: (String) -> Unit,
+    onUseSystemVoice: () -> Unit,
     onClose: () -> Unit,
 ) {
     val statuses = state.asrBackendStatuses.ifEmpty {
@@ -55,7 +63,7 @@ fun VoiceModelScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Voice Recognition", fontFamily = FontFamily.Monospace) },
+                title = { Text("Voice & Conversation", fontFamily = FontFamily.Monospace) },
                 navigationIcon = {
                     TextButton(onClick = onClose) {
                         Text("Back", color = MaterialTheme.colorScheme.primary, fontSize = 13.sp)
@@ -75,12 +83,40 @@ fun VoiceModelScreen(
                 .padding(24.dp)
                 .verticalScroll(rememberScrollState()),
         ) {
+            Text("Speaking voice", style = MaterialTheme.typography.titleLarge)
+            Text("Four distinct neural voices. Once downloaded, speech is generated entirely on this phone. No voice API or server.",
+                style = MaterialTheme.typography.bodySmall)
+            if (!state.localVoicesReady) {
+                Button(onClick = onDownloadLocalVoices, enabled = state.localVoiceProgress == null) {
+                    Text("Download & enable offline voices · 349 MB")
+                }
+                Text("Needs 1.2 GB free during installation. Keep this screen open until complete.", style = MaterialTheme.typography.bodySmall)
+            }
+            state.localVoiceProgress?.let { LinearProgressIndicator(progress = { it }, modifier = Modifier.fillMaxWidth()) }
+            state.localVoiceMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+            val playbackError by com.example.meowmba.core.audio.LocalVoiceRuntime.lastError.collectAsState()
+            playbackError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            com.example.meowmba.core.audio.LocalVoices.all.forEach { voice ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(selected = state.localVoiceEnabled && state.localVoiceId == voice.id,
+                        enabled = state.localVoicesReady, onClick = { onSelectLocalVoice(voice.id) })
+                    Column(Modifier.weight(1f)) {
+                        Text("${voice.name} · ${voice.gender}")
+                        Text(voice.description, style = MaterialTheme.typography.bodySmall)
+                    }
+                    TextButton(enabled = state.localVoicesReady, onClick = { onPreviewLocalVoice(voice.id) }) { Text("Preview") }
+                }
+            }
+            TextButton(onClick = onUseSystemVoice) { Text("Use offline Android voice instead") }
+            Text("Kokoro neural voices · AI-generated speech, not human recordings. Preview to choose your preferred sound.", style = MaterialTheme.typography.bodySmall)
+            HorizontalDivider(Modifier.padding(vertical = 16.dp))
             Text(
-                "Which engine turns your speech into text",
+                "Listening · which engine turns your speech into text",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 12.sp,
             )
 
+            state.voiceRecognitionStatus?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Spacer(Modifier.height(20.dp))
 
             statuses.forEach { status ->
@@ -136,9 +172,10 @@ fun VoiceModelScreen(
                         }
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            "Recorded speech is uploaded to OpenRouter and transcribed by " +
-                                "${state.asrCloudModel}. Wake-word detection stays on-device — " +
-                                "only the utterance after it is sent.",
+                            if (state.asrBackend == AsrBackend.OPENAI_CLOUD)
+                                "Recorded turns are sent to OpenAI's ${com.example.meowmba.core.audio.OpenAiAsrEngine.MODEL}. An OpenAI API key and paid API usage are required. In always-on mode, captured speech can be sent without a wake phrase."
+                            else "Recorded turns are sent to OpenRouter and transcribed by ${state.asrCloudModel}. " +
+                                "In always-on mode, captured speech can be sent without a wake phrase.",
                             // Deliberately NOT onSurfaceVariant: this card's container is a
                             // fixed dark amber, so a themed (near-black in Light mode) text
                             // colour measured ~1.9:1 against it — unreadable, on a privacy
@@ -249,7 +286,7 @@ private fun VoiceBackendCard(
                         )
                         Spacer(Modifier.width(3.dp))
                         Text(
-                            "IN USE",
+                            "SELECTED",
                             color = Color.Black,
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Bold,

@@ -76,7 +76,7 @@ object AgentRouter {
      * command that merely starts with a carrier still loses the carrier while
      * an ordinary sentence is left alone.
      */
-    private fun stripAddress(text: String): String {
+    internal fun stripAddress(text: String): String {
         val withName = Regex(
             "^$WAKE_CARRIERS\\s+$WAKE_NAMES\\b[\\s,]*",
             RegexOption.IGNORE_CASE,
@@ -107,13 +107,58 @@ object AgentRouter {
         // either form.
         val command = WakePhraseMatcher.normalize(stripAddress(raw))
 
+        // A named DAW destination wins before generic phone volume, project
+        // creation and desktop routing. Track numbers are never percentages.
+        if (command in setOf("inspect logic", "inspect logic pro", "inspect my logic project", "show logic tracks", "show logic plugins")) {
+            return AgentIntent("computer", "logic.inspect", emptyMap(), "inspect Logic Pro controls")
+        }
+        val logicDestination = Regex("\\blogic pro\\b|\\b(?:in|using|with) logic\\b|\\blogic (?:project|song|session|track|mixer|plugin)\\b|^logic\\b").containsMatchIn(command)
+        if (logicDestination &&
+            Regex("\\b(edit|mix|master|bounce|export|insert|add|trim|split|route|automate|set|adjust|change|turn|mute|unmute|solo|unsolo|pan|raise|lower|reduce|increase|decrease|play|stop|record|create|remove)\\b").containsMatchIn(command)) {
+            return AgentIntent("computer", "logic.run_goal", mapOf("goal" to text), "work in Logic Pro")
+        }
+
+        AvatarInventionRequest.parse(command)?.let { request ->
+            return AgentIntent(AgentRegistry.MAIN, "avatar.invent", mapOf("request" to request.activity, "fresh" to request.fresh.toString()), "create ${request.activity} animation")
+        }
+        AvatarFormRequest.parse(command)?.let { animal ->
+            return AgentIntent(AgentRegistry.MAIN, "avatar.form", mapOf("animal" to animal), "become $animal")
+        }
+        AvatarSceneRequest.parse(command)?.let { name ->
+            return AgentIntent(AgentRegistry.MAIN, "avatar.animate", mapOf("name" to name), "play $name")
+        }
+
         /** True when the user said [phrases], with or without a wake word. */
         fun says(vararg phrases: String): Boolean {
             val set = phrases.toSet()
             return normalized in set || command in set
         }
 
+        if (says("list your models", "list ai models", "show available ai models", "what models can you use"))
+            return AgentIntent(AgentRegistry.MAIN, "brain.models", emptyMap(), "list available AI models")
+        Regex("^(?:switch|change) (?:your |the )?(?:ai |llm )?model to (local|openrouter) (.+)$", RegexOption.IGNORE_CASE)
+            .matchEntire(stripAddress(raw))?.let {
+                return AgentIntent(AgentRegistry.MAIN, "brain.select_model", mapOf("provider" to it.groupValues[1].lowercase(), "model" to it.groupValues[2]), "verify and switch AI model to ${it.groupValues[2]}")
+            }
+        if (says("list bluetooth devices", "show paired bluetooth devices", "bluetooth status"))
+            return AgentIntent("phone", "phone.bluetooth_devices", emptyMap(), "Bluetooth devices")
+        Regex("^(?:connect|pair)(?: to)? (?:the )?bluetooth(?: device)?(?: (.+))?$", RegexOption.IGNORE_CASE)
+            .matchEntire(stripAddress(raw))?.let {
+                return AgentIntent("phone", "phone.bluetooth_setup", mapOf("name" to it.groupValues[1]), "connect Bluetooth ${it.groupValues[1]}")
+            }
+
+        Regex("^(?:on my (?:computer|desktop)[, ]+|use my (?:computer|desktop) to )(.+)$", RegexOption.IGNORE_CASE)
+            .matchEntire(stripAddress(raw))?.let {
+                return AgentIntent("computer", "desktop.run_goal", mapOf("goal" to it.groupValues[1]), "work on my computer: ${it.groupValues[1].take(100)}")
+            }
+
         // Exact-phrase commands (normalized for tolerance)
+        if (says("open files", "open the file browser", "open file browser", "open my library", "open asset library"))
+            return AgentIntent("file", "file.browser", emptyMap(), "open Files library")
+        if (says("clean up library", "clean up my library", "analyze library storage"))
+            return AgentIntent("file", "file.cleanup", emptyMap(), "review library cleanup")
+        val assetSearch = Regex("^(?:find files|search files|find assets|search library)(?: for| about)? (.+)$", RegexOption.IGNORE_CASE).find(stripAddress(raw))
+        if (assetSearch != null) return AgentIntent("file", "file.search", mapOf("query" to assetSearch.groupValues[1]), "search saved assets")
         if (normalized in setOf("list files", "list the files", "show files", "show me the files",
                 "what files do i have", "show workspace", "list workspace")) {
             return AgentIntent("file", "file.list", emptyMap(), "list workspace files")
@@ -121,6 +166,16 @@ object AgentRouter {
         if (normalized in setOf("list tasks", "show tasks", "what tasks are running",
                 "what are you working on", "show agent tasks")) {
             return AgentIntent("main", "task.list", emptyMap(), "list agent tasks")
+        }
+        if (normalized in setOf("open business agents", "open my agent team", "show my agent team",
+                "business mode", "open business mode", "switch to business mode", "show business mode"))
+            return AgentIntent("main", "business.open", emptyMap(), "open business agents")
+        if (normalized in setOf("list business agents", "list my business agents"))
+            return AgentIntent("main", "business.agents", emptyMap(), "list business agents")
+        if (normalized in setOf("business job status", "show business jobs", "check business jobs"))
+            return AgentIntent("main", "business.jobs", emptyMap(), "check saved business jobs")
+        Regex("^(?:ask|run) business agent (.+?) to (.+)$", RegexOption.IGNORE_CASE).find(stripAddress(raw))?.let {
+            return AgentIntent("main", "business.start", mapOf("agent" to it.groupValues[1], "goal" to it.groupValues[2]), "queue business-agent goal")
         }
         if (normalized in setOf("start remembering", "start remembering everything",
                 "remember everything", "keep track of everything", "start memory capture")) {
@@ -179,6 +234,10 @@ object AgentRouter {
             return AgentIntent("memory", "memory.search", mapOf("query" to query), "search memory: $query")
         }
 
+        Regex("^use (?:my|the) phone to (.+)$", RegexOption.IGNORE_CASE).matchEntire(stripAddress(raw))?.let {
+            return AgentIntent("phone_control", "phone.run_goal", mapOf("goal" to it.groupValues[1]), it.groupValues[1].take(100))
+        }
+
         // Deep-link search: "search X in/on <app>" jumps straight into the app's
         // search screen instead of the browser. Checked before the web-search
         // block so "search cats on youtube" doesn't become a web query.
@@ -235,7 +294,7 @@ object AgentRouter {
         // Desktop bridge
         if (normalized in setOf("what's on my desktop", "whats on my desktop",
                 "list my desktop", "desktop status", "bridge status")) {
-            return AgentIntent("computer", "desktop.run_build", mapOf("name" to "status"),
+            return AgentIntent("computer", "desktop.control", mapOf("action" to "status"),
                 "check desktop status")
         }
         extractAfter(raw, listOf("write a file on my desktop called ", "write a file on desktop called ",
@@ -335,6 +394,12 @@ object AgentRouter {
             )
         }
 
+        // Direct social drafting is still a phone goal, not proof of a post.
+        // Keep the full request for the planner and its final-action gate.
+        val socialDraft = Regex("^(?:please )?(?:can you |could you )?(?:make|write|draft|create|compose) (?:me )?(?:a |the |this )?(?:new )?post (?:on|in|for) (linkedin|linked in|linked it|facebook|reddit|instagram|twitter|x)\\b", RegexOption.IGNORE_CASE)
+        if (socialDraft.containsMatchIn(stripLeadIn(stripAddress(raw)))) {
+            return AgentIntent("phone_control", "phone.run_goal", mapOf("goal" to raw), raw.take(100))
+        }
         // "open X" reaching here means an app, not a workspace file.
         if (normalized in setOf("what apps do i have", "list my apps", "show my apps",
                 "list apps", "show apps", "what apps are installed")) {
@@ -356,8 +421,13 @@ object AgentRouter {
         }
         extractAfter(stripLeadIn(raw), listOf("open the app ", "open app ", "launch the app ",
             "launch app ", "launch ", "start the app ", "open "))?.let { rest ->
+            // Preserve the whole request. A launch is not completion of a task inside an app.
+            if (Regex("\\b(?:and then|and|then|to)\\s+(?:start|create|write|draft|search|find|read|check|show|tap|press|post|publish|send|share|reply|compose|open|look|make|ask|type|browse|summarize)\\b", RegexOption.IGNORE_CASE).containsMatchIn(rest)) {
+                return AgentIntent("phone_control", "phone.run_goal", mapOf("goal" to raw), raw.take(100))
+            }
             // Bounded: an app name is a name, not the rest of the sentence.
             val name = boundTarget(rest) ?: return@let
+            if (name.lowercase() in setOf("it", "that", "them", "that app", "the same app")) return@let
             // More than a few words is a sentence, not an app — "open up about your
             // feelings" must stay conversation rather than becoming a launch request
             // for an app called "up about your feelings".
@@ -368,8 +438,9 @@ object AgentRouter {
         // ── Assistant-class phone actions (Phase F4) ─────────────────────────
         // Volume: "turn the volume to 50", "volume up", "mute it".
         val volumeText = raw.lowercase().trim()
-        if (volumeText.contains("volume") || volumeText.contains("turn it down") ||
-            volumeText.contains("turn it up") || volumeText.contains("mute")) {
+        val dawVolume = Regex("\\b(db|decibels?|track|channel|fader|plugin|plug in)\\b").containsMatchIn(volumeText)
+        if (!dawVolume && (volumeText.contains("volume") || volumeText.contains("turn it down") ||
+            volumeText.contains("turn it up") || volumeText.contains("mute"))) {
             val levelMatch = Regex("(\\d{1,3})\\s*(%|percent)?").find(volumeText)
             if (volumeText.contains("volume") || volumeText.contains("mute") ||
                 volumeText.contains("turn it down") || volumeText.contains("turn it up")) {
@@ -475,7 +546,10 @@ object AgentRouter {
         // only has to say WHICH clip.
         if (says("do a trick", "show me a trick", "do an animation",
                 "show me an animation", "perform a trick", "do something cute",
-                "animate yourself", "wiggle your ears")) {
+                "animate yourself", "show me another trick", "another trick", "talent show", "do a talent show")) {
+            return AgentIntent("main", "avatar.animate", mapOf("name" to "surprise me"), "surprise performance")
+        }
+        if (says("wiggle your ears")) {
             return AgentIntent("main", "avatar.animate", mapOf("name" to "ear wiggle"), "ear wiggle")
         }
         if (says("dance", "do a dance", "show me a dance", "dance for me")) {
@@ -534,11 +608,25 @@ object AgentRouter {
         // "Act like a dog" is a performance, not a mood, so it gets its own
         // route rather than being left to the model — same reason every trick
         // here is deterministic: it must land on the face, every time.
+        if (says("act like a squirrel", "pretend to be a squirrel")) {
+            return AgentIntent("main", "avatar.describe_animation", mapOf("description" to "squirrel"), "squirrel")
+        }
+        if (says("act like a raccoon", "act like a racoon", "pretend to be a raccoon", "pretend to be a racoon")) {
+            return AgentIntent("main", "avatar.describe_animation", mapOf("description" to "raccoon"), "raccoon")
+        }
         if (says("act like a dog", "be a dog", "pretend to be a dog",
                 "act like a puppy", "be a puppy", "pant like a dog", "do a dog",
                 "be a good boy", "good boy")) {
             return AgentIntent("main", "avatar.describe_animation",
                 mapOf("description" to "dog"), "dog")
+        }
+        if (says("act like a cat", "be a cat", "pretend to be a cat",
+                "act like a kitten", "be a kitten")) {
+            return AgentIntent("main", "avatar.describe_animation",
+                mapOf("description" to "cat"), "cat")
+        }
+        if (says("act like a sloth", "pretend to be a sloth")) {
+            return AgentIntent("main", "avatar.animate", mapOf("name" to "Sloth Stretch"), "sloth performance")
         }
         if (says("make a silly face", "silly face", "be silly",
                 "look silly", "goofy face", "make a goofy face", "do a derp",

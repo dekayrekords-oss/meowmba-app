@@ -50,6 +50,9 @@ val mwdatClientToken = gradle.extra["mwdat.clientToken"] as String
 // that key in local.properties (gitignored); without it the default
 // per-machine debug keystore is used, as before.
 val debugKeystorePath = (localProps.getProperty("debugKeystore") ?: "").trim()
+// For a debug-only device test of Kotlin/UI changes, reuse the unchanged JNI
+// bridges from a verified previous APK. Release always uses the pinned sources.
+val prebuiltDebugNativeDir = providers.gradleProperty("prebuiltDebugNativeDir").orNull
 println(
     when {
         hasMwdat -> "MWDAT (Meta glasses SDK): ENABLED"
@@ -63,7 +66,7 @@ android {
 
     ndkVersion = "27.0.12077973"  // match whatever Task 1 confirmed available
 
-    externalNativeBuild {
+    if (prebuiltDebugNativeDir == null) externalNativeBuild {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
             version = "3.22.1"
@@ -80,8 +83,18 @@ android {
         // versionCode 20 (1.3.16), so an install at 20 would not register as an
         // upgrade and preserving app data would be a coin flip. 21 > 20 makes it
         // a genuine in-place upgrade that keeps the Room database and models.
-        versionCode = 27
-        versionName = "1.3.23"
+        // 81 > 80 so the accessibility-event fix installs as a genuine in-place
+        // upgrade that keeps the Room database and selected models.
+        // 82 > 81 so the adaptive driving-GPS-cadence fix installs the same way.
+        // 83 > 82 so the idle MicButton glow fix installs the same way.
+        // 84 > 83 so the continuous-drive (nervous system) behaviour installs as
+        // a genuine in-place upgrade, and so it is distinguishable on-device from
+        // the 83 thermal build when testing.
+        // 85 > 84 so the affect/valence + pet wiring installs as a genuine
+        // in-place upgrade, and so it is distinguishable on-device from 84 (which
+        // has the drives but not the reply affect or the touch sense).
+        versionCode = 85
+        versionName = "1.3.81"
 
         buildConfigField("boolean", "HAS_MWDAT_SDK", hasMwdat.toString())
         manifestPlaceholders["mwdat_application_id"] = mwdatApplicationId
@@ -128,6 +141,11 @@ android {
                 storePassword = "android"
                 keyAlias = "androiddebugkey"
                 keyPassword = "android"
+                // Samsung / Android 16 sideload: keep v1 + v2 + v3. AGP defaulted
+                // debug to v2-only which some PackageInstaller paths reject.
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
             }
         }
     }
@@ -162,6 +180,7 @@ android {
     // when configured in settings.gradle.kts. verifyMwdatReleaseConfiguration
     // prevents the tokenless development variant from becoming a Play build.
     sourceSets {
+        if (prebuiltDebugNativeDir != null) getByName("debug").jniLibs.srcDir(prebuiltDebugNativeDir)
         getByName("main") {
             if (hasMwdat) {
                 java.srcDir("src/mwdat/java")
@@ -201,6 +220,11 @@ androidComponents {
     onVariants(selector().withBuildType("debug")) { variant ->
         // Fold still has the old id. Release / Play stays com.meow.meowmba.
         variant.applicationId.set("com.example.meowmba")
+        // Combined Computer + avatar update; bump debug-only so in-place
+        // upgrade is allowed without changing release defaultConfig (85).
+        variant.outputs.forEach { output ->
+            output.versionCode.set(125)
+        }
     }
 }
 
@@ -213,6 +237,7 @@ ksp {
 // whole test task. IdleBehaviorTest re-enables it explicitly.
 tasks.withType<Test>().configureEach {
     systemProperty("meowmba.idleAnimations", "false")
+    if (providers.gradleProperty("testProgress").orNull == "true") testLogging.events("started", "failed", "skipped")
 
     // The full suite died with OutOfMemoryError twice under the old defaults
     // (512m worker heap, no JVM recycling). Raising the heap alone did NOT fix
@@ -264,6 +289,7 @@ val verifyReleaseSigningConfiguration = tasks.register("verifyReleaseSigningConf
 }
 tasks.matching { it.name == "preReleaseBuild" }.configureEach {
     dependsOn(verifyReleaseSigningConfiguration)
+    doFirst { check(prebuiltDebugNativeDir == null) { "Release cannot use prebuiltDebugNativeDir. Build the pinned native sources." } }
 }
 
 // These gitignored runtimes must be restored in every fresh release checkout.
@@ -339,6 +365,7 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation("androidx.work:work-runtime-ktx:2.10.2")
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)

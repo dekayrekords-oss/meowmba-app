@@ -1,0 +1,508 @@
+{
+  "build": 115,
+  "version_name": "1.3.81",
+  "source_commit": "2c94201e89382f19a910853faeec2ad896acbf5c",
+  "built_on": "meow-nb:/home/claude/meowmba-fly-habitat",
+  "server_tests": {
+    "tests": 129,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "suites": [
+      {
+        "name": "com.example.meowmba.neural.MaleCnsRemoteTest",
+        "tests": 6
+      },
+      {
+        "name": "com.example.meowmba.neural.InputSoundLevelTest",
+        "tests": 4
+      },
+      {
+        "name": "com.example.meowmba.Fly3DNeuralMotorTest",
+        "tests": 5
+      },
+      {
+        "name": "com.example.meowmba.BrainInfoUiTest",
+        "tests": 8
+      },
+      {
+        "name": "com.example.meowmba.neural.FeatureEncoderTest",
+        "tests": 8
+      },
+      {
+        "name": "com.example.meowmba.AvatarHomeNavigationTest",
+        "tests": 2
+      },
+      {
+        "name": "com.example.meowmba.Fly3DWorldTest",
+        "tests": 9
+      },
+      {
+        "name": "com.example.meowmba.neural.AdaptivePreferenceModelTest",
+        "tests": 3
+      },
+      {
+        "name": "com.example.meowmba.IdlePerformancePolicyTest",
+        "tests": 7
+      },
+      {
+        "name": "com.example.meowmba.neural.NeuralCheckpointTest",
+        "tests": 10
+      },
+      {
+        "name": "com.example.meowmba.SettingsNavigationUiTest",
+        "tests": 6
+      },
+      {
+        "name": "com.example.meowmba.neural.MaleCnsFullGraphTest",
+        "tests": 5
+      },
+      {
+        "name": "com.example.meowmba.neural.NeuralMotorDirectorTest",
+        "tests": 2
+      },
+      {
+        "name": "com.example.meowmba.BrainAvatarVisibilityTest",
+        "tests": 4
+      },
+      {
+        "name": "com.example.meowmba.neural.RecordedReplayTest",
+        "tests": 3
+      },
+      {
+        "name": "com.example.meowmba.neural.NeuralCoreContractTest",
+        "tests": 6
+      },
+      {
+        "name": "com.example.meowmba.neural.SpikingCoreTest",
+        "tests": 5
+      },
+      {
+        "name": "com.example.meowmba.neural.SensoryEventBusTest",
+        "tests": 8
+      },
+      {
+        "name": "com.example.meowmba.neural.LeakyRecurrentCoreTest",
+        "tests": 15
+      },
+      {
+        "name": "com.example.meowmba.neural.NeuralComparisonReportTest",
+        "tests": 1
+      },
+      {
+        "name": "com.example.meowmba.CompanionBrainControlsTest",
+        "tests": 12
+      }
+    ]
+  },
+  "initial_local_tests": {
+    "tests": 33,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "python_tests": {
+    "converter_meow": 14,
+    "converter_mac_passed": 13,
+    "converter_mac_skipped": 1,
+    "bridge": 10,
+    "streaming_apk_reconstruction": 2
+  },
+  "graph_identity": {
+    "schema": 1,
+    "graph": "full",
+    "dataset": "male-cns:v1.0",
+    "asset_sha256": "8860e68b59e454d8d4e8bd601dd7a3cb9049d18516f1ea8df34eabe1ae400d08",
+    "asset_size": 79963380,
+    "neurons": 176422,
+    "pairs": 25862574,
+    "synapses": 125024863,
+    "min_pair_synapses": 1,
+    "autapses_removed": false,
+    "roster_sha256": "a21dcf2576c352eda0f4d455683b648ec28272fd7f4918fdfbf2c97aff9df465"
+  },
+  "worker_tests": {
+    "retained": {
+      "identity": {
+        "asset_sha256": "e33df182bed7a6f3ea279daf4790a82b05706d3d41e819a6a80c0473e8c559f3",
+        "neurons": 176422,
+        "pairs": 6287749,
+        "synapses": 90296905
+      },
+      "checks": {
+        "quiet_is_silent": true,
+        "food_reaches_feeding": true,
+        "touch_reaches_grooming": true,
+        "loom_reaches_jump": true,
+        "lateral_motion_is_directional": true,
+        "steady_compute_within_budget": true,
+        "steady_responses_fresh": true
+      },
+      "cold_request_ms": 325.4418200231157,
+      "compute_p95_ms": 117.338,
+      "steady_round_trip_max_ms": 141.3832499529235,
+      "steady_round_trip_mean_ms": 52.548564181131745
+    },
+    "full": {
+      "identity": {
+        "schema": 1,
+        "graph": "full",
+        "dataset": "male-cns:v1.0",
+        "asset_sha256": "8860e68b59e454d8d4e8bd601dd7a3cb9049d18516f1ea8df34eabe1ae400d08",
+        "asset_size": 79963380,
+        "neurons": 176422,
+        "pairs": 25862574,
+        "synapses": 125024863,
+        "min_pair_synapses": 1,
+        "autapses_removed": false,
+        "roster_sha256": "a21dcf2576c352eda0f4d455683b648ec28272fd7f4918fdfbf2c97aff9df465"
+      },
+      "checks": {
+        "quiet_is_silent": true,
+        "food_reaches_feeding": true,
+        "touch_reaches_grooming": true,
+        "loom_reaches_jump": true,
+        "lateral_motion_is_directional": true,
+        "steady_compute_within_budget": true,
+        "steady_responses_fresh": true
+      },
+      "cold_request_ms": 654.4577439781278,
+      "compute_p95_ms": 254.053,
+      "steady_round_trip_max_ms": 278.90090498840436,
+      "steady_round_trip_mean_ms": 119.54427876441848
+    }
+  },
+  "worker_profile_change_rejected": true,
+  "full_model_checks": {
+    "quiet_is_silent": true,
+    "reset_replays_all_neuron_states": true,
+    "observer_does_not_change_neuron_states": true,
+    "sugar_reaches_feeding": true,
+    "bitter_suppresses_sugar": true,
+    "touch_reaches_grooming": true,
+    "loom_reaches_jump": true,
+    "feeding_requires_connections": true,
+    "jump_requires_connections": true
+  },
+  "live_bridge": {
+    "full": {
+      "graph": "full",
+      "asset_sha256": "8860e68b59e454d8d4e8bd601dd7a3cb9049d18516f1ea8df34eabe1ae400d08",
+      "unsigned_rejected": true,
+      "duplicate_cached": true,
+      "restart_deterministic": true,
+      "compute_p95_ms": 248.951,
+      "steady_round_trip_max_ms": 354.325,
+      "sensory_updates": 124,
+      "motor_peaks": {
+        "quiet": {
+          "mean_hz": 0.0,
+          "max_hz": 0.0,
+          "feed_hz": 0.0,
+          "escape_hz": 0.0,
+          "jump_hz": 0.0,
+          "groom_hz": 0.0,
+          "groom2_hz": 0.0,
+          "wing_hz": 0.0,
+          "left_hz": 0.0,
+          "right_hz": 0.0,
+          "forward_hz": 0.0,
+          "backward_hz": 0.0,
+          "halt_hz": 0.0,
+          "landing_hz": 0.0,
+          "takeoff_hz": 0.0
+        },
+        "food": {
+          "mean_hz": 1.169242,
+          "max_hz": 420.0,
+          "feed_hz": 120.0,
+          "escape_hz": 0.0,
+          "jump_hz": 0.0,
+          "groom_hz": 0.0,
+          "groom2_hz": 0.0,
+          "wing_hz": 3.448276,
+          "left_hz": 20.0,
+          "right_hz": 20.0,
+          "forward_hz": 0.0,
+          "backward_hz": 0.0,
+          "halt_hz": 70.0,
+          "landing_hz": 30.0,
+          "takeoff_hz": 0.0
+        },
+        "touch": {
+          "mean_hz": 8.754917,
+          "max_hz": 500.0,
+          "feed_hz": 20.0,
+          "escape_hz": 0.0,
+          "jump_hz": 0.0,
+          "groom_hz": 220.0,
+          "groom2_hz": 160.0,
+          "wing_hz": 0.689655,
+          "left_hz": 60.0,
+          "right_hz": 0.0,
+          "forward_hz": 0.0,
+          "backward_hz": 55.0,
+          "halt_hz": 0.0,
+          "landing_hz": 95.0,
+          "takeoff_hz": 0.0
+        },
+        "loom": {
+          "mean_hz": 2.164696,
+          "max_hz": 500.0,
+          "feed_hz": 0.0,
+          "escape_hz": 490.0,
+          "jump_hz": 130.0,
+          "groom_hz": 0.0,
+          "groom2_hz": 0.0,
+          "wing_hz": 0.0,
+          "left_hz": 0.0,
+          "right_hz": 0.0,
+          "forward_hz": 0.0,
+          "backward_hz": 0.0,
+          "halt_hz": 0.0,
+          "landing_hz": 5.0,
+          "takeoff_hz": 376.666667
+        },
+        "food_and_touch": {
+          "mean_hz": 8.765347,
+          "max_hz": 500.0,
+          "feed_hz": 70.0,
+          "escape_hz": 0.0,
+          "jump_hz": 0.0,
+          "groom_hz": 210.0,
+          "groom2_hz": 150.0,
+          "wing_hz": 0.689655,
+          "left_hz": 20.0,
+          "right_hz": 0.0,
+          "forward_hz": 0.0,
+          "backward_hz": 25.0,
+          "halt_hz": 0.0,
+          "landing_hz": 95.0,
+          "takeoff_hz": 0.0
+        }
+      }
+    },
+    "retained": {
+      "graph": "retained",
+      "asset_sha256": "e33df182bed7a6f3ea279daf4790a82b05706d3d41e819a6a80c0473e8c559f3",
+      "unsigned_rejected": true,
+      "duplicate_cached": true,
+      "restart_deterministic": true,
+      "compute_p95_ms": 116.824,
+      "steady_round_trip_max_ms": 298.448,
+      "sensory_updates": 124,
+      "motor_peaks": {
+        "quiet": {
+          "mean_hz": 0.0,
+          "max_hz": 0.0,
+          "feed_hz": 0.0,
+          "escape_hz": 0.0,
+          "jump_hz": 0.0,
+          "groom_hz": 0.0,
+          "groom2_hz": 0.0,
+          "wing_hz": 0.0,
+          "left_hz": 0.0,
+          "right_hz": 0.0,
+          "forward_hz": 0.0,
+          "backward_hz": 0.0,
+          "halt_hz": 0.0,
+          "landing_hz": 0.0,
+          "takeoff_hz": 0.0
+        },
+        "food": {
+          "mean_hz": 4.176237,
+          "max_hz": 500.0,
+          "feed_hz": 100.0,
+          "escape_hz": 0.0,
+          "jump_hz": 0.0,
+          "groom_hz": 0.0,
+          "groom2_hz": 0.0,
+          "wing_hz": 0.689655,
+          "left_hz": 20.0,
+          "right_hz": 20.0,
+          "forward_hz": 0.0,
+          "backward_hz": 0.0,
+          "halt_hz": 50.0,
+          "landing_hz": 10.0,
+          "takeoff_hz": 0.0
+        },
+        "touch": {
+          "mean_hz": 4.970015,
+          "max_hz": 500.0,
+          "feed_hz": 30.0,
+          "escape_hz": 0.0,
+          "jump_hz": 0.0,
+          "groom_hz": 200.0,
+          "groom2_hz": 140.0,
+          "wing_hz": 0.689655,
+          "left_hz": 20.0,
+          "right_hz": 0.0,
+          "forward_hz": 0.0,
+          "backward_hz": 75.0,
+          "halt_hz": 0.0,
+          "landing_hz": 55.0,
+          "takeoff_hz": 0.0
+        },
+        "loom": {
+          "mean_hz": 1.394157,
+          "max_hz": 500.0,
+          "feed_hz": 0.0,
+          "escape_hz": 480.0,
+          "jump_hz": 110.0,
+          "groom_hz": 0.0,
+          "groom2_hz": 0.0,
+          "wing_hz": 0.0,
+          "left_hz": 0.0,
+          "right_hz": 0.0,
+          "forward_hz": 0.0,
+          "backward_hz": 0.0,
+          "halt_hz": 0.0,
+          "landing_hz": 0.0,
+          "takeoff_hz": 370.0
+        },
+        "food_and_touch": {
+          "mean_hz": 5.080772,
+          "max_hz": 500.0,
+          "feed_hz": 90.0,
+          "escape_hz": 0.0,
+          "jump_hz": 0.0,
+          "groom_hz": 210.0,
+          "groom2_hz": 150.0,
+          "wing_hz": 0.0,
+          "left_hz": 20.0,
+          "right_hz": 0.0,
+          "forward_hz": 0.0,
+          "backward_hz": 70.0,
+          "halt_hz": 0.0,
+          "landing_hz": 55.0,
+          "takeoff_hz": 0.0
+        }
+      }
+    }
+  },
+  "resource_measurements": {
+    "conversion_wall_seconds": 35.19,
+    "conversion_peak_rss_kib": 1184868,
+    "worker_acceptance_peak_rss_kib": 574072,
+    "worker_acceptance_swap_events": 0,
+    "full_cadence_ms": 400,
+    "full_compute_budget_ms": 300,
+    "retained_cadence_ms": 200,
+    "freshness_limit_ms": 1800,
+    "production_heap_max": "1g",
+    "production_cpu_count": 1
+  },
+  "artifacts": [
+    {
+      "file": "build-out/habitat/meowmba-115.apk",
+      "bytes": 455335425,
+      "sha256": "1468395a087ee3844d5cf9c102d08975bbcd6010f0162fcb0c0b1e67d12d5588",
+      "package": "com.example.meowmba",
+      "signer_sha256": "b7850d5fb645df9f5d12525db1b10e457b0ee7f3aa50bbf4294ff31dae3379ff"
+    },
+    {
+      "file": "build-out/habitat/tests115.apk",
+      "bytes": 2740418,
+      "sha256": "fc604d9b4f3c847130b7c84bcc1181ff66bb57706df4ed144980914505b2071e",
+      "package": "com.example.meowmba.test",
+      "signer_sha256": "b7850d5fb645df9f5d12525db1b10e457b0ee7f3aa50bbf4294ff31dae3379ff"
+    }
+  ],
+  "preserved_runtime_entry_count": 53,
+  "preserved_runtime_entries": [
+    "lib/arm64-v8a/libandroidx.graphics.path.so",
+    "lib/arm64-v8a/libface_detector_v2_jni.so",
+    "lib/arm64-v8a/libimage_processing_util_jni.so",
+    "lib/arm64-v8a/liblitertlm_jni.so",
+    "lib/arm64-v8a/libllm_inference_engine_jni.so",
+    "lib/arm64-v8a/libmediapipe_tasks_vision_image_generator_jni.so",
+    "lib/arm64-v8a/libmediapipe_tasks_vision_jni.so",
+    "lib/arm64-v8a/libneedle_jni_bridge.so",
+    "lib/arm64-v8a/libonnxruntime.so",
+    "lib/arm64-v8a/libsd_jni_bridge.so",
+    "lib/arm64-v8a/libsherpa-onnx-jni.so",
+    "lib/arm64-v8a/libsurface_util_jni.so",
+    "lib/arm64-v8a/libxeno_native.so",
+    "assets/mlkit_pose/benchmark_breaking1.data",
+    "assets/mlkit_pose/benchmark_breaking2.data",
+    "assets/mlkit_pose/benchmark_halfbody.data",
+    "assets/mlkit_pose/benchmark_jump.data",
+    "assets/mlkit_pose/benchmark_plant.data",
+    "assets/mlkit_pose/bundled_allowlist.binarypb",
+    "assets/mlkit_pose/pose_landmark_detector_lite_f16_inf.tflite",
+    "assets/mlkit_pose/pose_non_tracking_graph.binarypb",
+    "assets/mlkit_pose/pose_non_tracking_graph_gpu.binarypb",
+    "assets/mlkit_pose/pose_non_tracking_graph_nnapi.binarypb",
+    "assets/mlkit_pose/pose_person_detector_f16.tflite",
+    "assets/mlkit_pose/pose_tracking_graph.binarypb",
+    "assets/mlkit_pose/pose_tracking_graph_gpu.binarypb",
+    "assets/mlkit_pose/pose_tracking_graph_nnapi.binarypb",
+    "assets/mobile_acceleration/gpu_compatibility.bin",
+    "assets/models_bundled/BCLjoy_200.emd",
+    "assets/models_bundled/BCLlefteyeclosed_200.emd",
+    "assets/models_bundled/BCLrighteyeclosed_200.emd",
+    "assets/models_bundled/LMprec_600.emd",
+    "assets/models_bundled/MFT_fssd_accgray.pb",
+    "assets/models_bundled/MFT_fssd_fastgray.pb",
+    "assets/models_bundled/blazeface.tfl",
+    "assets/models_bundled/contours.tfl",
+    "assets/models_bundled/fssd_25_8bit_gray_v2.tflite",
+    "assets/models_bundled/fssd_25_8bit_v2.tflite",
+    "assets/models_bundled/fssd_anchors_v2.pb",
+    "assets/models_bundled/fssd_anchors_v5.pb",
+    "assets/models_bundled/fssd_medium_8bit_gray_v5.tflite",
+    "assets/models_bundled/fssd_medium_8bit_v5.tflite",
+    "assets/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01/decoder-epoch-12-avg-2-chunk-16-left-64.int8.onnx",
+    "assets/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01/encoder-epoch-12-avg-2-chunk-16-left-64.int8.onnx",
+    "assets/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01/joiner-epoch-12-avg-2-chunk-16-left-64.int8.onnx",
+    "assets/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01/keywords.txt",
+    "assets/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01/tokens.txt",
+    "assets/sherpa-onnx-streaming-zipformer-en-2023-06-26/decoder-epoch-99-avg-1-chunk-16-left-128.int8.onnx",
+    "assets/sherpa-onnx-streaming-zipformer-en-2023-06-26/encoder-epoch-99-avg-1-chunk-16-left-128.int8.onnx",
+    "assets/sherpa-onnx-streaming-zipformer-en-2023-06-26/joiner-epoch-99-avg-1-chunk-16-left-128.int8.onnx",
+    "assets/sherpa-onnx-streaming-zipformer-en-2023-06-26/tokens.txt",
+    "assets/silero_vad.onnx",
+    "assets/speaker.onnx"
+  ],
+  "preserved_painted_background_count": 15,
+  "preserved_painted_backgrounds": [
+    "assets/backgrounds/painted/beach.png",
+    "assets/backgrounds/painted/bedroom.png",
+    "assets/backgrounds/painted/cafe.png",
+    "assets/backgrounds/painted/cartoon_diner.png",
+    "assets/backgrounds/painted/cartoon_galley.png",
+    "assets/backgrounds/painted/cartoon_laundromat.png",
+    "assets/backgrounds/painted/cartoon_nook.png",
+    "assets/backgrounds/painted/cartoon_snack_lab.png",
+    "assets/backgrounds/painted/greenhouse.png",
+    "assets/backgrounds/painted/kitchen.png",
+    "assets/backgrounds/painted/library.png",
+    "assets/backgrounds/painted/observatory.png",
+    "assets/backgrounds/painted/orchard.png",
+    "assets/backgrounds/painted/pond.png",
+    "assets/backgrounds/painted/workshop.png"
+  ],
+  "helper": {
+    "runtime": "~/.meowmba-bridge/runtime-115",
+    "worker": "/home/prog/research/malecns-worker-115",
+    "pairing_certificate_preserved": true,
+    "worker_stopped_after_tests": true
+  },
+  "device": {
+    "connected": false,
+    "last_verified_build": 112,
+    "build115_installed": false,
+    "malecns_pairing_verified": false
+  },
+  "pending": [
+    "Phone installation and opt-in full graph acceptance",
+    "Physical GLES/touch review",
+    "Sustained phone heat/battery validation"
+  ],
+  "limitations": [
+    "Available confidence-0.5 graph between annotated neurons; unannotated fragments excluded",
+    "Fixed-weight point-neuron model; no validated biological learning or muscle/flight physiology",
+    "Forward motor population remained silent under tested cues",
+    "No robot hardware available; physical control unchanged"
+  ]
+}

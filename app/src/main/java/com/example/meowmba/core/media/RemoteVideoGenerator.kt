@@ -12,6 +12,7 @@ import io.ktor.http.ContentType
 import io.ktor.http.contentLength
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -56,7 +57,9 @@ class RemoteVideoGenerator(
             val jobId = startGeneration(prompt)
                 ?: return Result.failure(IllegalStateException("Video server did not return a job id"))
             pollUntilDone(jobId, onProgress)
-        } catch (e: Throwable) {
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
             Result.failure(IllegalStateException("Video server unreachable: ${e.message ?: "network error"}"))
         } finally {
             client.close()

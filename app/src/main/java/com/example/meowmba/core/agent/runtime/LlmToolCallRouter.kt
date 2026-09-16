@@ -16,7 +16,7 @@ import kotlinx.coroutines.withContext
 object CommandHeuristics {
     private val SIGNAL_WORDS = setOf(
         // Files, projects, memory
-        "create", "make", "file", "folder", "project", "delete", "remove",
+        "create", "make", "file", "files", "assets", "library", "organize", "cleanup", "clean", "folder", "project", "delete", "remove",
         "read", "open", "write", "save", "search", "find", "list", "show",
         "task", "workspace", "memory", "remember", "note", "scaffold", "todo",
         // Email and calendar — these tools are registered but were unreachable
@@ -43,9 +43,31 @@ object CommandHeuristics {
     )
 
     fun mightBeCommand(text: String): Boolean {
-        val tokens = WakePhraseMatcher.normalize(text).split(' ')
-        return tokens.any { it in SIGNAL_WORDS }
+        if (AvatarFormRequest.parse(AgentRouter.stripAddress(text)) != null) return true
+        if (AvatarSceneRequest.parse(text) != null) return true
+        val normalized = WakePhraseMatcher.normalize(text)
+        if (normalized.matches(Regex("(yes|yeah|yep|sure|ok|okay)( please)?"))) return true
+        val request = normalized
+            .replace(Regex("^(hey|hi)\\s+"), "")
+            .replace(Regex("^(please|just)\\s+"), "")
+            .replace(Regex("^(can|could|would|will) you\\s+"), "")
+            .replace(Regex("^(i want you to|i'd like you to|i would like you to|let's|lets)\\s+"), "")
+            .replace(Regex("^please\\s+"), "")
+        // A noun mentioned in conversation is not a request to act on it.
+        // Measured: "just chillin with the cats" reached Needle and became video.
+        val first = request.substringBefore(' ')
+        return first in ACTION_VERBS
     }
+
+    private val ACTION_VERBS = setOf(
+        "create", "make", "organize", "clean", "delete", "remove", "read", "open",
+        "write", "save", "search", "find", "list", "show", "remember", "note",
+        "scaffold", "email", "mail", "send", "draft", "reply", "compose", "schedule",
+        "remind", "draw", "paint", "sketch", "render", "generate", "animate", "launch",
+        "start", "call", "text", "run", "build", "tap", "click", "press", "swipe",
+        "scroll", "type", "control", "navigate", "play", "pause", "stop", "perform",
+        "dance", "wiggle", "lick", "do", "set", "turn", "change", "update", "move", "work", "plan",
+    )
 }
 
 /**
@@ -96,6 +118,8 @@ class LlmToolCallRouter(
             withContext(dispatcher) {
                 provider.generate(prompt)
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             null
         } ?: return null

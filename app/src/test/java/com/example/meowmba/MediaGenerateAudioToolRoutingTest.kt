@@ -19,12 +19,13 @@ private class FakeMusicGenerator(
     override fun isAvailable() = available
     override suspend fun generate(prompt: String, durationSec: Int): Result<ByteArray> {
         callCount++
-        return if (succeeds) Result.success(byteArrayOf(1, 2, 3))
+        return if (succeeds) Result.success(validGeneratedWav())
                else Result.failure(IllegalStateException("boom"))
     }
 }
 
 @RunWith(RobolectricTestRunner::class)
+@org.robolectric.annotation.Config(sdk = [35])
 class MediaGenerateAudioToolRoutingTest {
 
     private fun workspace(): Workspace =
@@ -42,23 +43,23 @@ class MediaGenerateAudioToolRoutingTest {
     }
 
     @Test
-    fun `falls back to the tone generator when nothing is configured`() = runTest {
+    fun `missing music backend fails without pretending tones are a song`() = runTest {
         val tool = MediaGenerateAudioTool(workspace())
 
         val result = tool.execute(mapOf("prompt" to "lofi beat"))
 
-        assertTrue(result is ToolResult.Success)
-        assertTrue((result as ToolResult.Success).output.contains("audio_"))
+        assertTrue(result is ToolResult.Failure)
+        assertTrue((result as ToolResult.Failure).error.contains("No audio was created"))
     }
 
     @Test
-    fun `falls back to the tone generator when the remote generator fails`() = runTest {
+    fun `remote generation failure remains a failure`() = runTest {
         val remote = FakeMusicGenerator(available = true, succeeds = false)
         val tool = MediaGenerateAudioTool(workspace(), remoteGenerator = { remote })
 
         val result = tool.execute(mapOf("prompt" to "lofi beat"))
 
         assertEquals(1, remote.callCount)
-        assertTrue(result is ToolResult.Success)
+        assertTrue(result is ToolResult.Failure)
     }
 }

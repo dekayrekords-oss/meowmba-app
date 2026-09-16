@@ -10,12 +10,12 @@ import org.json.JSONObject
 /**
  * Places the user has taught the companion ("home", "work", "mom's").
  *
- * Plain SharedPreferences rather than DataStore or Room: this app has neither a
- * DataStore dependency nor a reason to gain one for a handful of coordinates, and
- * putting them in Room would mean a schema migration. Nothing here touches the
- * network, so saved-place navigation works with no server and no signal.
+ * One encrypted source shared by voice, tools and the NAV card. Older voice
+ * and NAV preference formats migrate once; deletion cannot resurrect a stale
+ * duplicate from another store. Saved navigation works without a network.
  */
-class SavedPlaceStore(private val context: Context) {
+class SavedPlaceStore(private val context: Context, suppliedStorage: com.example.meowmba.core.security.SecureStorageManager? = null) {
+    private val storage by lazy { suppliedStorage ?: com.example.meowmba.core.security.SecureStorageManager(context) }
 
     // Lazy on purpose: constructing this must not touch Context or disk. It is built
     // eagerly inside CompanionViewModel's init, and doing I/O there NPE'd every test
@@ -41,9 +41,13 @@ class SavedPlaceStore(private val context: Context) {
     private val _places by lazy { MutableStateFlow(read()) }
     val places: StateFlow<List<SavedPlace>> get() = _places.asStateFlow()
 
+    fun all(): List<SavedPlace> = read()
+
     fun save(name: String, lat: Double, lon: Double) {
+        require(com.example.meowmba.core.alerts.RoadFeed.validCoordinates(lat, lon))
         val clean = name.trim().lowercase()
         if (clean.isBlank()) return
+        require(clean.length <= 80)
         // Re-saving a name overwrites it: "this is my home" should move home, not add
         // a second one.
         val next = read().filterNot { it.name == clean } +
@@ -76,13 +80,30 @@ class SavedPlaceStore(private val context: Context) {
                 }
             )
         }
-        prefs.edit().putString(KEY, arr.toString()).apply()
+        storage.savePreference(SECURE_KEY, arr.toString())
         _places.value = list.sortedBy { it.name }
     }
 
     private fun read(): List<SavedPlace> {
-        val raw = prefs.getString(KEY, null)
-        if (raw.isNullOrBlank()) return emptyList()
+        var raw = storage.getPreference(SECURE_KEY)
+        if (raw == null) {
+            // Both historical stores now migrate into one encrypted source.
+            // Keep legacy data intact if parsing fails; never clear on failure.
+            val nav = JSONArray(prefs.getString(KEY, "[]") ?: "[]")
+            val voice = JSONObject(storage.getPreference("named_places") ?: "{}")
+            val names = (0 until nav.length()).map { nav.getJSONObject(it).getString("name").lowercase() }.toSet()
+            voice.keys().asSequence().filter { it.lowercase() !in names }.forEach { name ->
+                val parts = voice.getString(name).split(",")
+                val lat = parts[0].toDouble(); val lon = parts[1].toDouble()
+                if (com.example.meowmba.core.alerts.RoadFeed.validCoordinates(lat, lon)) nav.put(JSONObject()
+                    .put("name", name.lowercase()).put("lat", lat).put("lon", lon).put("savedAt", 0L))
+            }
+            raw = nav.toString()
+            storage.savePreference(SECURE_KEY, raw)
+            // Leaving old stores inert avoids any cross-file migration data-loss
+            // window. All reads, saves and deletes below use SECURE_KEY only.
+        }
+        if (raw.isBlank()) return emptyList()
         return try {
             val arr = JSONArray(raw)
             (0 until arr.length()).mapNotNull { i ->
@@ -101,5 +122,6 @@ class SavedPlaceStore(private val context: Context) {
 
     private companion object {
         const val KEY = "places"
+        const val SECURE_KEY = "saved_places_v2"
     }
 }

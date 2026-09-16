@@ -9,9 +9,13 @@ import java.util.*
 /**
  * [SpeechSynthesizer] backed by Android's Text-to-Speech engine.
  */
-class TextToSpeechManager(context: Context) : SpeechSynthesizer {
+class TextToSpeechManager(private val context: Context) : SpeechSynthesizer {
     private var tts: TextToSpeech? = null
     private var isInitialized = false
+    private val neural by lazy { LocalNeuralSpeech(context.applicationContext,
+        started = { onSpeechStarted?.invoke() }, finished = { onSpeechFinished?.invoke() },
+        failed = { LocalVoiceRuntime.lastError.value = it }) }
+    private fun useNeural() = LocalVoices.enabled(context) && LocalVoicePack(context).ready()
 
     override var onSpeechStarted: (() -> Unit)? = null
     override var onSpeechFinished: (() -> Unit)? = null
@@ -20,8 +24,11 @@ class TextToSpeechManager(context: Context) : SpeechSynthesizer {
     init {
         tts = TextToSpeech(context) { status ->
             if (status == TextToSpeech.SUCCESS) {
-                tts?.language = Locale.US
-                isInitialized = true
+                // Never send speech to a network-backed Android voice.
+                val offline = tts?.voices?.filter { !it.isNetworkConnectionRequired && it.locale.language == "en" }
+                    ?.sortedByDescending { it.quality }?.firstOrNull()
+                if (offline != null) tts?.voice = offline
+                isInitialized = offline != null
                 setupListener()
             }
         }
@@ -42,6 +49,9 @@ class TextToSpeechManager(context: Context) : SpeechSynthesizer {
     fun setSpeechRate(rate: Float) { tts?.setSpeechRate(rate.coerceIn(0.5f, 2.0f)) }
 
     private var pendingUtterances = 0
+    private val activeIds = mutableSetOf<String>()
+    private val startCallbacks = mutableMapOf<String, () -> Unit>()
+    private var speakingStarted = false
 
     /**
      * True while any utterance — or a queued tail of streamed sentences — is still
@@ -57,8 +67,9 @@ class TextToSpeechManager(context: Context) : SpeechSynthesizer {
     private var oldestPendingAtMs = 0L
 
     fun isSpeaking(): Boolean = synchronized(this) {
+        if (neural.isSpeaking()) return true
         if (pendingUtterances <= 0) return false
-        System.currentTimeMillis() - oldestPendingAtMs < 20_000L
+        tts?.isSpeaking == true || System.currentTimeMillis() - oldestPendingAtMs < 20_000L
     }
 
     /**
@@ -75,42 +86,60 @@ class TextToSpeechManager(context: Context) : SpeechSynthesizer {
     private fun setupListener() {
         tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) {
-                // Only the first utterance of a reply is a transition into speaking.
-                if (pendingUtterances <= 1) onMain { onSpeechStarted?.invoke() }
+                synchronized(this@TextToSpeechManager) {
+                    if (utteranceId !in activeIds || speakingStarted) return
+                    speakingStarted = true
+                }
+                onMain { synchronized(this@TextToSpeechManager) {
+                    if (utteranceId in activeIds) {
+                        startCallbacks.remove(utteranceId)?.invoke()
+                        onSpeechStarted?.invoke()
+                    }
+                } }
             }
 
             override fun onDone(utteranceId: String?) {
-                finishOne()
+                finishOne(utteranceId)
             }
 
             override fun onError(utteranceId: String?) {
-                finishOne()
+                finishOne(utteranceId)
             }
 
             // API 30+: engines may report failures through this overload ONLY —
             // missing it leaked pendingUtterances and gated the mic shut.
             override fun onError(utteranceId: String?, status: Int) {
-                finishOne()
+                finishOne(utteranceId)
             }
 
-            private fun finishOne() {
+            private fun finishOne(id: String?) {
                 synchronized(this@TextToSpeechManager) {
-                    pendingUtterances = (pendingUtterances - 1).coerceAtLeast(0)
+                    if (!activeIds.remove(id)) return
+                    startCallbacks.remove(id)
+                    pendingUtterances = activeIds.size
                     if (pendingUtterances > 0) return
+                    speakingStarted = false
                 }
-                onMain { onSpeechFinished?.invoke() }
+                onMain { synchronized(this@TextToSpeechManager) {
+                    if (pendingUtterances == 0) onSpeechFinished?.invoke()
+                } }
             }
 
             // API 26+: word-boundary events drive the avatar's mouth rhythm.
             // On older devices this simply never fires and the renderer
             // falls back to its base talk cycle.
             override fun onRangeStart(utteranceId: String?, start: Int, end: Int, frame: Int) {
+                synchronized(this@TextToSpeechManager) { if (utteranceId !in activeIds) return }
                 onMain { onWordBoundary?.invoke(start, end) }
             }
         })
     }
 
+    private var expression = VoiceExpression()
+    override fun setExpression(expression: VoiceExpression) { this.expression = expression.bounded() }
+
     override fun speak(text: String) = enqueue(text, flush = true)
+    override fun speak(text: String, onStarted: () -> Unit) = enqueue(text, flush = true, onStarted = onStarted)
 
     /**
      * Appends [text] to what is already being said instead of cutting it off.
@@ -122,29 +151,50 @@ class TextToSpeechManager(context: Context) : SpeechSynthesizer {
      */
     override fun speakMore(text: String) = enqueue(text, flush = false)
 
-    private fun enqueue(text: String, flush: Boolean) {
-        if (!isInitialized || text.isBlank()) return
-        synchronized(this) {
-            if (pendingUtterances == 0) oldestPendingAtMs = System.currentTimeMillis()
-            if (flush) pendingUtterances = 0
-            pendingUtterances++
+    fun previewLocalVoice(id: String) {
+        stop()
+        val voice = LocalVoices.find(id)
+        neural.enqueue("Hi, I'm ${voice.name}. What would you like to do next?", true, voice)
+    }
+
+    private fun enqueue(text: String, flush: Boolean, onStarted: (() -> Unit)? = null) {
+        if (useNeural()) {
+            if (flush) { synchronized(this) { pendingUtterances = 0; activeIds.clear(); startCallbacks.clear(); speakingStarted = false }; tts?.stop() }
+            LocalVoiceRuntime.lastError.value = null
+            neural.enqueue(text, flush, rate = expression.rate, onStarted = onStarted)
+            return
         }
+        if (!isInitialized || text.isBlank()) return
         val id = "memba_utterance_${utteranceSeq++}"
+        synchronized(this) {
+            if (flush || pendingUtterances == 0) oldestPendingAtMs = System.currentTimeMillis()
+            if (flush) { activeIds.clear(); startCallbacks.clear(); speakingStarted = false }
+            activeIds.add(id)
+            if (onStarted != null) startCallbacks[id] = onStarted
+            pendingUtterances = activeIds.size
+        }
         val params = Bundle().apply {
             putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, id)
         }
+        tts?.setPitch(expression.pitch)
+        tts?.setSpeechRate(expression.rate)
         val mode = if (flush) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
-        tts?.speak(text, mode, params, id)
+        if (tts?.speak(text, mode, params, id) == TextToSpeech.ERROR) {
+            synchronized(this) { activeIds.remove(id); startCallbacks.remove(id); pendingUtterances = activeIds.size }
+            if (pendingUtterances == 0) onMain { onSpeechFinished?.invoke() }
+        }
     }
 
     private var utteranceSeq = 0L
 
     override fun stop() {
-        synchronized(this) { pendingUtterances = 0 }
+        synchronized(this) { pendingUtterances = 0; activeIds.clear(); startCallbacks.clear(); speakingStarted = false }
+        neural.stop()
         tts?.stop()
     }
 
     override fun shutdown() {
+        neural.shutdown()
         tts?.shutdown()
     }
 }

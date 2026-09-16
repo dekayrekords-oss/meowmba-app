@@ -1,0 +1,10 @@
+// Optional local JVM-test limit. Apply with Gradle -I; production defaults stay intact.
+// This does not make a JVM-only native placeholder suitable for an APK.
+allprojects {
+    afterEvaluate {
+        tasks.withType(org.gradle.api.tasks.testing.Test).configureEach {
+            maxHeapSize = '2g'
+            maxParallelForks = 1
+        }
+    }
+}

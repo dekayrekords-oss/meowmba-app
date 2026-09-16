@@ -1,0 +1,18 @@
+{
+  "label": "build107 avatar foreground camera/mic off USB at full charge baseline",
+  "version": "versionCode=107 minSdk=31 targetSdk=36\nversionName=1.3.81\nlastUpdateTime=2026-09-13 09:28:55",
+  "sampleCount": 300,
+  "foregroundSamples": 43,
+  "durationSeconds": 598.9816375000228,
+  "measuredForegroundCpuSeconds": 78.11793370902888,
+  "meanCpuPercentOfOneCore": 71.41765962193108,
+  "p95IntervalCpuPercentOfOneCore": 88.89675384348709,
+  "batteryCStart": 31.3,
+  "batteryCEnd": 32.4,
+  "batteryCMax": 32.5,
+  "thermalStatusStart": 0,
+  "thermalStatusEnd": 0,
+  "usbChargingObserved": true,
+  "batteryDrainConclusion": "Not measured: USB-powered observations cannot establish unplugged drain.",
+  "limitations": "Foreground does not prove motion was active. No GPU/frame-time gate, room-temperature control, or all-day guarantee."
+}

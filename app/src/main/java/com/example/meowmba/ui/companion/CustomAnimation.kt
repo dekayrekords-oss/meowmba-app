@@ -51,6 +51,7 @@ data class AnimFrame(
 data class CustomAnimationSpec(
     val name: String,
     val frames: List<AnimFrame>,
+    val props: List<InventedProp> = emptyList(),
 ) {
     val durationMs: Int get() = frames.last().atMs
 }
@@ -532,7 +533,7 @@ object CustomAnimations {
         } else {
             frames
         }
-        return CustomAnimationSpec(name, stretched) to notes
+        return CustomAnimationSpec(name, stretched, InventedScenes.parse(root, stretched.last().atMs)) to notes
     }
 
     private fun parseFrame(index: Int, f: JSONObject, notes: MutableList<String>): AnimFrame {
@@ -643,7 +644,9 @@ object CustomAnimations {
             f.sparkle?.let { o.put("sparkle", it.toDouble()) }
             frames.put(o)
         }
-        return JSONObject().put("name", spec.name).put("frames", frames).toString()
+        return JSONObject().put("name", spec.name).put("frames", frames).apply {
+            if (spec.props.isNotEmpty()) put("props", InventedScenes.toJson(spec.props))
+        }.toString()
     }
 
     /**

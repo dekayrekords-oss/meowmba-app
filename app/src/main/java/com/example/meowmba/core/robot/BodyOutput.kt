@@ -8,8 +8,16 @@ package com.example.meowmba.core.robot
  * still serves the TCP/serial transport and is left alone.
  */
 interface BodyOutput {
+    /** Device-specific protocol and stop bounds must be verified, not inferred from connection. */
+    val wheelControlVerified: Boolean get() = false
     /** -1 fully up, 0 center, +1 down. */
     fun neck(pitch: Float)
+
+    /** Last submitted pitch, not measured joint position; null after brake/connect. */
+    val lastCommandedNeckPitch: Float? get() = null
+
+    /** Authored samples already eased by a live BodySession; same position channel. */
+    fun profiledNeck(pitch: Float) = neck(pitch)
 
     /** In-place rotation. [sign] is recorded but not yet honourable — see BodyVerb.Turn. */
     fun turn(speedPercent: Int, ticks: Int, sign: Int)
@@ -31,7 +39,7 @@ interface BodyOutput {
 fun BodyOutput.perform(verb: BodyVerb) {
     runCatching {
         when (verb) {
-            is BodyVerb.Neck -> neck(verb.pitch)
+            is BodyVerb.Neck -> if (verb.profiled) profiledNeck(verb.pitch) else neck(verb.pitch)
             is BodyVerb.Turn -> turn(verb.speedPercent, verb.ticks, verb.sign)
             is BodyVerb.Drive -> drive(verb.speed)
             is BodyVerb.Light -> light(verb.on)
@@ -86,7 +94,9 @@ class LooiBleBodyOutput(
     private val nowMs: () -> Long = System::currentTimeMillis,
 ) : BodyOutput {
 
-    constructor(link: LooiBleLink) : this(link, { link.connected }, { link.setNeckPitch(it) })
+    constructor(link: LooiBleLink) : this(link, { link.connected }, {
+        check(link.setNeckPitch(it)) { "Robot rejected neck command (disconnected or Bluetooth busy)." }
+    })
 
     /**
      * Face tracking calls neck() every camera frame. Coalescing keeps a steady
@@ -99,6 +109,30 @@ class LooiBleBodyOutput(
     private var neckTargetSinceMs = 0L
     private var lastNeckWriteAtMs = 0L
 
+    override val lastCommandedNeckPitch: Float?
+        get() = lastNeckPitch.takeIf { connected() && it.isFinite() }
+
+    /**
+     * An exclusive authored trajectory must not re-enter the camera sustain
+     * filter: each intermediate point intentionally changes. Keep the same
+     * 250 ms wire budget and travel cap, with no timer or deferred packet here.
+     * Only the owning session submits subsequent samples; brake cannot leave
+     * an autonomous ramp running. This is open-loop target interpolation.
+     */
+    override fun profiledNeck(pitch: Float) {
+        if (!connected() || !pitch.isFinite()) return
+        val now = nowMs()
+        if (lastNeckPitch.isFinite() &&
+            (now < lastNeckWriteAtMs || now - lastNeckWriteAtMs < NECK_SPACING_MS)) return
+        val bounded = pitch.coerceIn(-RobotManager.NECK_RANGE, RobotManager.NECK_RANGE)
+        if (bounded == lastNeckPitch) return
+        writePitch(bounded)
+        lastNeckWriteAtMs = now
+        lastNeckPitch = bounded
+        neckTarget = bounded
+        neckTargetSinceMs = now
+    }
+
     override fun neck(pitch: Float) {
         if (!connected()) return
         val clamped = pitch.coerceIn(-1f, 1f)
@@ -109,7 +143,8 @@ class LooiBleBodyOutput(
         // kills single-frame jitter) and writes have to leave the servo time to
         // settle ([NECK_SPACING_MS]). Measured on device: without both, the base
         // nodded continuously and the screen was hard to touch.
-        if (clamped != neckTarget) {
+        if (!clamped.isFinite()) return
+        if (neckTarget.isNaN() || kotlin.math.abs(clamped - neckTarget) > NECK_TARGET_TOLERANCE) {
             neckTarget = clamped
             neckTargetSinceMs = now
         }
@@ -121,9 +156,9 @@ class LooiBleBodyOutput(
         if (!lastNeckPitch.isNaN() &&
             kotlin.math.abs(clamped - lastNeckPitch) < NECK_DEADBAND
         ) return
+        writePitch(clamped)
         lastNeckWriteAtMs = now
         lastNeckPitch = clamped
-        writePitch(clamped)
     }
 
     override fun turn(speedPercent: Int, ticks: Int, sign: Int) {
@@ -133,23 +168,29 @@ class LooiBleBodyOutput(
         // clip-driven turn the same way — the same "left does nothing" bug the
         // follow loop already avoids by passing a signed speed.
         val mag = kotlin.math.abs(speedPercent)
-        link?.turnPulse(if (sign < 0) -mag else mag, ticks)
+        check(link?.turnPulse(if (sign < 0) -mag else mag, ticks) == true) { "Wheel control is not verified." }
     }
 
     override fun drive(speed: Float) {
-        if (connected()) link?.driveSpeed(speed)
+        check(connected() && link?.driveSpeed(speed) == true) { "Robot rejected drive command." }
     }
 
     override fun light(on: Boolean) {
-        if (connected()) link?.setHeadlight(on)
+        check(connected() && link?.setHeadlight(on) == true) { "Robot rejected light command." }
     }
 
     override fun brake() {
-        if (connected()) link?.stopAll()
+        if (connected()) {
+            link?.stopAll()
+        }
+        lastNeckPitch = Float.NaN
+        neckTarget = Float.NaN
     }
 
-    private companion object {
+    internal companion object {
         const val NECK_DEADBAND = 0.04f
+        /** Camera samples may settle within a small band without being bit-identical. */
+        const val NECK_TARGET_TOLERANCE = 0.015f
 
         /** A neck pose must hold this long before it is written. */
         const val NECK_SUSTAIN_MS = 120L

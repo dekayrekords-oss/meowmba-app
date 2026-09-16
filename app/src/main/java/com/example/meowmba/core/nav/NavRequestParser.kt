@@ -164,7 +164,8 @@ object NavRequestParser {
      * @param savedPlaceNames names the user has previously saved, lowercased.
      */
     fun parse(text: String, savedPlaceNames: Set<String> = emptySet()): NavRequest? {
-        val t = text.lowercase().trim().trimEnd('.', '!', '?')
+        val t = text.lowercase().replace('’','\'').trim().trimEnd('.', '!', '?')
+            .replace(Regex("^(?:(?:ok|okay|please),?\\s+)+"), "")
         if (t.isBlank()) return null
 
         val trigger = TRIGGERS.firstOrNull { t == it || t.startsWith("$it ") } ?: return null
@@ -176,7 +177,7 @@ object NavRequestParser {
 
         LEADING_NOISE.forEach { if (target.startsWith(it)) target = target.removePrefix(it) }
         TRAILING_NOISE.forEach { if (target.endsWith(it)) target = target.removeSuffix(it) }
-        target = target.trim().trimEnd(',')
+        target = target.trim().trimEnd(',').trim('"','“','”','\'')
         if (target.isBlank()) return null
 
         // 1. Saved places win — the user explicitly taught us these.

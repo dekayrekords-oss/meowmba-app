@@ -18,17 +18,17 @@ class KeepInFrameTest {
     }
 
     @Test
-    fun `front camera subject on the right turns the robot left`() {
+    fun `screen side produces matching signed intent without claiming verified motor direction`() {
         val t = KeepInFrame.Tracker()
         val onScreenRight = KeepInFrame.step(0.40f, 0f, 1f, 1_000, 1_000, 0f, t)
         val t2 = KeepInFrame.Tracker()
         val onScreenLeft = KeepInFrame.step(-0.40f, 0f, 1f, 1_000, 1_000, 0f, t2)
         assertTrue(
-            "person on the right of a facing camera is the robot's right",
+            "screen-right produces positive intent",
             onScreenRight.turnSpeed > 0,
         )
         assertTrue(
-            "person on the left of a facing camera is the robot's left",
+            "screen-left produces negative intent",
             onScreenLeft.turnSpeed < 0,
         )
         assertTrue(onScreenRight.turning)
@@ -89,42 +89,31 @@ class KeepInFrameTest {
     }
 
     @Test
-    fun `a lost face sweeps the way they left, then rests`() {
+    fun `a lost face holds only briefly and never searches`() {
         val t = KeepInFrame.Tracker()
-        assertTrue(KeepInFrame.step(0.40f, 0f, 1f, 1_000, 1_000, 0.40f, t).turning)
-        // A 200ms blink is still a lock, not a loss.
+        assertTrue(KeepInFrame.step(0.40f, -0.5f, 1f, 1_000, 1_000, 0.40f, t).turning)
         val blink = KeepInFrame.step(null, null, null, nowMs = 1_200, lastSeenMs = 1_000, lastX = 0.40f, tracker = t)
-        assertFalse(blink.searching)
-        assertFalse(blink.turning)
-        // Past the hold they left to the right, so sweep right.
-        val sweep = KeepInFrame.step(null, null, null, nowMs = 1_700, lastSeenMs = 1_000, lastX = 0.40f, tracker = t)
-        assertTrue("a lost face must be searched for, got $sweep", sweep.searching)
-        assertTrue(sweep.turnSpeed > 0)
-        // One burst is bounded: SEARCH_GIVE_UP_MS after it started the base
-        // rests instead of hunting (started 1_700, so 4_600 is past it).
-        val rested = KeepInFrame.step(null, null, null, nowMs = 4_600, lastSeenMs = 1_000, lastX = 0.40f, tracker = t)
-        assertFalse("search must rest between bursts", rested.turning)
-        // ...and sweeps back the other way once the SEARCH_PAUSE_MS rest is over.
-        val back = KeepInFrame.step(null, null, null, nowMs = 6_600, lastSeenMs = 1_000, lastX = 0.40f, tracker = t)
-        assertTrue("the second sweep goes back the other way, got $back", back.turnSpeed < 0)
+        assertStopped(blink)
+        assertEquals(-0.2f, blink.neckPitch, 0.0001f)
+        assertTrue(t.hasBody)
+        val expired = KeepInFrame.step(null, null, null, 1_400, 1_000, 0.40f, t)
+        assertStopped(expired)
+        assertEquals(0f, expired.neckPitch, 0f)
+        assertFalse(t.hasBody)
+        assertEquals(0, t.sign)
     }
 
     @Test
-    fun `searching eventually stops instead of hunting forever`() {
+    fun `missing face never emits a search pulse even after repeated long gaps`() {
         val t = KeepInFrame.Tracker()
         assertTrue(KeepInFrame.step(0.40f, 0f, 1f, 1_000, 1_000, 0.40f, t).turning)
-        var now = 1_500L
-        var bursts = 0
-        while (now < 60_000L) {
+        var now = 1_001L
+        while (now < 120_000L) {
             val c = KeepInFrame.step(null, null, null, nowMs = now, lastSeenMs = 1_000, lastX = 0.40f, tracker = t)
-            if (c.turning) bursts++
+            assertStopped(c)
             now += 100L
         }
-        // 3 bursts x 2.8s of sweeping, sampled every 100ms, and nothing after.
-        assertTrue("expected a bounded number of search bursts, got $bursts", bursts in 70..95)
-        val done = KeepInFrame.step(null, null, null, nowMs = 60_000, lastSeenMs = 1_000, lastX = 0.40f, tracker = t)
-        assertFalse("after the burst budget the base stands still", done.turning)
-        assertFalse("and the lock is dropped so a new face starts clean", t.hasBody)
+        assertFalse(t.hasBody)
     }
 
     @Test
@@ -135,5 +124,136 @@ class KeepInFrameTest {
         assertTrue("half out of frame is exactly when to turn, got ${edge.turnSpeed}", edge.turning)
         assertTrue("the edge turn is capped, got ${edge.turnSpeed}", kotlin.math.abs(edge.turnSpeed) <= KeepInFrame.EDGE_SPEED)
         assertFalse(edge.driving)
+    }
+
+    @Test
+    fun `partially missing coordinates stop and do not start a search`() {
+        listOf(null to 0.7f, 0.7f to null).forEach { (x, y) ->
+            val t = KeepInFrame.Tracker()
+            KeepInFrame.step(0.7f, 0.3f, 1f, 1_000, 1_000, 0f, t)
+            assertStopped(KeepInFrame.step(x, y, 1f, 1_100, 1_000, 0.7f, t))
+            assertFalse(t.turning)
+        }
+    }
+
+    @Test
+    fun `nonfinite samples reset the filter and the next valid observation recovers`() {
+        listOf(Float.NaN, Float.POSITIVE_INFINITY, Float.NEGATIVE_INFINITY).forEach { invalid ->
+            listOf(
+                listOf(invalid, 0.4f, 1f, 0.4f),
+                listOf(0.4f, invalid, 1f, 0.4f),
+                listOf(0.4f, 0.4f, invalid, 0.4f),
+                listOf(0.4f, 0.4f, 1f, invalid),
+            ).forEach { (x, y, scale, lastX) ->
+                val t = KeepInFrame.Tracker()
+                KeepInFrame.step(0.7f, 0.5f, 1f, 1_000, 1_000, 0f, t)
+                assertStopped(KeepInFrame.step(x, y, scale, 1_100, 1_000, lastX, t))
+                assertFalse(t.hasBody)
+                assertEquals(0f, t.bodyX, 0f)
+                assertEquals(0f, t.bodyY, 0f)
+                val recovered = KeepInFrame.step(-0.4f, -0.5f, 1f, 1_200, 1_200, 0f, t)
+                assertTrue(recovered.turnSpeed < 0)
+                assertEquals(-0.2f, recovered.neckPitch, 0.0001f)
+            }
+        }
+    }
+
+    @Test
+    fun `poisoned mutable state is cleared on valid or missing samples`() {
+        listOf(Float.NaN, Float.POSITIVE_INFINITY, -2f).forEach { poison ->
+            listOf(true, false).forEach { observed ->
+                val t = KeepInFrame.Tracker().apply {
+                    hasBody = true
+                    turning = true
+                    bodyY = poison
+                }
+                val c = KeepInFrame.step(if (observed) 0.6f else null, if (observed) 0.5f else null,
+                    1f, 1_000, 900, 0.6f, t)
+                assertStopped(c)
+                assertEquals(0f, c.neckPitch, 0f)
+                assertFalse(t.hasBody)
+            }
+        }
+    }
+
+    @Test
+    fun `direct command also rejects nonfinite input and clears a direction lock`() {
+        val t = KeepInFrame.Tracker()
+        KeepInFrame.command(0.6f, 0.4f, 1_000, t)
+        assertStopped(KeepInFrame.command(Float.NaN, 0.4f, 1_100, t))
+        assertEquals(0, t.sign)
+        assertStopped(KeepInFrame.command(0.4f, Float.POSITIVE_INFINITY, 1_200, t))
+    }
+
+    @Test
+    fun `time based smoothing agrees across 10 20 50 and 62 Hz callbacks`() {
+        val results = listOf(100L, 50L, 20L, 16L).map { interval ->
+            val t = KeepInFrame.Tracker()
+            KeepInFrame.step(0f, 0f, 1f, 0, 0, 0f, t)
+            var now = interval
+            while (now <= 400L) {
+                KeepInFrame.step(0.6f, -0.6f, 1f, now, now, 0f, t)
+                now += interval
+            }
+            t.bodyX to t.bodyY
+        }
+        results.forEach { (x, y) ->
+            assertEquals(results.first().first, x, 0.00001f)
+            assertEquals(results.first().second, y, 0.00001f)
+            assertTrue(x in 0.51f..0.53f)
+        }
+    }
+
+    @Test
+    fun `duplicate timestamps neither accelerate the filter nor replay turns`() {
+        val t = KeepInFrame.Tracker()
+        KeepInFrame.step(0.4f, 0.5f, 1f, 1_000, 1_000, 0f, t)
+        repeat(100) {
+            assertStopped(KeepInFrame.step(-0.9f, -0.9f, 1f, 1_000, 1_000, 0f, t))
+        }
+        assertEquals(0.4f, t.bodyX, 0f)
+        assertEquals(0.5f, t.bodyY, 0f)
+    }
+
+    @Test
+    fun `regressed time stops and clears stale filter before reacquisition`() {
+        val t = KeepInFrame.Tracker()
+        KeepInFrame.step(0.6f, 0.5f, 1f, 1_000, 1_000, 0f, t)
+        assertStopped(KeepInFrame.step(-0.6f, 0f, 1f, 900, 900, 0f, t))
+        assertFalse(t.hasBody)
+        assertTrue(KeepInFrame.step(-0.6f, 0f, 1f, 950, 950, 0f, t).turnSpeed < 0)
+    }
+
+    @Test
+    fun `finite out of range samples are bounded and smoothing does not overshoot`() {
+        val t = KeepInFrame.Tracker()
+        val extreme = KeepInFrame.step(20f, -20f, 1f, 1_000, 1_000, 0f, t)
+        assertTrue(extreme.turnSpeed <= KeepInFrame.EDGE_SPEED)
+        assertEquals(-0.4f, extreme.neckPitch, 0.0001f)
+        var previous = t.bodyX
+        for (now in 1_020L..2_000L step 20) {
+            val c = KeepInFrame.step(0f, 0f, 1f, now, now, 0f, t)
+            assertTrue(t.bodyX in 0f..previous)
+            assertTrue(c.neckPitch.isFinite())
+            assertFalse(c.driving)
+            previous = t.bodyX
+        }
+        assertFalse(t.turning)
+    }
+
+    @Test
+    fun `face reacquisition after expiry cannot reuse the previous turn direction`() {
+        val t = KeepInFrame.Tracker()
+        KeepInFrame.step(0.6f, 0f, 1f, 1_000, 1_000, 0f, t)
+        assertStopped(KeepInFrame.step(null, null, null, 1_400, 1_000, 0.6f, t))
+        assertTrue(KeepInFrame.step(-0.4f, 0f, 1f, 1_410, 1_410, 0f, t).turnSpeed < 0)
+    }
+
+    private fun assertStopped(command: KeepInFrame.Command) {
+        assertFalse(command.turning)
+        assertFalse(command.driving)
+        assertFalse(command.searching)
+        assertEquals(0, command.turnTicks)
+        assertTrue(command.neckPitch.isFinite())
     }
 }

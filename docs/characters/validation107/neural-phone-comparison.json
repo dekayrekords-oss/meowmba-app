@@ -1,0 +1,1 @@
+{"scope":"Real phone synthetic replay; no biological weights or learned quality proof","models":[{"substrate":"RATE","samples":2000,"p50Micros":66.875,"p95Micros":68.125,"maxMicros":118.542,"p95Under20ms":true,"reproducible":true},{"substrate":"SPIKING","samples":2000,"p50Micros":231.041,"p95Micros":241.563,"maxMicros":298.281,"p95Under20ms":true,"reproducible":true}]}

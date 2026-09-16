@@ -1,6 +1,8 @@
 package com.example.meowmba
 
 import android.content.Context
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.cancel
 import com.example.meowmba.core.memory.MemoryRepository
 import com.example.meowmba.core.security.SecureStorageManager
 import com.example.meowmba.ui.companion.CompanionViewModel
@@ -32,6 +34,18 @@ class ModelStatusTest {
     private val mockSecureStorage = mock(SecureStorageManager::class.java)
     private val mockContext = mock(Context::class.java)
     private val mockMemoryRepository = mock(MemoryRepository::class.java)
+    private val viewModels = mutableListOf<CompanionViewModel>()
+    private fun newVm(secureStorage: SecureStorageManager? = null,
+                      memoryRepository: MemoryRepository? = null,
+                      modelsDir: java.io.File? = null) = CompanionViewModel(
+        secureStorage = secureStorage, memoryRepository = memoryRepository,
+        modelsDir = modelsDir, ioDispatcher = testDispatcher,
+        // Metadata tests must not launch the first-run Needle download on
+        // real IO and deliver its completion into a later test's Main scope.
+        modelDownloader = modelsDir?.let { com.example.meowmba.core.agent.ModelDownloader(it,
+            engine = { _, _, _, _ -> error("Network disabled in model-status fixture") },
+            dispatcher = testDispatcher) },
+    ).also { viewModels += it }
 
     @Before
     fun setup() {
@@ -41,12 +55,14 @@ class ModelStatusTest {
 
     @After
     fun tearDown() {
+        viewModels.forEach { it.viewModelScope.cancel() }
+        viewModels.clear()
         Dispatchers.resetMain()
     }
 
     @Test
     fun `defaults show local model active without secure storage`() = runTest {
-        val vm = CompanionViewModel()
+        val vm = newVm()
         val loaded = vm.uiState.value.loadedModels
         // No storage → legacy default path; name reflects the real file, not a label
         assertEquals("gemma.bin", loaded.localName)
@@ -59,7 +75,7 @@ class ModelStatusTest {
     fun `selecting cloud model reflects configured cloud model and key`() = runTest {
         `when`(mockSecureStorage.getModelName("openai")).thenReturn("gpt-4o")
         `when`(mockSecureStorage.getApiKey("openai")).thenReturn("sk-test")
-        val vm = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
+        val vm = newVm(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
 
         vm.onModelSelected("OpenAI (Cloud)")
 
@@ -72,7 +88,7 @@ class ModelStatusTest {
 
     @Test
     fun `cloud key not configured is reported honestly`() = runTest {
-        val vm = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
+        val vm = newVm(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
 
         vm.onModelSelected("OpenAI (Cloud)")
 
@@ -83,7 +99,7 @@ class ModelStatusTest {
     @Test
     fun `selecting local model shows custom on-device path`() = runTest {
         `when`(mockSecureStorage.getEndpoint("local")).thenReturn("/sdcard/llm/gemma3.bin")
-        val vm = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
+        val vm = newVm(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
 
         vm.onModelSelected("On-device (Local)")
 
@@ -98,7 +114,7 @@ class ModelStatusTest {
     fun `catalog file resolves to its display name`() = runTest {
         `when`(mockSecureStorage.getEndpoint("local"))
             .thenReturn("/data/user/0/com.example.meowmba/files/models/qwen2.5-1.5b-instruct-q8.task")
-        val vm = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
+        val vm = newVm(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
 
         vm.onModelSelected("On-device (Local)")
 
@@ -110,14 +126,14 @@ class ModelStatusTest {
         `when`(mockSecureStorage.getPreference("default_brain")).thenReturn("bigpickle")
         `when`(mockSecureStorage.getApiKey("opencode")).thenReturn("zen-key")
         `when`(mockSecureStorage.getApiKey("openrouter")).thenReturn("or-key")
-        val vm = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
+        val vm = newVm(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
         assertEquals("bigpickle", vm.preferredChatRouteId())
     }
 
     @Test
     fun `openrouter selection populates the network card`() = runTest {
         `when`(mockSecureStorage.getModelName("openrouter")).thenReturn("test-model:free")
-        val vm = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
+        val vm = newVm(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
 
         vm.onModelSelected("OpenRouter (Cloud)")
 
@@ -131,7 +147,7 @@ class ModelStatusTest {
 
     @Test
     fun `selecting openrouter marks network as the active source`() = runTest {
-        val vm = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
+        val vm = newVm(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
 
         vm.onModelSelected("OpenRouter (Cloud)")
 
@@ -139,10 +155,17 @@ class ModelStatusTest {
     }
 
     @Test
-    fun `every provider-picker entry builds a real provider`() = runTest {
+    fun `configured provider-picker entries build providers but missing local weights do not`() = runTest {
+        `when`(mockSecureStorage.getApiKey("openrouter")).thenReturn("synthetic-key-not-used-for-network")
+        `when`(mockSecureStorage.getApiKey("openai")).thenReturn("synthetic-key-not-used-for-network")
+        for (id in listOf("anthropic", "custom", "opencode")) {
+            `when`(mockSecureStorage.getApiKey(id)).thenReturn("synthetic-key-not-used-for-network")
+            `when`(mockSecureStorage.getModelName(id)).thenReturn("test-model")
+        }
+        `when`(mockSecureStorage.getEndpoint("custom")).thenReturn("https://fixture.invalid")
         // Regression net: picker entries that build nothing trap users in
         // "No model is ready" (the removed Phi-3/Anthropic/Memba-Custom stubs).
-        val vm = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
+        val vm = newVm(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
         // Only the entries this device actually OFFERS. Gemini Nano is filtered out
         // where AICore is absent (as in this JVM test), which is the point of
         // availableModelProviders — an offered entry must always build.
@@ -166,7 +189,7 @@ class ModelStatusTest {
     @Test
     fun `provider selection persists across restarts`() = runTest {
         `when`(mockSecureStorage.getPreference("selected_model")).thenReturn("OpenRouter (Cloud)")
-        val vm = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
+        val vm = newVm(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
 
         assertEquals("OpenRouter (Cloud)", vm.uiState.value.selectedModel)
         assertEquals(ModelSource.NETWORK, vm.uiState.value.loadedModels.activeSource)
@@ -176,15 +199,15 @@ class ModelStatusTest {
     fun `stale persisted provider falls back to default honestly`() = runTest {
         // A label removed in a later version must not resurrect the null-provider trap
         `when`(mockSecureStorage.getPreference("selected_model")).thenReturn("Phi-3 Mini (Local)")
-        val vm = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
+        val vm = newVm(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
 
-        // Falls back to the current default — the local router — and the assertion below
-        // is the real point: a provider actually got built, no null-provider trap.
+        // The current router label is restored, but no key or local weights
+        // means no working provider. Do not resurrect a fake model wrapper.
         assertEquals(
             com.example.meowmba.ui.companion.MODEL_OMNIROUTE,
             vm.uiState.value.selectedModel,
         )
-        org.junit.Assert.assertNotNull(vm.currentProvider)
+        org.junit.Assert.assertNull(vm.currentProvider)
     }
 
     @Test
@@ -197,7 +220,7 @@ class ModelStatusTest {
         bundle.writeText("fake bundle")
         `when`(mockSecureStorage.getEndpoint("local")).thenReturn("/gone/gemm4.task")
 
-        val vm = CompanionViewModel(
+        val vm = newVm(
             secureStorage = mockSecureStorage,
             memoryRepository = mockMemoryRepository,
             modelsDir = dir

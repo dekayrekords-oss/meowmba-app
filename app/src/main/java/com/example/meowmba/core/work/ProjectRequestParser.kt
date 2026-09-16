@@ -26,15 +26,12 @@ object ProjectRequestParser {
     }
 
     private fun looksLikeStart(t: String): Boolean {
-        // File-scaffold path stays with AgentRouter / project.create.
-        if (t.startsWith("create a project") || t.startsWith("create project") ||
-            t.startsWith("create a new project") || t.startsWith("create new project")
-        ) return false
-        val hasNoun = t.contains("project") || t.contains("codebase")
-        val startish = t.contains("start") || t.contains("begin") ||
-            t.startsWith("new project") || t.startsWith("new website project") ||
-            t.startsWith("new photo project") || t.startsWith("new codebase")
-        return hasNoun && startish
+        // A substring match on "start" accepted our own spoken "Started X...
+        // Projects" confirmation. Hearing that confirmation could create and
+        // announce another project indefinitely. Only an explicit, anchored
+        // request can allocate a workspace; reports, negations and quoted
+        // confirmations are ordinary conversation.
+        return START_REQUEST.containsMatchIn(t) || HELP_REQUEST.containsMatchIn(t)
     }
 
     private fun detectKind(t: String): ProjectKind = when {
@@ -61,6 +58,10 @@ object ProjectRequestParser {
                 if (name.isNotBlank()) return titleCase(name.take(48))
             }
         }
+        for (marker in listOf("project about ", "project for ", "project to ")) {
+            val goal = t.substringAfter(marker, "").trim()
+            if (goal.isNotBlank()) return titleCase(goal.take(48))
+        }
         return when (kind) {
             ProjectKind.WEBSITE -> "Website"
             ProjectKind.PHOTO -> "Photos"
@@ -81,6 +82,7 @@ object ProjectRequestParser {
         val leads = listOf(
             "hey meow ", "ok meow ", "okay meow ", "meow ",
             "please ", "can you ", "could you ", "would you ", "hey ",
+            "let's ", "lets ", "let us ", "i want to ", "i'd like to ", "i would like to ",
         )
         var changed = true
         while (changed) {
@@ -94,4 +96,8 @@ object ProjectRequestParser {
         }
         return s.trim()
     }
+
+    private const val PROJECT_NOUN = "(?:(?:website|web|photo|code|coding|software|app) )?(?:project|codebase)\\b"
+    private val START_REQUEST = Regex("^(?:(?:start|begin|create|make) (?:a |an |the )?(?:new |another |separate )?|new )$PROJECT_NOUN")
+    private val HELP_REQUEST = Regex("^(?:help (?:me )?(?:with|plan) a |plan a )$PROJECT_NOUN")
 }

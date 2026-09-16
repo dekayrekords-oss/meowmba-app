@@ -1,0 +1,18 @@
+{
+  "label": "build105 baseline USB charging camera/mic off observed foreground",
+  "version": "versionCode=105 minSdk=31 targetSdk=36\nversionName=1.3.81\nlastUpdateTime=2026-09-13 08:47:13",
+  "sampleCount": 300,
+  "foregroundSamples": 106,
+  "durationSeconds": 598.9903202920104,
+  "measuredForegroundCpuSeconds": 206.31486887601204,
+  "meanCpuPercentOfOneCore": 72.8885905408849,
+  "p95IntervalCpuPercentOfOneCore": 86.83420094743055,
+  "batteryCStart": 32.2,
+  "batteryCEnd": 34.3,
+  "batteryCMax": 34.6,
+  "thermalStatusStart": 0,
+  "thermalStatusEnd": 1,
+  "usbChargingObserved": true,
+  "batteryDrainConclusion": "Not measured: USB-powered observations cannot establish unplugged drain.",
+  "limitations": "Foreground does not prove motion was active. No GPU/frame-time gate, room-temperature control, or all-day guarantee."
+}

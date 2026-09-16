@@ -54,12 +54,12 @@ object SetupWiring {
     val BRAIN_PROVIDERS: List<BrainProvider> = listOf(
         BrainProvider(
             id = "local",
-            name = "Run on this phone (Needle 2 actions)",
+            name = "Run a conversation model on this phone",
             path = Path.LOCAL,
             getKeyUrl = null,
             defaultModel = "local",
-            blurb = "Fully private — no account or key. Meow downloads a small voice model " +
-                "to your phone so everything works offline. Best for privacy.",
+            blurb = "On-phone action routing needs a separate model download. " +
+                "Voice models download separately; connected services can still require internet access.",
         ),
         BrainProvider(
             id = "bigpickle",
@@ -67,8 +67,8 @@ object SetupWiring {
             path = Path.FREE_CLOUD,
             getKeyUrl = "https://opencode.ai/zen",
             defaultModel = "big-pickle",
-            blurb = "A flexible free cloud brain. Needs a free key from opencode.ai — " +
-                "no credit card. Great everyday default.",
+            blurb = "Cloud conversation using an OpenCode Zen key. " +
+                "Check the provider's current availability and pricing before connecting.",
         ),
         BrainProvider(
             id = "openrouter",
@@ -134,10 +134,18 @@ object SetupWiring {
         val id = s.getPreference(PREF_BRAIN_PROVIDER) ?: return false
         val p = brainProvider(id) ?: return false
         return when (p.path) {
-            Path.LOCAL -> true
-            else -> !s.getApiKey(id).isNullOrBlank()
+            Path.LOCAL -> s.getEndpoint("local")?.let { path ->
+                java.io.File(path).let { it.isFile && it.length() > 0 && com.example.meowmba.core.agent.LocalChatModel.supports(it) } &&
+                    (s.getPreference("planner_verified_local") == path ||
+                        s.getPreference("chat_verified_local") == localStamp(java.io.File(path)))
+            } == true
+            else -> !s.getApiKey(id).isNullOrBlank() && PlannerReadiness.cloudStamp(s.getModelName(id), s.getApiKey(id)).let { stamp ->
+                s.getPreference("planner_verified_$id") == stamp || s.getPreference("chat_verified_$id") == stamp
+            }
         }
     }
+
+    fun localStamp(file: java.io.File): String = "${file.absolutePath}:${file.length()}:${file.lastModified()}"
 
     // ── TTS (speech out) ───────────────────────────────────────────────────
 

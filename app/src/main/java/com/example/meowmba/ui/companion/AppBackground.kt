@@ -43,6 +43,7 @@ fun AppBackground(
     /** Current sky, for [BackgroundKind.LIVE_WEATHER]. Null falls back to a plain sky. */
     weather: WeatherNow?,
     modifier: Modifier = Modifier,
+    paused: Boolean = false,
 ) {
     Box(modifier = modifier.fillMaxSize()) {
         when (selection.kind) {
@@ -64,9 +65,10 @@ fun AppBackground(
                             isDay = tod.isLight,
                             timeOfDay = tod,
                             modifier = Modifier.fillMaxSize(),
+                            paused = paused,
                         )
                     }
-                    animation != null -> AnimatedBackground(animation, Modifier.fillMaxSize())
+                    animation != null -> AnimatedBackground(animation, Modifier.fillMaxSize(), paused)
                     else -> Unit
                 }
             }
@@ -76,8 +78,9 @@ fun AppBackground(
                     condition = w.condition,
                     isDay = w.isDay,
                     modifier = Modifier.fillMaxSize(),
+                    paused = paused,
                 )
-            } ?: AnimatedBackground(BackgroundAnimation.STARFIELD, Modifier.fillMaxSize())
+            } ?: AnimatedBackground(BackgroundAnimation.STARFIELD, Modifier.fillMaxSize(), paused)
         }
 
         if (selection.kind != BackgroundKind.NONE && selection.dimPercent > 0) {
@@ -87,6 +90,7 @@ fun AppBackground(
                     .background(Color.Black.copy(alpha = selection.dimPercent / 100f))
             )
         }
+
     }
 }
 
@@ -119,7 +123,9 @@ private fun ImageBackground(uriString: String) {
 }
 
 private fun decodeBackground(context: Context, uriString: String): Bitmap? = runCatching {
-    val source = ImageDecoder.createSource(context.contentResolver, Uri.parse(uriString))
+    val source = if (uriString == "asset:///backgrounds/conservatory.png")
+        ImageDecoder.createSource(context.assets, "backgrounds/conservatory.png")
+    else ImageDecoder.createSource(context.contentResolver, Uri.parse(uriString))
     ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
         val longest = maxOf(info.size.width, info.size.height)
         if (longest > MAX_EDGE) {

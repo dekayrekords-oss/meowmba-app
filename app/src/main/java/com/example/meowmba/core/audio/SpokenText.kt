@@ -11,6 +11,7 @@ object SpokenText {
      * Always-on AiAi and the 20M zipformer both emit these on silence.
      */
     fun isUsable(raw: String): Boolean {
+        if (isNonSpeechAnnotation(raw)) return false
         val t = normalize(raw).trim()
         if (t.isEmpty()) return false
         val letters = t.filter { it.isLetter() }
@@ -94,6 +95,7 @@ object SpokenText {
      * Fold often ends with an empty final).
      */
     fun preferFinal(official: String, partial: String): String {
+        if (isNonSpeechAnnotation(official)) return ""
         val o = normalize(official).trim()
         val p = normalize(partial).trim()
         val oOk = isUsable(o)
@@ -123,6 +125,37 @@ object SpokenText {
      */
     fun polish(raw: String): String = repair(normalize(raw))
 
+    /** Only explicit decoder annotations, not speech ABOUT music/noise. */
+    fun isNonSpeechAnnotation(raw: String): Boolean {
+        val trimmed = raw.trim().trimEnd('.', ',', '!', '?').trim()
+        if (trimmed.isEmpty()) return false
+        val annotations = NON_SPEECH_ANNOTATION.findAll(trimmed).toList()
+        return annotations.isNotEmpty() &&
+            NON_SPEECH_ANNOTATION.replace(trimmed, "").trim().isEmpty() &&
+            annotations.all { it.groupValues[1].trim().lowercase() in NON_SPEECH_LABELS }
+    }
+
+    /** A successful noise/empty final must not resurrect a hallucinated partial.
+     * Null is reserved for unavailable/failed refinement, where streaming wins.
+     */
+    internal fun refinedTranscript(streaming: String, refined: String?): String? = when {
+        refined == null -> streaming.takeIf(::isUsable)
+        else -> refined.takeIf(::isFinalTranscriptUsable)
+    }
+
+    /** Final ASR must preserve numbers, other scripts, and natural repetitions.
+     * The streaming-preview heuristics are not acoustic confidence scores. */
+    fun isFinalTranscriptUsable(text: String): Boolean =
+        text.any { it.isLetterOrDigit() } && !isNonSpeechAnnotation(text)
+
+    private val NON_SPEECH_ANNOTATION = Regex("[\\[(]([^\\[\\]()]+)[\\])]")
+    private val NON_SPEECH_LABELS = setOf(
+        "buzzing", "buzz", "music", "background music", "silence", "noise",
+        "background noise", "static", "humming", "applause", "laughter", "laughing",
+        "sigh", "sighing", "breathing", "coughing", "inaudible", "unintelligible",
+        "blank_audio", "no speech", "wind", "rustling", "beep", "beeping",
+    )
+
     internal fun repair(sentence: String): String {
         if (sentence.isBlank()) return sentence
         val compact = sentence.lowercase()
@@ -140,10 +173,10 @@ object SpokenText {
         t = t.replace(Regex("""\bbudd\b"""), "buddy")
 
         // --- YouTube (the 2023 zipformer doesn't know this word) ---
-        t = t.replace(
-            Regex("""\byou\s*two\b"""),
-            "YouTube",
-        )
+        // "You two" and "you to" are ordinary speech, not evidence of the
+        // media app. Rewriting them globally corrupted even correct Whisper
+        // finals ("I want you to..." became "I want YouTube..."). Ambiguous
+        // app-name recovery belongs after explicit app/media intent, not ASR.
         t = t.replace(
             Regex("""\byou\s*tube\b"""),
             "YouTube",
@@ -152,11 +185,6 @@ object SpokenText {
             Regex("""\byo\s*tube\b"""),
             "YouTube",
         )
-        t = t.replace(
-            Regex("""\byou\s*to\b"""),
-            "YouTube",
-        )
-
         // --- "meow" variants (not in the zipformer's vocabulary) ---
         t = t.replace(
             Regex("""\b(yo|yoh|yoa|yow|yom|yah|ya|ye|hee|hey|hi|oi|oh)\s*(meow|meo|meoo|miao|miau|mow|mo|mao|me ow|my ow|miow|miya|myo|me o|me oo|mem)\b"""),

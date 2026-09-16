@@ -1,0 +1,67 @@
+{
+  "device": "Samsung SM-F966U1",
+  "installedPackage": "com.example.meowmba",
+  "installedVersion": "1.3.81",
+  "installedCode": 99,
+  "installedAtPhoneLocal": "2026-09-12 17:42:40",
+  "apkSha256": "794db431039d944e0888268051f73eee640cf7125ae3c99a4fb9a685789e63b4",
+  "userDataPreserved": true,
+  "notes": [
+    "USB charging and unrelated PIP video confound thermal comparison.",
+    "No controlled neural incremental CPU/battery result.",
+    "Thermal status MODERATE paused decorative work; care remains accessible.",
+    "Eight-hour soak, unplugged battery and end-to-end sensory response gates remain open."
+  ],
+  "controllerSnapshots": {
+    "rateP95Micros": 537,
+    "spikingP95Micros": 1027,
+    "fallbackBoth": "NONE",
+    "scope": "computation snapshots in Settings, different histories, not end-to-end latency"
+  },
+  "samples": [
+    {
+      "file": "phone-shadow97.json",
+      "scope": "Foreground fly, care interactions and PIP; not controlled A/B",
+      "elapsedSeconds": 58.115,
+      "cpuPercentOneCore": 35.154,
+      "sampleCount": 30,
+      "foregroundSamples": 30,
+      "pidCount": 1,
+      "batteryStartC": 33.6,
+      "batteryEndC": 34.0
+    },
+    {
+      "file": "phone-spiking97.json",
+      "scope": "Settings open; EXCLUDE from animation comparison",
+      "elapsedSeconds": 58.116,
+      "cpuPercentOneCore": 19.151,
+      "sampleCount": 30,
+      "foregroundSamples": 30,
+      "pidCount": 1,
+      "batteryStartC": 34.8,
+      "batteryEndC": 34.9
+    },
+    {
+      "file": "phone-rate98.json",
+      "scope": "Foreground with thermal pause and PIP; not full-speed animation benchmark",
+      "elapsedSeconds": 58.115,
+      "cpuPercentOneCore": 28.392,
+      "sampleCount": 30,
+      "foregroundSamples": 30,
+      "pidCount": 1,
+      "batteryStartC": 35.0,
+      "batteryEndC": 35.1
+    },
+    {
+      "file": "phone-background98.json",
+      "scope": "Android Settings foreground; short lifecycle check",
+      "elapsedSeconds": 28.063,
+      "cpuPercentOneCore": 0.107,
+      "sampleCount": 15,
+      "foregroundSamples": 0,
+      "pidCount": 1,
+      "batteryStartC": 35.0,
+      "batteryEndC": 34.9
+    }
+  ]
+}

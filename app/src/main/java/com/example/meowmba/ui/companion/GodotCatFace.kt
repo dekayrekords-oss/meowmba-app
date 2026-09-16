@@ -56,15 +56,7 @@ private fun hdr(c: Color, boost: Float, a: Float = 1f): Color {
 
 fun DrawScope.softGlow(center: Offset, radius: Float, color: Color, alpha: Float) {
     if (alpha <= 0.001f || radius <= 0.5f) return
-    drawCircle(
-        brush = Brush.radialGradient(
-            colors = listOf(color.copy(alpha = alpha), color.copy(alpha = 0f)),
-            center = center,
-            radius = radius,
-        ),
-        radius = radius,
-        center = center,
-    )
+    drawRadialGlow(center, radius, RadialGlow.brush(color), alpha)
 }
 
 /**

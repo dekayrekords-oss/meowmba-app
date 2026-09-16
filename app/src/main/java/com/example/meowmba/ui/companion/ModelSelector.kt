@@ -1,5 +1,7 @@
 package com.example.meowmba.ui.companion
 
+import com.example.meowmba.ui.theme.Surface
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -103,6 +105,9 @@ val modelProviders = listOf(
     "On-device (Local)",
     "OpenRouter (Cloud)",
     "OpenAI (Cloud)",
+    "Claude (Cloud)",
+    "OpenCode Zen (Cloud)",
+    "Custom API (Cloud)",
 )
 
 fun availableModelProviders(context: android.content.Context?): List<String> = modelProviders

@@ -63,7 +63,10 @@ object BodyMotionMap {
         // Unconditional: a clip always ends with the base stopped.
         out += BodyCue(end, BodyVerb.Brake)
 
-        return out.sortedBy { it.atMs }
+        // A bounce may ask to recover 200 ms after its source keyframe. If
+        // that frame is near the clip end, never restart the neck/drive after
+        // the unconditional final brake or extend this clip's motion lease.
+        return out.filter { it.atMs <= end }.sortedBy { it.atMs }
     }
 
     /** gaze 1.0 = looking up = neck pitch -1. gaze 0.5 = center = 0. */

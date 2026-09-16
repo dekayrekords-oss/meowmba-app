@@ -28,7 +28,7 @@ data class GeneratedMedia(
     val label: String,
     val timestamp: Long = System.currentTimeMillis()
 ) {
-    enum class MediaType { IMAGE, VIDEO, AUDIO }
+    enum class MediaType { IMAGE, VIDEO, AUDIO, DOCUMENT }
 }
 
 /**
@@ -54,9 +54,27 @@ data class ProjectUi(
 )
 
 data class CompanionState(
+    val petCare: com.example.meowmba.core.behavior.PetCareState = com.example.meowmba.core.behavior.PetCareState(),
+    val habitatCommand: HabitatCommand = HabitatCommand(),
+    val petLearningEnabled: Boolean = true,
+    val petFeedbackNotice: String? = null,
+    val petPlayPreference: Float = 0f,
+    val neuralMode: com.example.meowmba.core.neural.NeuralMode = com.example.meowmba.core.neural.NeuralMode.SHADOW,
+    val neuralSubstrate: com.example.meowmba.core.neural.NeuralSubstrate = com.example.meowmba.core.neural.NeuralSubstrate.RATE,
+    val neuralTraceConsent: Boolean = false,
+    val neuralDiagnostics: com.example.meowmba.core.neural.NeuralDiagnostics? = null,
+    val coverAvatarEnabled: Boolean = false,
     val name: String = "Meow",
     val interactionState: InteractionState = InteractionState.IDLE,
+    val computerTaskRunning: Boolean = false,
     val emotion: CompanionEmotion = CompanionEmotion.IDLE,
+    /** Short, explicit acting rehearsal; never persists as a conversational mood. */
+    val emotionPreview: CompanionEmotion? = null,
+    val expressionPlan: ExpressionPlan? = null,
+    val expressionIntensity: ExpressionIntensity = ExpressionIntensity.NATURAL,
+    val playfulness: Playfulness = Playfulness.BALANCED,
+    /** Replaying the same immutable clip still starts a new performance. */
+    val avatarPerformanceSequence: Long = 0,
     val lookAtOffset: Offset = Offset.Zero, // Screen coordinates for eyes to track
     val captionText: String? = null,
     val isChatExpanded: Boolean = false,
@@ -66,6 +84,9 @@ data class CompanionState(
     /** Vault title, e.g. Notes/2026-08-19. */
     val notingTitle: String? = null,
     val isCameraEnabled: Boolean = false,
+    val avatarScale: Float = 2f,
+    val habitatMode: Boolean = false,
+    val habitatBackgroundId: String = "kitchen",
     val isMicEnabled: Boolean = true,
     /** ML Kit currently sees a face (held briefly across one-frame misses). */
     val userInView: Boolean = false,
@@ -77,17 +98,53 @@ data class CompanionState(
     val facesInView: Int = 0,
     /** Wake-word models are on disk (or not needed yet). */
     val voicePackReady: Boolean = true,
+    val localVoicesReady: Boolean = false,
+    val localVoiceId: String = "af_heart",
+    val localVoiceEnabled: Boolean = false,
+    val localVoiceProgress: Float? = null,
+    val localVoiceMessage: String? = null,
     val voicePackLabel: String? = null,
     val voicePackProgress: Float? = null,
     val activeTask: String? = null,
     val errorMessage: String? = null,
     val showTiles: Boolean = false,
     val showSettings: Boolean = false,
+    /** Optional category requested by a contextual setup action. */
+    val settingsInitialPage: String? = null,
     val showModelManager: Boolean = false,
     val showPrivacyDashboard: Boolean = false,
     val showAvatarScreen: Boolean = false,
+    /** Lightweight live neural activity panel, opened from the tile grid. */
+    val showNeuralInfo: Boolean = false,
+    val neuralDesktopPaired: Boolean = false,
+    val maleCnsServer: MaleCnsServerUiState = MaleCnsServerUiState(),
+    val cameraTrackingStatus: com.example.meowmba.core.vision.FaceTrackingStatus =
+        com.example.meowmba.core.vision.FaceTrackingStatus.OFF,
+    /** Confirms input submission, never claims a measured neural response. */
+    val neuralInputNotice: String? = null,
     /** Which eye style the face is drawn in. Persisted across launches. */
     val avatarStyle: AvatarStyle = AvatarStyle.DEFAULT,
+    val avatarAnimal: AvatarAnimal = AvatarAnimal.NONE,
+    /** Validated, saved cartoon geometry; shares Lumen's brain and animation clock. */
+    val generatedAvatarForm: GeneratedAvatarForm? = null,
+    val savedGeneratedForms: List<GeneratedAvatarForm> = emptyList(),
+    val avatarFormGenerating: Boolean = false,
+    val avatarFormMessage: String? = null,
+    val avatarFormError: Boolean = false,
+    /** Vending-machine companion props (filesDir/companion_props). */
+    val savedProps: List<GeneratedPropForm> = emptyList(),
+    val propInventGenerating: Boolean = false,
+    val propInventMessage: String? = null,
+    val propInventError: Boolean = false,
+    /** After invent/save, offer drag placement on the current avatar. */
+    val pendingPropPlacement: GeneratedPropForm? = null,
+    /** Vending animation generator (CustomAnimationStore). */
+    val savedAnimationNames: List<String> = emptyList(),
+    val animInventGenerating: Boolean = false,
+    val animInventMessage: String? = null,
+    val animInventError: Boolean = false,
+    /** Temporary costume from an explicit performance; never persisted over the user's choice. */
+    val performanceAnimal: AvatarAnimal? = null,
     val appTheme: AppTheme = AppTheme.COMPANION,
     val appearanceMode: AppearanceMode = AppearanceMode.DARK,
     val avatarFeatureColor: Long = 0xFFE8D5B9L,
@@ -114,6 +171,7 @@ data class CompanionState(
     /** Phase G1: current mood label (content, excited, sleepy, ...). */
     val moodLabel: String = "content",
     val robotBodyEnabled: Boolean = false,
+    val robotConnected: Boolean = false,
     val robotHost: String = "192.168.1.200",
     val robotPort: String = "9100",
     val robotStatus: String = "simulated (no body)",
@@ -132,6 +190,9 @@ data class CompanionState(
     val commentaryEnabled: Boolean = false,
     /** Waze / Maps police alerts on the face. */
     val roadAlertsEnabled: Boolean = false,
+    val roadAlertStatus: String? = null,
+    val idleScenesEnabled: Boolean = true,
+    val voiceRecognitionStatus: String? = null,
     val policeAlert: String? = null,
     /** App drawer overlay (swipe right) is open. */
     val showAppDrawer: Boolean = false,
@@ -150,7 +211,7 @@ data class CompanionState(
     // avatar (and re-ran resolvePose) for the entire length of every reply.
     // It lives in CompanionViewModel.mouthEnergy as its own StateFlow, read
     // only inside the Canvas draw lambda.
-    /** Result of the last "Test connection" action on the Hardware page. */
+    /** Result of the last "Test connection" action on the LLM page. */
     val connectionTestResult: String? = null,
     val connectionTestRunning: Boolean = false,
     /** Conversation history, sourced live from Room. */
@@ -165,8 +226,12 @@ data class CompanionState(
     val memorySearchResults: List<MemoryEntity>? = null,
     val showMemoryScreen: Boolean = false,
     val showStudioScreen: Boolean = false,
+    val showAssetBrowser: Boolean = false,
+    val assetBrowserInitialPath: String = "",
     /** Invented clip currently playing over the face, or null. Clears itself when done. */
     val activeAnimation: CustomAnimationSpec? = null,
+    /** Quiet library gestures yield immediately to a conversation or an open panel. */
+    val ambientPerformance: Boolean = false,
     /** Godot-style channel composition currently driving the face, if any. */
     val activeComposed: ComposedExpression? = null,
     /** True only when the MetaMemory glasses app is actually installed — never assumed. */
@@ -267,6 +332,7 @@ data class CompanionState(
     /** A tool call waiting for the user's explicit decision, if any. */
     val pendingApproval: ApprovalRequest? = null,
     val showAgentsScreen: Boolean = false,
+    val showBusinessAgents: Boolean = false,
     /** Tools registered in this installation; not a claim of live account/hardware access. */
     val registeredAgentTools: Set<String> = emptySet(),
     val showProjectsScreen: Boolean = false,
@@ -274,7 +340,7 @@ data class CompanionState(
     /** Full-screen LOOI body panel opened from the Robot tile. */
     val showRobotScreen: Boolean = false,
 
-    /** Hardware → Voice Recognition: which speech-to-text backend to use. */
+    /** LLM → Voice Recognition: which speech-to-text backend to use. */
     val showVoiceModelScreen: Boolean = false,
     val asrBackend: com.example.meowmba.core.audio.AsrBackend =
         com.example.meowmba.core.audio.AsrBackend.DEFAULT,
@@ -285,6 +351,10 @@ data class CompanionState(
     val projects: List<ProjectUi> = emptyList(),
     val activeProjectId: Long? = null,
     val activeProjectName: String? = null,
+    val projectWork: com.example.meowmba.core.work.ProjectWorkSnapshot? = null,
+    val projectWorkBusy: Boolean = false,
+    val projectExecuting: Boolean = false,
+    val projectWorkMessage: String? = null,
     val activeConversationId: Long = 0L,
 
     /** Obsidian-style vault notes screen. */
@@ -327,9 +397,12 @@ data class CompanionState(
     /** Compatible bundles found in the public Downloads collection. */
     val discoveredModelFiles: List<DiscoveredModelFile> = emptyList(),
     val modelScanRunning: Boolean = false,
+    val modelScanMessage: String? = null,
+    val modelImportRunning: Boolean = false,
     /** Keep listening for the wake phrase in the background (foreground service). */
     val backgroundListeningEnabled: Boolean = false,
     /** Vision: set when a look request needs the CAMERA runtime permission. */
+    val microphonePermissionRequested: Boolean = false,
     val cameraPermissionRequested: Boolean = false,
     /** Locations: set when saving a named place needs location permission. */
     val locationPermissionRequested: Boolean = false,
@@ -347,6 +420,9 @@ data class CompanionState(
     val faceGazeY: Float? = null,
     /** Generated media (image, video, audio) to show in a popup. */
     val generatedMedia: GeneratedMedia? = null,
+    val artifactOpenMessage: String? = null,
+    val phoneControlSetupGoal: String? = null,
+    val modelSetupRequired: Boolean = false,
     /** USB auto-bridge is monitoring for a tethered desktop connection. */
     val usbAutoBridgeEnabled: Boolean = false,
     /** True when the phone is plugged into USB (data connection). */
@@ -367,6 +443,38 @@ data class CompanionState(
     val mcpServerPort: Int = 0,
     /** Phone LAN address shown so Android Studio can paste it as the httpUrl. */
     val mcpServerAddress: String = "",
+    /**
+     * Phase 6 optional: soft agentic presence hint when agentic_runtime_v1 is ON.
+     * Empty when flag OFF. Does not drive SSH or Lumen frame loop.
+     */
+    val agenticPresenceHint: String? = null,
+    /**
+     * Short Lumen reflex summary when lumen_reflex_v2 is ON (e.g. face · talk).
+     * Null when flag OFF or nothing notable. Does not drive SSH.
+     */
+    val reflexSummary: String? = null,
+    /** Mirrored FeatureFlags for settings / presence chip (defaults OFF). */
+    val lumenReflexV2Enabled: Boolean = false,
+    val agenticRuntimeV1Enabled: Boolean = false,
+    val lumenReflexGain: Float = 1f,
+    /** Avatar ACTIVE FPS target when cool (15/30/45/60). Default 30. */
+    val avatarFpsTarget: Int = 30,
+    /** Computer guest power: Off / Idle / On. Default Idle (asleep, cheap). */
+    val computerPowerState: com.example.meowmba.core.config.ComputerPowerState =
+        com.example.meowmba.core.config.ComputerPowerState.Idle,
+    val computerIdleMinutes: Int = 5,
+    val computerSetupStatus: com.example.meowmba.core.computer.ComputerSetupStatus =
+        com.example.meowmba.core.computer.ComputerSetupStatus.NotSetUp,
+    val computerStatusDetail: String = "",
+    val computerInstallLog: String = "",
+    val computerPhoneProbeSummary: String = "Checking this phone…",
+    val computerPhoneReady: Boolean = false,
+    val computerVncUrl: String? = null,
+    val computerShowInstallPrompt: Boolean = false,
+    val computerSavedProfileId: String? = null,
+    /** Goal waiting on side-effecting ssh_exec approval (agentic_runtime_v1). */
+    val agenticPendingApprovalGoalId: String? = null,
+    val agenticPendingApprovalTitle: String? = null,
 )
 
 /**
@@ -384,7 +492,7 @@ fun isLandscapeScreen(context: android.content.Context?): Boolean {
 }
 
 /**
- * Snapshot of what model is loaded where, shown on the Hardware (LLM Manager)
+ * Snapshot of what model is loaded where, shown on the LLM
  * page. Populated by the ViewModel from the same secure configuration that
  * builds the actual providers, so the page always reflects reality.
  */
@@ -401,6 +509,7 @@ data class LoadedModelsInfo(
     /** Network (LAN) server model — Ollama. */
     val networkEndpoint: String = "",
     val networkModel: String = "",
+    val networkKeyConfigured: Boolean = false,
     /** True when the local model file actually exists on disk. */
     val localInstalled: Boolean = false,
     /** Which source is actively serving responses right now. */
@@ -412,13 +521,16 @@ data class InstalledModelFile(
     val fileName: String,
     val sizeBytes: Long,
     /** Catalog display name when the file matches a curated option, else null (custom). */
-    val catalogDisplayName: String? = null
+    val catalogDisplayName: String? = null,
+    val downloadedAtMs: Long? = null,
+    val modifiedAtMs: Long? = null,
 )
 
 data class DiscoveredModelFile(
     val uri: String,
     val fileName: String,
     val sizeBytes: Long,
+    val modifiedAtMs: Long? = null,
 )
 
 /**
@@ -443,8 +555,21 @@ enum class CompanionEmotion {
     ALERT,
     SLEEPY,
     CONFUSED,
-    PROUD
+    PROUD,
+    ATTENTIVE,
+    UNDERSTANDING,
+    CONCERNED,
+    APOLOGETIC,
+    SURPRISED,
+    PLAYFUL,
+    AFFECTIONATE,
+    DETERMINED,
+    RELIEVED
 }
+
+/** Partial chat and Brain overlays leave the rendered avatar scene visible. */
+fun avatarSceneVisible(state: CompanionState): Boolean =
+    faceModeActive(state.copy(isChatExpanded = false, showNeuralInfo = false))
 
 /**
  * True when the bare companion face is what's on screen — no overlay panels,
@@ -459,11 +584,14 @@ fun faceModeActive(state: CompanionState): Boolean =
         !state.showPrivacyDashboard &&
         !state.showMemoryScreen &&
         !state.showStudioScreen &&
+        !state.showAssetBrowser &&
         !state.showAgentsScreen &&
+        !state.showBusinessAgents &&
         !state.showBackgroundScreen &&
         !state.showWeatherScreen &&
         !state.showNavScreen &&
         !state.showAvatarScreen &&
+        !state.showNeuralInfo &&
         !state.showVaultScreen &&
         !state.showProjectsScreen &&
         !state.showToolsScreen &&

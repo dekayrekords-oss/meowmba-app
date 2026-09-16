@@ -1,5 +1,8 @@
 package com.example.meowmba.ui.companion
 
+import com.example.meowmba.ui.theme.Button
+import com.example.meowmba.ui.theme.Surface
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -74,6 +77,7 @@ fun AgentsScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             // ── Agent roster ────────────────────────────────────────────────
+            BusinessAgentsLauncher()
             SectionTitle("Agents")
             Body("Tap an agent for its tools and task history. Tools ready means installed, not that accounts, permissions or hardware have been verified.")
             Spacer(modifier = Modifier.height(8.dp))

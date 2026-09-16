@@ -34,4 +34,19 @@ class RoadAlertTest {
         assertNull(RoadAlerts.fromNotification("com.spotify.music", "Now playing", "song"))
         assertNull(RoadAlerts.fromNotification("com.waze", "Traffic", "slowdown ahead"))
     }
+
+    @Test
+    fun `partial words and news are not police detections`() {
+        assertNull(RoadAlerts.fromNotification("com.waze", "Helicopter Museum", "Destination nearby"))
+        assertNull(RoadAlerts.fromNotification("com.google.android.googlequicksearchbox", "Police", "News headline"))
+        assertNull(RoadAlerts.fromNotification("com.google.android.apps.maps", "Police station", "Turn left"))
+        assertNull(RoadAlerts.fromNotification("com.waze", "No police", "Report removed"))
+    }
+
+    @Test
+    fun `radar speed camera is classified as a camera with named source`() {
+        val alert = RoadAlerts.fromNotification("com.waze", "Radar speed camera", "Nearby")!!
+        assertEquals(RoadAlert.Kind.CAMERA, alert.kind)
+        org.junit.Assert.assertTrue(alert.summary.contains("Waze"))
+    }
 }

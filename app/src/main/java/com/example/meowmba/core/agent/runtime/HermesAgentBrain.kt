@@ -58,7 +58,7 @@ object HermesProtocol {
                             }
                         }
                         putJsonArray("required") {
-                            tool.inputSchema.keys.forEach { add(JsonPrimitive(it)) }
+                            tool.inputSchema.filterValues { !it.endsWith('?') }.keys.forEach { add(JsonPrimitive(it)) }
                         }
                     }
                 }

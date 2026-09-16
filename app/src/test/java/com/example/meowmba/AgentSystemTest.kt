@@ -11,6 +11,9 @@ import com.example.meowmba.core.agent.tools.FileWriteTool
 import com.example.meowmba.core.agent.tools.ToolRegistry
 import com.example.meowmba.core.agent.tools.Workspace
 import com.example.meowmba.ui.companion.CompanionViewModel
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
@@ -323,22 +326,34 @@ class AgentViewModelTest {
 
     private val testDispatcher = UnconfinedTestDispatcher()
     private lateinit var fakeTts: VoicePipelineTest.FakeSpeechSynthesizer
+    private lateinit var androidMocks: ScopedCompanionAndroidMocks
+    private val viewModels = mutableListOf<CompanionViewModel>()
 
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
+        // Completed tools now feed the live expression/reflex pipeline before
+        // speech. Its Android clock must be supplied in this plain-JVM fixture.
+        androidMocks = ScopedCompanionAndroidMocks { testDispatcher.scheduler.currentTime }
         fakeTts = VoicePipelineTest.FakeSpeechSynthesizer()
     }
 
     @After
-    fun tearDown() {
-        Dispatchers.resetMain()
+    fun tearDown() = runTest(testDispatcher) {
+        try {
+            viewModels.forEach { it.viewModelScope.coroutineContext[Job]?.cancelAndJoin() }
+        } finally {
+            viewModels.clear()
+            androidMocks.close()
+            Dispatchers.resetMain()
+        }
     }
 
     @Test
     fun `voice command to create a file runs the full approval loop end to end`() = runTest {
         val workspaceRoot = Files.createTempDirectory("memba_vm_ws").toFile()
-        val vm = CompanionViewModel(ttsManager = fakeTts, workspaceRoot = workspaceRoot)
+        val vm = CompanionViewModel(ttsManager = fakeTts, workspaceRoot = workspaceRoot,
+            ioDispatcher = testDispatcher).also { viewModels += it }
 
         vm.onUserTextSubmitted("create file called hello.txt")
         runCurrent() // settle synchronous work without tripping the approval timeout
@@ -359,13 +374,13 @@ class AgentViewModelTest {
     }
 
     @Test
-    fun `unavailable agents are reported honestly over voice`() = runTest {
-        val vm = CompanionViewModel(ttsManager = fakeTts, workspaceRoot = Files.createTempDirectory("memba_vm_ws2").toFile())
-        // "main" agent can only task.list; force an unknown-tool path via project without project tool is
-        // not possible (workspace has it), so ask the file agent to do something outside its toolset is
-        // not routable — instead verify the orchestrator path exists and task.list works
+    fun `task status question uses real task evidence without a chat model`() = runTest {
+        val vm = CompanionViewModel(ttsManager = fakeTts, workspaceRoot = Files.createTempDirectory("memba_vm_ws2").toFile(),
+            ioDispatcher = testDispatcher).also { viewModels += it }
+        // This must not be swallowed by generic "what ..." chat routing.
         vm.onUserTextSubmitted("what tasks are running")
         advanceUntilIdle()
-        assertTrue(fakeTts.spokenTexts.isNotEmpty())
+        assertTrue(vm.uiState.value.activeTasks.any { it.toolId == "task.list" && it.status == TaskStatus.COMPLETED })
+        assertEquals(listOf("No tasks right now."), fakeTts.spokenTexts)
     }
 }

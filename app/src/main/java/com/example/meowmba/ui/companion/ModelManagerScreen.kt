@@ -1,5 +1,11 @@
 package com.example.meowmba.ui.companion
 
+import com.example.meowmba.ui.theme.Button
+import com.example.meowmba.ui.theme.OutlinedButton
+import com.example.meowmba.ui.theme.Card
+import com.example.meowmba.ui.theme.Surface
+
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -8,6 +14,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
@@ -17,6 +24,7 @@ import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -27,6 +35,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.meowmba.core.agent.LocalModelOption
 import com.example.meowmba.core.agent.ModelCatalog
+import com.example.meowmba.core.agent.OpenRouterModel
+import com.example.meowmba.core.agent.OpenRouterModels
+import com.example.meowmba.core.security.SecureStorageManager
 import com.example.meowmba.core.utils.SystemUtils
 import com.example.meowmba.core.utils.SystemUtils.HardwareCapabilities
 @OptIn(ExperimentalMaterial3Api::class)
@@ -46,9 +57,27 @@ fun ModelManagerScreen(
     onScanPhone: () -> Unit = {},
     onImportFoundModel: (DiscoveredModelFile) -> Unit = {},
     onOpenVoiceModels: () -> Unit = {},
+    secureStorage: SecureStorageManager? = null,
+    onProviderSettingsSaved: () -> Unit = {},
+    loadOpenRouterCatalog: suspend () -> Result<List<OpenRouterModel>> = { OpenRouterModels.fetch() },
     onClose: () -> Unit
 ) {
+    var showLocalSettings by rememberSaveable { mutableStateOf(false) }
+    if (showLocalSettings) {
+        LocalModelSettingsScreen(
+            state = state, storage = secureStorage,
+            onDownload = onDownloadModel, onUse = onUseInstalledFile,
+            onDelete = onDeleteInstalledFile, onCustomDownload = onCustomDownload,
+            onScan = onScanPhone, onImportFound = onImportFoundModel,
+            onImportUri = { viewModel?.importModelUri(it) },
+            onSavePath = { viewModel?.saveLocalModelPath(it) },
+            onRefresh = { viewModel?.refreshLocalModelLibrary() },
+            onClose = { showLocalSettings = false },
+        )
+        return
+    }
     var showProviderPicker by remember { mutableStateOf(false) }
+    BackHandler { if (showProviderPicker) showProviderPicker = false else onClose() }
 
     if (showProviderPicker) {
         ModalBottomSheet(
@@ -69,7 +98,8 @@ fun ModelManagerScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("LLM Manager", fontFamily = FontFamily.Monospace) },
+                title = { Text("LLM", fontFamily = FontFamily.Monospace) },
+                navigationIcon = { IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Close LLM") } },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background,
                     titleContentColor = MaterialTheme.colorScheme.onSurface
@@ -112,25 +142,14 @@ fun ModelManagerScreen(
 
             // Currently loaded models: on-device vs. cloud server
             Text(
-                "Currently Loaded",
+                "Choose your AI",
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.Bold
             )
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    "Active provider: ${state.selectedModel}",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.sp,
-                    modifier = Modifier.weight(1f)
-                )
-            TextButton(onClick = { showProviderPicker = true }) {
-                Text("Change", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
-            }
-        }
+            Text("Tap a card to manage its models and connection.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+            OutlinedButton(onClick = { showProviderPicker = true }, modifier = Modifier.fillMaxWidth()) { Text("All AI provider options") }
 
             Spacer(modifier = Modifier.height(4.dp))
 
@@ -144,36 +163,51 @@ fun ModelManagerScreen(
                     "Path: ${loaded.localPath}",
                     if (loaded.localInstalled) "File: present on disk" else "File: NOT found on disk"
                 ),
-                status = if (loaded.activeSource == ModelSource.LOCAL) LoadStatus.ACTIVE else LoadStatus.STANDBY
+                status = when { !loaded.localInstalled -> LoadStatus.NOT_CONFIGURED; loaded.activeSource == ModelSource.LOCAL -> LoadStatus.ACTIVE; else -> LoadStatus.STANDBY },
+                onClick = { showLocalSettings = true },
+                actionLabel = "Manage models, downloads & settings"
             )
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            LoadedModelCard(
-                icon = { Icon(Icons.Default.Cloud, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-                title = "OpenRouter · cloud",
-                primary = "OpenRouter · ${loaded.networkModel}",
-                details = listOf("Endpoint: ${loaded.networkEndpoint}"),
-                status = if (loaded.activeSource == ModelSource.NETWORK) LoadStatus.ACTIVE else LoadStatus.STANDBY
+            CloudModelCard(
+                provider = "openrouter", storage = secureStorage,
+                modelName = loaded.networkModel, endpoint = loaded.networkEndpoint,
+                keyConfigured = loaded.networkKeyConfigured,
+                status = when { !loaded.networkKeyConfigured -> LoadStatus.NOT_CONFIGURED; loaded.activeSource == ModelSource.NETWORK -> LoadStatus.ACTIVE; else -> LoadStatus.STANDBY },
+                onSelect = { onModelSelected("OpenRouter (Cloud)") },
+                onSaved = onProviderSettingsSaved, loadCatalog = loadOpenRouterCatalog,
             )
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            LoadedModelCard(
-                icon = { Icon(Icons.Default.Cloud, contentDescription = null, tint = Color(0xFFD29922)) },
-                title = "Cloud server",
-                primary = "${loaded.cloudProvider} · ${loaded.cloudModel}",
-                details = listOf(
-                    "Endpoint: ${loaded.cloudEndpoint}",
-                    if (loaded.cloudKeyConfigured) "API key: configured (Keystore)" else "API key: not set — add it in Settings"
-                ),
+            CloudModelCard(
+                provider = "openai", storage = secureStorage,
+                modelName = loaded.cloudModel, endpoint = loaded.cloudEndpoint,
+                keyConfigured = loaded.cloudKeyConfigured,
                 status = when {
-                    loaded.activeSource == ModelSource.CLOUD -> LoadStatus.ACTIVE
+                    loaded.activeSource == ModelSource.CLOUD && (state.selectedModel == "OpenAI (Cloud)" || secureStorage?.getPreference("default_brain") == "openai") -> LoadStatus.ACTIVE
                     loaded.cloudKeyConfigured -> LoadStatus.STANDBY
                     else -> LoadStatus.NOT_CONFIGURED
-                }
+                },
+                onSelect = { onModelSelected("OpenAI (Cloud)") },
+                onSaved = onProviderSettingsSaved, loadCatalog = loadOpenRouterCatalog,
             )
 
+            Spacer(modifier = Modifier.height(12.dp))
+            secureStorage?.let { storage ->
+                listOf("anthropic", "custom", "opencode").forEach { provider ->
+                    val configured = !storage.getApiKey(provider).isNullOrBlank()
+                    CloudModelCard(provider, storage, storage.getModelName(provider) ?: if (provider == "opencode") "big-pickle" else "",
+                        storage.getEndpoint(provider)?.takeIf { it.isNotBlank() } ?: if (provider == "anthropic") "https://api.anthropic.com" else if (provider == "opencode") "https://opencode.ai/zen" else "Set your provider URL",
+                        configured,
+                        if (!configured) LoadStatus.NOT_CONFIGURED else if (storage.getPreference("default_brain") == if (provider == "opencode") "bigpickle" else provider) LoadStatus.ACTIVE else LoadStatus.STANDBY,
+                        onSelect = { onModelSelected(when (provider) { "anthropic" -> "Claude (Cloud)"; "opencode" -> "OpenCode Zen (Cloud)"; else -> "Custom API (Cloud)" }) },
+                        onSaved = onProviderSettingsSaved)
+                    Spacer(Modifier.height(12.dp))
+                }
+            }
+            secureStorage?.let { VisionModelSettingsCard(it, onProviderSettingsSaved, loadOpenRouterCatalog) }
             Spacer(modifier = Modifier.height(12.dp))
 
             // Health checks: verify the local file exists and the cloud is reachable
@@ -222,103 +256,6 @@ fun ModelManagerScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            Text(
-                "Local Intelligence",
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.Bold
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Honest state banner when nothing is installed on-device
-            if (!state.loadedModels.localInstalled) {
-                Surface(
-                    color = Color(0xFFD29922).copy(alpha = 0.12f),
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, Color(0xFFD29922).copy(alpha = 0.5f))
-                ) {
-                    Text(
-                        "No local model installed. Download one below to chat and " +
-                            "run the agent brain fully on-device — or load a Hermes " +
-                            "fine-tune via a custom URL.",
-                        color = Color(0xFFD29922),
-                        fontSize = 13.sp,
-                        modifier = Modifier.padding(16.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-            }
-
-            var selectedCatalogId by remember { mutableStateOf(ModelCatalog.options.first().id) }
-            var catalogMenuOpen by remember { mutableStateOf(false) }
-            val compatible = ModelCatalog.options.filter { it.minRamGb <= 11 }
-            Text("Add a compatible model", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
-            Box {
-                OutlinedButton(onClick = { catalogMenuOpen = true }, modifier = Modifier.fillMaxWidth()) {
-                    Text(compatible.firstOrNull { it.id == selectedCatalogId }?.displayName ?: "Choose model")
-                }
-                DropdownMenu(expanded = catalogMenuOpen, onDismissRequest = { catalogMenuOpen = false }) {
-                    compatible.forEach { option ->
-                        DropdownMenuItem(
-                            text = { Text("${option.displayName} · ${option.approxSize}") },
-                            onClick = { selectedCatalogId = option.id; catalogMenuOpen = false },
-                        )
-                    }
-                }
-            }
-            compatible.firstOrNull { it.id == selectedCatalogId }?.let { option ->
-                CatalogModelItem(
-                    option = option,
-                    state = state,
-                    onDownload = { onDownloadModel(option) },
-                    onUse = { onUseModel(option) },
-                    onDelete = { onDeleteModel(option) }
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-            }
-
-            OutlinedButton(onClick = onScanPhone, enabled = !state.modelScanRunning, modifier = Modifier.fillMaxWidth()) {
-                Text(if (state.modelScanRunning) "Searching Downloads…" else "Search this phone for downloaded models")
-            }
-            state.discoveredModelFiles.forEach { found ->
-                Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(found.fileName, color = MaterialTheme.colorScheme.onSurface, fontSize = 12.sp)
-                        Text("${found.sizeBytes / 1_048_576} MB · Downloads", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
-                    }
-                    TextButton(onClick = { onImportFoundModel(found) }) { Text("Add") }
-                }
-            }
-
-            // Custom installs: real bundles on disk that are not in the catalog
-            val customInstalled = state.installedModels.filter { it.catalogDisplayName == null }
-            if (customInstalled.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    "Custom installs",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                customInstalled.forEach { file ->
-                    CustomInstalledItem(
-                        file = file,
-                        ramGb = caps.ramGb,
-                        isActive = state.loadedModels.activeSource == ModelSource.LOCAL &&
-                            java.io.File(state.loadedModels.localPath).name == file.fileName,
-                        onUse = { onUseInstalledFile(file.fileName) },
-                        onDelete = { onDeleteInstalledFile(file.fileName) }
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                }
-            }
-
-            // Any model via custom URL
-            CustomModelDownload(state = state, onCustomDownload = onCustomDownload)
-
-            Spacer(modifier = Modifier.height(32.dp))
-
             Button(
                 onClick = onClose,
                 modifier = Modifier.fillMaxWidth(),
@@ -333,7 +270,7 @@ fun ModelManagerScreen(
 
 enum class LoadStatus { ACTIVE, STANDBY, NOT_CONFIGURED }
 
-/** Row on the Hardware page that opens [VoiceModelScreen]. */
+/** Row on the LLM page that opens [VoiceModelScreen]. */
 @Composable
 private fun VoiceRecognitionEntryCard(
     backendName: String,
@@ -384,9 +321,13 @@ fun LoadedModelCard(
     title: String,
     primary: String,
     details: List<String>,
-    status: LoadStatus
+    status: LoadStatus,
+    onClick: () -> Unit = {},
+    actionLabel: String = "Tap to select",
+    settings: (@Composable () -> Unit)? = null,
 ) {
     Surface(
+        modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(12.dp),
         border = BorderStroke(
@@ -395,7 +336,8 @@ fun LoadedModelCard(
             else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
         )
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column {
+        Column(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 icon()
                 Spacer(modifier = Modifier.width(8.dp))
@@ -425,9 +367,12 @@ fun LoadedModelCard(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(primary, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Text(actionLabel, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
             details.forEach {
                 Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
             }
+        }
+        settings?.let { Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) { it() } }
         }
     }
 }
@@ -488,7 +433,8 @@ fun CatalogModelItem(
     state: CompanionState,
     onDownload: () -> Unit,
     onUse: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    downloadEnabled: Boolean = true,
 ) {
     val installed = state.installedModels.any { it.fileName == option.fileName }
     val progress = state.modelDownloads[option.id]
@@ -500,7 +446,7 @@ fun CatalogModelItem(
         color = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(12.dp),
         border = if (isActive) BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)) else null,
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth().clickable(enabled = installed && option.runtime.canActivate && !isActive, onClick = onUse)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -577,12 +523,12 @@ fun CatalogModelItem(
                 }
                 progress?.error != null -> {
                     Text(progress.error, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
-                    TextButton(onClick = onDownload) {
+                    TextButton(onClick = onDownload, enabled = downloadEnabled) {
                         Text("Retry", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
                     }
                 }
                 else -> {
-                    OutlinedButton(onClick = onDownload, shape = RoundedCornerShape(8.dp)) {
+                    OutlinedButton(onClick = onDownload, enabled = downloadEnabled, shape = RoundedCornerShape(8.dp)) {
                         Icon(
                             Icons.Default.Download,
                             contentDescription = null,
@@ -613,7 +559,7 @@ fun CustomInstalledItem(
         color = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(12.dp),
         border = if (isActive) BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)) else null,
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth().clickable(enabled = !isActive && com.example.meowmba.core.agent.LocalChatModel.supports(java.io.File(file.fileName)), onClick = onUse)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(file.fileName, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
@@ -682,7 +628,7 @@ fun CustomModelDownload(
     var expanded by remember { mutableStateOf(false) }
     var url by remember { mutableStateOf("") }
     var fileName by remember { mutableStateOf("") }
-    val id = "custom:$fileName"
+    val id = "custom:${fileName.ifBlank { "repository" }}"
     val progress = state.modelDownloads[id]
 
     Surface(
@@ -750,7 +696,7 @@ fun CustomModelDownload(
 }
 
 /**
- * Meta Ray-Ban glasses control card (Hardware page).
+ * Meta Ray-Ban glasses control card (LLM page).
  *
  * Shows the live link state from the controller's flows, one-tap setup
  * (Meta AI registration + camera permission), connect/disconnect, and the

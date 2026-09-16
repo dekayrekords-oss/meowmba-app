@@ -65,6 +65,8 @@
              entirely: bindService fails and getLaunchIntentForPackage returns null, which
              looks exactly like "the inventory app is not installed". -->
         <package android:name="com.meow.inventory" />
+        <!-- Termux: needed so setup can detect install + launch during onboarding. -->
+        <package android:name="com.termux" />
         <intent>
             <action android:name="com.meow.inventory.action.INVENTORY_BRIDGE" />
         </intent>
@@ -86,6 +88,8 @@
              service, erroring 5/9). Android System Intelligence is the one we
              actually want. -->
         <package android:name="com.google.android.as" />
+        <!-- Also used by the drawer's package-scoped Google app searches.
+             Keep visible even when it has no launcher/WEB_SEARCH entry point. -->
         <package android:name="com.google.android.googlequicksearchbox" />
         <package android:name="com.amazon.dee.app" />
         <package android:name="com.google.android.apps.bard" />
@@ -97,6 +101,7 @@
     </queries>
 
     <application
+        android:name=".MeowmbaApp"
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -122,6 +127,7 @@
             android:label="@string/app_name"
             android:theme="@style/Theme.Meowmba"
             android:launchMode="singleTask"
+            android:resizeableActivity="true"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|uiMode|density"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>

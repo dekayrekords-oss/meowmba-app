@@ -1,7 +1,14 @@
 package com.example.meowmba.ui.companion
 
+import com.example.meowmba.ui.theme.Button
+import com.example.meowmba.ui.theme.OutlinedButton
+import com.example.meowmba.ui.theme.Surface
+
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.graphics.graphicsLayer
@@ -11,6 +18,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
@@ -30,6 +38,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material.icons.filled.VideocamOff
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -39,7 +49,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.clickable
@@ -56,28 +65,65 @@ import com.example.meowmba.core.security.SecureStorageManager
 @Composable
 fun CompanionScreen(
     viewModel: CompanionViewModel,
-    secureStorage: SecureStorageManager? = null
+    secureStorage: SecureStorageManager? = null,
+    onboardingVisible: Boolean = false,
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val terminalUiStatus by viewModel.companionTerminalStatus.collectAsState()
+    val terminalUiStatusDetail by viewModel.companionTerminalStatusDetail.collectAsState()
+    val terminalUiScrollback by viewModel.companionTerminalScrollback.collectAsState()
+    val terminalUiConnectedTargetId by viewModel.companionTerminalConnectedTargetId.collectAsState()
+    val terminalPaneRequest by viewModel.companionTerminalPaneRequest.collectAsState()
     val showOnboarding by viewModel.showOnboarding.collectAsState()
     // Pinned apps + drawer folders are used by both the base surfaces and the
     // shared overlay layer, so they live at the screen root.
     val pinnedApps by viewModel.pinnedPackages.collectAsState()
     val drawerFolders by viewModel.drawerFolders.collectAsState()
+    val drawerUsage by viewModel.drawerUsage.collectAsState()
 
     // Foldable split: on the unfolded inner display (wide, >=600dp) the
     // agent browser lives in the right half while the companion keeps the
     // left, so meow can drive the browser in real time while you watch.
     val screenWidthDp = LocalConfiguration.current.screenWidthDp
+    val coverContext = LocalContext.current
+    val coverConfiguration = LocalConfiguration.current
+    val isFlipCover = useCoverAvatarLayout(
+        uiState.coverAvatarEnabled,
+        coverContext.display?.displayId ?: 0,
+        isFlipCoverWindow(android.os.Build.MANUFACTURER, android.os.Build.MODEL,
+            coverContext.display?.displayId ?: 0, screenWidthDp, coverConfiguration.screenHeightDp) ||
+            (coverContext.display?.let { it.flags and android.view.Display.FLAG_PRESENTATION == 0 } == true &&
+                coverConfiguration.touchscreen == android.content.res.Configuration.TOUCHSCREEN_FINGER),
+        screenWidthDp, coverConfiguration.screenHeightDp,
+    )
     val isUnfolded = screenWidthDp >= 600
     val splitBrowser = isUnfolded && uiState.showBrowser
     val halfWidth = (screenWidthDp / 2).dp
     // Meow freezes while a surface covers the face — chat sheet, app menu,
     // or the full-screen (folded) browser. In split view the avatar stays
     // alive beside the browser.
-    val animationsPaused = !faceModeActive(uiState.copy(isChatExpanded = false)) ||
-        uiState.showConnectorsScreen || showOnboarding || (uiState.showBrowser && !splitBrowser)
+    val avatarWorkStatus = rememberAvatarWorkStatus()
+    val avatarWorkAllowed = avatarWorkStatus.allowed
+    val habitatCovered = !avatarSceneVisible(uiState) ||
+        uiState.showConnectorsScreen || showOnboarding || onboardingVisible || (uiState.showBrowser && !splitBrowser)
+    val animationsPaused = !avatarWorkAllowed || habitatCovered
+    // Report the real stage policy, including thermal/fold/onboarding changes.
+    // Camera/body preferences must not cancel a visible acting performance.
+    LaunchedEffect(viewModel, animationsPaused) {
+        viewModel.setAvatarPerformanceStageAllowed(!animationsPaused)
+    }
+    DisposableEffect(viewModel) {
+        onDispose { viewModel.setAvatarPerformanceStageAllowed(false) }
+    }
+    DisposableEffect(viewModel, animationsPaused, uiState.showNeuralInfo, uiState.isCameraEnabled, uiState.robotBodyEnabled) {
+        // Brain is a visual monitor; opening it does not enable a physical body.
+        viewModel.setBodyStageAllowed(!animationsPaused && !uiState.showNeuralInfo)
+        onDispose { viewModel.setBodyStageAllowed(false) }
+    }
 
+    LaunchedEffect(uiState.showSettings, uiState.showNeuralInfo) {
+        if (uiState.showSettings || uiState.showNeuralInfo) viewModel.refreshMaleCnsServer()
+    }
     val isNeo = uiState.avatarStyle == AvatarStyle.NEO
     val hasUserBg = uiState.background.kind !=
         com.example.meowmba.core.background.BackgroundKind.NONE
@@ -86,6 +132,7 @@ fun CompanionScreen(
     // (true 0-alpha lets taps fall through on some OEMs — cards looked "dead").
     val voidColor = when {
         uiState.appTheme == AppTheme.PROFESSIONAL -> MaterialTheme.colorScheme.background
+        uiState.avatarStyle.isLumen -> MaterialTheme.colorScheme.background
         isNeo && !hasUserBg -> Color(0x03000000)
         else -> Color(0xFF0D1117)
     }
@@ -99,19 +146,34 @@ fun CompanionScreen(
                 .fillMaxSize()
                 .then(if (splitBrowser) Modifier.padding(end = halfWidth) else Modifier)
         ) {
-        if (uiState.appTheme == AppTheme.PROFESSIONAL) {
+        if (isFlipCover) {
+            FlipCoverAvatar(uiState, onMicClick = viewModel::onMicClick) {
+                AvatarMotionHost(viewModel, uiState, animationsPaused,
+                    Modifier.fillMaxSize(), interactive = false)
+            }
+        } else if (uiState.appTheme == AppTheme.PROFESSIONAL) {
             ProfessionalWorkspace(uiState, viewModel) {
                 AvatarMotionHost(viewModel, uiState, animationsPaused || uiState.showAvatarScreen,
                     Modifier.fillMaxSize(), interactive = false)
             }
         } else {
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+        // Reserve real layout space for the monitor so even a 300% avatar can
+        // remain visible. Background and props share the same resized viewport.
+        val brainSpace = when {
+            !uiState.showNeuralInfo -> Modifier
+            maxWidth > maxHeight -> Modifier.padding(end = minOf(360.dp, maxWidth * .48f) + 24.dp)
+            else -> Modifier.padding(bottom = maxHeight * .56f + 24.dp)
+        }
+        Box(Modifier.matchParentSize().then(brainSpace)) {
         // 0. User-chosen background always draws when set. Live weather sky too.
         // Only the empty NEO desk stays see-through.
-        if (!isNeo || hasUserBg) {
+        if ((!isNeo || hasUserBg) && !(uiState.avatarStyle == AvatarStyle.FULL_FLY && uiState.habitatMode)) {
             AppBackground(
-                selection = uiState.background,
+                selection = if (uiState.habitatMode) com.example.meowmba.core.background.BackgroundSelection(com.example.meowmba.core.background.BackgroundKind.ANIMATION, uiState.habitatBackgroundId, 15) else uiState.background,
                 weather = uiState.ambientWeather ?: uiState.weather,
                 modifier = Modifier.matchParentSize(),
+                paused = animationsPaused,
             )
         }
 
@@ -124,6 +186,22 @@ fun CompanionScreen(
             paused = animationsPaused,
             modifier = Modifier.matchParentSize(),
         )
+        }
+        }
+
+        if (!habitatCovered && !uiState.showNeuralInfo) {
+            PetCarePanel(
+                habitatMode = uiState.habitatMode, onTrick = viewModel::playCompanionTrick,
+                care = uiState.petCare, motionPaused = !avatarWorkAllowed, onCareChanged = viewModel::setPetCare,
+                onAction = viewModel::habitatAction, onFeedback = viewModel::petFeedback,
+                onLearningChanged = viewModel::setPetLearning, learningEnabled = uiState.petLearningEnabled,
+                feedbackNotice = uiState.petFeedbackNotice,
+                onResetLearning = viewModel::resetPetLearning,
+                formKey = uiState.generatedAvatarForm?.let { "generated" }
+                    ?: (uiState.performanceAnimal ?: uiState.avatarAnimal).key,
+                modifier = Modifier.align(Alignment.TopStart).safeDrawingPadding().padding(start = 12.dp, top = 64.dp),
+            )
+        }
 
         // 2. Controls layer — everything interactive respects the system bars
         //    (status bar, nav/gesture bar, display cutout) so it always fits.
@@ -134,6 +212,16 @@ fun CompanionScreen(
                 .safeDrawingPadding()
         ) {
             val faceContext = LocalContext.current
+
+            // Local wall clock on every companion scene/background; opens system Clock.
+            if (!habitatCovered) {
+                CompanionWallClock(
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 8.dp)
+                        .testTag("companion-face-wall-clock"),
+                )
+            }
 
             // Two pinned apps on the face (first two favorites).
             if (pinnedApps.isNotEmpty()) {
@@ -155,6 +243,13 @@ fun CompanionScreen(
                             )
                         }
                     }
+                }
+            }
+
+            if (uiState.computerTaskRunning) {
+                OutlinedButton(onClick = viewModel::cancelAgenticComputerChat,
+                    modifier = Modifier.align(Alignment.TopCenter).padding(top = 56.dp)) {
+                    Text("Stop Computer")
                 }
             }
 
@@ -202,7 +297,7 @@ fun CompanionScreen(
                         modifier = Modifier.padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp)
                     ) {
                         Text(
-                            text = "Taking notes",
+                            text = "Local notes · recording",
                             color = Color.White,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 16.sp,
@@ -213,7 +308,7 @@ fun CompanionScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.Close,
-                                contentDescription = "Stop taking notes",
+                                contentDescription = "Stop taking notes and save a local summary",
                                 tint = Color.White,
                             )
                         }
@@ -315,29 +410,31 @@ fun CompanionScreen(
                     .align(Alignment.BottomEnd)
                     .imePadding()
                     .padding(16.dp)
+                    .border(2.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape),
+                colors = IconButtonDefaults.iconButtonColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.Chat,
                     contentDescription = "Open chat",
-                    tint = Color(0x55CFF9FF)
+                    tint = MaterialTheme.colorScheme.onSurface
                 )
             }
 
-            // Camera preview toggle (bottom-end, above chat)
-            IconButton(
-                onClick = { viewModel.togglePreview() },
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .imePadding()
-                    .padding(bottom = 72.dp, end = 16.dp)
-            ) {
-                Icon(
-                    imageVector = if (uiState.isPreviewVisible)
-                        Icons.Default.Close else Icons.Default.PlayArrow,
-                    contentDescription = "Toggle camera preview",
-                    tint = if (uiState.isPreviewVisible) Color(0xFF3FB950) else Color(0x55CFF9FF)
-                )
-            }
+            // Capture controls: the camera action releases/enables capture, independent of chat.
+            MicKillButton(
+                enabled = uiState.isMicEnabled,
+                onEnabledChange = viewModel::setMicEnabled,
+                modifier = Modifier.align(Alignment.BottomEnd).imePadding()
+                    .padding(bottom = 128.dp, end = 16.dp),
+            )
+            CameraTrackingControl(
+                enabled = uiState.isCameraEnabled,
+                status = uiState.cameraTrackingStatus,
+                onToggle = { viewModel.setCameraEnabled(!uiState.isCameraEnabled) },
+                onRetry = viewModel::resumeFaceTrackingIfEnabled,
+                modifier = Modifier.align(Alignment.BottomEnd).imePadding()
+                    .padding(bottom = 72.dp, end = 16.dp),
+            )
 
         // Live camera preview — draggable PiP so it can sit anywhere on screen.
         val density = LocalDensity.current
@@ -443,85 +540,12 @@ fun CompanionScreen(
                     // Held back: this layer is in front of the face.
                     intensity = overlayIntensity(w.condition),
                     modifier = Modifier.matchParentSize(),
+                    paused = animationsPaused,
                 )
             }
         }
 
         }
-
-            // Generated media popup (image/video/audio created by Canvas agent)
-            AnimatedVisibility(
-                visible = uiState.generatedMedia != null,
-                enter = fadeIn() + scaleIn(),
-                exit = fadeOut() + scaleOut(),
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .padding(32.dp)
-            ) {
-                uiState.generatedMedia?.let { media ->
-                    Surface(
-                        color = Color(0xFF161B22),
-                        shape = RoundedCornerShape(16.dp),
-                        tonalElevation = 8.dp
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.End
-                            ) {
-                                IconButton(onClick = { viewModel.dismissGeneratedMedia() }) {
-                                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.Gray)
-                                }
-                            }
-                            when (media.type) {
-                                GeneratedMedia.MediaType.IMAGE -> {
-                                    var bitmap by remember(media.filePath) {
-                                        mutableStateOf<android.graphics.Bitmap?>(null)
-                                    }
-                                    LaunchedEffect(media.filePath) {
-                                        bitmap = try {
-                                            android.graphics.BitmapFactory.decodeFile(media.filePath)
-                                        } catch (_: Exception) { null }
-                                    }
-                                    bitmap?.let { bmp ->
-                                        androidx.compose.foundation.Image(
-                                            bitmap = bmp.asImageBitmap(),
-                                            contentDescription = media.label,
-                                            modifier = Modifier
-                                                .size(240.dp)
-                                                .padding(bottom = 8.dp)
-                                        )
-                                    }
-                                }
-                                GeneratedMedia.MediaType.VIDEO -> {
-                                    Icon(
-                                        Icons.Default.PlayArrow,
-                                        contentDescription = null,
-                                        tint = Color(0xFF58A6FF),
-                                        modifier = Modifier.size(48.dp)
-                                    )
-                                }
-                                GeneratedMedia.MediaType.AUDIO -> {
-                                    Icon(
-                                        Icons.Default.PlayArrow,
-                                        contentDescription = null,
-                                        tint = Color(0xFF3FB950),
-                                        modifier = Modifier.size(48.dp)
-                                    )
-                                }
-                            }
-                            Text(media.label, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                            Text(
-                                media.filePath.substringAfterLast("/"),
-                                color = Color.Gray, fontSize = 11.sp
-                            )
-                        }
-                    }
-                }
-            }
 
         if (!uiState.voicePackReady || !uiState.voicePackLabel.isNullOrBlank()) {
             Surface(
@@ -561,10 +585,12 @@ fun CompanionScreen(
                 viewModel.onAvatarZoneClick(AvatarZone.BACKGROUND)
                 when (tileName) {
                     "Settings" -> viewModel.toggleSettings()
-                    "Hardware" -> viewModel.toggleModelManager()
+                    "LLM", "Hardware" -> viewModel.toggleModelManager()
+                    "Brain" -> viewModel.toggleNeuralInfo()
                     "Privacy" -> viewModel.togglePrivacyDashboard()
                     "Memory" -> viewModel.toggleMemoryScreen()
-                    "Studio" -> viewModel.toggleStudioScreen()
+                    "Vending" -> viewModel.toggleStudioScreen()
+                    "Files" -> viewModel.toggleAssetBrowser()
                     "NAV" -> viewModel.toggleNavScreen()
                     "Weather" -> viewModel.toggleWeatherScreen()
                     "Background" -> viewModel.toggleBackgroundScreen()
@@ -635,9 +661,25 @@ fun CompanionScreen(
                     manual = uiState.driveManual,
                     trip = uiState.driveTrip,
                     onDismiss = { viewModel.dismissDriveCard() },
+                    roadStatus = if (uiState.roadAlertsEnabled) uiState.roadAlertStatus else null,
                     modifier = Modifier.padding(top = if (uiState.weather != null) 200.dp else 0.dp),
                 )
             }
+        }
+
+        // Lumen / agentic presence chip — only when flags warrant and hint is non-null.
+        val presenceHint = uiState.agenticPresenceHint
+            ?: uiState.reflexSummary?.takeIf { uiState.lumenReflexV2Enabled }
+        if (presenceHint != null &&
+            (uiState.agenticRuntimeV1Enabled || uiState.lumenReflexV2Enabled)
+        ) {
+            PresenceHintChip(
+                hint = presenceHint,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .safeDrawingPadding()
+                    .padding(top = 8.dp),
+            )
         }
 
         // What the agents are doing. Above the avatar, below the full-screen menus, and
@@ -688,17 +730,44 @@ fun CompanionScreen(
 
         if (uiState.showBackgroundScreen) {
             BackgroundScreen(
-                selection = uiState.background,
+                selection = if (uiState.habitatMode) com.example.meowmba.core.background.BackgroundSelection(com.example.meowmba.core.background.BackgroundKind.ANIMATION, uiState.habitatBackgroundId, 15) else uiState.background,
                 onSelect = { viewModel.setBackground(it) },
                 onClose = { viewModel.toggleBackgroundScreen() },
                 ambientWeatherOn = uiState.ambientWeatherEnabled,
+                avatarScale = uiState.avatarScale, onAvatarScale = viewModel::setAvatarScale,
+                habitatMode = uiState.habitatMode, onHabitatMode = viewModel::setHabitatMode,
             )
         }
 
         if (uiState.showAvatarScreen) {
             AvatarScreen(
+                avatarScale = uiState.avatarScale, onAvatarScale = viewModel::setAvatarScale,
+                habitatMode = uiState.habitatMode, onHabitatMode = viewModel::setHabitatMode,
                 style = uiState.avatarStyle,
                 onSelectStyle = { viewModel.setAvatarStyle(it) },
+                animal = uiState.avatarAnimal,
+                onSelectAnimal = viewModel::setAvatarAnimal,
+                generatedAvatarForm = uiState.generatedAvatarForm,
+                savedGeneratedForms = uiState.savedGeneratedForms,
+                avatarFormGenerating = uiState.avatarFormGenerating,
+                avatarFormMessage = uiState.avatarFormMessage,
+                avatarFormError = uiState.avatarFormError,
+                onGenerateForm = viewModel::createAvatarForm,
+                onRefineForm = viewModel::refineAvatarForm,
+                onCancelGenerateForm = viewModel::cancelAvatarFormGeneration,
+                onSelectGeneratedForm = viewModel::selectGeneratedAvatarForm,
+                onDeleteGeneratedForm = viewModel::deleteGeneratedAvatarForm,
+                expressionIntensity = uiState.expressionIntensity,
+                onExpressionIntensity = viewModel::setExpressionIntensity,
+                playfulness = uiState.playfulness,
+                onPlayfulness = viewModel::setPlayfulness,
+                diagnostics = {
+                    var timingSnapshot by remember { mutableStateOf(viewModel.interactionTimings.snapshot()) }
+                    InteractionTimingPanel(timingSnapshot,
+                        onEnabledChange = { viewModel.interactionTimings.setEnabled(it); timingSnapshot = viewModel.interactionTimings.snapshot() },
+                        onReset = { viewModel.interactionTimings.reset(); timingSnapshot = viewModel.interactionTimings.snapshot() },
+                        onRefresh = { timingSnapshot = viewModel.interactionTimings.snapshot() })
+                },
                 eyeColor = uiState.avatarEyeColor,
                 glowColor = uiState.avatarGlowColor,
                 onSelectEyeColor = { viewModel.setAvatarEyeColor(it) },
@@ -710,11 +779,29 @@ fun CompanionScreen(
                 appearanceMode = uiState.appearanceMode,
                 onSelectAppearance = viewModel::setAppearanceMode,
                 preview = {
-                    AvatarMotionHost(viewModel, uiState, false, Modifier.fillMaxSize(), interactive = false)
+                    AvatarMotionHost(viewModel, uiState, !avatarWorkAllowed, Modifier.fillMaxSize(), interactive = false)
                 },
                 animations = viewModel.avatarAnimationNames(),
                 onPlayAnimation = { viewModel.playAnimationNamed(it) },
                 onClose = { viewModel.toggleAvatarScreen() },
+            )
+        }
+
+        if (uiState.showNeuralInfo) {
+            NeuralInfoPanel(
+                diagnostics = uiState.neuralDiagnostics,
+                onClose = viewModel::toggleNeuralInfo,
+                desktopPaired = uiState.neuralDesktopPaired,
+                remoteServerPaired = uiState.maleCnsServer.paired,
+                remoteServerName = uiState.maleCnsServer.serverName,
+                onSetupBrainServer = viewModel::openNeuralSettingsFromInfo,
+                inputNotice = uiState.neuralInputNotice,
+                onUseLocalBrain = viewModel::startLocalBrainFromInfo,
+                onEnableNeuralControl = viewModel::enableNeuralControlFromInfo,
+                onPet = viewModel::petBrainFromInfo,
+                onFeed = viewModel::feedBrainFromInfo,
+                onOpenSettings = viewModel::openNeuralSettingsFromInfo,
+                onPairComputer = viewModel::openBrainPairingFromInfo,
             )
         }
 
@@ -726,10 +813,39 @@ fun CompanionScreen(
             )
         }
 
+
+        val pendingApprovalId = uiState.agenticPendingApprovalGoalId
+        if (pendingApprovalId != null && uiState.agenticRuntimeV1Enabled) {
+            AlertDialog(
+                onDismissRequest = { viewModel.rejectAgenticGoal(pendingApprovalId) },
+                title = { Text("Approve agentic SSH?") },
+                text = {
+                    Text(
+                        "Goal '" + (uiState.agenticPendingApprovalTitle ?: pendingApprovalId).take(80) +
+                            "' wants to run a side-effecting ssh_exec. Approve or reject."
+                    )
+                },
+                confirmButton = {
+                    Button(onClick = { viewModel.approveAgenticGoal(pendingApprovalId) }) {
+                        Text("Approve")
+                    }
+                },
+                dismissButton = {
+                    OutlinedButton(onClick = { viewModel.rejectAgenticGoal(pendingApprovalId) }) {
+                        Text("Reject")
+                    }
+                },
+            )
+        }
+
         if (uiState.showSettings && secureStorage != null) {
             SettingsScreen(
                 secureStorage = secureStorage,
+                initialPage = uiState.settingsInitialPage,
+                onOpenBrain = viewModel::toggleNeuralInfo,
                 companionName = uiState.name,
+                coverAvatarEnabled = uiState.coverAvatarEnabled,
+                onCoverAvatarChange = viewModel::setCoverAvatarEnabled,
                 wakeWordEnabled = uiState.wakeWordEnabled,
                 requireWakeWordInFace = uiState.requireWakeWordInFace,
                 conversationMode = uiState.conversationMode,
@@ -776,7 +892,13 @@ fun CompanionScreen(
 
                 onBargeInChange = { viewModel.setBargeIn(it) },
                 onOpenAccessibility = { viewModel.openAccessibilitySettings() },
-                onOpenSetup = { viewModel.toggleSetupWizard() },
+                onOpenSetup = { viewModel.toggleSettings(); viewModel.toggleSetupWizard() },
+                onOpenVoiceModels = { viewModel.toggleSettings(); viewModel.toggleVoiceModelScreen() },
+                onOpenModels = { viewModel.toggleSettings(); viewModel.toggleModelManager() },
+                appTheme = uiState.appTheme,
+                appearanceMode = uiState.appearanceMode,
+                onAppThemeChange = viewModel::setAppTheme,
+                onAppearanceModeChange = viewModel::setAppearanceMode,
                 idleChatterEnabled = uiState.idleChatterEnabled,
                 onIdleChatterChange = { viewModel.setIdleChatter(it) },
 
@@ -787,6 +909,9 @@ fun CompanionScreen(
                 commentaryEnabled = uiState.commentaryEnabled,
                 onCommentaryChange = { viewModel.setCommentaryMode(it) },
                 roadAlertsEnabled = uiState.roadAlertsEnabled,
+                roadAlertStatus = uiState.roadAlertStatus,
+                idleScenesEnabled = uiState.idleScenesEnabled,
+                onIdleScenesChange = viewModel::setIdleScenesEnabled,
                 onRoadAlertsChange = { viewModel.setRoadAlerts(it) },
                 onSaved = { viewModel.rebuildOmniRoute() },
                 onAgentBrainChange = { viewModel.setAgentBrainEnabled(it) },
@@ -800,6 +925,62 @@ fun CompanionScreen(
                 onVideoServerUrlChange = { viewModel.setVideoServerUrl(it) },
                 onBackgroundListeningChange = { viewModel.setBackgroundListeningEnabled(it) },
                 onUsbAutoBridgeChange = { viewModel.setUsbAutoBridge(it) },
+                maleCnsServer = uiState.maleCnsServer,
+                onPairMaleCnsServer = viewModel::pairMaleCnsServer,
+                onUsePairedComputerForMaleCns = viewModel::usePairedComputerForMaleCns,
+                onTestMaleCnsServer = viewModel::testMaleCnsServer,
+                onPairComputerForMaleCns = viewModel::openBrainPairingFromInfo,
+                neuralMode = uiState.neuralMode, neuralSubstrate = uiState.neuralSubstrate,
+                neuralTraceConsent = uiState.neuralTraceConsent, neuralDiagnostics = uiState.neuralDiagnostics,
+                onNeuralMode = viewModel::setNeuralMode, onNeuralSubstrate = viewModel::setNeuralSubstrate,
+                onNeuralTrace = viewModel::setNeuralTraceConsent, onNeuralReset = viewModel::resetNeuralController,
+                lumenReflexV2 = uiState.lumenReflexV2Enabled,
+                onLumenReflexV2Change = viewModel::setLumenReflexV2,
+                agenticRuntimeV1 = uiState.agenticRuntimeV1Enabled,
+                onAgenticRuntimeV1Change = viewModel::setAgenticRuntimeV1,
+                connectionProfiles = viewModel.listAgenticConnectionProfiles(),
+                onSaveConnectionProfile = viewModel::saveAgenticConnectionProfile,
+                onDeleteConnectionProfile = viewModel::deleteAgenticConnectionProfile,
+                onSaveAgenticCredential = viewModel::saveAgenticCredential,
+                agenticGoals = viewModel.listAgenticOpenGoals(),
+                agenticModelConfig = viewModel.agenticModelConfigSnapshot(),
+                sshCapabilitySummary = viewModel.agenticSshCapabilitySummary(),
+                onCreateAgenticGoal = viewModel::createAgenticGoal,
+                onTickAgenticGoal = viewModel::tickAgenticGoal,
+                onTickOpenAgenticGoals = viewModel::tickOpenAgenticGoals,
+                onApproveAgenticGoal = viewModel::approveAgenticGoal,
+                onRejectAgenticGoal = viewModel::rejectAgenticGoal,
+                onRefreshAgenticTasks = viewModel::refreshAgenticPresenceHint,
+                onSaveAgenticModelConfig = viewModel::saveAgenticModelConfig,
+
+
+                computerPhoneProbeSummary = uiState.computerPhoneProbeSummary,
+                computerPhoneReady = uiState.computerPhoneReady,
+                computerSetupStatus = uiState.computerSetupStatus,
+                computerStatusDetail = uiState.computerStatusDetail,
+                computerInstallLog = uiState.computerInstallLog,
+                computerPowerState = uiState.computerPowerState,
+                computerVncUrl = uiState.computerVncUrl,
+                computerSavedProfile = viewModel.computerSavedProfileOrNull(),
+                computerShowInstallPrompt = uiState.computerShowInstallPrompt,
+                onComputerSaveProfile = viewModel::saveComputerProfile,
+                onComputerTestConnection = viewModel::testComputerConnection,
+                onComputerInstall = viewModel::installComputerOnServer,
+                onComputerOpenTerminal = {
+                    viewModel.connectCompanionTerminal(
+                        com.example.meowmba.ui.companion.CompanionTerminalTarget.LOCAL_ID
+                    )
+                },
+                onComputerOpenDesktop = viewModel::openComputerDesktopUrl,
+                onComputerConfirmInstallPrompt = viewModel::confirmComputerInstallPrompt,
+                lumenReflexGain = uiState.lumenReflexGain,
+                onLumenReflexGainChange = viewModel::setLumenReflexGain,
+                avatarFpsTarget = uiState.avatarFpsTarget,
+                onAvatarFpsTargetChange = viewModel::setAvatarFpsTarget,
+                computerPower = uiState.computerPowerState,
+                onComputerPowerChange = viewModel::setComputerPowerState,
+                computerIdleMinutes = uiState.computerIdleMinutes,
+                onComputerIdleMinutesChange = viewModel::setComputerIdleMinutes,
                 onClose = { viewModel.toggleSettings() }
             )
         }
@@ -808,6 +989,8 @@ fun CompanionScreen(
             ModelManagerScreen(
                 state = uiState,
                 viewModel = viewModel,
+                secureStorage = secureStorage,
+                onProviderSettingsSaved = viewModel::reloadSetupConfiguration,
                 onModelSelected = { viewModel.onModelSelected(it) },
                 onTestCloud = { viewModel.runCloudConnectionTest() },
                 onCheckLocal = { viewModel.runLocalModelCheck() },
@@ -817,6 +1000,8 @@ fun CompanionScreen(
                 onCustomDownload = { url, name -> viewModel.downloadCustomModel(url, name) },
                 onUseInstalledFile = { viewModel.useInstalledModelFile(it) },
                 onDeleteInstalledFile = { viewModel.deleteInstalledModelFile(it) },
+                onScanPhone = viewModel::scanPhoneForModels,
+                onImportFoundModel = viewModel::importDiscoveredModel,
                 onOpenVoiceModels = { viewModel.toggleVoiceModelScreen() },
                 onClose = { viewModel.toggleModelManager() }
             )
@@ -828,6 +1013,10 @@ fun CompanionScreen(
                 onSelectBackend = { viewModel.setAsrBackend(it) },
                 onDownloadWhisper = { viewModel.downloadWhisperModel() },
                 onRepairStreamingModel = { viewModel.repairStreamingAsrModel() },
+                onDownloadLocalVoices = { viewModel.downloadLocalVoices() },
+                onSelectLocalVoice = { viewModel.selectLocalVoice(it) },
+                onPreviewLocalVoice = { viewModel.previewLocalVoice(it) },
+                onUseSystemVoice = { viewModel.useSystemVoice() },
                 onClose = { viewModel.toggleVoiceModelScreen() }
             )
         }
@@ -855,13 +1044,33 @@ fun CompanionScreen(
             )
         }
 
+        if (uiState.showAssetBrowser) {
+            AssetBrowserScreen(askAi = viewModel::askAssetBrain,
+                onProjects = { viewModel.toggleAssetBrowser(); viewModel.toggleProjectsScreen() },
+                onClose = viewModel::toggleAssetBrowser, initialPath = uiState.assetBrowserInitialPath)
+        }
+
         if (uiState.showStudioScreen) {
-            StudioScreen(
+            VendingMachineScreen(
                 viewModel = viewModel,
                 onClose = { viewModel.toggleStudioScreen() }
             )
         }
 
+        uiState.pendingPropPlacement?.let { prop ->
+            PropPlacementEditor(
+                prop = prop,
+                avatar = uiState.generatedAvatarForm,
+                onSave = viewModel::savePropPlacement,
+                onDismiss = viewModel::dismissPropPlacement,
+            )
+        }
+
+        if (uiState.showBusinessAgents) {
+            androidx.activity.compose.BackHandler { viewModel.closeBusinessAgents() }
+            BusinessAgentsScreen(onOpenFiles = { viewModel.openBusinessFiles() },
+                onOpenBugReports = { viewModel.openBusinessFiles(diagnostics = true) }) { viewModel.closeBusinessAgents() }
+        }
         if (uiState.showAgentsScreen) {
             AgentsScreen(
                 state = uiState,
@@ -876,7 +1085,12 @@ fun CompanionScreen(
                 state = uiState,
                 onOpen = { viewModel.openProject(it) },
                 onDelete = { viewModel.deleteProject(it) },
-                onClose = { viewModel.toggleProjectsScreen() }
+                onClose = { viewModel.toggleProjectsScreen() },
+                onCreate = viewModel::createProject, onSavePlan = viewModel::saveProjectPlan,
+                onDraftPlan = viewModel::draftProjectPlan, onCancelPlan = viewModel::cancelProjectPlanning,
+                onStepDone = viewModel::setProjectStepDone, onContinue = viewModel::continueProject,
+                onFiles = viewModel::openProjectFiles, onArtifact = viewModel::openProjectArtifact,
+                onCancelTask = viewModel::cancelTask, onRefresh = { viewModel.refreshProjectWork() },
             )
         }
 
@@ -891,6 +1105,7 @@ fun CompanionScreen(
         if (uiState.showRobotScreen) {
             RobotScreen(
                 robotStatus = uiState.robotStatus,
+                robotConnected = uiState.robotConnected,
                 robotBodyEnabled = uiState.robotBodyEnabled,
                 robotUseBluetooth = uiState.robotUseBluetooth,
                 robotBtAddress = uiState.robotBtAddress,
@@ -904,7 +1119,8 @@ fun CompanionScreen(
                 onRobotHostChange = { viewModel.setRobotHost(it) },
                 onRobotPortChange = { viewModel.setRobotPort(it) },
                 onRobotScan = { viewModel.scanForRobotBases() },
-                onRefresh = { viewModel.refreshRobot() },
+                onStop = { viewModel.stopRobotFromControls() },
+                onRefresh = { viewModel.connectRobotFromControls() },
                 onClose = { viewModel.toggleRobotScreen() }
             )
         }
@@ -935,6 +1151,17 @@ fun CompanionScreen(
                 onRemoveFromFolder = { id, pkg -> viewModel.removeAppFromDrawerFolder(id, pkg) },
                 onRenameFolder = { id, name -> viewModel.renameDrawerFolder(id, name) },
                 onDeleteFolder = { viewModel.deleteDrawerFolder(it) },
+                frequentPackages = DrawerUsage.frequentPackages(
+                    drawerUsage,
+                    installed = drawerUsage.launches.keys,
+                ),
+                neverFrequentPackages = drawerUsage.neverFrequent,
+                launchCounts = drawerUsage.launches,
+                onHideFromFrequent = viewModel::hideFromFrequentApps,
+                onSetNeverFrequent = viewModel::setNeverFrequentApp,
+                onAllowFrequent = viewModel::allowFrequentApp,
+                onRecordLaunch = viewModel::recordDrawerLaunch,
+
                 onSubmitQuery = { raw, count, label ->
                     viewModel.submitDrawerQuery(raw, count, label)
                 },
@@ -944,6 +1171,7 @@ fun CompanionScreen(
                 listening = uiState.interactionState == InteractionState.LISTENING,
                 listenPartial = uiState.captionText,
                 onMicClick = { viewModel.startDrawerVoiceSearch() },
+                onCancelVoice = { viewModel.cancelDrawerVoice() },
                 voiceCommit = uiState.drawerVoiceCommit,
                 onVoiceConsumed = { viewModel.consumeDrawerVoice() },
             )
@@ -963,12 +1191,14 @@ fun CompanionScreen(
         }
 
         ChatOverlay(
+            recognitionIssue = uiState.voiceRecognitionStatus,
             isExpanded = uiState.isChatExpanded,
             onClose = { viewModel.toggleChat() },
             onSend = { viewModel.onUserTextSubmitted(it) },
             onDeleteMessage = { viewModel.deleteMessage(it) },
             messages = uiState.chatMessages,
             title = uiState.activeProjectName ?: "Conversation",
+            onProjectOverview = if (uiState.activeProjectId != null) viewModel::toggleProjectsScreen else null,
             onLeaveProject = if (uiState.activeProjectId != null) {
                 { viewModel.leaveProject() }
             } else null,
@@ -980,6 +1210,23 @@ fun CompanionScreen(
             onMicClick = { viewModel.onChatMicClick() },
             callActive = uiState.callMode,
             onCallClick = { viewModel.toggleCallMode() },
+            terminalTargets = viewModel.listCompanionTerminalTargets(),
+            terminalStatus = terminalUiStatus,
+            terminalStatusDetail = terminalUiStatusDetail,
+            terminalScrollback = terminalUiScrollback,
+            terminalConnectedTargetId = terminalUiConnectedTargetId,
+            onTerminalConnect = viewModel::connectCompanionTerminal,
+            onTerminalDisconnect = viewModel::disconnectCompanionTerminal,
+            onTerminalSendLine = viewModel::sendCompanionTerminalLine,
+            onTerminalInterrupt = viewModel::interruptCompanionTerminal,
+            onTerminalClear = viewModel::clearCompanionTerminalScrollback,
+            onTerminalResize = viewModel::resizeCompanionTerminal,
+            onRunTerminalCommand = { targetId, command ->
+                viewModel.runCompanionTerminalCommand(targetId, command)
+            },
+            computerPower = uiState.computerPowerState,
+            onComputerPower = viewModel::setComputerPowerState,
+            terminalPaneRequest = terminalPaneRequest,
             modifier = Modifier.align(Alignment.BottomCenter)
         )
 
@@ -998,6 +1245,40 @@ fun CompanionScreen(
         // card rendered underneath the open conversation sheet, so a task
         // waiting on approval was invisible and silently timed out.
         // Tool approval card: a risky action is blocked until you decide
+        // Thermal banner: NONE/LIGHT never warn; MODERATE needs hold (AvatarWorkPolicy);
+        // copy is mild at MODERATE and only stronger at SEVERE+.
+        thermalUiBannerText(avatarWorkStatus.warning)?.takeIf {
+            faceModeActive(uiState.copy(isChatExpanded = false))
+        }?.let { banner ->
+            Surface(Modifier.align(Alignment.TopCenter).safeDrawingPadding().padding(16.dp),
+                shape = MaterialTheme.shapes.medium) {
+                Text(banner, modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        // Above chat and settings, but below approvals and onboarding.
+        uiState.generatedMedia?.let { media ->
+            ArtifactResultCard(media, uiState.artifactOpenMessage,
+                onOpen = { viewModel.showFileInBrowser(java.io.File(media.filePath)) },
+                onFiles = viewModel::showGeneratedFiles, onClose = viewModel::dismissGeneratedMedia,
+                modifier = Modifier.align(Alignment.Center).safeDrawingPadding().padding(16.dp)
+                    .heightIn(max = (coverConfiguration.screenHeightDp * 0.65f).dp))
+        }
+        uiState.phoneControlSetupGoal?.let {
+            AlertDialog(onDismissRequest = viewModel::dismissPhoneControlSetup,
+                title = { Text("Reconnect phone control") },
+                text = { Text("Android has disconnected Meow Accessibility. Turn Meow off and back on in Settings → Accessibility → Installed apps, then return here. Retry will ask for task approval again; nothing will be posted automatically.") },
+                confirmButton = { TextButton(onClick = viewModel::openAccessibilitySettings) { Text("Open settings") } },
+                dismissButton = { Row {
+                    TextButton(onClick = viewModel::dismissPhoneControlSetup) { Text("Cancel") }
+                    TextButton(onClick = viewModel::retryPhoneControlSetup) { Text("Retry task") }
+                } })
+        }
+        if (uiState.modelSetupRequired && !showOnboarding) {
+            Surface(Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(16.dp),
+                shape = MaterialTheme.shapes.medium) {
+                TextButton(onClick = viewModel::repairModelSetup) { Text("Repair local AI setup") }
+            }
+        }
         uiState.pendingApproval?.let { approval ->
             Surface(
                 color = MaterialTheme.colorScheme.surface,
@@ -1027,7 +1308,9 @@ fun CompanionScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(approval.title, color = MaterialTheme.colorScheme.primary, fontSize = 14.sp)
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text(approval.detail, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                    Text(approval.detail, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp,
+                        modifier = Modifier.fillMaxWidth().heightIn(max = (coverConfiguration.screenHeightDp * .42f).dp)
+                            .verticalScroll(rememberScrollState()))
                     Spacer(modifier = Modifier.height(16.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Button(
@@ -1061,12 +1344,17 @@ fun CompanionScreen(
 
         // Setup wizard: full-screen overlay for first-launch or re-open from Settings.
         // Drawn AFTER everything else so it covers the entire companion surface.
-        val ctx = LocalContext.current
         if (showOnboarding) {
             com.example.meowmba.ui.onboarding.SetupWizardRoute(
-                onFinished = {
-                    com.example.meowmba.core.setup.SetupWiring.markOnboardingDone(ctx)
-                    viewModel.toggleSetupWizard()
+                onFinished = { viewModel.finishOnboarding() },
+                onEnablePermissions = { viewModel.requestOnboardingPermissions() },
+                onOpenChat = {
+                    viewModel.finishOnboarding()
+                    viewModel.openChat()
+                },
+                onOpenTerminal = {
+                    viewModel.finishOnboarding()
+                    viewModel.openCompanionTerminalFromOnboarding()
                 },
                 modifier = Modifier.fillMaxSize(),
             )
@@ -1087,7 +1375,10 @@ private fun AvatarMotionHost(
     modifier: Modifier = Modifier,
     interactive: Boolean = true,
 ) {
-    val motionTilt by viewModel.motionTiltDeg.collectAsState()
+    val motionTilt = viewModel.motionScreenLeanDeg.collectAsState()
+    val motionSampleTime = viewModel.motionObservedAtMs.collectAsState()
+    val view = androidx.compose.ui.platform.LocalView.current
+    val displayRotation = LocalConfiguration.current.let { view.display?.rotation ?: 0 }
     val motionLean by viewModel.motionLean.collectAsState()
     val motionLurch by viewModel.motionLurch.collectAsState()
     val shakeCount by viewModel.avatarShakeCount.collectAsState()
@@ -1098,13 +1389,17 @@ private fun AvatarMotionHost(
     val mouthEnergy = viewModel.mouthEnergy.collectAsState()
     val facePose by viewModel.facePose.collectAsState()
     val chaseHard by viewModel.chaseHard.collectAsState()
-    Box(
-        modifier = modifier.graphicsLayer {
-            // ViewModel already clamps to ±14°; don't squash it back to ±4 here.
-            rotationZ = if (uiState.avatarStyle == AvatarStyle.SIGNAL) 0f else motionTilt.coerceIn(-14f, 14f)
-            clip = false
+    val flyContext = androidx.compose.ui.platform.LocalContext.current
+    val flyView = remember(flyContext, uiState.avatarStyle) {
+        if (uiState.avatarStyle == AvatarStyle.FULL_FLY) Fly3DView(flyContext) else null
+    }
+    var flyError by remember { mutableStateOf<String?>(null) }
+    DisposableEffect(flyView) { onDispose { flyView?.dispose() } }
+    SideEffect { flyView?.setStageActive(!paused); flyView?.onFailure = { flyError = it } }
+    Box(modifier = modifier) {
+        if (flyView != null) {
+            androidx.compose.ui.viewinterop.AndroidView(factory = { flyView }, modifier = Modifier.matchParentSize())
         }
-    ) {
         AvatarRenderer(
             state = uiState,
             onZoneClick = { if (interactive) viewModel.onAvatarZoneClick(it) },
@@ -1113,6 +1408,8 @@ private fun AvatarMotionHost(
             onSwipeLeft = { if (interactive) viewModel.toggleBrowser() },
             onSwipeRight = { if (interactive) viewModel.openChat() },
             paused = paused,
+            timings = viewModel.interactionTimings,
+            displayRefreshRate = view.display?.refreshRate,
             // Statue mode: no gesture consumption either, so a non-interactive
             // stage (the Professional workspace orb) leaves taps to its parent
             // — the clickable that flips the mic.
@@ -1126,8 +1423,26 @@ private fun AvatarMotionHost(
             faceScale = facePose?.scale,
             motionLean = motionLean,
             motionLurch = motionLurch,
+            motionObservedAtMs = motionSampleTime,
+            nervousBias = viewModel::nervousBiasNow,
+            neuralGaze = viewModel::neuralGazeNow,
+            neuralWingPower = viewModel::neuralWingPowerNow,
+            neuralFlyMotor = viewModel::neuralFlyMotorNow,
+            onPet = viewModel::onAvatarPetted,
+            onPlay = { viewModel.playCompanionTrick("peekaboo") },
+            onHabitatAction = viewModel::habitatAction,
+            onFly3DFrame = flyView?.let { gpu -> { frame: Fly3DFrame -> gpu.publish(frame) } },
+            motionScreenLean = motionTilt,
+            displayRotation = displayRotation,
             shakeCount = shakeCount,
             chaseHard = chaseHard,
+            reflexFeed = { viewModel.reflexSensory.value },
+            reflexGain = uiState.lumenReflexGain,
+            onReflexSummary = viewModel::onReflexSummary,
         )
+        if (flyError != null) {
+            androidx.compose.material3.Text("3D graphics unavailable: $flyError", color=Color.White,
+                modifier=Modifier.align(Alignment.Center).background(Color(0xff20332f)).padding(16.dp))
+        }
     }
 }

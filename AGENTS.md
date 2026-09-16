@@ -1,5 +1,16 @@
 # Meowmba — guide for AI contributors
 
+## Android source publication restriction — owner instruction, 2026-09-13
+
+Do not upload any Android app source code to public GitHub. This includes
+source copied into public repositories, gists, issues, PRs, snippets, or public
+website assets. A request to connect the website or videos to GitHub does not
+authorize publishing the Android implementation. Keep app code in local Git or
+owner-authorized private server repositories. Review destinations before any
+push; never assume a remote is private from its name. Public website updates
+may describe features without including Android source. Record changes and
+Meow passdowns locally; a local commit is not a public push.
+
 ## Active appearance revision and agent assignments
 
 For the current user-requested animation/chat/orb work, read `docs/IMMERSIVE_COMPANION_PLAN.md` and `docs/AGENT_PLAN.md`. They supersede the older orb-ribbon direction, not the security rules or unrelated roadmap below.
@@ -60,6 +71,18 @@ all remotes use that key. prog's password exists but its account
 lockouts bite after a few failed password logins — always use the key.
 
 ## Build & test
+
+### Existing Play release signing and upload path
+
+The absence of `keystore.properties` on the Mac does not mean the upload key is
+missing. The existing signing configuration is on SSH host `meow` at
+`/home/claude/meowmba-app/keystore.properties`. Use it through
+`-PreleaseSigningProperties=...` in an isolated release checkout on that host;
+do not print or copy its secrets into the repository. The matching upload
+certificate and successful build procedure are recorded in
+`docs/store/SIGNED_RELEASE_1.3.40.md` and `SIGNED_RELEASE_1.3.20.md`.
+The existing Play app is `com.meow.meowmba`, closed-testing Alpha. Inspect the
+signed-in Play Console browser before assuming that upload access is missing.
 
 ```bash
 ./gradlew :app:assembleDebug

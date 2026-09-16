@@ -1,0 +1,114 @@
+{
+  "build": 112,
+  "versionName": "1.3.81",
+  "sourceCommit": "776eb0d",
+  "phone": {
+    "model": "SM-F966U1",
+    "installedInPlace": true,
+    "lastUpdateTimeLocal": "2026-09-13 20:27:44",
+    "clearedAppData": false,
+    "runtimeProtectedEntriesCompared": 53,
+    "runtimeEntriesMatchBuild111": true,
+    "liveAcceptance": "PENDING_PAIRING",
+    "deviceTestFailure": "Pair the computer bridge first",
+    "neuralPreferencesChangedByDeviceTest": false,
+    "userDirection": "Continue without the disconnected phone",
+    "latestReportedThermalStatus": 1,
+    "sustainedHeatBatteryValidation": false
+  },
+  "artifacts": {
+    "meowmba-112.apk": {
+      "bytes": 441901342,
+      "sha256": "7b861d0c9ef77824bab0980b0ce43a98262569fe802af04e85303be107e9cd9c"
+    },
+    "tests112.apk": {
+      "bytes": 2736070,
+      "sha256": "ae44fc06943049dd336523a0e509b6ba67accabebf168fa123b9792d3a182cbc"
+    }
+  },
+  "signingCertificateSha256": "b7850d5fb645df9f5d12525db1b10e457b0ee7f3aa50bbf4294ff31dae3379ff",
+  "hostTests": {
+    "androidFocusedServer": {
+      "tests": 75,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "androidFocusedMac": {
+      "tests": 12,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "pythonBridge": {
+      "tests": 23,
+      "failures": 0
+    }
+  },
+  "liveBridge": {
+    "scope": "Live authenticated Mac helper to Meow; phone disconnected, no Android acceptance",
+    "protocol": "pinned TLS plus HMAC on existing paired helper, then private SSH",
+    "requestsInSensoryEpisodes": 124,
+    "assetSha256": "e33df182bed7a6f3ea279daf4790a82b05706d3d41e819a6a80c0473e8c559f3",
+    "neurons": 176422,
+    "pairs": 6287749,
+    "retainedAnatomicalSynapseCounts": 90296905,
+    "unsignedRejected": true,
+    "duplicateCached": true,
+    "restartDeterministic": true,
+    "roundTripMs": {
+      "min": 54.65,
+      "median": 145.077,
+      "p95": 187.392,
+      "max": 1518.113
+    },
+    "workerComputeMs": {
+      "min": 0.318,
+      "median": 73.336,
+      "p95": 113.596,
+      "max": 142.12
+    },
+    "repliesAbove1800Ms": 0,
+    "workerProcessesAfterStop": 0,
+    "episodeMotorPeaksHz": {
+      "quiet": {
+        "feed_hz": 0.0,
+        "groom_hz": 0.0,
+        "escape_hz": 0.0,
+        "wing_hz": 0.0
+      },
+      "food": {
+        "feed_hz": 100.0,
+        "groom_hz": 0.0,
+        "escape_hz": 0.0,
+        "wing_hz": 0.689655
+      },
+      "touch": {
+        "feed_hz": 30.0,
+        "groom_hz": 200.0,
+        "escape_hz": 0.0,
+        "wing_hz": 0.689655
+      },
+      "loom": {
+        "feed_hz": 0.0,
+        "groom_hz": 0.0,
+        "escape_hz": 480.0,
+        "wing_hz": 0.0
+      },
+      "food_and_touch": {
+        "feed_hz": 90.0,
+        "groom_hz": 210.0,
+        "escape_hz": 0.0,
+        "wing_hz": 0.0
+      }
+    },
+    "numericEvidencePath": "build-out/habitat/build112/bridge-sensory-acceptance.json",
+    "numericEvidenceSha256": "7a520de217ba27a3e29c40e1322bc73381ba0f537928f838b78f8a681f163e90"
+  },
+  "openLimits": [
+    "Phone pairing and live animation/control acceptance",
+    "Sustained phone heat and battery validation",
+    "Biophysical synaptic parameters and receptor/flight fidelity",
+    "Physical robot transfer; no robot available"
+  ]
+}
