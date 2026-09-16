@@ -200,9 +200,7 @@ class MainActivity : ComponentActivity() {
                         uiState.showTiles || uiState.showPrivacyDashboard || uiState.showMemoryScreen ||
                         uiState.showAgentsScreen || uiState.showBackgroundScreen ||
                         uiState.showWeatherScreen || uiState.showNavScreen ||
-                        uiState.showAppDrawer || uiState.showBrowser ||
-                        uiState.showMusicDawScreen || uiState.showVaultScreen ||
-                        uiState.showAvatarScreen
+                        uiState.showAppDrawer || uiState.showBrowser
                 ) {
                     when {
                         uiState.showAppDrawer || uiState.showBrowser -> viewModel.closeOverlays()
@@ -214,9 +212,6 @@ class MainActivity : ComponentActivity() {
                         uiState.showBackgroundScreen -> viewModel.toggleBackgroundScreen()
                         uiState.showWeatherScreen -> viewModel.toggleWeatherScreen()
                         uiState.showNavScreen -> viewModel.toggleNavScreen()
-                        uiState.showMusicDawScreen -> viewModel.toggleMusicDawScreen()
-                        uiState.showVaultScreen -> viewModel.toggleVaultScreen()
-                        uiState.showAvatarScreen -> viewModel.toggleAvatarScreen()
                         uiState.isChatExpanded -> viewModel.toggleChat()
                         uiState.showTiles -> viewModel.onAvatarZoneClick(com.example.meowmba.ui.companion.AvatarZone.BACKGROUND)
                     }
