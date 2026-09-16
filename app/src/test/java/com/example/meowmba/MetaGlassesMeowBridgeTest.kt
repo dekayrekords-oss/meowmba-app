@@ -25,7 +25,7 @@ class MetaGlassesMeowBridgeTest {
     }
 
     @Test
-    fun `ssh phrase maps to ssh.meow hint`() {
+    fun `ssh phrase maps to ssh meow hint`() {
         val prepared = MetaGlassesMeowBridge.normalizeTranscript("Hey Meow ssh run uptime on meow")
         assertNotNull(prepared)
         assertEquals(MetaGlassesMeowBridge.CommandIntent.SSH_MEOW, prepared!!.intent)
