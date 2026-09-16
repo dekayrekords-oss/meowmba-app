@@ -650,6 +650,7 @@ class CompanionViewModel(
         secureStorage?.context?.filesDir?.let { GeneratedPropStore(File(it, "companion_props")) }
     }
     private var propInventGeneration = 0L
+    private var animInventGeneration = 0L
     private var propInventStop = com.example.meowmba.core.agent.LocalInferenceCancellation()
     private var propInventWork: Job? = null
     private val performanceRotation = PerformanceRotation()

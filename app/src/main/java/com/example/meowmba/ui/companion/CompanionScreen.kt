@@ -218,8 +218,7 @@ fun CompanionScreen(
                 CompanionWallClock(
                     Modifier
                         .align(Alignment.TopCenter)
-                        .padding(top = 8.dp)
-                        .testTag("companion-face-wall-clock"),
+                        .padding(top = 8.dp),
                 )
             }
 
