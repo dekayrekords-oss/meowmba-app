@@ -1,5 +1,15 @@
 # MEOWMBA MASTER PLAN
 
+## September 15, 2026 — Prop placement / vending animation / background clock (Preview vc125)
+
+Branch: `feat/prop-placement-vending-clock` (from `fix/invent-avatar-crash-and-drawer-search` @ `7748ed3`). Preview package `com.example.meowmba`. Flags `lumen_reflex_v2` / `agentic_runtime_v1` remain default **OFF**. No FlyWire.
+
+- [x] Prop-on-avatar placement editor (drag + scale/rotate); persist attach in `GeneratedPropForm`.
+- [x] Smarter default attach for wearables (glasses near eyes); user override required path after invent.
+- [x] Vending Machine animation generator lane (props list + duration/intensity + CustomAnimationStore).
+- [x] Avatar workshop preview + generate-from-current + selectable props.
+- [x] Clickable local wall clock on every companion background (`CompanionWallClock` → system Clock app).
+
 ## September 15, 2026 — Epic P3 / Slices E+F: Deep care + background motion + files scope
 
 Branch: `feat/epic-p3-care-motion-files` (from `feat/epic-p2-vending-machine` @ `76aba32`). Preview package `com.example.meowmba`. Flags `lumen_reflex_v2` / `agentic_runtime_v1` remain default **OFF**. No FlyWire.

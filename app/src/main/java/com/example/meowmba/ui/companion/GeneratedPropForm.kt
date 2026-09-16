@@ -30,8 +30,12 @@ data class GeneratedPropForm(
     val category: GeneratedPropCategory,
     val useHint: String,
     val parts: List<GeneratedAvatarPart>,
+    /** Attach point on the avatar in normalized companion space (y down). */
     val anchorX: Float = 0f,
     val anchorY: Float = 0.22f,
+    /** Extra placement controls for the prop-on-avatar editor. */
+    val attachScale: Float = 1f,
+    val attachRotation: Float = 0f,
     val version: Int = 1,
 )
 
@@ -51,7 +55,7 @@ object GeneratedPropForms {
             value
         } catch (e: SpecException) { throw e }
         catch (_: Exception) { fail("Prop drawing is not valid JSON") }
-        keys(root, setOf("version", "name", "description", "category", "use_hint", "parts", "anchor"), "prop")
+        keys(root, setOf("version", "name", "description", "category", "use_hint", "parts", "anchor", "attach_scale", "attach_rotation"), "prop")
         if (number(root, "version", 1f, 1f) != 1f) fail("Unsupported prop version")
         val name = string(root, "name", 60)
         val description = string(root, "description", MAX_REQUEST, allowEmpty = true)
@@ -68,6 +72,8 @@ object GeneratedPropForms {
             "", name, description, category, useHint, parts,
             number(anchor, "x", -.5f, .5f, 0f),
             number(anchor, "y", -.5f, .5f, .22f),
+            number(root, "attach_scale", .3f, 2.5f, 1f),
+            number(root, "attach_rotation", -180f, 180f, 0f),
         )
         val id = MessageDigest.getInstance("SHA-256").digest(toJson(form).toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
@@ -101,7 +107,72 @@ object GeneratedPropForms {
             }
         })
         put("anchor", JSONObject().put("x", form.anchorX).put("y", form.anchorY))
+        put("attach_scale", form.attachScale)
+        put("attach_rotation", form.attachRotation)
     }.toString()
+
+
+    /** Smarter default attach for known wearable types; user may still drag-override. */
+    fun withSmartDefaults(form: GeneratedPropForm): GeneratedPropForm {
+        val (x, y) = defaultAttach(form.category, form.name, form.description)
+        val scale = when (form.category) {
+            GeneratedPropCategory.WEARABLE -> .85f
+            GeneratedPropCategory.HELD -> 1f
+            GeneratedPropCategory.TOY -> .9f
+            GeneratedPropCategory.SCENE -> 1.1f
+        }
+        return rehash(form.copy(anchorX = x, anchorY = y, attachScale = scale, attachRotation = 0f))
+    }
+
+    fun withPlacement(
+        form: GeneratedPropForm,
+        anchorX: Float,
+        anchorY: Float,
+        attachScale: Float = form.attachScale,
+        attachRotation: Float = form.attachRotation,
+    ): GeneratedPropForm = rehash(
+        form.copy(
+            anchorX = anchorX.coerceIn(-.5f, .5f),
+            anchorY = anchorY.coerceIn(-.5f, .5f),
+            attachScale = attachScale.coerceIn(.3f, 2.5f),
+            attachRotation = attachRotation.coerceIn(-180f, 180f),
+        ),
+    )
+
+    fun defaultAttach(
+        category: GeneratedPropCategory,
+        name: String,
+        description: String = "",
+    ): Pair<Float, Float> {
+        val blob = "$name $description".lowercase(Locale.ROOT)
+        return when (category) {
+            GeneratedPropCategory.WEARABLE -> when {
+                looksLike(blob, "glass", "sunglass", "spectacles", "goggle", "monocle", "visor") ->
+                    0f to -.12f
+                looksLike(blob, "hat", "cap", "crown", "helmet", "beanie", "hood", "tiara") ->
+                    0f to -.28f
+                looksLike(blob, "mask", "scarf", "bandana") ->
+                    0f to -.02f
+                looksLike(blob, "earring", "ear", "antenna") ->
+                    .18f to -.16f
+                looksLike(blob, "bow", "ribbon", "flower") ->
+                    -.16f to -.22f
+                else -> 0f to -.1f
+            }
+            GeneratedPropCategory.HELD -> .22f to .22f
+            GeneratedPropCategory.TOY -> 0f to .18f
+            GeneratedPropCategory.SCENE -> 0f to .28f
+        }
+    }
+
+    private fun looksLike(blob: String, vararg needles: String): Boolean =
+        needles.any { it in blob }
+
+    private fun rehash(form: GeneratedPropForm): GeneratedPropForm {
+        val id = MessageDigest.getInstance("SHA-256").digest(toJson(form.copy(id = "")).toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+        return form.copy(id = id)
+    }
 
     private fun parsePart(p: JSONObject?, index: Int): GeneratedAvatarPart {
         val part = p ?: fail("Part $index must be an object")

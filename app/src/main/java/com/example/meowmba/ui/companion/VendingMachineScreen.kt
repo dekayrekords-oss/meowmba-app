@@ -1,6 +1,17 @@
 package com.example.meowmba.ui.companion
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.runtime.remember
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Checkbox
+import androidx.compose.material.icons.filled.Movie
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -50,7 +61,7 @@ import com.example.meowmba.ui.theme.Surface
 import java.io.File
 
 private enum class VendingPage {
-    HUB, AVATAR_SIMPLE, AVATAR_WORKSHOP, PROP_GENERATE, PROP_LIBRARY, STUDIO_ARCHIVE
+    HUB, AVATAR_SIMPLE, AVATAR_WORKSHOP, PROP_GENERATE, PROP_LIBRARY, ANIMATION_GENERATE, STUDIO_ARCHIVE
 }
 
 /**
@@ -87,6 +98,7 @@ fun VendingMachineScreen(
                             VendingPage.AVATAR_WORKSHOP -> "Avatar workshop"
                             VendingPage.PROP_GENERATE -> "Prop dispenser"
                             VendingPage.PROP_LIBRARY -> "Prop library"
+                            VendingPage.ANIMATION_GENERATE -> "Animation generator"
                             VendingPage.STUDIO_ARCHIVE -> "Comics & characters"
                         },
                         fontSize = 22.sp,
@@ -110,6 +122,7 @@ fun VendingMachineScreen(
                     onAvatarsWorkshop = { page = VendingPage.AVATAR_WORKSHOP.name },
                     onPropsGenerate = { page = VendingPage.PROP_GENERATE.name },
                     onPropsLibrary = { page = VendingPage.PROP_LIBRARY.name },
+                    onAnimationGenerate = { page = VendingPage.ANIMATION_GENERATE.name },
                     onStudioArchive = { page = VendingPage.STUDIO_ARCHIVE.name },
                 )
                 VendingPage.AVATAR_SIMPLE -> {
@@ -135,9 +148,12 @@ fun VendingMachineScreen(
                             message = uiState.avatarFormMessage,
                             isError = uiState.avatarFormError,
                             wearing = uiState.generatedAvatarForm,
+                            props = uiState.savedProps,
                             onInvent = viewModel::createAvatarForm,
                             onRefine = viewModel::refineAvatarForm,
+                            onInventFromCurrent = viewModel::inventFromCurrentAvatar,
                             onCancel = viewModel::cancelAvatarFormGeneration,
+                            onPlaceProp = viewModel::openPropPlacement,
                         )
                     }
                 }
@@ -157,8 +173,25 @@ fun VendingMachineScreen(
                     PropLibraryPanel(
                         props = uiState.savedProps,
                         onDelete = viewModel::deleteProp,
+                        onPlace = viewModel::openPropPlacement,
                         modifier = Modifier.weight(1f),
                     )
+                }
+                VendingPage.ANIMATION_GENERATE -> {
+                    Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                        AnimationGeneratePanel(
+                            busy = uiState.animInventGenerating,
+                            message = uiState.animInventMessage,
+                            isError = uiState.animInventError,
+                            props = uiState.savedProps,
+                            savedNames = uiState.savedAnimationNames,
+                            onInvent = viewModel::inventAnimationFromVending,
+                            onCancel = viewModel::cancelAnimInvent,
+                            onPlay = viewModel::playSavedAnimation,
+                            onDelete = viewModel::deleteSavedAnimation,
+                            onRefresh = viewModel::refreshSavedAnimations,
+                        )
+                    }
                 }
                 VendingPage.STUDIO_ARCHIVE -> {
                     StudioArchivePanel(
@@ -179,6 +212,7 @@ private fun VendingHub(
     onAvatarsWorkshop: () -> Unit,
     onPropsGenerate: () -> Unit,
     onPropsLibrary: () -> Unit,
+    onAnimationGenerate: () -> Unit,
     onStudioArchive: () -> Unit,
 ) {
     LazyColumn(
@@ -231,6 +265,15 @@ private fun VendingHub(
         }
         item {
             VendingLaneCard(
+                title = "Animations · generate",
+                subtitle = "Invent a short performance with selectable props and editable timing.",
+                icon = Icons.Default.Movie,
+                onClick = onAnimationGenerate,
+                tag = "vending-lane-animation-generate",
+            )
+        }
+        item {
+            VendingLaneCard(
                 title = "Comics & characters",
                 subtitle = "Former Studio archive — recurring characters and made-for-you pages.",
                 icon = Icons.Default.Palette,
@@ -268,9 +311,12 @@ internal fun AvatarWorkshopPanel(
     message: String?,
     isError: Boolean,
     wearing: GeneratedAvatarForm?,
+    props: List<GeneratedPropForm> = emptyList(),
     onInvent: (String, InventReasonLevel) -> Unit,
     onRefine: (String, InventReasonLevel) -> Unit,
+    onInventFromCurrent: (String, InventReasonLevel) -> Unit = { _, _ -> },
     onCancel: () -> Unit,
+    onPlaceProp: (String) -> Unit = {},
 ) {
     var subject by rememberSaveable { mutableStateOf("") }
     var look by rememberSaveable { mutableStateOf("") }
@@ -289,12 +335,62 @@ internal fun AvatarWorkshopPanel(
     )
     val canGo = composed.isNotBlank() && !busy
 
+    var selectedPropIds by remember { mutableStateOf(setOf<String>()) }
+    val avatarPainter = remember { GeneratedAvatarPainter() }
     Column(Modifier.testTag("avatar-workshop"), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(
             "Workshop builds one invent prompt from structured parts, then uses the same AvatarFormInventor + reason levels as Become-anything.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        Text("Preview", style = MaterialTheme.typography.titleSmall)
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(180.dp)
+                .testTag("avatar-workshop-preview"),
+        ) {
+            Canvas(Modifier.fillMaxSize()) {
+                val placement = generatedAvatarPlacement(size.width, size.height, LumenFrame(), scale = 1.2f)
+                if (wearing != null) {
+                    avatarPainter.draw(this, wearing, LumenFrame(), 0f, placement.center, placement.unit)
+                } else {
+                    drawCircle(Color(0xFFE8D5B9).copy(alpha = .85f), placement.unit * .36f, placement.center)
+                    drawCircle(Color(0xFF182032), placement.unit * .055f, placement.center + Offset(-placement.unit * .11f, -placement.unit * .05f))
+                    drawCircle(Color(0xFF182032), placement.unit * .055f, placement.center + Offset(placement.unit * .11f, -placement.unit * .05f))
+                }
+            }
+        }
+        if (wearing != null) {
+            OutlinedButton(
+                onClick = { onInventFromCurrent(composed, reason) },
+                enabled = !busy,
+                modifier = Modifier.fillMaxWidth().testTag("workshop-from-current"),
+            ) { Text("Generate from current avatar (${wearing.name})") }
+        }
+        if (props.isNotEmpty()) {
+            Text("Attachable props (optional)", style = MaterialTheme.typography.titleSmall)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                props.take(12).forEach { prop ->
+                    val selected = prop.id in selectedPropIds
+                    FilterChip(
+                        selected = selected,
+                        enabled = !busy,
+                        onClick = {
+                            selectedPropIds = if (selected) selectedPropIds - prop.id else selectedPropIds + prop.id
+                        },
+                        label = { Text(prop.name.take(24)) },
+                    )
+                }
+            }
+            if (selectedPropIds.isNotEmpty()) {
+                OutlinedButton(
+                    onClick = { selectedPropIds.firstOrNull()?.let(onPlaceProp) },
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth().testTag("workshop-place-selected-prop"),
+                ) { Text("Place selected prop on avatar") }
+            }
+        }
         Text("Reason level", style = MaterialTheme.typography.titleSmall)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             InventReasonLevel.entries.forEach { level ->
@@ -473,6 +569,7 @@ private fun PropGeneratePanel(
 private fun PropLibraryPanel(
     props: List<GeneratedPropForm>,
     onDelete: (String) -> Unit,
+    onPlace: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
@@ -501,7 +598,15 @@ private fun PropLibraryPanel(
                         if (prop.useHint.isNotBlank()) {
                             Text("Use: ${prop.useHint}", style = MaterialTheme.typography.bodySmall)
                         }
-                        OutlinedButton(onClick = { onDelete(prop.id) }) { Text("Remove") }
+                        Text(
+                            "Attach @ (${"%.2f".format(prop.anchorX)}, ${"%.2f".format(prop.anchorY)}) · scale ${"%.2f".format(prop.attachScale)}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onClick = { onPlace(prop.id) }) { Text("Place on avatar") }
+                            OutlinedButton(onClick = { onDelete(prop.id) }) { Text("Remove") }
+                        }
                     }
                 }
             }
@@ -566,6 +671,122 @@ private fun StudioArchivePanel(
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AnimationGeneratePanel(
+    busy: Boolean,
+    message: String?,
+    isError: Boolean,
+    props: List<GeneratedPropForm>,
+    savedNames: List<String>,
+    onInvent: (prompt: String, selectedPropNames: List<String>, durationHintSec: Int, intensity: Float, fresh: Boolean) -> Unit,
+    onCancel: () -> Unit,
+    onPlay: (String) -> Unit,
+    onDelete: (String) -> Unit,
+    onRefresh: () -> Unit,
+) {
+    var prompt by rememberSaveable { mutableStateOf("") }
+    var durationSec by rememberSaveable { mutableStateOf(6f) }
+    var intensity by rememberSaveable { mutableStateOf(0.7f) }
+    var selected by remember { mutableStateOf(setOf<String>()) }
+    var fresh by rememberSaveable { mutableStateOf(true) }
+    val canGo = prompt.isNotBlank() && !busy
+
+    Column(Modifier.testTag("animation-generate"), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(
+            "Compose a short on-device animation. Pick library props to bias the invent prompt; timing and intensity stay editable.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        OutlinedTextField(
+            value = prompt,
+            onValueChange = { prompt = it.take(500) },
+            enabled = !busy,
+            modifier = Modifier.fillMaxWidth().testTag("animation-prompt"),
+            label = { Text("What should Lumen perform?") },
+            placeholder = { Text("A tiny fishing trip") },
+            minLines = 2,
+            maxLines = 4,
+            supportingText = { Text("${prompt.length}/500") },
+        )
+        Text("Duration ~${durationSec.toInt()}s", style = MaterialTheme.typography.labelMedium)
+        Slider(
+            value = durationSec,
+            onValueChange = { durationSec = it },
+            valueRange = 4f..10f,
+            steps = 5,
+            modifier = Modifier.testTag("animation-duration"),
+        )
+        Text("Motion intensity ${"%.0f".format(intensity * 100)}%", style = MaterialTheme.typography.labelMedium)
+        Slider(
+            value = intensity,
+            onValueChange = { intensity = it },
+            valueRange = 0.2f..1f,
+            modifier = Modifier.testTag("animation-intensity"),
+        )
+        Text("Props to include", style = MaterialTheme.typography.titleSmall)
+        if (props.isEmpty()) {
+            Text(
+                "No dispensed props yet — invent still works with native kinds (ball, star, fishing…).",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                props.take(16).forEach { prop ->
+                    val on = prop.name in selected
+                    FilterChip(
+                        selected = on,
+                        enabled = !busy,
+                        onClick = {
+                            selected = if (on) selected - prop.name else selected + prop.name
+                        },
+                        label = { Text(prop.name.take(22)) },
+                    )
+                }
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = fresh, onCheckedChange = { fresh = it }, enabled = !busy)
+            Text("Force fresh invent (skip saved reuse)", style = MaterialTheme.typography.bodySmall)
+        }
+        Button(
+            onClick = {
+                onInvent(prompt.trim(), selected.toList(), durationSec.toInt(), intensity, fresh)
+            },
+            enabled = canGo,
+            modifier = Modifier.fillMaxWidth().testTag("animation-dispense"),
+        ) { Text(if (busy) "Inventing animation…" else "Invent animation") }
+        if (busy) {
+            LinearProgressIndicator(Modifier.fillMaxWidth())
+            OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) { Text("Cancel") }
+        }
+        message?.takeIf { it.isNotBlank() }?.let {
+            Text(it, color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = onRefresh, modifier = Modifier.weight(1f)) { Text("Refresh library") }
+        }
+        if (savedNames.isNotEmpty()) {
+            Text("Saved animations", style = MaterialTheme.typography.titleSmall)
+            savedNames.forEach { name ->
+                Card(Modifier.fillMaxWidth()) {
+                    Row(
+                        Modifier.padding(12.dp).fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(name, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                        OutlinedButton(onClick = { onPlay(name) }) { Text("Play") }
+                        OutlinedButton(onClick = { onDelete(name) }) { Text("Remove") }
                     }
                 }
             }

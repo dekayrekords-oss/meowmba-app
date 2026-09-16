@@ -60,6 +60,13 @@ class GeneratedPropStore(private val dir: File) {
         }?.form
     }
 
+
+    /** Placement edits change the content hash (id). Swap the old file for the new one. */
+    @Synchronized fun replace(oldId: String, form: GeneratedPropForm, request: String) {
+        if (oldId != form.id) delete(oldId)
+        save(form, request)
+    }
+
     @Synchronized fun delete(id: String): Boolean = file(id)?.delete() ?: false
 
     private fun file(id: String): File? = if (idPattern.matches(id)) File(dir, "$id.json") else null

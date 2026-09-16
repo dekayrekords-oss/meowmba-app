@@ -90,6 +90,7 @@ fun AppBackground(
                     .background(Color.Black.copy(alpha = selection.dimPercent / 100f))
             )
         }
+
     }
 }
 

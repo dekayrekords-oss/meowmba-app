@@ -136,6 +136,13 @@ data class CompanionState(
     val propInventGenerating: Boolean = false,
     val propInventMessage: String? = null,
     val propInventError: Boolean = false,
+    /** After invent/save, offer drag placement on the current avatar. */
+    val pendingPropPlacement: GeneratedPropForm? = null,
+    /** Vending animation generator (CustomAnimationStore). */
+    val savedAnimationNames: List<String> = emptyList(),
+    val animInventGenerating: Boolean = false,
+    val animInventMessage: String? = null,
+    val animInventError: Boolean = false,
     /** Temporary costume from an explicit performance; never persisted over the user's choice. */
     val performanceAnimal: AvatarAnimal? = null,
     val appTheme: AppTheme = AppTheme.COMPANION,

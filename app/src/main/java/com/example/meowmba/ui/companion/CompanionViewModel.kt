@@ -1442,6 +1442,7 @@ class CompanionViewModel(
                 }.getOrNull(),
                 savedGeneratedForms = runCatching { generatedAvatarStore?.list().orEmpty() }.getOrDefault(emptyList()),
                 savedProps = runCatching { generatedPropStore?.list().orEmpty() }.getOrDefault(emptyList()),
+                savedAnimationNames = runCatching { avatarAnimationStore?.list().orEmpty() }.getOrDefault(emptyList()),
                 appTheme = AppTheme.fromKey(storage.getPreference("app_theme")),
                 appearanceMode = AppearanceMode.fromKey(storage.getPreference("appearance_mode")),
                 avatarFeatureColor = AvatarColors.parse(storage.getPreference("avatar_feature_color"), 0xFFE8D5B9L),
@@ -10510,6 +10511,165 @@ class CompanionViewModel(
         }
     }
 
+    fun dismissPropPlacement() {
+        _uiState.value = _uiState.value.copy(pendingPropPlacement = null)
+    }
+
+    fun openPropPlacement(id: String) {
+        val form = generatedPropStore?.load(id) ?: _uiState.value.savedProps.firstOrNull { it.id == id }
+        if (form != null) {
+            _uiState.value = _uiState.value.copy(pendingPropPlacement = form, propInventError = false)
+        }
+    }
+
+    fun savePropPlacement(updated: GeneratedPropForm) {
+        try {
+            val store = generatedPropStore ?: error("Prop storage unavailable")
+            val previous = _uiState.value.pendingPropPlacement
+            val request = previous?.name?.takeIf { it.isNotBlank() } ?: updated.name
+            if (previous != null && previous.id != updated.id) {
+                store.replace(previous.id, updated, request)
+            } else {
+                store.save(updated, request)
+            }
+            _uiState.value = _uiState.value.copy(
+                savedProps = store.list(),
+                pendingPropPlacement = null,
+                propInventMessage = "Saved placement for ${updated.name}.",
+                propInventError = false,
+            )
+        } catch (error: Exception) {
+            val reason = error.message?.filterNot { it.isISOControl() }?.take(120)
+            _uiState.value = _uiState.value.copy(
+                propInventMessage = reason ?: "Could not save prop placement.",
+                propInventError = true,
+            )
+        }
+    }
+
+    /** Seed invent/refine from the currently worn generated avatar. */
+    fun inventFromCurrentAvatar(extraDetail: String = "", reasonLevel: InventReasonLevel = InventReasonLevel.BALANCED) {
+        val wearing = _uiState.value.generatedAvatarForm
+        if (wearing == null) {
+            avatarFormFailure("Wear a generated form first, or describe a new one.")
+            return
+        }
+        val detail = extraDetail.trim()
+        val prompt = buildString {
+            append("Start from current avatar \"").append(wearing.name).append("\": ")
+            append(wearing.description.take(280))
+            if (detail.isNotEmpty()) append(". Change: ").append(detail)
+            append(". Keep movable parts with motion tags.")
+        }.take(GeneratedAvatarForms.MAX_REQUEST)
+        if (detail.isNotEmpty()) refineAvatarForm(prompt, reasonLevel)
+        else createAvatarForm(prompt, reasonLevel)
+    }
+
+    fun refreshSavedAnimations() {
+        val names = runCatching { avatarAnimationStore?.list().orEmpty() }.getOrDefault(emptyList())
+        _uiState.value = _uiState.value.copy(savedAnimationNames = names)
+    }
+
+    fun inventAnimationFromVending(
+        prompt: String,
+        selectedPropNames: List<String> = emptyList(),
+        durationHintSec: Int = 6,
+        intensity: Float = 0.7f,
+        fresh: Boolean = true,
+    ) {
+        val base = prompt.trim()
+        if (base.isBlank()) {
+            _uiState.value = _uiState.value.copy(
+                animInventMessage = "Describe the animation to invent.",
+                animInventError = true,
+            )
+            return
+        }
+        val intensityLabel = when {
+            intensity < 0.4f -> "gentle"
+            intensity < 0.75f -> "playful"
+            else -> "energetic"
+        }
+        val duration = durationHintSec.coerceIn(4, 10)
+        val composed = buildString {
+            append(base)
+            append(". Timing about ").append(duration).append(" seconds, ")
+            append(intensityLabel).append(" motion intensity")
+            if (selectedPropNames.isNotEmpty()) {
+                append(". Prefer including these props if they fit the native set (ROD,FISH,BOBBER,WATER,BALL,STAR,HEART) or mirror their roles: ")
+                append(selectedPropNames.take(6).joinToString(", "))
+            }
+        }.take(500)
+        cancelAnimInvent()
+        viewModelScope.launch {
+            val store = avatarAnimationStore
+            if (store == null) {
+                _uiState.value = _uiState.value.copy(
+                    animInventGenerating = false,
+                    animInventMessage = "Animation storage is unavailable.",
+                    animInventError = true,
+                )
+                return@launch
+            }
+            animInventGeneration++
+            val generation = animInventGeneration
+            _uiState.value = _uiState.value.copy(
+                animInventGenerating = true,
+                animInventError = false,
+                animInventMessage = "Inventing animation…",
+            )
+            try {
+                val result = inventLocalAvatarScene(composed, fresh = fresh, store = store)
+                if (generation != animInventGeneration) return@launch
+                val ok = result is com.example.meowmba.core.agent.tools.ToolResult.Success
+                val message = when (result) {
+                    is com.example.meowmba.core.agent.tools.ToolResult.Success -> result.output
+                    is com.example.meowmba.core.agent.tools.ToolResult.Failure -> result.error
+                    else -> "Animation invent finished."
+                }
+                _uiState.value = _uiState.value.copy(
+                    animInventGenerating = false,
+                    animInventError = !ok,
+                    animInventMessage = message,
+                    savedAnimationNames = store.list(),
+                )
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                if (generation != animInventGeneration) return@launch
+                val reason = error.message?.filterNot { it.isISOControl() }?.take(160)
+                _uiState.value = _uiState.value.copy(
+                    animInventGenerating = false,
+                    animInventError = true,
+                    animInventMessage = reason ?: "Could not invent that animation.",
+                )
+            }
+        }
+    }
+
+    fun cancelAnimInvent() {
+        animInventGeneration++
+        if (_uiState.value.animInventGenerating) {
+            _uiState.value = _uiState.value.copy(
+                animInventGenerating = false,
+                animInventMessage = "Animation invent cancelled.",
+                animInventError = false,
+            )
+        }
+    }
+
+    fun playSavedAnimation(name: String) {
+        val store = avatarAnimationStore ?: return
+        val spec = store.load(name) ?: return
+        playCustomAnimation(spec, userRequested = true)
+    }
+
+    fun deleteSavedAnimation(name: String) {
+        val store = avatarAnimationStore ?: return
+        store.delete(name)
+        _uiState.value = _uiState.value.copy(savedAnimationNames = store.list())
+    }
+
     private fun propInventFailure(message: String) {
         _uiState.value = _uiState.value.copy(
             propInventGenerating = false,
@@ -10551,8 +10711,9 @@ class CompanionViewModel(
                     _uiState.value = _uiState.value.copy(
                         propInventGenerating = false,
                         savedProps = store.list(),
-                        propInventMessage = "Already in library: ${saved.name}.",
+                        propInventMessage = "Already in library: ${saved.name}. Adjust placement?",
                         propInventError = false,
+                        pendingPropPlacement = saved,
                     )
                     return@coroutineScope
                 }
@@ -10580,12 +10741,14 @@ class CompanionViewModel(
                 }
                 kotlinx.coroutines.currentCoroutineContext().ensureActive()
                 ensureOwner()
-                store.save(form, prompt)
+                val placed = GeneratedPropForms.withSmartDefaults(form)
+                store.save(placed, prompt)
                 _uiState.value = _uiState.value.copy(
                     propInventGenerating = false,
                     savedProps = store.list(),
-                    propInventMessage = "Dispensed ${form.name}. Saved to prop library.",
+                    propInventMessage = "Dispensed ${placed.name}. Drag it into place on your avatar.",
                     propInventError = false,
+                    pendingPropPlacement = placed,
                 )
             } catch (_: kotlinx.coroutines.TimeoutCancellationException) {
                 ensureOwner()
@@ -11576,6 +11739,7 @@ class CompanionViewModel(
             _studioArtifacts.value = listStudioArtifacts()
             _uiState.value = _uiState.value.copy(
                 savedProps = runCatching { generatedPropStore?.list().orEmpty() }.getOrDefault(emptyList()),
+                savedAnimationNames = runCatching { avatarAnimationStore?.list().orEmpty() }.getOrDefault(emptyList()),
             )
         }
     }
