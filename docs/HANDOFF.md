@@ -4,7 +4,29 @@
 > The "Recent builds" section is regenerated automatically by scripts/autobuild.sh
 > after every commit; everything else is maintained by hand at each phase.
 
-## Current status — 2026-09-16 (feat/meta-glasses-meow-bridge · Preview vc126)
+## Current status — 2026-09-17 (feat/meta-glasses-meow-bridge · Preview vc127 · MWDAT-enabled)
+
+**Active branch:** `feat/meta-glasses-meow-bridge` @ tip (base `7fab957`)  
+**Packages:** Preview `com.example.meowmba` · Play `defaultConfig` versionCode **85** unchanged  
+**Flags:** `lumen_reflex_v2` / `agentic_runtime_v1` default **OFF**  
+**Build:** debug Preview with `-PincludeMwdat=true` + external `mwdat.properties` (Meta Wearables DAT camera SDK)
+
+### This slice
+- **vc127 is the MWDAT-enabled Preview for glasses Setup** — ship with Meta MWDAT camera SDK so Fold Setup glasses / Connect works (not the tokenless debug stub).
+- Debug `onVariants` versionCode **127** (was 126); still signed with prog debug keystore (`b7850d5f…`).
+- Bridge + tools from vc126 unchanged: `ssh.meow`, `opencode.run`, `server.shell`; Meta glasses card.
+
+### How Wyatt should talk
+1. Install Preview vc127; pair glasses in Meta AI; Meow LLM → Setup glasses / Connect (SDK build).
+2. Bridge ON; Voice Recognition → Meta glasses mic (optional).
+3. Say **“Hey Meow …”** (or tap mic). For server work: “run opencode …”, “ssh …”, “shell on meow …”.
+4. Destructive SSH/OpenCode still need on-screen approval.
+
+### Parent / related
+- Bridge tip vc126 @ `7fab957` without MWDAT in the shipped APK path (this build enables it).
+- Base tip prop placement / vending / clock (vc125).
+
+## Previous status — 2026-09-16 (feat/meta-glasses-meow-bridge · Preview vc126)
 
 **Active branch:** `feat/meta-glasses-meow-bridge` (from `feat/prop-placement-vending-clock` @ `fda4eac`)  
 **Packages:** Preview `com.example.meowmba` · Play signing not mixed  
