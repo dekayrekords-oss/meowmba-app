@@ -29,7 +29,7 @@ Setup **Hi.** opens the **current** bundled PDF (asset → cache → FileProvide
 Every Preview ship must also publish the machine-readable feed the app polls:
 
 ```bash
-VERSION_CODE=131 DEST_APK_SERVE=/home/prog/apk-serve scripts/write-preview-version.sh
+VERSION_CODE=132 DEST_APK_SERVE=/home/prog/apk-serve scripts/write-preview-version.sh
 ```
 
 Writes `$DEST_APK_SERVE/preview-version.json` with `versionCode`, `versionName`,

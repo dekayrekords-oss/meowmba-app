@@ -21,6 +21,7 @@ class MeowmbaApp : Application() {
         ThermalGovernor.install(this)
         // Periodic agentic ticks when flag ON (no-op / cancelled when OFF).
         runCatching { AgenticScheduler.recover(this) }
+        // Schedules WorkManager + channel off the critical path (see recover).
         runCatching { PreviewUpdateScheduler.recover(this) }
     }
 }

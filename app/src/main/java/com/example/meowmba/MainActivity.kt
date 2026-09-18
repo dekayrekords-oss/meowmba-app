@@ -400,6 +400,7 @@ class MainActivity : ComponentActivity() {
         // If a background hand-off was scheduled by a transient pause, it is now
         // stale: we are visible again and the in-app engine owns the mic.
         WakeWordService.stop(this)
+        // Off-main-thread inside scheduler (never block cold-start resume with HTTP).
         runCatching { com.example.meowmba.core.update.PreviewUpdateScheduler.checkOnResume(this) }
         companionViewModel?.reclaimWakeMicForForeground()
         companionViewModel?.refreshRobot()

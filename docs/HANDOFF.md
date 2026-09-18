@@ -4,7 +4,37 @@
 > The "Recent builds" section is regenerated automatically by scripts/autobuild.sh
 > after every commit; everything else is maintained by hand at each phase.
 
-## Current status — 2026-09-17 (feat/preview-update-check · Preview vc131)
+## Current status — 2026-09-18 (feat/preview-update-check · Preview vc132)
+
+**Active branch:** `feat/preview-update-check`  
+**Packages:** Preview `com.example.meowmba` · Play `defaultConfig` versionCode **85** unchanged  
+**Flags:** `lumen_reflex_v2` / `agentic_runtime_v1` default **OFF**  
+**Build:** debug Preview vc132
+
+### This slice
+- **Launch crash harden:** Preview update check no longer does HTTP / WorkManager on the
+  main thread during cold start (was ANR / apparent crash when apk-serve was slow).
+  Channel + notify soft-fail; small icon uses `R.mipmap.ic_launcher`.
+- Prior vc131: Settings → Help & feedback → Check for update + daily WorkManager feed.
+
+### Ship checklist (Preview)
+1. Edit `docs/USER_MANUAL.md` if content changed.
+2. Bump debug `onVariants` versionCode.
+3. `scripts/update-user-manual.sh`
+4. Assemble + serve prog-signed `preview.apk` and Claude-signed `preview-alt.apk`.
+5. Update `get-preview.html` / `get-preview-alt.html` SIZE/SHA; allowlist new APK names in `range_server.py`.
+6. `scripts/write-preview-version.sh` (DEST_APK_SERVE=/home/prog/apk-serve).
+
+### How Wyatt should talk
+1. Install Preview vc132 matching your current signer (do not uninstall when key matches).
+2. App should open without hanging on launch; update check continues in the background.
+3. Feed: `http://100.77.97.236:8765/preview-version.json`
+
+### Parent / related
+- Base tip vc131 update check @ `49a58cf`.
+
+
+## Previous status — 2026-09-17 (feat/preview-update-check · Preview vc131)
 
 **Active branch:** `feat/preview-update-check` (from `fix/setup-finish-openrouter-thermal` @ `04364d1`)  
 **Packages:** Preview `com.example.meowmba` · Play `defaultConfig` versionCode **85** unchanged  
