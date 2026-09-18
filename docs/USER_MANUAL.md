@@ -75,6 +75,20 @@ Meowmba is distributed as an APK rather than through the Play Store, so installa
 
 
 
+## Checking for Preview updates
+
+Settings → **Help & feedback** → **Check for update** asks apk-serve for
+`preview-version.json` and compares it to this build's versionCode. When a newer
+Preview is available you get a dialog to open the chunked download page
+(**get-preview** for the prog key, **get-preview-alt** for the Fold/Claude key).
+The apk-serve base URL is configurable there (default NetBird
+`http://100.77.97.236:8765`, optional LAN fallback). The app also checks about
+once a day in the background and can show a notification "Preview vcN available"
+— the same version is not notified twice.
+
+
+
+
 ## First run: the setup wizard
 
 The first launch runs a twelve-step wizard. You can leave at any point — Skip is in the top-right corner of

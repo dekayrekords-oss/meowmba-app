@@ -378,6 +378,7 @@ class MainActivity : ComponentActivity() {
         }
 
         consumeWakeCommand(intent)
+        consumePreviewUpdateIntent(intent)
     }
 
     // ── Background wake-word handoff (Phase 2.5) ────────────────────────────
@@ -399,6 +400,7 @@ class MainActivity : ComponentActivity() {
         // If a background hand-off was scheduled by a transient pause, it is now
         // stale: we are visible again and the in-app engine owns the mic.
         WakeWordService.stop(this)
+        runCatching { com.example.meowmba.core.update.PreviewUpdateScheduler.checkOnResume(this) }
         companionViewModel?.reclaimWakeMicForForeground()
         companionViewModel?.refreshRobot()
         // Only resume tracking if the user left the camera on. Forcing it
@@ -406,6 +408,7 @@ class MainActivity : ComponentActivity() {
         // cooked the phone.
         companionViewModel?.resumeFaceTrackingIfEnabled()
         consumeWakeCommand(intent)
+        consumePreviewUpdateIntent(intent)
     }
 
     override fun onPause() {
@@ -487,12 +490,30 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         consumeWakeCommand(intent)
+        consumePreviewUpdateIntent(intent)
     }
 
     /** Wake command arriving before the ViewModel exists (cold launch). */
     private var pendingAvatarHome = false
     private var pendingWakeCommand: String? = null
     private var pendingBusinessAgents = false
+
+
+    private fun consumePreviewUpdateIntent(source: Intent?) {
+        if (source?.getBooleanExtra(
+                com.example.meowmba.core.update.PreviewUpdateNotifier.EXTRA_OPEN_UPDATE,
+                false,
+            ) != true
+        ) {
+            return
+        }
+        source.removeExtra(com.example.meowmba.core.update.PreviewUpdateNotifier.EXTRA_OPEN_UPDATE)
+        val page = source.getStringExtra(
+            com.example.meowmba.core.update.PreviewUpdateNotifier.EXTRA_OPEN_SETTINGS_PAGE,
+        ) ?: "Help & feedback"
+        source.removeExtra(com.example.meowmba.core.update.PreviewUpdateNotifier.EXTRA_OPEN_SETTINGS_PAGE)
+        companionViewModel?.openSettingsCategory(page)
+    }
 
     private fun consumeWakeCommand(source: Intent?) {
         if (com.example.meowmba.ui.companion.isAvatarHomeIntent(source?.action, source?.categories)) {

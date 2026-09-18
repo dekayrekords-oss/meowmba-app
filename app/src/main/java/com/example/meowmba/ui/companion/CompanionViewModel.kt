@@ -9414,6 +9414,11 @@ class CompanionViewModel(
     fun openBrainPairingFromInfo() = openBrainSettingsCategory("Connections & memory")
 
     private fun openBrainSettingsCategory(category: String) {
+        openSettingsCategory(category)
+    }
+
+    /** Open Settings to a category page (e.g. notification deep-link to Help & feedback). */
+    fun openSettingsCategory(category: String) {
         _uiState.update { it.copy(showNeuralInfo = false, showSettings = true,
             settingsInitialPage = category, neuralInputNotice = null) }
     }

@@ -4,7 +4,39 @@
 > The "Recent builds" section is regenerated automatically by scripts/autobuild.sh
 > after every commit; everything else is maintained by hand at each phase.
 
-## Current status — 2026-09-17 (fix/setup-user-manual-link · Preview vc130)
+## Current status — 2026-09-17 (feat/preview-update-check · Preview vc131)
+
+**Active branch:** `feat/preview-update-check` (from `fix/setup-finish-openrouter-thermal` @ `04364d1`)  
+**Packages:** Preview `com.example.meowmba` · Play `defaultConfig` versionCode **85** unchanged  
+**Flags:** `lumen_reflex_v2` / `agentic_runtime_v1` default **OFF**  
+**Build:** debug Preview vc131
+
+### This slice
+- **Settings → Help & feedback → Check for update:** fetches `{apk-serve}/preview-version.json`,
+  compares to `BuildConfig.VERSION_CODE`, dialog opens preferred get-preview / get-preview-alt
+  based on installed signer (prog `b7850d5f…` vs Claude `75b19d5a…`).
+- Configurable apk-serve base URL + optional LAN fallback.
+- Daily WorkManager + on-resume check; notification "Preview vcN available" deduped by versionCode.
+- Ship writes `preview-version.json` via `scripts/write-preview-version.sh`.
+
+### Ship checklist (Preview)
+1. Edit `docs/USER_MANUAL.md` if content changed.
+2. Bump debug `onVariants` versionCode.
+3. `scripts/update-user-manual.sh`
+4. Assemble + serve prog-signed `preview.apk` and Claude-signed `preview-alt.apk`.
+5. Update `get-preview.html` / `get-preview-alt.html` SIZE/SHA; allowlist new APK names in `range_server.py`.
+6. `scripts/write-preview-version.sh` (DEST_APK_SERVE=/home/prog/apk-serve).
+
+### How Wyatt should talk
+1. Install Preview vc131 matching your current signer (do not uninstall when key matches).
+2. Settings → Help & feedback → Check for update (or wait for the daily notification).
+3. Feed: `http://100.77.97.236:8765/preview-version.json`
+
+### Parent / related
+- Base tip User Manual / setup @ `04364d1`.
+
+
+## Previous status — 2026-09-17 (fix/setup-user-manual-link · Preview vc130)
 
 **Active branch:** `fix/setup-user-manual-link` (from `fix/setup-finish-openrouter-thermal` @ `27ed476`)  
 **Packages:** Preview `com.example.meowmba` · Play `defaultConfig` versionCode **85** unchanged  
