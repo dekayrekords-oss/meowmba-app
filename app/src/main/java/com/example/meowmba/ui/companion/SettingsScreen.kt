@@ -88,11 +88,27 @@ fun SettingsScreen(
     robotScanning: Boolean = false,
     robotScanResults: List<Pair<String, String>> = emptyList(),
     carModeEnabled: Boolean = false,
+    idleMorphEnabled: Boolean = true,
+    idleMorphIntervalSec: Int = 55,
+    idleMorphIncludeGenerated: Boolean = true,
+    driveEmotionBoost: Boolean = true,
+    driveDriverCameraEnabled: Boolean = true,
+    obdEnabled: Boolean = false,
+    obdAdapterAddress: String = "",
+    carDashcamRtspUrl: String = "",
     avatarStyle: AvatarStyle = AvatarStyle.DEFAULT,
     onAvatarStyleChange: (AvatarStyle) -> Unit = {},
     emergencyContact: String = "",
     onCarModeChange: (Boolean) -> Unit = {},
     onEmergencyContactChange: (String) -> Unit = {},
+    onIdleMorphChange: (Boolean) -> Unit = {},
+    onIdleMorphIntervalChange: (Int) -> Unit = {},
+    onIdleMorphGeneratedChange: (Boolean) -> Unit = {},
+    onDriveEmotionBoostChange: (Boolean) -> Unit = {},
+    onDriveDriverCameraChange: (Boolean) -> Unit = {},
+    onObdEnabledChange: (Boolean) -> Unit = {},
+    onObdAdapterChange: (String) -> Unit = {},
+    onCarDashcamRtspChange: (String) -> Unit = {},
     onRobotScan: () -> Unit = {},
     onRobotBodyChange: (Boolean) -> Unit = {},
     onRobotHostChange: (String) -> Unit = {},
@@ -881,6 +897,87 @@ fun SettingsScreen(
                     "impact and Meow will open a text with your location ready to send.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text("Lumen idle morph", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+            Spacer(modifier = Modifier.height(8.dp))
+            VoiceToggle(
+                label = "Cycle all characters while idle",
+                description = "Rotates through every authored Lumen form (cat, dog, squirrel, " +
+                    "raccoon, owl, duck, rabbit, pig, alien, robot, panda, fruit fly, Clippy, " +
+                    "Wizard, …) plus saved invented forms when enabled. Does not overwrite " +
+                    "your preferred form permanently.",
+                checked = idleMorphEnabled,
+                onCheckedChange = onIdleMorphChange,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            VoiceToggle(
+                label = "Include invented forms",
+                description = "Add saved generated avatar forms to the idle morph pool.",
+                checked = idleMorphIncludeGenerated,
+                onCheckedChange = onIdleMorphGeneratedChange,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("Morph interval: ${idleMorphIntervalSec}s", style = MaterialTheme.typography.bodySmall)
+            Slider(
+                value = idleMorphIntervalSec.toFloat(),
+                onValueChange = { onIdleMorphIntervalChange(it.toInt()) },
+                valueRange = 20f..180f,
+                steps = 15,
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text("Drive reactivity & cameras", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+            Spacer(modifier = Modifier.height(8.dp))
+            VoiceToggle(
+                label = "Stronger emotion while driving",
+                description = "Faster face/social reactions and stronger lean/lurch while Drive mode is active.",
+                checked = driveEmotionBoost,
+                onCheckedChange = onDriveEmotionBoostChange,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            VoiceToggle(
+                label = "Driver camera on drive card",
+                description = "Shows the live front-camera preview on the drive HUD when CAMERA is allowed.",
+                checked = driveDriverCameraEnabled,
+                onCheckedChange = onDriveDriverCameraChange,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            SettingsTextField(
+                value = carDashcamRtspUrl,
+                onValueChange = onCarDashcamRtspChange,
+                label = { Text("IP dashcam RTSP URL (optional)") },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                "Lists an IP/RTSP dashcam for tools and the drive camera list. In-app live " +
+                    "preview uses the phone cameras; RTSP playback needs an external player for now.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text("OBD-II (ELM327)", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+            Spacer(modifier = Modifier.height(8.dp))
+            VoiceToggle(
+                label = "Native OBD-II",
+                description = "Connect to a classic Bluetooth ELM327 adapter and poll RPM, speed, " +
+                    "coolant, battery, MIL, and fuel. Feeds Lumen excitement/alerts. " +
+                    "USB ELM327 is detected but needs a CDC driver — Bluetooth SPP is the supported path.",
+                checked = obdEnabled,
+                onCheckedChange = onObdEnabledChange,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            SettingsTextField(
+                value = obdAdapterAddress,
+                onValueChange = onObdAdapterChange,
+                label = { Text("ELM327 Bluetooth MAC address") },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                "Apple CarPlay: third-party Android apps cannot fully remote-control a CarPlay " +
+                    "session. Meow uses MediaSession / volume / dialer / Bluetooth and Android Auto " +
+                    "hints instead — see docs/DRIVE_CARPLAY_OBD2.md.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             Spacer(modifier = Modifier.height(24.dp))
