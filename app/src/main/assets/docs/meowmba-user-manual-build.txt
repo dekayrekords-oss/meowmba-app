@@ -1,7 +1,7 @@
 meowmba-user-manual
 versionName=1.3.81
-versionCode=131
-gitSha=20a5f7b
+versionCode=132
+gitSha=b4b7bce
 packageId=com.example.meowmba
-stampedAt=2026-09-17 22:57 PDT
+stampedAt=2026-09-18 08:49 PDT
 source=docs/USER_MANUAL.md
