@@ -15,7 +15,7 @@ data class VehicleIdentity(
     val bluetoothConnected: Boolean = false,
     val androidAutoLikely: Boolean = false,
     val carPlayRemoteControlAvailable: Boolean = false,
-    val notes: String = CARPLAY_LIMIT_NOTE,
+    val notes: String = "",
 ) {
     val known: Boolean
         get() = displayName.isNotBlank() || bluetoothAddress.isNotBlank() || bluetoothConnected
@@ -39,6 +39,7 @@ object VehicleAwareness {
         bluetoothConnected = connected,
         androidAutoLikely = hasAndroidAutoFeature && connected,
         carPlayRemoteControlAvailable = false,
+        notes = CARPLAY_LIMIT_NOTE,
     )
 
     fun summary(id: VehicleIdentity): String = buildString {
