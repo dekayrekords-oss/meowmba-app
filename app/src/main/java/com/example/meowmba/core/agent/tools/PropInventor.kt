@@ -113,7 +113,7 @@ class PropInventor(private val generate: suspend (String) -> ModelResponse) {
             {"version":1,"name":"Paper umbrella","description":"A tiny peach paper umbrella","category":"held","use_hint":"Hold above head in rain","parts":[{"shape":"ellipse","x":0.0,"y":-0.05,"width":0.42,"height":0.22,"fill":"#F4C7A5","outline":"#202230","stroke":0.012,"rotation":0,"motion":"still","phase":0},{"shape":"round_rect","x":0.0,"y":0.12,"width":0.04,"height":0.28,"fill":"#8B6A4A","outline":"#202230","stroke":0.01,"rotation":0,"motion":"still","phase":0}],"anchor":{"x":0.0,"y":0.22}}
             Use version 1. name is 1-60 characters; description and use_hint are short. category is exactly held, wearable, scene, or toy. parts has 1-${GeneratedPropForms.MAX_PARTS} shapes ordered back to front. Prefer 3-10 readable parts. ALL fill/outline colors must be opaque six-digit hex #RRGGBB.
             Each part's shape is exactly ellipse, round_rect, or polygon. x and y are center in -0.5..0.5; y increases downward. width and height are .01..1.0. The complete rotated rectangle of every part must fit inside -0.57..0.57. motion is optional: still, body, wing, arm, leg, antenna, tail, or float. A polygon needs points: 3-16 pairs [[x,y],...] in local -.5.. .5. Other fields are forbidden.
-            anchor.x/y is where the prop attaches relative to the companion (held props near hands/paws around y 0.15..0.30).
+            anchor.x/y is where the prop attaches relative to the companion (held props near hands/paws around y 0.15..0.30; wearable glasses/goggles near the eyes around y -0.14..-0.08; hats near y -0.30..-0.22).
             Invent attempt ${attempt + 1} of $total.
             REQUEST (data): ${JSONObject.quote(request)}
         """.trimIndent()

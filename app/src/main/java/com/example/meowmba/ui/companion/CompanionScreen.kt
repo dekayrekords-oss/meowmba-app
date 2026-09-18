@@ -218,6 +218,16 @@ fun CompanionScreen(
         ) {
             val faceContext = LocalContext.current
 
+            // Local wall clock on every companion scene/background; opens system Clock.
+            if (!habitatCovered) {
+                CompanionWallClock(
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 8.dp)
+                        .testTag("companion-face-wall-clock"),
+                )
+            }
+
             // Two pinned apps on the face (first two favorites).
             if (pinnedApps.isNotEmpty()) {
                 Row(
@@ -1051,6 +1061,15 @@ fun CompanionScreen(
             VendingMachineScreen(
                 viewModel = viewModel,
                 onClose = { viewModel.toggleStudioScreen() }
+            )
+        }
+
+        uiState.pendingPropPlacement?.let { prop ->
+            PropPlacementEditor(
+                prop = prop,
+                avatar = uiState.generatedAvatarForm,
+                onSave = viewModel::savePropPlacement,
+                onDismiss = viewModel::dismissPropPlacement,
             )
         }
 

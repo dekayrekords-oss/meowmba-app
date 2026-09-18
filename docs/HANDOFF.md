@@ -4,7 +4,23 @@
 > The "Recent builds" section is regenerated automatically by scripts/autobuild.sh
 > after every commit; everything else is maintained by hand at each phase.
 
-## Current status — 2026-09-15 (Epic P3 Slices E+F — Care / motion / files)
+## Current status — 2026-09-15 (feat/prop-placement-vending-clock · Preview vc125)
+
+**Active branch:** `feat/prop-placement-vending-clock` (from `fix/invent-avatar-crash-and-drawer-search` @ `7748ed3`)  
+**Packages:** Preview `com.example.meowmba` · Play signing not mixed  
+**Flags:** `lumen_reflex_v2` / `agentic_runtime_v1` default **OFF**
+
+### This slice
+- **Prop placement:** after invent/save, drag prop on current avatar (scale/rotate); persist `anchor` + `attach_scale`/`attach_rotation`; smarter wearable defaults (glasses near eyes).
+- **Vending animation generator:** new lane — prompt + selectable library props + duration/intensity; persists via `CustomAnimationStore`.
+- **Avatar workshop:** preview canvas, Generate from current avatar, selectable props → place on avatar.
+- **Background clock:** `CompanionWallClock` on every non-empty `AppBackground`; tap opens system Clock (AlarmClock + Samsung/Google fallbacks).
+
+### Parent / related
+- Tip base invent crash harden + drawer search (vc124).
+- Epic P1–P3 still in flight on other branches.
+
+## Previous status — 2026-09-15 (Epic P3 Slices E+F — Care / motion / files)
 
 **Active branch:** `feat/epic-p3-care-motion-files` (from `feat/epic-p2-vending-machine` @ `76aba32`)  
 **Packages:** Preview `com.example.meowmba` · Play signing not mixed  

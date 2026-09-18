@@ -1,5 +1,9 @@
 # Meowmba — guide for AI contributors
 
+Read `BUILD_MASTER.md` FIRST for the current recovery branch, build owner,
+artifact verification and installation rules. Historical paths below are not
+the current build authority.
+
 ## Android source publication restriction — owner instruction, 2026-09-13
 
 Do not upload any Android app source code to public GitHub. This includes
