@@ -194,6 +194,9 @@ fun AvatarRenderer(
     faceScale: Float? = null,
     /** Lateral force on the phone, -1..1 (+ = pushed right). Turns lean the head. */
     motionLean: Float = 0f,
+    /** Sample forces during draw without recomposing the whole avatar per sensor event. */
+    motionLeanState: androidx.compose.runtime.State<Float>? = null,
+    motionLurchState: androidx.compose.runtime.State<Float>? = null,
     /**
      * Whether the face consumes touches at all. `false` turns the avatar into a
      * statue: no taps, no drags, no petting — the parent surface decides what a
@@ -661,8 +664,8 @@ fun AvatarRenderer(
         val relativeLean = com.example.meowmba.core.sensor.MotionMath.displayRelativeLean(
             motionScreenLean?.value ?: 0f, displayRotation)
         val boost = state.driving && state.driveEmotionBoost
-        val leanIn = DriveEmotionBoost.amplifyImu(motionLean, boost)
-        val lurchIn = DriveEmotionBoost.amplifyImu(motionLurch, boost)
+        val leanIn = DriveEmotionBoost.amplifyImu(motionLeanState?.value ?: motionLean, boost)
+        val lurchIn = DriveEmotionBoost.amplifyImu(motionLurchState?.value ?: motionLurch, boost)
         val frame = driveRig.step(clockSec, android.os.SystemClock.elapsedRealtime(),
             motionObservedAtMs?.value ?: 0L, state.driving, leanIn, lurchIn,
             (-relativeLean * 0.35f).coerceIn(-14f, 14f))

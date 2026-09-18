@@ -82,6 +82,18 @@ internal fun CloudProviderSettings(
             runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
                 .onFailure { note = "Open $url in your browser, then return here." }
         }, modifier = Modifier.fillMaxWidth()) { Text("Get an $label API key ↗") }
+        if (router) {
+            var showGuide by remember { mutableStateOf(false) }
+            OutlinedButton(onClick = { showGuide = !showGuide }, modifier = Modifier.fillMaxWidth()) {
+                Text(if (showGuide) "Hide guided OpenRouter setup" else "Guided OpenRouter setup")
+            }
+            if (showGuide) {
+                com.example.meowmba.ui.onboarding.OpenRouterGuidePage(
+                    onNext = { showGuide = false; onSaved() },
+                    onSkip = { showGuide = false },
+                )
+            }
+        }
         Text("Sign in, create an API key, copy the full secret, then return and paste it below. API billing is separate from chat subscriptions.", style = MaterialTheme.typography.bodySmall)
         ApiKeyField(key, { key = it; note = "" }, "$label API key", showKey, { showKey = !showKey })
         if (router) ModelCatalogField("OpenRouter chat model", model, { model = it; note = "" }, loadCatalog)

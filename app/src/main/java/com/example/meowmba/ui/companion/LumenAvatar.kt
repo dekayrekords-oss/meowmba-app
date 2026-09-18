@@ -256,11 +256,13 @@ class LumenPainter {
                         style = Stroke(rx * .023f))
                     // Irregular long/short fibres are cached directions; nothing
                     // shimmers or rolls a random number at display refresh rate.
+                    val brightFibre = m.fibre.copy(alpha = .21f * (1f - shape.dark) * (1f - f.form.fruitFly) * (1f - helper))
+                    val dimFibre = m.fibre.copy(alpha = .10f * (1f - shape.dark) * (1f - f.form.fruitFly) * (1f - helper))
                     for (i in irisDirections.indices) {
                         val direction = irisDirections[i]
                         val root = .48f + (i % 5) * .024f
                         val tip = .89f + (i % 3) * .018f
-                        drawLine(lerp(color, Color.White, .42f).copy(alpha = (if (i % 3 == 0) .21f else .10f) * (1f - shape.dark) * (1f - f.form.fruitFly) * (1f - helper)),
+                        drawLine(if (i % 3 == 0) brightFibre else dimFibre,
                             direction * (irisR * root), direction * (irisR * tip), rx * .009f, StrokeCap.Round)
                     }
                     val pr = irisR * (.56f + (f.pupil - .5f) * .40f) * shape.pupilScale * (1f - .24f * f.form.fruitFly)

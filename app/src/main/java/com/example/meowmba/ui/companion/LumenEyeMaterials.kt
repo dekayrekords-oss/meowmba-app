@@ -7,6 +7,8 @@ import androidx.compose.ui.graphics.lerp
 
 /** Brushes are rebuilt on palette/viewport changes, not for each moving pupil. */
 internal class LumenEyeMaterials(val rx: Float, val ry: Float, val color: Color, val glow: Color) {
+    // Exact blend shared by all iris fibres; recomputing per line repeats Oklab work.
+    val fibre = lerp(color, Color.White, .42f)
     val halo = Brush.radialGradient(listOf(glow.copy(alpha = .10f), glow.copy(alpha = .025f), Color.Transparent),
         Offset.Zero, ry * 2.5f)
     val sclera = Brush.radialGradient(

@@ -1381,21 +1381,9 @@ fun CompanionScreen(
 
         // Setup wizard: full-screen overlay for first-launch or re-open from Settings.
         // Drawn AFTER everything else so it covers the entire companion surface.
-        if (showOnboarding) {
-            com.example.meowmba.ui.onboarding.SetupWizardRoute(
-                onFinished = { viewModel.finishOnboarding() },
-                onEnablePermissions = { viewModel.requestOnboardingPermissions() },
-                onOpenChat = {
-                    viewModel.finishOnboarding()
-                    viewModel.openChat()
-                },
-                onOpenTerminal = {
-                    viewModel.finishOnboarding()
-                    viewModel.openCompanionTerminalFromOnboarding()
-                },
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
+        // Setup wizard is hosted by MainActivity (SaveableStateProvider) so page
+        // state survives Terminal peek and finishing avatar/background lands on
+        // the companion instead of remounting at Hi.
 
         // Unfolded split: the browser used to own the right half. That half is
         // free again now that pages go to a real browser instead.
@@ -1416,8 +1404,8 @@ private fun AvatarMotionHost(
     val motionSampleTime = viewModel.motionObservedAtMs.collectAsState()
     val view = androidx.compose.ui.platform.LocalView.current
     val displayRotation = LocalConfiguration.current.let { view.display?.rotation ?: 0 }
-    val motionLean by viewModel.motionLean.collectAsState()
-    val motionLurch by viewModel.motionLurch.collectAsState()
+    val motionLean = viewModel.motionLean.collectAsState()
+    val motionLurch = viewModel.motionLurch.collectAsState()
     val shakeCount by viewModel.avatarShakeCount.collectAsState()
     val faceGaze by viewModel.faceGaze.collectAsState()
     // Deliberately NOT `by`: delegating would read the value here, in
@@ -1458,8 +1446,8 @@ private fun AvatarMotionHost(
             facePitchDeg = facePose?.pitchDeg,
             faceRollDeg = facePose?.rollDeg,
             faceScale = facePose?.scale,
-            motionLean = motionLean,
-            motionLurch = motionLurch,
+            motionLeanState = motionLean,
+            motionLurchState = motionLurch,
             motionObservedAtMs = motionSampleTime,
             nervousBias = viewModel::nervousBiasNow,
             neuralGaze = viewModel::neuralGazeNow,

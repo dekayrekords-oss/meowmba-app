@@ -16,6 +16,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.core.content.ContextCompat
@@ -318,10 +319,16 @@ class MainActivity : ComponentActivity() {
                         onboardingVisible = wizardVisible,
                     )
                     // Onboarding wizard: full-screen overlay above everything.
+                    // Keep wizard page state across Terminal peek (pauseWizardForTerminal).
+                    // Without this, remounting SetupWizardRoute resets to Hi — the "avatar
+                    // finish returns to first screen" bug.
+                    val wizardState = rememberSaveableStateHolder()
                     if (wizardVisible) {
+                        wizardState.SaveableStateProvider("setup") {
                         com.example.meowmba.ui.onboarding.SetupWizardRoute(
                             onEnablePermissions = { checkPermissions() },
                             onFinished = {
+                                wizardState.removeState("setup")
                                 com.example.meowmba.core.setup.SetupWiring.markOnboardingDone(this@MainActivity)
                                 viewModel.reloadSetupConfiguration()
                                 needsOnboarding = false
@@ -329,6 +336,7 @@ class MainActivity : ComponentActivity() {
                                 if (showOnboarding) viewModel.toggleSetupWizard()
                             },
                             onOpenChat = {
+                                wizardState.removeState("setup")
                                 com.example.meowmba.core.setup.SetupWiring.markOnboardingDone(this@MainActivity)
                                 viewModel.reloadSetupConfiguration()
                                 needsOnboarding = false
@@ -337,6 +345,7 @@ class MainActivity : ComponentActivity() {
                                 viewModel.openChat()
                             },
                             onOpenTerminal = {
+                                wizardState.removeState("setup")
                                 com.example.meowmba.core.setup.SetupWiring.markOnboardingDone(this@MainActivity)
                                 viewModel.reloadSetupConfiguration()
                                 needsOnboarding = false
@@ -362,6 +371,7 @@ class MainActivity : ComponentActivity() {
                             },
                             modifier = Modifier.fillMaxSize(),
                         )
+                        }
                     }
                 }
             }

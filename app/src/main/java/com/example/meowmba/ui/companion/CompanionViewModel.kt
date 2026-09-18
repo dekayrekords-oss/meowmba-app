@@ -1916,7 +1916,10 @@ class CompanionViewModel(
                             nervousSystem.pauseExternalWork()
                         else nervousSystem.tick((now - last).coerceIn(0L, 250L))
                     }
-                    if (now - lastNeuralDiagnosticsMs >= 1000L) {
+                    // Diagnostics sort timing samples and publish a large UI state.
+                    // Live motor reads the controller directly; hidden panels need no copies.
+                    if ((_uiState.value.showNeuralInfo || _uiState.value.showSettings) &&
+                        now - lastNeuralDiagnosticsMs >= 1000L) {
                         lastNeuralDiagnosticsMs = now
                         _uiState.update { it.copy(neuralDiagnostics = nervousSystem.diagnostics()) }
                     }
@@ -8858,8 +8861,11 @@ class CompanionViewModel(
 
     fun toggleSettings() {
         if (_uiState.value.showSettings) rebuildOmniRoute()
+        val opening = !_uiState.value.showSettings
         _uiState.value = _uiState.value.copy(showSettings = !_uiState.value.showSettings,
-            settingsInitialPage = null, showNeuralInfo = false)
+            settingsInitialPage = null, showNeuralInfo = false,
+            neuralDiagnostics = if (opening) nervousSystem.diagnostics()
+                else _uiState.value.neuralDiagnostics)
     }
 
     fun toggleSetupWizard() {
@@ -11077,7 +11083,11 @@ class CompanionViewModel(
                 s.idleMorphEnabled && !s.driving && !appInBackground &&
                     s.interactionState == InteractionState.IDLE &&
                     !s.ambientPerformance && s.activeAnimation == null &&
-                    s.avatarStyle.isLumen
+                    s.avatarStyle.isLumen &&
+                    // Pause idle form cycling when hot or decorative work is disallowed.
+                    com.example.meowmba.core.thermal.ThermalGovernor.allowDecorativeAnimation() &&
+                    com.example.meowmba.core.thermal.ThermalGovernor.currentStatus() <
+                        android.os.PowerManager.THERMAL_STATUS_MODERATE
             },
             generatedFormIds = {
                 _uiState.value.savedGeneratedForms.map { it.id }
