@@ -7,6 +7,8 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.border
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -75,6 +77,7 @@ private enum class FirstRunPage {
     IDidThat,
     OpenCode,
     Mic,
+    OpenRouter,
     ApiKey,
     GitHub,
     Avatar,
@@ -139,13 +142,14 @@ fun SetupWizardRoute(
             FirstRunPage.IDidThat -> go(FirstRunPage.CopyCommands)
             FirstRunPage.OpenCode -> go(FirstRunPage.IDidThat)
             FirstRunPage.Mic -> go(FirstRunPage.OpenCode)
-            FirstRunPage.ApiKey -> go(FirstRunPage.Mic)
+            FirstRunPage.OpenRouter -> go(FirstRunPage.Mic)
+            FirstRunPage.ApiKey -> go(FirstRunPage.OpenRouter)
             FirstRunPage.GitHub -> go(FirstRunPage.ApiKey)
             FirstRunPage.Avatar -> go(FirstRunPage.GitHub)
             FirstRunPage.Background -> go(FirstRunPage.Avatar)
             FirstRunPage.OptionalServer -> go(FirstRunPage.Background)
             FirstRunPage.ServerFields -> go(FirstRunPage.OptionalServer)
-            FirstRunPage.Done -> go(FirstRunPage.ApiKey)
+            FirstRunPage.Done -> go(FirstRunPage.Background)
         }
     }
 
@@ -277,10 +281,14 @@ fun SetupWizardRoute(
                         primary = "Allow",
                         onPrimary = {
                             onEnablePermissions()
-                            go(FirstRunPage.ApiKey)
+                            go(FirstRunPage.OpenRouter)
                         },
                         secondary = "Not now",
-                        onSecondary = { go(FirstRunPage.ApiKey) },
+                        onSecondary = { go(FirstRunPage.OpenRouter) },
+                    )
+                    FirstRunPage.OpenRouter -> OpenRouterGuidePage(
+                        onNext = { go(FirstRunPage.ApiKey) },
+                        onSkip = { go(FirstRunPage.ApiKey) },
                     )
                     FirstRunPage.ApiKey -> ApiKeyPage(
                         apiKey = apiKey,
@@ -372,7 +380,8 @@ fun SetupWizardRoute(
                             storage.savePreference("background_value", "")
                             onBackgroundPicked(selection)
                         },
-                        onNext = { go(FirstRunPage.OptionalServer) },
+                        onNext = { finish() },
+                        onMore = { go(FirstRunPage.OptionalServer) },
                     )
                     FirstRunPage.OptionalServer -> KidPage(
                         title = "Have a computer on the internet?",
@@ -691,16 +700,23 @@ private fun BackgroundPickPage(
     onSelect: (BackgroundAnimation) -> Unit,
     onNone: () -> Unit,
     onNext: () -> Unit,
+    onMore: () -> Unit = {},
 ) {
-    // A short kid-friendly subset of the full BackgroundScreen catalog.
+    // Gallery subset with live preview (full catalog remains in Backgrounds settings).
     val choices = listOf(
         BackgroundAnimation.AURORA,
         BackgroundAnimation.STARFIELD,
         BackgroundAnimation.NEBULA,
+        BackgroundAnimation.EMBERS,
         BackgroundAnimation.WOODLAND,
         BackgroundAnimation.LAGOON,
+        BackgroundAnimation.RAINY_LOFT,
         BackgroundAnimation.CLEAR_SKY,
+        BackgroundAnimation.KITCHEN,
+        BackgroundAnimation.CARTOON_MOON_GARDEN,
+        BackgroundAnimation.CARTOON_ALIEN_AQUARIUM,
     )
+    val previewAnim = choices.firstOrNull { it.id == selectedId }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -715,11 +731,40 @@ private fun BackgroundPickPage(
             textAlign = TextAlign.Center,
         )
         Text(
-            "What sits behind your helper. More choices live in Settings later.",
+            "Tap a scene for a live preview. More habitats live in Settings later.",
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(160.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp)),
+        ) {
+            if (previewAnim != null) {
+                com.example.meowmba.ui.companion.AppBackground(
+                    selection = BackgroundSelection(
+                        kind = BackgroundKind.ANIMATION,
+                        value = previewAnim.id,
+                        dimPercent = 20,
+                    ),
+                    weather = null,
+                    modifier = Modifier.fillMaxSize(),
+                    paused = false,
+                )
+            } else {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("No background", style = MaterialTheme.typography.titleMedium)
+                }
+            }
+        }
         OutlinedButton(
             onClick = onNone,
             modifier = Modifier.fillMaxWidth().height(52.dp),
@@ -729,19 +774,47 @@ private fun BackgroundPickPage(
                 style = MaterialTheme.typography.titleMedium,
             )
         }
-        choices.forEach { anim ->
-            val selected = anim.id == selectedId
-            OutlinedButton(
-                onClick = { onSelect(anim) },
-                modifier = Modifier.fillMaxWidth().height(52.dp),
+        choices.chunked(2).forEach { row ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(
-                    if (selected) "✓ ${anim.label}" else anim.label,
-                    style = MaterialTheme.typography.titleMedium,
-                )
+                row.forEach { anim ->
+                    val selected = anim.id == selectedId
+                    OutlinedButton(
+                        onClick = { onSelect(anim) },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(88.dp)
+                            .then(
+                                if (selected) {
+                                    Modifier.border(
+                                        2.dp,
+                                        MaterialTheme.colorScheme.primary,
+                                        RoundedCornerShape(12.dp),
+                                    )
+                                } else Modifier,
+                            ),
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            com.example.meowmba.ui.companion.AnimationThumbnail(
+                                anim,
+                                Modifier.fillMaxWidth().height(40.dp).clip(RoundedCornerShape(8.dp)),
+                            )
+                            Text(
+                                if (selected) "✓ ${anim.label}" else anim.label,
+                                style = MaterialTheme.typography.labelLarge,
+                                textAlign = TextAlign.Center,
+                                maxLines = 2,
+                            )
+                        }
+                    }
+                }
+                if (row.size == 1) Spacer(Modifier.weight(1f))
             }
         }
-        KidPrimaryButton("Next", onNext)
+        KidPrimaryButton("Finish setup", onNext)
+        TextButton(onClick = onMore) { Text("Optional: add a remote computer") }
     }
 }
 
