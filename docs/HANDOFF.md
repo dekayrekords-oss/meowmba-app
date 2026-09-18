@@ -4,7 +4,39 @@
 > The "Recent builds" section is regenerated automatically by scripts/autobuild.sh
 > after every commit; everything else is maintained by hand at each phase.
 
-## Current status — 2026-09-18 (feat/preview-update-check · Preview vc132)
+## Current status — 2026-09-18 (feat/preview-update-check · Preview vc133)
+
+**Active branch:** `feat/preview-update-check`  
+**Packages:** Preview `com.example.meowmba` · Play `defaultConfig` versionCode **85** unchanged  
+**Flags:** `lumen_reflex_v2` / `agentic_runtime_v1` default **OFF**  
+**Build:** debug Preview vc133
+
+### This slice
+- **Launch crash harden (beyond vc132 ANR):** soft-fail + defer Application/WorkManager/encrypted-prefs;
+  SecureStorage create-or-clear-retry; Room/secure-storage toast+finish; NotificationHelper soft-fail +
+  mipmap icon; defer Sherpa/wake attach with runCatching; soft-fail OBD/idle morph/vehicle identity;
+  MetaGlassesController soft-fail. No Fold logcat available — defense-in-depth for remaining launch killers.
+- Prior vc132: off-main update check (HTTP ANR).
+
+### Ship checklist (Preview)
+1. Edit `docs/USER_MANUAL.md` if content changed.
+2. Bump debug `onVariants` versionCode.
+3. `scripts/update-user-manual.sh`
+4. Assemble + serve prog-signed `preview.apk` and Claude-signed `preview-alt.apk`.
+5. Update `get-preview.html` / `get-preview-alt.html` SIZE/SHA; allowlist new APK names in `range_server.py`.
+6. `scripts/write-preview-version.sh` (DEST_APK_SERVE=/home/prog/apk-serve).
+
+### How Wyatt should talk
+1. Install Preview vc133 matching your current signer (do **not** uninstall when key matches — Fold stays on Claude `75b19d5a…` via get-preview-alt).
+2. App should open; if it still stops, note exact toast / “keeps stopping” and we need logcat.
+3. Feed: `http://100.77.97.236:8765/preview-version.json`
+
+### Parent / related
+- Base tip vc132 ANR harden @ `4c5aea6`.
+
+
+## Previous status — 2026-09-18 (feat/preview-update-check · Preview vc132)
+
 
 **Active branch:** `feat/preview-update-check`  
 **Packages:** Preview `com.example.meowmba` · Play `defaultConfig` versionCode **85** unchanged  

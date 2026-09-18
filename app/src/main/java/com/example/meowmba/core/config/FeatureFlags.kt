@@ -65,7 +65,7 @@ class FeatureFlags(private val storage: SecureStorageManager) {
             cached?.let { if (it.first === app) return it.second }
             return synchronized(this) {
                 cached?.takeIf { it.first === app }?.second
-                    ?: FeatureFlags(SecureStorageManager(app)).also { cached = app to it }
+                    ?: FeatureFlags(SecureStorageManager.create(app)).also { cached = app to it }
             }
         }
     }

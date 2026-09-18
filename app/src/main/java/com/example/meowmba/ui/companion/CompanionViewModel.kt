@@ -1415,7 +1415,9 @@ class CompanionViewModel(
     }
 
     init {
-        // Restore persisted voice preferences (name, wake word, conversation mode)
+        // Restore persisted voice preferences (name, wake word, conversation mode).
+        // Soft-fail the whole restore so a bad preference decode cannot kill launch.
+        runCatching {
         secureStorage?.let { storage ->
             storage.getPreference(KEY_OWNER_SPEAKER)?.trim()?.takeIf { it.isNotEmpty() }?.let { owner ->
                 lastSpeakerName = owner
@@ -1499,6 +1501,7 @@ class CompanionViewModel(
                 ).let { if (it.animation?.isPetEnvironment == true) com.example.meowmba.core.background.BackgroundSelection() else it },
             )
         }
+        }.onFailure { android.util.Log.e("CompanionVM", "preference restore failed", it) }
         // Phase 6 (agentic ↔ Lumen presence): optional, flag-gated, minimal.
         // Soft hint only — never drives SSH from Lumen frame loop.
         refreshAgenticPresenceHint()
@@ -1535,7 +1538,13 @@ class CompanionViewModel(
         }
 
         matcher = WakePhraseMatcher(_uiState.value.name)
-        ensureVoiceModelsThenAttachWake()
+        // Defer voice/native attach off the first composition frame. Sherpa /
+        // speaker JNI loadLibrary is an Error (not Exception) on missing or
+        // corrupt natives — wrap so one subsystem cannot kill cold open (vc133).
+        viewModelScope.launch {
+            runCatching { ensureVoiceModelsThenAttachWake() }
+                .onFailure { android.util.Log.e("CompanionVM", "voice/wake attach failed", it) }
+        }
 
         // Wire the SetupWiring local-model hook so the onboarding wizard can
         // trigger real downloads. Safe: runCatching guards every branch.
@@ -2344,8 +2353,15 @@ class CompanionViewModel(
             // Car assistant: fuse GPS speed + accelerometer + a configured car
             // Bluetooth device to know when the user is driving, track the trip, and
             // watch for a crash. Sensors/location only run while car mode is enabled.
-            val drivingDetector = DrivingDetector(appContext, viewModelScope).also {
-                it.setCarDeviceAddress(secureStorage?.getPreference(KEY_CAR_DEVICE))
+            val drivingDetector = runCatching {
+                DrivingDetector(appContext, viewModelScope).also {
+                    it.setCarDeviceAddress(secureStorage?.getPreference(KEY_CAR_DEVICE))
+                }
+            }.onFailure {
+                android.util.Log.e("CompanionVM", "DrivingDetector init failed", it)
+            }.getOrElse {
+                // Retry without car BT address; sensors still soft-fail inside.
+                DrivingDetector(appContext, viewModelScope)
             }
             carDetector = drivingDetector
             val tripTracker = TripTracker()
@@ -2353,7 +2369,7 @@ class CompanionViewModel(
 
             // Always mirror the persisted switch, so the detector's state and the
             // Settings toggle can never disagree (fresh detector starts disabled).
-            drivingDetector.setCarModeEnabled(_uiState.value.carModeEnabled)
+            runCatching { drivingDetector.setCarModeEnabled(_uiState.value.carModeEnabled) }
 
             viewModelScope.launch {
                 drivingDetector.driving.collect { s ->
@@ -2478,10 +2494,15 @@ class CompanionViewModel(
                 }
             }
             if (_uiState.value.obdEnabled && _uiState.value.obdAdapterAddress.isNotBlank()) {
-                viewModelScope.launch { obd.connect(_uiState.value.obdAdapterAddress) }
+                viewModelScope.launch {
+                    runCatching { obd.connect(_uiState.value.obdAdapterAddress) }
+                        .onFailure { android.util.Log.w("CompanionVM", "OBD connect failed", it) }
+                }
             }
-            refreshVehicleIdentity()
-            startIdleFormCyclerIfNeeded()
+            runCatching { refreshVehicleIdentity() }
+                .onFailure { android.util.Log.w("CompanionVM", "VehicleIdentity refresh failed", it) }
+            runCatching { startIdleFormCyclerIfNeeded() }
+                .onFailure { android.util.Log.w("CompanionVM", "IdleFormCycler start failed", it) }
         }
         if (workspaceRoot != null) {
             val ws = Workspace(workspaceRoot) { _uiState.value.activeProjectId?.let { "projects/project-$it" } }
@@ -10116,7 +10137,9 @@ class CompanionViewModel(
             return
         }
         if (!com.example.meowmba.core.audio.VoiceModelStore(ctx).asrReady()) return
-        sherpaAsrEngine = SherpaAsrEngine(ctx, viewModelScope)
+        sherpaAsrEngine = runCatching { SherpaAsrEngine(ctx, viewModelScope) }
+            .onFailure { android.util.Log.e("CompanionVM", "SherpaAsrEngine attach failed", it) }
+            .getOrNull() ?: return
         attachWhisperRefiner()
         fuLog("on-device always-on ASR attached")
         // This attach is async relative to the always-on arm that raced it
@@ -10142,13 +10165,17 @@ class CompanionViewModel(
         speakerVerifier = null
         val wakeEngineSource = (speechService as? SpeechService)
             ?.createSessionEngine() ?: speechService
-        val built = com.example.meowmba.core.audio.WakeWordEngineFactory.create(
-            context = secureStorage?.context,
-            scope = viewModelScope,
-            companionName = _uiState.value.name,
-            matcher = matcher,
-            speechEngine = wakeEngineSource,
-        ) ?: return
+        val built = runCatching {
+            com.example.meowmba.core.audio.WakeWordEngineFactory.create(
+                context = secureStorage?.context,
+                scope = viewModelScope,
+                companionName = _uiState.value.name,
+                matcher = matcher,
+                speechEngine = wakeEngineSource,
+            )
+        }.onFailure {
+            android.util.Log.e("CompanionVM", "WakeWordEngineFactory.create failed", it)
+        }.getOrNull() ?: return
         speakerVerifier = built.verifier
         wakeWordEngine = built.engine.apply {
             onWake = { command ->

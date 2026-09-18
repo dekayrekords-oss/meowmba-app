@@ -1,11 +1,16 @@
 package com.example.meowmba.core.security
 
 import android.content.Context
+import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 
 /**
  * Manages secure storage of API keys and configuration using EncryptedSharedPreferences.
+ *
+ * Construction can throw on a corrupt Android Keystore / prefs pair (observed as
+ * cold-start "keeps stopping" after Preview upgrades). Prefer [create] / [createOrNull]
+ * from launch paths so a one-shot clear+retry can recover without killing the process.
  */
 class SecureStorageManager(val context: Context) {
     private val masterKey = MasterKey.Builder(context)
@@ -14,11 +19,43 @@ class SecureStorageManager(val context: Context) {
 
     private val sharedPreferences = EncryptedSharedPreferences.create(
         context,
-        "meowmba_secure_prefs",
+        PREFS_NAME,
         masterKey,
         EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
         EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
     )
+
+    companion object {
+        private const val TAG = "SecureStorage"
+        private const val PREFS_NAME = "meowmba_secure_prefs"
+
+        /** Open encrypted prefs; on failure clear the corrupt store once and retry. */
+        fun create(context: Context): SecureStorageManager {
+            val app = context.applicationContext
+            return try {
+                SecureStorageManager(app)
+            } catch (first: Throwable) {
+                Log.e(TAG, "Encrypted prefs open failed; clearing corrupt store and retrying", first)
+                clearCorruptStore(app)
+                SecureStorageManager(app)
+            }
+        }
+
+        /** Same as [create] but returns null instead of throwing after retry. */
+        fun createOrNull(context: Context): SecureStorageManager? =
+            runCatching { create(context) }
+                .onFailure { Log.e(TAG, "Encrypted prefs unavailable after retry", it) }
+                .getOrNull()
+
+        private fun clearCorruptStore(context: Context) {
+            runCatching { context.deleteSharedPreferences(PREFS_NAME) }
+            // AndroidX Security master-key sidecar (name varies by library version).
+            runCatching { context.deleteSharedPreferences("_androidx_security_master_key_") }
+            runCatching {
+                context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().clear().commit()
+            }
+        }
+    }
 
     fun saveApiKey(provider: String, key: String) {
         sharedPreferences.edit().putString("api_key_$provider", key).apply()

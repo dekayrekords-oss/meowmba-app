@@ -117,14 +117,35 @@ class MainActivity : ComponentActivity() {
         // Dim amount 0: still a proper activity window that owns the touch stream.
         window.setDimAmount(0f)
 
+        // Soft-fail launch killers (corrupt Keystore / Room / channel) so cold
+        // open does not become "keeps stopping" without a toast (vc133).
+        val storage = com.example.meowmba.core.security.SecureStorageManager.createOrNull(this)
+        if (storage == null) {
+            android.widget.Toast.makeText(
+                this,
+                "Meow could not open secure storage. Clear app storage or reinstall Preview.",
+                android.widget.Toast.LENGTH_LONG,
+            ).show()
+            finish()
+            return
+        }
+        secureStorage = storage
         speechService = SpeechService(this)
         ttsManager = TextToSpeechManager(this)
-        secureStorage = SecureStorageManager(this)
         audioStreamingManager = AudioStreamingManager(this)
         visionManager = com.example.meowmba.core.vision.VisionManager(this, this)
         notificationHelper = NotificationHelper(this)
-        
-        val database = MeowmbaDatabase.getDatabase(this)
+
+        val database = runCatching { MeowmbaDatabase.getDatabase(this) }.getOrElse {
+            android.util.Log.e("MainActivity", "Room open failed", it)
+            android.widget.Toast.makeText(
+                this,
+                "Meow could not open its database. Try Clear storage for Preview, or reinstall.",
+                android.widget.Toast.LENGTH_LONG,
+            ).show()
+            finish()
+            return
+        }
         memoryRepository = MemoryRepository(database.messageDao(), database.memoryDao())
         val auditDao = database.auditDao()
         val workspaceRoot = java.io.File(filesDir, "memba_workspace")
@@ -157,7 +178,11 @@ class MainActivity : ComponentActivity() {
                                 routineDao = database.routineDao(),
                                 projectDao = database.projectDao(),
                                 characterDao = database.characterDao(),
-                                glassesController = com.example.meowmba.core.glasses.MetaGlassesController(this@MainActivity)
+                                glassesController = runCatching {
+                                    com.example.meowmba.core.glasses.MetaGlassesController(this@MainActivity)
+                                }.onFailure {
+                                    android.util.Log.w("MainActivity", "MetaGlassesController init failed", it)
+                                }.getOrNull()
                             ).also {
                                 companionViewModel = it
                                 if (pendingAvatarHome) { pendingAvatarHome = false; it.returnToAvatar() }

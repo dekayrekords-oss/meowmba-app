@@ -110,31 +110,37 @@ object WakeWordEngineFactory {
         // native loader aborts the process instead of failing gracefully.
         if (!SherpaKwsEngine.assetsPresent(context)) return null
 
-        val vocab = readVocab(context) ?: return null
+        return runCatching {
+            val vocab = readVocab(context) ?: return@runCatching null
 
-        val phrases = BASE_PHRASES + companionName.trim()
-            .takeIf { it.isNotBlank() }
-            ?.let { listOf("hey $it") }
-            .orEmpty()
+            val phrases = BASE_PHRASES + companionName.trim()
+                .takeIf { it.isNotBlank() }
+                ?.let { listOf("hey $it") }
+                .orEmpty()
 
-        val keywords = KwsKeywords.build(phrases, vocab)
-        if (keywords.isBlank()) {
-            return null
-        }
-        // Both gates are optional and fail open: a missing model just means the stage is
-        // skipped, never that the wake word stops working.
-        val verifier = SpeakerVerifier(context, VoiceProfileStore(context))
-            .takeIf { it.isModelAvailable() }
-            ?.also { it.reload() }
+            val keywords = KwsKeywords.build(phrases, vocab)
+            if (keywords.isBlank()) {
+                return@runCatching null
+            }
+            // Both gates are optional and fail open: a missing model just means the stage is
+            // skipped, never that the wake word stops working.
+            val verifier = runCatching {
+                SpeakerVerifier(context, VoiceProfileStore(context))
+                    .takeIf { it.isModelAvailable() }
+                    ?.also { it.reload() }
+            }.getOrNull()
 
-        val engine = SherpaKwsEngine(
-            context = context,
-            scope = scope,
-            keywords = keywords,
-            verifier = if (SPEAKER_GATE_ENABLED) verifier else null,
-            speechGate = if (VAD_GATE_ENABLED) VadGate.create(context) else null,
-        )
-        return engine to verifier
+            val engine = SherpaKwsEngine(
+                context = context,
+                scope = scope,
+                keywords = keywords,
+                verifier = if (SPEAKER_GATE_ENABLED) verifier else null,
+                speechGate = if (VAD_GATE_ENABLED) {
+                    runCatching { VadGate.create(context) }.getOrNull()
+                } else null,
+            )
+            engine to verifier
+        }.getOrNull()
     }
 
     /** Reads tokens.txt from the on-disk pack, then from debug assets. */
