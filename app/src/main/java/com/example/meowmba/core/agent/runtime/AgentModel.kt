@@ -157,6 +157,8 @@ object AgentRegistry {
                 "phone.cleanup",
                 "phone.bluetooth_devices", "phone.bluetooth_setup",
                 "nav.find_places", "nav.navigate", "nav.save_place", "nav.list_saved_places",
+                "car.status", "car.drive_mode", "car.trip", "car.eta", "car.help",
+                "car.vehicle", "car.obd", "car.obd_connect", "car.cameras",
             )
         ),
         AgentDefinition(
@@ -185,6 +187,18 @@ object AgentRegistry {
             allowedTools = setOf(
                 "studio.save_character", "studio.get_character",
                 "studio.create_comic", "studio.write_script"
+            )
+        ),
+        AgentDefinition(
+            id = "car", name = "Cruise",
+            purpose = "In-car assistant: drive mode, trip/ETA, vehicle Bluetooth awareness, " +
+                "OBD-II diagnostics, and car cameras. Media/phone use phone.* tools " +
+                "(MediaSession / dialer) — not full Apple CarPlay ownership.",
+            allowedTools = setOf(
+                "car.status", "car.drive_mode", "car.trip", "car.eta", "car.help",
+                "car.vehicle", "car.obd", "car.obd_connect", "car.cameras",
+                "phone.media_control", "phone.set_volume", "phone.dial_call",
+                "phone.play_music",
             )
         ),
         AgentDefinition(

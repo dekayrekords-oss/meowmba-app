@@ -1,3 +1,20 @@
+# MASTER PLAN
+
+## Current — 2026-09-17 (feat/lumen-drive-carplay-obd2 · Preview vc128)
+
+Branch: `feat/lumen-drive-carplay-obd2` (from `feat/meta-glasses-meow-bridge` @ `8ac4b9d`). Preview package `com.example.meowmba`. Flags `lumen_reflex_v2` / `agentic_runtime_v1` remain default **OFF**. No FlyWire.
+
+### This slice
+- [x] Lumen idle morph cycles **all** authored characters (+ optional generated forms)
+- [x] Stronger drive-mode emotion / IMU reactivity
+- [x] Driver camera preview on drive card; car camera source list (USB/RTSP hooks)
+- [x] Vehicle Bluetooth / AA awareness + honest CarPlay limits
+- [x] MediaSession / dialer best-effort (not full CarPlay ownership)
+- [x] Native ELM327 Bluetooth OBD-II → Lumen cues + diagnostics panel/alerts
+- [x] Docs: `docs/DRIVE_CARPLAY_OBD2.md`
+
+See also prior tip: Meta glasses Meow bridge (vc127).
+
 # MEOWMBA MASTER PLAN
 
 ## September 14 Arizona / September 15 UTC — audit repair preview128

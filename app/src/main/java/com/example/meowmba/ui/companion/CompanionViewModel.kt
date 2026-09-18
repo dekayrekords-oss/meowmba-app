@@ -108,8 +108,18 @@ import com.example.meowmba.core.agent.tools.OpenSettingsTool
 import com.example.meowmba.core.agent.tools.CarStatusTool
 import com.example.meowmba.core.agent.tools.CarDriveModeTool
 import com.example.meowmba.core.agent.tools.CarTripTool
+import com.example.meowmba.core.agent.tools.CarVehicleTool
+import com.example.meowmba.core.agent.tools.CarObdTool
+import com.example.meowmba.core.agent.tools.CarObdConnectTool
+import com.example.meowmba.core.agent.tools.CarCamerasTool
 import com.example.meowmba.core.agent.tools.CarEtaTool
 import com.example.meowmba.core.agent.tools.CarHelpTool
+import com.example.meowmba.core.car.VehicleAwareness
+import com.example.meowmba.core.car.VehicleIdentity
+import com.example.meowmba.core.car.camera.CarCameraSources
+import com.example.meowmba.core.car.obd2.Elm327Client
+import com.example.meowmba.core.car.obd2.Obd2Manager
+import com.example.meowmba.core.car.obd2.Obd2LumenCues
 import com.example.meowmba.core.car.DrivingDetector
 import com.example.meowmba.core.car.TripTracker
 import com.example.meowmba.core.car.CrashEvent
@@ -1254,6 +1264,9 @@ class CompanionViewModel(
     private var carDetector: DrivingDetector? = null
     private var carTripTracker: TripTracker? = null
     private var driveCardSuppressed = false
+    private var idleFormCycler: IdleFormCycler? = null
+    private var obdManager: Obd2Manager? = null
+    private var elm327Client: Elm327Client? = null
 
     /** When the current transient drive reaction began. */
     private var driveReactionStartedAtMs = 0L
@@ -1435,6 +1448,19 @@ class CompanionViewModel(
                 musicServerUrl = storage.getPreference(KEY_MUSIC_SERVER_URL) ?: "",
                 backgroundListeningEnabled = storage.getBooleanPreference(KEY_BACKGROUND_LISTENING, false),
                 carModeEnabled = storage.getBooleanPreference(KEY_CAR_MODE, false),
+                idleMorphEnabled = storage.getBooleanPreference(KEY_IDLE_MORPH, true),
+                idleMorphIntervalSec = storage.getPreference(KEY_IDLE_MORPH_INTERVAL)?.toIntOrNull()
+                    ?.coerceIn(20, 180) ?: 55,
+                idleMorphIncludeGenerated = storage.getBooleanPreference(KEY_IDLE_MORPH_GENERATED, true),
+                driveEmotionBoost = storage.getBooleanPreference(KEY_DRIVE_EMOTION_BOOST, true),
+                driveDriverCameraEnabled = storage.getBooleanPreference(KEY_DRIVE_DRIVER_CAMERA, true),
+                obdEnabled = storage.getBooleanPreference(KEY_OBD_ENABLED, false),
+                obdAdapterAddress = storage.getPreference(KEY_OBD_ADAPTER).orEmpty(),
+                carDashcamRtspUrl = storage.getPreference(KEY_CAR_RTSP).orEmpty(),
+                carCameraActiveId = storage.getPreference(KEY_CAR_CAMERA_ACTIVE) ?: "front_driver",
+                carCameraSources = CarCameraSources.defaultSources(
+                    rtspUrl = storage.getPreference(KEY_CAR_RTSP),
+                ),
                 avatarScale = storage.getPreference("avatar_scale")?.toFloatOrNull()?.takeIf { it.isFinite() }?.coerceIn(.5f, 3f) ?: 2f,
                 habitatMode = storage.getBooleanPreference("habitat_mode", false),
                 habitatBackgroundId = storage.getPreference("habitat_background")?.takeIf { id -> com.example.meowmba.core.background.BackgroundAnimation.byId(id)?.isPetEnvironment == true } ?: "kitchen",
@@ -2406,6 +2432,61 @@ class CompanionViewModel(
                     trip = { tripTracker.trip.value },
                 )
             )
+            toolRegistry.register(
+                CarVehicleTool(identity = { _uiState.value.vehicleIdentity })
+            )
+            val elm = Elm327Client(appContext).also { elm327Client = it }
+            val obd = Obd2Manager(viewModelScope, elm).also { obdManager = it }
+            toolRegistry.register(
+                CarObdTool(
+                    reading = { _uiState.value.obdReading },
+                    alerts = { _uiState.value.obdAlerts },
+                )
+            )
+            toolRegistry.register(
+                CarObdConnectTool(
+                    connect = { addr ->
+                        secureStorage?.savePreference(KEY_OBD_ADAPTER, addr)
+                        _uiState.value = _uiState.value.copy(obdAdapterAddress = addr, obdEnabled = true)
+                        secureStorage?.saveBooleanPreference(KEY_OBD_ENABLED, true)
+                        obd.connect(addr)
+                    },
+                    lastAddress = { _uiState.value.obdAdapterAddress },
+                )
+            )
+            toolRegistry.register(
+                CarCamerasTool(
+                    sources = { _uiState.value.carCameraSources },
+                    activeId = { _uiState.value.carCameraActiveId },
+                    onSelect = { id -> setCarCameraActive(id) },
+                )
+            )
+            viewModelScope.launch {
+                obd.reading.collect { r ->
+                    val excitement = Obd2LumenCues.excitementFromRpm(r.rpm)
+                    _uiState.value = _uiState.value.copy(
+                        obdReading = r,
+                        obdExcitement = excitement,
+                    )
+                }
+            }
+            viewModelScope.launch {
+                obd.alerts.collect { a ->
+                    _uiState.value = _uiState.value.copy(obdAlerts = a)
+                    if (a.isNotEmpty() && _uiState.value.driving) {
+                        val top = a.first()
+                        if (top.kind == com.example.meowmba.core.car.obd2.Obd2AlertKind.COOLANT_HIGH ||
+                            top.kind == com.example.meowmba.core.car.obd2.Obd2AlertKind.MIL) {
+                            _uiState.value = _uiState.value.copy(emotion = CompanionEmotion.ALERT)
+                        }
+                    }
+                }
+            }
+            if (_uiState.value.obdEnabled && _uiState.value.obdAdapterAddress.isNotBlank()) {
+                viewModelScope.launch { obd.connect(_uiState.value.obdAdapterAddress) }
+            }
+            refreshVehicleIdentity()
+            startIdleFormCyclerIfNeeded()
         }
         if (workspaceRoot != null) {
             val ws = Workspace(workspaceRoot) { _uiState.value.activeProjectId?.let { "projects/project-$it" } }
@@ -3433,6 +3514,8 @@ class CompanionViewModel(
         // the battery for the life of the process. setCarModeEnabled(false) is
         // the public route to its stop().
         carDetector?.setCarModeEnabled(false)
+        idleFormCycler?.stop()
+        obdManager?.disconnect()
         roadFeedJob?.cancel()
         thinkingWatchdogJob?.cancel()
         alwaysOnSessionWatchdog?.cancel()
@@ -8628,8 +8711,10 @@ class CompanionViewModel(
             _uiState.value.interactionState == InteractionState.THINKING) return
         val cue = track?.cue ?: com.example.meowmba.core.vision.SocialCue.NONE
         val now = System.currentTimeMillis()
+        val (minGap, sameGap) = DriveEmotionBoost.socialGaps(_uiState.value.driving && _uiState.value.driveEmotionBoost)
         if (!com.example.meowmba.core.vision.SocialCues.shouldReact(
                 cue, lastSocialCue, now, lastSocialCueAtMs,
+                minGapMs = minGap, sameCueGapMs = sameGap,
             )
         ) {
             if (cue != com.example.meowmba.core.vision.SocialCue.NONE) lastSocialCue = cue
@@ -11058,6 +11143,170 @@ class CompanionViewModel(
         }
     }
 
+    // ── Idle morph + car awareness ───────────────────────────────────────────
+
+    private fun startIdleFormCyclerIfNeeded() {
+        idleFormCycler?.stop()
+        if (!_uiState.value.idleMorphEnabled) {
+            clearIdleMorphOverlay()
+            return
+        }
+        if (_uiState.value.driving) return
+        val cycler = IdleFormCycler(
+            scope = viewModelScope,
+            canMorph = {
+                val s = _uiState.value
+                s.idleMorphEnabled && !s.driving && !appInBackground &&
+                    s.interactionState == InteractionState.IDLE &&
+                    !s.ambientPerformance && s.activeAnimation == null &&
+                    s.avatarStyle.isLumen
+            },
+            generatedFormIds = {
+                _uiState.value.savedGeneratedForms.map { it.id }
+            },
+            includeGenerated = { _uiState.value.idleMorphIncludeGenerated },
+            intervalMs = { _uiState.value.idleMorphIntervalSec * 1000L },
+            onTarget = { applyIdleMorphTarget(it) },
+        )
+        idleFormCycler = cycler
+        cycler.start()
+    }
+
+    private fun applyIdleMorphTarget(target: IdleFormTarget) {
+        if (target.isGenerated) {
+            _uiState.value = _uiState.value.copy(
+                idleMorphGeneratedId = target.generatedId,
+                idleMorphAnimal = null,
+            )
+        } else {
+            _uiState.value = _uiState.value.copy(
+                idleMorphAnimal = target.animal,
+                idleMorphGeneratedId = null,
+            )
+        }
+    }
+
+    private fun clearIdleMorphOverlay() {
+        _uiState.value = _uiState.value.copy(idleMorphAnimal = null, idleMorphGeneratedId = null)
+    }
+
+    fun setIdleMorphEnabled(enabled: Boolean) {
+        _uiState.value = _uiState.value.copy(idleMorphEnabled = enabled)
+        secureStorage?.saveBooleanPreference(KEY_IDLE_MORPH, enabled)
+        if (enabled) startIdleFormCyclerIfNeeded() else {
+            idleFormCycler?.stop()
+            clearIdleMorphOverlay()
+        }
+    }
+
+    fun setIdleMorphIntervalSec(sec: Int) {
+        val v = sec.coerceIn(20, 180)
+        _uiState.value = _uiState.value.copy(idleMorphIntervalSec = v)
+        secureStorage?.savePreference(KEY_IDLE_MORPH_INTERVAL, v.toString())
+    }
+
+    fun setIdleMorphIncludeGenerated(enabled: Boolean) {
+        _uiState.value = _uiState.value.copy(idleMorphIncludeGenerated = enabled)
+        secureStorage?.saveBooleanPreference(KEY_IDLE_MORPH_GENERATED, enabled)
+    }
+
+    fun setDriveEmotionBoost(enabled: Boolean) {
+        _uiState.value = _uiState.value.copy(driveEmotionBoost = enabled)
+        secureStorage?.saveBooleanPreference(KEY_DRIVE_EMOTION_BOOST, enabled)
+    }
+
+    fun setDriveDriverCameraEnabled(enabled: Boolean) {
+        _uiState.value = _uiState.value.copy(driveDriverCameraEnabled = enabled)
+        secureStorage?.saveBooleanPreference(KEY_DRIVE_DRIVER_CAMERA, enabled)
+        if (enabled && _uiState.value.driving) {
+            // Prefer driver-facing preview while the drive card is up.
+            visionManager?.setUseFrontCamera(true)
+            ensureFaceTrackingOn(followOnly = true)
+        }
+    }
+
+    fun setObdEnabled(enabled: Boolean) {
+        _uiState.value = _uiState.value.copy(obdEnabled = enabled)
+        secureStorage?.saveBooleanPreference(KEY_OBD_ENABLED, enabled)
+        if (!enabled) {
+            obdManager?.disconnect()
+        } else if (_uiState.value.obdAdapterAddress.isNotBlank()) {
+            viewModelScope.launch { obdManager?.connect(_uiState.value.obdAdapterAddress) }
+        }
+    }
+
+    fun setObdAdapterAddress(address: String) {
+        val clean = address.trim()
+        _uiState.value = _uiState.value.copy(obdAdapterAddress = clean)
+        secureStorage?.savePreference(KEY_OBD_ADAPTER, clean)
+    }
+
+    fun setCarDashcamRtspUrl(url: String) {
+        val clean = url.trim()
+        _uiState.value = _uiState.value.copy(
+            carDashcamRtspUrl = clean,
+            carCameraSources = CarCameraSources.defaultSources(rtspUrl = clean),
+        )
+        secureStorage?.savePreference(KEY_CAR_RTSP, clean)
+    }
+
+    fun setCarCameraActive(id: String) {
+        val clean = id.trim().ifBlank { "front_driver" }
+        _uiState.value = _uiState.value.copy(carCameraActiveId = clean)
+        secureStorage?.savePreference(KEY_CAR_CAMERA_ACTIVE, clean)
+        when (clean) {
+            "front_driver" -> {
+                visionManager?.setUseFrontCamera(true)
+                if (_uiState.value.driveDriverCameraEnabled) ensureFaceTrackingOn(followOnly = true)
+            }
+            "rear_phone" -> {
+                visionManager?.setUseFrontCamera(false)
+                if (_uiState.value.driveDriverCameraEnabled) ensureFaceTrackingOn(followOnly = true)
+            }
+            else -> Unit // RTSP/USB listed for AI/tools; in-app preview uses phone cameras
+        }
+    }
+
+    private fun refreshVehicleIdentity() {
+        val ctx = secureStorage?.context ?: return
+        val addr = secureStorage?.getPreference(KEY_CAR_DEVICE).orEmpty()
+        var name = ""
+        var connected = false
+        try {
+            val mgr = ctx.getSystemService(android.content.Context.BLUETOOTH_SERVICE)
+                as? android.bluetooth.BluetoothManager
+            val adapter = mgr?.adapter
+            if (adapter != null && android.content.pm.PackageManager.PERMISSION_GRANTED ==
+                androidx.core.content.ContextCompat.checkSelfPermission(
+                    ctx, android.Manifest.permission.BLUETOOTH_CONNECT,
+                )
+            ) {
+                @Suppress("MissingPermission")
+                val devices = mgr.getConnectedDevices(android.bluetooth.BluetoothProfile.HEADSET)
+                val match = devices.firstOrNull {
+                    addr.isBlank() || it.address.equals(addr, ignoreCase = true)
+                } ?: devices.firstOrNull()
+                if (match != null) {
+                    connected = true
+                    name = match.name.orEmpty()
+                }
+            }
+        } catch (_: SecurityException) {
+        } catch (_: Exception) {
+        }
+        val hasAa = try {
+            ctx.packageManager.hasSystemFeature("android.software.car.templates_host") ||
+                ctx.packageManager.hasSystemFeature("android.software.automotive")
+        } catch (_: Exception) { false }
+        val identity = VehicleAwareness.fromBluetooth(
+            deviceName = name.ifBlank { null },
+            address = addr.ifBlank { null },
+            connected = connected,
+            hasAndroidAutoFeature = hasAa,
+        )
+        _uiState.value = _uiState.value.copy(vehicleIdentity = identity)
+    }
+
     // ── Car assistant ────────────────────────────────────────────────────────
 
     /** Master switch: starts/stops the driving detector (sensors + GPS). */
@@ -11080,11 +11329,17 @@ class CompanionViewModel(
         val active = s.isDriving && s.carModeEnabled
         if (!active) driveCardSuppressed = false
         val now = if (active) elapsedRealtimeMs() else 0L
-        val incoming = if (active) driveReactionFor(s.speedMph, s.lateralG, s.longitudinalG) else DriveReaction.NONE
+        val incoming = if (active) DriveEmotionBoost.driveReaction(
+            s.speedMph, s.lateralG, s.longitudinalG,
+            boosted = _uiState.value.driveEmotionBoost,
+        ) else DriveReaction.NONE
         val (reaction, startedAt) = if (active) nextDriveReaction(
             _uiState.value.driveReaction, driveReactionStartedAtMs, incoming, now,
         ) else DriveReaction.NONE to 0L
         driveReactionStartedAtMs = startedAt
+        if (active) refreshVehicleIdentity()
+        // Pause idle morph showcase while driving — keep current overlay but stop cycling.
+        if (active) idleFormCycler?.stop() else startIdleFormCyclerIfNeeded()
         _uiState.value = _uiState.value.copy(
             driving = active, driveCardVisible = active && !driveCardSuppressed,
             driveSpeedMph = s.speedMph, driveGForce = s.gForce,
@@ -12385,6 +12640,15 @@ SAFE if the scene looks like a normal road, car interior, sidewalk, or room, or 
         private const val KEY_MEM0_USER_ID = "mem0_user_id"
         private const val KEY_MEM0_SYNC_WATERMARK = "mem0_sync_watermark"
         private const val KEY_CAR_MODE = "car_mode"
+        private const val KEY_IDLE_MORPH = "idle_morph_enabled"
+        private const val KEY_IDLE_MORPH_INTERVAL = "idle_morph_interval_sec"
+        private const val KEY_IDLE_MORPH_GENERATED = "idle_morph_include_generated"
+        private const val KEY_DRIVE_EMOTION_BOOST = "drive_emotion_boost"
+        private const val KEY_DRIVE_DRIVER_CAMERA = "drive_driver_camera"
+        private const val KEY_OBD_ENABLED = "obd2_enabled"
+        private const val KEY_OBD_ADAPTER = "obd2_adapter_address"
+        private const val KEY_CAR_RTSP = "car_dashcam_rtsp_url"
+        private const val KEY_CAR_CAMERA_ACTIVE = "car_camera_active_id"
         private const val KEY_AVATAR_STYLE = "avatar_style"
         private const val KEY_AVATAR_EYE_COLOR = "avatar_eye_color"
         private const val KEY_AVATAR_GLOW_COLOR = "avatar_glow_color"
