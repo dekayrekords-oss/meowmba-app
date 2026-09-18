@@ -4,7 +4,38 @@
 > The "Recent builds" section is regenerated automatically by scripts/autobuild.sh
 > after every commit; everything else is maintained by hand at each phase.
 
-## Current status — 2026-09-17 (feat/lumen-drive-carplay-obd2 · Preview vc128)
+## Current status — 2026-09-17 (fix/setup-user-manual-link · Preview vc130)
+
+**Active branch:** `fix/setup-user-manual-link` (from `fix/setup-finish-openrouter-thermal` @ `27ed476`)  
+**Packages:** Preview `com.example.meowmba` · Play `defaultConfig` versionCode **85** unchanged  
+**Flags:** `lumen_reflex_v2` / `agentic_runtime_v1` default **OFF**  
+**Build:** debug Preview vc130
+
+### This slice
+- **User Manual on setup Hi:** first setup screen has a **User Manual** button that copies
+  `assets/docs/meowmba-user-manual.pdf` to cache and opens it via FileProvider / `ArtifactViewer`.
+- **Manual is build-stamped:** source of truth is `docs/USER_MANUAL.md`. Every Preview ship
+  **must** run `scripts/update-user-manual.sh` (stamps versionName / versionCode / git SHA /
+  date, regenerates the asset PDF, copies to `/home/prog/apk-serve/meowmba-user-manual.pdf`
+  when that path exists). Sidecar: `meowmba-user-manual-build.txt`.
+
+### Ship checklist (Preview)
+1. Edit `docs/USER_MANUAL.md` if content changed.
+2. Bump debug `onVariants` versionCode.
+3. `scripts/update-user-manual.sh`
+4. Assemble + serve prog-signed `preview.apk` and Claude-signed `preview-alt.apk`.
+5. Update `get-preview.html` / `get-preview-alt.html` SIZE/SHA; allowlist new APK names in `range_server.py`.
+
+### How Wyatt should talk
+1. Install Preview vc130 (prog key) or Fold alt (Claude key) without uninstall when signer matches.
+2. First launch / Start setup → **Hi.** → tap **User Manual** to open the stamped PDF.
+3. Web copy: `http://100.77.97.236:8765/meowmba-user-manual.pdf`
+
+### Parent / related
+- Base tip setup finish / OpenRouter / idle thermal vc129 @ `27ed476`.
+
+
+## Previous status — 2026-09-17 (feat/lumen-drive-carplay-obd2 · Preview vc128)
 
 **Active branch:** `feat/lumen-drive-carplay-obd2` (from `feat/meta-glasses-meow-bridge` @ `8ac4b9d`)  
 **Packages:** Preview `com.example.meowmba` · Play `defaultConfig` versionCode **85** unchanged  

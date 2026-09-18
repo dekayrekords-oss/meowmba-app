@@ -26,6 +26,7 @@ Branch: `feat/meta-glasses-meow-bridge` (from `feat/prop-placement-vending-clock
 - [x] Tools: `ssh.meow`, `opencode.run`, `server.shell` (reuse SshHostRegistry + AgenticSshPolicy / confirmation).
 - [x] Settings UI on LLM Meta glasses card: connect status, bridge toggle, default meow SSH host.
 - [x] Preview debug `versionCode` **126**.
+- [x] Preview debug `versionCode` **130** — User Manual on setup Hi; `docs/USER_MANUAL.md` + `scripts/update-user-manual.sh` refresh every Preview ship.
 - [ ] Fold E2E with physical Ray-Bans + meow SSH (device-dependent).
 - [ ] MWDAT-enabled APK (needs GitHub `read:packages` PAT + Wearables registration) — camera Setup still gated.
 

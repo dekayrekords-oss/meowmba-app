@@ -5,6 +5,9 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import java.io.File
+import com.example.meowmba.core.media.ArtifactViewer
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.border
 import androidx.compose.ui.draw.clip
@@ -193,6 +196,8 @@ fun SetupWizardRoute(
                         body = "This is your helper. It lives on this phone.",
                         primary = "Let’s go",
                         onPrimary = { go(FirstRunPage.GetTermux) },
+                        secondary = "User Manual",
+                        onSecondary = { openBundledUserManual(context) },
                     )
                     FirstRunPage.GetTermux -> GetTermuxPage(
                         termuxOk = termuxOk,
@@ -1029,6 +1034,26 @@ private fun KidPrimaryButton(label: String, onClick: () -> Unit) {
             .heightIn(min = 56.dp),
     ) {
         Text(label, style = MaterialTheme.typography.titleLarge)
+    }
+}
+
+
+/** Copy the stamped User Manual asset to cache and open with an external PDF viewer. */
+private fun openBundledUserManual(context: Context) {
+    val result = runCatching {
+        val assetPath = "docs/meowmba-user-manual.pdf"
+        val out = File(context.cacheDir, "meowmba-user-manual.pdf")
+        context.assets.open(assetPath).use { input ->
+            out.outputStream().use { output -> input.copyTo(output) }
+        }
+        ArtifactViewer.open(context, out).getOrThrow()
+    }
+    result.onFailure { err ->
+        Toast.makeText(
+            context,
+            err.message ?: "Could not open the User Manual.",
+            Toast.LENGTH_LONG,
+        ).show()
     }
 }
 
