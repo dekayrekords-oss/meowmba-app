@@ -106,3 +106,7 @@ reflectively loaded bridge; no blanket SDK keep/dontwarn workaround is added.
 
 These references were checked on 2026-09-05. Device and production integration
 are not certified by a tokenless unit-test run.
+
+## Meow command bridge
+
+Voice / SSH / OpenCode integration (Hey Meta limits, tools, Settings): see [META_GLASSES_MEOW_BRIDGE.md](META_GLASSES_MEOW_BRIDGE.md).
