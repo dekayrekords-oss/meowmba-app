@@ -274,7 +274,10 @@ fun AvatarRenderer(
     val lumenPainter = remember { LumenPainter() }
     val generatedPainter = remember { GeneratedAvatarPainter() }
     val generatedScenePainter = remember { InventedScenePainter() }
-    val generatedForm = state.generatedAvatarForm.takeIf { state.avatarStyle == AvatarStyle.LUMEN }
+    val idleGenerated = state.idleMorphGeneratedId?.let { id ->
+                state.savedGeneratedForms.firstOrNull { it.id == id }
+            }
+            val generatedForm = (idleGenerated ?: state.generatedAvatarForm).takeIf { state.avatarStyle == AvatarStyle.LUMEN }
     val touchGeneratedForm by rememberUpdatedState(generatedForm)
     val generatedPlacement = remember { arrayOfNulls<GeneratedAvatarPlacement>(1) }
     val fullFlyPainter = remember { FullFlyPainter() }
@@ -657,9 +660,17 @@ fun AvatarRenderer(
     fun currentDriveFrame(): DriveVisualFrame {
         val relativeLean = com.example.meowmba.core.sensor.MotionMath.displayRelativeLean(
             motionScreenLean?.value ?: 0f, displayRotation)
-        return driveRig.step(clockSec, android.os.SystemClock.elapsedRealtime(),
-            motionObservedAtMs?.value ?: 0L, state.driving, motionLean, motionLurch,
+        val boost = state.driving && state.driveEmotionBoost
+        val leanIn = DriveEmotionBoost.amplifyImu(motionLean, boost)
+        val lurchIn = DriveEmotionBoost.amplifyImu(motionLurch, boost)
+        val frame = driveRig.step(clockSec, android.os.SystemClock.elapsedRealtime(),
+            motionObservedAtMs?.value ?: 0L, state.driving, leanIn, lurchIn,
             (-relativeLean * 0.35f).coerceIn(-14f, 14f))
+        if (!boost) return frame
+        val emotionAdd = DriveEmotionBoost.emotionBraceAdd(
+            ConversationAffect.valence(state.emotion), driving = true)
+        val brace = DriveEmotionBoost.combineBrace(frame.brace, emotionAdd, state.obdExcitement)
+        return frame.copy(brace = brace)
     }
 
     // ── Petting: stroking the cat makes it purr ────────────────────────────
@@ -987,7 +998,8 @@ fun AvatarRenderer(
                 cameraEnabled = state.isCameraEnabled || touchGaze != null || neuralLook != null,
                 emotion = state.emotion, interaction = state.interactionState,
                 animal = if (generatedForm != null) AvatarAnimal.NONE else
-                    state.performanceAnimal ?: if (isCat) AvatarAnimal.CAT else state.avatarAnimal,
+                    state.performanceAnimal ?: state.idleMorphAnimal
+                    ?: if (isCat) AvatarAnimal.CAT else state.avatarAnimal,
                 openness = effectivePose.eyeOpen, pupil = if (playingClip) effectivePose.pupilSize else .5f,
                 tilt = if (playingClip) effectivePose.headTiltDeg else 0f,
                 bounce = if (playingClip) effectivePose.bodyBounce else 0f,

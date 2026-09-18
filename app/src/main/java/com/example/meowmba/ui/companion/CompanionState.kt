@@ -276,6 +276,34 @@ data class CompanionState(
     val crashAlert: String? = null,
     /** Emergency-contact phone number for the car.help tool (Settings). */
     val emergencyContact: String = "",
+    /** Idle morph showcase: rotate through all Lumen forms while quiet. */
+    val idleMorphEnabled: Boolean = true,
+    /** Seconds between idle form morphs (clamped in cycler). */
+    val idleMorphIntervalSec: Int = 55,
+    /** Include saved generated avatar forms in the idle morph pool. */
+    val idleMorphIncludeGenerated: Boolean = true,
+    /** Non-persisted overlay animal from [IdleFormCycler]; null = use preferred form. */
+    val idleMorphAnimal: AvatarAnimal? = null,
+    /** Non-persisted generated form id overlay from idle morph. */
+    val idleMorphGeneratedId: String? = null,
+    /** Stronger emotion + IMU reactivity while driving. */
+    val driveEmotionBoost: Boolean = true,
+    /** Show driver-facing camera preview on the drive card when CAMERA permitted. */
+    val driveDriverCameraEnabled: Boolean = true,
+    /** Vehicle Bluetooth / projection awareness. */
+    val vehicleIdentity: com.example.meowmba.core.car.VehicleIdentity =
+        com.example.meowmba.core.car.VehicleIdentity(),
+    /** Live OBD-II snapshot (NaN fields when disconnected). */
+    val obdReading: com.example.meowmba.core.car.obd2.Obd2Reading =
+        com.example.meowmba.core.car.obd2.Obd2Reading(),
+    val obdAlerts: List<com.example.meowmba.core.car.obd2.Obd2Alert> = emptyList(),
+    val obdEnabled: Boolean = false,
+    val obdAdapterAddress: String = "",
+    /** Soft 0..1 excitement from OBD RPM for Lumen brace. */
+    val obdExcitement: Float = 0f,
+    val carCameraSources: List<com.example.meowmba.core.car.camera.CarCameraSource> = emptyList(),
+    val carCameraActiveId: String = "front_driver",
+    val carDashcamRtspUrl: String = "",
     /**
      * Weather to show as a card, or null for none.
      *

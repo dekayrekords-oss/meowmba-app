@@ -44,6 +44,10 @@ fun DriveCard(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     roadStatus: String? = null,
+    driverCamera: (@Composable () -> Unit)? = null,
+    obdLine: String? = null,
+    vehicleLine: String? = null,
+    cameraLabels: List<String> = emptyList(),
 ) {
     Column(
         modifier = modifier
@@ -90,6 +94,28 @@ fun DriveCard(
         }
 
         roadStatus?.let { Text(it, color = DrivePalette.onSurface, style = shadowed(12.sp)) }
+        vehicleLine?.takeIf { it.isNotBlank() }?.let {
+            Text(it, color = DrivePalette.onSurface.copy(alpha = 0.85f), style = shadowed(11.sp))
+        }
+        obdLine?.takeIf { it.isNotBlank() }?.let {
+            Text(it, color = DrivePalette.onSurface, style = shadowed(12.sp))
+        }
+        if (cameraLabels.isNotEmpty()) {
+            Text(
+                "Cameras: " + cameraLabels.joinToString(" · "),
+                color = DrivePalette.onSurface.copy(alpha = 0.8f),
+                style = shadowed(10.sp),
+            )
+        }
+        driverCamera?.let { cam ->
+            Spacer(Modifier.height(10.dp))
+            androidx.compose.foundation.layout.Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(110.dp)
+                    .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(16.dp))
+            ) { cam() }
+        }
         Spacer(Modifier.height(14.dp))
 
         Row(

@@ -4,7 +4,29 @@
 > The "Recent builds" section is regenerated automatically by scripts/autobuild.sh
 > after every commit; everything else is maintained by hand at each phase.
 
-## Current status — 2026-09-17 (feat/meta-glasses-meow-bridge · Preview vc127 · MWDAT-enabled)
+## Current status — 2026-09-17 (feat/lumen-drive-carplay-obd2 · Preview vc128)
+
+**Active branch:** `feat/lumen-drive-carplay-obd2` (from `feat/meta-glasses-meow-bridge` @ `8ac4b9d`)  
+**Packages:** Preview `com.example.meowmba` · Play `defaultConfig` versionCode **85** unchanged  
+**Flags:** `lumen_reflex_v2` / `agentic_runtime_v1` default **OFF**  
+**Build:** debug Preview vc128; prefer MWDAT-enabled when `mwdat.properties` available
+
+### This slice
+- Idle morph through **all** Lumen forms (+ optional invented forms); Settings interval
+- Drive emotion boost + driver camera on drive HUD; OBD-II ELM327 Bluetooth; vehicle awareness
+- Honest CarPlay gap documented in `docs/DRIVE_CARPLAY_OBD2.md`
+- Tools: `car.vehicle`, `car.obd`, `car.obd_connect`, `car.cameras` (+ existing car/phone media)
+
+### How Wyatt should talk
+1. Install Preview vc128; Settings → Driving → enable idle morph / drive mode / OBD as needed.
+2. While idle, Lumen should cycle characters; while driving, expect stronger face reactions + optional driver PiP.
+3. Say “connect OBD”, “engine RPM”, “what car is connected”, “pause music”, “call Mom” (dialer).
+4. Do **not** expect full Apple CarPlay radio/template ownership from this Android app.
+
+### Parent / related
+- Base tip Meta glasses Meow bridge vc127 @ `8ac4b9d`.
+
+## Previous status — 2026-09-17 (feat/meta-glasses-meow-bridge · Preview vc127 · MWDAT-enabled)
 
 **Active branch:** `feat/meta-glasses-meow-bridge` @ tip (base `7fab957`)  
 **Packages:** Preview `com.example.meowmba` · Play `defaultConfig` versionCode **85** unchanged  

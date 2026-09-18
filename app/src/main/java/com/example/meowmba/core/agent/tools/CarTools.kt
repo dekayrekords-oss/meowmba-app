@@ -271,3 +271,139 @@ class CarHelpTool(
         }
     }
 }
+
+/** `car.vehicle` — Bluetooth / projection awareness (honest CarPlay limits). */
+class CarVehicleTool(
+    private val identity: () -> com.example.meowmba.core.car.VehicleIdentity,
+) : Tool {
+    override val definition = ToolDefinition(
+        id = "car.vehicle",
+        displayName = "Vehicle identity",
+        description = "What Meow knows about the connected car: Bluetooth name/address, " +
+            "Android Auto hint, and whether CarPlay remote control is available " +
+            "(it is not for third-party Android apps). Use for \"what car is connected\", " +
+            "\"are we on CarPlay\", \"car Bluetooth\".",
+        riskLevel = RiskLevel.SAFE,
+        environments = setOf(ToolEnvironment.PHONE),
+        confirmationPolicy = ConfirmationPolicy.NONE,
+        timeoutMs = 5_000,
+    )
+
+    override suspend fun execute(args: Map<String, String>): ToolResult {
+        val id = identity()
+        val body = com.example.meowmba.core.car.VehicleAwareness.summary(id) +
+            "\n" + id.notes
+        return ToolResult.Success(body)
+    }
+}
+
+/** `car.obd` — live OBD-II snapshot from ELM327 when connected. */
+class CarObdTool(
+    private val reading: () -> com.example.meowmba.core.car.obd2.Obd2Reading,
+    private val alerts: () -> List<com.example.meowmba.core.car.obd2.Obd2Alert>,
+) : Tool {
+    override val definition = ToolDefinition(
+        id = "car.obd",
+        displayName = "OBD-II diagnostics",
+        description = "Read live OBD-II values from a paired ELM327 adapter: RPM, speed, " +
+            "coolant, battery voltage, MIL, fuel level when available. Also reports " +
+            "threshold alerts. Use for \"engine RPM\", \"coolant temp\", \"check engine\", " +
+            "\"battery voltage\", \"OBD\".",
+        riskLevel = RiskLevel.SAFE,
+        environments = setOf(ToolEnvironment.PHONE),
+        confirmationPolicy = ConfirmationPolicy.NONE,
+        timeoutMs = 8_000,
+    )
+
+    override suspend fun execute(args: Map<String, String>): ToolResult {
+        val r = reading()
+        if (!r.connected) {
+            return ToolResult.Failure(
+                "No OBD adapter connected. Pair an ELM327 over Bluetooth and enable " +
+                    "OBD-II in Settings → Driving, or say \"connect OBD\".",
+            )
+        }
+        val body = buildString {
+            append("OBD connected")
+            if (r.adapterAddress.isNotBlank()) append(" (${r.adapterAddress})")
+            append(". ")
+            if (r.hasRpm) append("RPM %.0f. ".format(Locale.US, r.rpm))
+            if (r.hasSpeed) append("Speed %.0f mph. ".format(Locale.US, r.speedMph))
+            if (r.hasCoolant) append("Coolant %.0f°C. ".format(Locale.US, r.coolantC))
+            if (r.hasBattery) append("Battery %.1f V. ".format(Locale.US, r.batteryV))
+            if (r.hasFuel) append("Fuel %.0f%%. ".format(Locale.US, r.fuelPercent))
+            if (r.milOn) append("MIL / check-engine is ON. ")
+            val a = alerts()
+            if (a.isNotEmpty()) append("Alerts: " + a.joinToString("; ") { it.message } + ".")
+            if (r.lastError.isNotBlank()) append(" Note: ${r.lastError}")
+        }
+        return ToolResult.Success(body.trim())
+    }
+}
+
+/** `car.obd_connect` — connect to a saved or named ELM327 Bluetooth address. */
+class CarObdConnectTool(
+    private val connect: suspend (String) -> Result<Unit>,
+    private val lastAddress: () -> String,
+) : Tool {
+    override val definition = ToolDefinition(
+        id = "car.obd_connect",
+        displayName = "Connect OBD-II adapter",
+        description = "Connect to an ELM327 OBD-II adapter over classic Bluetooth SPP. " +
+            "Args: address = MAC (optional if previously saved). Use for \"connect OBD\", " +
+            "\"pair ELM327\".",
+        inputSchema = mapOf("address" to "string"),
+        riskLevel = RiskLevel.MODERATE,
+        environments = setOf(ToolEnvironment.PHONE),
+        confirmationPolicy = ConfirmationPolicy.NONE,
+        timeoutMs = 20_000,
+    )
+
+    override suspend fun execute(args: Map<String, String>): ToolResult {
+        val address = args["address"]?.trim().orEmpty().ifBlank { lastAddress() }
+        if (address.isBlank()) {
+            return ToolResult.Failure(
+                "Tell me the ELM327 Bluetooth MAC address, or save one in Settings → Driving.",
+            )
+        }
+        return connect(address).fold(
+            onSuccess = { ToolResult.Success("Connected to OBD adapter $address.") },
+            onFailure = { ToolResult.Failure("OBD connect failed: ${it.message}") },
+        )
+    }
+}
+
+/** `car.cameras` — list driver / dashcam sources and optional switch. */
+class CarCamerasTool(
+    private val sources: () -> List<com.example.meowmba.core.car.camera.CarCameraSource>,
+    private val activeId: () -> String?,
+    private val onSelect: (String) -> Unit,
+) : Tool {
+    override val definition = ToolDefinition(
+        id = "car.cameras",
+        displayName = "Car cameras",
+        description = "List driver-facing and car-connected cameras (front, rear, USB UVC, " +
+            "IP RTSP dashcam). Pass id= to switch the active preview. Use for " +
+            "\"show driver camera\", \"switch to dashcam\", \"list car cameras\".",
+        inputSchema = mapOf("id" to "string"),
+        riskLevel = RiskLevel.SAFE,
+        environments = setOf(ToolEnvironment.PHONE),
+        confirmationPolicy = ConfirmationPolicy.NONE,
+        timeoutMs = 5_000,
+    )
+
+    override suspend fun execute(args: Map<String, String>): ToolResult {
+        val list = sources()
+        val want = args["id"]?.trim().orEmpty()
+        if (want.isNotBlank()) {
+            val match = list.firstOrNull { it.id.equals(want, ignoreCase = true) ||
+                it.label.contains(want, ignoreCase = true) }
+                ?: return ToolResult.Failure("No camera matching \"$want\".")
+            onSelect(match.id)
+            return ToolResult.Success("Active car camera: ${match.label}.")
+        }
+        return ToolResult.Success(
+            com.example.meowmba.core.car.camera.CarCameraSources.describe(list, activeId()),
+        )
+    }
+}

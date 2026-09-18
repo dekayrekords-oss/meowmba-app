@@ -661,6 +661,28 @@ fun CompanionScreen(
                     trip = uiState.driveTrip,
                     onDismiss = { viewModel.dismissDriveCard() },
                     roadStatus = if (uiState.roadAlertsEnabled) uiState.roadAlertStatus else null,
+                    vehicleLine = com.example.meowmba.core.car.VehicleAwareness.summary(uiState.vehicleIdentity),
+                    obdLine = uiState.obdReading.takeIf { it.connected }?.let { r ->
+                        buildString {
+                            if (r.hasRpm) append("RPM %.0f · ".format(java.util.Locale.US, r.rpm))
+                            if (r.hasCoolant) append("%.0f°C · ".format(java.util.Locale.US, r.coolantC))
+                            if (r.hasBattery) append("%.1fV".format(java.util.Locale.US, r.batteryV))
+                            if (uiState.obdAlerts.isNotEmpty()) append(" · ⚠ " + uiState.obdAlerts.first().message)
+                        }.trim().trimEnd('·').trim()
+                    },
+                    cameraLabels = uiState.carCameraSources.map { it.label },
+                    driverCamera = if (
+                        uiState.driveDriverCameraEnabled &&
+                        uiState.isCameraEnabled &&
+                        uiState.carCameraActiveId in setOf("front_driver", "rear_phone")
+                    ) {
+                        {
+                            Viewfinder(
+                                visionManager = viewModel.getVisionManager(),
+                                modifier = Modifier.fillMaxWidth().height(110.dp),
+                            )
+                        }
+                    } else null,
                     modifier = Modifier.padding(top = if (uiState.weather != null) 200.dp else 0.dp),
                 )
             }
@@ -873,10 +895,26 @@ fun CompanionScreen(
                 robotScanning = uiState.robotScanning,
                 robotScanResults = uiState.robotScanResults,
                 carModeEnabled = uiState.carModeEnabled,
+                idleMorphEnabled = uiState.idleMorphEnabled,
+                idleMorphIntervalSec = uiState.idleMorphIntervalSec,
+                idleMorphIncludeGenerated = uiState.idleMorphIncludeGenerated,
+                driveEmotionBoost = uiState.driveEmotionBoost,
+                driveDriverCameraEnabled = uiState.driveDriverCameraEnabled,
+                obdEnabled = uiState.obdEnabled,
+                obdAdapterAddress = uiState.obdAdapterAddress,
+                carDashcamRtspUrl = uiState.carDashcamRtspUrl,
                 avatarStyle = uiState.avatarStyle,
                 onAvatarStyleChange = { viewModel.setAvatarStyle(it) },
                 emergencyContact = uiState.emergencyContact,
                 onCarModeChange = { viewModel.setCarModeEnabled(it) },
+                onIdleMorphChange = { viewModel.setIdleMorphEnabled(it) },
+                onIdleMorphIntervalChange = { viewModel.setIdleMorphIntervalSec(it) },
+                onIdleMorphGeneratedChange = { viewModel.setIdleMorphIncludeGenerated(it) },
+                onDriveEmotionBoostChange = { viewModel.setDriveEmotionBoost(it) },
+                onDriveDriverCameraChange = { viewModel.setDriveDriverCameraEnabled(it) },
+                onObdEnabledChange = { viewModel.setObdEnabled(it) },
+                onObdAdapterChange = { viewModel.setObdAdapterAddress(it) },
+                onCarDashcamRtspChange = { viewModel.setCarDashcamRtspUrl(it) },
                 onEmergencyContactChange = { viewModel.setEmergencyContact(it) },
                 onRobotScan = { viewModel.scanForRobotBases() },
                 onRobotBodyChange = { viewModel.setRobotBody(it) },
