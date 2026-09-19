@@ -18,6 +18,7 @@ import java.util.concurrent.atomic.AtomicInteger
 object PhoneComputerSetup {
     const val PERMISSION = "com.termux.permission.RUN_COMMAND"
     class PermissionRequired : IllegalStateException("Allow Meow to run commands in Termux, then retry setup.")
+    class GuidedSetupRequired : IllegalStateException("This Termux edition needs guided setup. Use Copy setup & open Termux; there is no command permission to grant.")
     private val lock = Mutex()
     private val ids = AtomicInteger(1000)
     internal val results = ConcurrentHashMap<Int, CompletableDeferred<Int>>()
@@ -28,6 +29,41 @@ object PhoneComputerSetup {
             source.replace("4096", "4097").replace("setup-server.log", "setup-server-4097.log") else source
     }
 
+    /** Fixed installer only; clipboard contains no password, token or user-supplied shell text.
+     * /dev/tty keeps the password out of shell history and hides it while typing. */
+    internal fun guidedScript(source: String, address: String): String {
+        val script = scriptForAddress(source, address)
+        val read = "IFS= read -r meow_password"
+        check(script.lines().count { it == read } == 1)
+        val prompt = """
+            printf '%s\n' 'Meow guided setup: preserves existing Ubuntu and other servers.'
+            trap 'meow_exit=${'$'}?; if [ "${'$'}meow_exit" -eq 22 ]; then printf "%s\n" "That local port is already in use. No server was stopped. Return to Meow to verify or choose a separate connection."; elif [ "${'$'}meow_exit" -ne 0 ]; then printf "Setup stopped (code %s). Existing Ubuntu files were kept.\n" "${'$'}meow_exit"; fi' EXIT
+            if [ -r /etc/os-release ] && grep -q '^ID=ubuntu' /etc/os-release; then
+                printf '%s\n' 'You are already inside Ubuntu. Type exit to return to Termux, then paste setup again.'
+                exit 23
+            fi
+            IFS= read -r -s -p 'Enter the same new Meow connection password (typing is hidden): ' meow_password </dev/tty
+            printf '\n' >/dev/tty
+            [ "${'$'}{#meow_password}" -ge 12 ] && [ "${'$'}{#meow_password}" -le 256 ] || { printf '%s\n' 'Use a password of 12–256 characters.'; exit 20; }
+            IFS= read -r -s -p 'Repeat password: ' meow_confirm </dev/tty
+            printf '\n' >/dev/tty
+            [ "${'$'}meow_password" = "${'$'}meow_confirm" ] || { printf '%s\n' 'Passwords did not match. Paste setup again to retry.'; exit 20; }
+            unset meow_confirm
+        """.trimIndent()
+        return script.replace(read, prompt) + "\nunset meow_password\nprintf '%s\\n' 'Server started. Return to Meow and tap Verify connection; only that check confirms readiness.'\n"
+    }
+
+    fun guidedCommand(context: Context, address: String): String {
+        val source = context.assets.open("computer/setup-phone.sh").bufferedReader().use { it.readText() }
+        return guidedCommandFromSource(source, address)
+    }
+
+    internal fun guidedCommandFromSource(source: String, address: String): String {
+        val encoded = java.util.Base64.getEncoder().encodeToString(guidedScript(source, address).toByteArray(Charsets.UTF_8))
+        // End the outer command before interactive read, so pasting never stores the password.
+        return "bash -c \"${'$'}(printf '%s' '$encoded' | base64 -d)\""
+    }
+
     suspend fun start(context: Context, password: String, address: String = OpenCodeLocalConnection.ADDRESS): String = lock.withLock {
         require(address == OpenCodeLocalConnection.ORIGINAL_ADDRESS || address == OpenCodeLocalConnection.RECOVERY_ADDRESS)
         require(password.length >= 12 && password.length <= 256 && '\n' !in password && '\r' !in password && '\u0000' !in password) {
@@ -36,6 +72,11 @@ object PhoneComputerSetup {
         // Reuse a healthy server; authentication failures must not trigger a replacement.
         try { return@withLock OpenCodeLocalConnection.verify(password, address) }
         catch (_: java.net.ConnectException) { /* not started */ }
+        when (TermuxSetupSupport.detect(context)) {
+            TermuxSetupSupport.MISSING -> error("Install the recommended Termux edition first, then reopen setup.")
+            TermuxSetupSupport.GUIDED -> throw GuidedSetupRequired()
+            TermuxSetupSupport.AUTOMATIC -> Unit
+        }
         if (context.checkSelfPermission(PERMISSION) != PackageManager.PERMISSION_GRANTED) throw PermissionRequired()
         val script = withContext(Dispatchers.IO) {
             context.assets.open("computer/setup-phone.sh").bufferedReader().use { scriptForAddress(it.readText(), address) }

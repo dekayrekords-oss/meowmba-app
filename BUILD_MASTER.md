@@ -23,6 +23,23 @@ Port feature commits; do not overwrite the baseline with an experimental branch 
 
 ## Coordination
 
+### September 19 Termux edition repair — preview144 in validation
+
+- Sole integrator. User authorized adapting the installed edition, correcting onboarding and
+  installing/testing after checks. No Termux uninstall, replacement, data reset or unknown-server stop.
+- Phone's actual Termux is googleplay.2026.06.21/code141, installed by Play. Its manifest has
+  neither RUN_COMMAND permission nor RunCommandService.143's permission prompt could never succeed.
+  Detect actual permission/service availability; a package-name check is not capability verification.
+- Automatic setup stays available for supported editions. Other installed editions get fixed,
+  user-pasted setup with hidden password entry, the same Ubuntu-preserving installer and explicit
+  return-to-Meow authenticated verification. Clipboard contains no password. Pending secret and
+  selected loopback endpoint are stored together in encrypted preferences for return/recreation.
+- Onboarding/Computer share official F-Droid (recommended)/GitHub guidance, refresh on return,
+  keep installed editions and warn against source mixing. Removed the obsolete copy-only wizard,
+  blind sandbox OpenCode auto-start and unauthenticated NetBird APK mirror from onboarding.
+- Next: full tests, package/runtime/signature checks, real phone guided-path UI and handoff.
+  Hidden password entry remains the user's action; do not claim authenticated readiness prematurely.
+
 ### September 19 Computer recovery / personal companion — preview143 installed
 
 - Sole integrator retains ownership. User approved in-place143 installation after checks,

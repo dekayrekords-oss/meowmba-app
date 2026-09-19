@@ -135,10 +135,10 @@ object LocalLinuxSupport {
                 label = "Computer",
                 bannerHint =
                     "Computer · sandbox — Termux is installed but not executable from this app (SELinux). " +
-                        "Enable allow-external-apps for RUN_COMMAND; interactive shell stays sandbox. " +
+                        "Use Computer setup for a verified Ubuntu terminal; some Termux editions need guided setup. This target stays sandbox. " +
                         COMPUTER_COPY + " $INSTALL_TERMUX_MSG",
                 installHint =
-                    "Enable Termux allow-external-apps for RUN_COMMAND. " + BOOTSTRAP_HINT +
+                    "Open Computer setup to check this edition's connection support. " + BOOTSTRAP_HINT +
                         " Or use an app SSH profile for meow.",
             )
             else -> LocalLinuxProbe(

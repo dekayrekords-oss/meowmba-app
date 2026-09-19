@@ -97,7 +97,7 @@ fun SetupWizardRoute(
     onOpenTerminal: () -> Unit = onFinished,
     onOpenConnectionsSetup: () -> Unit = onFinished,
     onOpenNeuralSetup: () -> Unit = onFinished,
-    /** Connect Computer PTY and auto-install/launch OpenCode (may peek Terminal). */
+    /** Legacy callback retained for callers; setup no longer auto-starts a sandbox shell. */
     onStartOpenCode: () -> Unit = {},
     onAvatarPicked: (AvatarStyle) -> Unit = {},
     onAnimalPicked: (AvatarAnimal) -> Unit = {},
@@ -112,9 +112,6 @@ fun SetupWizardRoute(
         runCatching { FirstRunPage.valueOf(page) }.getOrDefault(FirstRunPage.Hi)
     }
     var history by rememberSaveable { mutableStateOf(arrayListOf<String>()) }
-    var copied by rememberSaveable { mutableStateOf(false) }
-    var termuxOk by remember { mutableStateOf(termuxInstalled(context)) }
-    var openCodeStarted by rememberSaveable { mutableStateOf(false) }
     val storage = remember { SecureStorageManager(context) }
     var githubToken by remember { mutableStateOf(storage.getApiKey(GitHubProjectSetup.STORAGE_KEY).orEmpty()) }
     var githubRepoName by rememberSaveable { mutableStateOf("meowmba-projects") }
@@ -221,87 +218,29 @@ fun SetupWizardRoute(
                             go(FirstRunPage.Background)
                         },
                     )
-                    FirstRunPage.GetTermux -> GetTermuxPage(
-                        termuxOk = termuxOk,
-                        onLater = { go(FirstRunPage.Mic) },
-                        onRefresh = { termuxOk = termuxInstalled(context) },
-                        onGetFdroid = { openUrl(context, TermuxComputerLinks.TERMUX_FDROID) },
-                        onGetGithub = { openUrl(context, TermuxComputerLinks.TERMUX_GITHUB_RELEASES) },
-                        onGetNetBird = { openUrl(context, TermuxComputerLinks.TERMUX_NETBIRD) },
-                        onOpenTermux = {
-                            termuxOk = termuxInstalled(context)
-                            if (!openTermux(context)) {
-                                openAppLauncher(context)
+                    FirstRunPage.GetTermux -> {
+                        val observed by com.example.meowmba.ui.companion.rememberTermuxSetupSupport()
+                        var refreshed by remember { mutableStateOf<com.example.meowmba.core.computer.TermuxSetupSupport?>(null) }
+                        LaunchedEffect(observed) { refreshed = null }
+                        val support = refreshed ?: observed
+                        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            Text("Set up your phone Computer", style = MaterialTheme.typography.headlineMedium)
+                            com.example.meowmba.ui.companion.TermuxInstallGuidance(support) {
+                                refreshed = com.example.meowmba.core.computer.TermuxSetupSupport.detect(context)
                             }
-                        },
-                        onInstalled = {
-                            termuxOk = termuxInstalled(context)
-                            openTermux(context)
-                            go(FirstRunPage.CopyCommands)
-                        },
-                        onShowApps = { openAppLauncher(context) },
-                    )
-                    FirstRunPage.CopyCommands -> CopyCommandsPage(
-                        copied = copied,
-                        onCopy = {
-                            copyText(context, TermuxComputerLinks.BOOTSTRAP_COMMANDS)
-                            copied = true
-                        },
-                        onOpenTermux = {
-                            termuxOk = termuxInstalled(context)
-                            if (!openTermux(context)) openAppLauncher(context)
-                        },
-                        onNext = { go(FirstRunPage.IDidThat) },
-                    )
-                    FirstRunPage.IDidThat -> KidPage(
-                        title = if (termuxOk) "Termux is on this phone." else "Almost done.",
-                        body = if (termuxOk) {
-                            "Nice. We found Termux. Next we start OpenCode in Terminal."
-                        } else {
-                            "Open Termux, paste the words, then come back. Or open your apps if you still need to install it."
-                        },
-                        primary = "I did that",
-                        onPrimary = {
-                            termuxOk = termuxInstalled(context)
-                            go(FirstRunPage.OpenCode)
-                        },
-                        secondary = TermuxComputerLinks.BUTTON_OPEN_TERMUX,
-                        onSecondary = {
-                            termuxOk = termuxInstalled(context)
-                            if (!openTermux(context)) openAppLauncher(context)
-                        },
-                        tertiary = TermuxComputerLinks.BUTTON_SHOW_APPS,
-                        onTertiary = { openAppLauncher(context) },
-                    )
-                    FirstRunPage.OpenCode -> {
-                        // Auto-start once when Computer/Termux is present. Never trap without Termux.
-                        LaunchedEffect(Unit) {
-                            termuxOk = termuxInstalled(context)
-                            if (termuxOk && !openCodeStarted) {
-                                openCodeStarted = true
-                                onStartOpenCode()
-                            }
+                            Button(onClick = { go(FirstRunPage.OpenCode) }, enabled = support != com.example.meowmba.core.computer.TermuxSetupSupport.MISSING,
+                                modifier = Modifier.fillMaxWidth()) { Text("Continue with installed Termux") }
+                            TextButton(onClick = { go(FirstRunPage.Mic) }) { Text("Set up Computer later") }
                         }
-                        OpenCodePage(
-                            termuxOk = termuxOk,
-                            alreadyStarted = openCodeStarted,
-                            onStartAgain = {
-                                termuxOk = termuxInstalled(context)
-                                if (termuxOk) {
-                                    openCodeStarted = true
-                                    onStartOpenCode()
-                                } else {
-                                    openAppLauncher(context)
-                                }
-                            },
-                            onOpenTermux = {
-                                termuxOk = termuxInstalled(context)
-                                if (!openTermux(context)) openAppLauncher(context)
-                            },
-                            onShowApps = { openAppLauncher(context) },
-                            onGetNetBird = { openUrl(context, TermuxComputerLinks.TERMUX_NETBIRD) },
-                            onNext = { go(FirstRunPage.Mic) },
-                        )
+                    }
+                    // Old saved wizard positions resume into the same capability-aware connection flow.
+                    FirstRunPage.CopyCommands, FirstRunPage.IDidThat, FirstRunPage.OpenCode -> {
+                        var verified by remember { mutableStateOf(false) }
+                        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            Text("Connect Ubuntu & OpenCode", style = MaterialTheme.typography.headlineMedium)
+                            com.example.meowmba.ui.companion.OpenCodeLocalConnectionCard(onVerified = { verified = true })
+                            TextButton(onClick = { go(FirstRunPage.Mic) }) { Text(if (verified) "Continue" else "Set up Computer later") }
+                        }
                     }
                     FirstRunPage.Mic -> KidPage(
                         title = "Can we use the mic and camera?",
@@ -448,59 +387,6 @@ fun SetupWizardRoute(
     }
 }
 
-@Composable
-private fun OpenCodePage(
-    termuxOk: Boolean,
-    alreadyStarted: Boolean,
-    onStartAgain: () -> Unit,
-    onOpenTermux: () -> Unit,
-    onShowApps: () -> Unit,
-    onGetNetBird: () -> Unit,
-    onNext: () -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState()),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Text(
-            "OpenCode in Terminal",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.SemiBold,
-            textAlign = TextAlign.Center,
-        )
-        Text(
-            if (termuxOk) {
-                if (alreadyStarted) {
-                    "Terminal is installing OpenCode if needed, then starting it. You can peek, then continue."
-                } else {
-                    "We’ll open your in-app Terminal and run a short install, then start OpenCode."
-                }
-            } else {
-                "Termux isn’t ready yet. Get it first — you won’t get stuck. You can still continue for an AI key."
-            },
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-        if (termuxOk) {
-            KidPrimaryButton(
-                if (alreadyStarted) "Show Terminal again" else "Start OpenCode",
-                onStartAgain,
-            )
-        } else {
-            KidPrimaryButton(TermuxComputerLinks.BUTTON_OPEN_TERMUX, onOpenTermux)
-            OutlinedButton(
-                onClick = onGetNetBird,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
-            ) { Text(TermuxComputerLinks.BUTTON_NETBIRD, style = MaterialTheme.typography.titleMedium) }
-            TextButton(onClick = onShowApps) { Text(TermuxComputerLinks.BUTTON_SHOW_APPS) }
-        }
-        KidPrimaryButton("Continue", onNext)
-    }
-}
 
 
 @Composable
@@ -651,108 +537,7 @@ private fun BackgroundPickPage(
     }
 }
 
-@Composable
-private fun GetTermuxPage(
-    termuxOk: Boolean,
-    onLater: () -> Unit,
-    onRefresh: () -> Unit,
-    onGetFdroid: () -> Unit,
-    onGetGithub: () -> Unit,
-    onGetNetBird: () -> Unit,
-    onOpenTermux: () -> Unit,
-    onInstalled: () -> Unit,
-    onShowApps: () -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState()),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Text(
-            "Your Computer is this phone.",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.SemiBold,
-            textAlign = TextAlign.Center,
-        )
-        Text(
-            if (termuxOk) {
-                "Termux is ready. Tap Open Termux, then come back."
-            } else {
-                "First, get a free app called Termux. Use a big button — not the Play Store. After you install it, open it from here."
-            },
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-        KidPrimaryButton(TermuxComputerLinks.BUTTON_GET_TERMUX, onGetFdroid)
-        OutlinedButton(
-            onClick = onGetGithub,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
-        ) { Text(TermuxComputerLinks.BUTTON_GITHUB_DOWNLOAD, style = MaterialTheme.typography.titleMedium) }
-        OutlinedButton(
-            onClick = onGetNetBird,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
-        ) { Text(TermuxComputerLinks.BUTTON_NETBIRD, style = MaterialTheme.typography.titleMedium) }
-        KidPrimaryButton(TermuxComputerLinks.BUTTON_OPEN_TERMUX) {
-            onRefresh()
-            onOpenTermux()
-        }
-        OutlinedButton(
-            onClick = onInstalled,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
-        ) { Text(TermuxComputerLinks.BUTTON_I_INSTALLED, style = MaterialTheme.typography.titleMedium) }
-        TextButton(onClick = onLater) { Text("Set up Computer later") }
-        TextButton(onClick = onShowApps) { Text(TermuxComputerLinks.BUTTON_SHOW_APPS) }
-        TextButton(onClick = {
-            onRefresh()
-            onInstalled()
-        }) { Text("I already have it") }
-    }
-}
 
-@Composable
-private fun CopyCommandsPage(
-    copied: Boolean,
-    onCopy: () -> Unit,
-    onOpenTermux: () -> Unit,
-    onNext: () -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState()),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(20.dp),
-    ) {
-        Text(
-            "Open Termux and paste this.",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.SemiBold,
-            textAlign = TextAlign.Center,
-        )
-        Text(
-            "This makes a tiny Linux on your phone.",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-        Text(
-            TermuxComputerLinks.BOOTSTRAP_COMMANDS,
-            style = MaterialTheme.typography.bodyLarge.copy(
-                fontFamily = FontFamily.Monospace,
-                fontSize = 18.sp,
-                lineHeight = 28.sp,
-            ),
-            textAlign = TextAlign.Start,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        KidPrimaryButton(TermuxComputerLinks.BUTTON_OPEN_TERMUX, onOpenTermux)
-        KidPrimaryButton(if (copied) "Copied!" else "Copy", onCopy)
-        TextButton(onClick = onNext) { Text("Next") }
-    }
-}
 
 @Composable
 private fun KidPage(

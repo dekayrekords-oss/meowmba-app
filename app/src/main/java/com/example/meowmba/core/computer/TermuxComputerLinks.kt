@@ -4,7 +4,8 @@ package com.example.meowmba.core.computer
  * Shared public links + short copy for **Your Computer** and first-run onboarding.
  *
  * Prefer F-Droid / GitHub. Do **not** use Play Store com.termux as the primary link
- * (Play listing is abandoned / unofficial forks).
+ * for automatic RUN_COMMAND setup. Google Play uses a separate implementation;
+ * detect its capabilities and offer guided setup without replacing users' data.
  *
  * Onboarding workers should import these constants rather than duplicating URLs.
  */
@@ -27,6 +28,8 @@ object TermuxComputerLinks {
     const val BUTTON_OPEN_TERMUX = "Open Termux"
     const val BUTTON_SHOW_APPS = "Show my apps"
     const val BUTTON_I_INSTALLED = "I installed it"
+    const val INSTALL_GUIDANCE = "For automatic Meow setup, install Termux from F-Droid using Download APK. The F-Droid app is optional. Open Termux once, then return here and check installation."
+    const val EXISTING_GUIDANCE = "Keep your existing Termux and Ubuntu files. Do not uninstall or mix APK sources without a verified backup. The Google Play edition can use guided setup when command integration is unavailable."
 
     /** Paste in Termux. Keep as two lines so a child can copy once. */
     const val BOOTSTRAP_COMMANDS =

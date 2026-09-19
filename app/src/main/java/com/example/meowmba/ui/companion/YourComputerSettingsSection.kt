@@ -94,13 +94,12 @@ internal fun YourComputerSettingsSection(
             ComputerToolsPage.PHONE_INSTALL -> {
                 StepHint("Phone setup",1,3)
                 Text("Install Termux", style=MaterialTheme.typography.titleLarge)
-                Text("Termux provides the Linux environment. Return here once it is installed.")
-                Text(if(phoneReady) "Termux is available on this phone." else "Termux has not been detected yet.",
-                    color=MaterialTheme.colorScheme.onSurfaceVariant)
-                Button(onClick={openUrl(TermuxComputerLinks.TERMUX_FDROID)},modifier=Modifier.fillMaxWidth()) { Text("Get Termux") }
-                TextButton(onClick={openUrl(TermuxComputerLinks.TERMUX_GITHUB_RELEASES)}) { Text("Alternative: GitHub download") }
-                OutlinedButton(onClick=onRefreshPhone,modifier=Modifier.fillMaxWidth()) { Text("Check installation") }
-                Button(onClick={onNavigate(ComputerToolsPage.PHONE_PREPARE)},enabled=phoneReady,modifier=Modifier.fillMaxWidth()) { Text("Continue") }
+                val observed by rememberTermuxSetupSupport()
+                var refreshed by remember { mutableStateOf<com.example.meowmba.core.computer.TermuxSetupSupport?>(null) }
+                LaunchedEffect(observed) { refreshed = null }
+                val support = refreshed ?: observed
+                TermuxInstallGuidance(support) { refreshed = com.example.meowmba.core.computer.TermuxSetupSupport.detect(context); onRefreshPhone() }
+                Button(onClick={onNavigate(ComputerToolsPage.PHONE_PREPARE)},enabled=phoneReady || support != com.example.meowmba.core.computer.TermuxSetupSupport.MISSING,modifier=Modifier.fillMaxWidth()) { Text("Continue") }
             }
             ComputerToolsPage.PHONE_PREPARE -> {
                 StepHint("Phone setup",2,3)
@@ -108,7 +107,7 @@ internal fun YourComputerSettingsSection(
                 OpenCodeLocalConnectionCard()
                 OutlinedButton(onClick={openTermux()},modifier=Modifier.fillMaxWidth()) { Text("Open Termux") }
                 TextButton(onClick={advanced=!advanced}) { Text(if(advanced) "Hide connection help" else "Help connecting Termux") }
-                if(advanced) Text("If Meow cannot connect, allow Termux's RUN_COMMAND access and its external-app setting. The Terminal reports whether it reached Linux or only the phone sandbox.",style=MaterialTheme.typography.bodySmall)
+                if(advanced) Text("The setup card checks whether this edition supports command permission or needs a guided handoff. Keep existing Ubuntu files; never uninstall Termux to fix a permission message. Only a verified OpenCode connection enables the Ubuntu terminal.",style=MaterialTheme.typography.bodySmall)
                 TextButton(onClick={onNavigate(ComputerToolsPage.PHONE_OPEN)},modifier=Modifier.fillMaxWidth()) { Text("Advanced: terminal and diagnostics") }
             }
             ComputerToolsPage.PHONE_OPEN -> {

@@ -42,7 +42,18 @@ class Computer143DeviceTest {
         switches[1].assertIsOff()
         assertTrue(rule.activity.window.attributes.flags and android.view.WindowManager.LayoutParams.FLAG_SECURE != 0)
         back()
-        tap("Set up Computer"); tap("This phone"); tap("Continue")
+        tap("Set up Computer"); tap("This phone")
+        val guided = com.example.meowmba.core.computer.TermuxSetupSupport.detect(rule.activity) == com.example.meowmba.core.computer.TermuxSetupSupport.GUIDED
+        if (guided) {
+            rule.onNodeWithText("Termux detected · guided setup needed").assertExists()
+            rule.onNodeWithText("Get Termux from F-Droid (recommended)").assertDoesNotExist()
+        }
+        tap("Continue")
+        if (guided) {
+            rule.onNodeWithText("Allow Meow to connect to Termux").assertDoesNotExist()
+            rule.onNodeWithText("Copy setup & open Termux").performScrollTo().assertIsDisplayed()
+            rule.onNodeWithText("Verify connection").performScrollTo().assertIsDisplayed()
+        }
         tap("Forgot password? Create a separate Meow connection")
         rule.onNodeWithText("Create a separate private connection?").assertExists()
         rule.onNodeWithText("Choose new password").performClick()

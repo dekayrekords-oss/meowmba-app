@@ -40,7 +40,9 @@ object YourComputerViewModelHooks {
             probeKind == LocalLinuxKind.TERMUX_LINUX.name ->
                 "Termux's shell is available. Open Terminal to check your Linux workspace."
             ready ->
-                "Termux is installed. Open Terminal to check access and finish Linux setup."
+                if (runCatching { com.example.meowmba.core.computer.TermuxSetupSupport.detect(context) }.getOrNull() == com.example.meowmba.core.computer.TermuxSetupSupport.GUIDED)
+                    "Termux is installed, but this edition needs guided setup. No command permission can be granted. Open Set up Computer; keep your existing Ubuntu files."
+                else "Termux is installed. Finish Computer setup and verify the private connection before opening the Ubuntu Terminal."
             else ->
                 "Termux has not been detected. Use Set up Computer → This phone to get started."
         }

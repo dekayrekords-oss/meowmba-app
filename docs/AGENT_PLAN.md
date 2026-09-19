@@ -1,5 +1,15 @@
 # Agent execution plan — immersive companion revision
 
+## September 19: preview144 Termux edition compatibility
+
+The phone has a Play Termux build without RUN_COMMAND/service. Never tell the owner to
+grant a nonexistent permission or uninstall their Ubuntu. Root integrator owns capability
+detection, guided fixed-script handoff, encrypted pending-connection recovery and shared
+onboarding edition guidance. Official F-Droid is recommended for fresh automated setup;
+installed editions are preserved. Verify script parsing, hidden password/no-secret clipboard,
+safe occupied-port refusal, no wizard auto-shell and actual phone UI. User approved in-place
+app installation after checks; this does not authorize replacing Termux or stopping4096.
+
 ## September 19: preview143 Computer recovery and companion modes
 
 Single integrator. User approved installation after checks, keeping new monitoring off.
