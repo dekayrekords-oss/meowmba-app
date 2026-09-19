@@ -9,13 +9,17 @@ User accepts warmth during demanding requested tasks; idle heat remains a priori
 OS thermal protections and animation fidelity. Do not call ordinary active-task warmth an
 idle regression, or claim a short USB-powered observation proves a never-hot guarantee.
 
-Source through242a63d is committed and pushed to Meow's private recovery branch.146 passes
-2,644 JVM tests (five skipped) and six live phone checks but fails Android result saving:
-hard-link publication is denied on this phone.147 repairs publication with no-replacement
-same-directory moves and must pass real save/readback before success is claimed.
+Source through09db18d is committed and pushed to Meow's private recovery branch. Installed147
+passes 2,646 full-suite tests (five skipped, zero failures/errors) and seven live phone checks.
+146's Android hard-link save failure is repaired with no-replacement same-directory moves;
+actual save/readback, visible preview, Files discovery and Chrome opening now pass on147.
 Known-tool result discovery, verified local preview cards, Files navigation and measured
-header/card layout are implemented. Large transfers and unified project/session ownership
-remain separate work, not completed by this batch.
+header/card layout are implemented. Three-minute idle observation: battery 34.7→34.5°C,
+thermal status 1→0, USB powered. CPU remains 54.53% of one core; no controlled improvement
+claim. Frame-counter delta reports 4,918/7,282 janky frames: investigate pacing/render-thread
+cost without reducing visual quality or disabling thermal safety. Large transfers, unified
+project/session ownership and longer unplugged thermal validation remain open. Evidence:
+docs/RESULTS_IDLE_147_PASS_DOWN.md.
 
 Delegation is bounded: thermal worker removes unused ear/trace work and optimizes measured
 fruit-fly facet overhead; result worker extends allowlisted metadata parsing; home worker

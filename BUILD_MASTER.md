@@ -11,7 +11,7 @@ This supersedes historical build-location/version instructions in other document
 - Baseline: `5efed2f`, version 1.3.82/code 138. Historical evidence is dated September 15.
 - Verified original APK: `/Users/prog/Meowmba-Releases/idle136-20260915/meow-preview138.apk`.
 - Grok source to recover: `529cc69`, preserved as `recovery/grok-lumen` remote-tracking ref.
-- Status: preview145 (1.3.89) installed in place. Modern Ubuntu reuse repaired; authenticated Computer connection, real Ubuntu terminal round trip and no-tools agent response pass on phone. Fresh-device and long-session production acceptance remain open. Not a Play release.
+- Status: preview147 (1.3.91/source09db18d) installed in place. Seven live checks including real Computer file retrieval/local saving/context pass;2,646 full-suite tests, zero failures, five skipped. Known146 Android file-save failure repaired. Results UX, measured header layout and exact-output idle rendering optimizations included. Fresh-device and sustained thermal acceptance remain open. Not a Play release.
 
 ## Feature queue
 
@@ -22,6 +22,23 @@ Retain baseline computer setup, cancellation, habitat, onboarding, server and pe
 Port feature commits; do not overwrite the baseline with an experimental branch tree.
 
 ## Coordination
+
+### September 19 preview147 installed — bounded acceptance complete
+
+- Source09db18d installed12:57:50;2,646 full tests, five skipped, zero failures/errors;
+  seven phone checks pass46.224s including actual result save/readback.148 protected assets
+  unchanged, same certificate. APK0f595f4b5f584ae278ae962c4967f3d9e65d884016b5925739260f6f8cc7fb1f.
+- See docs/RESULTS_IDLE_147_PASS_DOWN.md for provenance,146 failure and repaired storage,
+  remaining transfer/project limits and profiling boundaries.129 exact native comparisons
+  validate optimized fly facet drawing. No visual cadence or thermal-safety reduction.
+- Source pushed to private Meow recovery branch. Actual UI test passes: exact-file once
+  approval, Save & preview visibly renders the generated text, Files finds the saved copy,
+  and Chrome opens its content URI correctly with a one-time viewer choice.
+- Three-minute idle observation: 90/90 foreground samples, battery 34.7→34.5°C, Android
+  thermal status 1→0, USB connected. CPU remains 54.53% of one core; do not claim a measured
+  CPU improvement against the uncontrolled baseline. Graphics counters show 4,918/7,282
+  janky frames in the interval; frame pacing is a follow-up, not signed off. No all-day
+  heat, unplugged battery or production-readiness claim. Mic/camera remain off.
 
 ### September 19 next batch — preview146 tested;147 repair in preparation
 

@@ -5,7 +5,19 @@ This is an acceptance/backlog report, not authorization to publish, enable monit
 operate a robot, post to accounts or replace the user's data. Historical plan checkboxes
 are not reliable current status; use the latest evidence below and BUILD_MASTER.md.
 
-## Build and scope
+## Latest follow-up — preview147
+
+The audit below records145; it is not the latest installed-build status. Installed147
+(source09db18d) repairs clock/Reflex stacking, extends known-tool result discovery and
+adds verified local result previews. Full suite2,646 tests, five skipped, zero failures;
+seven phone checks pass. A real UI task also passes exact-file approval → visible preview
+→ Files search → Chrome rendering. Three-minute idle battery temperature fell34.7→34.5°C,
+thermal1→0, USB connected, but CPU remains54.53% of one core and frame pacing needs work.
+See [RESULTS_IDLE_147_PASS_DOWN.md](RESULTS_IDLE_147_PASS_DOWN.md) for evidence and limits.
+Large transfers, project/session integration, sustained thermal and fresh-device acceptance
+are not completed by this batch. No production release or monitoring enablement.
+
+## Original145 build and scope
 
 - Phone: Samsung SM-F966U1, serial RFCY61NJEVM. This is not the earlier Flip6.
 - Installed preview: com.example.meowmba, 1.3.89/code145, app source6b6cab3.
