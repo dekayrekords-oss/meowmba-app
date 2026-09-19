@@ -11,7 +11,7 @@ This supersedes historical build-location/version instructions in other document
 - Baseline: `5efed2f`, version 1.3.82/code 138. Historical evidence is dated September 15.
 - Verified original APK: `/Users/prog/Meowmba-Releases/idle136-20260915/meow-preview138.apk`.
 - Grok source to recover: `529cc69`, preserved as `recovery/grok-lumen` remote-tracking ref.
-- Status: recovery preview139 installed in place; remaining feature integration IN PROGRESS, not a Play release.
+- Status: preview141 (1.3.85) installed in place; authenticated Computer acceptance remains blocked on the user's private server password. Not a Play release.
 
 ## Feature queue
 
@@ -23,7 +23,7 @@ Port feature commits; do not overwrite the baseline with an experimental branch 
 
 ## Coordination
 
-### September 19 Computer/Auto/avatar revision — implementation under test
+### September 19 Computer/Auto/avatar revision — preview141 installed
 
 - Integrator owns OpenCodeComputer transport/panel, Auto page, avatar sliders, provider defaults and fact history.
 - Computer task UI now submits asynchronous OpenCode sessions with explicit ask-all permissions;
@@ -36,7 +36,12 @@ Port feature commits; do not overwrite the baseline with an experimental branch 
 - Avatar page has separate cadence/randomness sliders; all named styles resolve from turn-into requests.
 - Facts are generated from the configured model with persistent claim/text history, exact/near-duplicate
   rejection and no old-pool fallback. Semantic equivalence/factual accuracy cannot be absolutely guaranteed.
-- Test/install gate pending. Phone disconnected from Mac; checking Meow after user reports reconnect.
+- Source e407586; signed preview141 installed in place on RFCY61NJEVM, without uninstall or data reset.
+- Full suite on a96b1f9: 2,581 tests, zero failures, five skipped. Final e407586 focused tests and packaging pass.
+- All148 protected runtime entries match140. APK SHA256: 2ddead0889ca454885bf980faa20bcecbb394538325c506160218a3494594feb.
+- Device Avatar/Auto selection and privacy-preservation test passes; screenshots visually reviewed.
+- Authenticated worker test blocked: no verified password saved. User asked to enter it privately in Computer setup. A401 health response proves only password protection.
+- Artifacts: /Users/prog/Meowmba-Releases/auto141-20260919.
 - Do not mark fresh Termux provisioning or real authenticated OpenCode task execution verified without device evidence.
 
 ### September 19 automated Computer setup — preview140 installed

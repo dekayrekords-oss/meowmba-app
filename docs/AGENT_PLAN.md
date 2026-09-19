@@ -1,5 +1,13 @@
 # Agent execution plan — immersive companion revision
 
+## September 19: preview141 device checkpoint
+
+Source e407586 installed in place on RFCY61NJEVM. Full JVM suite on parent a96b1f9
+passed2,581 checks with five skipped; final focused tests pass. Avatar/Auto real-device
+selection and privacy-preservation check passes, screenshots reviewed. Computer worker
+acceptance is blocked on the user entering a verified server password privately in-app.
+Do not claim fresh provisioning or authenticated task execution complete. See BUILD_MASTER.
+
 ## September 15: idle processing with unchanged animation — Builds 136–138
 
 The owner's visual-preservation constraint governs this change: unchanged

@@ -1,4 +1,4 @@
-# Automated phone Computer setup (preview 140)
+# Automated phone Computer setup (preview 141)
 
 ## User flow
 
@@ -28,8 +28,13 @@ Ubuntu's ~/MeowProjects. This does not change any model provider or authorize sp
 - Install/retry is serialized within the app and protected by a Termux file lock.
 - Background worker lifetime on each OEM/Termux version still requires device testing.
   Termux/Android can stop the worker; tap Setup computer to restart/recheck it.
-- Task submission, progress, permission replies and final assets are a separate
-  integration. A healthy server alone does NOT make those features complete.
+- Tasks & approvals now offers the Computer worker: explicit Run, persistent sessions,
+  progress/todos, worker questions, one-time permission approvals/rejection and Stop.
+  Completed file paths can be copied into the app workspace and opened externally;
+  exports are bounded to about1.5MB. Legacy tasks remain available separately.
+- Transport contract tests pass. On-phone authenticated task acceptance is still
+  blocked on entering/verifying the private server password. Health alone is not proof
+  that the worker can execute a task. Fresh provisioning/lifetime tests remain pending.
 - No auto-approval flags. Provisioned OpenCode defaults to asking for tool permission.
   Existing per-agent/project configuration must be reviewed before actual task routing.
 
