@@ -11,7 +11,7 @@ This supersedes historical build-location/version instructions in other document
 - Baseline: `5efed2f`, version 1.3.82/code 138. Historical evidence is dated September 15.
 - Verified original APK: `/Users/prog/Meowmba-Releases/idle136-20260915/meow-preview138.apk`.
 - Grok source to recover: `529cc69`, preserved as `recovery/grok-lumen` remote-tracking ref.
-- Status: preview143 (1.3.87) installed in place. Password recovery and optional-mode phone UI checks pass; live generation acceptance remains incomplete. Authenticated Computer acceptance requires the user's new private connection password. Not a Play release.
+- Status: preview144 (1.3.88) installed in place. Termux edition-aware setup and optional-mode phone UI checks pass. Authenticated Computer acceptance still requires the user's private password and guided handoff. Not a Play release.
 
 ## Feature queue
 
@@ -23,7 +23,7 @@ Port feature commits; do not overwrite the baseline with an experimental branch 
 
 ## Coordination
 
-### September 19 Termux edition repair — preview144 in validation
+### September 19 Termux edition repair — preview144 installed
 
 - Sole integrator. User authorized adapting the installed edition, correcting onboarding and
   installing/testing after checks. No Termux uninstall, replacement, data reset or unknown-server stop.
@@ -37,7 +37,16 @@ Port feature commits; do not overwrite the baseline with an experimental branch 
 - Onboarding/Computer share official F-Droid (recommended)/GitHub guidance, refresh on return,
   keep installed editions and warn against source mixing. Removed the obsolete copy-only wizard,
   blind sandbox OpenCode auto-start and unauthenticated NetBird APK mirror from onboarding.
-- Next: full tests, package/runtime/signature checks, real phone guided-path UI and handoff.
+- Source991fff0, installed over143 at2026-09-19 11:43:37 on RFCY61NJEVM. Full suite:
+  2,608 tests, zero failures/errors, five skipped. All148 protected runtime entries unchanged;
+  matching signing certificate. APK SHA256 c5c42e31749fb17ac1d42b348ebaeb1be8177507b47031f20122b0418d7ebb09.
+- Phone acceptance passes: real installed edition classified guided, no nonexistent permission,
+  no replacement download offered, recovery4097 available, HUB/personal monitoring off and
+  camera/mic unchanged. Test harness uses accessibility actions with its animation clock paused;
+  coordinate-scroll attempts were unreliable with that frozen test clock. Production clock unchanged.
+- Archive:/Users/prog/Meowmba-Releases/termux144-20260919. Termux remains Play code141;
+  no uninstall, data reset, old-server stop or Play upload. Guided script syntax/contracts pass;
+  live provisioning, authenticated terminal/task acceptance still await private user input.
   Hidden password entry remains the user's action; do not claim authenticated readiness prematurely.
 
 ### September 19 Computer recovery / personal companion — preview143 installed

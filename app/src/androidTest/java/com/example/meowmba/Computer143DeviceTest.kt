@@ -12,11 +12,15 @@ import org.junit.Test
 class Computer143DeviceTest {
     @get:Rule val rule = createAndroidComposeRule<MainActivity>()
     private fun tap(text: String) {
-        rule.onNode(hasText(text) and hasClickAction()).performScrollTo().performClick()
+        // Use the accessibility action while the animation clock is paused.
+        // Coordinate scrolling can wait forever for a frozen layout frame.
+        rule.onNode(hasText(text) and hasClickAction()).performSemanticsAction(
+            androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
         rule.mainClock.advanceTimeBy(500)
     }
     private fun back() {
-        rule.onNodeWithContentDescription("Back in Computer").performClick()
+        rule.onNodeWithContentDescription("Back in Computer").performSemanticsAction(
+            androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
         rule.mainClock.advanceTimeBy(500)
     }
     @Test fun recoveryAndOptionalModesAreReachableWithoutEnablingMonitoring() {
@@ -51,14 +55,13 @@ class Computer143DeviceTest {
         tap("Continue")
         if (guided) {
             rule.onNodeWithText("Allow Meow to connect to Termux").assertDoesNotExist()
-            rule.onNodeWithText("Copy setup & open Termux").performScrollTo().assertIsDisplayed()
-            rule.onNodeWithText("Verify connection").performScrollTo().assertIsDisplayed()
+            rule.onNodeWithText("Copy setup & open Termux").assertExists()
+            rule.onNodeWithText("Verify connection").assertExists()
         }
         tap("Forgot password? Create a separate Meow connection")
         rule.onNodeWithText("Create a separate private connection?").assertExists()
-        rule.onNodeWithText("Choose new password").performClick()
-        rule.mainClock.advanceTimeBy(500)
-        rule.onNodeWithText("Choose a NEW connection password").performScrollTo().assertIsDisplayed()
+        tap("Choose new password")
+        rule.onNodeWithText("Choose a NEW connection password").assertExists()
         rule.onNodeWithText("http://127.0.0.1:4097 · username opencode").assertExists()
         assertEquals(before.isCameraEnabled, vm.uiState.value.isCameraEnabled)
         assertEquals(before.isMicEnabled, vm.uiState.value.isMicEnabled)

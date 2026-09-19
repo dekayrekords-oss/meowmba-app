@@ -10,6 +10,12 @@ installed editions are preserved. Verify script parsing, hidden password/no-secr
 safe occupied-port refusal, no wizard auto-shell and actual phone UI. User approved in-place
 app installation after checks; this does not authorize replacing Termux or stopping4096.
 
+Preview144/source991fff0 installed in place, 2,608 JVM/UI tests (zero failures, five skipped),
+148 protected runtime entries unchanged. Phone guided-edition/recovery/privacy checks pass;
+the device harness uses accessibility actions to avoid scrolling against its frozen animation
+clock. Actual handoff requires the user to enter the same new password twice privately in
+Termux and return to Verify connection. Until then, no authenticated worker/terminal claim.
+
 ## September 19: preview143 Computer recovery and companion modes
 
 Single integrator. User approved installation after checks, keeping new monitoring off.
