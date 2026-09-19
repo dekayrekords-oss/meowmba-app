@@ -223,15 +223,6 @@ fun CompanionScreen(
         ) {
             val faceContext = LocalContext.current
 
-            // Local wall clock on every companion scene/background; opens system Clock.
-            if (!habitatCovered) {
-                CompanionWallClock(
-                    Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(top = 8.dp),
-                )
-            }
-
             // Two pinned apps on the face (first two favorites).
             if (pinnedApps.isNotEmpty()) {
                 Row(
@@ -252,13 +243,6 @@ fun CompanionScreen(
                             )
                         }
                     }
-                }
-            }
-
-            if (uiState.computerTaskRunning) {
-                OutlinedButton(onClick = viewModel::cancelAgenticComputerChat,
-                    modifier = Modifier.align(Alignment.TopCenter).padding(top = 56.dp)) {
-                    Text("Stop Computer")
                 }
             }
 
@@ -615,120 +599,92 @@ fun CompanionScreen(
         )
 
 
-        // Weather card: floats above the companion rather than replacing it, so the cat
-        // reacting to the weather and the numbers are visible together. The scene itself is
-        // drawn FIRST (below), behind the avatar, so the cat sits inside the weather.
-        uiState.weather?.let { w ->
-            androidx.compose.foundation.layout.Box(
-                modifier = Modifier
-                    .align(androidx.compose.ui.Alignment.TopCenter)
-                    .padding(horizontal = 16.dp, vertical = 48.dp)
-            ) {
-                WeatherCard(
-                    // Forcing the scene to midday and leaving the card on its night palette
-                    // would look like two different weathers.
-                    weather = w.copy(
-                        isDay = uiState.previewTimeOfDay?.isLight ?: w.isDay,
-                    ),
-                    onDismiss = { viewModel.dismissWeatherCard() },
-                    // Tap the card to preview the next condition's animation.
-                    onCycleCondition = { viewModel.cycleForcedWeatherCondition() },
-                    previewTimeOfDay = uiState.previewTimeOfDay,
-                    onCycleTimeOfDay = { viewModel.cyclePreviewTimeOfDay() },
-                )
-            }
-        }
-
-        // A possible collision is the most urgent thing on screen — it wins the top slot
-        // over the weather and drive cards, so it is impossible to miss while driving.
-        uiState.crashAlert?.let { alert ->
-            androidx.compose.foundation.layout.Box(
-                modifier = Modifier
-                    .align(androidx.compose.ui.Alignment.TopCenter)
-                    .padding(horizontal = 16.dp, vertical = 48.dp)
-            ) {
-                CrashAlertCard(
-                    message = alert,
-                    onTextContact = { viewModel.sendEmergencyText() },
-                    onDismiss = { viewModel.dismissCrashAlert() },
-                )
-            }
-        }
-
-        // Drive card: while the user is driving, a glanceable heads-up with speed,
-        // G-force and trip stats. Pushed below the weather/crash cards when those
-        // are up so the top of the screen doesn't stack three panels.
-        if (uiState.driveCardVisible && uiState.crashAlert == null) {
-            androidx.compose.foundation.layout.Box(
-                modifier = Modifier
-                    .align(androidx.compose.ui.Alignment.TopCenter)
-                    .padding(horizontal = 16.dp, vertical = 48.dp)
-            ) {
-                DriveCard(
-                    speedMph = uiState.driveSpeedMph,
-                    gForce = uiState.driveGForce,
-                    reason = uiState.driveReason,
-                    manual = uiState.driveManual,
-                    trip = uiState.driveTrip,
-                    onDismiss = { viewModel.dismissDriveCard() },
-                    roadStatus = if (uiState.roadAlertsEnabled) uiState.roadAlertStatus else null,
-                    vehicleLine = com.example.meowmba.core.car.VehicleAwareness.summary(uiState.vehicleIdentity),
-                    obdLine = uiState.obdReading.takeIf { it.connected }?.let { r ->
-                        buildString {
-                            if (r.hasRpm) append("RPM %.0f · ".format(java.util.Locale.US, r.rpm))
-                            if (r.hasCoolant) append("%.0f°C · ".format(java.util.Locale.US, r.coolantC))
-                            if (r.hasBattery) append("%.1fV".format(java.util.Locale.US, r.batteryV))
-                            if (uiState.obdAlerts.isNotEmpty()) append(" · ⚠ " + uiState.obdAlerts.first().message)
-                        }.trim().trimEnd('·').trim()
-                    },
-                    cameraLabels = uiState.carCameraSources.map { it.label },
-                    driverCamera = if (
-                        uiState.driveDriverCameraEnabled &&
-                        uiState.isCameraEnabled &&
-                        uiState.carCameraActiveId in setOf("front_driver", "rear_phone")
-                    ) {
-                        {
-                            Viewfinder(
-                                visionManager = viewModel.getVisionManager(),
-                                modifier = Modifier.fillMaxWidth().height(110.dp),
-                            )
-                        }
-                    } else null,
-                    modifier = Modifier.padding(top = if (uiState.weather != null) 200.dp else 0.dp),
-                )
-            }
-        }
-
-        // Lumen / agentic presence chip — only when flags warrant and hint is non-null.
+        // Top controls and transient cards share measured space; fixed offsets
+        // let Reflex cover the clock and moved that collision into weather/drive.
         val presenceHint = uiState.agenticPresenceHint
             ?: uiState.reflexSummary?.takeIf { uiState.lumenReflexV2Enabled && uiState.features.neuralFeedbackVisible }
-        if (presenceHint != null &&
-            (uiState.agenticRuntimeV1Enabled || uiState.lumenReflexV2Enabled)
-        ) {
-            PresenceHintChip(
-                hint = presenceHint,
-                onReview = if (uiState.agenticPresenceHint != null) viewModel::openAgenticTaskDetails else null,
-                onDismiss = if (uiState.agenticDismissibleRevision != null) viewModel::dismissAgenticPresenceHint else null,
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .safeDrawingPadding()
-                    .padding(top = 8.dp),
-            )
-        }
-
-        // What the agents are doing. Above the avatar, below the full-screen menus, and
-        // translucent — handing work to an agent should not take you out of the room.
-        AgentActivityPanel(
-            tasks = uiState.activeTasks,
-            visible = uiState.agentActivityVisible,
-            onDismiss = { viewModel.dismissAgentActivity() },
-            onOpenAgent = { viewModel.openAgentDetail(it) },
+        val companionControls = !isFlipCover && uiState.appTheme != AppTheme.PROFESSIONAL
+        CompanionTopOverlays(
+            priorityRevision = uiState.crashAlert,
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .safeDrawingPadding()
-                .padding(horizontal = 12.dp)
-                .padding(top = if (uiState.weather != null) 250.dp else 12.dp),
-        )
+                .padding(top = 8.dp),
+            header = {
+                CompanionStatusHeader(
+                    showClock = companionControls && !habitatCovered,
+                    presenceHint = presenceHint.takeIf {
+                        uiState.agenticRuntimeV1Enabled || uiState.lumenReflexV2Enabled
+                    },
+                    onReview = if (uiState.agenticPresenceHint != null) viewModel::openAgenticTaskDetails else null,
+                    onDismiss = if (uiState.agenticDismissibleRevision != null) viewModel::dismissAgenticPresenceHint else null,
+                    onStopComputer = if (companionControls && uiState.computerTaskRunning) viewModel::cancelAgenticComputerChat else null,
+                )
+            },
+        ) {
+            // The collision alert temporarily takes priority over weather and
+            // driving, without changing either card's saved visibility/state.
+            val crashAlert = uiState.crashAlert
+            if (crashAlert != null) {
+                CrashAlertCard(
+                    message = crashAlert,
+                    onTextContact = { viewModel.sendEmergencyText() },
+                    onDismiss = { viewModel.dismissCrashAlert() },
+                )
+            } else {
+                // Weather remains translucent above the existing weather scene.
+                uiState.weather?.let { w ->
+                    WeatherCard(
+                        weather = w.copy(isDay = uiState.previewTimeOfDay?.isLight ?: w.isDay),
+                        onDismiss = { viewModel.dismissWeatherCard() },
+                        onCycleCondition = { viewModel.cycleForcedWeatherCondition() },
+                        previewTimeOfDay = uiState.previewTimeOfDay,
+                        onCycleTimeOfDay = { viewModel.cyclePreviewTimeOfDay() },
+                    )
+                }
+                if (uiState.driveCardVisible) {
+                    DriveCard(
+                        speedMph = uiState.driveSpeedMph,
+                        gForce = uiState.driveGForce,
+                        reason = uiState.driveReason,
+                        manual = uiState.driveManual,
+                        trip = uiState.driveTrip,
+                        onDismiss = { viewModel.dismissDriveCard() },
+                        roadStatus = if (uiState.roadAlertsEnabled) uiState.roadAlertStatus else null,
+                        vehicleLine = com.example.meowmba.core.car.VehicleAwareness.summary(uiState.vehicleIdentity),
+                        obdLine = uiState.obdReading.takeIf { it.connected }?.let { r ->
+                            buildString {
+                                if (r.hasRpm) append("RPM %.0f · ".format(java.util.Locale.US, r.rpm))
+                                if (r.hasCoolant) append("%.0f°C · ".format(java.util.Locale.US, r.coolantC))
+                                if (r.hasBattery) append("%.1fV".format(java.util.Locale.US, r.batteryV))
+                                if (uiState.obdAlerts.isNotEmpty()) append(" · ⚠ " + uiState.obdAlerts.first().message)
+                            }.trim().trimEnd('·').trim()
+                        },
+                        cameraLabels = uiState.carCameraSources.map { it.label },
+                        driverCamera = if (
+                            uiState.driveDriverCameraEnabled &&
+                            uiState.isCameraEnabled &&
+                            uiState.carCameraActiveId in setOf("front_driver", "rear_phone")
+                        ) {
+                            {
+                                Viewfinder(
+                                    visionManager = viewModel.getVisionManager(),
+                                    modifier = Modifier.fillMaxWidth().height(110.dp),
+                                )
+                            }
+                        } else null,
+                    )
+                }
+            }
+            // Agent feedback follows the cards' actual height and stays reachable
+            // in the same scrollable overlay when large text fills the screen.
+            AgentActivityPanel(
+                tasks = uiState.activeTasks,
+                visible = uiState.agentActivityVisible,
+                onDismiss = { viewModel.dismissAgentActivity() },
+                onOpenAgent = { viewModel.openAgentDetail(it) },
+            )
+        }
 
         // The thing the conversation is about. Sits above the avatar, below the menus, and
         // low enough that the weather card at the top is still readable next to it.
@@ -880,6 +836,7 @@ fun CompanionScreen(
 
         if (uiState.showSettings && secureStorage != null) {
             SettingsScreen(
+                onOpenComputerFiles = viewModel::toggleAssetBrowser,
                 onOpenAuto = viewModel::openAutoScreen,
                 secureStorage = secureStorage,
                 initialPage = uiState.settingsInitialPage,

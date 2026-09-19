@@ -49,6 +49,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun SettingsScreen(
     secureStorage: SecureStorageManager,
+    onOpenComputerFiles: () -> Unit = {},
     companionName: String = "Meow",
     maleCnsServer: MaleCnsServerUiState = MaleCnsServerUiState(),
     onPairMaleCnsServer: (String) -> Unit = {},
@@ -252,6 +253,7 @@ fun SettingsScreen(
     if (page == COMPUTER_TOOLS_TITLE) {
         ComputerToolsScreen(
             onClose = { page = null },
+            onOpenComputerFiles = onOpenComputerFiles,
             agenticRuntimeV1 = agenticRuntimeV1,
             onAgenticRuntimeV1Change = onAgenticRuntimeV1Change,
             connectionProfiles = connectionProfiles,

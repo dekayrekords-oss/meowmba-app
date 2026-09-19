@@ -75,6 +75,7 @@ internal fun ComputerToolsScreen(
     onComputerPowerChange: (ComputerPowerState) -> Unit,
     computerIdleMinutes: Int,
     onComputerIdleMinutesChange: (Int) -> Unit,
+    onOpenComputerFiles: () -> Unit = {},
 ) {
     val uriHandler=LocalUriHandler.current
     var linkError by remember { mutableStateOf<String?>(null) }
@@ -124,7 +125,7 @@ internal fun ComputerToolsScreen(
                         TextButton(onClick={navigate(ComputerToolsPage.DETAILS)}) { Text("Connection details & logs") }
                         TextButton(onClick={navigate(ComputerToolsPage.LEGACY_TASKS)}) { Text("Legacy tasks") }
                     }
-                    ComputerToolsPage.TASKS -> { OpenCodeComputerPanel() }
+                    ComputerToolsPage.TASKS -> { OpenCodeComputerPanel(onOpenFiles = onOpenComputerFiles) }
                     ComputerToolsPage.HUB -> { ComputerHubPanel() }
                     ComputerToolsPage.PERSONAL -> { PersonalCompanionPanel() }
                     ComputerToolsPage.LEGACY_TASKS -> {

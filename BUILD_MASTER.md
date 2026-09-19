@@ -23,6 +23,22 @@ Port feature commits; do not overwrite the baseline with an experimental branch 
 
 ## Coordination
 
+### September 19 next batch — preview146 in preparation
+
+- User permits warmer operation during demanding requested tasks; idle heat is the target.
+  Keep Android thermal safety, visual quality and cadence. No promise that every ambient
+  temperature/charger can yield a cold phone. User authorizes automatic in-place installation
+  and testing of subsequent builds, preserving data and monitoring-off state; no repeated ask.
+- Existing work through6f88496 pushed to Meow private /home/prog/git/meowmba-app.git,
+  recovery/known-good-138, over NetBird100.77.97.236. LAN alias timed out; do not push public.
+- One build owner/integrator. Delegated bounded work: idle_heat_search owns trace allocation
+  gate/unused ear loop + tests; result_flow_search owns resultPaths known-tool parser + tests;
+  home_overlap_fix owns measured home header/card layout + tests. Main owns result store,
+  preview/Files wiring, build receipts, profiling, packaging and installation. No worker builds.
+- Baseline145 idle sample:49/60 samples foreground,54.38% of one CPU core over94.2 valid
+  seconds, battery35.7→36.0°C, thermal1→1 while USB connected. Not a controlled all-day
+  comparison; preserve raw evidence and do not attribute heat to a single component yet.
+
 ### September 19 broader acceptance audit — app145 unchanged
 
 - Active consolidated backlog: docs/TEST_AUDIT_AND_BACKLOG_2026-09-19.md (52 work items,

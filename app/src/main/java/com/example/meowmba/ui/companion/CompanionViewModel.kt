@@ -884,6 +884,7 @@ class CompanionViewModel(
         } ?: NeuralSubstrate.RATE,
         thermalTier = { com.example.meowmba.core.thermal.ThermalGovernor.currentTier().ordinal },
         traceSink = { neuralTraceRecorder?.record(it) },
+        traceEnabled = { neuralTraceRecorder != null },
     )
     private val neuralFaceSense = com.example.meowmba.core.neural.senses.FaceSense()
     private var lastNeuralSenseMs = 0L

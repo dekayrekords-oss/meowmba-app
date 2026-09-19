@@ -112,17 +112,58 @@ class OpenCodeComputer(private val password: String, private val address: String
     }
 
     data class Snapshot(val status: String, val messages: JsonArray, val permissions: List<JsonObject>, val todos: JsonArray, val directory: String, val questions: List<JsonObject> = emptyList()) {
-        fun resultPaths(): List<String> = messages.flatMap { message ->
-            (message.jsonObject["parts"] as? JsonArray).orEmpty().mapNotNull { part ->
-                val p = part.jsonObject
-                val state = p["state"] as? JsonObject
-                if (p["type"]?.jsonPrimitive?.content != "tool" || p["tool"]?.jsonPrimitive?.content !in setOf("write", "edit") ||
-                    state?.get("status")?.jsonPrimitive?.content != "completed") return@mapNotNull null
-                val raw = (state["input"] as? JsonObject)?.get("filePath")?.jsonPrimitive?.content ?: return@mapNotNull null
-                val relative = raw.removePrefix(directory.trimEnd('/') + "/")
-                runCatching { artifactPath(relative) }.getOrNull()
+        /** These are reported file candidates, not verified downloads. Only known
+         * completed writers supply paths; prose, patch text and other tools do not.
+         * apply_patch's relativePath uses the repository root, which may differ
+         * from this session's directory, so its absolute metadata is required. */
+        fun resultPaths(): List<String> {
+            fun JsonObject.string(key: String): String? = (this[key] as? JsonPrimitive)
+                ?.takeIf { it.isString }?.content
+            val base = directory.trimEnd('/')
+            if (!directory.startsWith('/') || ':' in directory || '\\' in directory || directory.any { it.isISOControl() } ||
+                (base.isEmpty() && directory != "/") ||
+                (base.isNotEmpty() && runCatching { artifactPath(base.removePrefix("/")) }.isFailure)) return emptyList()
+            fun relative(raw: String?, absoluteOnly: Boolean = false): String? {
+                if (raw == null || ':' in raw) return null
+                val path = if (raw.startsWith('/')) {
+                    if (!raw.startsWith("$base/")) return null
+                    raw.removePrefix("$base/")
+                } else {
+                    if (absoluteOnly) return null
+                    raw
+                }
+                return runCatching { artifactPath(path) }.getOrNull()
             }
-        }.distinct().take(30)
+            val paths = linkedSetOf<String>()
+            for (message in messages) {
+                val obj = message as? JsonObject ?: continue
+                if ((obj["info"] as? JsonObject)?.string("role") != "assistant") continue
+                for (part in (obj["parts"] as? JsonArray).orEmpty()) {
+                    val p = part as? JsonObject ?: continue
+                    val state = p["state"] as? JsonObject ?: continue
+                    if (p.string("type") != "tool" || state.string("status") != "completed") continue
+                    when (p.string("tool")) {
+                        "write", "edit" -> relative((state["input"] as? JsonObject)?.string("filePath"))?.let(paths::add)
+                        "apply_patch" -> {
+                            val metadata = state["metadata"] as? JsonObject ?: continue
+                            for (entry in (metadata["files"] as? JsonArray).orEmpty()) {
+                                val file = entry as? JsonObject ?: continue
+                                val source = relative(file.string("filePath"), absoluteOnly = true) ?: continue
+                                when (file.string("type")) {
+                                    "add", "update" -> paths.add(source)
+                                    "delete" -> paths.remove(source)
+                                    "move" -> {
+                                        paths.remove(source)
+                                        relative(file.string("movePath"), absoluteOnly = true)?.let(paths::add)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return paths.take(30)
+        }
 
         fun transcript(): String = messages.joinToString("\n\n") { message ->
             val obj = message.jsonObject

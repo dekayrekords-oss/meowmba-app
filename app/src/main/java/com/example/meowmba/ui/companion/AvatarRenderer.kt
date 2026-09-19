@@ -85,6 +85,10 @@ private val PUPIL_COLOR = Color(0xFF06232B)
 private val NOSE_COLOR = Color(0xFFFFA6C9)
 private val WHISKER_COLOR = Color(0x66CFF9FF)
 
+/** Lumen owns its own ears, and the orb/classic painters never read the legacy trail. */
+internal fun needsLegacyEarFollowThrough(style: AvatarStyle, lumenOwnsPose: Boolean): Boolean =
+    !lumenOwnsPose && (style == AvatarStyle.NEO || style == AvatarStyle.PEARL)
+
 
 /**
  * Godot face extents (relative to head radius R, from GodotCatFace):
@@ -611,8 +615,9 @@ fun AvatarRenderer(
     // the head makes — tracking a face, an idle weight shift, a performance.
     val earTrail = remember { Trailing(stiffness = 88f, bounce = 0.28f) }
     var earLag by remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(paused, avatarFpsTarget) {
-        if (paused) return@LaunchedEffect
+    val needsEarFollowThrough = needsLegacyEarFollowThrough(state.avatarStyle, useLumen)
+    LaunchedEffect(paused, needsEarFollowThrough, avatarFpsTarget) {
+        if (paused || !needsEarFollowThrough) return@LaunchedEffect
         var last = 0L
         val cadence = AvatarFrameCadence()
         while (true) {

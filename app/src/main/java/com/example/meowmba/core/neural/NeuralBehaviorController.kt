@@ -118,6 +118,8 @@ class NeuralBehaviorController(
     private val telemetry: NeuralTelemetry = NeuralTelemetry.LOOP,
     private val divergenceSink: (DivergenceReport) -> Unit = {},
     private val traceSink: ((FeatureTraceSample) -> Unit)? = null,
+    /** Check before copying trace arrays; an installed sink may have no active recorder. */
+    private val traceEnabled: () -> Boolean = { true },
     private val deadlineMs: Float = 20f,
     private val maxDeadlineMisses: Int = 5,
     private val divergenceReportIntervalMs: Long = 5_000L,
@@ -414,7 +416,7 @@ class NeuralBehaviorController(
             published = if (arbitrated != null && fallback == FallbackReason.NONE) arbitrated.bias else legacyBias
         }
 
-        traceSink?.invoke(
+        if (traceSink != null && traceEnabled()) traceSink.invoke(
             FeatureTraceSample(
                 tMs = simTimeMs,
                 dtMs = stepDt,

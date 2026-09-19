@@ -7,7 +7,12 @@ import android.provider.AlarmClock
 import android.text.format.DateFormat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -15,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -26,9 +32,73 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.meowmba.ui.theme.OutlinedButton
 import kotlinx.coroutines.delay
 import java.util.Calendar
 import java.util.Date
+
+/**
+ * Transient cards start below the measured header, and below each other. The
+ * earlier independent 48/200/250dp offsets collided with enlarged text and a
+ * visible Reflex badge. Scrolling keeps tall card actions reachable on a cover
+ * display or with enlarged text instead of measuring later cards to zero height.
+ */
+@Composable
+internal fun CompanionTopOverlays(
+    modifier: Modifier = Modifier,
+    priorityRevision: Any? = null,
+    header: @Composable () -> Unit,
+    cards: @Composable ColumnScope.() -> Unit,
+) {
+    // A newly arrived crash alert must not inherit an old card scroll position.
+    val cardScroll = key(priorityRevision) { rememberScrollState() }
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        header()
+        Column(
+            modifier = Modifier.verticalScroll(cardScroll).padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            content = cards,
+        )
+    }
+}
+
+/**
+ * The presence badge, clock and stop action share measured space. Independent
+ * top-center offsets hid the clock behind Reflex on the phone; a column also
+ * handles a two-line hint or enlarged text without estimating either height.
+ */
+@Composable
+internal fun CompanionStatusHeader(
+    showClock: Boolean,
+    presenceHint: String?,
+    modifier: Modifier = Modifier,
+    onReview: (() -> Unit)? = null,
+    onDismiss: (() -> Unit)? = null,
+    onStopComputer: (() -> Unit)? = null,
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        presenceHint?.let {
+            PresenceHintChip(
+                hint = it,
+                modifier = Modifier.testTag("companion-presence-hint"),
+                onReview = onReview,
+                onDismiss = onDismiss,
+            )
+        }
+        if (showClock) CompanionWallClock()
+        onStopComputer?.let { stop ->
+            OutlinedButton(onClick = stop) { Text("Stop Computer") }
+        }
+    }
+}
 
 /**
  * Local wall-clock chip for companion backgrounds. Uses the device clock

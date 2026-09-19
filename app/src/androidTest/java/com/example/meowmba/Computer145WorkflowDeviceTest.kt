@@ -54,6 +54,11 @@ class Computer145WorkflowDeviceTest {
             // This acceptance checks the actual text content. Track trailing-line
             // normalization separately; this does not establish byte-exact transfer.
             assertEquals("Actual exported content must match, not merely a completion claim.", marker, exported.trimEnd('\r', '\n'))
+            val workspace = java.io.File(InstrumentationRegistry.getInstrumentation().targetContext.filesDir, "memba_workspace")
+            val store = ComputerArtifactStore(workspace)
+            val saved = store.save(session, filename, exported.toByteArray(Charsets.UTF_8))
+            assertEquals(exported, saved.file.readText())
+            assertEquals(saved, store.save(session, filename, exported.toByteArray(Charsets.UTF_8)))
             val written = api.snapshot(session).messages.flatMap { message ->
                 message.jsonObject["parts"]?.jsonArray.orEmpty().map { it.jsonObject }
             }.firstOrNull { it["type"]?.jsonPrimitive?.content == "tool" && it["tool"]?.jsonPrimitive?.content == "write" }
