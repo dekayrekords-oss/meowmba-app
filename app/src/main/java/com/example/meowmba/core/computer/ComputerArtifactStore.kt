@@ -29,11 +29,12 @@ class ComputerArtifactStore(workspace: File) {
             val pending = File.createTempFile(".computer-result-", ".part", dir)
             try {
                 FileOutputStream(pending).use { it.write(bytes); it.fd.sync() }
-                // Never expose an incomplete result or replace an existing user file.
-                // A same-directory hard link atomically publishes the complete
-                // inode and fails if a destination appeared; atomic move may
-                // replace a raced destination on Unix even without REPLACE_EXISTING.
-                Files.createLink(target.toPath(), pending.toPath())
+                // Android app storage may forbid hard links. Publish within this
+                // directory using the no-replacement move contract; do not request
+                // ATOMIC_MOVE, whose existing-target semantics are platform-specific.
+                // A concurrent existing copy is verified below, never overwritten.
+                try { Files.move(pending.toPath(), target.toPath()) }
+                catch (_: java.nio.file.FileAlreadyExistsException) { /* verify existing bytes below */ }
             } finally { pending.delete() }
         }
         check(target.isFile && target.length() == bytes.size.toLong() &&

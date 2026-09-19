@@ -1,5 +1,28 @@
 # Agent execution plan — immersive companion revision
 
+## September 19 continuation: idle efficiency and visible results
+
+User authorizes automatic in-place installation and testing of subsequent builds on the
+connected phone; do not ask again for each build. Preserve data/credentials and keep sensing
+off. This does not authorize uninstall/reset, account posting, robot actuation or Play rollout.
+User accepts warmth during demanding requested tasks; idle heat remains a priority. Retain
+OS thermal protections and animation fidelity. Do not call ordinary active-task warmth an
+idle regression, or claim a short USB-powered observation proves a never-hot guarantee.
+
+Source through242a63d is committed and pushed to Meow's private recovery branch.146 passes
+2,644 JVM tests (five skipped) and six live phone checks but fails Android result saving:
+hard-link publication is denied on this phone.147 repairs publication with no-replacement
+same-directory moves and must pass real save/readback before success is claimed.
+Known-tool result discovery, verified local preview cards, Files navigation and measured
+header/card layout are implemented. Large transfers and unified project/session ownership
+remain separate work, not completed by this batch.
+
+Delegation is bounded: thermal worker removes unused ear/trace work and optimizes measured
+fruit-fly facet overhead; result worker extends allowlisted metadata parsing; home worker
+fixes measured header/card stacking. Integrator owns shared wiring, artifact storage, tests,
+versioning and installation. Facet optimization requires native old/new pixel identity before
+install, not merely an assertion that it looks similar. All other runtime assets must match145.
+
 ## September 19 active acceptance backlog
 
 Use [TEST_AUDIT_AND_BACKLOG_2026-09-19.md](TEST_AUDIT_AND_BACKLOG_2026-09-19.md)

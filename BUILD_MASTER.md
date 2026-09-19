@@ -23,7 +23,19 @@ Port feature commits; do not overwrite the baseline with an experimental branch 
 
 ## Coordination
 
-### September 19 next batch — preview146 in preparation
+### September 19 next batch — preview146 tested;147 repair in preparation
+
+-146 source242a63d installed in place at12:51:31, all148 protected assets unchanged,
+  matching certificate, APK SHA2565f78ad2492e752004d5acba652e02c9375441573feda26b4653b94bfbddba33f.
+  Fresh full suite2,644 tests, zero failures/errors, five skipped. Six device checks pass,
+  but productive result saving FAILED: Android denies hard links in private app storage.
+  Do not call146 production-ready.147 uses the no-replacement same-directory move API
+  and must pass the actual phone save/readback test. No files/data were deleted/reset.
+- Baseline sampled ART v3 trace identified fruit-fly facet drawing as a major app-side
+  sampled CPU cost. Worker owns only exact-output facet paint/canvas reuse + differential
+  pixel tests for147; no animation cadence, detail or thermal-threshold reduction.
+- Archive146: /Users/prog/Meowmba-Releases/results146-20260919-ZFX8ax/. Source242a63d
+  is pushed to Meow private recovery branch.147 install follows full/device verification.
 
 - User permits warmer operation during demanding requested tasks; idle heat is the target.
   Keep Android thermal safety, visual quality and cadence. No promise that every ambient

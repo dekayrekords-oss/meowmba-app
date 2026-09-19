@@ -4,6 +4,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.PaintingStyle
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -33,6 +35,19 @@ internal class LumenFruitFlyParts {
             if (i == 0) moveTo(x, y) else lineTo(x, y)
         }
         close()
+    }
+    // Exactly the DrawScope drawPath(color, style = Stroke(.055f)) defaults.
+    // The sampled idle trace spent most compound-eye time in repeated Compose
+    // context/paint accessors. This paint belongs only to the facet pass.
+    private val facetPaint = Paint().apply {
+        style = PaintingStyle.Stroke
+        strokeWidth = .055f
+        strokeMiterLimit = Stroke.DefaultMiter
+        strokeCap = Stroke.DefaultCap
+        strokeJoin = Stroke.DefaultJoin
+        blendMode = DrawScope.DefaultBlendMode
+        filterQuality = DrawScope.DefaultFilterQuality
+        isAntiAlias = true
     }
 
     fun backdrop(scope: DrawScope, center: Offset, unit: Float, f: LumenFrame) = with(scope) {
@@ -82,13 +97,30 @@ internal class LumenFruitFlyParts {
             lerp(color, Color(0xFF290D1B), .72f)), Offset(-rx * .24f, -ry * .30f), ry * 1.8f),
             Offset(-rx, -ry * 1.5f), Size(rx * 2f, ry * 3f), alpha = a)
         val radius = rx * .105f
+        val canvas = drawContext.canvas
+        facetPaint.color = Color(0xFFFFBAAA).copy(alpha = a * .17f)
         for (row in -7..7) for (column in -7..7) {
             val x = column * radius * 1.5f
             val y = (row + if (column % 2 == 0) 0f else .5f) * radius * 1.732f
             if (x * x / (rx * rx) + y * y / (ry * ry * 1.5f) < 1.35f) {
-                translate(x, y) { scale(radius, radius, Offset.Zero) {
-                    drawPath(facet, Color(0xFFFFBAAA).copy(alpha = a * .17f), style = Stroke(.055f))
-                } }
+                // Preserve DrawScope.translate { scale(..., Offset.Zero) { ... } }
+                // operation order, including translation outside save/restore.
+                // Reordering/combining cells can change fractional sampling or
+                // the overlap of translucent facet edges.
+                canvas.translate(x, y)
+                try {
+                    canvas.save()
+                    try {
+                        canvas.translate(0f, 0f)
+                        canvas.scale(radius, radius)
+                        canvas.translate(-0f, -0f)
+                        canvas.drawPath(facet, facetPaint)
+                    } finally {
+                        canvas.restore()
+                    }
+                } finally {
+                    canvas.translate(-x, -y)
+                }
             }
         }
     }
