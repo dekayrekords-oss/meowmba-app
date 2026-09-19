@@ -17,10 +17,10 @@ import org.robolectric.annotation.Config
 class LumenUiTest {
     @get:Rule val compose = createComposeRule()
 
-    @Test fun legacyCatShowsEveryMorphChoice() {
+    @Test fun lumenShowsEveryMorphChoice() {
         var selected: AvatarAnimal? = null
         compose.setContent { MaterialTheme {
-            AvatarScreen(AvatarStyle.LUMEN_CAT, {}, emptyList(), {}, {}, onSelectAnimal = { selected = it })
+            AvatarScreen(AvatarStyle.LUMEN, {}, emptyList(), {}, {}, onSelectAnimal = { selected = it })
         } }
         compose.onNodeWithText("Squirrel").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(AvatarAnimal.SQUIRREL, selected) }
@@ -49,8 +49,8 @@ class LumenUiTest {
         compose.runOnIdle { assertEquals(AvatarStyle.LUMEN, style); assertEquals(AvatarAnimal.NONE, animal) }
         compose.onNodeWithText("Dog").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(AvatarAnimal.DOG, animal); assertEquals(null, played) }
-        compose.onNodeWithText("Act like a cat").performScrollTo().performClick()
-        compose.runOnIdle { assertEquals("cat", played) }
+        compose.onNodeWithText("Act like a cat").assertDoesNotExist()
+        compose.runOnIdle { assertEquals(null, played) }
         compose.onNodeWithText("Eyes only").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(AvatarAnimal.NONE, animal) }
     }
@@ -64,9 +64,9 @@ class LumenUiTest {
         }
         compose.onNodeWithText("Lumen Cat").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(AvatarStyle.LUMEN_CAT, style) }
-        compose.onNodeWithText("Eye color").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Animal color").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Glow color").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Choose Eye color").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Choose Feature color").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Choose Glow color").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Animations").performScrollTo().performClick()
         compose.onNodeWithText("Search all animations").performScrollTo().performTextInput("snow")
         compose.onNodeWithText("Snow Wonder").performScrollTo().performClick()
@@ -83,12 +83,14 @@ class LumenUiTest {
                 onSelectEyeColor = { eye = it }, onSelectGlowColor = { glow = it },
                 onSelectFeatureColor = { feature = it }) }
         }
-        compose.onNodeWithContentDescription("Feature color Pink").performScrollTo().performClick()
+        compose.onNodeWithText("Choose Feature color").performScrollTo().performClick()
+        compose.onNodeWithContentDescription("Feature color Pink").performClick()
         compose.runOnIdle {
             assertEquals(0xFFFFA6C9L, feature)
             assertEquals(AvatarColors.DEFAULT_EYE, eye); assertEquals(AvatarColors.DEFAULT_GLOW, glow)
         }
-        compose.onNodeWithContentDescription("Eye color Violet").performScrollTo().performClick()
+        compose.onNodeWithText("Choose Eye color").performScrollTo().performClick()
+        compose.onNodeWithContentDescription("Eye color Violet").performClick()
         compose.runOnIdle { assertEquals(0xFFA371F7L, eye); assertEquals(0xFFFFA6C9L, feature) }
     }
 }

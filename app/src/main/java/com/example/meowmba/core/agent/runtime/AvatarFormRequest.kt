@@ -80,7 +80,16 @@ object AvatarFormRequest {
     private val nonAppearanceSuffix = Regex("(?:^| )(?:for me|for you|owner|person|friend|buddy|lover|fan|boy|girl|gentleman)$")
 
     /** A greeting/name prefix is the router's job; only polite wrappers live here. */
+    fun parseNewDesign(text: String): String? {
+        if (text.any { it.isISOControl() } || text.length > MAX_DESCRIPTION_LENGTH + 150) return null
+        val normalized = text.trim().lowercase(Locale.ROOT).replaceFirst(politeQuestion, "")
+            .replaceFirst(pleaseStart, "").trimEnd('.', '!', '?')
+        val match = Regex("^(?:create|make|design)(?: me)? (?:a |an |another )?(?:new )?avatar (?:of |like |as )?(.+)$").matchEntire(normalized) ?: return null
+        return match.groupValues[1].replaceFirst(article, "").takeIf(::isDescription)
+    }
+
     fun parse(text: String): String? {
+        parseNewDesign(text)?.let { return it }
         if (text.length > MAX_DESCRIPTION_LENGTH + 150 || text.any { it == '\n' || it == '\r' || it == ';' }) return null
         var normalized = text.trim().lowercase(Locale.ROOT).replace(spaces, " ")
             .trimEnd('.', '!', '?').trimEnd()
@@ -102,6 +111,11 @@ object AvatarFormRequest {
     }
 
     /** Same boundary for deterministic routing and model-proposed tool arguments. */
+    fun isRefinement(text: String): Boolean {
+        val target = text.trim().replace(Regex("^(?:make it |give it |change it to |change to )", RegexOption.IGNORE_CASE), "")
+        return text.length <= MAX_DESCRIPTION_LENGTH && isDescription(target)
+    }
+
     fun isDescription(text: String): Boolean {
         if (text.length !in 1..MAX_DESCRIPTION_LENGTH || text.any { it.isISOControl() }) return false
         val normalized = text.trim().lowercase(Locale.ROOT)

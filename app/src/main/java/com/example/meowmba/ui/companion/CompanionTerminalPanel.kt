@@ -69,6 +69,8 @@ fun CompanionTerminalPanel(
     onComputerPower: (com.example.meowmba.core.config.ComputerPowerState) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var termuxNotice by remember { mutableStateOf<String?>(null) }
     val scroll = rememberScrollState()
     var draft by rememberSaveable { mutableStateOf("") }
     var menuOpen by remember { mutableStateOf(false) }
@@ -139,6 +141,17 @@ fun CompanionTerminalPanel(
             .background(MaterialTheme.colorScheme.background)
             .padding(8.dp),
     ) {
+        if (computerSelected) {
+            Text("This embedded terminal is separate from the Ubuntu/OpenCode worker. Open Termux for its real terminal; use Computer → Tasks & approvals for the worker.",
+                style = MaterialTheme.typography.bodySmall)
+            TextButton(onClick = {
+                val intent = context.packageManager.getLaunchIntentForPackage("com.termux")
+                termuxNotice = if (intent == null) "Install and open Termux first from Computer setup." else {
+                    runCatching { context.startActivity(intent) }.exceptionOrNull()?.let { "Could not open Termux. Check Computer setup." }
+                }
+            }) { Text("Open Termux") }
+            termuxNotice?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+        }
         Row(verticalAlignment = Alignment.CenterVertically) {
             TextButton(
                 onClick = { menuOpen = true },

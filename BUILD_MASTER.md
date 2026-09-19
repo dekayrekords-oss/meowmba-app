@@ -23,6 +23,27 @@ Port feature commits; do not overwrite the baseline with an experimental branch 
 
 ## Coordination
 
+### September 19 weather/appearance/Vending revision — preview142 under test
+
+- Sole integrator owns this checkout. User authorized in-place phone installation and tests.
+- Weather page removes simulated-condition/time controls and fake numerical empty-state readings;
+  saved city or device location feeds default weather fetches, with visible failures and stale-selection fencing.
+- Avatar Look: creation moved to Vending, compact swatch dialogs, visible app theme;
+  character choices only under Lumen, Jarvis switch, no dog/cat performance buttons (voice logic retained).
+- Avatar Space: persisted Care visibility/corner placement and neural-feedback visibility;
+  hiding feedback does not disable reactions, privacy marks or agent approval/task feedback.
+- New native-avatar requests ask whether to show an example. The example uses actual validated
+  geometry and the production painter; accept saves/equips that same design. Refine/cancel/skip exist.
+  This is a native cartoon proof, not a photorealistic image-to-3D pipeline or guaranteed perfect likeness.
+- Vending photo picker requires explicit analysis consent; bounded image decoding and configured
+  vision describe the reference. Avatars/props use visual descriptions; backgrounds can use the photo
+  directly or a configured image provider. No silent claim of pixel-exact reference reconstruction.
+- Vending animation cancellation now stops underlying work; Vending can use configured AI.
+  Custom library props guide supported native prop roles, not arbitrary generated-prop animation.
+- Terminal is not an embedded Termux session: phone UID check returns permission denied for its
+  private bash. Sandbox label and Open Termux handoff are explicit. OpenCode health remains401.
+- Full-suite and device acceptance results will be recorded before declaring this ready.
+
 ### September 19 Computer/Auto/avatar revision — preview141 installed
 
 - Integrator owns OpenCodeComputer transport/panel, Auto page, avatar sliders, provider defaults and fact history.

@@ -38,8 +38,8 @@ class PropInventorTest {
             freeform = "cheerful",
         )
         assertTrue(prompt.contains("fox barista"))
-        assertTrue(prompt.contains("Head: soft ears"))
-        assertTrue(prompt.contains("movable parts"))
+        assertTrue(prompt.contains("head soft ears"))
+        assertTrue(com.example.meowmba.core.agent.runtime.AvatarFormRequest.isDescription(prompt))
         assertTrue(prompt.length <= 720)
     }
 

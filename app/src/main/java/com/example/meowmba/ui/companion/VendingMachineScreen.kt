@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -62,7 +63,7 @@ import com.example.meowmba.ui.theme.Surface
 import java.io.File
 
 private enum class VendingPage {
-    HUB, AVATAR_SIMPLE, AVATAR_WORKSHOP, PROP_GENERATE, PROP_LIBRARY, ANIMATION_GENERATE, STUDIO_ARCHIVE
+    HUB, AVATAR_SIMPLE, AVATAR_WORKSHOP, PROP_GENERATE, PROP_LIBRARY, ANIMATION_GENERATE, BACKGROUND_GENERATE, STUDIO_ARCHIVE
 }
 
 /**
@@ -81,7 +82,7 @@ fun VendingMachineScreen(
     val current = runCatching { VendingPage.valueOf(page) }.getOrDefault(VendingPage.HUB)
 
     Surface(modifier = Modifier.fillMaxSize().testTag("vending-machine"), color = MaterialTheme.colorScheme.background) {
-        Column(Modifier.fillMaxSize().padding(16.dp)) {
+        Column(Modifier.fillMaxSize().safeDrawingPadding().padding(16.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 if (current != VendingPage.HUB) {
                     IconButton(onClick = { page = VendingPage.HUB.name }, modifier = Modifier.testTag("vending-back")) {
@@ -100,6 +101,7 @@ fun VendingMachineScreen(
                             VendingPage.PROP_GENERATE -> "Prop dispenser"
                             VendingPage.PROP_LIBRARY -> "Prop library"
                             VendingPage.ANIMATION_GENERATE -> "Animation generator"
+                            VendingPage.BACKGROUND_GENERATE -> "Background studio"
                             VendingPage.STUDIO_ARCHIVE -> "Comics & characters"
                         },
                         fontSize = 22.sp,
@@ -125,9 +127,17 @@ fun VendingMachineScreen(
                     onPropsLibrary = { page = VendingPage.PROP_LIBRARY.name },
                     onAnimationGenerate = { page = VendingPage.ANIMATION_GENERATE.name },
                     onStudioArchive = { page = VendingPage.STUDIO_ARCHIVE.name },
+                    onBackground = { page = VendingPage.BACKGROUND_GENERATE.name },
                 )
+                VendingPage.BACKGROUND_GENERATE -> {
+                    Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                        ReferencePhotoControls(uiState, viewModel)
+                        BackgroundCreationControls(uiState, viewModel)
+                    }
+                }
                 VendingPage.AVATAR_SIMPLE -> {
                     Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                        ReferencePhotoControls(uiState, viewModel)
                         GeneratedAvatarControls(
                             current = uiState.generatedAvatarForm,
                             saved = uiState.savedGeneratedForms,
@@ -144,6 +154,7 @@ fun VendingMachineScreen(
                 }
                 VendingPage.AVATAR_WORKSHOP -> {
                     Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                        ReferencePhotoControls(uiState, viewModel)
                         AvatarWorkshopPanel(
                             busy = uiState.avatarFormGenerating,
                             message = uiState.avatarFormMessage,
@@ -160,6 +171,7 @@ fun VendingMachineScreen(
                 }
                 VendingPage.PROP_GENERATE -> {
                     Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                        ReferencePhotoControls(uiState, viewModel)
                         PropGeneratePanel(
                             busy = uiState.propInventGenerating,
                             message = uiState.propInventMessage,
@@ -218,6 +230,7 @@ private fun VendingHub(
     onPropsLibrary: () -> Unit,
     onAnimationGenerate: () -> Unit,
     onStudioArchive: () -> Unit,
+    onBackground: () -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize().testTag("vending-hub"),
@@ -275,6 +288,10 @@ private fun VendingHub(
                 onClick = onAnimationGenerate,
                 tag = "vending-lane-animation-generate",
             )
+        }
+        item {
+            VendingLaneCard(title = "Backgrounds · create", subtitle = "Create a scene, use a photo, or build from its visual description.",
+                icon = Icons.Default.Palette, onClick = onBackground, tag = "vending-lane-background")
         }
         item {
             VendingLaneCard(
@@ -480,20 +497,22 @@ object AvatarWorkshopPrompt {
         legs: String,
         tail: String,
         freeform: String,
-    ): String = buildString {
+    ): String {
+      if (listOf(subject, look, head, body, arms, legs, tail, freeform).all { it.isBlank() }) return ""
+      return buildString {
         val who = subject.trim().ifBlank { "companion form" }
         append(who)
         if (style.isNotBlank()) append(", ").append(style.trim()).append(" style")
-        if (look.isNotBlank()) append(". Look: ").append(look.trim())
+        if (look.isNotBlank()) append(", ").append(look.trim())
         fun part(label: String, value: String) {
             value.trim().takeIf { it.isNotEmpty() }?.let {
-                append(". ").append(label).append(": ").append(it)
+                append(", ").append(label.lowercase()).append(" ").append(it)
             }
         }
         part("Head", head); part("Body", body); part("Arms", arms); part("Legs", legs); part("Tail", tail)
-        freeform.trim().takeIf { it.isNotEmpty() }?.let { append(". ").append(it) }
-        append(". Include movable parts with motion tags body/arm/leg/tail/wing/float (never motion head; head-adjacent shapes use still or body).")
-    }.take(GeneratedAvatarForms.MAX_REQUEST)
+        freeform.trim().takeIf { it.isNotEmpty() }?.let { append(", ").append(it) }
+      }.take(GeneratedAvatarForms.MAX_REQUEST).trimEnd(',', ' ')
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -719,7 +738,7 @@ private fun AnimationGeneratePanel(
 
     Column(Modifier.testTag("animation-generate"), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(
-            "Compose a short on-device animation. Pick library props to bias the invent prompt; timing and intensity stay editable.",
+            "Compose a short native animation with your configured AI. Library props guide the idea; only supported native prop shapes are animated, not exact copies of custom props.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

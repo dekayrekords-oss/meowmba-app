@@ -93,6 +93,7 @@ fun AvatarScreen(
     onPlayfulness: (Playfulness) -> Unit = {},
     diagnostics: @Composable () -> Unit = {},
     morphControls: @Composable () -> Unit = {},
+    homeControls: @Composable () -> Unit = {},
     preview: @Composable () -> Unit = {},
     avatarScale: Float = 2f,
     onAvatarScale: (Float) -> Unit = {},
@@ -132,13 +133,13 @@ fun AvatarScreen(
                 ?: if (style.isLumen && style != AvatarStyle.FULL_FLY) "${style.label} · ${if (style == AvatarStyle.LUMEN_CAT) AvatarAnimal.CAT.label else animal.label}" else style.label,
                 style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = AvatarSetupTokens.item))
             Text("Selected · changes apply immediately", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            morphControls()
             FlowRow(Modifier.padding(top = AvatarSetupTokens.section), horizontalArrangement = Arrangement.spacedBy(AvatarSetupTokens.compact)) {
                 listOf("Look", "Space", "Behavior", "Animations").forEach { option ->
                     FilterChip(selected = tab == option, onClick = { tab = option }, label = { Text(option) })
                 }
             }
             if (tab == "Space") {
+                homeControls()
                 SetupSection("Size & play space")
                 Text("Keep a large avatar on your chosen background, or let it roam a game environment.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -149,29 +150,16 @@ fun AvatarScreen(
             }
             if (tab == "Look") {
                 Spacer(Modifier.height(AvatarSetupTokens.item))
-                GeneratedAvatarControls(
-                    current = generatedAvatarForm,
-                    saved = savedGeneratedForms,
-                    busy = avatarFormGenerating,
-                    message = avatarFormMessage,
-                    isError = avatarFormError,
-                    onGenerate = onGenerateForm,
-                    onCancel = onCancelGenerateForm,
-                    onSelect = onSelectGeneratedForm,
-                    onDelete = onDeleteGeneratedForm,
-                    onRefine = onRefineForm,
-                )
                 SetupSection("Choose an avatar")
-            AvatarStyle.entries.forEach { option ->
-                StyleRow(
-                    option = option,
-                    selected = generatedAvatarForm == null && option == style,
-                    onClick = { onSelectStyle(option) },
-                )
-                Spacer(modifier = Modifier.height(10.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                AvatarStyle.entries.forEach { option ->
+                    FilterChip(selected = generatedAvatarForm == null && option == style,
+                        onClick = { onSelectStyle(option) }, label = { Text(option.label) })
+                }
             }
+            Text(style.description, style = MaterialTheme.typography.bodySmall)
 
-            if (style.isLumen && style != AvatarStyle.FULL_FLY) {
+            if (style == AvatarStyle.LUMEN) {
                   Text("Choose your character", style = MaterialTheme.typography.titleMedium)
                   Text("Pick a character for Lumen, including Clippy and the classic wizard. Your choice stays saved.",
                       style = MaterialTheme.typography.bodySmall)
@@ -190,57 +178,27 @@ fun AvatarScreen(
                 }
                 Text("Tap or stroke the avatar to interact. Use the video button to enable or disable the camera for face following; swipe down to open the card menu.",
                     style = MaterialTheme.typography.bodySmall)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected = false, onClick = { onPlayAnimation("dog") }, label = { Text("Act like a dog") })
-                    FilterChip(selected = false, onClick = { onPlayAnimation("cat") }, label = { Text("Act like a cat") })
-                }
-                Text("These performances are temporary. Your selected character stays saved.",
-                    style = MaterialTheme.typography.bodySmall)
+                TextButton(onClick = { onSelectStyle(AvatarStyle.SIGNAL) }) { Text("Turn into Jarvis orb") }
                 Spacer(Modifier.height(12.dp))
             }
             Spacer(modifier = Modifier.height(18.dp))
             if (style != AvatarStyle.FULL_FLY && generatedAvatarForm == null) {
-            Text(
-                text = "Eye color",
-                color = MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Text(
-                text = "Iris color for Lumen, Pearl and Godot.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodySmall,
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-            ColorSwatchRow(selected = eyeColor, onSelect = onSelectEyeColor, label = "Eye color")
+            SetupSection("Colors")
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            CompactColorChooser(selected = eyeColor, onSelect = onSelectEyeColor, label = "Eye color")
 
             if ((style == AvatarStyle.PEARL || style.isLumen) &&
                 !(style == AvatarStyle.LUMEN && (animal == AvatarAnimal.CLIPPY || animal == AvatarAnimal.WIZARD))) {
-                Spacer(Modifier.height(18.dp))
-                Text(if (style.isLumen) "Animal color" else "Cat color", style = MaterialTheme.typography.titleMedium)
-                Text(if (style.isLumen) "Ears, muzzle, markings and tail. Eyes and glow stay independent."
-                    else "Ears, nose, mouth and whiskers. Eyes and glow stay independent.", style = MaterialTheme.typography.bodySmall)
-                Spacer(Modifier.height(10.dp))
-                ColorSwatchRow(selected = featureColor, onSelect = onSelectFeatureColor, label = "Feature color")
+                CompactColorChooser(selected = featureColor, onSelect = onSelectFeatureColor, label = "Feature color")
             }
 
-            Spacer(modifier = Modifier.height(18.dp))
-            Text(
-                text = "Glow color",
-                color = MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Text(
-                text = "Soft halo behind the face — shows over a transparent desk.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodySmall,
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-            ColorSwatchRow(selected = glowColor, onSelect = onSelectGlowColor, label = "Glow color")
-
+            CompactColorChooser(selected = glowColor, onSelect = onSelectGlowColor, label = "Glow color")
+            }
             Spacer(modifier = Modifier.height(18.dp))
             }
             } // Look
             if (tab == "Behavior") {
+                morphControls()
                 SetupSection("Movement & personality")
             Text("Expression strength", style = MaterialTheme.typography.titleMedium)
             Text("Controls how strongly the face shows an expression.", style = MaterialTheme.typography.bodySmall)
@@ -310,12 +268,7 @@ fun AvatarScreen(
 
             }
             if (tab == "Look") {
-            TextButton(onClick = { advanced = !advanced }, modifier = Modifier.padding(top = AvatarSetupTokens.section)) {
-                Text(if (advanced) "Hide advanced settings" else "Advanced settings")
-            }
-            if (advanced) {
                 SetupSection("App appearance")
-            FlipCoverSetupCard()
             Text("App theme", style = MaterialTheme.typography.titleMedium)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 AppTheme.entries.forEach { option ->
@@ -331,6 +284,11 @@ fun AvatarScreen(
                         onClick = { onSelectAppearance(option) }, label = { Text(option.label) })
                 }
             }
+            TextButton(onClick = { advanced = !advanced }, modifier = Modifier.padding(top = AvatarSetupTokens.section)) {
+                Text(if (advanced) "Hide advanced settings" else "Advanced settings")
+            }
+            if (advanced) {
+                FlipCoverSetupCard()
                 SetupSection("Diagnostics")
                 diagnostics()
             }
@@ -338,6 +296,22 @@ fun AvatarScreen(
             Spacer(Modifier.height(AvatarSetupTokens.section))
         }
     }
+}
+
+@Composable
+private fun CompactColorChooser(selected: Long, onSelect: (Long) -> Unit, label: String) {
+    var open by rememberSaveable { mutableStateOf(false) }
+    TextButton(onClick = { open = true }) {
+        Box(Modifier.size(24.dp).clip(CircleShape).background(Color(selected)))
+        Spacer(Modifier.size(8.dp))
+        Text("Choose $label")
+    }
+    if (open) androidx.compose.material3.AlertDialog(
+        onDismissRequest = { open = false },
+        title = { Text(label) },
+        text = { ColorSwatchRow(selected = selected, onSelect = { onSelect(it); open = false }, label = label) },
+        confirmButton = { TextButton(onClick = { open = false }) { Text("Done") } },
+    )
 }
 
 internal fun avatarAnimationChoices(names: List<String>, category: String, query: String): List<String> {

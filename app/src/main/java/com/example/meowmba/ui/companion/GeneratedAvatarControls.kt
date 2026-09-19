@@ -128,7 +128,7 @@ internal fun GeneratedAvatarControls(
                 onClick = submit,
                 enabled = canGenerate,
                 modifier = Modifier.fillMaxWidth().testTag("generated-avatar-create"),
-            ) { Text(if (busy) "Creating your form…" else "Create & become") }
+            ) { Text(if (busy) "Creating your form…" else "Create avatar…") }
             if (current != null) {
                 Text("Refine current form", style = MaterialTheme.typography.titleMedium)
                 Text(

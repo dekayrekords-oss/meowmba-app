@@ -122,7 +122,9 @@ object AgentRouter {
             return AgentIntent(AgentRegistry.MAIN, "avatar.invent", mapOf("request" to request.activity, "fresh" to request.fresh.toString()), "create ${request.activity} animation")
         }
         AvatarFormRequest.parse(command)?.let { animal ->
-            return AgentIntent(AgentRegistry.MAIN, "avatar.form", mapOf("animal" to animal), "become $animal")
+            val args = mapOf("animal" to animal) + if (AvatarFormRequest.parseNewDesign(command) != null)
+                mapOf("_create_new" to "true") else emptyMap()
+            return AgentIntent(AgentRegistry.MAIN, "avatar.form", args, "become $animal")
         }
         AvatarSceneRequest.parse(command)?.let { name ->
             return AgentIntent(AgentRegistry.MAIN, "avatar.animate", mapOf("name" to name), "play $name")

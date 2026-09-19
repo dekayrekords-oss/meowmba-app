@@ -314,6 +314,9 @@ class GeneratedAvatarIntegrationTest {
                 ModelResponse.Complete(GeneratedAvatarForms.toJson(form))
             }
             model.createAvatarForm("walking coffee cup", InventReasonLevel.FAST)
+            assertNotNull(model.uiState.value.features.avatarCreationReview)
+            assertFalse(model.uiState.value.avatarFormGenerating)
+            model.chooseAvatarExample(false)
             assertTrue(model.uiState.value.avatarFormGenerating)
             advanceTimeBy(35_001)
             runCurrent()
@@ -333,12 +336,90 @@ class GeneratedAvatarIntegrationTest {
             assertTrue(model.uiState.value.avatarFormMessage.orEmpty().isNotBlank())
             model.currentProvider = Provider { delay(50_000); ModelResponse.Complete(GeneratedAvatarForms.toJson(GeneratedAvatarExamples.dragon())) }
             model.createAvatarForm("friendly purple dragon")
+            model.chooseAvatarExample(false)
             assertTrue(model.uiState.value.avatarFormGenerating)
             model.cancelAvatarFormGeneration()
             runCurrent()
             assertFalse(model.uiState.value.avatarFormGenerating)
             assertTrue(model.uiState.value.activeTasks.none { it.toolId == "avatar.form" && !it.isTerminal })
             assertTrue(store.list().isEmpty())
+        }
+    }
+
+    @Test fun `preview is never worn or saved before approval and refinement uses same model`() = runTest {
+        fixture {
+            val model = model()
+            model.setAvatarAnimal(AvatarAnimal.CAT)
+            val form = GeneratedAvatarExamples.dragon()
+            model.currentProvider = Provider { ModelResponse.Complete(GeneratedAvatarForms.toJson(form)) }
+            model.requestAvatarExample("friendly purple dragon", InventReasonLevel.FAST)
+            assertNull(model.uiState.value.generatedAvatarForm)
+            model.chooseAvatarExample(true)
+            runCurrent()
+            assertEquals(form, model.uiState.value.features.avatarCreationReview?.candidate)
+            assertNull(model.uiState.value.generatedAvatarForm)
+            assertTrue(store.list().isEmpty())
+            model.refineAvatarExample("make it blue")
+            runCurrent()
+            assertFalse(model.uiState.value.avatarFormError)
+            model.acceptAvatarExample()
+            assertEquals(form, model.uiState.value.generatedAvatarForm)
+            assertEquals(1, store.list().size)
+            assertNull(model.uiState.value.features.avatarCreationReview)
+        }
+    }
+
+    @Test fun `dismissed preview and home control preferences preserve main avatar and privacy`() = runTest {
+        fixture {
+            val model = model()
+            model.requestAvatarExample("purple dragon", InventReasonLevel.FAST)
+            model.dismissAvatarReview()
+            model.chooseAvatarExample(false)
+            assertTrue(store.list().isEmpty())
+            model.setHomeControls(false, "Bottom right", false)
+            val restored = model().uiState.value
+            assertFalse(restored.features.careVisible)
+            assertFalse(restored.features.neuralFeedbackVisible)
+            assertEquals("Bottom right", restored.features.carePosition)
+            assertFalse(restored.isCameraEnabled)
+        }
+    }
+
+    @Test fun `vending animation uses configured model and cancellation stops actual work`() = runTest {
+        fixture {
+            val model = model()
+            var cancelled = false
+            var calls = 0
+            model.currentProvider = Provider {
+                calls++
+                try { delay(40_000); ModelResponse.Complete(FishingFixture.json) }
+                finally { cancelled = true }
+            }
+            model.inventAnimationFromVending("fishing")
+            runCurrent()
+            assertEquals(1, calls)
+            assertTrue(model.uiState.value.animInventGenerating)
+            model.cancelAnimInvent()
+            runCurrent()
+            assertTrue(cancelled)
+            assertFalse(model.uiState.value.animInventGenerating)
+            assertTrue(CustomAnimationStore(File(folder, "custom_animations")).list().isEmpty())
+        }
+    }
+
+    @Test fun `reference requires analysis and unapproved previews cannot replace a named selection`() = runTest {
+        fixture {
+            val model = model()
+            model.setCreationReference("content://reference/image")
+            model.createAvatarForm("purple dragon")
+            assertTrue(model.uiState.value.avatarFormError)
+            assertNull(model.uiState.value.features.avatarCreationReview)
+            model.setCreationReference(null)
+            model.requestAvatarExample("purple dragon", InventReasonLevel.FAST)
+            model.setAvatarStyle(AvatarStyle.SIGNAL)
+            model.acceptAvatarExample()
+            assertEquals(AvatarStyle.SIGNAL, model.uiState.value.avatarStyle)
+            assertNull(model.uiState.value.features.avatarCreationReview)
         }
     }
 

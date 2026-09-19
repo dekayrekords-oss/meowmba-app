@@ -25,6 +25,14 @@ import java.net.URL
  * directly — no separate event bus needed.
  */
 class WeatherRepository(private val context: Context) {
+    private val preferences = context.getSharedPreferences("weather_location", Context.MODE_PRIVATE)
+    @Volatile private var locationRevision = 0L
+    val selectedPlace: String get() = preferences?.getString("place", "").orEmpty()
+    fun setSelectedPlace(place: String) {
+        locationRevision++
+        preferences?.edit()?.putString("place", place.trim().take(160))?.apply()
+        clear()
+    }
 
     private val _latest = MutableStateFlow<WeatherNow?>(null)
     val latest: StateFlow<WeatherNow?> = _latest.asStateFlow()
@@ -41,7 +49,8 @@ class WeatherRepository(private val context: Context) {
 
     /** A spoken city needs no device-location grant. Never treat it as another tool request. */
     @Suppress("DEPRECATION")
-    suspend fun fetchPlace(place: String): Result = withContext(Dispatchers.IO) {
+    suspend fun fetchPlace(place: String, surface: Boolean = true): Result = withContext(Dispatchers.IO) {
+        val revision = locationRevision
         if (place.length !in 2..160) return@withContext Result.Failed("Please give a city and state.")
         try {
             val matches = android.location.Geocoder(context).getFromLocationName(place, 2).orEmpty()
@@ -51,7 +60,17 @@ class WeatherRepository(private val context: Context) {
             val match = matches.single()
             if (!match.hasLatitude() || !match.hasLongitude())
                 return@withContext Result.Failed("That place has no coordinates.")
-            fetch(match.latitude, match.longitude)
+            when (val result = fetch(match.latitude, match.longitude, surface = false)) {
+                is Result.Ok -> {
+                    if (revision != locationRevision) return@withContext Result.Failed("Weather location changed; refresh again.")
+                    val named = result.weather.copy(place = place)
+                    if (surface) _latest.value = named
+                    Result.Ok(named)
+                }
+                is Result.Failed -> result
+            }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.Failed("I couldn't look up that city.")
         }
@@ -73,6 +92,9 @@ class WeatherRepository(private val context: Context) {
         surface: Boolean = true,
     ): Result =
         withContext(Dispatchers.IO) {
+            val revision = locationRevision
+            if (lat == null && lon == null && selectedPlace.isNotBlank())
+                return@withContext fetchPlace(selectedPlace, surface)
             val fix = if (lat != null && lon != null) {
                 CurrentLocation.Fix(lat, lon)
             } else {
@@ -106,6 +128,7 @@ class WeatherRepository(private val context: Context) {
                     "weather ok: ${parsed.condition} ${parsed.temperatureF}F " +
                         if (surface) "-> card" else "-> ambient only",
                 )
+                if (revision != locationRevision) return@withContext Result.Failed("Weather location changed; refresh again.")
                 if (surface) _latest.value = parsed
                 Result.Ok(parsed)
             } catch (e: CancellationException) {

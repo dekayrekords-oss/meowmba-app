@@ -14,6 +14,21 @@ import org.junit.rules.TemporaryFolder
 class ComputerAvatarRevisionTest {
     @get:Rule val temporary = TemporaryFolder()
 
+    @Test fun referencePhotoReadsHaveAHardByteLimit() {
+        assertArrayEquals(byteArrayOf(1, 2), CreationPhotoInput.read(byteArrayOf(1, 2).inputStream(), 2))
+        assertTrue(runCatching { CreationPhotoInput.read(byteArrayOf(1, 2, 3).inputStream(), 2) }.isFailure)
+    }
+
+    @Test fun newAvatarRequestsAskForCreationRatherThanOnlySelectingThePreset() {
+        val request = com.example.meowmba.core.agent.runtime.AgentRouter.route("make a new avatar of a cat")!!
+        assertEquals("avatar.form", request.toolId)
+        assertEquals("true", request.args["_create_new"])
+        assertEquals("cat", request.args["animal"])
+        assertNull(com.example.meowmba.core.agent.runtime.AgentRouter.route("turn into a cat")!!.args["_create_new"])
+        assertNull(AvatarFormRequest.parseNewDesign("do not make a new avatar of a cat"))
+        assertNull(AvatarFormRequest.parseNewDesign("make a new avatar of a cat then send an email"))
+    }
+
     @Test fun everyStyleCanBeRequestedByName() {
         AvatarStyle.entries.forEach { style ->
             val request = AvatarFormRequest.parse("turn into ${style.label}")

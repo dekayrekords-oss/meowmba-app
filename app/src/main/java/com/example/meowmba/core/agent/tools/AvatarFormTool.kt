@@ -13,6 +13,7 @@ class AvatarFormTool(
     private val onChange: (AvatarAnimal) -> Unit,
     private val onGenerate: (suspend (String, Long?, String?) -> ToolResult)?,
     private val validateGeneration: (Long?) -> Unit,
+    private val onCreate: (suspend (String, String?) -> ToolResult)? = null,
 ) : Tool {
     constructor(onChange: (AvatarAnimal) -> Unit) : this(onChange, null, {})
     constructor(onChange: (AvatarAnimal) -> Unit, onGenerate: suspend (String, Long?) -> ToolResult) :
@@ -57,6 +58,7 @@ class AvatarFormTool(
             // Even an immediate preset can have waited in the agent queue.
             // Reject superseded jobs before either appearance callback runs.
             validateGeneration(generation)
+            if (args["_create_new"] == "true" && onCreate != null) return onCreate.invoke(requested, args["reason_level"])
             if (animal != null) {
                 onChange(animal)
                 ToolResult.Success("Lumen avatar form set to ${animal.label}.")

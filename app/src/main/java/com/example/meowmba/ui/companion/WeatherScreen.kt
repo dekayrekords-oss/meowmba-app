@@ -27,6 +27,12 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -57,10 +63,18 @@ fun WeatherScreen(
     onCycleCondition: () -> Unit,
     onRefresh: () -> Unit,
     onClose: () -> Unit,
+    location: String = "",
+    status: String? = null,
+    onLocationChange: (String) -> Unit = {},
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val locationPermission = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { granted -> if (granted) onRefresh() }
+    var locationDraft by rememberSaveable(location) { mutableStateOf(location) }
     val shown = weather ?: PLACEHOLDER
     val clockTimeOfDay = rememberTimeOfDay(shown.isDay)
-    val effectiveTimeOfDay = previewTimeOfDay ?: clockTimeOfDay
+    val effectiveTimeOfDay = if (shown.isDay) TimeOfDay.DAY else TimeOfDay.NIGHT
     val moon = rememberMoonPhase()
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -91,13 +105,12 @@ fun WeatherScreen(
             // Live scene strip: the same renderer the companion screen uses, at full
             // strength. Tapping it steps the condition, which is how you audit an animation
             // without waiting for that weather to happen.
-            Box(
+            if (weather != null) Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(180.dp)
                     .clip(RoundedCornerShape(20.dp))
-                    .background(MaterialTheme.colorScheme.surfaceContainerLowest)
-                    .clickable { onCycleCondition() },
+                    .background(MaterialTheme.colorScheme.surfaceContainerLowest),
             ) {
                 WeatherScene(
                     condition = shown.condition,
@@ -126,18 +139,11 @@ fun WeatherScreen(
                         Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                     }
                 }
-                Text(
-                    text = "tap to preview conditions",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 10.sp,
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp)
-                        .background(MaterialTheme.colorScheme.surfaceContainerLow, MaterialTheme.shapes.small).padding(6.dp),
-                )
             }
 
             Spacer(Modifier.height(16.dp))
 
-            Row(
+            if (weather != null) Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
@@ -151,7 +157,7 @@ fun WeatherScreen(
             if (weather == null) {
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    "No reading yet — tap refresh. Needs location access and a network.",
+                    "No current reading. Choose a city below or use device location, then refresh.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 12.sp,
                 )
@@ -182,6 +188,19 @@ fun WeatherScreen(
 
             Spacer(Modifier.height(24.dp))
             SectionHeader("Settings")
+            OutlinedTextField(value = locationDraft, onValueChange = { locationDraft = it.take(160) },
+                label = { Text("Weather location") }, placeholder = { Text("City, state, country") },
+                singleLine = true, modifier = Modifier.fillMaxWidth())
+            Row {
+                TextButton(onClick = { onLocationChange(locationDraft.trim()) }, enabled = locationDraft.trim().length >= 2) { Text("Use this city") }
+                TextButton(onClick = {
+                    locationDraft = ""; onLocationChange("")
+                    if (!com.example.meowmba.core.nav.CurrentLocation.hasPermission(context))
+                        locationPermission.launch(android.Manifest.permission.ACCESS_COARSE_LOCATION)
+                }) { Text("Use device location") }
+            }
+            Text(if (location.isBlank()) "Using device location" else "Selected: $location", style = MaterialTheme.typography.bodySmall)
+            status?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -215,22 +234,6 @@ fun WeatherScreen(
             }
 
             Spacer(Modifier.height(24.dp))
-            SectionHeader("Preview")
-            Text(
-                "Look at this weather at another hour. Auto follows the real clock.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 11.sp,
-            )
-            Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TimeChip("Auto", previewTimeOfDay == null) { onPreviewTimeOfDay(null) }
-                TimeOfDay.entries.forEach { tod ->
-                    TimeChip(
-                        label = tod.name.lowercase().replaceFirstChar { it.uppercase() },
-                        selected = previewTimeOfDay == tod,
-                    ) { onPreviewTimeOfDay(tod) }
-                }
-            }
 
             Spacer(Modifier.height(40.dp))
         }

@@ -89,7 +89,7 @@ class AvatarFormInventor(private val generate: suspend (String) -> ModelResponse
         reasonLevel: InventReasonLevel = InventReasonLevel.BALANCED,
     ): GeneratedAvatarForm {
         lastValidated = null
-        require(AvatarFormRequest.isDescription(changeRequest)) {
+        require(AvatarFormRequest.isRefinement(changeRequest)) {
             "Describe one avatar appearance change in 1-${AvatarFormRequest.MAX_DESCRIPTION_LENGTH} characters"
         }
         val baseJson = GeneratedAvatarForms.toJson(current)

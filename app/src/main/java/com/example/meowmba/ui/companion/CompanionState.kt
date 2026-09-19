@@ -754,6 +754,16 @@ fun nextDriveReaction(
 
 /** Separate feature state keeps JVM constructor/copy signatures below the 255-slot limit. */
 data class CompanionFeatures(
+    val referencePhotoUri: String? = null,
+    val referenceDescription: String? = null,
+    val referencePhotoBusy: Boolean = false,
+    val referencePhotoMessage: String? = null,
+    val avatarCreationReview: AvatarCreationReview? = null,
+    val careVisible: Boolean = true,
+    val carePosition: String = "Top left",
+    val neuralFeedbackVisible: Boolean = true,
+    val weatherLocation: String = "",
+    val weatherStatus: String? = null,
     val pendingPropPlacement: GeneratedPropForm? = null,
     val savedAnimationNames: List<String> = emptyList(),
     val animInventGenerating: Boolean = false,

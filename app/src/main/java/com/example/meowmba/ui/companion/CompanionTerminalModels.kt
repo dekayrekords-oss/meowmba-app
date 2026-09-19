@@ -21,7 +21,7 @@ sealed class CompanionTerminalTarget {
         val kind: LocalLinuxKind = LocalLinuxKind.LOCAL_SANDBOX,
     ) : CompanionTerminalTarget() {
         override val id: String = LOCAL_ID
-        override val label: String = "Computer"
+        override val label: String = if (kind == LocalLinuxKind.TERMUX_LINUX) "Termux shell" else "App sandbox"
     }
 
     data class AgenticProfile(val profile: ConnectionProfile) : CompanionTerminalTarget() {

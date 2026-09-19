@@ -1,5 +1,16 @@
 # Agent execution plan — immersive companion revision
 
+## September 19: preview142 acceptance queue
+
+Single integrator; no concurrent builds. Weather/current-location controls, Avatar layout,
+home controls and Vending preview/reference workflows are implemented under test.
+Verify all seven Vending lanes, approval-before-save, refinement, cancellation, reference
+size/consent failures, named weather persistence, old voice actions and protected assets.
+User approved in-place142 installation. Run actual configured-model avatar and prop probes,
+restore user appearance/privacy, and report provider failures honestly. Native render proof
+is not photorealistic concept art; reference descriptions are not exact 3D reconstruction.
+Embedded terminal remains sandbox; real Termux is an explicit external-app handoff.
+
 ## September 19: preview141 device checkpoint
 
 Source e407586 installed in place on RFCY61NJEVM. Full JVM suite on parent a96b1f9

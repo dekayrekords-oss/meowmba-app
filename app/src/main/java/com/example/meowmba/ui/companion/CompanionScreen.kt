@@ -193,7 +193,7 @@ fun CompanionScreen(
         }
         }
 
-        if (!habitatCovered && !uiState.showNeuralInfo) {
+        if (!habitatCovered && !uiState.showNeuralInfo && uiState.features.careVisible) {
             PetCarePanel(
                 habitatMode = uiState.habitatMode, onTrick = viewModel::playCompanionTrick,
                 onHabitatMode = viewModel::setHabitatMode,
@@ -204,7 +204,12 @@ fun CompanionScreen(
                 onResetLearning = viewModel::resetPetLearning,
                 formKey = uiState.generatedAvatarForm?.let { "generated" }
                     ?: (uiState.performanceAnimal ?: uiState.avatarAnimal).key,
-                modifier = Modifier.align(Alignment.TopStart).safeDrawingPadding().padding(start = 12.dp, top = 64.dp),
+                modifier = Modifier.align(when (uiState.features.carePosition) {
+                    "Top right" -> Alignment.TopEnd
+                    "Bottom left" -> Alignment.BottomStart
+                    "Bottom right" -> Alignment.BottomEnd
+                    else -> Alignment.TopStart
+                }).safeDrawingPadding().padding(horizontal = 12.dp, vertical = 64.dp),
             )
         }
 
@@ -696,7 +701,7 @@ fun CompanionScreen(
 
         // Lumen / agentic presence chip — only when flags warrant and hint is non-null.
         val presenceHint = uiState.agenticPresenceHint
-            ?: uiState.reflexSummary?.takeIf { uiState.lumenReflexV2Enabled }
+            ?: uiState.reflexSummary?.takeIf { uiState.lumenReflexV2Enabled && uiState.features.neuralFeedbackVisible }
         if (presenceHint != null &&
             (uiState.agenticRuntimeV1Enabled || uiState.lumenReflexV2Enabled)
         ) {
@@ -754,6 +759,9 @@ fun CompanionScreen(
                 onCycleCondition = { viewModel.cycleForcedWeatherCondition() },
                 onRefresh = { viewModel.refreshWeather() },
                 onClose = { viewModel.toggleWeatherScreen() },
+                location = uiState.features.weatherLocation,
+                status = uiState.features.weatherStatus,
+                onLocationChange = viewModel::setWeatherLocation,
             )
         }
 
@@ -771,6 +779,7 @@ fun CompanionScreen(
         if (uiState.showAvatarScreen) {
             AvatarScreen(
                 morphControls = { AvatarMorphControls(uiState, viewModel) },
+                homeControls = { HomeControlSettings(uiState, viewModel) },
                 avatarScale = uiState.avatarScale, onAvatarScale = viewModel::setAvatarScale,
                 habitatMode = uiState.habitatMode, onHabitatMode = viewModel::setHabitatMode,
                 style = uiState.avatarStyle,
@@ -1103,6 +1112,8 @@ fun CompanionScreen(
                 onClose = { viewModel.toggleStudioScreen() }
             )
         }
+
+        AvatarCreationReviewDialog(uiState, viewModel)
 
         uiState.pendingPropPlacement?.let { prop ->
             PropPlacementEditor(
