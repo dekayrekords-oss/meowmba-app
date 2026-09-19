@@ -1,5 +1,16 @@
 # Agent execution plan — immersive companion revision
 
+## September 19: preview145 modern Ubuntu detection repair
+
+Installed source6b6cab3/code145; full2,615-test suite passes (five skipped), phone setup/privacy
+test passes. PRoot-Distro5.3 uses containers/ubuntu/rootfs, not just installed-rootfs/ubuntu.
+The old check tried to reinstall an active container. Detect both, preserve partial/broken
+existing paths, test repeated runs, install failure and missing workspace. Actual Ubuntu
+read-only login and OpenCode1.18.31 binary work; no deletion/reset needed or performed.
+Only reviewed setup-phone.sh changes among148 protected assets. All other147 match144.
+Pending: user private password through corrected handoff, authenticated health, terminal and
+worker-task acceptance. Fresh-device production acceptance remains separate from shell fixtures.
+
 ## September 19: preview144 Termux edition compatibility
 
 The phone has a Play Termux build without RUN_COMMAND/service. Never tell the owner to

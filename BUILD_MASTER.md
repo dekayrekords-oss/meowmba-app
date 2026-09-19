@@ -11,7 +11,7 @@ This supersedes historical build-location/version instructions in other document
 - Baseline: `5efed2f`, version 1.3.82/code 138. Historical evidence is dated September 15.
 - Verified original APK: `/Users/prog/Meowmba-Releases/idle136-20260915/meow-preview138.apk`.
 - Grok source to recover: `529cc69`, preserved as `recovery/grok-lumen` remote-tracking ref.
-- Status: preview144 (1.3.88) installed in place. Termux edition-aware setup and optional-mode phone UI checks pass. Authenticated Computer acceptance still requires the user's private password and guided handoff. Not a Play release.
+- Status: preview145 (1.3.89) installed in place. Modern Ubuntu reuse repaired; edition-aware setup and optional-mode phone UI checks pass. Authenticated Computer acceptance still requires private password/handoff. Not a Play release.
 
 ## Feature queue
 
@@ -23,7 +23,7 @@ Port feature commits; do not overwrite the baseline with an experimental branch 
 
 ## Coordination
 
-### September 19 Ubuntu reuse repair — preview145 in validation
+### September 19 Ubuntu reuse repair — preview145 installed
 
 - Owner reported container-busy during guided setup; phone has PRoot-Distro5.3.0, with
   Ubuntu listed as installed and read-only login returning MEOW_UBUNTU_OK. Old script only
@@ -35,6 +35,15 @@ Port feature commits; do not overwrite the baseline with an experimental branch 
   only; all other native/model assets must still match144. Do not whitelist arbitrary changes.
 - User requests production-equivalent behavior and allows deletion only if needed. Preserve
   Ubuntu/Termux and existing servers; guided private-password entry remains user-owned.
+- Source6b6cab3 installed over144 at2026-09-19 11:55:58. Full suite2,615 checks,
+  zero failures/errors, five skipped; on-phone Computer143DeviceTest passes. Real read-only
+  Ubuntu login and existing OpenCode1.18.31 executable pass. No files/containers deleted.
+- Certificate unchanged. APK SHA256 0fbb53d981af4d9691858083d23078ed3a14cc5002d2bb481864ba4cbf0e4ce8.
+  All147 other protected entries unchanged; reviewed script SHA256
+  af5b176099d3a82c0567bff40acc26a0f40196b9e30921472d9dc7142dcbaba9 equals packaged asset.
+- Archive:/Users/prog/Meowmba-Releases/ubuntu145-20260919. Fresh downloading is fixture-tested,
+  not a real clean-phone production signoff. Authenticated worker/terminal still needs final
+  private password entry and verification; do not confuse read-only binary execution with that.
 
 ### September 19 Termux edition repair — preview144 installed
 
