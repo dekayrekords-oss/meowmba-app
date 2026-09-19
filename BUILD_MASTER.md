@@ -23,6 +23,19 @@ Port feature commits; do not overwrite the baseline with an experimental branch 
 
 ## Coordination
 
+### September 19 Ubuntu reuse repair — preview145 in validation
+
+- Owner reported container-busy during guided setup; phone has PRoot-Distro5.3.0, with
+  Ubuntu listed as installed and read-only login returning MEOW_UBUNTU_OK. Old script only
+  checked installed-rootfs/ubuntu; version5 uses containers/ubuntu/rootfs. This attempted
+  unnecessary installation, refused by the active container lock. No reset/uninstall needed.
+- Integrator fixes both layouts and refuses overwrite of incomplete existing containers.
+  Seven executable shell fixtures cover reuse, repeat setup, missing/partial/broken layout
+  and failed installation. Explicitly reviewed runtime delta: assets/computer/setup-phone.sh
+  only; all other native/model assets must still match144. Do not whitelist arbitrary changes.
+- User requests production-equivalent behavior and allows deletion only if needed. Preserve
+  Ubuntu/Termux and existing servers; guided private-password entry remains user-owned.
+
 ### September 19 Termux edition repair — preview144 installed
 
 - Sole integrator. User authorized adapting the installed edition, correcting onboarding and

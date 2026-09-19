@@ -13,9 +13,32 @@ if ! command -v proot-distro >/dev/null 2>&1; then
     pkg update -y </dev/null
     pkg install -y proot-distro </dev/null
 fi
-if [ ! -d "$PREFIX/var/lib/proot-distro/installed-rootfs/ubuntu" ]; then
-    proot-distro install ubuntu </dev/null
-fi
+# BEGIN UBUNTU DETECTION
+# PRoot-Distro 5 moved rootfs storage to containers/<name>/rootfs. Testing only
+# the legacy path attempted to reinstall a live container ("container busy").
+# Do not infer missing from a failed login: locked/broken installs must be kept.
+meow_ensure_ubuntu() {
+    local meow_runtime="$1"
+    if [ -d "$meow_runtime/containers/ubuntu/rootfs" ] || [ -d "$meow_runtime/installed-rootfs/ubuntu" ]; then
+        printf '%s\n' 'Existing Ubuntu found. Reusing your workspace.'
+        return 0
+    fi
+    if [ -e "$meow_runtime/containers/ubuntu" ] || [ -L "$meow_runtime/containers/ubuntu" ] ||
+       [ -e "$meow_runtime/installed-rootfs/ubuntu" ] || [ -L "$meow_runtime/installed-rootfs/ubuntu" ]; then
+        printf '%s\n' 'Ubuntu exists but its filesystem is incomplete. Setup will not overwrite it. Keep the existing files and contact support.' >&2
+        return 24
+    fi
+    printf '%s\n' 'No existing Ubuntu found. Downloading Ubuntu; keep Termux open.'
+    proot-distro install ubuntu </dev/null || return $?
+    if [ ! -d "$meow_runtime/containers/ubuntu/rootfs" ] && [ ! -d "$meow_runtime/installed-rootfs/ubuntu" ]; then
+        printf '%s\n' 'Ubuntu installation did not create a recognized workspace. Setup stopped without starting a server.' >&2
+        return 24
+    fi
+}
+# END UBUNTU DETECTION
+meow_termux_prefix="${TERMUX__PREFIX:-${PREFIX:-/data/data/com.termux/files/usr}}"
+meow_ensure_ubuntu "$meow_termux_prefix/var/lib/proot-distro"
+printf '%s\n' 'Checking Ubuntu and OpenCode…'
 # Read the password before package managers run; never interpolate it into code,
 # a command argument, disk file, terminal transcript or public storage.
 proot-distro login ubuntu -- bash -c '
