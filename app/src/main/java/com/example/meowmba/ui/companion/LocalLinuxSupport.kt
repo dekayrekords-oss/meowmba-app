@@ -58,7 +58,7 @@ object LocalLinuxSupport {
         "Install Termux for a real Computer guest; sandbox sh cannot do ls/apt"
 
     const val COMPUTER_COPY =
-        "Computer is a Linux guest (root inside only). It can SSH out. Off = no CPU. Idle = asleep."
+        "Computer runs inside Ubuntu, not as phone root. Disconnecting its terminal does not stop the separate OpenCode server."
 
     /**
      * Documented bootstrap for micro Linux + outbound SSH from the guest.
@@ -122,7 +122,7 @@ object LocalLinuxSupport {
                 label = "Computer",
                 bannerHint =
                     "Computer · Termux — Linux guest (root inside only). It can SSH out. " +
-                        "Off = no CPU. Idle = asleep. Guest root != phone root. " +
+                        "Terminal Off/Idle does not stop other Termux processes. Guest root != phone root. " +
                         "proot-distro / proot -0 for root-in-guest; openssh-client to ssh to meow.",
                 installHint = BOOTSTRAP_HINT,
             )

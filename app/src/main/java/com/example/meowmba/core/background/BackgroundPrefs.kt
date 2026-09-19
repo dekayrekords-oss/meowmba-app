@@ -73,7 +73,13 @@ enum class BackgroundAnimation(
     CARTOON_PORTAL_ARCADE("cartoon_portal_arcade", "Portal arcade", isPetEnvironment = true),
     CARTOON_MOON_GARDEN("cartoon_moon_garden", "Moon garden", isPetEnvironment = true),
     CARTOON_ALIEN_AQUARIUM("cartoon_alien_aquarium", "Alien aquarium", isPetEnvironment = true),
-    CARTOON_METEOR_GARAGE("cartoon_meteor_garage", "Meteor garage", isPetEnvironment = true);
+    CARTOON_METEOR_GARAGE("cartoon_meteor_garage", "Meteor garage", isPetEnvironment = true),
+    // Append only: several older particle backgrounds seed their art from ordinal.
+    SAFFRON_DUNES("saffron_dunes", "Saffron dunes"),
+    ALPINE_CABLEWAY("alpine_cableway", "Alpine cableway"),
+    CORAL_TWILIGHT("coral_twilight", "Coral twilight"),
+    LANTERN_COURTYARD("lantern_courtyard", "Lantern courtyard"),
+    CRYSTAL_CAVERN("crystal_cavern", "Crystal cavern");
 
     /** Picker grouping is independent of the stable IDs already stored on the phone. */
     val isCartoonEnvironment: Boolean

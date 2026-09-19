@@ -33,8 +33,8 @@ class GeneratedAvatarIntegrationTest {
         override fun generateStreaming(prompt: String): Flow<ModelResponse> = flowOf(ModelResponse.Error("Use structured generation"))
     }
 
-    private suspend fun TestScope.fixture(block: suspend Fixture.() -> Unit) {
-        val dispatcher = UnconfinedTestDispatcher(testScheduler)
+    private suspend fun TestScope.fixture(queued: Boolean = false, block: suspend Fixture.() -> Unit) {
+        val dispatcher = if (queued) StandardTestDispatcher(testScheduler) else UnconfinedTestDispatcher(testScheduler)
         Dispatchers.setMain(dispatcher)
         val previousIdle = System.getProperty("meowmba.idleAnimations")
         System.setProperty("meowmba.idleAnimations", "false")
@@ -338,8 +338,15 @@ class GeneratedAvatarIntegrationTest {
             assertTrue(model.uiState.value.avatarFormMessage.orEmpty().isNotBlank())
             model.currentProvider = Provider { delay(50_000); ModelResponse.Complete(GeneratedAvatarForms.toJson(GeneratedAvatarExamples.dragon())) }
             model.createAvatarForm("friendly purple dragon")
+            // The user chooses only after the orchestrated review prompt is
+            // rendered. Drain queued Main work before simulating that choice.
+            runCurrent()
+            assertNotNull("Review must be staged before choosing: ${model.uiState.value.avatarFormMessage}",
+                model.uiState.value.features.avatarCreationReview)
             model.chooseAvatarExample(false)
-            assertTrue(model.uiState.value.avatarFormGenerating)
+            runCurrent()
+            assertTrue("Creation must be active before cancellation: ${model.uiState.value.avatarFormMessage}",
+                model.uiState.value.avatarFormGenerating)
             model.cancelAvatarFormGeneration()
             runCurrent()
             assertFalse(model.uiState.value.avatarFormGenerating)
@@ -368,6 +375,153 @@ class GeneratedAvatarIntegrationTest {
             assertEquals(form, model.uiState.value.generatedAvatarForm)
             assertEquals(1, store.list().size)
             assertNull(model.uiState.value.features.avatarCreationReview)
+        }
+    }
+
+    @Test fun `cancel before queued example launch prevents the model call and save`() = runTest {
+        for (show in listOf(false, true)) fixture(queued = true) {
+            val model = model()
+            var calls = 0
+            model.currentProvider = Provider { calls++; ModelResponse.Complete(GeneratedAvatarForms.toJson(GeneratedAvatarExamples.coffeeCup())) }
+            model.requestAvatarExample("a walking coffee cup", InventReasonLevel.FAST)
+            model.chooseAvatarExample(show)
+            model.cancelAvatarFormGeneration()
+            runCurrent()
+            assertEquals(0, calls)
+            assertFalse(model.uiState.value.avatarFormGenerating)
+            assertNull(model.uiState.value.generatedAvatarForm)
+            assertTrue(store.list().isEmpty())
+        }
+    }
+
+    @Test fun `cancel before queued preview refinement preserves the candidate without calling the model`() = runTest {
+        fixture(queued = true) {
+            val model = model()
+            val form = GeneratedAvatarExamples.coffeeCup()
+            var calls = 0
+            model.currentProvider = Provider { calls++; ModelResponse.Complete(GeneratedAvatarForms.toJson(form)) }
+            model.requestAvatarExample("a walking coffee cup", InventReasonLevel.FAST)
+            model.chooseAvatarExample(true)
+            runCurrent()
+            assertEquals(form, model.uiState.value.features.avatarCreationReview?.candidate)
+            assertEquals(1, calls)
+            assertNull(model.uiState.value.generatedAvatarForm)
+            model.refineAvatarExample("give it small wings")
+            model.cancelAvatarFormGeneration()
+            runCurrent()
+            assertEquals(1, calls)
+            assertEquals(form, model.uiState.value.features.avatarCreationReview?.candidate)
+            assertNull(model.uiState.value.generatedAvatarForm)
+            assertFalse(model.uiState.value.avatarFormGenerating)
+            assertTrue(store.list().isEmpty())
+        }
+    }
+
+    @Test fun `cancel before queued worn avatar refinement preserves the saved form`() = runTest {
+        fixture(queued = true) {
+            val model = model()
+            val form = GeneratedAvatarExamples.coffeeCup()
+            var calls = 0
+            model.currentProvider = Provider { calls++; ModelResponse.Complete(GeneratedAvatarForms.toJson(form)) }
+            assertTrue(model.generateAvatarForm("a walking coffee cup", reasonLevel = InventReasonLevel.FAST) is ToolResult.Success)
+            assertEquals(1, calls)
+            model.refineAvatarForm("give it small wings", InventReasonLevel.FAST)
+            model.cancelAvatarFormGeneration()
+            runCurrent()
+            assertEquals(1, calls)
+            assertEquals(form, model.uiState.value.generatedAvatarForm)
+            assertFalse(model.uiState.value.avatarFormGenerating)
+            assertEquals(1, store.list().size)
+        }
+    }
+
+    @Test fun `failed preview can retry in place without saving or changing the avatar`() = runTest {
+        fixture {
+            val model = model()
+            val form = GeneratedAvatarExamples.dragon()
+            var calls = 0
+            model.currentProvider = Provider {
+                calls++
+                if (calls == 1) ModelResponse.Error("HTTP 401 secret-provider-detail")
+                else ModelResponse.Complete(GeneratedAvatarForms.toJson(form))
+            }
+            model.requestAvatarExample("friendly purple dragon", InventReasonLevel.FAST)
+            model.chooseAvatarExample(true)
+            runCurrent()
+            assertTrue(model.uiState.value.avatarFormError)
+            assertFalse(model.uiState.value.avatarFormMessage.orEmpty().contains("secret-provider-detail"))
+            assertNull(model.uiState.value.features.avatarCreationReview?.candidate)
+            model.chooseAvatarExample(true)
+            runCurrent()
+            assertEquals(2, calls)
+            assertEquals(form, model.uiState.value.features.avatarCreationReview?.candidate)
+            assertNull(model.uiState.value.generatedAvatarForm)
+            assertTrue(store.list().isEmpty())
+            model.chooseAvatarExample(true)
+            assertEquals("A ready candidate is not regenerated by a repeated click", 2, calls)
+        }
+    }
+
+    @Test fun `optional review failure visibly retains a real completed design`() = runTest {
+        fixture {
+            val model = model()
+            val form = GeneratedAvatarExamples.dragon()
+            var calls = 0
+            model.currentProvider = Provider {
+                calls++
+                if (calls == 1) ModelResponse.Complete(GeneratedAvatarForms.toJson(form))
+                else ModelResponse.Error("private provider problem")
+            }
+            model.requestAvatarExample("friendly purple dragon", InventReasonLevel.BALANCED)
+            model.chooseAvatarExample(true)
+            runCurrent()
+            assertEquals(form, model.uiState.value.features.avatarCreationReview?.candidate)
+            assertTrue(model.uiState.value.avatarFormMessage.orEmpty().contains("polish"))
+            assertFalse(model.uiState.value.avatarFormMessage.orEmpty().contains("private provider"))
+            assertFalse(model.uiState.value.avatarFormError)
+            assertTrue(store.list().isEmpty())
+            model.acceptAvatarExample()
+            assertEquals(form, model.uiState.value.generatedAvatarForm)
+        }
+    }
+
+    @Test fun `outer task timeout never saves a candidate completed before optional polish`() = runTest {
+        fixture {
+            val model = model()
+            val form = GeneratedAvatarExamples.dragon()
+            var calls = 0
+            model.currentProvider = Provider {
+                calls++
+                if (calls == 1) ModelResponse.Complete(GeneratedAvatarForms.toJson(form))
+                else { delay(60_000); ModelResponse.Complete(GeneratedAvatarForms.toJson(form)) }
+            }
+            val result = runCatching {
+                withTimeout(2_000) { model.generateAvatarForm("friendly purple dragon", reasonLevel = InventReasonLevel.BALANCED, createNew = true) }
+            }
+            assertTrue(result.exceptionOrNull() is TimeoutCancellationException)
+            assertTrue(store.list().isEmpty())
+            assertNull(model.uiState.value.generatedAvatarForm)
+            assertFalse(model.uiState.value.avatarFormGenerating)
+        }
+    }
+
+    @Test fun `creation shows elapsed progress and cancellation stops progress updates`() = runTest {
+        fixture {
+            val model = model()
+            model.currentProvider = Provider { delay(60_000); ModelResponse.Complete("{}") }
+            model.requestAvatarExample("friendly purple dragon", InventReasonLevel.FAST)
+            model.chooseAvatarExample(true)
+            advanceTimeBy(10_001)
+            runCurrent()
+            assertTrue(model.uiState.value.avatarFormMessage.orEmpty().contains("10s"))
+            model.cancelAvatarFormGeneration()
+            runCurrent()
+            val cancelled = model.uiState.value.avatarFormMessage
+            advanceTimeBy(15_000)
+            runCurrent()
+            assertEquals(cancelled, model.uiState.value.avatarFormMessage)
+            assertFalse(model.uiState.value.avatarFormGenerating)
+            assertTrue(store.list().isEmpty())
         }
     }
 

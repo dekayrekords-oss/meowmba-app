@@ -17,8 +17,17 @@ import org.json.JSONObject
  * and supersession checks.
  */
 class AvatarFormInventor(private val generate: suspend (String) -> ModelResponse) {
+    enum class ProviderFailureKind { UNAVAILABLE, INCOMPLETE }
+    /** Hosts can explain provider failures without displaying raw remote error text. */
+    class ProviderFailure(val kind: ProviderFailureKind, message: String) : IllegalStateException(message)
+
     /** Only complete validated geometry is eligible for timeout recovery. */
     @Volatile var lastValidated: GeneratedAvatarForm? = null
+        private set
+
+    /** A failed optional pass must not discard an already generated valid form.
+     * The host displays this neutral notice beside that actual design. */
+    @Volatile var completionNotice: String? = null
         private set
 
     suspend fun invent(
@@ -26,6 +35,7 @@ class AvatarFormInventor(private val generate: suspend (String) -> ModelResponse
         reasonLevel: InventReasonLevel = InventReasonLevel.BALANCED,
     ): GeneratedAvatarForm {
         lastValidated = null
+        completionNotice = null
         require(AvatarFormRequest.isDescription(request)) {
             "Describe one avatar appearance in 1-${AvatarFormRequest.MAX_DESCRIPTION_LENGTH} characters"
         }
@@ -89,6 +99,7 @@ class AvatarFormInventor(private val generate: suspend (String) -> ModelResponse
         reasonLevel: InventReasonLevel = InventReasonLevel.BALANCED,
     ): GeneratedAvatarForm {
         lastValidated = null
+        completionNotice = null
         require(AvatarFormRequest.isRefinement(changeRequest)) {
             "Describe one avatar appearance change in 1-${AvatarFormRequest.MAX_DESCRIPTION_LENGTH} characters"
         }
@@ -147,13 +158,23 @@ class AvatarFormInventor(private val generate: suspend (String) -> ModelResponse
                 throw cancelled
             } catch (_: OutOfMemoryError) {
                 System.gc()
+                currentCoroutineContext().ensureActive()
+                completionNotice = "Extra polish stopped because memory was limited; kept the completed design."
                 break // keep last good form rather than crash
+            } catch (_: Exception) {
+                currentCoroutineContext().ensureActive()
+                completionNotice = "Extra polish could not finish; kept the completed design."
+                break
             }
             currentCoroutineContext().ensureActive()
             current = try {
                 parseResponse(complete(response))
+            } catch (_: ProviderFailure) {
+                completionNotice = "Extra polish could not finish; kept the completed design."
+                break
             } catch (_: IllegalArgumentException) {
-                current // keep last good form
+                completionNotice = "Extra polish did not pass drawing checks; kept the completed design."
+                break
             }
             lastValidated = current
         }
@@ -162,8 +183,9 @@ class AvatarFormInventor(private val generate: suspend (String) -> ModelResponse
 
     private fun complete(response: ModelResponse): String = when (response) {
         is ModelResponse.Complete -> response.text
-        is ModelResponse.Error -> throw IllegalStateException(response.message.take(240))
-        is ModelResponse.Partial -> throw IllegalStateException("The selected AI model did not finish the avatar design")
+        is ModelResponse.Error -> throw ProviderFailure(ProviderFailureKind.UNAVAILABLE, response.message.take(240))
+        is ModelResponse.Partial -> throw ProviderFailure(ProviderFailureKind.INCOMPLETE,
+            "The selected AI model did not finish the avatar design")
     }
 
     companion object {

@@ -4,13 +4,13 @@ import android.content.Context
 import com.example.meowmba.core.security.SecureStorageManager
 
 /**
- * Power for the local **Computer** Linux guest (Termux/PRoot if available, else sandbox sh).
+ * Connection policy for the terminal owned by Meow. Not power authority over Termux.
  *
- * - [On]: start/keep the guest session. Terminal Connect works.
- * - [Idle]: unused for [ComputerPowerStore.idleMinutes] — PTY disconnected, guest
- *   processes stopped, disk/state kept. Cheap. UI shows Idle.
- * - [Off]: user toggle — kill session, no Computer background ticks, no Termux/PRoot
- *   held by this app. Saves CPU. Disk/state remain so Turn On reconnects (no reinstall).
+ * - [On]: connect the terminal session.
+ * - [Idle]: disconnect the owned PTY after [ComputerPowerStore.idleMinutes] unused.
+ * - [Off]: disconnect the owned terminal and cancel its inactivity watch.
+ * The separately launched OpenCode server/other Termux sessions remain running in all
+ * three states. Never infer an idle server, zero CPU or permission to kill other work.
  *
  * Guest root (PRoot) ≠ phone root. The guest can SSH out over the network.
  * See docs/LOCAL_LINUX.md.
@@ -54,7 +54,7 @@ class ComputerPowerStore(private val storage: SecureStorageManager) {
         val DEFAULT_STATE = ComputerPowerState.Idle
 
         const val COPY =
-            "Computer is a Linux guest (root inside only). It can SSH out. Off = no CPU. Idle = asleep."
+            "These controls disconnect Meow's terminal, not the separate OpenCode server. Ubuntu files stay saved."
 
         fun from(context: Context): ComputerPowerStore =
             ComputerPowerStore(SecureStorageManager(context.applicationContext))

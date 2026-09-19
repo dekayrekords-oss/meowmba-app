@@ -121,7 +121,7 @@ internal fun ComputerToolsScreen(
                         Text("Default agent: Computer · powered by OpenCode", style=MaterialTheme.typography.bodyMedium)
                         ComputerDestinationCard("Advanced legacy planner","Optional older task planner settings; Computer uses OpenCode's model.",Icons.Default.Psychology) { navigate(ComputerToolsPage.MODEL) }
                         ComputerDestinationCard("Saved connections",if(agenticRuntimeV1) "${connectionProfiles.size} saved · add or edit SSH targets." else "Set up the connections used by task automation.",Icons.Default.Link) { navigate(ComputerToolsPage.PROFILES) }
-                        ComputerDestinationCard("Power & sleep","${computerPower.name} · choose when Computer rests.",Icons.Default.PowerSettingsNew) { navigate(ComputerToolsPage.POWER) }
+                        ComputerDestinationCard("Power & sleep","${computerPower.name} · terminal connection and server guidance.",Icons.Default.PowerSettingsNew) { navigate(ComputerToolsPage.POWER) }
                         TextButton(onClick={navigate(ComputerToolsPage.DETAILS)}) { Text("Connection details & logs") }
                         TextButton(onClick={navigate(ComputerToolsPage.LEGACY_TASKS)}) { Text("Legacy tasks") }
                     }
@@ -151,19 +151,23 @@ internal fun ComputerToolsScreen(
                         }
                     }
                     ComputerToolsPage.POWER -> {
-                        Text("Choose when the phone's Linux Computer runs. Remote servers keep their own power settings.")
+                        Text("Terminal connection", style=MaterialTheme.typography.titleMedium)
+                        Text("These controls affect Meow's terminal only. OpenCode can still run in Termux after the terminal disconnects; Idle does not mean the server is asleep.")
                         FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                             ComputerPowerState.entries.forEach { state ->
                                 FilterChip(state==computerPower,{onComputerPowerChange(state)},label={Text(state.name)})
                             }
                         }
                         Text(when(computerPower) {
-                            ComputerPowerState.On -> "Keep the Computer session running."
-                            ComputerPowerState.Idle -> "Let Computer sleep when it is unused."
-                            ComputerPowerState.Off -> "Stop the phone's Computer session."
+                            ComputerPowerState.On -> "Connect Meow's legacy local terminal. Use Open phone Terminal for the configured Ubuntu connection."
+                            ComputerPowerState.Idle -> "Disconnect Meow's terminal. OpenCode remains available."
+                            ComputerPowerState.Off -> "Disconnect Meow's terminal. Other Termux sessions and OpenCode tasks are not stopped."
                         },style=MaterialTheme.typography.bodyMedium)
-                        Text("Sleep after ${computerIdleMinutes.coerceIn(1,30)} minutes unused",style=MaterialTheme.typography.titleSmall)
+                        Text("Disconnect legacy terminal after ${computerIdleMinutes.coerceIn(1,30)} minutes unused",style=MaterialTheme.typography.titleSmall)
                         Slider(computerIdleMinutes.coerceIn(1,30).toFloat(),{onComputerIdleMinutesChange(it.toInt().coerceIn(1,30))},valueRange=1f..30f,steps=28)
+                        Text("The timer does not close Ubuntu terminals: a quiet command may still be working. Choosing Idle or Off yourself can stop manual terminal commands and active legacy agent steps; separately submitted OpenCode tasks continue.", style=MaterialTheme.typography.bodySmall)
+                        Text("If Termux stays warm without a task", style=MaterialTheme.typography.titleMedium)
+                        Text("New Computer setups select OpenCode's ripgrep search backend instead of its native index. It lists workspace filenames once, then searches when requested. An already-running server must be restarted to use the new launch settings; heat improvement still needs measurement. Do not stop Termux during a task. Disconnecting here does not apply the change.")
                     }
                     ComputerToolsPage.DETAILS -> {
                         Text("Phone",style=MaterialTheme.typography.titleMedium)

@@ -491,7 +491,7 @@ class CompanionTerminalSession(
 
     private fun emitSafe(text: String) {
         if (text.isEmpty()) return
-        if (isLocalSession.get()) noteIoActivity()
+        if (isLocalSession.get() || ubuntu != null) noteIoActivity()
         _output.tryEmit(text)
     }
 

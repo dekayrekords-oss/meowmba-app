@@ -5,7 +5,24 @@ This is an acceptance/backlog report, not authorization to publish, enable monit
 operate a robot, post to accounts or replace the user's data. Historical plan checkboxes
 are not reliable current status; use the latest evidence below and BUILD_MASTER.md.
 
-## Latest follow-up — preview147
+## Latest follow-up — preview148 prepared, not installed
+
+User-reported driving UI and avatar-generation failures addressed in candidate148: compact
+landscape HUD, neutral source-availability status, scrollable details, bounded real-preview
+dialog, remote queue allowance, retained validated designs, retry and cancellation guards.
+Five original animated scenes added with static-layer caching and the existing pause clock.
+Final full suite:2,693 tests, zero failures/errors, five skipped; both APKs built. Drive9,
+background9, creation reliability13, review UI5 and avatar integration24 tests pass.
+
+This advances items9,30,31,34,35,47,49 and50; it does not close their live acceptance gates.
+Computer idle/error polling is reduced and silent Ubuntu commands are protected from
+automatic disconnection. Future setup selects on-demand search, but existing OpenCode
+servers were not restarted. Phone is absent on both Mac and Meow:148 is NOT installed,
+and the owner's Termux idle overheating is still unmeasured/unresolved. First next action
+on reconnection is a UID-scoped baseline, then automatic in-place install/live testing.
+See [DRIVE_CREATION_BACKGROUNDS_148_PASS_DOWN.md](DRIVE_CREATION_BACKGROUNDS_148_PASS_DOWN.md).
+
+## Previous follow-up — preview147 installed
 
 The audit below records145; it is not the latest installed-build status. Installed147
 (source09db18d) repairs clock/Reflex stacking, extends known-tool result discovery and
@@ -259,9 +276,11 @@ every listed feature is wholly absent.
 
 ## Next work recommendation
 
-First deliver a **complete project-to-result loop** (items1–4), fix the observed home
-layout overlap, and run clean-device onboarding/lifecycle acceptance (5–8,12).
-Then tackle measured thermal/voice reliability (9,22–24) before expanding autonomous
+First complete148 phone acceptance and measure the reported Termux idle heat (item9),
+without interrupting unknown work.147 already repaired the observed home-header overlap;
+148 adds the compact driving layout, pending phone acceptance. Then deliver a **complete
+project-to-result loop** (items1–4), large safe outputs, and clean-device onboarding/lifecycle
+acceptance (5–8,12). Continue measured thermal/voice reliability (9,22–24) before expanding autonomous
 business/HUB/robot features. Existing features need an understandable, verifiable result
 experience more urgently than the app needs another large catalog of options.
 

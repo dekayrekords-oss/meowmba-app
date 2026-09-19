@@ -2678,8 +2678,8 @@ class CompanionViewModel(
 
     /**
      * Computer Off | Idle | On.
-     * Off kills the guest and cancels idle ticks (no Termux/PRoot held).
-     * Idle disconnects the PTY and stops guest processes; disk/state stay.
+     * Off/Idle disconnect the owned PTY; the separate OpenCode server remains running.
+     * These states are not evidence that Termux is asleep or using no CPU.
      * On from Idle/Off reconnects (no reinstall).
      */
     fun setComputerPowerState(state: ComputerPowerState) {
@@ -2705,7 +2705,7 @@ class CompanionViewModel(
                         session.disconnect()
                     }
                     appendCompanionTerminalOutput(
-                        "[Computer off — no CPU. Guest disk kept; Turn On to wake.]\n",
+                        "[Meow terminal disconnected. OpenCode and other Termux sessions may still be running. Files kept.]\n",
                     )
                 }
                 syncComputerIdleWatch()
@@ -2721,7 +2721,7 @@ class CompanionViewModel(
                         session.disconnect()
                     }
                     appendCompanionTerminalOutput(
-                        "[Computer idle — asleep. Disk kept. Turn On or Wake to reconnect.]\n",
+                        "[Meow terminal idle/disconnected. OpenCode remains running; this is not server sleep.]\n",
                     )
                 }
                 syncComputerIdleWatch()
@@ -2757,6 +2757,9 @@ class CompanionViewModel(
                 val live = ComputerPowerStore(storage)
                 if (live.state != ComputerPowerState.On) break
                 val session = companionTerminalSession ?: continue
+                // A silent Ubuntu PTY may be compiling/rendering. Closing it kills
+                // its shell, not the idle OpenCode server; never use this as cooling.
+                if (!computerAllowsSilenceDisconnect(session.connectedTargetId.value)) continue
                 if (!session.isComputerGuest() &&
                     session.connectedTargetId.value != CompanionTerminalTarget.LOCAL_ID
                 ) {
@@ -2773,7 +2776,7 @@ class CompanionViewModel(
                     refreshComputerPowerMirror()
                     session.disconnect()
                     appendCompanionTerminalOutput(
-                        "[Computer idle — unused ${live.idleMinutes} min. Guest asleep.]\n",
+                        "[Meow terminal disconnected after ${live.idleMinutes} min unused. OpenCode remains running.]\n",
                     )
                     break
                 }
@@ -10518,9 +10521,11 @@ class CompanionViewModel(
             avatarFormFailure("Wear a generated form before refining it.")
             return
         }
+        val generation = avatarFormGeneration
         viewModelScope.launch {
             generateAvatarForm(
                 request = changeRequest.trim(),
+                expectedGeneration = generation,
                 reasonLevel = reasonLevel,
                 refineFrom = current,
             )
@@ -10579,7 +10584,8 @@ class CompanionViewModel(
                     val selected = currentProvider ?: return@coroutineScope avatarFormFailure(
                         "Choose a working AI model in LLM settings to create a new form. Presets and saved forms work without one.")
                     val prompt = com.example.meowmba.core.agent.tools.AvatarFormInventor.prompt(request)
-                    // Prefer a fast invent lane when available; complex forms need JSON quickly under 90s.
+                    // Keep the configured creation route; a queued remote request needs
+                    // its own bounded allowance, not the short local inference deadline.
                     val inventPrefer = preferredFastRouteId() ?: preferredChatRouteId()
                     val provider = if (selected is com.example.meowmba.core.agent.OmniRoute)
                         selected.plan(prompt, preferRouteId = inventPrefer).firstOrNull()?.provider
@@ -10592,37 +10598,50 @@ class CompanionViewModel(
                         } ?: "")
                         if (provider is LiteRtProvider) provider.generateStructured(grounded) else provider.generate(grounded)
                     }.also { inventor = it }
-                    val timeoutMs = when (reasonLevel) {
-                        InventReasonLevel.FAST -> 75_000L
-                        InventReasonLevel.BALANCED -> 90_000L
-                        InventReasonLevel.THOROUGH -> 120_000L
+                    val remote = provider is RemoteModelProvider
+                    val timeoutMs = InventTimeBudget.avatar(remote, reasonLevel)
+                    val progress = launch {
+                        var seconds = 0
+                        while (true) {
+                            delay(5_000)
+                            seconds += 5
+                            ensureOwner()
+                            val phase = if (activeInventor.lastValidated == null) "Designing your avatar" else "Design ready · checking optional polish"
+                            _uiState.value = _uiState.value.copy(avatarFormMessage =
+                                "$phase · ${seconds}s. " +
+                                    (if (remote) "Cloud services may queue requests. " else "") + "Cancel anytime.")
+                        }
                     }
-                    val form = withContext(ioDispatcher + stop) {
+                    val form = try { withContext(ioDispatcher + stop) {
                         withTimeout(timeoutMs) {
                             if (refineFrom != null) activeInventor.refine(refineFrom, request, reasonLevel)
                             else activeInventor.invent(request, reasonLevel)
                         }
-                    }
+                    } } finally { progress.cancel() }
                     kotlinx.coroutines.currentCoroutineContext().ensureActive()
                     ensureOwner()
                     // Bounded 32 KB atomic file write + preference selection are serialized
                     // with cancellation. No suspended late write can resurrect a cancelled form.
-                    if (previewOnly) return@coroutineScope stageAvatarExample(form)
+                    val notice = activeInventor.completionNotice?.let { " $it" }.orEmpty()
+                    if (previewOnly) return@coroutineScope stageAvatarExample(form, notice)
                     store.save(form, request)
-                    applyGeneratedAvatar(form, store.list(), "Now wearing ${form.name}. Saved to Your forms.")
-                    ToolResult.Success("Lumen is now ${form.name}, a generated cartoon interpretation. Saved for reuse; the same brain and reactions continue.")
+                    applyGeneratedAvatar(form, store.list(), "Now wearing ${form.name}. Saved to Your forms.$notice")
+                    ToolResult.Success("Lumen is now ${form.name}, a generated cartoon interpretation. Saved for reuse; the same brain and reactions continue.$notice")
                 } catch (_: kotlinx.coroutines.TimeoutCancellationException) {
+                    // Recover only our inner creation deadline. An outer task/user
+                    // cancellation must never commit a candidate after cancellation.
+                    kotlinx.coroutines.currentCoroutineContext().ensureActive()
                     ensureOwner()
                     val ready = inventor?.lastValidated
                     if (ready != null && store != null) {
                         try {
-                            if (previewOnly) return@coroutineScope stageAvatarExample(ready)
+                            if (previewOnly) return@coroutineScope stageAvatarExample(ready, " Extra polish timed out; the completed design is ready for review.")
                             store.save(ready, request)
                             val message = "Now wearing ${ready.name}. Extra polish timed out; saved the completed design."
                             applyGeneratedAvatar(ready, store.list(), message)
                             ToolResult.Success(message)
                         } catch (_: Exception) { avatarFormFailure("Could not save the completed design. Try again or free a library slot.") }
-                    } else avatarFormFailure("Avatar creation timed out. Your current form is unchanged; try a simpler description.")
+                    } else avatarFormFailure("The selected model did not finish before the time limit. Your avatar is unchanged. Retry, or check the model connection in LLM.")
                 } catch (cancelled: kotlinx.coroutines.CancellationException) {
                     throw cancelled
                 } catch (error: Throwable) {
@@ -10632,6 +10651,10 @@ class CompanionViewModel(
                     val reason = error.message?.filterNot { it.isISOControl() }?.take(120)?.takeIf { it.isNotBlank() }
                     avatarFormFailure(
                         when {
+                            error is com.example.meowmba.core.agent.tools.AvatarFormInventor.ProviderFailure ->
+                                if (error.kind == com.example.meowmba.core.agent.tools.AvatarFormInventor.ProviderFailureKind.INCOMPLETE)
+                                    "The model returned an unfinished design. Your avatar is unchanged. Retry or choose another configured model in LLM."
+                                else "The selected AI service could not complete the design. Your avatar is unchanged. Check its connection or credits in LLM, then retry."
                             error is OutOfMemoryError || reason?.contains("memory", ignoreCase = true) == true ->
                                 "That form was too complex for memory. Try Faster reason level or a simpler description."
                             reason != null && (reason.contains("HTTP", ignoreCase = true) ||
@@ -10685,26 +10708,31 @@ class CompanionViewModel(
 
     fun chooseAvatarExample(show: Boolean) {
         val draft = _uiState.value.features.avatarCreationReview ?: return
-        if (draft.reviewing || _uiState.value.avatarFormGenerating) return
+        val retryFailedPreview = show && draft.reviewing && draft.candidate == null && _uiState.value.avatarFormError
+        if (_uiState.value.avatarFormGenerating || (draft.reviewing && !retryFailedPreview)) return
         _uiState.value = _uiState.value.copy(features = _uiState.value.features.copy(
             avatarCreationReview = if (show) draft.copy(reviewing = true) else null))
-        viewModelScope.launch { generateAvatarForm(draft.request, reasonLevel = draft.reason, previewOnly = show, referenceDescription = draft.referenceDescription, createNew = true) }
+        // Capture before dispatch: cancel/dismiss can happen before this launch
+        // enters generateAvatarForm and registers its active work handle.
+        val generation = avatarFormGeneration
+        viewModelScope.launch { generateAvatarForm(draft.request, expectedGeneration = generation, reasonLevel = draft.reason, previewOnly = show, referenceDescription = draft.referenceDescription, createNew = true) }
     }
 
-    private fun stageAvatarExample(form: GeneratedAvatarForm): ToolResult {
+    private fun stageAvatarExample(form: GeneratedAvatarForm, notice: String = ""): ToolResult {
         val review = _uiState.value.features.avatarCreationReview
             ?: throw kotlinx.coroutines.CancellationException("Preview dismissed")
         _uiState.value = _uiState.value.copy(features = _uiState.value.features.copy(
             avatarCreationReview = review.copy(candidate = form, reviewing = true)),
-            avatarFormMessage = "Example ready. Accept or refine it; your main avatar is unchanged.", avatarFormError = false)
-        return ToolResult.Success("Example ready for review. Not saved or equipped yet.")
+            avatarFormMessage = "Example ready. Accept or refine it; your main avatar is unchanged.$notice", avatarFormError = false)
+        return ToolResult.Success("Example ready for review. Not saved or equipped yet.$notice")
     }
 
     fun refineAvatarExample(change: String) {
         val draft = _uiState.value.features.avatarCreationReview ?: return
         val form = draft.candidate ?: return
         if (change.isBlank() || _uiState.value.avatarFormGenerating) return
-        viewModelScope.launch { generateAvatarForm(change.take(500), reasonLevel = draft.reason, refineFrom = form, previewOnly = true, referenceDescription = draft.referenceDescription) }
+        val generation = avatarFormGeneration
+        viewModelScope.launch { generateAvatarForm(change.take(500), expectedGeneration = generation, reasonLevel = draft.reason, refineFrom = form, previewOnly = true, referenceDescription = draft.referenceDescription) }
     }
 
     fun acceptAvatarExample() {

@@ -12,6 +12,10 @@ This supersedes historical build-location/version instructions in other document
 - Verified original APK: `/Users/prog/Meowmba-Releases/idle136-20260915/meow-preview138.apk`.
 - Grok source to recover: `529cc69`, preserved as `recovery/grok-lumen` remote-tracking ref.
 - Status: preview147 (1.3.91/source09db18d) installed in place. Seven live checks including real Computer file retrieval/local saving/context pass;2,646 full-suite tests, zero failures, five skipped. Known146 Android file-save failure repaired. Results UX, measured header layout and exact-output idle rendering optimizations included. Fresh-device and sustained thermal acceptance remain open. Not a Play release.
+- Ready candidate: preview148 (1.3.92), full2,693 tests, zero failures/errors, five skipped.
+  Compact driving/landscape UI, reliable avatar retry/cancellation and five animated scenes.
+  Not installed: phone absent from ADB. Termux idle heat remains unmeasured/unresolved.
+  Receipt and limitations: docs/DRIVE_CREATION_BACKGROUNDS_148_PASS_DOWN.md.
 
 ## Feature queue
 
@@ -22,6 +26,34 @@ Retain baseline computer setup, cancellation, habitat, onboarding, server and pe
 Port feature commits; do not overwrite the baseline with an experimental branch tree.
 
 ## Coordination
+
+### September 19 preview148 prepared — driving, creation, backgrounds and Termux heat
+
+- Installed baseline remains147. Candidate148 is built/tested in this checkout; no second build
+  owner. Automatic data-preserving install/test remains authorized. Phone currently absent
+  from ADB, so Termux CPU diagnosis, existing-server restart and live avatar verification
+  cannot yet be claimed. Do not stop unknown servers or reset Ubuntu to work around this.
+- Root owns shared ViewModel wiring, safe phone diagnostics, Computer power truthfulness,
+  setup profile and tests/build/install. home_overlap_fix owns responsive DriveCard and
+  tests; result_flow_search owns avatar inventor/budget/retry dialog/tests;
+  idle_heat_search owns five code-native animated backgrounds and tests. Workers do not build.
+- Drive summary becomes compact with separate details; real crash/vehicle alerts stay.
+  Avatar generation gets bounded remote queue time, elapsed feedback, retry and retention
+  of validated designs when optional polish fails. New background art uses retained static
+  layers and the existing lifecycle/thermal clock; no raster assets or per-background loops.
+- The old Computer Idle/Off label is NOT server power: closing a PTY leaves OpenCode
+  running. Future setup selects supported on-demand search (OPENCODE_DISABLE_FFF=1).
+  Existing servers require a separately verified restart; this is not an already-applied
+  heat fix. Version1.18.31 already disables FFF content indexing, so do not cite older
+  home-directory indexing reports as this phone's measured root cause.
+- Final397 suites/2,693 tests:2,688 passed, five skipped, zero failures/errors. Both APKs
+  built. Avatar review landscape, real native backgrounds, failed-preview retry, optional
+  review recovery and cancellation-before-dispatch have regression coverage. The latter
+  had three failing red tests before the ownership-guard fix; do not remove that coverage.
+- Archive:/Users/prog/Meowmba-Releases/drive148-20260919-RwdioX/. APK SHA256
+  c6034d1dbd045103573bb9187d0e7941ec5a4d4fa3633120e722a02c500d4452. Same certificate;
+ 148 protected entries, none missing,147 unchanged, reviewed setup-phone.sh change only.
+  No phone install, existing-server restart, user-data change or Play upload in this batch.
 
 ### September 19 preview147 installed — bounded acceptance complete
 

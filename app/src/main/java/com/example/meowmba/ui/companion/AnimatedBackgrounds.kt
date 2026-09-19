@@ -38,6 +38,10 @@ fun AnimatedBackground(animation: BackgroundAnimation, modifier: Modifier = Modi
     // Read inside Canvas, never in composition. Both layers share one clock.
     val clock by remember(sceneClock) { derivedStateOf { sceneClock.phase(BG_CYCLE_MS) } }
     val slow by remember(sceneClock) { derivedStateOf { sceneClock.phase(BG_SLOW_MS) } }
+    if (isScenicBackground(animation)) {
+        ScenicBackground(animation, modifier, clock = { clock }, slow = { slow })
+        return
+    }
     if (animation.isPetEnvironment) {
         IllustratedEnvironmentBackground(animation, modifier, clock = { clock }, slow = { slow })
         return
@@ -264,6 +268,10 @@ private fun DrawScope.embers(f: BgField, clock: Float, slow: Float, scale: Float
  */
 @Composable
 fun AnimationThumbnail(animation: BackgroundAnimation, modifier: Modifier = Modifier) {
+    if (isScenicBackground(animation)) {
+        ScenicBackground(animation, modifier, clock = { .25f }, slow = { .15f })
+        return
+    }
     if (animation.isPetEnvironment) {
         IllustratedEnvironmentBackground(animation, modifier, clock = { .25f }, slow = { .15f }, thumbnail = true)
         return

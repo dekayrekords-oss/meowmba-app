@@ -33,6 +33,18 @@ class PhoneComputerSetupContractTest {
         assertTrue(source.contains("set +x"))
     }
 
+    @Test fun phoneWorkerUsesOnDemandSearchWithoutDisablingTaskToolsOrChangingModels() {
+        val source = script()
+        val server = source.substringAfter("IFS= read -r OPENCODE_SERVER_PASSWORD")
+        assertTrue(server.contains("cd \"${'$'}HOME/MeowProjects\""))
+        assertTrue(server.contains("export OPENCODE_DISABLE_FFF=1"))
+        assertTrue(server.indexOf("export OPENCODE_DISABLE_FFF=1") < server.indexOf("exec opencode serve"))
+        assertTrue(server.contains("\"permission\":{\"*\":\"ask\"}"))
+        assertFalse(server.contains("--model"))
+        assertFalse(server.contains("\"tools\""))
+        assertFalse(server.contains("pkill"))
+    }
+
     @Test fun recoveryUsesOnlyTheSeparatePortAndPreservesExistingServer() {
         val original = script()
         assertEquals(original, PhoneComputerSetup.scriptForAddress(original, OpenCodeLocalConnection.ORIGINAL_ADDRESS))

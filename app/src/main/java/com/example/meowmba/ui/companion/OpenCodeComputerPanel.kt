@@ -35,6 +35,7 @@ internal fun OpenCodeComputerPanel(onOpenFiles: () -> Unit = {}) {
     var missingSession by remember { mutableStateOf(false) }
     var savedResult by remember(session) { mutableStateOf<ComputerArtifactStore.Saved?>(null) }
     var showProgress by remember(session) { mutableStateOf(false) }
+    var refreshGeneration by remember { mutableIntStateOf(0) }
     var actionFeedback by remember { mutableStateOf<String?>(null) }
     val previewLocation = remember { BringIntoViewRequester() }
     val feedbackLocation = remember { BringIntoViewRequester() }
@@ -59,18 +60,20 @@ internal fun OpenCodeComputerPanel(onOpenFiles: () -> Unit = {}) {
         } catch (e: CancellationException) { throw e }
         catch (_: Exception) { client = null; status = "Secure connection storage is unavailable. Unlock the phone and reopen Computer setup. Nothing was sent." }
     }
-    LaunchedEffect(session, client) {
+    LaunchedEffect(session, client, refreshGeneration) {
         val api = client ?: return@LaunchedEffect
         if (session.isBlank()) return@LaunchedEffect
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            val cadence = ComputerPollCadence()
             while (isActive) {
-                try { snapshot = api.snapshot(session); missingSession = false; status = "Computer: ${snapshot!!.status}" }
+                var observedStatus: String? = null
+                try { snapshot = api.snapshot(session); missingSession = false; observedStatus = snapshot!!.status; status = "Computer: $observedStatus" }
                 catch (e: CancellationException) { throw e }
                 catch (e: Exception) {
                     missingSession = e.message?.contains("HTTP 404") == true
                     status = e.message ?: "Computer unavailable. Task may still be running."
                 }
-                delay(if (snapshot?.status == "idle") 10_000 else 3_000)
+                delay(cadence.after(observedStatus))
             }
         }
     }
@@ -81,7 +84,7 @@ internal fun OpenCodeComputerPanel(onOpenFiles: () -> Unit = {}) {
             try { block(api) }
             catch (e: CancellationException) { throw e }
             catch (e: Exception) { actionFeedback = e.message ?: "Computer action failed; refresh before retrying." }
-            finally { busy = false }
+            finally { busy = false; refreshGeneration++ }
         }
     }
     fun saveResult(path: String) = action { api ->
@@ -99,6 +102,9 @@ internal fun OpenCodeComputerPanel(onOpenFiles: () -> Unit = {}) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Computer", style = MaterialTheme.typography.titleLarge)
         Text(status)
+        if (client != null && session.isNotBlank()) {
+            TextButton(onClick = { refreshGeneration++ }, enabled = !busy) { Text("Refresh status") }
+        }
         actionFeedback?.let { Text(it, modifier = Modifier.bringIntoViewRequester(feedbackLocation)) }
         savedResult?.let { saved ->
             val mime = com.example.meowmba.core.media.ArtifactViewer.mimeFor(saved.file)

@@ -36,7 +36,8 @@ class Creation142DeviceTest {
                 Thread.sleep(750)
                 screenshot(context, "creation142-question.png")
                 scenario.onActivity { vm.chooseAvatarExample(true) }
-                await(120_000) { !vm.uiState.value.avatarFormGenerating }
+                // Match the bounded remote allowance plus transport/UI cleanup time.
+                await(InventTimeBudget.avatar(true, InventReasonLevel.BALANCED) + 30_000) { !vm.uiState.value.avatarFormGenerating }
                 File(context.getExternalFilesDir(null), "creation142-result.txt").writeText(
                     "Message: ${vm.uiState.value.avatarFormMessage}\nError: ${vm.uiState.value.avatarFormError}\nReview present: ${vm.uiState.value.features.avatarCreationReview != null}\nCandidate present: ${vm.uiState.value.features.avatarCreationReview?.candidate != null}"
                 )

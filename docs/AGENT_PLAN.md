@@ -1,5 +1,40 @@
 # Agent execution plan — immersive companion revision
 
+## September 19 continuation: preview148 prepared, phone acceptance pending
+
+Root is sole build/install owner. Continue automatic in-place installs when the phone is
+available; do not ask again. As of this batch the phone is absent from both Mac and Meow
+ADB, so installed baseline147, real Termux idle heat and live avatar generation are not
+revalidated. No reset, unknown-server kill, monitoring enablement or public rollout.
+
+Implementation and desktop validation complete:397 suites/2,693 tests, zero failures/errors,
+five skipped; APK and device-test APK built. Actual example dialog is bounded and scrollable,
+with three new cancellation-before-launch tests demonstrating the previous race then passing
+the ownership-guard repair. Drive9 tests and background9 tests pass. See
+docs/DRIVE_CREATION_BACKGROUNDS_148_PASS_DOWN.md for source/artifact provenance and limits.
+The phone is still absent; do not describe this build as installed or Termux as thermally fixed.
+
+- Driving worker: compact responsive HUD, neutral road-availability status and separate
+  scrollable details. Keep actual crash/hazard/OBD warnings visible. Desktop layout cases
+  must cover narrow phones, 200% text and landscape header/HUD bounds.
+- Creation worker: bounded remote wait, retain validated geometry on optional polish
+  failure, typed/redacted initial provider failures, actionable failed-preview retry.
+  Root integrates elapsed feedback and tests cancellation, privacy and approval-before-save.
+- Background worker: five original vector scenes using the existing clock/pause/thermal
+  framework; retain static artwork, bound moving draws, preserve saved enum identities.
+  Native proof renders and motion/pause/picker tests, not claims of phone FPS acceptance.
+- Root: Termux-wide UID-scoped read-only profiler, reduced idle/error panel polling,
+  protect quiet Ubuntu commands from destructive silence-based PTY auto-disconnection,
+  honest terminal-versus-server power labels. New setup selects the supported ripgrep
+  search backend, without model changes or blanket tool permissions. Existing servers
+  are not silently restarted and require measured before/after validation on reconnection.
+
+After this batch: measure BOTH Termux/OpenCode processes and Meow while idle, check whether
+4096/4097 duplicate servers exist and own active work, then apply a targeted verified restart
+only when safe. Do not label a startup flag or colder short sample as an overheating fix.
+Resume productive results/project integration and large safe transfers from the52-item list;
+fresh-device onboarding, long-lived agents, voice and physical devices remain separate gates.
+
 ## September 19 continuation: idle efficiency and visible results
 
 User authorizes automatic in-place installation and testing of subsequent builds on the

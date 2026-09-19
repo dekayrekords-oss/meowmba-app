@@ -68,6 +68,11 @@ export OPENCODE_SERVER_PASSWORD
 export OPENCODE_SERVER_USERNAME=opencode
 export PATH="$HOME/.opencode/bin:$PATH"
 cd "$HOME/MeowProjects"
+# Headless phone worker: use OpenCode's supported on-demand ripgrep backend.
+# Avoid a persistent native search index/watcher inside PRoot while no task runs.
+# File glob/grep tools remain available; no model, task or permission is disabled.
+# Verified against packages/core/src/filesystem/search.ts in OpenCode v1.18.31.
+export OPENCODE_DISABLE_FFF=1
 export OPENCODE_CONFIG_CONTENT='\''{"permission":{"*":"ask"}}'\''
 exec opencode serve --hostname 127.0.0.1 --port 4096 </dev/null
 ' 9>&- >"$HOME/.meow-computer/setup-server.log" 2>&1 &
