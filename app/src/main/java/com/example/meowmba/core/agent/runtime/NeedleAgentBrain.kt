@@ -38,7 +38,7 @@ class NeedleAgentBrain internal constructor(
     private val native: NeedleNative = NeedleJniNative,
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : AgentBrainRouter {
-    private val lock = Mutex()
+    private val ownerToken = Any()
     private var schemaFingerprint: Int? = null
 
     override suspend fun route(text: String, registry: ToolRegistry): AgentRouter.AgentIntent? =
@@ -47,18 +47,24 @@ class NeedleAgentBrain internal constructor(
             lock.withLock {
                 val definitions = registry.definitions()
                 val schema = toolsJson(definitions)
-                if (schemaFingerprint != schema.hashCode()) {
+                if (activeOwner !== ownerToken || schemaFingerprint != schema.hashCode()) {
+                    activeOwner = null
                     if (!modelFile.isFile || native.load(modelFile.readBytes()) != 0) return@withLock null
                     // Needle returns a non-negative cached-prefix token count
                     // on success; positive is not an error.
                     if (native.initialize(SYSTEM_PROMPT, schema) < 0) return@withLock null
                     schemaFingerprint = schema.hashCode()
+                    activeOwner = ownerToken
                 }
                 parse(native.complete(text, 256), registry)
             }
         }
 
     companion object {
+        // The vendor API owns one process-global, non-thread-safe model. A
+        // ViewModel recreation or model update must not race another instance.
+        private val lock = Mutex()
+        private var activeOwner: Any? = null
         private const val SYSTEM_PROMPT =
             "Choose a tool only when the user clearly requests an action. Refuse ordinary conversation."
 
@@ -82,13 +88,15 @@ class NeedleAgentBrain internal constructor(
         internal fun parse(raw: String?, registry: ToolRegistry): AgentRouter.AgentIntent? {
             val root = runCatching { Json.parseToJsonElement(raw ?: return null).jsonObject }.getOrNull()
                 ?: return null
-            if (root["type"]?.jsonPrimitive?.contentOrNull != "call") return null
+            if (runCatching { root["type"]?.jsonPrimitive?.contentOrNull }.getOrNull() != "call") return null
             val call = runCatching { root["function_calls"]?.jsonArray?.firstOrNull()?.jsonObject }.getOrNull()
                 ?: return null
-            val id = call["name"]?.jsonPrimitive?.contentOrNull ?: return null
+            val id = runCatching { call["name"]?.jsonPrimitive?.contentOrNull }.getOrNull() ?: return null
             if (registry.byId(id) == null) return null
             val args = runCatching { call["arguments"]?.jsonObject }.getOrNull()
-                ?.mapValues { it.value.jsonPrimitive.contentOrNull ?: it.value.toString() } ?: emptyMap()
+                ?.mapValues { (_, value) ->
+                    (value as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull ?: value.toString()
+                } ?: emptyMap()
             val owner = AgentRegistry.ownerOf(id) ?: return null
             return AgentRouter.AgentIntent(owner.id, id, args, registry.byId(id)!!.definition.displayName)
         }

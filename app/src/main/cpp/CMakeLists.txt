@@ -3,7 +3,7 @@ project(sdcpp_bridge)
 
 # Needle ships a small, official Android arm64 static runtime. Pin both its
 # release URL and digest: configure fails closed if upstream bytes ever change.
-set(NEEDLE_SHA256 "93738ae3a9488cbc3104eb65bf49093683c26eb01b0d257e980e499d1d06a9f4")
+set(NEEDLE_SHA256 "2a5286cd8d4d750f8ee6eb885f76fd57aacee5daefa2e4e378bcfe583e7e999e")
 set(NEEDLE_LIBRARY "" CACHE FILEPATH "Path to the pinned Android arm64 Needle archive")
 if(NEEDLE_LIBRARY)
     if(NOT EXISTS "${NEEDLE_LIBRARY}")
@@ -14,7 +14,7 @@ if(NEEDLE_LIBRARY)
         message(FATAL_ERROR "Needle cache SHA-256 mismatch; expected ${NEEDLE_SHA256}, got ${NEEDLE_ACTUAL_SHA256}")
     endif()
 else()
-    set(NEEDLE_DIR "${CMAKE_BINARY_DIR}/needle2")
+    set(NEEDLE_DIR "${CMAKE_BINARY_DIR}/needle3")
     file(MAKE_DIRECTORY "${NEEDLE_DIR}")
     set(NEEDLE_LIBRARY "${NEEDLE_DIR}/libneedle.a")
     set(NEEDLE_ACTUAL_SHA256 "")
@@ -25,7 +25,7 @@ else()
         # Download to a temporary file so an interrupted connection cannot
         # truncate a usable cached archive. Never relax the pinned digest.
         file(DOWNLOAD
-            "https://huggingface.co/Cactus-Compute/needle2/resolve/b739205bcda01f71ebf0ba180f75a885d515ad96/android-arm64/libneedle.a"
+            "https://huggingface.co/Cactus-Compute/needle3/resolve/c1fc4d4cb32993156a880ceb8ff171b03b1f166a/android-arm64/libneedle.a"
             "${NEEDLE_LIBRARY}.part"
             TLS_VERIFY ON TIMEOUT 120 INACTIVITY_TIMEOUT 20
             STATUS NEEDLE_DOWNLOAD_STATUS SHOW_PROGRESS)

@@ -78,6 +78,8 @@ fun LocalModelSettingsScreen(
     var filterOpen by rememberSaveable { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<InstalledModelFile?>(null) }
     var pendingDownload by remember { mutableStateOf<PhoneModelCandidate?>(null) }
+    var checkingUpdates by remember { mutableStateOf(false) }
+    var updateStatuses by remember { mutableStateOf<Map<String, LocalModelUpdateChecker.Status>>(emptyMap()) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(onImportUri) }
     LaunchedEffect(Unit) { onRefresh() }
 
@@ -154,6 +156,27 @@ fun LocalModelSettingsScreen(
                             Text("Your model library", style = MaterialTheme.typography.titleLarge)
                             Text("Download complete means the file is saved. Use local AI selects it; the first reply verifies the runtime.",
                                 style = MaterialTheme.typography.bodySmall)
+                            OutlinedButton(onClick = {
+                                checkingUpdates = true
+                                updateStatuses = emptyMap()
+                                val files = state.installedModels.toList()
+                                scope.launch {
+                                    try {
+                                        for (file in files) {
+                                            val result = try {
+                                                LocalModelUpdateChecker.check(java.io.File(context.filesDir, "models/${file.fileName}"),
+                                                    storage?.getApiKey("huggingface"))
+                                            } catch (e: CancellationException) { throw e }
+                                            catch (_: Exception) { LocalModelUpdateChecker.Status("Check failed. Existing model unchanged; try again when online.") }
+                                            updateStatuses = updateStatuses + (file.fileName to result)
+                                        }
+                                    } finally { checkingUpdates = false }
+                                }
+                            }, enabled = !checkingUpdates && state.installedModels.isNotEmpty(), modifier = Modifier.fillMaxWidth()) {
+                                Text(if (checkingUpdates) "Checking model weights…" else "Check model updates")
+                            }
+                            Text("Checks this local AI library against compatible catalog releases. Large files take time to verify. Custom models may need manual updates; voice and image models are managed separately.",
+                                style = MaterialTheme.typography.bodySmall)
                             OutlinedTextField(localQuery, { localQuery = it }, label = { Text("Find an installed model") },
                                 singleLine = true, modifier = Modifier.fillMaxWidth())
                             ModelChoice("Sort", installedSort.label, listOf(PhoneModelSort.NAME, PhoneModelSort.SIZE,
@@ -175,6 +198,16 @@ fun LocalModelSettingsScreen(
                             LocalInstalledCard(file, state.loadedModels.localPath.endsWith("/${file.fileName}") &&
                                 state.loadedModels.activeSource == ModelSource.LOCAL,
                                 onUse = { onUse(file.fileName) }, onDelete = { pendingDelete = file })
+                            updateStatuses[file.fileName]?.let { update ->
+                                Text(update.message, style = MaterialTheme.typography.bodySmall)
+                                update.replacement?.let { replacement ->
+                                    val progress = state.modelDownloads[replacement.id]
+                                    OutlinedButton(onClick = { onDownload(replacement) },
+                                        enabled = progress == null || progress.error != null) {
+                                        Text(if (progress?.done == true) "Update downloaded" else if (progress != null && progress.error == null) "Downloading update…" else "Download update · keep old model")
+                                    }
+                                }
+                            }
                         }
                         items(state.discoveredModelFiles.filter { found -> state.installedModels.none { it.fileName == found.fileName } },
                             key = { it.uri }) { found ->

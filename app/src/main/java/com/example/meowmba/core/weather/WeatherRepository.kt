@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.example.meowmba.core.nav.CurrentLocation
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -75,7 +76,7 @@ class WeatherRepository(private val context: Context) {
             val fix = if (lat != null && lon != null) {
                 CurrentLocation.Fix(lat, lon)
             } else {
-                CurrentLocation.last(context) ?: return@withContext Result.Failed(
+                CurrentLocation.fresh(context, maxAgeMs = 15 * 60_000L, maxAccuracyMeters = 10_000f) ?: return@withContext Result.Failed(
                     if (CurrentLocation.hasPermission(context)) {
                         "I don't have a location fix yet, so I can't check the weather here."
                     } else {
@@ -107,6 +108,8 @@ class WeatherRepository(private val context: Context) {
                 )
                 if (surface) _latest.value = parsed
                 Result.Ok(parsed)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.w(TAG, "weather fetch failed: ${e.message}")
                 Result.Failed("I couldn't reach the weather service.")

@@ -5,6 +5,8 @@ import com.example.meowmba.ui.companion.IdleFormCycler
 import com.example.meowmba.ui.companion.IdleFormTarget
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.advanceTimeBy
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -12,6 +14,20 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class IdleFormCyclerTest {
+    @Test fun repeatedStartDoesNotPostponeTheNextForm() = kotlinx.coroutines.test.runTest {
+        val targets = mutableListOf<IdleFormTarget>()
+        val cycler = IdleFormCycler(backgroundScope, { true },
+            intervalMs = { 20_000L }, onTarget = targets::add)
+        cycler.start()
+        runCurrent()
+        advanceTimeBy(10_000L)
+        cycler.start()
+        advanceTimeBy(10_000L)
+        runCurrent()
+        assertEquals(1, targets.size)
+        cycler.stop()
+        assertFalse(cycler.isRunning)
+    }
     @Test
     fun poolIncludesEveryAuthoredAnimalExceptEyesOnly() {
         val cycler = IdleFormCycler(
@@ -51,10 +67,9 @@ class IdleFormCyclerTest {
             onTarget = {},
         )
         repeat(8) { seen += cycler.nextTarget()!! }
-        assertEquals(AvatarAnimal.CAT, seen[0].animal)
-        assertEquals(AvatarAnimal.DUCK, seen[1].animal)
-        assertEquals(AvatarAnimal.DOG, seen[2].animal)
-        assertEquals(AvatarAnimal.OWL, seen[3].animal)
-        assertEquals(AvatarAnimal.CAT, seen[4].animal)
+        val expected = setOf(AvatarAnimal.CAT, AvatarAnimal.DUCK, AvatarAnimal.DOG, AvatarAnimal.OWL)
+        assertEquals(expected, seen.take(4).map { it.animal }.toSet())
+        assertEquals(expected, seen.drop(4).map { it.animal }.toSet())
+        assertTrue(seen.zipWithNext().all { (a, b) -> a != b })
     }
 }

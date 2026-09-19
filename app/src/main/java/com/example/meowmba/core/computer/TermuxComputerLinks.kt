@@ -31,7 +31,7 @@ object TermuxComputerLinks {
     /** Paste in Termux. Keep as two lines so a child can copy once. */
     const val BOOTSTRAP_COMMANDS =
         "pkg update && pkg install proot proot-distro openssh tmux\n" +
-            "proot-distro install debian"
+            "proot-distro install ubuntu"
     const val BUTTON_SETUP_GUIDE = "Setup guide"
 
     /**
@@ -40,13 +40,16 @@ object TermuxComputerLinks {
      * Official installer: https://opencode.ai/install — PATH may already include
      * ~/.opencode/bin on some guests; we still export it before launch.
      */
+    // A Linux OpenCode binary cannot execute in Android's native Termux loader.
+    // Do not nest proot when the terminal is already inside the Ubuntu guest.
     const val OPENCODE_SETUP_COMMANDS =
-        "export PATH=\"\$HOME/.opencode/bin:\$PATH\"; " +
-            "if command -v opencode >/dev/null 2>&1; then echo \"OpenCode already installed.\"; " +
-            "else echo \"Installing OpenCode…\"; curl -fsSL https://opencode.ai/install | bash; " +
-            "export PATH=\"\$HOME/.opencode/bin:\$PATH\"; fi; " +
-            "command -v opencode >/dev/null 2>&1 && opencode || " +
-            "echo \"OpenCode not found yet. Open Termux, finish Computer setup, then try again.\""
+        "if [ -r /etc/os-release ] && grep -q '^ID=ubuntu' /etc/os-release; then " +
+            "if [ -x \"\$HOME/.opencode/bin/opencode\" ]; then \"\$HOME/.opencode/bin/opencode\"; " +
+            "else echo \"OpenCode is not installed inside Ubuntu. Finish the setup guide first.\"; fi; " +
+            "elif command -v proot-distro >/dev/null 2>&1; then " +
+            "proot-distro login ubuntu -- bash -lc 'if [ -x \"\$HOME/.opencode/bin/opencode\" ]; then " +
+            "exec \"\$HOME/.opencode/bin/opencode\"; else echo \"Install OpenCode inside Ubuntu first.\"; fi'; " +
+            "else echo \"Open Termux and finish Ubuntu setup first. Android shell is not Ubuntu.\"; fi"
 
     const val HOWTO_PHONE_SHORT =
         "Need a Linux workspace? Start on this phone with Termux (F-Droid or GitHub). " +
@@ -55,8 +58,9 @@ object TermuxComputerLinks {
     const val TERMUX_BOOTSTRAP_STEPS =
         "1. Install Termux from F-Droid or GitHub releases.\n" +
             "2. In Termux: pkg update && pkg install proot proot-distro openssh tmux\n" +
-            "3. proot-distro install debian && proot-distro login debian\n" +
-            "4. In Meowmba: Terminal → Computer (or Settings → Your Computer → Open Terminal)."
+            "3. Install Ubuntu only if missing: proot-distro install ubuntu. Enter it with proot-distro login ubuntu.\n" +
+            "4. Inside Ubuntu, install OpenCode from https://opencode.ai/docs/. Do not enter Ubuntu again from inside Ubuntu.\n" +
+            "5. Opening OpenCode is separate from connecting its local server to Meowmba."
 
     const val SERVER_HOWTO_SHORT =
         "Optional: enter a Linux host, port, username, and password or key. " +

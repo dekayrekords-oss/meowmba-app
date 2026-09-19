@@ -1423,78 +1423,21 @@ class CompanionViewModel(
                 lastSpeakerName = owner
             }
             val savedName = storage.getPreference(KEY_COMPANION_NAME)
-            _uiState.value = _uiState.value.copy(
-                name = if (savedName.isNullOrBlank()) _uiState.value.name else savedName,
-                wakeWordEnabled = storage.getBooleanPreference(KEY_WAKE_WORD, false),
-                coverAvatarEnabled = storage.getBooleanPreference("cover_avatar_enabled", false),
-                requireWakeWordInFace = storage.getBooleanPreference(KEY_REQUIRE_WAKE_IN_FACE, false),
-                conversationMode = storage.getBooleanPreference(KEY_CONVERSATION, false),
-                bargeInEnabled = storage.getBooleanPreference(KEY_BARGE_IN, true),
-                idleChatterEnabled = storage.getBooleanPreference(KEY_IDLE_CHATTER, true),
-                keepScreenOnInFaceMode = storage.getBooleanPreference(KEY_KEEP_SCREEN_ON, false),
-                commentaryEnabled = storage.getBooleanPreference(KEY_COMMENTARY, false),
-                roadAlertsEnabled = storage.getBooleanPreference(KEY_ROAD_ALERTS, false),
-                idleScenesEnabled = storage.getBooleanPreference("idle_scenes_enabled", true),
-                expressionIntensity = ExpressionIntensity.fromKey(storage.getPreference("expression_intensity")),
-                playfulness = Playfulness.fromKey(storage.getPreference("playfulness")),
-                isCameraEnabled = storage.getBooleanPreference(KEY_CAMERA_ENABLED, false),
-                isMicEnabled = com.example.meowmba.core.audio.MicrophonePrivacy.isEnabled(storage),
-                agentBrainEnabled = storage.getBooleanPreference(KEY_AGENT_BRAIN, true),
-                hermesAgentUrl = storage.getPreference(KEY_HERMES_URL) ?: "",
-                imageServerUrl = storage.getPreference(KEY_IMAGE_SERVER_URL) ?: "",
-                mem0ServerUrl = storage.getPreference(KEY_MEM0_SERVER_URL) ?: "",
-                videoServerUrl = storage.getPreference(KEY_VIDEO_SERVER_URL) ?: "",
-                preferServerImageGen = storage.getBooleanPreference(KEY_PREFER_SERVER_IMAGE_GEN, false),
-                musicServerUrl = storage.getPreference(KEY_MUSIC_SERVER_URL) ?: "",
-                backgroundListeningEnabled = storage.getBooleanPreference(KEY_BACKGROUND_LISTENING, false),
-                carModeEnabled = storage.getBooleanPreference(KEY_CAR_MODE, false),
-                idleMorphEnabled = storage.getBooleanPreference(KEY_IDLE_MORPH, true),
-                idleMorphIntervalSec = storage.getPreference(KEY_IDLE_MORPH_INTERVAL)?.toIntOrNull()
-                    ?.coerceIn(20, 180) ?: 55,
-                idleMorphIncludeGenerated = storage.getBooleanPreference(KEY_IDLE_MORPH_GENERATED, true),
-                driveEmotionBoost = storage.getBooleanPreference(KEY_DRIVE_EMOTION_BOOST, true),
-                driveDriverCameraEnabled = storage.getBooleanPreference(KEY_DRIVE_DRIVER_CAMERA, true),
-                obdEnabled = storage.getBooleanPreference(KEY_OBD_ENABLED, false),
-                obdAdapterAddress = storage.getPreference(KEY_OBD_ADAPTER).orEmpty(),
-                carDashcamRtspUrl = storage.getPreference(KEY_CAR_RTSP).orEmpty(),
-                carCameraActiveId = storage.getPreference(KEY_CAR_CAMERA_ACTIVE) ?: "front_driver",
-                carCameraSources = CarCameraSources.defaultSources(
+            _uiState.value = _uiState.value.withFeatures(idleMorphEnabled = storage.getBooleanPreference(KEY_IDLE_MORPH, true), idleMorphIntervalSec = storage.getPreference(KEY_IDLE_MORPH_INTERVAL)?.toIntOrNull()
+                    ?.coerceIn(20, 180) ?: 55, idleMorphIncludeGenerated = storage.getBooleanPreference(KEY_IDLE_MORPH_GENERATED, true), driveEmotionBoost = storage.getBooleanPreference(KEY_DRIVE_EMOTION_BOOST, true), driveDriverCameraEnabled = storage.getBooleanPreference(KEY_DRIVE_DRIVER_CAMERA, true), obdEnabled = storage.getBooleanPreference(KEY_OBD_ENABLED, false), obdAdapterAddress = storage.getPreference(KEY_OBD_ADAPTER).orEmpty(), carDashcamRtspUrl = storage.getPreference(KEY_CAR_RTSP).orEmpty(), carCameraActiveId = storage.getPreference(KEY_CAR_CAMERA_ACTIVE) ?: "front_driver", carCameraSources = CarCameraSources.defaultSources(
                     rtspUrl = storage.getPreference(KEY_CAR_RTSP),
-                ),
-                avatarScale = storage.getPreference("avatar_scale")?.toFloatOrNull()?.takeIf { it.isFinite() }?.coerceIn(.5f, 3f) ?: 2f,
-                habitatMode = storage.getBooleanPreference("habitat_mode", false),
-                habitatBackgroundId = storage.getPreference("habitat_background")?.takeIf { id -> com.example.meowmba.core.background.BackgroundAnimation.byId(id)?.isPetEnvironment == true } ?: "kitchen",
-                avatarStyle = AvatarStyle.fromKey(storage.getPreference(KEY_AVATAR_STYLE)),
-                petCare = PetCareState.decode(storage.getPreference("pet_care_v1").orEmpty()).advance(System.currentTimeMillis()),
-                petLearningEnabled = petPreferences.enabled,
-                petPlayPreference = petPreferences.preference("play"),
-                neuralMode = nervousSystem.mode,
-                neuralSubstrate = nervousSystem.substrate,
-                avatarAnimal = AvatarAnimal.fromKey(storage.getPreference("avatar_animal")),
-                generatedAvatarForm = runCatching {
+                ), savedAnimationNames = runCatching { avatarAnimationStore?.list().orEmpty() }.getOrDefault(emptyList())).copy(name = if (savedName.isNullOrBlank()) _uiState.value.name else savedName, wakeWordEnabled = storage.getBooleanPreference(KEY_WAKE_WORD, false), coverAvatarEnabled = storage.getBooleanPreference("cover_avatar_enabled", false), requireWakeWordInFace = storage.getBooleanPreference(KEY_REQUIRE_WAKE_IN_FACE, false), conversationMode = storage.getBooleanPreference(KEY_CONVERSATION, false), bargeInEnabled = storage.getBooleanPreference(KEY_BARGE_IN, true), idleChatterEnabled = storage.getBooleanPreference(KEY_IDLE_CHATTER, true), keepScreenOnInFaceMode = storage.getBooleanPreference(KEY_KEEP_SCREEN_ON, false), commentaryEnabled = storage.getBooleanPreference(KEY_COMMENTARY, false), roadAlertsEnabled = storage.getBooleanPreference(KEY_ROAD_ALERTS, false), idleScenesEnabled = storage.getBooleanPreference("idle_scenes_enabled", true), expressionIntensity = ExpressionIntensity.fromKey(storage.getPreference("expression_intensity")), playfulness = Playfulness.fromKey(storage.getPreference("playfulness")), isCameraEnabled = storage.getBooleanPreference(KEY_CAMERA_ENABLED, false), isMicEnabled = com.example.meowmba.core.audio.MicrophonePrivacy.isEnabled(storage), agentBrainEnabled = storage.getBooleanPreference(KEY_AGENT_BRAIN, true), hermesAgentUrl = storage.getPreference(KEY_HERMES_URL) ?: "", imageServerUrl = storage.getPreference(KEY_IMAGE_SERVER_URL) ?: "", mem0ServerUrl = storage.getPreference(KEY_MEM0_SERVER_URL) ?: "", videoServerUrl = storage.getPreference(KEY_VIDEO_SERVER_URL) ?: "", preferServerImageGen = storage.getBooleanPreference(KEY_PREFER_SERVER_IMAGE_GEN, false), musicServerUrl = storage.getPreference(KEY_MUSIC_SERVER_URL) ?: "", backgroundListeningEnabled = storage.getBooleanPreference(KEY_BACKGROUND_LISTENING, false), carModeEnabled = storage.getBooleanPreference(KEY_CAR_MODE, false), avatarScale = storage.getPreference("avatar_scale")?.toFloatOrNull()?.takeIf { it.isFinite() }?.coerceIn(.5f, 3f) ?: 2f, habitatMode = storage.getBooleanPreference("habitat_mode", false), habitatBackgroundId = storage.getPreference("habitat_background")?.takeIf { id -> com.example.meowmba.core.background.BackgroundAnimation.byId(id)?.isPetEnvironment == true } ?: "kitchen", avatarStyle = AvatarStyle.fromKey(storage.getPreference(KEY_AVATAR_STYLE)), petCare = PetCareState.decode(storage.getPreference("pet_care_v1").orEmpty()).advance(System.currentTimeMillis()), petLearningEnabled = petPreferences.enabled, petPlayPreference = petPreferences.preference("play"), neuralMode = nervousSystem.mode, neuralSubstrate = nervousSystem.substrate, avatarAnimal = AvatarAnimal.fromKey(storage.getPreference("avatar_animal")), generatedAvatarForm = runCatching {
                     storage.getPreference("generated_avatar_id")?.let { generatedAvatarStore?.load(it) }
-                }.getOrNull(),
-                savedGeneratedForms = runCatching { generatedAvatarStore?.list().orEmpty() }.getOrDefault(emptyList()),
-                savedProps = runCatching { generatedPropStore?.list().orEmpty() }.getOrDefault(emptyList()),
-                equippedProp = runCatching {
+                }.getOrNull(), savedGeneratedForms = runCatching { generatedAvatarStore?.list().orEmpty() }.getOrDefault(emptyList()), savedProps = runCatching { generatedPropStore?.list().orEmpty() }.getOrDefault(emptyList()), equippedProp = runCatching {
                     storage.getPreference("equipped_prop_id")?.let { generatedPropStore?.load(it) }
-                }.getOrNull(),
-                savedAnimationNames = runCatching { avatarAnimationStore?.list().orEmpty() }.getOrDefault(emptyList()),
-                appTheme = AppTheme.fromKey(storage.getPreference("app_theme")),
-                appearanceMode = AppearanceMode.fromKey(storage.getPreference("appearance_mode")),
-                avatarFeatureColor = AvatarColors.parse(storage.getPreference("avatar_feature_color"), 0xFFE8D5B9L),
-                avatarEyeColor = AvatarColors.parse(
-                    storage.getPreference(KEY_AVATAR_EYE_COLOR), AvatarColors.DEFAULT_EYE),
-                avatarGlowColor = AvatarColors.parse(
-                    storage.getPreference(KEY_AVATAR_GLOW_COLOR), AvatarColors.DEFAULT_GLOW),
-                emergencyContact = storage.getPreference(KEY_EMERGENCY_CONTACT) ?: "",
-                // Restore the provider picked last session — but only if it is
+                }.getOrNull(), appTheme = AppTheme.fromKey(storage.getPreference("app_theme")), appearanceMode = AppearanceMode.fromKey(storage.getPreference("appearance_mode")), avatarFeatureColor = AvatarColors.parse(storage.getPreference("avatar_feature_color"), 0xFFE8D5B9L), avatarEyeColor = AvatarColors.parse(
+                    storage.getPreference(KEY_AVATAR_EYE_COLOR), AvatarColors.DEFAULT_EYE), avatarGlowColor = AvatarColors.parse(
+                    storage.getPreference(KEY_AVATAR_GLOW_COLOR), AvatarColors.DEFAULT_GLOW), emergencyContact = storage.getPreference(KEY_EMERGENCY_CONTACT) ?: "", // Restore the provider picked last session — but only if it is
                 // still a buildable provider; a stale/removed label falls back
                 // to the default instead of producing a silent null provider.
                 selectedModel = storage.getPreference(KEY_SELECTED_MODEL)
                     ?.takeIf { it in availableModelProviders(storage.context) }
-                    ?: defaultModelLabel(storage.context)
-            )
+                    ?: defaultModelLabel(storage.context))
             _uiState.value = _uiState.value.copy(
                 ambientWeatherEnabled = storage.getBooleanPreference(KEY_AMBIENT_WEATHER, false),
                 background = com.example.meowmba.core.background.BackgroundSelection.parse(
@@ -2447,7 +2390,7 @@ class CompanionViewModel(
                 CarObdConnectTool(
                     connect = { addr ->
                         secureStorage?.savePreference(KEY_OBD_ADAPTER, addr)
-                        _uiState.value = _uiState.value.copy(obdAdapterAddress = addr, obdEnabled = true)
+                        _uiState.value = _uiState.value.withFeatures(obdAdapterAddress = addr, obdEnabled = true)
                         secureStorage?.saveBooleanPreference(KEY_OBD_ENABLED, true)
                         obd.connect(addr)
                     },
@@ -2464,15 +2407,12 @@ class CompanionViewModel(
             viewModelScope.launch {
                 obd.reading.collect { r ->
                     val excitement = Obd2LumenCues.excitementFromRpm(r.rpm)
-                    _uiState.value = _uiState.value.copy(
-                        obdReading = r,
-                        obdExcitement = excitement,
-                    )
+                    _uiState.value = _uiState.value.withFeatures(obdReading = r, obdExcitement = excitement)
                 }
             }
             viewModelScope.launch {
                 obd.alerts.collect { a ->
-                    _uiState.value = _uiState.value.copy(obdAlerts = a)
+                    _uiState.value = _uiState.value.withFeatures(obdAlerts = a)
                     if (a.isNotEmpty() && _uiState.value.driving) {
                         val top = a.first()
                         if (top.kind == com.example.meowmba.core.car.obd2.Obd2AlertKind.COOLANT_HIGH ||
@@ -9076,7 +9016,14 @@ class CompanionViewModel(
      * chat and deterministic commands remain usable throughout.
      */
     private fun ensureNeedleDefault() {
-        val option = ModelCatalog.options.firstOrNull { it.id == "needle-2" } ?: return
+        val option = ModelCatalog.options.firstOrNull { it.id == "needle-3" } ?: return
+        val saved = secureStorage?.getPreference("needle_model_file")
+        if (saved != null && ModelCatalog.optionForFile(saved)?.id == option.id) {
+            downloader?.destinationFor(saved)?.takeIf { it.isFile && it.length() > 0 }?.let {
+                loadNeedle(it)
+                return
+            }
+        }
         val installed = downloader?.installedFile(option)
         if (installed != null) {
             loadNeedle(installed)
@@ -9089,6 +9036,7 @@ class CompanionViewModel(
 
     private fun loadNeedle(file: File) {
         needleBrain = runCatching { NeedleAgentBrain(file) }.getOrNull()
+        if (needleBrain != null) secureStorage?.savePreference("needle_model_file", file.name)
     }
 
     /** Download any model from a custom URL (must be a MediaPipe .task bundle). */
@@ -10708,13 +10656,13 @@ class CompanionViewModel(
     }
 
     fun dismissPropPlacement() {
-        _uiState.value = _uiState.value.copy(pendingPropPlacement = null)
+        _uiState.value = _uiState.value.withFeatures(pendingPropPlacement = null)
     }
 
     fun openPropPlacement(id: String) {
         val form = generatedPropStore?.load(id) ?: _uiState.value.savedProps.firstOrNull { it.id == id }
         if (form != null) {
-            _uiState.value = _uiState.value.copy(pendingPropPlacement = form, propInventError = false)
+            _uiState.value = _uiState.value.withFeatures(pendingPropPlacement = form).copy(propInventError = false)
         }
     }
 
@@ -10728,12 +10676,7 @@ class CompanionViewModel(
             } else {
                 store.save(updated, request)
             }
-            _uiState.value = _uiState.value.copy(
-                savedProps = store.list(),
-                pendingPropPlacement = null,
-                propInventMessage = "Saved placement for ${updated.name}.",
-                propInventError = false,
-            )
+            _uiState.value = _uiState.value.withFeatures(pendingPropPlacement = null).copy(savedProps = store.list(), propInventMessage = "Saved placement for ${updated.name}.", propInventError = false)
         } catch (error: Exception) {
             val reason = error.message?.filterNot { it.isISOControl() }?.take(120)
             _uiState.value = _uiState.value.copy(
@@ -10763,7 +10706,7 @@ class CompanionViewModel(
 
     fun refreshSavedAnimations() {
         val names = runCatching { avatarAnimationStore?.list().orEmpty() }.getOrDefault(emptyList())
-        _uiState.value = _uiState.value.copy(savedAnimationNames = names)
+        _uiState.value = _uiState.value.withFeatures(savedAnimationNames = names)
     }
 
     fun inventAnimationFromVending(
@@ -10775,10 +10718,7 @@ class CompanionViewModel(
     ) {
         val base = prompt.trim()
         if (base.isBlank()) {
-            _uiState.value = _uiState.value.copy(
-                animInventMessage = "Describe the animation to invent.",
-                animInventError = true,
-            )
+            _uiState.value = _uiState.value.withFeatures(animInventMessage = "Describe the animation to invent.", animInventError = true)
             return
         }
         val intensityLabel = when {
@@ -10800,20 +10740,12 @@ class CompanionViewModel(
         viewModelScope.launch {
             val store = avatarAnimationStore
             if (store == null) {
-                _uiState.value = _uiState.value.copy(
-                    animInventGenerating = false,
-                    animInventMessage = "Animation storage is unavailable.",
-                    animInventError = true,
-                )
+                _uiState.value = _uiState.value.withFeatures(animInventGenerating = false, animInventMessage = "Animation storage is unavailable.", animInventError = true)
                 return@launch
             }
             animInventGeneration++
             val generation = animInventGeneration
-            _uiState.value = _uiState.value.copy(
-                animInventGenerating = true,
-                animInventError = false,
-                animInventMessage = "Inventing animation…",
-            )
+            _uiState.value = _uiState.value.withFeatures(animInventGenerating = true, animInventError = false, animInventMessage = "Inventing animation…")
             try {
                 val result = inventLocalAvatarScene(composed, fresh = fresh, store = store)
                 if (generation != animInventGeneration) return@launch
@@ -10823,22 +10755,13 @@ class CompanionViewModel(
                     is com.example.meowmba.core.agent.tools.ToolResult.Failure -> result.error
                     else -> "Animation invent finished."
                 }
-                _uiState.value = _uiState.value.copy(
-                    animInventGenerating = false,
-                    animInventError = !ok,
-                    animInventMessage = message,
-                    savedAnimationNames = store.list(),
-                )
+                _uiState.value = _uiState.value.withFeatures(animInventGenerating = false, animInventError = !ok, animInventMessage = message, savedAnimationNames = store.list())
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
             } catch (error: Throwable) {
                 if (generation != animInventGeneration) return@launch
                 val reason = error.message?.filterNot { it.isISOControl() }?.take(160)
-                _uiState.value = _uiState.value.copy(
-                    animInventGenerating = false,
-                    animInventError = true,
-                    animInventMessage = reason ?: "Could not invent that animation.",
-                )
+                _uiState.value = _uiState.value.withFeatures(animInventGenerating = false, animInventError = true, animInventMessage = reason ?: "Could not invent that animation.")
             }
         }
     }
@@ -10846,11 +10769,7 @@ class CompanionViewModel(
     fun cancelAnimInvent() {
         animInventGeneration++
         if (_uiState.value.animInventGenerating) {
-            _uiState.value = _uiState.value.copy(
-                animInventGenerating = false,
-                animInventMessage = "Animation invent cancelled.",
-                animInventError = false,
-            )
+            _uiState.value = _uiState.value.withFeatures(animInventGenerating = false, animInventMessage = "Animation invent cancelled.", animInventError = false)
         }
     }
 
@@ -10863,7 +10782,7 @@ class CompanionViewModel(
     fun deleteSavedAnimation(name: String) {
         val store = avatarAnimationStore ?: return
         store.delete(name)
-        _uiState.value = _uiState.value.copy(savedAnimationNames = store.list())
+        _uiState.value = _uiState.value.withFeatures(savedAnimationNames = store.list())
     }
 
     private fun propInventFailure(message: String) {
@@ -10905,13 +10824,7 @@ class CompanionViewModel(
                 val saved = withContext(ioDispatcher) { store.find(prompt) }
                 ensureOwner()
                 if (saved != null) {
-                    _uiState.value = _uiState.value.copy(
-                        propInventGenerating = false,
-                        savedProps = store.list(),
-                        propInventMessage = "Already in library: ${saved.name}. Adjust placement?",
-                        propInventError = false,
-                        pendingPropPlacement = saved,
-                    )
+                    _uiState.value = _uiState.value.withFeatures(pendingPropPlacement = saved).copy(propInventGenerating = false, savedProps = store.list(), propInventMessage = "Already in library: ${saved.name}. Adjust placement?", propInventError = false)
                     return@coroutineScope
                 }
                 val selected = currentProvider ?: return@coroutineScope propInventFailure(
@@ -10940,13 +10853,7 @@ class CompanionViewModel(
                 ensureOwner()
                 val placed = GeneratedPropForms.withSmartDefaults(form)
                 store.save(placed, prompt)
-                _uiState.value = _uiState.value.copy(
-                    propInventGenerating = false,
-                    savedProps = store.list(),
-                    propInventMessage = "Dispensed ${placed.name}. Drag it into place on your avatar.",
-                    propInventError = false,
-                    pendingPropPlacement = placed,
-                )
+                _uiState.value = _uiState.value.withFeatures(pendingPropPlacement = placed).copy(propInventGenerating = false, savedProps = store.list(), propInventMessage = "Dispensed ${placed.name}. Drag it into place on your avatar.", propInventError = false)
             } catch (_: kotlinx.coroutines.TimeoutCancellationException) {
                 ensureOwner()
                 val ready = inventor?.lastValidated
@@ -11146,12 +11053,18 @@ class CompanionViewModel(
     // ── Idle morph + car awareness ───────────────────────────────────────────
 
     private fun startIdleFormCyclerIfNeeded() {
-        idleFormCycler?.stop()
+        // Match the existing idle director: virtual-time unit tests must not
+        // schedule an infinite animation loop when draining pending work.
+        if (System.getProperty("meowmba.idleAnimations", "true") == "false") return
         if (!_uiState.value.idleMorphEnabled) {
+            idleFormCycler?.stop()
             clearIdleMorphOverlay()
             return
         }
         if (_uiState.value.driving) return
+        // Driving snapshots arrive repeatedly even while parked. Restarting here
+        // reset the 55-second timer on every update, preventing any idle morph.
+        if (idleFormCycler?.isRunning == true) return
         val cycler = IdleFormCycler(
             scope = viewModelScope,
             canMorph = {
@@ -11174,24 +11087,18 @@ class CompanionViewModel(
 
     private fun applyIdleMorphTarget(target: IdleFormTarget) {
         if (target.isGenerated) {
-            _uiState.value = _uiState.value.copy(
-                idleMorphGeneratedId = target.generatedId,
-                idleMorphAnimal = null,
-            )
+            _uiState.value = _uiState.value.withFeatures(idleMorphGeneratedId = target.generatedId, idleMorphAnimal = null)
         } else {
-            _uiState.value = _uiState.value.copy(
-                idleMorphAnimal = target.animal,
-                idleMorphGeneratedId = null,
-            )
+            _uiState.value = _uiState.value.withFeatures(idleMorphAnimal = target.animal, idleMorphGeneratedId = null)
         }
     }
 
     private fun clearIdleMorphOverlay() {
-        _uiState.value = _uiState.value.copy(idleMorphAnimal = null, idleMorphGeneratedId = null)
+        _uiState.value = _uiState.value.withFeatures(idleMorphAnimal = null, idleMorphGeneratedId = null)
     }
 
     fun setIdleMorphEnabled(enabled: Boolean) {
-        _uiState.value = _uiState.value.copy(idleMorphEnabled = enabled)
+        _uiState.value = _uiState.value.withFeatures(idleMorphEnabled = enabled)
         secureStorage?.saveBooleanPreference(KEY_IDLE_MORPH, enabled)
         if (enabled) startIdleFormCyclerIfNeeded() else {
             idleFormCycler?.stop()
@@ -11201,22 +11108,22 @@ class CompanionViewModel(
 
     fun setIdleMorphIntervalSec(sec: Int) {
         val v = sec.coerceIn(20, 180)
-        _uiState.value = _uiState.value.copy(idleMorphIntervalSec = v)
+        _uiState.value = _uiState.value.withFeatures(idleMorphIntervalSec = v)
         secureStorage?.savePreference(KEY_IDLE_MORPH_INTERVAL, v.toString())
     }
 
     fun setIdleMorphIncludeGenerated(enabled: Boolean) {
-        _uiState.value = _uiState.value.copy(idleMorphIncludeGenerated = enabled)
+        _uiState.value = _uiState.value.withFeatures(idleMorphIncludeGenerated = enabled)
         secureStorage?.saveBooleanPreference(KEY_IDLE_MORPH_GENERATED, enabled)
     }
 
     fun setDriveEmotionBoost(enabled: Boolean) {
-        _uiState.value = _uiState.value.copy(driveEmotionBoost = enabled)
+        _uiState.value = _uiState.value.withFeatures(driveEmotionBoost = enabled)
         secureStorage?.saveBooleanPreference(KEY_DRIVE_EMOTION_BOOST, enabled)
     }
 
     fun setDriveDriverCameraEnabled(enabled: Boolean) {
-        _uiState.value = _uiState.value.copy(driveDriverCameraEnabled = enabled)
+        _uiState.value = _uiState.value.withFeatures(driveDriverCameraEnabled = enabled)
         secureStorage?.saveBooleanPreference(KEY_DRIVE_DRIVER_CAMERA, enabled)
         if (enabled && _uiState.value.driving) {
             // Prefer driver-facing preview while the drive card is up.
@@ -11226,7 +11133,7 @@ class CompanionViewModel(
     }
 
     fun setObdEnabled(enabled: Boolean) {
-        _uiState.value = _uiState.value.copy(obdEnabled = enabled)
+        _uiState.value = _uiState.value.withFeatures(obdEnabled = enabled)
         secureStorage?.saveBooleanPreference(KEY_OBD_ENABLED, enabled)
         if (!enabled) {
             obdManager?.disconnect()
@@ -11237,22 +11144,19 @@ class CompanionViewModel(
 
     fun setObdAdapterAddress(address: String) {
         val clean = address.trim()
-        _uiState.value = _uiState.value.copy(obdAdapterAddress = clean)
+        _uiState.value = _uiState.value.withFeatures(obdAdapterAddress = clean)
         secureStorage?.savePreference(KEY_OBD_ADAPTER, clean)
     }
 
     fun setCarDashcamRtspUrl(url: String) {
         val clean = url.trim()
-        _uiState.value = _uiState.value.copy(
-            carDashcamRtspUrl = clean,
-            carCameraSources = CarCameraSources.defaultSources(rtspUrl = clean),
-        )
+        _uiState.value = _uiState.value.withFeatures(carDashcamRtspUrl = clean, carCameraSources = CarCameraSources.defaultSources(rtspUrl = clean))
         secureStorage?.savePreference(KEY_CAR_RTSP, clean)
     }
 
     fun setCarCameraActive(id: String) {
         val clean = id.trim().ifBlank { "front_driver" }
-        _uiState.value = _uiState.value.copy(carCameraActiveId = clean)
+        _uiState.value = _uiState.value.withFeatures(carCameraActiveId = clean)
         secureStorage?.savePreference(KEY_CAR_CAMERA_ACTIVE, clean)
         when (clean) {
             "front_driver" -> {
@@ -11268,6 +11172,7 @@ class CompanionViewModel(
     }
 
     private fun refreshVehicleIdentity() {
+        if (!_uiState.value.carModeEnabled) return
         val ctx = secureStorage?.context ?: return
         val addr = secureStorage?.getPreference(KEY_CAR_DEVICE).orEmpty()
         var name = ""
@@ -11304,7 +11209,7 @@ class CompanionViewModel(
             connected = connected,
             hasAndroidAutoFeature = hasAa,
         )
-        _uiState.value = _uiState.value.copy(vehicleIdentity = identity)
+        _uiState.value = _uiState.value.withFeatures(vehicleIdentity = identity)
     }
 
     // ── Car assistant ────────────────────────────────────────────────────────
@@ -11339,13 +11244,13 @@ class CompanionViewModel(
         driveReactionStartedAtMs = startedAt
         if (active) refreshVehicleIdentity()
         // Pause idle morph showcase while driving — keep current overlay but stop cycling.
-        if (active) idleFormCycler?.stop() else startIdleFormCyclerIfNeeded()
         _uiState.value = _uiState.value.copy(
             driving = active, driveCardVisible = active && !driveCardSuppressed,
             driveSpeedMph = s.speedMph, driveGForce = s.gForce,
             driveLateralG = s.lateralG, driveLongitudinalG = s.longitudinalG,
             driveReaction = reaction, driveReason = s.reason, driveManual = s.manualOverride,
         )
+        if (active) idleFormCycler?.stop() else startIdleFormCyclerIfNeeded()
         driveReactionExpiry?.cancel()
         if (reaction in setOf(DriveReaction.LEAN_LEFT, DriveReaction.LEAN_RIGHT, DriveReaction.LURCH)) {
             driveReactionExpiry = viewModelScope.launch {
@@ -12112,10 +12017,7 @@ class CompanionViewModel(
             // Fresh reads each open so comics/scripts and props saved since the
             // last visit show up without an app restart.
             _studioArtifacts.value = listStudioArtifacts()
-            _uiState.value = _uiState.value.copy(
-                savedProps = runCatching { generatedPropStore?.list().orEmpty() }.getOrDefault(emptyList()),
-                savedAnimationNames = runCatching { avatarAnimationStore?.list().orEmpty() }.getOrDefault(emptyList()),
-            )
+            _uiState.value = _uiState.value.withFeatures(savedAnimationNames = runCatching { avatarAnimationStore?.list().orEmpty() }.getOrDefault(emptyList())).copy(savedProps = runCatching { generatedPropStore?.list().orEmpty() }.getOrDefault(emptyList()))
         }
     }
 

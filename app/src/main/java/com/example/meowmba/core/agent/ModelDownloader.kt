@@ -113,8 +113,11 @@ class ModelDownloader(
                 onProgress(DownloadProgress(received, total))
             }
             check(partFile.isFile && partFile.length() > 0) { "Download produced an empty file" }
-            if (finalFile.exists()) finalFile.delete()
-            check(partFile.renameTo(finalFile)) { "Could not finalize download" }
+            // Never delete a usable model before its replacement is committed.
+            // Both paths are on the same filesystem; rename is atomic on Android.
+            Files.move(partFile.toPath(), finalFile.toPath(),
+                java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING)
             onProgress(DownloadProgress(finalFile.length(), finalFile.length(), done = true))
             finalFile
         } catch (e: Exception) {

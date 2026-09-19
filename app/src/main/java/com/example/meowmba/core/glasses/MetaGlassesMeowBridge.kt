@@ -73,7 +73,7 @@ class MetaGlassesMeowBridge(
         const val DEFAULT_SSH_HOST = "meow"
 
         private val WAKE_PREFIX = Regex(
-            """(?i)^\s*(hey\s+meta|ok\s+meta|hi\s+meta|meta[,:]?|hey\s+meow|ok\s+meow|hi\s+meow|hey\s+[a-z][\w'-]{0,24}|ok\s+[a-z][\w'-]{0,24})\s*[,:]?\s*""",
+            """(?i)^\s*(hey\s+meta|ok\s+meta|hi\s+meta|meta|hey\s+meow|ok\s+meow|hi\s+meow)(?=\s|[,:]|$)\s*[,:]?\s*""",
         )
 
         private val SSH_HINT = Regex("""(?i)\b(ssh|on\s+meow|meow\s+server|run\s+on\s+(the\s+)?server)\b""")

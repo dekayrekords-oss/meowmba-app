@@ -138,12 +138,7 @@ data class CompanionState(
     val propInventMessage: String? = null,
     val propInventError: Boolean = false,
     /** After invent/save, offer drag placement on the current avatar. */
-    val pendingPropPlacement: GeneratedPropForm? = null,
     /** Vending animation generator (CustomAnimationStore). */
-    val savedAnimationNames: List<String> = emptyList(),
-    val animInventGenerating: Boolean = false,
-    val animInventMessage: String? = null,
-    val animInventError: Boolean = false,
     /** Temporary costume from an explicit performance; never persisted over the user's choice. */
     val performanceAnimal: AvatarAnimal? = null,
     val appTheme: AppTheme = AppTheme.COMPANION,
@@ -278,33 +273,15 @@ data class CompanionState(
     /** Emergency-contact phone number for the car.help tool (Settings). */
     val emergencyContact: String = "",
     /** Idle morph showcase: rotate through all Lumen forms while quiet. */
-    val idleMorphEnabled: Boolean = true,
     /** Seconds between idle form morphs (clamped in cycler). */
-    val idleMorphIntervalSec: Int = 55,
     /** Include saved generated avatar forms in the idle morph pool. */
-    val idleMorphIncludeGenerated: Boolean = true,
     /** Non-persisted overlay animal from [IdleFormCycler]; null = use preferred form. */
-    val idleMorphAnimal: AvatarAnimal? = null,
     /** Non-persisted generated form id overlay from idle morph. */
-    val idleMorphGeneratedId: String? = null,
     /** Stronger emotion + IMU reactivity while driving. */
-    val driveEmotionBoost: Boolean = true,
     /** Show driver-facing camera preview on the drive card when CAMERA permitted. */
-    val driveDriverCameraEnabled: Boolean = true,
     /** Vehicle Bluetooth / projection awareness. */
-    val vehicleIdentity: com.example.meowmba.core.car.VehicleIdentity =
-        com.example.meowmba.core.car.VehicleIdentity(),
     /** Live OBD-II snapshot (NaN fields when disconnected). */
-    val obdReading: com.example.meowmba.core.car.obd2.Obd2Reading =
-        com.example.meowmba.core.car.obd2.Obd2Reading(),
-    val obdAlerts: List<com.example.meowmba.core.car.obd2.Obd2Alert> = emptyList(),
-    val obdEnabled: Boolean = false,
-    val obdAdapterAddress: String = "",
     /** Soft 0..1 excitement from OBD RPM for Lumen brace. */
-    val obdExcitement: Float = 0f,
-    val carCameraSources: List<com.example.meowmba.core.car.camera.CarCameraSource> = emptyList(),
-    val carCameraActiveId: String = "front_driver",
-    val carDashcamRtspUrl: String = "",
     /**
      * Weather to show as a card, or null for none.
      *
@@ -507,7 +484,75 @@ data class CompanionState(
     /** Goal waiting on side-effecting ssh_exec approval (agentic_runtime_v1). */
     val agenticPendingApprovalGoalId: String? = null,
     val agenticPendingApprovalTitle: String? = null,
-)
+    val features: CompanionFeatures = CompanionFeatures(),
+) {
+    val pendingPropPlacement: GeneratedPropForm? get() = features.pendingPropPlacement
+    val savedAnimationNames: List<String> get() = features.savedAnimationNames
+    val animInventGenerating: Boolean get() = features.animInventGenerating
+    val animInventMessage: String? get() = features.animInventMessage
+    val animInventError: Boolean get() = features.animInventError
+    val idleMorphEnabled: Boolean get() = features.idleMorphEnabled
+    val idleMorphIntervalSec: Int get() = features.idleMorphIntervalSec
+    val idleMorphIncludeGenerated: Boolean get() = features.idleMorphIncludeGenerated
+    val idleMorphAnimal: AvatarAnimal? get() = features.idleMorphAnimal
+    val idleMorphGeneratedId: String? get() = features.idleMorphGeneratedId
+    val driveEmotionBoost: Boolean get() = features.driveEmotionBoost
+    val driveDriverCameraEnabled: Boolean get() = features.driveDriverCameraEnabled
+    val vehicleIdentity: com.example.meowmba.core.car.VehicleIdentity get() = features.vehicleIdentity
+    val obdReading: com.example.meowmba.core.car.obd2.Obd2Reading get() = features.obdReading
+    val obdAlerts: List<com.example.meowmba.core.car.obd2.Obd2Alert> get() = features.obdAlerts
+    val obdEnabled: Boolean get() = features.obdEnabled
+    val obdAdapterAddress: String get() = features.obdAdapterAddress
+    val obdExcitement: Float get() = features.obdExcitement
+    val carCameraSources: List<com.example.meowmba.core.car.camera.CarCameraSource> get() = features.carCameraSources
+    val carCameraActiveId: String get() = features.carCameraActiveId
+    val carDashcamRtspUrl: String get() = features.carDashcamRtspUrl
+    fun withFeatures(
+        pendingPropPlacement: GeneratedPropForm? = features.pendingPropPlacement,
+        savedAnimationNames: List<String> = features.savedAnimationNames,
+        animInventGenerating: Boolean = features.animInventGenerating,
+        animInventMessage: String? = features.animInventMessage,
+        animInventError: Boolean = features.animInventError,
+        idleMorphEnabled: Boolean = features.idleMorphEnabled,
+        idleMorphIntervalSec: Int = features.idleMorphIntervalSec,
+        idleMorphIncludeGenerated: Boolean = features.idleMorphIncludeGenerated,
+        idleMorphAnimal: AvatarAnimal? = features.idleMorphAnimal,
+        idleMorphGeneratedId: String? = features.idleMorphGeneratedId,
+        driveEmotionBoost: Boolean = features.driveEmotionBoost,
+        driveDriverCameraEnabled: Boolean = features.driveDriverCameraEnabled,
+        vehicleIdentity: com.example.meowmba.core.car.VehicleIdentity = features.vehicleIdentity,
+        obdReading: com.example.meowmba.core.car.obd2.Obd2Reading = features.obdReading,
+        obdAlerts: List<com.example.meowmba.core.car.obd2.Obd2Alert> = features.obdAlerts,
+        obdEnabled: Boolean = features.obdEnabled,
+        obdAdapterAddress: String = features.obdAdapterAddress,
+        obdExcitement: Float = features.obdExcitement,
+        carCameraSources: List<com.example.meowmba.core.car.camera.CarCameraSource> = features.carCameraSources,
+        carCameraActiveId: String = features.carCameraActiveId,
+        carDashcamRtspUrl: String = features.carDashcamRtspUrl,
+    ): CompanionState = copy(features = features.copy(
+        pendingPropPlacement = pendingPropPlacement,
+        savedAnimationNames = savedAnimationNames,
+        animInventGenerating = animInventGenerating,
+        animInventMessage = animInventMessage,
+        animInventError = animInventError,
+        idleMorphEnabled = idleMorphEnabled,
+        idleMorphIntervalSec = idleMorphIntervalSec,
+        idleMorphIncludeGenerated = idleMorphIncludeGenerated,
+        idleMorphAnimal = idleMorphAnimal,
+        idleMorphGeneratedId = idleMorphGeneratedId,
+        driveEmotionBoost = driveEmotionBoost,
+        driveDriverCameraEnabled = driveDriverCameraEnabled,
+        vehicleIdentity = vehicleIdentity,
+        obdReading = obdReading,
+        obdAlerts = obdAlerts,
+        obdEnabled = obdEnabled,
+        obdAdapterAddress = obdAdapterAddress,
+        obdExcitement = obdExcitement,
+        carCameraSources = carCameraSources,
+        carCameraActiveId = carCameraActiveId,
+        carDashcamRtspUrl = carDashcamRtspUrl,
+    ))
+}
 
 /**
  * Which kind of provider is currently driving the companion.
@@ -706,3 +751,28 @@ fun nextDriveReaction(
     if (current.isTransient() && nowMs - startedAtMs < holdMs) return current to startedAtMs
     return incoming to nowMs
 }
+
+/** Separate feature state keeps JVM constructor/copy signatures below the 255-slot limit. */
+data class CompanionFeatures(
+    val pendingPropPlacement: GeneratedPropForm? = null,
+    val savedAnimationNames: List<String> = emptyList(),
+    val animInventGenerating: Boolean = false,
+    val animInventMessage: String? = null,
+    val animInventError: Boolean = false,
+    val idleMorphEnabled: Boolean = true,
+    val idleMorphIntervalSec: Int = 55,
+    val idleMorphIncludeGenerated: Boolean = true,
+    val idleMorphAnimal: AvatarAnimal? = null,
+    val idleMorphGeneratedId: String? = null,
+    val driveEmotionBoost: Boolean = true,
+    val driveDriverCameraEnabled: Boolean = true,
+    val vehicleIdentity: com.example.meowmba.core.car.VehicleIdentity = com.example.meowmba.core.car.VehicleIdentity(),
+    val obdReading: com.example.meowmba.core.car.obd2.Obd2Reading = com.example.meowmba.core.car.obd2.Obd2Reading(),
+    val obdAlerts: List<com.example.meowmba.core.car.obd2.Obd2Alert> = emptyList(),
+    val obdEnabled: Boolean = false,
+    val obdAdapterAddress: String = "",
+    val obdExcitement: Float = 0f,
+    val carCameraSources: List<com.example.meowmba.core.car.camera.CarCameraSource> = emptyList(),
+    val carCameraActiveId: String = "front_driver",
+    val carDashcamRtspUrl: String = "",
+)

@@ -36,7 +36,10 @@ class IdleFormCycler(
     private val onTarget: (IdleFormTarget) -> Unit,
 ) {
     private var job: Job? = null
-    private var index = 0
+    private var remaining = mutableListOf<IdleFormTarget>()
+    private var lastPool = emptyList<IdleFormTarget>()
+    private var previous: IdleFormTarget? = null
+    val isRunning: Boolean get() = job?.isActive == true
 
     fun start() {
         if (job?.isActive == true) return
@@ -61,16 +64,24 @@ class IdleFormCycler(
         val generated = if (includeGenerated()) {
             generatedFormIds().filter { it.isNotBlank() }.map { IdleFormTarget(generatedId = it) }
         } else emptyList()
-        return authored + generated
+        return (authored + generated).distinct()
     }
 
     /** Advance one step; exposed for unit tests. */
     fun nextTarget(): IdleFormTarget? {
         val items = pool()
         if (items.isEmpty()) return null
-        val i = ((index % items.size) + items.size) % items.size
-        index = i + 1
-        return items[i]
+        // Shuffle a whole bag instead of rolling independently: every available
+        // character gets a turn before any repeats, including generated forms.
+        if (remaining.isEmpty() || items != lastPool) {
+            remaining = items.shuffled().toMutableList()
+            lastPool = items
+            if (remaining.size > 1 && remaining.first() == previous) {
+                val first = remaining.removeAt(0)
+                remaining.add(first)
+            }
+        }
+        return remaining.removeAt(0).also { previous = it }
     }
 
     companion object {

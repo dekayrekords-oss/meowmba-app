@@ -120,6 +120,7 @@ internal fun YourComputerSettingsSection(
                 Button(onClick=onOpenTerminal,modifier=Modifier.fillMaxWidth()) { Text("Open phone Terminal") }
                 OutlinedButton(onClick=onRefreshPhone,modifier=Modifier.fillMaxWidth()) { Text("Check phone again") }
                 Text(phoneProbeSummary,style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                OpenCodeLocalConnectionCard()
             }
             ComputerToolsPage.SERVER_ADDRESS -> {
                 StepHint("Server setup",1,3)

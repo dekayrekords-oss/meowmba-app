@@ -1,6 +1,6 @@
 # Meowmba shared build authority
 
-Updated 2026-09-18. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
+Updated 2026-09-19. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
 This supersedes historical build-location/version instructions in other documents.
 
 ## Current recovery
@@ -22,6 +22,24 @@ Retain baseline computer setup, cancellation, habitat, onboarding, server and pe
 Port feature commits; do not overwrite the baseline with an experimental branch tree.
 
 ## Coordination
+
+### September 19 recovery checkpoint — NOT a release
+
+- Phone remains original preview 138; do not confuse candidate builds with installation.
+- Reproduced/fixed CompanionState JVM argument-slot overflow by grouping feature state.
+- Fixed Meta wake-prefix corruption of ordinary "hey can you…" commands; targeted regressions pass.
+- Fixed idle morph timer restarts and virtual-time test loop; stopped vehicle lookup while drive mode is off.
+- SDK-enabled full suite checkpoint: 2,568 tests, 0 failures, 5 skipped (before subsequent updater/connection UI work).
+- Actual phone: baseline UI visible, weather city lookup and Hugging Face network checks pass.
+- Actual phone: free structured prop response rejected with "x is required". Production repair prompts now include rejected data; live retry acceptance remains pending.
+- Needle 3 weights already exist on phone and match official SHA256 c9d915eca282ed42d1a09b143b592adb4cc6744ffe2d294adf5cfc5548170c38.
+  Candidate updates BOTH native archive and default catalog to Needle 3; native device acceptance pending.
+- Added local-library checksum update checker, keeping old files; custom models report unknown. Voice/image updater coverage still pending.
+- User confirms Ubuntu/OpenCode runs. Local server port4096 was unreachable. Added Ubuntu-aware launch and a password-protected loopback connection card.
+  Task submission, approvals, session persistence and result integration are NOT complete; do not claim the connection card implements them.
+- Bundled speech/native assets restored and external Meta build configuration located. Never replace a full build with missing runtimes.
+- Remaining: final source tests, artifact audit, version allocation, phone acceptance of candidate, complete OpenCode task integration,
+  drive-mode physical testing, all-character randomized Lumen acceptance, model-update tests/coverage, shared-server authority and clutter archive.
 
 Workers must start from the integration branch, claim bounded files/tasks here before editing,
 and provide source commit, changed files, tests, limitations and handoff. No concurrent edits

@@ -11,6 +11,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MetaGlassesMeowBridgeTest {
+    @Test fun ordinaryPoliteRequestsAreNotMistakenForWakeNames() {
+        val request = "hey can you make a file called todo.txt for me"
+        assertEquals(request, MetaGlassesMeowBridge.normalizeTranscript(request)?.text)
+        assertEquals("metadata is useful", MetaGlassesMeowBridge.normalizeTranscript("metadata is useful")?.text)
+    }
 
     @Test
     fun `strips Hey Meta and Hey Meow prefixes`() {

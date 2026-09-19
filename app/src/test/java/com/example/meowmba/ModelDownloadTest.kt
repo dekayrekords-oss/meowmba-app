@@ -44,11 +44,11 @@ class ModelCatalogTest {
     }
 
     @Test
-    fun `needle 2 is an ungated downloadable native tool router`() {
-        val needle = ModelCatalog.options.first { it.id == "needle-2" }
-        assertEquals("needle2.cact", needle.fileName)
-        assertTrue(needle.downloadUrl.contains("/Cactus-Compute/needle2/resolve/"))
-        assertTrue(needle.downloadUrl.endsWith("/needle2.cact"))
+    fun `needle 3 is an ungated downloadable native tool router`() {
+        val needle = ModelCatalog.options.first { it.id == "needle-3" }
+        assertEquals("needle3.cact", needle.fileName)
+        assertTrue(needle.downloadUrl.contains("/Cactus-Compute/needle3/resolve/c1fc4d4cb32993156a880ceb8ff171b03b1f166a/"))
+        assertTrue(needle.downloadUrl.endsWith("/needle3.cact"))
         assertFalse(needle.requiresHfToken)
         assertTrue(needle.recommended)
         assertFalse(needle.runtime.canActivate)

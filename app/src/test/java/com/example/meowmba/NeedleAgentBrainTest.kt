@@ -52,11 +52,21 @@ class NeedleAgentBrainTest {
 
     @Test
     fun `unknown or malformed output is declined`() {
+        assertNull(NeedleAgentBrain.parse("""{"type":{},"function_calls":[]}""", registry()))
+        assertNull(NeedleAgentBrain.parse("""{"type":"call","function_calls":[{"name":[]}]}""", registry()))
         assertNull(NeedleAgentBrain.parse("not json", registry()))
         assertNull(NeedleAgentBrain.parse(
             """{"type":"call","function_calls":[{"name":"shell.exec","arguments":{}}]}""",
             registry(),
         ))
+    }
+
+    @Test fun `structured arguments do not crash the native response parser`() {
+        val intent = NeedleAgentBrain.parse(
+            """{"type":"call","function_calls":[{"name":"memory.save","arguments":{"text":{"nested":"value"}}}]}""",
+            registry(),
+        )
+        assertEquals("""{"nested":"value"}""", intent?.args?.get("text"))
     }
 
     @Test
