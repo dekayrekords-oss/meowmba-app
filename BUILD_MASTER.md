@@ -23,7 +23,14 @@ Port feature commits; do not overwrite the baseline with an experimental branch 
 
 ## Coordination
 
-### September 19 automated Computer setup — source only, not installed
+### September 19 automated Computer setup — preview140 installed
+
+- Source bb58155; version1.3.84/code140 installed in place on RFCY61NJEVM without data reset.
+- SDK-enabled build and 3 setup contract tests pass. All147 protected runtime/assets match139.
+- Original certificate matches; APK SHA256 42864bef8dceacdcbe1304d726b446a34dbba66b15e2600917c17c36ae51a7bb.
+- Cold launch, visible Lumen UI and sustained process checked; no new app crash. Existing phone
+  OpenCode port4096 returns401, demonstrating authentication is enabled, not authenticated readiness.
+- User must enter existing server password privately in Computer setup to complete verification.
 
 - Added fixed Termux provisioning flow and declared RUN_COMMAND permission; no AI-supplied shell commands.
 - Phone setup now offers Setup computer instead of Ubuntu command copying. Reuses Ubuntu/OpenCode,
