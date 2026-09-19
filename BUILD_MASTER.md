@@ -11,7 +11,7 @@ This supersedes historical build-location/version instructions in other document
 - Baseline: `5efed2f`, version 1.3.82/code 138. Historical evidence is dated September 15.
 - Verified original APK: `/Users/prog/Meowmba-Releases/idle136-20260915/meow-preview138.apk`.
 - Grok source to recover: `529cc69`, preserved as `recovery/grok-lumen` remote-tracking ref.
-- Status: baseline restored; feature integration IN PROGRESS, not released.
+- Status: recovery preview139 installed in place; remaining feature integration IN PROGRESS, not a Play release.
 
 ## Feature queue
 
@@ -25,7 +25,13 @@ Port feature commits; do not overwrite the baseline with an experimental branch 
 
 ### September 19 recovery checkpoint — NOT a release
 
-- Phone remains original preview 138; do not confuse candidate builds with installation.
+- Phone updated in place to preview139 (1.3.83), source71b9194. No uninstall/data reset.
+- Final SDK-enabled suite: 2,570 tests, 0 failures, 5 skipped. Device: Needle3 inference proposal, named-city weather and HF connectivity all pass.
+- Correct signing key is Meow `/home/prog/.android/debug.keystore`, NOT `/home/claude/.android/debug.keystore`.
+  Local ignored copy: `/Users/prog/.android/meow-prog-debug.keystore`; original matching certificate above.
+- APK SHA256: 51bcdde3638eea4e2853dfe50613081bee8039a20a08e3e26db5037fc9253345.
+  All75 baseline native/assets retained. Needle JNI intentionally updated; SD JNI rebuilt from same pinned sources and differs bytewise.
+  Strict byte-identity verifier therefore reports two changed libraries, not a blanket pass.
 - Reproduced/fixed CompanionState JVM argument-slot overflow by grouping feature state.
 - Fixed Meta wake-prefix corruption of ordinary "hey can you…" commands; targeted regressions pass.
 - Fixed idle morph timer restarts and virtual-time test loop; stopped vehicle lookup while drive mode is off.
@@ -38,8 +44,12 @@ Port feature commits; do not overwrite the baseline with an experimental branch 
 - User confirms Ubuntu/OpenCode runs. Local server port4096 was unreachable. Added Ubuntu-aware launch and a password-protected loopback connection card.
   Task submission, approvals, session persistence and result integration are NOT complete; do not claim the connection card implements them.
 - Bundled speech/native assets restored and external Meta build configuration located. Never replace a full build with missing runtimes.
-- Remaining: final source tests, artifact audit, version allocation, phone acceptance of candidate, complete OpenCode task integration,
-  drive-mode physical testing, all-character randomized Lumen acceptance, model-update tests/coverage, shared-server authority and clutter archive.
+- Source is pushed privately to `/home/prog/git/meowmba-app.git`, branch `recovery/known-good-138`.
+- Old main/restore app/build directories (about5.1GB) moved recoverably to `/Users/prog/Meowmba-Releases/archive-build-output-20260919`.
+  Source/credentials/known-good artifacts preserved; legacy checkout marker files point here.
+- Remaining: complete OpenCode task integration,
+  drive-mode physical testing, all-character randomized Lumen visual acceptance, model-update tests/voice+image coverage.
+  On-phone visual inspection also found the new wall clock overlapping the reflex chip; layout correction is still pending.
 
 Workers must start from the integration branch, claim bounded files/tasks here before editing,
 and provide source commit, changed files, tests, limitations and handoff. No concurrent edits
