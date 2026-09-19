@@ -23,6 +23,16 @@ Port feature commits; do not overwrite the baseline with an experimental branch 
 
 ## Coordination
 
+### September 19 automated Computer setup — source only, not installed
+
+- Added fixed Termux provisioning flow and declared RUN_COMMAND permission; no AI-supplied shell commands.
+- Phone setup now offers Setup computer instead of Ubuntu command copying. Reuses Ubuntu/OpenCode,
+  installs missing components, starts loopback password-protected worker and verifies authenticated health.
+- Termux external-app opt-in and Android permission still require user action. Do not promise zero-touch.
+- Pending real-device validation: process lifetime under proot/Termux, clean-install downloads, callback,
+  permissions and resume after leaving the setup screen. Keep screen open during this preview.
+- OpenCode task/approval/session integration is still incomplete. A healthy server is NOT a working agent.
+
 ### September 19 recovery checkpoint — NOT a release
 
 - Phone updated in place to preview139 (1.3.83), source71b9194. No uninstall/data reset.

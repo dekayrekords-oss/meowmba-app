@@ -104,14 +104,12 @@ internal fun YourComputerSettingsSection(
             }
             ComputerToolsPage.PHONE_PREPARE -> {
                 StepHint("Phone setup",2,3)
-                Text("Prepare Linux",style=MaterialTheme.typography.titleLarge)
-                Text("Copy these commands, paste them in Termux, and wait for installation to finish. This downloads Linux packages.")
-                Card { Text(TermuxComputerLinks.BOOTSTRAP_COMMANDS,Modifier.padding(14.dp),style=MaterialTheme.typography.bodySmall.copy(fontFamily=FontFamily.Monospace)) }
-                Button(onClick={clipboard.setText(AnnotatedString(TermuxComputerLinks.BOOTSTRAP_COMMANDS));notice="Commands copied."},modifier=Modifier.fillMaxWidth()) { Text("Copy setup commands") }
+                Text("Setup computer",style=MaterialTheme.typography.titleLarge)
+                OpenCodeLocalConnectionCard()
                 OutlinedButton(onClick={openTermux()},modifier=Modifier.fillMaxWidth()) { Text("Open Termux") }
                 TextButton(onClick={advanced=!advanced}) { Text(if(advanced) "Hide connection help" else "Help connecting Termux") }
                 if(advanced) Text("If Meow cannot connect, allow Termux's RUN_COMMAND access and its external-app setting. The Terminal reports whether it reached Linux or only the phone sandbox.",style=MaterialTheme.typography.bodySmall)
-                Button(onClick={onNavigate(ComputerToolsPage.PHONE_OPEN)},modifier=Modifier.fillMaxWidth()) { Text("I finished these steps") }
+                TextButton(onClick={onNavigate(ComputerToolsPage.PHONE_OPEN)},modifier=Modifier.fillMaxWidth()) { Text("Advanced: terminal and diagnostics") }
             }
             ComputerToolsPage.PHONE_OPEN -> {
                 StepHint("Phone setup",3,3)

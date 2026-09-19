@@ -4,6 +4,7 @@
 
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <!-- Navigation: needed to rank nearby places by distance from the user. -->
@@ -111,6 +112,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Meowmba">
+        <receiver android:name=".core.computer.PhoneComputerSetupResult" android:exported="false" />
         <!-- Public SDK app-attestation configuration, NOT the GitHub PAT. -->
         <meta-data
             android:name="com.meta.wearable.mwdat.APPLICATION_ID"

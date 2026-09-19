@@ -93,8 +93,8 @@ android {
         // 85 > 84 so the affect/valence + pet wiring installs as a genuine
         // in-place upgrade, and so it is distinguishable on-device from 84 (which
         // has the drives but not the reply affect or the touch sense).
-        versionCode = 139
-        versionName = "1.3.83"
+        versionCode = 140
+        versionName = "1.3.84"
 
         buildConfigField("boolean", "HAS_MWDAT_SDK", hasMwdat.toString())
         manifestPlaceholders["mwdat_application_id"] = mwdatApplicationId
@@ -223,7 +223,7 @@ androidComponents {
         // Combined Computer + avatar update; bump debug-only so in-place
         // upgrade is allowed without changing release defaultConfig (85).
         variant.outputs.forEach { output ->
-            output.versionCode.set(139)
+            output.versionCode.set(140)
         }
     }
 }
