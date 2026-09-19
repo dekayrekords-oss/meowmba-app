@@ -37,7 +37,7 @@ Port feature commits; do not overwrite the baseline with an experimental branch 
 - Fixed idle morph timer restarts and virtual-time test loop; stopped vehicle lookup while drive mode is off.
 - SDK-enabled full suite checkpoint: 2,568 tests, 0 failures, 5 skipped (before subsequent updater/connection UI work).
 - Actual phone: baseline UI visible, weather city lookup and Hugging Face network checks pass.
-- Actual phone: free structured prop response rejected with "x is required". Production repair prompts now include rejected data; live retry acceptance remains pending.
+- Actual phone: free single-response prop probe rejected with "x is required". After repair, the actual configured-model production workflow passed (79.603s): valid geometry saved and equipped; temporary test prop removed and prior appearance/privacy restored. This proves one prop workflow, not every avatar design.
 - Needle 3 weights already exist on phone and match official SHA256 c9d915eca282ed42d1a09b143b592adb4cc6744ffe2d294adf5cfc5548170c38.
   Preview139 updates BOTH native archive and default catalog to Needle 3; native phone smoke test passes.
 - Added local-library checksum update checker, keeping old files; custom models report unknown. Voice/image updater coverage still pending.
