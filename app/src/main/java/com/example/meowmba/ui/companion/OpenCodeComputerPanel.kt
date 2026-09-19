@@ -27,6 +27,7 @@ internal fun OpenCodeComputerPanel() {
     var snapshot by remember { mutableStateOf<OpenCodeComputer.Snapshot?>(null) }
     var busy by remember { mutableStateOf(false) }
     var artifactPath by remember { mutableStateOf("") }
+    var missingSession by remember { mutableStateOf(false) }
     val answers = remember { mutableStateMapOf<String, String>() }
     LaunchedEffect(Unit) {
         try {
@@ -46,10 +47,13 @@ internal fun OpenCodeComputerPanel() {
         if (session.isBlank()) return@LaunchedEffect
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (isActive) {
-                try { snapshot = api.snapshot(session); status = "Computer: ${snapshot!!.status}" }
+                try { snapshot = api.snapshot(session); missingSession = false; status = "Computer: ${snapshot!!.status}" }
                 catch (e: CancellationException) { throw e }
-                catch (e: Exception) { status = e.message ?: "Computer unavailable. Task may still be running." }
-                delay(3_000)
+                catch (e: Exception) {
+                    missingSession = e.message?.contains("HTTP 404") == true
+                    status = e.message ?: "Computer unavailable. Task may still be running."
+                }
+                delay(if (snapshot?.status == "idle") 10_000 else 3_000)
             }
         }
     }
@@ -83,8 +87,8 @@ internal fun OpenCodeComputerPanel() {
             OutlinedButton(onClick = { action { it.stop(session); status = "Stop requested; checking worker status…" } }, enabled = !busy) { Text("Stop task") }
             TextButton(onClick = { action {
                 withContext(Dispatchers.IO) { SecureStorageManager(context).savePreference(OpenCodeComputer.SESSION_KEY, "") }
-                session = ""; snapshot = null; status = "New task. Previous session remains in OpenCode."
-            } }, enabled = !busy && snapshot?.status == "idle" && snapshot?.permissions.orEmpty().isEmpty() && snapshot?.questions.orEmpty().isEmpty()) { Text("New task") }
+                session = ""; snapshot = null; missingSession = false; status = "New task. Previous session remains in OpenCode."
+            } }, enabled = !busy && (snapshot?.status == "idle" || missingSession) && snapshot?.permissions.orEmpty().isEmpty() && snapshot?.questions.orEmpty().isEmpty()) { Text("New task") }
         }
         snapshot?.let { snap ->
             Text("Workspace: ${snap.directory}", style = MaterialTheme.typography.bodySmall)
