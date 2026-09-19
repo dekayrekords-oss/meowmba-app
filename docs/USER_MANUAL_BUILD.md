@@ -22,3 +22,21 @@ If Chrome/pandoc PDF tooling is missing on a host, the stamp file is still updat
 existing PDF is kept — restore tooling before claiming a fresh manual.
 
 Setup **Hi.** opens the **current** bundled PDF (asset → cache → FileProvider / ArtifactViewer).
+
+
+## Preview version feed (update check)
+
+Every Preview ship must also publish the machine-readable feed the app polls:
+
+```bash
+VERSION_CODE=133 DEST_APK_SERVE=/home/prog/apk-serve scripts/write-preview-version.sh
+```
+
+Writes `$DEST_APK_SERVE/preview-version.json` with `versionCode`, `versionName`,
+`apk`, `sha256`, `size`, optional `notes` / `publishedAt`, and alt fields when
+the Claude-signed APK is present.
+
+App Settings → **Help & feedback** → **Check for update** fetches
+`{apk-serve}/preview-version.json` (default NetBird `http://100.77.97.236:8765`,
+optional LAN fallback). A daily WorkManager / on-resume check notifies once per
+new `versionCode`.

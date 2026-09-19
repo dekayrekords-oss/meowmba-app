@@ -117,14 +117,35 @@ class MainActivity : ComponentActivity() {
         // Dim amount 0: still a proper activity window that owns the touch stream.
         window.setDimAmount(0f)
 
+        // Soft-fail launch killers (corrupt Keystore / Room / channel) so cold
+        // open does not become "keeps stopping" without a toast (vc133).
+        val storage = com.example.meowmba.core.security.SecureStorageManager.createOrNull(this)
+        if (storage == null) {
+            android.widget.Toast.makeText(
+                this,
+                "Meow could not open secure storage. Clear app storage or reinstall Preview.",
+                android.widget.Toast.LENGTH_LONG,
+            ).show()
+            finish()
+            return
+        }
+        secureStorage = storage
         speechService = SpeechService(this)
         ttsManager = TextToSpeechManager(this)
-        secureStorage = SecureStorageManager(this)
         audioStreamingManager = AudioStreamingManager(this)
         visionManager = com.example.meowmba.core.vision.VisionManager(this, this)
         notificationHelper = NotificationHelper(this)
-        
-        val database = MeowmbaDatabase.getDatabase(this)
+
+        val database = runCatching { MeowmbaDatabase.getDatabase(this) }.getOrElse {
+            android.util.Log.e("MainActivity", "Room open failed", it)
+            android.widget.Toast.makeText(
+                this,
+                "Meow could not open its database. Try Clear storage for Preview, or reinstall.",
+                android.widget.Toast.LENGTH_LONG,
+            ).show()
+            finish()
+            return
+        }
         memoryRepository = MemoryRepository(database.messageDao(), database.memoryDao())
         val auditDao = database.auditDao()
         val workspaceRoot = java.io.File(filesDir, "memba_workspace")
@@ -157,7 +178,11 @@ class MainActivity : ComponentActivity() {
                                 routineDao = database.routineDao(),
                                 projectDao = database.projectDao(),
                                 characterDao = database.characterDao(),
-                                glassesController = com.example.meowmba.core.glasses.MetaGlassesController(this@MainActivity)
+                                glassesController = runCatching {
+                                    com.example.meowmba.core.glasses.MetaGlassesController(this@MainActivity)
+                                }.onFailure {
+                                    android.util.Log.w("MainActivity", "MetaGlassesController init failed", it)
+                                }.getOrNull()
                             ).also {
                                 companionViewModel = it
                                 if (pendingAvatarHome) { pendingAvatarHome = false; it.returnToAvatar() }
@@ -378,6 +403,7 @@ class MainActivity : ComponentActivity() {
         }
 
         consumeWakeCommand(intent)
+        consumePreviewUpdateIntent(intent)
     }
 
     // ── Background wake-word handoff (Phase 2.5) ────────────────────────────
@@ -399,6 +425,8 @@ class MainActivity : ComponentActivity() {
         // If a background hand-off was scheduled by a transient pause, it is now
         // stale: we are visible again and the in-app engine owns the mic.
         WakeWordService.stop(this)
+        // Off-main-thread inside scheduler (never block cold-start resume with HTTP).
+        runCatching { com.example.meowmba.core.update.PreviewUpdateScheduler.checkOnResume(this) }
         companionViewModel?.reclaimWakeMicForForeground()
         companionViewModel?.refreshRobot()
         // Only resume tracking if the user left the camera on. Forcing it
@@ -406,6 +434,7 @@ class MainActivity : ComponentActivity() {
         // cooked the phone.
         companionViewModel?.resumeFaceTrackingIfEnabled()
         consumeWakeCommand(intent)
+        consumePreviewUpdateIntent(intent)
     }
 
     override fun onPause() {
@@ -487,12 +516,30 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         consumeWakeCommand(intent)
+        consumePreviewUpdateIntent(intent)
     }
 
     /** Wake command arriving before the ViewModel exists (cold launch). */
     private var pendingAvatarHome = false
     private var pendingWakeCommand: String? = null
     private var pendingBusinessAgents = false
+
+
+    private fun consumePreviewUpdateIntent(source: Intent?) {
+        if (source?.getBooleanExtra(
+                com.example.meowmba.core.update.PreviewUpdateNotifier.EXTRA_OPEN_UPDATE,
+                false,
+            ) != true
+        ) {
+            return
+        }
+        source.removeExtra(com.example.meowmba.core.update.PreviewUpdateNotifier.EXTRA_OPEN_UPDATE)
+        val page = source.getStringExtra(
+            com.example.meowmba.core.update.PreviewUpdateNotifier.EXTRA_OPEN_SETTINGS_PAGE,
+        ) ?: "Help & feedback"
+        source.removeExtra(com.example.meowmba.core.update.PreviewUpdateNotifier.EXTRA_OPEN_SETTINGS_PAGE)
+        companionViewModel?.openSettingsCategory(page)
+    }
 
     private fun consumeWakeCommand(source: Intent?) {
         if (com.example.meowmba.ui.companion.isAvatarHomeIntent(source?.action, source?.categories)) {

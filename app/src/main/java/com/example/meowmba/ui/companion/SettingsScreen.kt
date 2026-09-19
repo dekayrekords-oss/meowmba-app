@@ -351,7 +351,10 @@ fun SettingsScreen(
                     onComputerIdleMinutesChange = onComputerIdleMinutesChange,
                 )
             }
-            if (page == "Help & feedback") BetaHelpCard()
+            if (page == "Help & feedback") {
+                PreviewUpdateSection()
+                BetaHelpCard()
+            }
             if (page == "Voice & behavior") {
             OutlinedButton(onClick = onOpenVoiceModels, modifier = Modifier.fillMaxWidth()) { Text("Voice recognition & voice models") }
 
