@@ -11,7 +11,7 @@ This supersedes historical build-location/version instructions in other document
 - Baseline: `5efed2f`, version 1.3.82/code 138. Historical evidence is dated September 15.
 - Verified original APK: `/Users/prog/Meowmba-Releases/idle136-20260915/meow-preview138.apk`.
 - Grok source to recover: `529cc69`, preserved as `recovery/grok-lumen` remote-tracking ref.
-- Status: preview145 (1.3.89) installed in place. Modern Ubuntu reuse repaired; edition-aware setup and optional-mode phone UI checks pass. Authenticated Computer acceptance still requires private password/handoff. Not a Play release.
+- Status: preview145 (1.3.89) installed in place. Modern Ubuntu reuse repaired; authenticated Computer connection, real Ubuntu terminal round trip and no-tools agent response pass on phone. Fresh-device and long-session production acceptance remain open. Not a Play release.
 
 ## Feature queue
 
@@ -44,6 +44,13 @@ Port feature commits; do not overwrite the baseline with an experimental branch 
 - Archive:/Users/prog/Meowmba-Releases/ubuntu145-20260919. Fresh downloading is fixture-tested,
   not a real clean-phone production signoff. Authenticated worker/terminal still needs final
   private password entry and verification; do not confuse read-only binary execution with that.
+- Follow-up completed: user finished guided command without errors. In-app Verify connection
+  confirms OpenCode1.18.31 at4097 and securely persists credentials/endpoint. Live device tests
+  now pass both authenticated Ubuntu PTY round trip (read-only /etc/os-release identifies ubuntu)
+  and exact MEOW_COMPUTER_READY worker reply, with no tool permission granted. Monitoring untouched.
+  Initial worker assertion timed out; its transcript matching could miss blank lines from reasoning.
+  test now compares assistant text parts and restores saved endpoint before probing. Two final
+  live tests pass in3.969s. Only the test harness changed; installed app artifact remains6b6cab3.
 
 ### September 19 Termux edition repair — preview144 installed
 

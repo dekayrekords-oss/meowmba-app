@@ -11,6 +11,13 @@ Only reviewed setup-phone.sh changes among148 protected assets. All other147 mat
 Pending: user private password through corrected handoff, authenticated health, terminal and
 worker-task acceptance. Fresh-device production acceptance remains separate from shell fixtures.
 
+Follow-up: private handoff and in-app verification complete. Authenticated Ubuntu terminal
+round trip and no-tools agent reply both pass on device (2 tests,3.969s). Test-only corrections:
+restore the stored4097 endpoint and compare actual assistant text parts instead of formatted
+transcript whitespace around reasoning. Installed145 app unchanged. Next acceptance scope is
+real user-approved productive tasks, lifecycle/restart and fresh-phone onboarding, not blanket
+claims that every agent/tool or unattended background workflow has been proven.
+
 ## September 19: preview144 Termux edition compatibility
 
 The phone has a Play Termux build without RUN_COMMAND/service. Never tell the owner to

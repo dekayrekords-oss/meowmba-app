@@ -4,6 +4,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.example.meowmba.core.computer.*
 import com.example.meowmba.core.security.SecureStorageManager
 import kotlinx.coroutines.*
+import kotlinx.serialization.json.*
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -60,7 +61,9 @@ class Computer141DeviceTest {
 
     @Test fun authenticatedWorkerRespondsWithoutTools() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val password = SecureStorageManager(context).getApiKey(OpenCodeLocalConnection.CREDENTIAL).orEmpty()
+        val storage = SecureStorageManager(context)
+        OpenCodeLocalConnection.restore(storage)
+        val password = storage.getApiKey(OpenCodeLocalConnection.CREDENTIAL).orEmpty()
         assertTrue("Enter and verify the server password in Computer setup first; never paste it in chat.", password.isNotBlank())
         OpenCodeLocalConnection.verify(password)
         val api = OpenCodeComputer(password)
@@ -71,10 +74,43 @@ class Computer141DeviceTest {
                 while (true) {
                     val snapshot = api.snapshot(session)
                     assertTrue("Probe requested tool access; no approval was granted.", snapshot.permissions.isEmpty())
-                    if (snapshot.transcript().contains("assistant: MEOW_COMPUTER_READY")) break
+                    val replies = snapshot.messages.map { it.jsonObject }.filter {
+                        it["info"]?.jsonObject?.get("role")?.jsonPrimitive?.content == "assistant"
+                    }
+                    val error = replies.mapNotNull { it["info"]?.jsonObject?.get("error") }
+                        .firstOrNull { it !is JsonNull }
+                    assertTrue("Worker reported ${error?.jsonObject?.get("name")?.jsonPrimitive?.content ?: "an error"}; no tool access granted.", error == null)
+                    // Reasoning/non-text parts are rendered as blank lines in the
+                    // UI transcript. Compare actual text, not display whitespace.
+                    if (replies.any { reply ->
+                        reply["parts"]?.jsonArray.orEmpty().map { it.jsonObject }
+                            .filter { it["type"]?.jsonPrimitive?.content == "text" }
+                            .joinToString("") { it["text"]?.jsonPrimitive?.content.orEmpty() }
+                            .trim() == "MEOW_COMPUTER_READY"
+                    }) break
                     delay(1_000)
                 }
             }
         } finally { withContext(NonCancellable) { runCatching { api.stop(session) } } }
+    }
+
+    @Test fun authenticatedUbuntuTerminalRoundTrip() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val storage = SecureStorageManager(context)
+        OpenCodeLocalConnection.restore(storage)
+        val password = storage.getApiKey(OpenCodeLocalConnection.CREDENTIAL).orEmpty()
+        assertTrue("Verify Computer connection first.", password.isNotBlank())
+        OpenCodeLocalConnection.verify(password)
+        val output = StringBuffer()
+        val terminal = OpenCodeTerminal(password)
+        try {
+            terminal.connect({ output.append(it) }, {})
+            // Split markers so terminal input echo cannot satisfy the assertion.
+            // Reads OS metadata only; never reads user files or prints credentials.
+            terminal.send("printf '\\nMEOW_TERMINAL_%s\\n' READY; ( . /etc/os-release; printf 'MEOW_OS=%s\\n' \"${'$'}ID\" )\n".toByteArray())
+            withTimeout(20_000) {
+                while (!output.contains("MEOW_TERMINAL_READY") || !output.contains("MEOW_OS=ubuntu")) delay(100)
+            }
+        } finally { withContext(Dispatchers.IO + NonCancellable) { terminal.close() } }
     }
 }
