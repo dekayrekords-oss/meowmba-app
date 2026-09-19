@@ -11,7 +11,7 @@ This supersedes historical build-location/version instructions in other document
 - Baseline: `5efed2f`, version 1.3.82/code 138. Historical evidence is dated September 15.
 - Verified original APK: `/Users/prog/Meowmba-Releases/idle136-20260915/meow-preview138.apk`.
 - Grok source to recover: `529cc69`, preserved as `recovery/grok-lumen` remote-tracking ref.
-- Status: preview141 (1.3.85) installed in place; authenticated Computer acceptance remains blocked on the user's private server password. Not a Play release.
+- Status: preview142 (1.3.86) installed in place. New UI checks pass; live generation acceptance remains incomplete. Authenticated Computer acceptance remains blocked on the user's private server password. Not a Play release.
 
 ## Feature queue
 
@@ -23,7 +23,7 @@ Port feature commits; do not overwrite the baseline with an experimental branch 
 
 ## Coordination
 
-### September 19 weather/appearance/Vending revision — preview142 under test
+### September 19 weather/appearance/Vending revision — preview142 installed
 
 - Sole integrator owns this checkout. User authorized in-place phone installation and tests.
 - Weather page removes simulated-condition/time controls and fake numerical empty-state readings;
@@ -42,7 +42,22 @@ Port feature commits; do not overwrite the baseline with an experimental branch 
   Custom library props guide supported native prop roles, not arbitrary generated-prop animation.
 - Terminal is not an embedded Termux session: phone UID check returns permission denied for its
   private bash. Sandbox label and Open Termux handoff are explicit. OpenCode health remains401.
-- Full-suite and device acceptance results will be recorded before declaring this ready.
+- App source3f5969c; installed in place over141 on RFCY61NJEVM, preserving app data and signature.
+- Full suite:2,592 tests, zero failures/errors, five skipped. All148 protected runtime entries match141.
+- APK SHA256:161525ff247e42e977efa8f5857d32d6cbb42f8d4fe67b874edde79752a1374c.
+- Device appearance/weather/home-controls check passes; screenshots visually reviewed. Care and neural
+  labels hide without changing microphone/camera/driving privacy. Weather has no sample readings;
+  this phone currently lacks location access, so select a city or explicitly grant device location.
+- All seven Vending lanes open in UI tests; approval/refine/skip/cancel/schema checks pass locally.
+  Live FAST avatar and prop generation timed out (75s/60s); no existing design was replaced.
+  Route diagnostic resolves OpenRouter openrouter/free; phone reaches its model endpoint (HTTP200).
+  BALANCED avatar retry passes actual candidate validation, no save/equip before approval,
+  exact acceptance persistence and restoration (96s total test). One intermediate run was cancelled;
+  notification shade obscured final preview screenshots, so do not claim visual-quality approval.
+  Final device settings/privacy test passes again; test-created form removed, prior appearance and
+  FAST reason preference restored. Prop generation still requires live acceptance.
+  This is not evidence that all live generation providers or photo-to-model paths work.
+- Archive:/Users/prog/Meowmba-Releases/creation142-20260919. No Play upload/public source publication.
 
 ### September 19 Computer/Auto/avatar revision — preview141 installed
 

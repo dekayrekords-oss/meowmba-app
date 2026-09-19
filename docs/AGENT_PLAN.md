@@ -1,6 +1,6 @@
 # Agent execution plan — immersive companion revision
 
-## September 19: preview142 acceptance queue
+## September 19: preview142 installed; live generation not signed off
 
 Single integrator; no concurrent builds. Weather/current-location controls, Avatar layout,
 home controls and Vending preview/reference workflows are implemented under test.
@@ -10,6 +10,17 @@ User approved in-place142 installation. Run actual configured-model avatar and p
 restore user appearance/privacy, and report provider failures honestly. Native render proof
 is not photorealistic concept art; reference descriptions are not exact 3D reconstruction.
 Embedded terminal remains sandbox; real Termux is an explicit external-app handoff.
+
+App source3f5969c is installed over141. Full2592-test suite has zero failures, five skips;
+all148 protected runtime entries match. Device appearance/weather/home-controls test passes.
+FAST live avatar and prop requests timed out on the configured OpenRouter free route.
+Do not mark Vending fully working based on UI/unit tests. Preserve the current avatar on
+failure, do not silently switch to paid models, and investigate provider latency/schema
+completion before release. Photo/reference consent is implemented but real personal-photo
+generation and unattended Computer model construction remain unverified.
+BALANCED avatar retry passes actual generation/approval/persistence assertions in96s; fast
+prop creation still times out. Final settings/privacy probe passes. Preview screenshots
+were obscured by the notification shade, so visual quality of that design is not signed off.
 
 ## September 19: preview141 device checkpoint
 
