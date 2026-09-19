@@ -23,6 +23,24 @@ Port feature commits; do not overwrite the baseline with an experimental branch 
 
 ## Coordination
 
+### September 19 broader acceptance audit — app145 unchanged
+
+- Active consolidated backlog: docs/TEST_AUDIT_AND_BACKLOG_2026-09-19.md (52 work items,
+  with existing implementation distinguished from missing functionality and validation).
+- Fresh full suite:2,615 tests, zero failures/errors, five skipped. Six live UI/privacy/
+  terminal/agent/render checks pass; separate productive OpenCode probe passes11.662s:
+  exact-target once approval, actual file text retrieval and same-session context recall.
+- Test-only fixes handle root-relative permission patterns by binding absolute metadata;
+  never broaden grants. Model omitted requested final newline; final content acceptance
+  allows trailing-line differences and does not claim arbitrary byte-exact generation.
+- Confirmed clock/Reflex overlap; Computer auto-result list only recognizes write/edit,
+  and bounded JSON export supports approximately1.5MB files. Prioritize complete project
+  result UX, clean-phone onboarding/recovery and thermal/voice reliability. Robot stays
+  quarantined. Thermal status rose0→1 during mixed testing; heat is not signed off.
+- Test/docs changes only; no new app install, data reset, account action or Play upload.
+  Two synthetic QA files remain in Ubuntu workspace; no personal files altered. Evidence:
+  /Users/prog/Meowmba-Releases/ubuntu145-20260919/audit-5Fanjn/.
+
 ### September 19 Ubuntu reuse repair — preview145 installed
 
 - Owner reported container-busy during guided setup; phone has PRoot-Distro5.3.0, with

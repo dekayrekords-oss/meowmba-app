@@ -1,5 +1,21 @@
 # Agent execution plan — immersive companion revision
 
+## September 19 active acceptance backlog
+
+Use [TEST_AUDIT_AND_BACKLOG_2026-09-19.md](TEST_AUDIT_AND_BACKLOG_2026-09-19.md)
+for the consolidated52-item queue and actual acceptance boundaries. Older unchecked
+appearance queues below are historical, not evidence that implemented work is absent.
+No additional agents were dispatched for this audit; the integrator owns tests/docs.
+
+Fresh145 regression run:2,615 tests, zero failures/errors, five skipped. Six live checks
+pass; productive file/once-approval/retrieval/context probe separately passes11.662s.
+App binary unchanged. Intermediate conservative permission denials and final-newline
+noncompliance are documented, not hidden. No unrestricted permission or account action.
+Next: complete project/results UX (including large outputs and tools beyond write/edit),
+clock/reflex layout, clean-device setup/lifecycle, then sustained heat/voice quality.
+Robot remains quarantined and all new monitoring modes off. Do not conflate one passing
+file task or the older132 three-agent workflow with unrestricted unattended reliability.
+
 ## September 19: preview145 modern Ubuntu detection repair
 
 Installed source6b6cab3/code145; full2,615-test suite passes (five skipped), phone setup/privacy
