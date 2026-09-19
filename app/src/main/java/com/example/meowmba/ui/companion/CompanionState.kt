@@ -761,6 +761,7 @@ data class CompanionFeatures(
     val animInventError: Boolean = false,
     val idleMorphEnabled: Boolean = true,
     val idleMorphIntervalSec: Int = 55,
+    val idleMorphRandomness: Float = 1f,
     val idleMorphIncludeGenerated: Boolean = true,
     val idleMorphAnimal: AvatarAnimal? = null,
     val idleMorphGeneratedId: String? = null,

@@ -17,6 +17,7 @@ import java.util.concurrent.atomic.AtomicInteger
 /** Fixed provisioning only. No AI-supplied commands and no sandbox-shell fallback. */
 object PhoneComputerSetup {
     const val PERMISSION = "com.termux.permission.RUN_COMMAND"
+    class PermissionRequired : IllegalStateException("Allow Meow to run commands in Termux, then retry setup.")
     private val lock = Mutex()
     private val ids = AtomicInteger(1000)
     internal val results = ConcurrentHashMap<Int, CompletableDeferred<Int>>()
@@ -28,9 +29,7 @@ object PhoneComputerSetup {
         // Reuse a healthy server; authentication failures must not trigger a replacement.
         try { return@withLock OpenCodeLocalConnection.verify(password) }
         catch (_: java.net.ConnectException) { /* not started */ }
-        check(context.checkSelfPermission(PERMISSION) == PackageManager.PERMISSION_GRANTED) {
-            "Allow Meow to run commands in Termux, then retry setup."
-        }
+        if (context.checkSelfPermission(PERMISSION) != PackageManager.PERMISSION_GRANTED) throw PermissionRequired()
         val script = withContext(Dispatchers.IO) {
             context.assets.open("computer/setup-phone.sh").bufferedReader().use { it.readText() }
         }

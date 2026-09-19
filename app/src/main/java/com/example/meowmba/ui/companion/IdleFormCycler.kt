@@ -33,6 +33,7 @@ class IdleFormCycler(
     private val generatedFormIds: () -> List<String> = { emptyList() },
     private val includeGenerated: () -> Boolean = { true },
     private val intervalMs: () -> Long = { DEFAULT_INTERVAL_MS },
+    private val randomness: () -> Float = { 1f },
     private val onTarget: (IdleFormTarget) -> Unit,
 ) {
     private var job: Job? = null
@@ -74,14 +75,18 @@ class IdleFormCycler(
         // Shuffle a whole bag instead of rolling independently: every available
         // character gets a turn before any repeats, including generated forms.
         if (remaining.isEmpty() || items != lastPool) {
-            remaining = items.shuffled().toMutableList()
+            remaining = items.toMutableList()
             lastPool = items
             if (remaining.size > 1 && remaining.first() == previous) {
                 val first = remaining.removeAt(0)
                 remaining.add(first)
             }
         }
-        return remaining.removeAt(0).also { previous = it }
+        val randomIndex = if (kotlin.random.Random.nextFloat() < randomness().coerceIn(0f, 1f))
+            remaining.indices.random() else 0
+        val index = if (remaining.size > 1 && remaining[randomIndex] == previous)
+            (randomIndex + 1) % remaining.size else randomIndex
+        return remaining.removeAt(index).also { previous = it }
     }
 
     companion object {

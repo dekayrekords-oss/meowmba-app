@@ -213,6 +213,7 @@ fun SettingsScreen(
     computerVerifiedProfile: ConnectionProfile? = null,
     onComputerOpenDesktop: (String) -> Unit = {},
     onComputerConfirmInstallPrompt: () -> Unit = {},
+    onOpenAuto: () -> Unit = {},
     onSaved: () -> Unit = {},
     onClose: () -> Unit
 ) {
@@ -220,7 +221,7 @@ fun SettingsScreen(
         mutableStateOf(initialPage?.takeIf { requested -> SETTINGS_CATEGORIES.any { it.title == requested } })
     }
     var opencodeKey by remember { mutableStateOf(secureStorage.getApiKey("opencode") ?: "") }
-    var defaultBrain by remember { mutableStateOf(secureStorage.getPreference("default_brain") ?: "auto") }
+    var defaultBrain by remember { mutableStateOf(secureStorage.getPreference("default_brain") ?: "openrouter") }
     var brainMenuOpen by remember { mutableStateOf(false) }
     val sshRegistry = remember { com.example.meowmba.core.ssh.SshHostRegistry(secureStorage) }
     var sshName by remember { mutableStateOf("meow-nb") }
@@ -883,116 +884,9 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             }
-            if (page == "Driving") {
-            // Car assistant: knows when you're driving, tracks trips, watches for crashes.
-            Text("Car assistant", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-            Spacer(modifier = Modifier.height(8.dp))
-            VoiceToggle(
-                label = "Drive mode",
-                description = "Meow senses when you're in a car (GPS speed, your car's " +
-                    "Bluetooth, or a voice \"drive mode on\"), shows a speed/trip card, " +
-                    "and can answer \"how fast\", \"are we there yet\", or find gas and " +
-                    "food along the way. Uses GPS + accelerometer only while enabled.",
-                checked = carModeEnabled,
-                onCheckedChange = onCarModeChange
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            SettingsTextField(
-                value = emergencyContact,
-                onValueChange = onEmergencyContactChange,
-                label = { Text("Emergency contact phone (optional)") },
-                modifier = Modifier.fillMaxWidth()
-            )
-            Text(
-                text = "Used by the crash alert — say \"text mom\" after a detected " +
-                    "impact and Meow will open a text with your location ready to send.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Text("Lumen idle morph", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-            Spacer(modifier = Modifier.height(8.dp))
-            VoiceToggle(
-                label = "Cycle all characters while idle",
-                description = "Rotates through every authored Lumen form (cat, dog, squirrel, " +
-                    "raccoon, owl, duck, rabbit, pig, alien, robot, panda, fruit fly, Clippy, " +
-                    "Wizard, …) plus saved invented forms when enabled. Does not overwrite " +
-                    "your preferred form permanently.",
-                checked = idleMorphEnabled,
-                onCheckedChange = onIdleMorphChange,
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            VoiceToggle(
-                label = "Include invented forms",
-                description = "Add saved generated avatar forms to the idle morph pool.",
-                checked = idleMorphIncludeGenerated,
-                onCheckedChange = onIdleMorphGeneratedChange,
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text("Morph interval: ${idleMorphIntervalSec}s", style = MaterialTheme.typography.bodySmall)
-            Slider(
-                value = idleMorphIntervalSec.toFloat(),
-                onValueChange = { onIdleMorphIntervalChange(it.toInt()) },
-                valueRange = 20f..180f,
-                steps = 15,
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Text("Drive reactivity & cameras", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-            Spacer(modifier = Modifier.height(8.dp))
-            VoiceToggle(
-                label = "Stronger emotion while driving",
-                description = "Faster face/social reactions and stronger lean/lurch while Drive mode is active.",
-                checked = driveEmotionBoost,
-                onCheckedChange = onDriveEmotionBoostChange,
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            VoiceToggle(
-                label = "Driver camera on drive card",
-                description = "Shows the live front-camera preview on the drive HUD when CAMERA is allowed.",
-                checked = driveDriverCameraEnabled,
-                onCheckedChange = onDriveDriverCameraChange,
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            SettingsTextField(
-                value = carDashcamRtspUrl,
-                onValueChange = onCarDashcamRtspChange,
-                label = { Text("IP dashcam RTSP URL (optional)") },
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Text(
-                "Lists an IP/RTSP dashcam for tools and the drive camera list. In-app live " +
-                    "preview uses the phone cameras; RTSP playback needs an external player for now.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Text("OBD-II (ELM327)", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-            Spacer(modifier = Modifier.height(8.dp))
-            VoiceToggle(
-                label = "Native OBD-II",
-                description = "Connect to a classic Bluetooth ELM327 adapter and poll RPM, speed, " +
-                    "coolant, battery, MIL, and fuel. Feeds Lumen excitement/alerts. " +
-                    "USB ELM327 is detected but needs a CDC driver — Bluetooth SPP is the supported path.",
-                checked = obdEnabled,
-                onCheckedChange = onObdEnabledChange,
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            SettingsTextField(
-                value = obdAdapterAddress,
-                onValueChange = onObdAdapterChange,
-                label = { Text("ELM327 Bluetooth MAC address") },
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Text(
-                "Apple CarPlay: third-party Android apps cannot fully remote-control a CarPlay " +
-                    "session. Meow uses MediaSession / volume / dialer / Bluetooth and Android Auto " +
-                    "hints instead — see docs/DRIVE_CARPLAY_OBD2.md.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
+            if (page == "Driving" || page == "Auto") {
+                Text("Driving and navigation now live together in Auto.")
+                TextButton(onClick = onOpenAuto) { Text("Open Auto") }
             }
             if (page == "Connections & memory") {
             SettingsSectionCard(
@@ -1898,7 +1792,7 @@ private val SETTINGS_CATEGORIES = listOf(
     SettingsCategory("Appearance", "Dark/light mode, themes and avatars", Icons.Default.Palette),
     SettingsCategory("Neural / Lumen", "Avatar reactions, neural brain and sensitivity", Icons.Default.Bolt),
     SettingsCategory("Connections & memory", "Desktop bridge, servers and shared memory", Icons.Default.Link),
-    SettingsCategory("Driving", "Drive mode and emergency contact", Icons.Default.DirectionsCar),
+    SettingsCategory("Auto", "Driving, navigation and vehicle settings", Icons.Default.DirectionsCar),
     SettingsCategory("Help & feedback", "Beta help, testing and support", Icons.Default.HelpOutline),
 )
 

@@ -75,11 +75,12 @@ internal fun AgentBrainSetup(onContinue: () -> Unit, modelOverride: BrainSetupMo
                 else -> "Suggested: ${scan.recommended.displayName} (${scan.recommended.approxSize}), based on RAM and free space."
             }, style = MaterialTheme.typography.bodySmall)
         }
-        OutlinedButton(onClick = { scope.launch { cloudStart.bringIntoView() } }, modifier = Modifier.fillMaxWidth()) { Text("Set up OpenRouter ↓") }
+        Text("Default brain: OpenRouter. Connect your key below, or choose local-only AI if you prefer.")
+        Button(onClick = { scope.launch { cloudStart.bringIntoView() } }, modifier = Modifier.fillMaxWidth()) { Text("Set up OpenRouter (recommended) ↓") }
     } }
     Spacer(Modifier.height(12.dp))
     Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("1 · Local AI on this phone", style = MaterialTheme.typography.titleMedium)
+        Text("Optional · Local AI on this phone", style = MaterialTheme.typography.titleMedium)
         Text("Reuse an existing model or download one. Cloud can be connected separately.")
         state.scan?.models?.take(8)?.forEach { file ->
             OutlinedCard(onClick = { model.chooseLocal(file) }, modifier = Modifier.fillMaxWidth(), enabled = !state.localBusy && !importing) {
@@ -111,7 +112,7 @@ internal fun AgentBrainSetup(onContinue: () -> Unit, modelOverride: BrainSetupMo
     } }
     Spacer(Modifier.height(12.dp))
     Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("2 · Connect OpenRouter", style = MaterialTheme.typography.titleMedium, modifier = Modifier.bringIntoViewRequester(cloudStart))
+        Text("Default · Connect OpenRouter", style = MaterialTheme.typography.titleMedium, modifier = Modifier.bringIntoViewRequester(cloudStart))
         Text("Recommended for stronger reasoning and multi-app tasks. Your OpenRouter API key is separate from a ChatGPT or other AI subscription.")
         Button(onClick = { open("https://openrouter.ai/settings/keys") }, modifier = Modifier.fillMaxWidth()) { Text("Get an OpenRouter API key ↗") }
         Text("1. Tap the button above and sign in or create an account.\n2. Choose Create Key, name it Meow, and copy the full secret key.\n3. Return here, allow cloud use below, paste the key, then tap Save key & connect OpenRouter.", style = MaterialTheme.typography.bodySmall)

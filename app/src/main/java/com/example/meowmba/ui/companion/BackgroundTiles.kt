@@ -115,7 +115,7 @@ val tileItems: List<MembaTile> @Composable get() = listOf(
     MembaTile("Agents", Icons.Default.SmartToy, MaterialTheme.colorScheme.tertiary),
     MembaTile("Privacy", Icons.Default.Security, MaterialTheme.colorScheme.primary),
     MembaTile("Notes", Icons.Default.Book, MaterialTheme.colorScheme.primary),
-    MembaTile("NAV", Icons.Default.Navigation, MaterialTheme.colorScheme.secondary),
+    MembaTile("Auto", Icons.Default.DirectionsCar, MaterialTheme.colorScheme.secondary),
     MembaTile("Weather", Icons.Default.WbSunny, MaterialTheme.colorScheme.tertiary),
     MembaTile("Background", Icons.Default.Wallpaper, MaterialTheme.colorScheme.primary),
     MembaTile("Avatar", Icons.Default.Face, MaterialTheme.colorScheme.secondary),

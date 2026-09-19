@@ -39,10 +39,6 @@ internal fun OpenCodeLocalConnectionCard() {
             TextButton(onClick = { permission.launch(PhoneComputerSetup.PERMISSION) }, enabled = !busy) { Text("Allow Meow to connect to Termux") }
             TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/termux/termux-app/wiki/RUN_COMMAND-Intent#allow-external-apps-property-mandatory")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }) { Text("Show Termux connection instructions") }
             com.example.meowmba.ui.theme.Button(onClick = setup@{
-                if (context.checkSelfPermission(PhoneComputerSetup.PERMISSION) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                    permission.launch(PhoneComputerSetup.PERMISSION)
-                    return@setup
-                }
                 busy = true
                 status = "Preparing Ubuntu and OpenCode… Keep this screen open. Existing files are preserved."
                 scope.launch {
@@ -65,7 +61,10 @@ internal fun OpenCodeLocalConnectionCard() {
                             result
                         }
                         password = ""
-                        status = "Connection verified and password saved securely. OpenCode $version. Task, progress and approval integration is not yet enabled."
+                        status = "Connection verified and password saved securely. OpenCode $version. Open Computer → Tasks & approvals to run a task and review its actions."
+                    } catch (_: PhoneComputerSetup.PermissionRequired) {
+                        status = "Approve Termux access to install or start your Computer."
+                        permission.launch(PhoneComputerSetup.PERMISSION)
                     } catch (e: TimeoutCancellationException) { status = "Setup is taking longer than expected. Check Termux and retry; downloads may still be running."
                     } catch (e: CancellationException) { throw e }
                     catch (e: java.net.ConnectException) { status = "Server is not ready yet. Check Termux, then retry setup." }

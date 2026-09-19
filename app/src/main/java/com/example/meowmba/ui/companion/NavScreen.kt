@@ -54,6 +54,7 @@ import com.example.meowmba.core.security.SecureStorageManager
 fun NavScreen(
     secureStorage: SecureStorageManager? = null,
     state: CompanionState = CompanionState(),
+    drivingControls: @Composable () -> Unit = {},
     onClose: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -103,13 +104,15 @@ fun NavScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    "NAV",
+                    "Auto",
                     style = MaterialTheme.typography.headlineMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f),
                 )
                 TextButton(onClick = onClose) { Text("CLOSE") }
             }
+            drivingControls()
+            Text("Navigation", style = MaterialTheme.typography.titleLarge)
             Text(
                 "Offline-first. Region packs are searched before the online fallback, " +
                     "so this works with no signal.",

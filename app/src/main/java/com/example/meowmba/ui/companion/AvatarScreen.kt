@@ -92,6 +92,7 @@ fun AvatarScreen(
     playfulness: Playfulness = Playfulness.BALANCED,
     onPlayfulness: (Playfulness) -> Unit = {},
     diagnostics: @Composable () -> Unit = {},
+    morphControls: @Composable () -> Unit = {},
     preview: @Composable () -> Unit = {},
     avatarScale: Float = 2f,
     onAvatarScale: (Float) -> Unit = {},
@@ -131,6 +132,7 @@ fun AvatarScreen(
                 ?: if (style.isLumen && style != AvatarStyle.FULL_FLY) "${style.label} · ${if (style == AvatarStyle.LUMEN_CAT) AvatarAnimal.CAT.label else animal.label}" else style.label,
                 style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = AvatarSetupTokens.item))
             Text("Selected · changes apply immediately", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            morphControls()
             FlowRow(Modifier.padding(top = AvatarSetupTokens.section), horizontalArrangement = Arrangement.spacedBy(AvatarSetupTokens.compact)) {
                 listOf("Look", "Space", "Behavior", "Animations").forEach { option ->
                     FilterChip(selected = tab == option, onClick = { tab = option }, label = { Text(option) })

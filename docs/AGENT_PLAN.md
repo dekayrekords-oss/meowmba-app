@@ -1059,3 +1059,14 @@ signature, version and bundled speech assets passed verification. Native preview
 and development-Mac painter measurements are archived; phone timing, live voice
 acceptance and installation remain open gates. Film-level quality and robot
 awareness are not established. See `EMOTIONAL_ACTING_2026-09-09.md`.
+# September 19 active integration checkpoint
+
+Single integrator owns the recovery checkout named in BUILD_MASTER.md. Current package:
+OpenCode Computer task/approval/session UI; Auto driving/navigation consolidation;
+avatar cadence/randomness and named-style selection; OpenRouter default recommendation;
+persistent generated-fact deduplication. Legacy tasks/approvals must remain available.
+
+Acceptance: full JVM/UI suite, real HTTP contract, native/model asset preservation, signature,
+physical phone launch, authenticated worker test and permission-denial test. A green mocked
+HTTP test is not proof of the user's installed worker or successful fresh Ubuntu provisioning.
+No new physical robot actuation, account changes, public publication or blanket approval.

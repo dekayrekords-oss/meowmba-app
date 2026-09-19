@@ -142,8 +142,8 @@ object AgentRegistry {
             allowedTools = setOf("calendar.list_events", "calendar.create_event")
         ),
         AgentDefinition(
-            id = "computer", name = "Bridge",
-            purpose = "Controls paired computers through the desktop bridge.",
+            id = "computer", name = "Computer",
+            purpose = "OpenCode is the default task workspace in Computer. Paired desktop controls remain available through the desktop bridge.",
             allowedTools = setOf("desktop.write_file", "desktop.run_build", "desktop.run_script", "desktop.control", "desktop.run_goal", "desktop.blender_scene", "logic.inspect", "logic.edit", "logic.receipt", "logic.verify_audio", "logic.screen", "logic.act", "logic.cancel", "logic.run_goal")
         ),
         AgentDefinition(

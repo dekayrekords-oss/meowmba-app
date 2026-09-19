@@ -596,7 +596,7 @@ fun CompanionScreen(
                     "Memory" -> viewModel.toggleMemoryScreen()
                     "Vending" -> viewModel.toggleStudioScreen()
                     "Files" -> viewModel.toggleAssetBrowser()
-                    "NAV" -> viewModel.toggleNavScreen()
+                    "Auto", "NAV" -> viewModel.toggleNavScreen()
                     "Weather" -> viewModel.toggleWeatherScreen()
                     "Background" -> viewModel.toggleBackgroundScreen()
                     "Avatar" -> viewModel.toggleAvatarScreen()
@@ -770,6 +770,7 @@ fun CompanionScreen(
 
         if (uiState.showAvatarScreen) {
             AvatarScreen(
+                morphControls = { AvatarMorphControls(uiState, viewModel) },
                 avatarScale = uiState.avatarScale, onAvatarScale = viewModel::setAvatarScale,
                 habitatMode = uiState.habitatMode, onHabitatMode = viewModel::setHabitatMode,
                 style = uiState.avatarStyle,
@@ -836,6 +837,7 @@ fun CompanionScreen(
 
         if (uiState.showNavScreen) {
             NavScreen(
+                drivingControls = { AutoDrivingControls(uiState, viewModel) },
                 secureStorage = secureStorage,
                 state = uiState,
                 onClose = { viewModel.toggleNavScreen() },
@@ -869,6 +871,7 @@ fun CompanionScreen(
 
         if (uiState.showSettings && secureStorage != null) {
             SettingsScreen(
+                onOpenAuto = viewModel::openAutoScreen,
                 secureStorage = secureStorage,
                 initialPage = uiState.settingsInitialPage,
                 onOpenBrain = viewModel::toggleNeuralInfo,

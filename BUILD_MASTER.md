@@ -23,6 +23,22 @@ Port feature commits; do not overwrite the baseline with an experimental branch 
 
 ## Coordination
 
+### September 19 Computer/Auto/avatar revision — implementation under test
+
+- Integrator owns OpenCodeComputer transport/panel, Auto page, avatar sliders, provider defaults and fact history.
+- Computer task UI now submits asynchronous OpenCode sessions with explicit ask-all permissions;
+  checks echoed rules before submission, polls progress/todos, offers once/reject approvals,
+  answers worker questions, preserves session context and supports abort. Legacy tasks remain reachable.
+- Result files can be explicitly copied into memba_workspace/projects/opencode and opened externally
+  (bounded export about1.5MB; not automatic image/video streaming). HTTP errors never imply completion.
+- OpenRouter is the missing-preference default/recommendation. Explicit local-only choices and cloud consent remain respected.
+- Auto replaces NAV with a car icon, driving and navigation controls in one page. Settings links there.
+- Avatar page has separate cadence/randomness sliders; all named styles resolve from turn-into requests.
+- Facts are generated from the configured model with persistent claim/text history, exact/near-duplicate
+  rejection and no old-pool fallback. Semantic equivalence/factual accuracy cannot be absolutely guaranteed.
+- Test/install gate pending. Phone disconnected from Mac; checking Meow after user reports reconnect.
+- Do not mark fresh Termux provisioning or real authenticated OpenCode task execution verified without device evidence.
+
 ### September 19 automated Computer setup — preview140 installed
 
 - Source bb58155; version1.3.84/code140 installed in place on RFCY61NJEVM without data reset.

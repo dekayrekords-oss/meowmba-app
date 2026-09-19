@@ -114,26 +114,29 @@ internal fun ComputerToolsScreen(
                         computerSavedProfile?.takeIf { it.type==ConnectionProfileType.SSH }?.let { p ->
                             OutlinedButton(onClick={onComputerOpenServerTerminal(p)},modifier=Modifier.fillMaxWidth()) { Text("Open ${p.displayName}") }
                         }
-                        val waiting=agenticGoals.count { it.status==GoalStatus.WAITING_APPROVAL }
-                        ComputerDestinationCard("Tasks & approvals",if(waiting>0) "$waiting waiting for your review." else "Create tasks, run the next step and review requests.",Icons.Default.TaskAlt) { navigate(ComputerToolsPage.TASKS) }
-                        ComputerDestinationCard("AI for tasks",if(agenticModelConfig.configured) agenticModelConfig.modelName else "Choose the model that plans computer tasks.",Icons.Default.Psychology) { navigate(ComputerToolsPage.MODEL) }
+                        ComputerDestinationCard("Tasks & approvals","Computer · OpenCode tasks, live progress, results and permission requests.",Icons.Default.TaskAlt) { navigate(ComputerToolsPage.TASKS) }
+                        Text("Default agent: Computer · powered by OpenCode", style=MaterialTheme.typography.bodyMedium)
+                        ComputerDestinationCard("Advanced legacy planner","Optional older task planner settings; Computer uses OpenCode's model.",Icons.Default.Psychology) { navigate(ComputerToolsPage.MODEL) }
                         ComputerDestinationCard("Saved connections",if(agenticRuntimeV1) "${connectionProfiles.size} saved · add or edit SSH targets." else "Set up the connections used by task automation.",Icons.Default.Link) { navigate(ComputerToolsPage.PROFILES) }
                         ComputerDestinationCard("Power & sleep","${computerPower.name} · choose when Computer rests.",Icons.Default.PowerSettingsNew) { navigate(ComputerToolsPage.POWER) }
                         TextButton(onClick={navigate(ComputerToolsPage.DETAILS)}) { Text("Connection details & logs") }
+                        TextButton(onClick={navigate(ComputerToolsPage.LEGACY_TASKS)}) { Text("Legacy tasks") }
                     }
-                    ComputerToolsPage.TASKS,ComputerToolsPage.MODEL -> {
-                        if(page==ComputerToolsPage.TASKS) {
-                            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) { Text("Task automation",style=MaterialTheme.typography.titleMedium)
-                                    Text("Allow Meow to plan bounded computer tasks.",style=MaterialTheme.typography.bodySmall) }
-                                Switch(agenticRuntimeV1,onAgenticRuntimeV1Change,modifier=Modifier.semantics { contentDescription="Task automation" })
-                            }
+                    ComputerToolsPage.TASKS -> { OpenCodeComputerPanel() }
+                    ComputerToolsPage.LEGACY_TASKS -> {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment=Alignment.CenterVertically) {
+                            Text("Legacy task automation", modifier=Modifier.weight(1f))
+                            Switch(agenticRuntimeV1,onAgenticRuntimeV1Change)
                         }
-                        if(agenticRuntimeV1 || page==ComputerToolsPage.MODEL) {
-                            AgenticTasksSection(agenticGoals,agenticModelConfig,sshCapabilitySummary,onCreateAgenticGoal,
-                                onTickAgenticGoal,onTickOpenAgenticGoals,onApproveAgenticGoal,onRejectAgenticGoal,
-                                onRefreshAgenticTasks,onSaveAgenticModelConfig,modelOnly=page==ComputerToolsPage.MODEL)
-                        } else Text("Turn on task automation to create and run tasks. Computer setup remains available.",style=MaterialTheme.typography.bodyMedium)
+                        if (agenticRuntimeV1) AgenticTasksSection(agenticGoals,agenticModelConfig,sshCapabilitySummary,onCreateAgenticGoal,
+                            onTickAgenticGoal,onTickOpenAgenticGoals,onApproveAgenticGoal,onRejectAgenticGoal,
+                            onRefreshAgenticTasks,onSaveAgenticModelConfig,modelOnly=false)
+                    }
+                    ComputerToolsPage.MODEL -> {
+                        Text("Advanced legacy planner. Computer uses OpenCode's configured model by default.")
+                        AgenticTasksSection(agenticGoals,agenticModelConfig,sshCapabilitySummary,onCreateAgenticGoal,
+                            onTickAgenticGoal,onTickOpenAgenticGoals,onApproveAgenticGoal,onRejectAgenticGoal,
+                            onRefreshAgenticTasks,onSaveAgenticModelConfig,modelOnly=true)
                     }
                     ComputerToolsPage.PROFILES -> {
                         if (agenticRuntimeV1) AgenticProfilesSection(connectionProfiles,onSaveConnectionProfile,onDeleteConnectionProfile,onSaveAgenticCredential)

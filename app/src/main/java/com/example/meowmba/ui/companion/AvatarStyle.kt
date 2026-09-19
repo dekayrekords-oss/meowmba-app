@@ -51,6 +51,12 @@ enum class AvatarStyle(val key: String, val label: String, val description: Stri
     companion object {
         val DEFAULT = LUMEN // first-run / picker default: catalog "Lumen" (no "Lumen 2" entry)
 
+        fun resolveRequest(text: String): AvatarStyle? {
+            val value = text.trim().lowercase(java.util.Locale.ROOT)
+            return entries.firstOrNull { it.key == value || it.label.lowercase(java.util.Locale.ROOT) == value }
+                ?: when (value) { "orb", "jarvis" -> SIGNAL; "full fly" -> FULL_FLY; else -> null }
+        }
+
         /** Unknown or missing keys fall back rather than crashing on stale prefs. */
         fun fromKey(key: String?): AvatarStyle =
             entries.firstOrNull { it.key == key } ?: DEFAULT

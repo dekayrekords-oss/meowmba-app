@@ -1,5 +1,16 @@
 # Immersive companion — detailed revision plan
 
+## September 19 requested revision
+
+Avatar owns separate automatic-change interval and randomness controls; sequential order at
+zero randomness, shuffled coverage at full randomness, preserving every saved main form.
+Explicit "turn into" selects all named render styles or existing/generated characters and
+clears the temporary idle overlay immediately. Auto owns navigation plus driving settings.
+Computer uses OpenCode session APIs with user-reviewed permissions, live progress and results.
+OpenRouter is recommended by default without overriding a user's explicit local-only choice.
+Generated facts retain a durable history; do not promise perfect semantic novelty or truth.
+Implementation and device acceptance status live in BUILD_MASTER.md.
+
 ## September 12: full fly habitat preview 99
 
 Full-body fly option, ten shared animated environments, deterministic prop interactions, optional persisted care, bounded preferences and live shared neural controls are implemented. Final focused run:66 passed; full suite retains baseline failures. Biological FlyWire mapping and sustained phone performance gates remain open. See [HABITAT_BUILD_PASS_DOWN.md](characters/HABITAT_BUILD_PASS_DOWN.md) for exact build, installation evidence and limitations.

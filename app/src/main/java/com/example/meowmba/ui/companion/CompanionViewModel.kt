@@ -1819,7 +1819,9 @@ class CompanionViewModel(
                     st.captionText == null && moodEngine.mayChatter(now)
                 ) {
                     moodEngine.markChattered(now)
-                    speak(moodEngine.pickChatter(now, kotlin.random.Random.nextInt()))
+                    nextNovelFact()?.let { fact ->
+                        if (canOfferSocialSpeech() && _uiState.value.captionText == null) speak(fact)
+                    }
                 }
             }
         }
@@ -3206,6 +3208,14 @@ class CompanionViewModel(
      */
     private fun maybeHandleAgenticComputerChat(text: String): Boolean {
         val storage = secureStorage ?: return false
+        val computerRequest = Regex("^(?:run on (?:the )?computer|ask computer|computer[, :]+)\\s*:?[ ]*(.+)$", RegexOption.IGNORE_CASE)
+            .matchEntire(text.trim())?.groupValues?.get(1)
+        if (!computerRequest.isNullOrBlank()) {
+            storage.savePreference("computer_task_draft", computerRequest)
+            openComputerTools()
+            speak("Your task is ready in Computer. Open Tasks and approvals to run it with OpenCode.")
+            return true
+        }
         val flags = FeatureFlags(storage)
         if (!flags.agenticRuntimeV1) return false
         bindAgenticComputerHost()
@@ -3701,7 +3711,7 @@ class CompanionViewModel(
         // Default brain: OpenRouter when the user has saved a key, else the
         // on-device model; an explicit Settings choice always wins.
         val forced = (storage.getPreference("default_brain")
-            ?: if (openRouterKey.isNullOrBlank()) "local" else "openrouter")
+            ?: "openrouter")
             .takeIf { it.isNotBlank() && it != "auto" }
         val finalRoutes = if (forced != null) {
             // A missing local model must not silently turn a local-only choice
@@ -4577,6 +4587,31 @@ class CompanionViewModel(
 
     /** The on-device brain, kept so it can be released when it goes idle. */
     private var localBrain: com.example.meowmba.core.agent.ModelProvider? = null
+    private val novelFacts by lazy {
+        secureStorage?.context?.filesDir?.let { com.example.meowmba.core.personality.NovelFacts(File(it, "facts/history.jsonl")) }
+    }
+
+    private suspend fun nextNovelFact(): String? {
+        val selected = currentProvider ?: return null
+        return try {
+            kotlinx.coroutines.withTimeout(35_000L) {
+                novelFacts?.next { prompt ->
+                    val provider = if (selected is com.example.meowmba.core.agent.OmniRoute)
+                        selected.plan(prompt, preferRouteId = preferredChatRouteId()).firstOrNull()?.provider
+                            ?: error("No fact model configured") else selected
+                    withContext(ioDispatcher) {
+                        when (val response = provider.generate(prompt)) {
+                            is com.example.meowmba.core.agent.ModelResponse.Complete -> response.text
+                            is com.example.meowmba.core.agent.ModelResponse.Partial -> error("Fact response was incomplete")
+                            is com.example.meowmba.core.agent.ModelResponse.Error -> error(response.message)
+                        }
+                    }
+                }
+            }
+        } catch (_: kotlinx.coroutines.TimeoutCancellationException) { null }
+        catch (e: kotlinx.coroutines.CancellationException) { throw e }
+        catch (_: Exception) { null }
+    }
 
     /**
      * The on-device model is ~2 GB resident. Holding it forever put this phone
@@ -7068,7 +7103,7 @@ class CompanionViewModel(
             // as weather: an instant lookup with an obvious answer, no agent task.
             val normalizedTurn = com.example.meowmba.core.audio.WakePhraseMatcher.normalize(text)
             if (com.example.meowmba.core.personality.IdleChatter.isFactRequest(normalizedTurn)) {
-                speak(moodEngine.pickFact(System.currentTimeMillis(), kotlin.random.Random.nextInt()))
+                speak(nextNovelFact() ?: "I couldn't find a new fact confidently this time. I won't repeat an old one.")
                 return@launch
             }
             if (ClockAnswers.isClockQuestion(normalizedTurn)) {
@@ -10363,6 +10398,7 @@ class CompanionViewModel(
 
     /** Which face to draw. Persisted, so it survives a restart. */
     fun setAvatarStyle(style: AvatarStyle) {
+        clearIdleMorphOverlay()
         cancelAvatarFormGeneration()
         secureStorage?.savePreference("generated_avatar_id", "")
         _uiState.value = _uiState.value.copy(avatarStyle = style, generatedAvatarForm = null,
@@ -10382,6 +10418,7 @@ class CompanionViewModel(
     }
 
     fun setAvatarAnimal(animal: AvatarAnimal) {
+        clearIdleMorphOverlay()
         invalidateAvatarFormWork()
         stopAvatarPerformance()
         secureStorage?.saveAvatarForm(animal.key)
@@ -10464,6 +10501,11 @@ class CompanionViewModel(
             kotlinx.coroutines.coroutineScope {
                 if (expectedGeneration != null && expectedGeneration != avatarFormGeneration)
                     throw kotlinx.coroutines.CancellationException("Avatar transformation superseded")
+                AvatarStyle.resolveRequest(request)?.let { style ->
+                    setAvatarStyle(style)
+                    _uiState.value = _uiState.value.withPanelsClosed()
+                    return@coroutineScope ToolResult.Success("Main avatar set to ${style.label}.")
+                }
                 invalidateAvatarFormWork()
                 val generation = avatarFormGeneration
                 val scopeId = conversationId()
@@ -10565,6 +10607,7 @@ class CompanionViewModel(
         }
 
     private fun applyGeneratedAvatar(form: GeneratedAvatarForm, saved: List<GeneratedAvatarForm>, message: String) {
+        clearIdleMorphOverlay()
         secureStorage?.saveGeneratedAvatarForm(form.id)
         stopAvatarPerformance()
         _uiState.value = _uiState.value.copy(avatarStyle = AvatarStyle.LUMEN,
@@ -11053,6 +11096,9 @@ class CompanionViewModel(
     // ── Idle morph + car awareness ───────────────────────────────────────────
 
     private fun startIdleFormCyclerIfNeeded() {
+        secureStorage?.getPreference("idle_morph_randomness")?.toFloatOrNull()?.takeIf { it.isFinite() }?.let { value ->
+            _uiState.value = _uiState.value.copy(features = _uiState.value.features.copy(idleMorphRandomness = value.coerceIn(0f, 1f)))
+        }
         // Match the existing idle director: virtual-time unit tests must not
         // schedule an infinite animation loop when draining pending work.
         if (System.getProperty("meowmba.idleAnimations", "true") == "false") return
@@ -11079,6 +11125,7 @@ class CompanionViewModel(
             },
             includeGenerated = { _uiState.value.idleMorphIncludeGenerated },
             intervalMs = { _uiState.value.idleMorphIntervalSec * 1000L },
+            randomness = { _uiState.value.features.idleMorphRandomness },
             onTarget = { applyIdleMorphTarget(it) },
         )
         idleFormCycler = cycler
@@ -11110,6 +11157,15 @@ class CompanionViewModel(
         val v = sec.coerceIn(20, 180)
         _uiState.value = _uiState.value.withFeatures(idleMorphIntervalSec = v)
         secureStorage?.savePreference(KEY_IDLE_MORPH_INTERVAL, v.toString())
+        idleFormCycler?.stop()
+        startIdleFormCyclerIfNeeded()
+    }
+
+    fun setIdleMorphRandomness(value: Float) {
+        if (!value.isFinite()) return
+        val amount = value.coerceIn(0f, 1f)
+        _uiState.value = _uiState.value.copy(features = _uiState.value.features.copy(idleMorphRandomness = amount))
+        secureStorage?.savePreference("idle_morph_randomness", amount.toString())
     }
 
     fun setIdleMorphIncludeGenerated(enabled: Boolean) {
@@ -11999,6 +12055,10 @@ class CompanionViewModel(
 
     fun toggleNavScreen() {
         _uiState.value = _uiState.value.copy(showNavScreen = !_uiState.value.showNavScreen)
+    }
+
+    fun openAutoScreen() {
+        _uiState.value = _uiState.value.withPanelsClosed().copy(showNavScreen = true)
     }
 
     fun toggleMemoryScreen() {
