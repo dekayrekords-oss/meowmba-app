@@ -23,18 +23,22 @@ internal fun OpenCodeLocalConnectionCard() {
     var password by remember { mutableStateOf("") }
     var status by remember { mutableStateOf("Setup reuses Ubuntu and OpenCode when present, installs missing components and checks the private connection. Downloads may take several minutes.") }
     var busy by remember { mutableStateOf(false) }
+    var separate by remember { mutableStateOf(false) }
+    var confirmSeparate by remember { mutableStateOf(false) }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         status = if (granted) "Permission granted. Tap Setup computer to continue." else "Termux command permission is needed. You can allow it in Android Settings → Meow → Permissions."
     }
     com.example.meowmba.ui.theme.Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("OpenCode on this phone", style = MaterialTheme.typography.titleMedium)
-            Text("${OpenCodeLocalConnection.ADDRESS} · username opencode", style = MaterialTheme.typography.bodySmall)
-            OutlinedTextField(password, { password = it }, label = { Text("Private server password") },
+            Text("${if (separate) OpenCodeLocalConnection.RECOVERY_ADDRESS else OpenCodeLocalConnection.ADDRESS} · username opencode", style = MaterialTheme.typography.bodySmall)
+            OutlinedTextField(password, { password = it }, label = { Text(if (separate) "Choose a NEW connection password" else "Existing server password (or new setup password)") },
                 visualTransformation = PasswordVisualTransformation(), singleLine = true,
                 enabled = !busy, modifier = Modifier.fillMaxWidth())
-            Text("Choose a private connection password (at least 12 characters), not your Ubuntu login or API key. Leave blank to reuse your saved password. No existing Ubuntu installation will be removed.",
+            Text(if (separate) "Choose a new password of 12–256 characters. This creates a separate server on port 4097. The old server, Ubuntu files and active tasks are left untouched."
+                else "If a server already runs, enter THAT server's password—not a new password, Ubuntu login or API key. Leave blank to reuse the saved password. If none is running, this password is used to create one.",
                 style = MaterialTheme.typography.bodySmall)
+            TextButton(enabled = !busy, onClick = { confirmSeparate = true }) { Text("Forgot password? Create a separate Meow connection") }
             Text("One-time Termux requirement: enable allow-external-apps in Termux settings. Android requires your approval; Meow cannot change another app’s private settings.", style = MaterialTheme.typography.bodySmall)
             TextButton(onClick = { permission.launch(PhoneComputerSetup.PERMISSION) }, enabled = !busy) { Text("Allow Meow to connect to Termux") }
             TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/termux/termux-app/wiki/RUN_COMMAND-Intent#allow-external-apps-property-mandatory")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }) { Text("Show Termux connection instructions") }
@@ -44,9 +48,10 @@ internal fun OpenCodeLocalConnectionCard() {
                 scope.launch {
                     try {
                         val draft = password
+                        val targetAddress = if (separate) OpenCodeLocalConnection.RECOVERY_ADDRESS else OpenCodeLocalConnection.ADDRESS
                         val version = withContext(Dispatchers.IO) {
                             val storage = SecureStorageManager(context)
-                            val secret = draft.ifBlank { storage.getApiKey(OpenCodeLocalConnection.CREDENTIAL)
+                            val secret = if (separate) draft else draft.ifBlank { storage.getApiKey(OpenCodeLocalConnection.CREDENTIAL)
                                 ?.takeIf { it.isNotBlank() }
                                 ?: storage.getApiKey(OpenCodeLocalConnection.CREDENTIAL + "_pending").orEmpty() }
                             require(secret.length in 12..256 && secret.none { it == '\n' || it == '\r' || it == '\u0000' }) {
@@ -55,13 +60,16 @@ internal fun OpenCodeLocalConnectionCard() {
                             // Retain a separate encrypted draft if Android closes this screen during
                             // provisioning. Never mark it as the verified connection credential.
                             storage.saveVerifiedApiKey(OpenCodeLocalConnection.CREDENTIAL + "_pending", secret)
-                            val result = PhoneComputerSetup.start(context, secret)
-                            storage.saveVerifiedApiKey(OpenCodeLocalConnection.CREDENTIAL, secret)
+                            val result = PhoneComputerSetup.start(context, secret, targetAddress)
+                            storage.saveVerifiedConnection(OpenCodeLocalConnection.CREDENTIAL, secret, targetAddress)
+                            if (separate) storage.savePreference(com.example.meowmba.core.computer.OpenCodeComputer.SESSION_KEY, "")
+                            OpenCodeLocalConnection.restore(storage)
                             storage.saveApiKey(OpenCodeLocalConnection.CREDENTIAL + "_pending", "")
                             result
                         }
                         password = ""
-                        status = "Connection verified and password saved securely. OpenCode $version. Open Computer → Tasks & approvals to run a task and review its actions."
+                        separate = false
+                        status = "Connection verified and password saved securely. OpenCode $version. Open Computer → Tasks & approvals or the Ubuntu Terminal."
                     } catch (_: PhoneComputerSetup.PermissionRequired) {
                         status = "Approve Termux access to install or start your Computer."
                         permission.launch(PhoneComputerSetup.PERMISSION)
@@ -76,4 +84,9 @@ internal fun OpenCodeLocalConnectionCard() {
             Text(status, style = MaterialTheme.typography.bodySmall)
         }
     }
+    if (confirmSeparate) AlertDialog(onDismissRequest = { confirmSeparate = false },
+        title = { Text("Create a separate private connection?") },
+        text = { Text("This does not reset or stop the server whose password you forgot. It starts a second OpenCode server inside the same Ubuntu installation on port 4097, with a new password. Existing work remains untouched. If that port is also occupied, setup stops safely. Another server uses additional memory.") },
+        confirmButton = { TextButton(onClick = { separate = true; password = ""; confirmSeparate = false }) { Text("Choose new password") } },
+        dismissButton = { TextButton(onClick = { confirmSeparate = false }) { Text("Cancel") } })
 }

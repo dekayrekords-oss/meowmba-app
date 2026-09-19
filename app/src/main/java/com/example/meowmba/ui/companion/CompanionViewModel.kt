@@ -321,6 +321,7 @@ class CompanionViewModel(
     private var lastSocialCue: com.example.meowmba.core.vision.SocialCue =
         com.example.meowmba.core.vision.SocialCue.NONE
     private var lastSocialCueAtMs: Long = 0L
+    private val personalReactionDirector = PersonalReactionDirector()
 
     /** Rich sensory snapshot for Lumen reflex v2 (read on the draw path). */
     private val _reflexSensory = MutableStateFlow(
@@ -1274,6 +1275,8 @@ class CompanionViewModel(
     private var driveReactionExpiry: Job? = null
 
     init {
+        PersonalCompanionPrivacy.restore(secureStorage)
+        com.example.meowmba.core.computer.OpenCodeLocalConnection.restore(secureStorage)
         // Robot body: restore prefs into state, mirror live status, then connect.
         robotManager.setBodyPaused(true)
         secureStorage?.let { st ->
@@ -3066,6 +3069,7 @@ class CompanionViewModel(
             com.example.meowmba.core.ssh.SshHostRegistry(storage).list()
         }.getOrDefault(emptyList())
         return buildList {
+            add(CompanionTerminalTarget.Ubuntu)
             add(LocalLinuxSupport.terminalTarget(storage.context))
             profiles.forEach { add(CompanionTerminalTarget.AgenticProfile(it)) }
             hosts.forEach { add(CompanionTerminalTarget.LegacyHost(it.name)) }
@@ -3342,7 +3346,7 @@ class CompanionViewModel(
             appendCompanionTerminalOutput("error: secure storage unavailable\n")
             return
         }
-        val local = targetId.isBlank() || targetId == CompanionTerminalTarget.LOCAL_ID
+        val local = targetId.isBlank() || targetId == CompanionTerminalTarget.LOCAL_ID || targetId == CompanionTerminalTarget.Ubuntu.id
         if (local) {
             val store = computerStore()
             if (store != null && store.state != ComputerPowerState.On) {
@@ -8697,8 +8701,20 @@ class CompanionViewModel(
      * Debounced in [SocialCues.shouldReact] so a held smile does not spam.
      */
     private fun applySocialCue(track: com.example.meowmba.core.vision.FaceTrack?) {
+        val personalAllowed = PersonalCompanionPrivacy.reactions.value && !appInBackground &&
+            _uiState.value.isCameraEnabled && !_uiState.value.driving && !_uiState.value.carModeEnabled
+        if (!personalAllowed) { personalReactionDirector.reset(); return }
         if (!socialContextAllowed() || _uiState.value.interactionState == InteractionState.LISTENING ||
             _uiState.value.interactionState == InteractionState.THINKING) return
+        val ownSpeech = _uiState.value.interactionState == InteractionState.SPEAKING
+        val sound = com.example.meowmba.core.audio.InputSoundLevel.snapshot(
+            com.example.meowmba.core.audio.InputSoundLevel.monotonicNowMs(), ownSpeech)
+        val dance = personalReactionDirector.sample(track, elapsedRealtimeMs(),
+            _uiState.value.isMicEnabled && sound.fresh && sound.activity > .5f)
+        if (dance != null && !ownSpeech && faceModeActive(_uiState.value)) {
+            playAnimationNamed(dance, userRequested = false)
+            return
+        }
         val cue = track?.cue ?: com.example.meowmba.core.vision.SocialCue.NONE
         val now = System.currentTimeMillis()
         val (minGap, sameGap) = DriveEmotionBoost.socialGaps(_uiState.value.driving && _uiState.value.driveEmotionBoost)
@@ -8721,7 +8737,7 @@ class CompanionViewModel(
         if (!speaking && clip != null && faceModeActive(_uiState.value)) {
             playAnimationNamed(clip, userRequested = false)
         }
-        android.util.Log.i("MeowSocial", "cue=$cue emotion=$emotionName clip=$clip")
+        // Visual cues stay ephemeral: no emotion log, memory entry or cloud prompt.
     }
 
     /**
@@ -9445,7 +9461,7 @@ class CompanionViewModel(
         openChat()
         _companionTerminalPaneRequest.value += 1L
         connectCompanionTerminal(profile?.let { CompanionTerminalTarget.AgenticProfile(it).id }
-            ?: CompanionTerminalTarget.LOCAL_ID)
+            ?: CompanionTerminalTarget.Ubuntu.id)
     }
 
     fun openNeuralSettingsFromInfo() = openBrainSettingsCategory("Neural / Lumen")
@@ -11056,16 +11072,22 @@ class CompanionViewModel(
                 val activeInventor = com.example.meowmba.core.agent.tools.PropInventor { input ->
                     if (provider is LiteRtProvider) provider.generateStructured(input) else provider.generate(input)
                 }.also { inventor = it }
-                val timeoutMs = when (reasonLevel) {
-                    InventReasonLevel.FAST -> 60_000L
-                    InventReasonLevel.BALANCED -> 75_000L
-                    InventReasonLevel.THOROUGH -> 100_000L
+                val timeoutMs = InventTimeBudget.prop(provider is RemoteModelProvider, reasonLevel)
+                val progress = launch {
+                    var seconds = 0
+                    while (true) {
+                        delay(5_000)
+                        seconds += 5
+                        ensureOwner()
+                        _uiState.value = _uiState.value.copy(propInventMessage =
+                            "Creating and checking your prop · ${seconds}s. Free services may queue requests. Cancel anytime.")
+                    }
                 }
-                val form = withContext(ioDispatcher + stop) {
+                val form = try { withContext(ioDispatcher + stop) {
                     withTimeout(timeoutMs) {
                         activeInventor.invent(prompt, reasonLevel, categoryHint = category, detail = detail)
                     }
-                }
+                } } finally { progress.cancel() }
                 kotlinx.coroutines.currentCoroutineContext().ensureActive()
                 ensureOwner()
                 val placed = GeneratedPropForms.withSmartDefaults(form)
@@ -11077,8 +11099,9 @@ class CompanionViewModel(
                 val store = generatedPropStore
                 if (ready != null && store != null) {
                     try {
-                        store.save(ready, prompt)
-                        _uiState.update { it.copy(savedProps = store.list(), propInventError = false,
+                        val placed = GeneratedPropForms.withSmartDefaults(ready)
+                        store.save(placed, prompt)
+                        _uiState.update { it.withFeatures(pendingPropPlacement = placed).copy(savedProps = store.list(), propInventError = false,
                             propInventMessage = "Saved ${ready.name}. Extra polish timed out; the completed prop is ready to use.") }
                     } catch (_: Exception) { propInventFailure("Could not save the completed prop. Try again or free a library slot.") }
                 } else propInventFailure("Prop invent timed out. Try a simpler description.")

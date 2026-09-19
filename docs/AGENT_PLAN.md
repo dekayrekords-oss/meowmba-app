@@ -1,5 +1,17 @@
 # Agent execution plan — immersive companion revision
 
+## September 19: preview143 Computer recovery and companion modes
+
+Single integrator. User approved installation after checks, keeping new monitoring off.
+Validate recovery4097 port isolation, existing-password rejection, atomic encrypted endpoint
+selection, manual PTY lifecycle, optional HUB/private-panel navigation and two explicit cloud
+approvals. Never kill unknown4096 servers, reset Ubuntu or print passwords. Native terminal
+requires real authenticated on-phone verification; an HTTP401 is not successful readiness.
+Re-run live free-provider prop generation with a bounded remote queue budget and restore
+appearance/privacy. Do not quietly switch models or paid tiers. HUB is a paired desktop-helper
+path, not generic USB screen capture. Local private answers are not injected into ordinary chat;
+this limitation and all remaining physical-device checks must be reported honestly.
+
 ## September 19: preview142 installed; live generation not signed off
 
 Single integrator; no concurrent builds. Weather/current-location controls, Avatar layout,

@@ -23,6 +23,30 @@ Port feature commits; do not overwrite the baseline with an experimental branch 
 
 ## Coordination
 
+### September 19 Computer recovery / personal companion — preview143 in validation
+
+- Sole integrator retains ownership. User approved in-place143 installation after checks,
+  with new monitoring modes off. No Play upload authorized in this step.
+- Existing4096 OpenCode server rejects the user's password. Do not guess credentials, kill
+  that server or reset Ubuntu. Explicit Forgot password flow provisions a separate4097
+  server, preserving files/tasks; atomically saves verified endpoint + encrypted credential.
+- Native manual Ubuntu terminal uses authenticated OpenCode PTY, not a sandbox shell or
+  WebView. It is not exposed as an agent tool. Real authenticated device acceptance pending.
+- Remote prop generation gets a bounded180–240s queue allowance, elapsed feedback and
+  cancellation, without increasing local inference budgets or changing model/billing.
+- Computer HUB: off by default; paired desktop helper screenshots and accessible controls,
+  explicit session + per-press confirmation, local OCR or two-confirmation one-frame cloud
+  interpretation. A generic USB hub cannot capture computer video; raw UVC/HDMI capture
+  and continuous movie/game commentary are not implemented. Physical pairing acceptance pending.
+- Personal companion: off-by-default local cue reactions; no emotional diagnosis/profile.
+  Private optional interview answers remain encrypted and outside chat/tools/cloud prompts;
+  exact selected answer requires two red confirmations to send to OpenRouter. Private panel
+  blocks screenshots and cancels pending approvals on background. No absolute security claim.
+  Answers currently serve the private panel only, not automatic personalized conversation.
+- Small continuous Lumen body sway uses the existing clock; drive target continuity retained.
+- Current143 work is not yet an installed/verified release. See next validation checkpoint
+  before selecting an APK; old142 evidence below remains historical authority for installation.
+
 ### September 19 weather/appearance/Vending revision — preview142 installed
 
 - Sole integrator owns this checkout. User authorized in-place phone installation and tests.

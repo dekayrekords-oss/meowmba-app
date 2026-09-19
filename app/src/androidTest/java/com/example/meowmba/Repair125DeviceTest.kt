@@ -33,7 +33,10 @@ class Repair125DeviceTest {
         val started = android.os.SystemClock.elapsedRealtime()
         ActivityScenario.launch<MainActivity>(Intent(context, MainActivity::class.java)).use { scenario ->
             lateinit var vm: CompanionViewModel
-            scenario.onActivity { vm = ViewModelProvider(it)[CompanionViewModel::class.java] }
+            scenario.onActivity {
+                it.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                vm = ViewModelProvider(it)[CompanionViewModel::class.java]
+            }
             Thread.sleep(2_000)
             val before = vm.uiState.value
             try {
@@ -44,7 +47,7 @@ class Repair125DeviceTest {
                     vm.inventProp(request, "held", "A compact fishing prop for the floating avatar",
                         InventReasonLevel.fromKey(storage.getPreference("invent_reason_level")))
                 }
-                val deadline = started + 125_000
+                val deadline = started + 260_000
                 do { Thread.sleep(100) } while (vm.uiState.value.propInventGenerating && android.os.SystemClock.elapsedRealtime() < deadline)
                 report.put("message", vm.uiState.value.propInventMessage)
                     .put("elapsedMs", android.os.SystemClock.elapsedRealtime() - started)

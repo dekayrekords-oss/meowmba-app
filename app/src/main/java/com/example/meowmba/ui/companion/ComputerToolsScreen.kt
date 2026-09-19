@@ -109,6 +109,8 @@ internal fun ComputerToolsScreen(
                 } else when(page) {
                     ComputerToolsPage.HOME -> {
                         Text("Your workspace, connections and tasks—one place to get started.",style=MaterialTheme.typography.bodyMedium)
+                        ComputerDestinationCard("HUB mode", "Paired desktop screen, USB device check and confirmed controls.", Icons.Default.Computer) { navigate(ComputerToolsPage.HUB) }
+                        ComputerDestinationCard("Personal companion", "Optional local reactions and private get-to-know-me questions.", Icons.Default.Psychology) { navigate(ComputerToolsPage.PERSONAL) }
                         ComputerDestinationCard("Set up Computer",if(computerSavedProfile==null) "Choose this phone or a Linux server." else "Manage ${computerSavedProfile.displayName} or set up this phone.",Icons.Default.Computer) { navigate(ComputerToolsPage.SETUP) }
                         if(computerPhoneReady) Button(onClick=onComputerOpenTerminal,modifier=Modifier.fillMaxWidth()) { Text("Open phone Terminal") }
                         computerSavedProfile?.takeIf { it.type==ConnectionProfileType.SSH }?.let { p ->
@@ -123,6 +125,8 @@ internal fun ComputerToolsScreen(
                         TextButton(onClick={navigate(ComputerToolsPage.LEGACY_TASKS)}) { Text("Legacy tasks") }
                     }
                     ComputerToolsPage.TASKS -> { OpenCodeComputerPanel() }
+                    ComputerToolsPage.HUB -> { ComputerHubPanel() }
+                    ComputerToolsPage.PERSONAL -> { PersonalCompanionPanel() }
                     ComputerToolsPage.LEGACY_TASKS -> {
                         Row(Modifier.fillMaxWidth(), verticalAlignment=Alignment.CenterVertically) {
                             Text("Legacy task automation", modifier=Modifier.weight(1f))

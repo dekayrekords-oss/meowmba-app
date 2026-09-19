@@ -14,6 +14,7 @@ internal enum class ComputerToolsPage(val title: String, val setup: Boolean = fa
     SERVER_SIGN_IN("Sign in to your server", true),
     SERVER_REVIEW("Check your connection", true),
     TASKS("Tasks & approvals"), MODEL("AI for tasks"),
+    HUB("HUB mode"), PERSONAL("Personal companion"),
     LEGACY_TASKS("Legacy tasks"),
     PROFILES("Saved connections"), POWER("Power & sleep"), DETAILS("Connection details & logs"),
 }

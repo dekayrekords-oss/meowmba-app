@@ -13,6 +13,11 @@ sealed class CompanionTerminalTarget {
     abstract val id: String
     abstract val label: String
 
+    data object Ubuntu : CompanionTerminalTarget() {
+        override val id = "ubuntu-opencode"
+        override val label = "Ubuntu · on this phone"
+    }
+
     /**
      * Computer — Linux guest (Termux/PRoot when executable, else app sandbox).
      * User-facing label is always **Computer**. SSH profiles stay separate.

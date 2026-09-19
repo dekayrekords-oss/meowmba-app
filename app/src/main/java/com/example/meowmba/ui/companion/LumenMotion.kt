@@ -286,8 +286,15 @@ class LumenRig(seed: Int = 731) {
                 idle.bodyTarget.y * followScale,
             )
         }
-        val position = body.step(LumenAttentionPoint(bodyTarget.x + actor.lean * actorWeight,
-            bodyTarget.y - actor.lift * actorWeight * 2f), dt, tracking)
+        // Continuous low-amplitude weight shifts, not random per-frame noise. The
+        // existing spring keeps these smooth; gaze and authored scenes stay dominant.
+        // Driving amplitude is handled by the shared stage; retain the idle clock
+        // and target here so entering drive mode cannot jump the body.
+        val alive = if (resting && !input.performing) 1f else 0f
+        val sway = (.018f * kotlin.math.sin(time * .63f) + .008f * kotlin.math.sin(time * .27f)) * alive
+        val breathe = .014f * kotlin.math.sin(time * 1.15f) * alive
+        val position = body.step(LumenAttentionPoint(bodyTarget.x + actor.lean * actorWeight + sway,
+            bodyTarget.y - actor.lift * actorWeight * 2f + breathe), dt, tracking)
         val headX = hx.step((gx * 0.42f + input.lean.clean().coerceIn(-1f, 1f) * (0.24f + drive * 0.60f) +
             input.performanceLean.clean().coerceIn(-1f, 1f) * .45f + actor.lean * actorWeight).coerceIn(-1.1f, 1.1f), dt, 6.8f + drive * 3.2f)
         val headY = hy.step((gy * 0.3f + input.lurch.clean().coerceIn(-1f, 1f) * (0.12f + drive * 0.65f) -

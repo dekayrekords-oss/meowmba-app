@@ -89,11 +89,13 @@ fun CompanionTerminalPanel(
 
     val selected = targets.firstOrNull { it.id == selectedId } ?: CompanionTerminalTarget.Local()
     val promptHost = when (selected) {
+        CompanionTerminalTarget.Ubuntu -> "ubuntu"
         is CompanionTerminalTarget.Local -> "computer"
         is CompanionTerminalTarget.AgenticProfile -> selected.profile.host
         is CompanionTerminalTarget.LegacyHost -> selected.name
     }
     val promptUser = when (selected) {
+        CompanionTerminalTarget.Ubuntu -> "computer"
         is CompanionTerminalTarget.Local -> "meow"
         is CompanionTerminalTarget.AgenticProfile -> selected.profile.username
         is CompanionTerminalTarget.LegacyHost -> selected.name

@@ -211,7 +211,9 @@ class GeneratedAvatarIntegrationTest {
             }
             model.inventProp("a blue cup", "held", "", InventReasonLevel.BALANCED)
             advanceTimeBy(75_001); runCurrent()
-            assertEquals(prop, model.uiState.value.savedProps.single())
+            val placedProp = GeneratedPropForms.withSmartDefaults(prop)
+            assertEquals(placedProp, model.uiState.value.savedProps.single())
+            assertEquals(placedProp, model.uiState.value.pendingPropPlacement)
             assertFalse(model.uiState.value.propInventError)
             assertFalse(model.uiState.value.propInventGenerating)
             assertTrue(model.uiState.value.propInventMessage.orEmpty().contains("Extra polish timed out"))

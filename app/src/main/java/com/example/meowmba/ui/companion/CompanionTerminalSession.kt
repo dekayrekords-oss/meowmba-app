@@ -77,6 +77,7 @@ class CompanionTerminalSession(
     private var jschSession: Session? = null
     private var shellChannel: ChannelShell? = null
     private var localProcess: Process? = null
+    private var ubuntu: com.example.meowmba.core.computer.OpenCodeTerminal? = null
     private var stdin: OutputStream? = null
     private var readerJob: Job? = null
     private var stderrJob: Job? = null
@@ -96,7 +97,7 @@ class CompanionTerminalSession(
     }
 
     /** True while the backend is the Computer guest (Termux/PRoot/sandbox), not JSch. */
-    fun isComputerGuest(): Boolean = isLocalSession.get()
+    fun isComputerGuest(): Boolean = isLocalSession.get() || ubuntu != null
 
     private var ptyCols: Int = 80
     private var ptyRows: Int = 24
@@ -115,6 +116,18 @@ class CompanionTerminalSession(
 
         val result = runCatching {
             when {
+                targetId == CompanionTerminalTarget.Ubuntu.id -> {
+                    val terminal = com.example.meowmba.core.computer.OpenCodeTerminal(
+                        storage.getApiKey(com.example.meowmba.core.computer.OpenCodeLocalConnection.CREDENTIAL).orEmpty())
+                    ubuntu = terminal
+                    terminal.connect({ text -> if (ubuntu === terminal && !closed.get()) emitSafe(text) }) {
+                        if (ubuntu === terminal && !closed.get()) {
+                            closed.set(true)
+                            _status.value = CompanionTerminalStatus.Disconnected
+                            _statusDetail.value = "Ubuntu terminal closed. Reconnect to continue."
+                        }
+                    }
+                }
                 targetId.isBlank() || targetId == CompanionTerminalTarget.LOCAL_ID ->
                     openLocal()
                 targetId.startsWith(CompanionTerminalTarget.LEGACY_PREFIX) -> {
@@ -146,6 +159,11 @@ class CompanionTerminalSession(
     fun stdin(bytes: ByteArray) {
         if (bytes.isEmpty()) return
         if (_status.value != CompanionTerminalStatus.Connected) return
+        ubuntu?.let { terminal ->
+            noteIoActivity()
+            runCatching { terminal.send(bytes) }.onFailure { emitSafe("Ubuntu terminal disconnected.\n") }
+            return
+        }
         val stream = stdin ?: return
         noteIoActivity()
         scope.launch(Dispatchers.IO) {
@@ -194,6 +212,7 @@ class CompanionTerminalSession(
     fun resize(cols: Int, rows: Int) {
         ptyCols = cols.coerceIn(20, 500)
         ptyRows = rows.coerceIn(8, 200)
+        ubuntu?.let { terminal -> scope.launch(Dispatchers.IO) { runCatching { terminal.resize(ptyCols, ptyRows) } }; return }
         val channel = shellChannel ?: return
         runCatching {
             channel.setPtySize(ptyCols, ptyRows, ptyCols * 8, ptyRows * 16)
@@ -205,11 +224,14 @@ class CompanionTerminalSession(
     }
 
     fun disconnectAsync() {
-        scope.launch(Dispatchers.IO) { disconnect() }
+        scope.launch(Dispatchers.IO + kotlinx.coroutines.NonCancellable) { disconnect() }
     }
 
     private fun disconnectLocked(emitStatus: Boolean) {
         closed.set(true)
+        val previousUbuntu = ubuntu
+        ubuntu = null
+        previousUbuntu?.let { terminal -> scope.launch(Dispatchers.IO + kotlinx.coroutines.NonCancellable) { terminal.close() } }
         readerJob?.cancel()
         readerJob = null
         stderrJob?.cancel()

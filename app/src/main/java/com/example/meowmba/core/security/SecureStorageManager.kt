@@ -28,6 +28,13 @@ class SecureStorageManager(val context: Context) {
         return sharedPreferences.getString("api_key_$provider", null)
     }
 
+    /** Connection endpoint and secret must change atomically, including after a crash. */
+    fun saveVerifiedConnection(provider: String, key: String, endpoint: String) {
+        check(sharedPreferences.edit().putString("api_key_$provider", key)
+            .putString("endpoint_$provider", endpoint).commit()) { "Could not save the private connection." }
+        check(getApiKey(provider) == key && getEndpoint(provider) == endpoint) { "Connection save could not be verified." }
+    }
+
     /** Connection wizards call this off the main thread. Do not report a
      * verified connection as saved until encrypted preferences reach disk. */
     fun saveVerifiedApiKey(provider: String, key: String) {

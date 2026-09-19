@@ -86,6 +86,21 @@ class ComputerSetup135UiTest {
         tap("Open phone Terminal");assertEquals(1,opened)
     }
 
+    @Test fun forgottenPasswordRequiresExplicitSeparateConnectionChoice() {
+        rule.setContent { MeowmbaTheme { SettingsScreen(storage,
+            initialPage=COMPUTER_TOOLS_TITLE,computerPhoneReady=true,onClose={}) } }
+        tap("Set up Computer"); tap("This phone"); tap("Continue")
+        tap("Forgot password? Create a separate Meow connection")
+        rule.onNodeWithText("Create a separate private connection?").assertExists()
+        rule.onNodeWithText("Cancel").performClick()
+        rule.onNodeWithText("Choose a NEW connection password").assertDoesNotExist()
+        tap("Forgot password? Create a separate Meow connection")
+        rule.onNodeWithText("Choose new password").performClick()
+        rule.onNodeWithText("Choose a NEW connection password").assertExists()
+        rule.onNodeWithText("http://127.0.0.1:4097 · username opencode").assertExists()
+        rule.onNodeWithText("Setting up…").assertDoesNotExist()
+    }
+
     @Test fun serverTestUsesStableIdentityAndChangedAddressNeedsAnotherCheck() {
         var status by mutableStateOf(ComputerSetupStatus.NotSetUp)
         var saved by mutableStateOf<ConnectionProfile?>(null)

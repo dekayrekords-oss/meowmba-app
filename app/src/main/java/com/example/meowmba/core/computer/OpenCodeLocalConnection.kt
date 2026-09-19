@@ -12,7 +12,13 @@ import kotlinx.serialization.json.*
  */
 object OpenCodeLocalConnection {
     const val CREDENTIAL = "opencode_phone_worker"
-    const val ADDRESS = "http://127.0.0.1:4096"
+    const val ORIGINAL_ADDRESS = "http://127.0.0.1:4096"
+    const val RECOVERY_ADDRESS = "http://127.0.0.1:4097"
+    @Volatile private var selectedAddress = ORIGINAL_ADDRESS
+    val ADDRESS: String get() = selectedAddress
+    fun restore(storage: com.example.meowmba.core.security.SecureStorageManager?) {
+        selectedAddress = storage?.getEndpoint(CREDENTIAL)?.takeIf { it == ORIGINAL_ADDRESS || it == RECOVERY_ADDRESS } ?: ORIGINAL_ADDRESS
+    }
 
     suspend fun verify(password: String, address: String = ADDRESS): String = withContext(Dispatchers.IO) {
         requireLoopback(address)
