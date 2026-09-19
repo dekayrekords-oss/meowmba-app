@@ -39,7 +39,7 @@ Port feature commits; do not overwrite the baseline with an experimental branch 
 - Actual phone: baseline UI visible, weather city lookup and Hugging Face network checks pass.
 - Actual phone: free structured prop response rejected with "x is required". Production repair prompts now include rejected data; live retry acceptance remains pending.
 - Needle 3 weights already exist on phone and match official SHA256 c9d915eca282ed42d1a09b143b592adb4cc6744ffe2d294adf5cfc5548170c38.
-  Candidate updates BOTH native archive and default catalog to Needle 3; native device acceptance pending.
+  Preview139 updates BOTH native archive and default catalog to Needle 3; native phone smoke test passes.
 - Added local-library checksum update checker, keeping old files; custom models report unknown. Voice/image updater coverage still pending.
 - User confirms Ubuntu/OpenCode runs. Local server port4096 was unreachable. Added Ubuntu-aware launch and a password-protected loopback connection card.
   Task submission, approvals, session persistence and result integration are NOT complete; do not claim the connection card implements them.
