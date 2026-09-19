@@ -12,6 +12,15 @@ appearance/privacy. Do not quietly switch models or paid tiers. HUB is a paired 
 path, not generic USB screen capture. Local private answers are not injected into ordinary chat;
 this limitation and all remaining physical-device checks must be reported honestly.
 
+App source621cfec installed over142 after2,601 unit/UI checks (zero failures, five skips)
+and148 protected-asset matches. Real phone navigation/privacy/recovery test passes after
+correcting its animation-clock and microphone-selector assumptions. It starts no server,
+enables no sensing and submits no password. Actual authenticated acceptance still needs
+the user's private new password through the explicit4097 recovery flow.
+Live configured-model prop generation now passes in76.446s, including saved geometry,
+equip and appearance/privacy restoration. Android thermal status2 was observed; cooling
+protection is retained and long-session thermal acceptance remains open.
+
 ## September 19: preview142 installed; live generation not signed off
 
 Single integrator; no concurrent builds. Weather/current-location controls, Avatar layout,

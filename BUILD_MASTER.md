@@ -11,7 +11,7 @@ This supersedes historical build-location/version instructions in other document
 - Baseline: `5efed2f`, version 1.3.82/code 138. Historical evidence is dated September 15.
 - Verified original APK: `/Users/prog/Meowmba-Releases/idle136-20260915/meow-preview138.apk`.
 - Grok source to recover: `529cc69`, preserved as `recovery/grok-lumen` remote-tracking ref.
-- Status: preview142 (1.3.86) installed in place. New UI checks pass; live generation acceptance remains incomplete. Authenticated Computer acceptance remains blocked on the user's private server password. Not a Play release.
+- Status: preview143 (1.3.87) installed in place. Password recovery and optional-mode phone UI checks pass; live generation acceptance remains incomplete. Authenticated Computer acceptance requires the user's new private connection password. Not a Play release.
 
 ## Feature queue
 
@@ -23,7 +23,7 @@ Port feature commits; do not overwrite the baseline with an experimental branch 
 
 ## Coordination
 
-### September 19 Computer recovery / personal companion — preview143 in validation
+### September 19 Computer recovery / personal companion — preview143 installed
 
 - Sole integrator retains ownership. User approved in-place143 installation after checks,
   with new monitoring modes off. No Play upload authorized in this step.
@@ -44,8 +44,20 @@ Port feature commits; do not overwrite the baseline with an experimental branch 
   blocks screenshots and cancels pending approvals on background. No absolute security claim.
   Answers currently serve the private panel only, not automatic personalized conversation.
 - Small continuous Lumen body sway uses the existing clock; drive target continuity retained.
-- Current143 work is not yet an installed/verified release. See next validation checkpoint
-  before selecting an APK; old142 evidence below remains historical authority for installation.
+- App source621cfec; installed over142 on RFCY61NJEVM at2026-09-19 11:21:53, preserving
+  data/signature. Full suite2,601 tests, zero failures/errors, five skipped. All148 protected
+  runtime entries match142. APK SHA256 cb275097ffa7fc2319f914ffa677533568f2a27d574a0f1e390e4621490c454a.
+- Phone UI test passes: recovery choice, HUB default-off, personal switches default-off,
+  private-panel FLAG_SECURE and unchanged camera/microphone. The instrumentation harness
+  freezes/advances its own animation clock; production animation settings are untouched.
+- Archive:/Users/prog/Meowmba-Releases/computer143-20260919. Actual authenticated Ubuntu
+  terminal/tasks, fresh provisioning and paired HUB capture remain pending; not release signoff.
+- Live configured-model prop acceptance passes in76.446s: validated geometry saved/equipped,
+  previous appearance/privacy restored, only the synthetic test prop removed. No provider/key
+  selection changed. This is one successful free-route workflow, not a reliability guarantee.
+- During device checks Android reported thermal status2 (moderate); cooling banner active.
+  Protection remained enabled. Do not mistake thermal-reduced motion for a missing animation
+  or claim sustained thermal performance has been resolved by this build.
 
 ### September 19 weather/appearance/Vending revision — preview142 installed
 
