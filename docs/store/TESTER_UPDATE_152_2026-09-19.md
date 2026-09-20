@@ -143,6 +143,20 @@ check was not performed in this publication pass. Existing hosted design assets,
 and the earlier feature section remain. No site plan or payment settings were changed.
 See [website publication receipt](../youtube/weebly/MEOW_TESTER_UPDATE_152_2026-09-19.md).
 
+## Follow-up: listing and user manual
+
+The owner subsequently requested the Play listing and user manual update. Both en-US
+description fields were saved and submitted. Google required restarting the pending
+review to include them. At 22:03 America/Phoenix September 19 (05:03 UTC September 20),
+Alpha build 152 and both listing changes appeared together under “Changes in review”;
+quick-check progress had cleared. Publication is still not confirmed.
+
+The existing Documents/Meowmba-User-Manual.pdf is now a 23-page build-152 guide, with the
+original 57-page build-124 PDF preserved in the release archive. Setup, provider saving,
+care mode, privacy, Computer results and Play-edition limits were corrected. All pages
+were rendered and visually checked, with 23 bookmarks and no text beyond the margins.
+See [listing text and documentation receipt](PLAY_LISTING_152.md).
+
 ## Traceability
 
 Source commit: `039da2c5130d878a4751281b914578ac2908f0d2`.

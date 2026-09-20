@@ -38,6 +38,11 @@ This supersedes historical build-location/version instructions in other document
   Meow Assistant page at https://www.dekayrecords.com/meow-assistant.html#mx-release152.
   Detailed report: docs/store/TESTER_UPDATE_152_2026-09-19.md. Website receipt:
   docs/youtube/weebly/MEOW_TESTER_UPDATE_152_2026-09-19.md. No public Android source push.
+- Follow-up: default en-US Play short/full descriptions updated and submitted with 152;
+  Google required restarting review. All three items now show “Changes in review”.
+  Receipt/copy: docs/store/PLAY_LISTING_152.md. Current 23-page user manual source:
+  docs/manual/USER_MANUAL_152.md; PDF updated in Documents/Meowmba-User-Manual.pdf,
+  with the original build-124 PDF preserved in the play152 archive.
 - Fresh setup now starts with microphone off; “Not now” persists both sensors off and
   Android denial during setup leaves switches off. Setup requests only mic/camera.
   Signed152 fresh “Not now”, “Finish later” and Android-denial paths all pass,
