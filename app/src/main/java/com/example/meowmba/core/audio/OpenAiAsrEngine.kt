@@ -1,7 +1,6 @@
 package com.example.meowmba.core.audio
 
 import io.ktor.client.HttpClient
-import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.forms.MultiPartFormDataContent
 import io.ktor.client.request.forms.formData
 import io.ktor.client.request.header
@@ -56,14 +55,7 @@ class OpenAiAsrEngine(
     companion object {
         const val MODEL = "gpt-transcribe"
         private val defaultClient by lazy {
-            HttpClient {
-                followRedirects = false
-                install(HttpTimeout) {
-                    connectTimeoutMillis = 5_000
-                    requestTimeoutMillis = 15_000
-                    socketTimeoutMillis = 15_000
-                }
-            }
+            speechHttpClient(5_000L, 15_000L, followRedirects = false)
         }
         internal fun parseTranscript(body: String): String? = runCatching {
             Json.parseToJsonElement(body).jsonObject["text"]?.jsonPrimitive?.contentOrNull

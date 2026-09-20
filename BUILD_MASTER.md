@@ -11,11 +11,15 @@ This supersedes historical build-location/version instructions in other document
 - Baseline: `5efed2f`, version 1.3.82/code 138. Historical evidence is dated September 15.
 - Verified original APK: `/Users/prog/Meowmba-Releases/idle136-20260915/meow-preview138.apk`.
 - Grok source to recover: `529cc69`, preserved as `recovery/grok-lumen` remote-tracking ref.
-- Status: preview147 (1.3.91/source09db18d) installed in place. Seven live checks including real Computer file retrieval/local saving/context pass;2,646 full-suite tests, zero failures, five skipped. Known146 Android file-save failure repaired. Results UX, measured header layout and exact-output idle rendering optimizations included. Fresh-device and sustained thermal acceptance remain open. Not a Play release.
-- Ready candidate: preview148 (1.3.92), full2,693 tests, zero failures/errors, five skipped.
-  Compact driving/landscape UI, reliable avatar retry/cancellation and five animated scenes.
-  Not installed: phone absent from ADB. Termux idle heat remains unmeasured/unresolved.
-  Receipt and limitations: docs/DRIVE_CREATION_BACKGROUNDS_148_PASS_DOWN.md.
+- Status: preview149 (1.3.93), built from local changes on baseee5abe2, installed in place
+  September19 at18:20:27. Fixes two recorded147 speech crashes: background idle-chatter
+  recognizer access and Android HTTP gzip-stream cancellation. Includes prepared148 work.
+- Validation:397 suites/2,695 tests, zero failures/errors, five skipped; on-phone12-cycle
+  HTTP cancellation/reuse test passes. All148 protected runtime assets match148 exactly;
+  original signing certificate preserved. Cold start plus90s survival passes:19/19 foreground
+  samples, one unchanged PID, no new crash entries.
+- Receipt: docs/SPEECH_CRASH_149_PASS_DOWN.md. Thermal, low-memory and broader live148
+  acceptance remain open. No Play release; no phone data reset or server restart.
 
 ## Feature queue
 

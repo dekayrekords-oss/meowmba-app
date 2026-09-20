@@ -1,7 +1,6 @@
 package com.example.meowmba.core.audio
 
 import io.ktor.client.HttpClient
-import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -114,13 +113,7 @@ class OpenAiNativeSpeechEngine(
         private val json = Json { ignoreUnknownKeys = true }
 
         private val defaultClient by lazy {
-            HttpClient {
-                install(HttpTimeout) {
-                    connectTimeoutMillis = 10_000
-                    requestTimeoutMillis = 90_000
-                    socketTimeoutMillis = 90_000
-                }
-            }
+            speechHttpClient(10_000L, 90_000L, followRedirects = true)
         }
 
         internal fun requestBody(

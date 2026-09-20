@@ -1820,18 +1820,7 @@ class CompanionViewModel(
         viewModelScope.launch(Dispatchers.Default) {
             while (true) {
                 delay(10 * 60_000L)
-                val now = System.currentTimeMillis()
-                moodEngine.tick(now)
-                applyMood()
-                val st = _uiState.value
-                if (st.idleChatterEnabled && canOfferSocialSpeech() && st.playfulness != Playfulness.QUIET &&
-                    st.captionText == null && moodEngine.mayChatter(now)
-                ) {
-                    moodEngine.markChattered(now)
-                    nextNovelFact()?.let { fact ->
-                        if (canOfferSocialSpeech() && _uiState.value.captionText == null) speak(fact)
-                    }
-                }
+                runIdleMoodTick()
             }
         }
 
@@ -4612,6 +4601,24 @@ class CompanionViewModel(
     private val novelFacts by lazy {
         secureStorage?.context?.filesDir?.let { com.example.meowmba.core.personality.NovelFacts(File(it, "facts/history.jsonl")) }
     }
+
+    /** The timer stays on real time, but mood/UI and recognizer ownership are main-thread only.
+     * Recheck social eligibility after generation: a user turn may have started meanwhile. */
+    internal suspend fun runIdleMoodTick(fact: suspend () -> String? = { nextNovelFact() }) =
+        withContext(Dispatchers.Main.immediate) {
+            val now = System.currentTimeMillis()
+            moodEngine.tick(now)
+            applyMood()
+            val st = _uiState.value
+            if (st.idleChatterEnabled && canOfferSocialSpeech() && st.playfulness != Playfulness.QUIET &&
+                st.captionText == null && moodEngine.mayChatter(now)
+            ) {
+                moodEngine.markChattered(now)
+                fact()?.let {
+                    if (canOfferSocialSpeech() && _uiState.value.captionText == null) speak(it)
+                }
+            }
+        }
 
     private suspend fun nextNovelFact(): String? {
         val selected = currentProvider ?: return null

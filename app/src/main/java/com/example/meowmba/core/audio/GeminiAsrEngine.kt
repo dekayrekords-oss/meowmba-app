@@ -3,7 +3,6 @@ package com.example.meowmba.core.audio
 import android.util.Base64
 import android.util.Log
 import io.ktor.client.HttpClient
-import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -99,14 +98,7 @@ class GeminiAsrEngine(
         private val json = Json { ignoreUnknownKeys = true }
 
         private val defaultClient by lazy {
-            HttpClient {
-                followRedirects = false
-                install(HttpTimeout) {
-                    connectTimeoutMillis = 10_000
-                    requestTimeoutMillis = 15_000
-                    socketTimeoutMillis = 15_000
-                }
-            }
+            speechHttpClient(10_000L, 15_000L, followRedirects = false)
         }
 
         /**

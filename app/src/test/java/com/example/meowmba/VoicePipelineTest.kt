@@ -20,6 +20,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -99,7 +100,8 @@ class VoicePipelineTest {
             lastOnError = onError
         }
 
-        override fun stopListening() { stopListeningCalls++ }
+        var onStop: (() -> Unit)? = null
+        override fun stopListening() { onStop?.invoke(); stopListeningCalls++ }
         override fun swapCallbacks(onResult: (String) -> Unit, onError: (Int) -> Unit) {
             lastOnResult = onResult; lastOnError = onError
         }
@@ -150,6 +152,31 @@ class VoicePipelineTest {
     fun tearDown() {
         viewModel.viewModelScope.cancel()
         Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `background idle timer hands speech to main dispatcher`() = pipelineTest {
+        // UnconfinedTestDispatcher deliberately runs on the caller thread; use a
+        // queued main dispatcher to test the actual cross-dispatcher handoff.
+        Dispatchers.setMain(kotlinx.coroutines.test.StandardTestDispatcher(testScheduler))
+        val mainThread = Thread.currentThread()
+        fakeStt.onStop = { assertSame(mainThread, Thread.currentThread()) }
+        kotlinx.coroutines.withContext(Dispatchers.Default) {
+            viewModel.runIdleMoodTick { "A regression test fact." }
+        }
+        assertEquals(listOf("A regression test fact."), fakeTts.spokenTexts)
+        assertTrue(fakeStt.stopListeningCalls > 0)
+    }
+
+    @Test
+    fun `idle fact is discarded when stage becomes unavailable during generation`() = pipelineTest {
+        kotlinx.coroutines.withContext(Dispatchers.Default) {
+            viewModel.runIdleMoodTick {
+                viewModel.setAvatarPerformanceStageAllowed(false)
+                "Must not speak."
+            }
+        }
+        assertTrue(fakeTts.spokenTexts.isEmpty())
     }
 
     @Test
