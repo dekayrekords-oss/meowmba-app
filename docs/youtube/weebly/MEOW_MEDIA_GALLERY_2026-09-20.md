@@ -65,3 +65,7 @@ The native file chooser accepted multiple files via Shift+Down selection; Cmd+A 
 not select this file list. Then Pages > Meow Assistant > Build > existing Custom HTML
 block > Edit Custom HTML. Preserve the complete current embed, save, Publish and
 verify the public page. Asset paths are `/files/theme/<filename>`.
+
+## Public copy cleanup — September 20
+
+Published owner-requested removal of internal build numbers, capture provenance, test counts, CPU measurements and engineering notes from visitor copy. Gallery captions now describe the experience; legacy renderer captions are simplified. Beta availability, feature limits and provider requirements remain. Verified published captions and absence of the internal test report; all eight gallery images and two videos are retained. Complete editable embed synchronized from browser HTML save (UTF-16 FNV-1a `ec536bfd`). Historical provenance above remains an internal record.
