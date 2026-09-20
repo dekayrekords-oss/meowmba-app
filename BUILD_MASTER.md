@@ -29,8 +29,15 @@ This supersedes historical build-location/version instructions in other document
   Signatures, bundletool and all 86 native-library 16 KB alignment/JNI-export checks pass.
   All 149 protected preview runtime/model entries are unchanged from151.
   Play Accessibility exclusion remains enforced.
-- Live Play was last inspected on September19: Alpha138 available; 12 testers with 9
-  qualifying days toward 14; production access not granted. No upload/publication.
+- Live Play inspected September 19 at 21:47 America/Phoenix: signed 1.3.96/code 152
+  uploaded and submitted as Alpha release 11, full rollout to existing closed testers.
+  Console shows “Changes in review”; availability of 152 is not yet confirmed. Managed
+  publishing was already off. Previous Alpha build: 138. Production access is not granted;
+  the dashboard showed 12 testers with 9 qualifying days toward 14 earlier this session.
+- Owner-authorized Weebly feature update is published and verified on the existing
+  Meow Assistant page at https://www.dekayrecords.com/meow-assistant.html#mx-release152.
+  Detailed report: docs/store/TESTER_UPDATE_152_2026-09-19.md. Website receipt:
+  docs/youtube/weebly/MEOW_TESTER_UPDATE_152_2026-09-19.md. No public Android source push.
 - Fresh setup now starts with microphone off; “Not now” persists both sensors off and
   Android denial during setup leaves switches off. Setup requests only mic/camera.
   Signed152 fresh “Not now”, “Finish later” and Android-denial paths all pass,

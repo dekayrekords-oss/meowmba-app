@@ -5,7 +5,22 @@ This is an acceptance/backlog report, not authorization to publish, enable monit
 operate a robot, post to accounts or replace the user's data. Historical plan checkboxes
 are not reliable current status; use the latest evidence below and BUILD_MASTER.md.
 
-## Latest follow-up — preview152 and signed release prepared
+## Latest follow-up — 152 submitted to Alpha; website published
+
+The owner subsequently authorized the tester upload and Weebly feature publication.
+Signed 1.3.96/code 152 is uploaded and submitted as Alpha release 11, full rollout to the
+existing closed test. At September 19, 21:47 America/Phoenix, Play shows “Changes in review”;
+152 is not yet confirmed available. Managed publishing remains off. Production access
+and the remaining acceptance gates below are unchanged.
+
+The corresponding [website update](https://www.dekayrecords.com/meow-assistant.html#mx-release152)
+is published and verified live, including corrected Play-edition capability claims.
+See the [detailed tester report](store/TESTER_UPDATE_152_2026-09-19.md) for distribution,
+features, validation, tester checklist and website receipts. No app-code changes or new
+app test runs were needed for this upload/publication pass; the tested signed artifact
+from the previous preparation was used unchanged.
+
+## Previous follow-up — preview152 and signed release prepared
 
 Candidate152 fixes a fresh-install defect found while accepting151: “Not now” left
 MIC ON in the app despite Android access being denied. Fresh setup now starts muted,
