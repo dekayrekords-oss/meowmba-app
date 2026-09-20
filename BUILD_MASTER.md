@@ -43,6 +43,10 @@ This supersedes historical build-location/version instructions in other document
   Receipt/copy: docs/store/PLAY_LISTING_152.md. Current 23-page user manual source:
   docs/manual/USER_MANUAL_152.md; PDF updated in Documents/Meowmba-User-Manual.pdf,
   with the original build-124 PDF preserved in the play152 archive.
+- September 20 website media: eight captioned screenshots/render previews and two
+  short animation clips are published at the Meow page's #mx-gallery. Desktop/mobile
+  layout and both clip playbacks verified. Receipt and complete editable embed:
+  docs/youtube/weebly/MEOW_MEDIA_GALLERY_2026-09-20.md.
 - Fresh setup now starts with microphone off; “Not now” persists both sensors off and
   Android denial during setup leaves switches off. Setup requests only mic/camera.
   Signed152 fresh “Not now”, “Finish later” and Android-denial paths all pass,
