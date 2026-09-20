@@ -1364,6 +1364,7 @@ fun CompanionScreen(
             com.example.meowmba.ui.onboarding.SetupWizardRoute(
                 onFinished = { viewModel.finishOnboarding() },
                 onEnablePermissions = { viewModel.requestOnboardingPermissions() },
+                onSkipPermissions = viewModel::skipOnboardingPermissions,
                 onOpenChat = {
                     viewModel.finishOnboarding()
                     viewModel.openChat()

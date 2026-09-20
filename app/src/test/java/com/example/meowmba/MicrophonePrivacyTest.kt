@@ -25,6 +25,22 @@ private fun <T> anyCallback(): (T) -> Unit = any<(T) -> Unit>() ?: { _ -> }
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class MicrophonePrivacyTest {
+    @Test fun freshSetupPersistsMicrophoneOffBeforeAnyViewModelOrServiceStarts() {
+        val storage = mock(SecureStorageManager::class.java)
+        MicrophonePrivacy.initializeForFirstRun(storage)
+        verify(storage).saveBooleanPreference(MicrophonePrivacy.PREF_KEY, true)
+    }
+
+    @Test fun initializationPreservesSavedChoicesAndCompletedLegacySetup() {
+        for ((saved, completed) in listOf(true to false, false to true, true to true)) {
+            val storage = mock(SecureStorageManager::class.java)
+            `when`(storage.hasBooleanPreference(MicrophonePrivacy.PREF_KEY)).thenReturn(saved)
+            `when`(storage.getBooleanPreference("onboarding_done", false)).thenReturn(completed)
+            MicrophonePrivacy.initializeForFirstRun(storage)
+            verify(storage, never()).saveBooleanPreference(anyString(), anyBoolean())
+        }
+    }
+
     @Test fun missingPreferenceKeepsLegacyMicrophoneEnabledWithoutWritingAnything() {
         val storage = mock(SecureStorageManager::class.java)
         assertTrue(MicrophonePrivacy.isEnabled(storage))

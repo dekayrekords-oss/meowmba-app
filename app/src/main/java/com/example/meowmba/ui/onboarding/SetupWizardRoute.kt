@@ -93,6 +93,7 @@ fun SetupWizardRoute(
     onFinished: () -> Unit,
     modifier: Modifier = Modifier,
     onEnablePermissions: () -> Unit = {},
+    onSkipPermissions: () -> Unit = {},
     onOpenChat: () -> Unit = onFinished,
     onOpenTerminal: () -> Unit = onFinished,
     onOpenConnectionsSetup: () -> Unit = onFinished,
@@ -251,7 +252,7 @@ fun SetupWizardRoute(
                             go(FirstRunPage.ApiKey)
                         },
                         secondary = "Not now",
-                        onSecondary = { go(FirstRunPage.ApiKey) },
+                        onSecondary = { onSkipPermissions(); go(FirstRunPage.ApiKey) },
                     )
                     FirstRunPage.ApiKey -> SetupProvidersPage(
                         storage = storage,

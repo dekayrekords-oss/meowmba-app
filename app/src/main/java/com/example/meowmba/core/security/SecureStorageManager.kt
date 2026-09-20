@@ -104,6 +104,9 @@ class SecureStorageManager(val context: Context) {
         sharedPreferences.edit().putBoolean("pref_bool_$key", value).apply()
     }
 
+    fun hasBooleanPreference(key: String): Boolean =
+        sharedPreferences.contains("pref_bool_$key")
+
     fun getBooleanPreference(key: String, default: Boolean): Boolean {
         return sharedPreferences.getBoolean("pref_bool_$key", default)
     }

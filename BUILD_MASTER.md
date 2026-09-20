@@ -11,28 +11,33 @@ This supersedes historical build-location/version instructions in other document
 - Baseline: `5efed2f`, version 1.3.82/code 138. Historical evidence is dated September 15.
 - Verified original APK: `/Users/prog/Meowmba-Releases/idle136-20260915/meow-preview138.apk`.
 - Grok source to recover: `529cc69`, preserved as `recovery/grok-lumen` remote-tracking ref.
-- Status: preview151 (1.3.95) installed in place; original debug certificate and data
-  preserved. The separate signed release package is also updated to151.
+- Status: preview152 (1.3.96) installed in place; original debug certificate and data
+  preserved. The separate signed release package is also updated to152.
 - Fixes: all 21 lint errors, API31/32 road-feed compatibility, Bluetooth revocation/socket
   cleanup, CameraX API usage and Activity lookup. Native build uses baseline ARMv8-A;
   Needle3 checks dot-product support before loading. Sensor ticks no longer bypass
   avatar cadence and redraw a paused avatar.
-- Validation: 399 suites / 2,703 tests, zero failures/errors, five skipped. Full debug AND
-  release lint pass with zero errors (warnings remain). Five device checks pass on the
+- Validation: 399 suites / 2,708 tests, zero failures/errors, five skipped. Full debug AND
+  release lint pass with zero errors (warnings remain). Candidate151 five device checks pass on the
   Fold and a 16 KB emulator, including real Needle inference without executing a tool.
-- Ten-minute run passes 61/61 foreground samples, no severe thermal event, 32.37% CPU
+  Candidate152 repeats four focused device checks on both; all pass.
+- Candidate151 ten-minute run passes 61/61 foreground samples, no severe thermal event, 32.37% CPU
   including instrumentation, battery 37.1→36.5°C, thermal 2→1, USB connected.
   Separate 90-second comparisons at thermal 2: 87.62%→36.40% of one core. Unplugged/longer
   battery and older physical-device acceptance remain open; no all-day readiness claim.
 - Signed APK/AAB prepared with the existing upload key, package `com.meow.meowmba`.
   Signatures, bundletool and all 86 native-library 16 KB alignment/JNI-export checks pass.
-  All 148 prior protected entries remain: only the two rebuilt JNI libraries changed,
-  with the CPU probe newly added. Play Accessibility exclusion remains enforced.
+  All 149 protected preview runtime/model entries are unchanged from151.
+  Play Accessibility exclusion remains enforced.
 - Live Play was last inspected on September19: Alpha138 available; 12 testers with 9
   qualifying days toward 14; production access not granted. No upload/publication.
-- Receipt: docs/store/RELEASE_FIXES_151.md. SDK/data-flow review:
+- Fresh setup now starts with microphone off; “Not now” persists both sensors off and
+  Android denial during setup leaves switches off. Setup requests only mic/camera.
+  Signed152 fresh “Not now”, “Finish later” and Android-denial paths all pass,
+  including cold restarts, on the 16 KB emulator.
+- Receipt: docs/store/RELEASE_FIXES_152.md (prior performance/native evidence in151). SDK/data-flow review:
   docs/store/DATA_SAFETY_151_INVENTORY.md. Archive:
-  /Users/prog/Meowmba-Releases/release-fixes151-20260919/.
+  /Users/prog/Meowmba-Releases/release-fixes152-20260919/.
 - Do not reset phone data, enable monitoring, relax thermal limits, restart servers,
   operate the quarantined robot or invent tester feedback to bypass remaining gates.
 

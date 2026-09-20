@@ -57,14 +57,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /**
-     * Asks for everything the companion needs in ONE prompt: microphone, location, camera.
-     *
-     * Location was previously never requested at runtime, only declared in the manifest —
-     * so weather and navigation silently had nothing to work with. Camera was requested
-     * lazily on first "look", which is still fine, but including it here means the user
-     * grants once instead of being interrupted later.
-     */
+    /** Only the two sensors explained by the setup permission page. */
     private val corePermissionsLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { granted ->
@@ -119,6 +112,7 @@ class MainActivity : ComponentActivity() {
         speechService = SpeechService(this)
         ttsManager = TextToSpeechManager(this)
         secureStorage = SecureStorageManager(this)
+        com.example.meowmba.core.audio.MicrophonePrivacy.initializeForFirstRun(secureStorage)
         audioStreamingManager = AudioStreamingManager(this)
         visionManager = com.example.meowmba.core.vision.VisionManager(this, this)
         notificationHelper = NotificationHelper(this)
@@ -324,6 +318,7 @@ class MainActivity : ComponentActivity() {
                         wizardState.SaveableStateProvider("setup") {
                         com.example.meowmba.ui.onboarding.SetupWizardRoute(
                             onEnablePermissions = { checkPermissions() },
+                            onSkipPermissions = viewModel::skipOnboardingPermissions,
                             onFinished = {
                                 com.example.meowmba.core.setup.SetupWiring.markOnboardingDone(this@MainActivity)
                                 wizardState.removeState("setup")
@@ -548,30 +543,14 @@ class MainActivity : ComponentActivity() {
     private var pendingRoutineId: Long = -1L
 
     private fun checkPermissions() {
-        // Mic, location and camera together. Anything already granted is dropped, so a
-        // returning user is not re-prompted for what they have already allowed.
-        val core = (listOf(
-            Manifest.permission.RECORD_AUDIO,
-            Manifest.permission.ACCESS_FINE_LOCATION,
-            Manifest.permission.ACCESS_COARSE_LOCATION,
-            Manifest.permission.CAMERA,
-            // Declared in the manifest is not enough — querying CalendarProvider2 without
-            // the runtime grant threw SecurityException and killed the app.
-            Manifest.permission.READ_CALENDAR,
-            Manifest.permission.WRITE_CALENDAR,
-            // Auto-connect to a paired LOOI base requires reading bonded devices.
-            Manifest.permission.BLUETOOTH_CONNECT,
-            // FINDING a base requires BLUETOOTH_SCAN as well, and declaring it
-            // in the manifest is not the same as holding it: it is a runtime
-            // permission on Android 12+. Without the grant every startScan
-            // throws SecurityException, so "Find base (scan)" silently listed
-            // only already-bonded devices — which never includes an unpaired
-            // LOOI, making the base look undiscoverable.
-            Manifest.permission.BLUETOOTH_SCAN,
-        ) + if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            listOf(Manifest.permission.POST_NOTIFICATIONS)
-        } else emptyList()).filter {
-            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        companionViewModel?.prepareOnboardingPermissions()
+        val core = listOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA).filter {
+            val granted = ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
+            if (granted) {
+                if (it == Manifest.permission.RECORD_AUDIO) companionViewModel?.onMicrophonePermissionResult(true)
+                else companionViewModel?.onCameraPermissionResult(true)
+            }
+            !granted
         }
         if (core.isNotEmpty()) {
             corePermissionsLauncher.launch(core.toTypedArray())

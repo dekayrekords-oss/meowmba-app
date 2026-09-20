@@ -5,7 +5,23 @@ This is an acceptance/backlog report, not authorization to publish, enable monit
 operate a robot, post to accounts or replace the user's data. Historical plan checkboxes
 are not reliable current status; use the latest evidence below and BUILD_MASTER.md.
 
-## Latest follow-up — preview151 installed; release blockers repaired
+## Latest follow-up — preview152 and signed release prepared
+
+Candidate152 fixes a fresh-install defect found while accepting151: “Not now” left
+MIC ON in the app despite Android access being denied. Fresh setup now starts muted,
+skipping persists both sensors off, Android denial leaves switches off, and the setup
+prompt requests only the mic/camera it explains. Existing saved choices survive upgrade.
+Signed fresh “Not now”, “Finish later” and Android-denial paths all show MIC OFF and
+camera off, and retain those settings after cold restart.
+
+Full debug/release lint: zero errors. Full unit suite: 2,708 tests in399 suites,
+zero failures/errors, five skipped. Four device regressions pass on both the Fold and
+16 KB emulator. Both phone packages are updated in place; original data and certificates
+are preserved. No new phone crash appears; microphone/camera remain off. Nothing was
+uploaded to Play or published. See [candidate152](store/RELEASE_FIXES_152.md) for receipts
+and the remaining release gates.
+
+## Previous follow-up — preview151 installed; release blockers repaired
 
 Candidate151 fixes the 21 full-lint errors and passes full debug and release lint.
 The 2,703-test suite passes with zero failures/errors and five skipped. Native bridges

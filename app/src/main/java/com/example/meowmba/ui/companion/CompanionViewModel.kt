@@ -5171,14 +5171,21 @@ class CompanionViewModel(
     }
 
     /** Permission denial is not a transient recognizer failure. Keep the user's
-     * privacy toggle unchanged, but stop all retry paths until a grant/resume.
+     * privacy toggle unchanged outside setup, but stop retry paths until a grant/resume.
+     * During setup a denial also leaves the visible switch off.
      * The Flip previously retried ERROR_INSUFFICIENT_PERMISSIONS every 2s while
      * its first-run permission dialog had not even been completed. */
     fun onMicrophonePermissionResult(granted: Boolean) {
+        val fromOnboarding = onboardingMicrophonePending
+        onboardingMicrophonePending = false
         val resume = pendingMicrophoneAction
         pendingMicrophoneAction = null
         _uiState.value = _uiState.value.copy(microphonePermissionRequested = false)
         microphonePermissionBlocked = !granted
+        if (fromOnboarding) {
+            setMicEnabled(granted)
+            if (!granted) return
+        }
         if (granted) {
             if (_uiState.value.captionText == speechErrorCaption(SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS))
                 _uiState.value = _uiState.value.copy(captionText = null)
@@ -8228,6 +8235,12 @@ class CompanionViewModel(
 
     /** The MainActivity permission launcher reports back through here. */
     fun onCameraPermissionResult(granted: Boolean) {
+        if (onboardingCameraPending) {
+            onboardingCameraPending = false
+            _uiState.value = _uiState.value.copy(cameraPermissionRequested = false)
+            setCameraEnabled(granted)
+            return
+        }
         val requested = cameraEnablePending
         cameraEnablePending = false
         _uiState.value = _uiState.value.copy(cameraPermissionRequested = false)
@@ -12825,7 +12838,23 @@ class CompanionViewModel(
         }
     }
 
+    private var onboardingMicrophonePending = false
+    private var onboardingCameraPending = false
+
+    fun prepareOnboardingPermissions() {
+        onboardingMicrophonePending = true
+        onboardingCameraPending = true
+    }
+
+    fun skipOnboardingPermissions() {
+        onboardingMicrophonePending = false
+        onboardingCameraPending = false
+        setMicEnabled(false)
+        setCameraEnabled(false)
+    }
+
     fun requestOnboardingPermissions() {
+        prepareOnboardingPermissions()
         // Kid-simple first-run: ask for mic + camera in one rising-edge pulse so
         // MainActivity launchers always fire (even if a prior ask was dismissed).
         _uiState.value = _uiState.value.copy(
@@ -12835,8 +12864,8 @@ class CompanionViewModel(
         viewModelScope.launch {
             kotlinx.coroutines.delay(16)
             _uiState.value = _uiState.value.copy(
-                microphonePermissionRequested = true,
-                cameraPermissionRequested = true,
+                microphonePermissionRequested = onboardingMicrophonePending,
+                cameraPermissionRequested = onboardingCameraPending,
             )
         }
     }

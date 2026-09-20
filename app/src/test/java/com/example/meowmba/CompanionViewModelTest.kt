@@ -54,6 +54,40 @@ class CompanionViewModelTest {
         Dispatchers.resetMain()
     }
 
+    @Test fun `declining setup persists both sensors off and ignores a late grant`() = runTest {
+        val vm = CompanionViewModel(secureStorage = mockSecureStorage).also(models::add)
+        vm.prepareOnboardingPermissions()
+        vm.skipOnboardingPermissions()
+        vm.onMicrophonePermissionResult(true)
+        vm.onCameraPermissionResult(true)
+        assertFalse(vm.uiState.value.isMicEnabled)
+        assertFalse(vm.uiState.value.isCameraEnabled)
+        verify(mockSecureStorage).saveBooleanPreference("microphone_killed", true)
+        verify(mockSecureStorage).saveBooleanPreference("camera_enabled", false)
+    }
+
+    @Test fun `denying Android setup dialogs turns both sensor switches off`() = runTest {
+        val vm = CompanionViewModel(secureStorage = mockSecureStorage).also(models::add)
+        vm.prepareOnboardingPermissions()
+        vm.onMicrophonePermissionResult(false)
+        vm.onCameraPermissionResult(false)
+        assertFalse(vm.uiState.value.isMicEnabled)
+        assertFalse(vm.uiState.value.isCameraEnabled)
+        assertFalse(vm.uiState.value.microphonePermissionRequested)
+        assertFalse(vm.uiState.value.cameraPermissionRequested)
+        verify(mockSecureStorage).saveBooleanPreference("microphone_killed", true)
+    }
+
+    @Test fun `granting microphone during setup opts in after the Android result`() = runTest {
+        val vm = CompanionViewModel(secureStorage = mockSecureStorage).also(models::add)
+        vm.setMicEnabled(false)
+        vm.prepareOnboardingPermissions()
+        assertFalse(vm.uiState.value.isMicEnabled)
+        vm.onMicrophonePermissionResult(true)
+        assertTrue(vm.uiState.value.isMicEnabled)
+        verify(mockSecureStorage).saveBooleanPreference("microphone_killed", false)
+    }
+
     @Test
     fun `initial state is IDLE`() = runTest {
         val viewModel = CompanionViewModel(elapsedRealtimeMs = { System.nanoTime() / 1_000_000L }, secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository).also(models::add)

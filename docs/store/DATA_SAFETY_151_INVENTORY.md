@@ -47,3 +47,12 @@ deletion or universal HTTPS (configured local-network services can use HTTP).
 Collect actual closed-tester feedback for the production-access application. Tester
 engagement cannot be inferred from the opt-in count, and the 14-day requirement cannot
 be replaced by these automated checks.
+
+## Candidate152 consent follow-up
+
+Fresh setup now persists microphone off before the companion starts, and “Not now”
+persists both sensors off. Android setup denials leave the app switches off. The Allow
+step requests only microphone/camera; unrelated Calendar, location, Bluetooth and
+notification permissions are no longer bundled into that explanation. Existing saved
+choices remain on upgrade. This fixes first-run consent behavior; it does not replace
+review of the SDK disclosures or final Console answers above.
