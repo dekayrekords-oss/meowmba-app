@@ -906,6 +906,7 @@ fun CompanionScreen(
 
                 onBargeInChange = { viewModel.setBargeIn(it) },
                 onOpenAccessibility = { viewModel.openAccessibilitySettings() },
+                onShareDiagnostics = viewModel::shareSupportDiagnostics,
                 onOpenSetup = { viewModel.toggleSettings(); viewModel.toggleSetupWizard() },
                 onOpenVoiceModels = { viewModel.toggleSettings(); viewModel.toggleVoiceModelScreen() },
                 onOpenModels = { viewModel.toggleSettings(); viewModel.toggleModelManager() },

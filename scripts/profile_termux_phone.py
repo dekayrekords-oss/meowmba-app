@@ -40,6 +40,12 @@ def scoped_processes(table, uids):
     return result
 
 
+def package_uid(raw):
+    """Android versions expose the owner UID as either userId or appId."""
+    found = re.search(r'^\s*(?:userId|appId)=(\d+)\s*$', raw, re.M)
+    return int(found[1]) if found else None
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--serial', required=True)
@@ -57,10 +63,10 @@ def main():
 
     package_uids = {}
     for package in ('com.termux', 'com.example.meowmba'):
-        found = re.search(r'^\s*userId=(\d+)', adb('shell', 'dumpsys', 'package', package), re.M)
-        if not found:
+        found = package_uid(adb('shell', 'dumpsys', 'package', package))
+        if found is None:
             raise RuntimeError(f'Cannot resolve installed package UID: {package}')
-        package_uids[package] = int(found[1])
+        package_uids[package] = found
     tick_text = adb('shell', 'getconf', 'CLK_TCK')
     if not tick_text.isdigit() or int(tick_text) <= 0:
         raise RuntimeError('Cannot establish device clock tick rate.')

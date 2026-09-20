@@ -14,6 +14,8 @@ class PhoneGoalTool(private val start: (String) -> Boolean) : Tool {
         environments = setOf(ToolEnvironment.PHONE), timeoutMs = 10_000,
     )
     override suspend fun execute(args: Map<String, String>): ToolResult = withContext(Dispatchers.Main) {
+        if (!com.example.meowmba.BuildConfig.PHONE_AUTOMATION_ENABLED)
+            return@withContext ToolResult.Failure(com.example.meowmba.core.access.PhoneControlAvailability.UNAVAILABLE)
         val goal = args["goal"]?.trim()?.takeIf { it.isNotEmpty() && it.length <= 3000 }
             ?: return@withContext ToolResult.Failure("Please give a phone task under 3,000 characters.")
         if (MeowAccessibilityService.instance == null)

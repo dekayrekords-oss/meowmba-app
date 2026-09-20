@@ -165,9 +165,14 @@ class PhoneEnduranceTest {
             LoopTelemetry.snapshot().forEach { loops.put(JSONObject().put("feature", it.feature)
                 .put("iterations", it.iterations).put("busyMs", it.busyMs).put("windowMs", it.windowMs)) }
             val validCharge = initialCharge > 0 && finalCharge > 0 && unpluggedCount == count
-            val sustained = !cancelled.get() && elapsed >= seconds * 1000L &&
-                foregroundCount >= count * .95 && activeSampleCount >= (count - 1) * .95 &&
-                severeCount == 0 && frames >= seconds * 5
+            // Fly telemetry is not emitted by Canvas/Lumen avatars. Keep the
+            // specialized motion gate for fly runs; never report missing telemetry
+            // as either frozen motion or a passed animation test for other forms.
+            val flyMotionAvailable = fixedFly || viewModel?.uiState?.value?.avatarStyle == AvatarStyle.FULL_FLY
+            val foregroundStable = !cancelled.get() && elapsed >= seconds * 1000L &&
+                foregroundCount >= count * .95 && severeCount == 0
+            val sustained = foregroundStable && (!flyMotionAvailable ||
+                (activeSampleCount >= (count - 1) * .95 && frames >= seconds * 5))
             append(JSONObject().put("event", "complete").put("elapsedMs", elapsed).put("samples", count)
                 .put("foregroundSamples", foregroundCount).put("unpluggedSamples", unpluggedCount)
                 .put("activeMotionSamples", activeSampleCount)
@@ -176,7 +181,10 @@ class PhoneEnduranceTest {
                 .put("averagePresentedFps", frames * 1000.0 / elapsed)
                 .put("cpuPercentOfOneCore", (Process.getElapsedCpuTime() - initialCpu) * 100.0 / elapsed)
                 .put("chargeUsedMicroAh", if (validCharge) initialCharge - finalCharge else JSONObject.NULL)
-                .put("batteryMeasurementValid", validCharge).put("sustainedForegroundMotionGate", sustained)
+                .put("batteryMeasurementValid", validCharge)
+                .put("sustainedForegroundGate", foregroundStable)
+                .put("motionTelemetryAvailable", flyMotionAvailable)
+                .put("sustainedForegroundMotionGate", if (flyMotionAvailable) sustained else JSONObject.NULL)
                 .put("loops", loops))
             assertTrue("Measurement preserved but sustained foreground-motion gate failed: $output", sustained)
             if (waitSeconds > 0) assertTrue("Unplugged measurement interrupted or charge counter unavailable", validCharge)

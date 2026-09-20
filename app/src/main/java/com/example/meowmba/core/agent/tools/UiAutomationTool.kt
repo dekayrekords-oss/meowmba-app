@@ -33,6 +33,8 @@ class UiAutomationTool : Tool {
     )
 
     override suspend fun execute(args: Map<String, String>): ToolResult = withContext(Dispatchers.Main) {
+        if (!com.example.meowmba.BuildConfig.PHONE_AUTOMATION_ENABLED)
+            return@withContext ToolResult.Failure(com.example.meowmba.core.access.PhoneControlAvailability.UNAVAILABLE)
         val service = MeowAccessibilityService.instance ?: return@withContext disabled()
         val globalActions = setOf("back", "home", "recents", "notifications")
         if (args["action"]?.trim()?.lowercase() !in globalActions && service.getActivePackage() == "unknown") {

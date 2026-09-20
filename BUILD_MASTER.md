@@ -11,15 +11,25 @@ This supersedes historical build-location/version instructions in other document
 - Baseline: `5efed2f`, version 1.3.82/code 138. Historical evidence is dated September 15.
 - Verified original APK: `/Users/prog/Meowmba-Releases/idle136-20260915/meow-preview138.apk`.
 - Grok source to recover: `529cc69`, preserved as `recovery/grok-lumen` remote-tracking ref.
-- Status: preview149 (1.3.93), built from local changes on baseee5abe2, installed in place
-  September19 at18:20:27. Fixes two recorded147 speech crashes: background idle-chatter
-  recognizer access and Android HTTP gzip-stream cancellation. Includes prepared148 work.
-- Validation:397 suites/2,695 tests, zero failures/errors, five skipped; on-phone12-cycle
-  HTTP cancellation/reuse test passes. All148 protected runtime assets match148 exactly;
-  original signing certificate preserved. Cold start plus90s survival passes:19/19 foreground
-  samples, one unchanged PID, no new crash entries.
-- Receipt: docs/SPEECH_CRASH_149_PASS_DOWN.md. Thermal, low-memory and broader live148
-  acceptance remain open. No Play release; no phone data reset or server restart.
+- Status: preview150 (1.3.94) installed in place, preserving data and the debug
+  certificate. Includes committed149 speech fixes (e764083), optional support diagnostics,
+  and a Play release that excludes autonomous Accessibility phone control.
+- Validation: 398 suites / 2,697 tests, zero failures/errors, five skipped; two phone
+  diagnostics/cancellation regressions pass. All 148 protected runtime assets match149.
+  Ten-minute endurance passes 61/61 foreground samples with no severe thermal event;
+  CPU remains high (75.21% of one core including instrumentation). USB-connected only.
+- Signed APK/AAB prepared using the existing upload key, version150, package `com.meow.meowmba`.
+  Signature/bundle validation and all 85 native-library 16 KB alignment checks pass.
+  Release-critical lint passes, but full lint has 21 errors; see the receipt. No production
+  readiness claim. Native ARMv8.7-A compatibility, thermal/voice/older-device acceptance,
+  policy review and Play production access remain gates.
+- Fresh signed release installs alongside preview and opens onboarding; preview restored
+  foreground. Full signed-build onboarding/provider/native acceptance remains open.
+- Live Play: Alpha138 remains available to testers; 12 testers have 9 qualifying days
+  toward 14. Production access is not granted. No upload/publication performed.
+- Receipt: docs/store/PRODUCTION_READINESS_150.md; artifact archive:
+  /Users/prog/Meowmba-Releases/production-readiness-20260919/.
+  Do not reset phone data, turn monitoring on or restart servers to work around blockers.
 
 ## Feature queue
 

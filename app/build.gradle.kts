@@ -93,8 +93,8 @@ android {
         // 85 > 84 so the affect/valence + pet wiring installs as a genuine
         // in-place upgrade, and so it is distinguishable on-device from 84 (which
         // has the drives but not the reply affect or the touch sense).
-        versionCode = 149
-        versionName = "1.3.93"
+        versionCode = 150
+        versionName = "1.3.94"
 
         buildConfigField("boolean", "HAS_MWDAT_SDK", hasMwdat.toString())
         manifestPlaceholders["mwdat_application_id"] = mwdatApplicationId
@@ -151,7 +151,13 @@ android {
     }
 
     buildTypes {
+        debug {
+            buildConfigField("boolean", "PHONE_AUTOMATION_ENABLED", "true")
+        }
         release {
+            // Play excludes autonomous Accessibility-based phone control.
+            // The release manifest removes the service as a second boundary.
+            buildConfigField("boolean", "PHONE_AUTOMATION_ENABLED", "false")
             // Shrink + obfuscate for Play. JNI / Room / MediaPipe kept via
             // src/main/keepRules/rules.keep.
             isMinifyEnabled = true
@@ -223,7 +229,7 @@ androidComponents {
         // Combined Computer + avatar update; bump debug-only so in-place
         // upgrade is allowed without changing release defaultConfig (85).
         variant.outputs.forEach { output ->
-            output.versionCode.set(149)
+            output.versionCode.set(150)
         }
     }
 }
@@ -289,7 +295,8 @@ val verifyReleaseSigningConfiguration = tasks.register("verifyReleaseSigningConf
 }
 tasks.matching { it.name == "preReleaseBuild" }.configureEach {
     dependsOn(verifyReleaseSigningConfiguration)
-    doFirst { check(prebuiltDebugNativeDir == null) { "Release cannot use prebuiltDebugNativeDir. Build the pinned native sources." } }
+    val usesPrebuiltDebugNative = prebuiltDebugNativeDir != null
+    doFirst { check(!usesPrebuiltDebugNative) { "Release cannot use prebuiltDebugNativeDir. Build the pinned native sources." } }
 }
 
 // These gitignored runtimes must be restored in every fresh release checkout.

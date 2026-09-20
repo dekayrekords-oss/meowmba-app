@@ -124,6 +124,7 @@ fun SettingsScreen(
 
     onBargeInChange: (Boolean) -> Unit = {},
     onOpenAccessibility: () -> Unit = {},
+    onShareDiagnostics: () -> Unit = {},
     onOpenSetup: () -> Unit = {},
     onOpenVoiceModels: () -> Unit = {},
     onOpenModels: () -> Unit = {},
@@ -365,7 +366,14 @@ fun SettingsScreen(
                     onOpenComputerTools = { page = COMPUTER_TOOLS_TITLE },
                 )
             }
-            if (page == "Help & feedback") BetaHelpCard()
+            if (page == "Help & feedback") {
+                BetaHelpCard()
+            Text("Support", style = MaterialTheme.typography.titleMedium)
+            Text("Share a small report with the app version, runtime health, microphone/camera modes and recent exit codes. Chats, recordings, credentials and raw logs are excluded.",
+                style = MaterialTheme.typography.bodySmall)
+            OutlinedButton(onClick = onShareDiagnostics) { Text("Share diagnostics") }
+
+            }
             if (page == "Voice & behavior") {
             OutlinedButton(onClick = onOpenVoiceModels, modifier = Modifier.fillMaxWidth()) { Text("Voice recognition & voice models") }
 
@@ -477,24 +485,27 @@ fun SettingsScreen(
             )
             FlipCoverSetupCard(showOnAllDevices = true)
 
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "UI automation",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            Text(
-                text = "Meow can find, tap, type and scroll on-screen when you ask. " +
-                    "It uses the system accessibility service and stays OFF until you enable it. " +
-                    "Phone tasks require approval; consequential actions keep their separate confirmation or manual handoff.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            OutlinedButton(onClick = onOpenAccessibility) {
-                Text("Open accessibility settings")
+            if (com.example.meowmba.BuildConfig.PHONE_AUTOMATION_ENABLED) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "UI automation",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = "Meow can find, tap, type and scroll on-screen when you ask. " +
+                        "It uses the system accessibility service and stays OFF until you enable it. " +
+                        "Phone tasks require approval; consequential actions keep their separate confirmation or manual handoff.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                OutlinedButton(onClick = onOpenAccessibility) {
+                    Text("Open accessibility settings")
+                }
+
+                PhoneRecipeSettings()
             }
 
-            PhoneRecipeSettings()
 
             // ── Home screen ────────────────────────────────────────────────
             val context = LocalContext.current
@@ -1157,7 +1168,7 @@ fun SettingsScreen(
             }
             }
             Spacer(modifier = Modifier.height(40.dp))
-            
+
             Button(
                 onClick = {
                     back()

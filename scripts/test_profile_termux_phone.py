@@ -1,8 +1,14 @@
 import unittest
-from profile_termux_phone import cpu_ticks, scoped_processes, uid_number
+from profile_termux_phone import cpu_ticks, scoped_processes, uid_number, package_uid
 
 
 class TermuxProfileTest(unittest.TestCase):
+    def test_android_package_uid_formats(self):
+        self.assertEqual(10471, package_uid('  userId=10471\n'))
+        self.assertEqual(10471, package_uid('  appId=10471\n'))
+        self.assertIsNone(package_uid('  sharedUserId=10471\n'))
+        self.assertIsNone(package_uid('unavailable'))
+
     def test_uid_forms_and_scope(self):
         self.assertEqual(10312, uid_number('u0_a312'))
         self.assertEqual(1010312, uid_number('u10_a312'))

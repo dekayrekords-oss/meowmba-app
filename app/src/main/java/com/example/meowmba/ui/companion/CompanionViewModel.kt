@@ -1986,14 +1986,14 @@ class CompanionViewModel(
                 ),
             )
             // Phase F3: opt-in UI automation (off until enabled by the user).
-            toolRegistry.register(UiAutomationTool())
+            if (com.example.meowmba.BuildConfig.PHONE_AUTOMATION_ENABLED) toolRegistry.register(UiAutomationTool())
             val modelSwitcher = com.example.meowmba.core.agent.tools.AppModelSwitcher(appContext,
                 busy = { phoneAgentLoop?.isActive == true || desktopNavigation?.isActive == true || logicNavigation?.isActive == true }, changed = { reloadSetupConfiguration() })
             toolRegistry.register(com.example.meowmba.core.agent.tools.ListBrainModelsTool { modelSwitcher.choices() })
             toolRegistry.register(com.example.meowmba.core.agent.tools.SelectBrainModelTool { provider, model -> modelSwitcher.select(provider, model) })
             toolRegistry.register(com.example.meowmba.core.agent.tools.BluetoothDevicesTool(appContext))
             toolRegistry.register(com.example.meowmba.core.agent.tools.BluetoothSetupTool(appContext) { goal -> phoneAgentLoop?.let { it.setGoal(goal); true } ?: false })
-            toolRegistry.register(com.example.meowmba.core.agent.tools.PhoneGoalTool { goal ->
+            if (com.example.meowmba.BuildConfig.PHONE_AUTOMATION_ENABLED) toolRegistry.register(com.example.meowmba.core.agent.tools.PhoneGoalTool { goal ->
                 phoneAgentLoop?.let { it.setGoal(goal); true } ?: false
             })
             // The body. Without this the companion could describe moving but
@@ -2190,7 +2190,7 @@ class CompanionViewModel(
                 )
 
                 // Phone-control agent loop (accessibility-based, modeled on browserAgent)
-                phoneAgentLoop = com.example.meowmba.core.agent.PhoneAgentLoop(
+                if (com.example.meowmba.BuildConfig.PHONE_AUTOMATION_ENABLED) phoneAgentLoop = com.example.meowmba.core.agent.PhoneAgentLoop(
                     scope = viewModelScope,
                     brain = { prompt -> generateControllerAction(prompt) },
                     service = { com.example.meowmba.core.access.MeowAccessibilityService.instance },
@@ -4803,8 +4803,39 @@ class CompanionViewModel(
         _uiState.value = _uiState.value.copy(idleChatterEnabled = enabled)
     }
 
+    fun shareSupportDiagnostics() {
+        val context = secureStorage?.context ?: return
+        val state = _uiState.value
+        viewModelScope.launch {
+            try {
+                val file = withContext(ioDispatcher) {
+                    val diagnostics = com.example.meowmba.core.diagnostics.SupportDiagnostics
+                    diagnostics.write(context, diagnostics.capture(context, state.isMicEnabled,
+                        state.isCameraEnabled, state.wakeWordEnabled, state.backgroundListeningEnabled))
+                }
+                val uri = androidx.core.content.FileProvider.getUriForFile(context,
+                    "${context.packageName}.fileprovider", file)
+                val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                    type = "application/json"
+                    putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                    clipData = android.content.ClipData.newRawUri("Meow diagnostics", uri)
+                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                context.startActivity(android.content.Intent.createChooser(send, "Share diagnostics")
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (_: Exception) {
+                _uiState.value = _uiState.value.copy(captionText = "Couldn't open diagnostic sharing. Please try again.")
+            }
+        }
+    }
+
     /** Phase F3: jump the user to the system accessibility page. */
     fun openAccessibilitySettings() {
+        if (!com.example.meowmba.BuildConfig.PHONE_AUTOMATION_ENABLED) {
+            _uiState.value = _uiState.value.copy(captionText = com.example.meowmba.core.access.PhoneControlAvailability.UNAVAILABLE)
+            return
+        }
         val ctx = secureStorage?.context ?: return
         runCatching {
             ctx.startActivity(
@@ -6924,6 +6955,10 @@ class CompanionViewModel(
         // state where the NEXT utterance becomes the phone-control goal, so the
         // user can chain "read the screen", "write an email", "fill this form"...
         if (PHONE_CONTROL_ENGAGE.any { WakePhraseMatcher.normalize(text) == it }) {
+            if (!com.example.meowmba.BuildConfig.PHONE_AUTOMATION_ENABLED) {
+                speak(com.example.meowmba.core.access.PhoneControlAvailability.UNAVAILABLE)
+                return
+            }
             if (!com.example.meowmba.core.access.MeowAccessibilityService.isEnabled()) {
                 speak("Phone control needs the accessibility service. I'm opening Settings — enable Meow Companion there, then say start listening again.")
                 openAccessibilitySettings()

@@ -5,7 +5,29 @@ This is an acceptance/backlog report, not authorization to publish, enable monit
 operate a robot, post to accounts or replace the user's data. Historical plan checkboxes
 are not reliable current status; use the latest evidence below and BUILD_MASTER.md.
 
-## Latest follow-up — preview148 prepared, not installed
+## Latest follow-up — preview150 installed; production preparation
+
+Preview149 fixed both recorded speech crashes and passed its device cancellation test.
+Preview150 adds user-initiated diagnostics and removes autonomous Accessibility phone
+control from the Play release. The private preview retains existing phone controls.
+Full build: 2,697 tests, zero failures/errors, five skipped. Device diagnostics readback
+and repeated cloud-audio cancellation/reuse pass. Native runtime assets are unchanged.
+
+The signed candidate is preparation, not production acceptance. Full lint exposes 21
+errors, including API 31/32 incompatibility in the Arizona road feed; these remain gates.
+The current native ARMv8.7-A baseline needs older-device validation or correction.
+Thermal, unplugged battery, real provider/voice, large exports, unified projects and
+hardware acceptance remain open. Termux was stopped during the measured idle baseline,
+so its earlier overheating has not been attributed or fixed by this observation.
+
+Live Play Console: closed Alpha138 remains published to testers. Production access is
+not granted; 12 testers have 9 continuous days toward the 14-day requirement. At least
+five more qualifying days, actual feedback and the production-access application remain.
+No upload or publication was performed. See
+[PRODUCTION_READINESS_150.md](store/PRODUCTION_READINESS_150.md) for current receipts,
+remaining gates, local listing/privacy drafts and the tester checklist.
+
+## Previous follow-up — preview148 prepared, not installed
 
 User-reported driving UI and avatar-generation failures addressed in candidate148: compact
 landscape HUD, neutral source-availability status, scrollable details, bounded real-preview
