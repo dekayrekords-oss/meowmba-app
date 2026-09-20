@@ -9147,7 +9147,11 @@ class CompanionViewModel(
     }
 
     private fun loadNeedle(file: File) {
-        needleBrain = runCatching { NeedleAgentBrain(file) }.getOrNull()
+        needleBrain = runCatching { NeedleAgentBrain(file) }.onFailure { error ->
+            if (error is UnsupportedOperationException) {
+                _uiState.value = _uiState.value.copy(captionText = error.message.orEmpty())
+            }
+        }.getOrNull()
         if (needleBrain != null) secureStorage?.savePreference("needle_model_file", file.name)
     }
 
@@ -10309,7 +10313,7 @@ class CompanionViewModel(
             if (VoicePolicy.shouldResumeAlwaysOnFromSpeech(_uiState.value) &&
                 _uiState.value.interactionState == InteractionState.IDLE
             ) {
-        lastUsableSpeechAtMs = System.currentTimeMillis()
+                lastUsableSpeechAtMs = System.currentTimeMillis()
                 viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
                     fuLog("loud speech on wake nap — reopening always-on")
                     updateVoiceListeningMode()

@@ -11,25 +11,30 @@ This supersedes historical build-location/version instructions in other document
 - Baseline: `5efed2f`, version 1.3.82/code 138. Historical evidence is dated September 15.
 - Verified original APK: `/Users/prog/Meowmba-Releases/idle136-20260915/meow-preview138.apk`.
 - Grok source to recover: `529cc69`, preserved as `recovery/grok-lumen` remote-tracking ref.
-- Status: preview150 (1.3.94) installed in place, preserving data and the debug
-  certificate. Includes committed149 speech fixes (e764083), optional support diagnostics,
-  and a Play release that excludes autonomous Accessibility phone control.
-- Validation: 398 suites / 2,697 tests, zero failures/errors, five skipped; two phone
-  diagnostics/cancellation regressions pass. All 148 protected runtime assets match149.
-  Ten-minute endurance passes 61/61 foreground samples with no severe thermal event;
-  CPU remains high (75.21% of one core including instrumentation). USB-connected only.
-- Signed APK/AAB prepared using the existing upload key, version150, package `com.meow.meowmba`.
-  Signature/bundle validation and all 85 native-library 16 KB alignment checks pass.
-  Release-critical lint passes, but full lint has 21 errors; see the receipt. No production
-  readiness claim. Native ARMv8.7-A compatibility, thermal/voice/older-device acceptance,
-  policy review and Play production access remain gates.
-- Fresh signed release installs alongside preview and opens onboarding; preview restored
-  foreground. Full signed-build onboarding/provider/native acceptance remains open.
-- Live Play: Alpha138 remains available to testers; 12 testers have 9 qualifying days
-  toward 14. Production access is not granted. No upload/publication performed.
-- Receipt: docs/store/PRODUCTION_READINESS_150.md; artifact archive:
-  /Users/prog/Meowmba-Releases/production-readiness-20260919/.
-  Do not reset phone data, turn monitoring on or restart servers to work around blockers.
+- Status: preview151 (1.3.95) installed in place; original debug certificate and data
+  preserved. The separate signed release package is also updated to151.
+- Fixes: all 21 lint errors, API31/32 road-feed compatibility, Bluetooth revocation/socket
+  cleanup, CameraX API usage and Activity lookup. Native build uses baseline ARMv8-A;
+  Needle3 checks dot-product support before loading. Sensor ticks no longer bypass
+  avatar cadence and redraw a paused avatar.
+- Validation: 399 suites / 2,703 tests, zero failures/errors, five skipped. Full debug AND
+  release lint pass with zero errors (warnings remain). Five device checks pass on the
+  Fold and a 16 KB emulator, including real Needle inference without executing a tool.
+- Ten-minute run passes 61/61 foreground samples, no severe thermal event, 32.37% CPU
+  including instrumentation, battery 37.1→36.5°C, thermal 2→1, USB connected.
+  Separate 90-second comparisons at thermal 2: 87.62%→36.40% of one core. Unplugged/longer
+  battery and older physical-device acceptance remain open; no all-day readiness claim.
+- Signed APK/AAB prepared with the existing upload key, package `com.meow.meowmba`.
+  Signatures, bundletool and all 86 native-library 16 KB alignment/JNI-export checks pass.
+  All 148 prior protected entries remain: only the two rebuilt JNI libraries changed,
+  with the CPU probe newly added. Play Accessibility exclusion remains enforced.
+- Live Play was last inspected on September19: Alpha138 available; 12 testers with 9
+  qualifying days toward 14; production access not granted. No upload/publication.
+- Receipt: docs/store/RELEASE_FIXES_151.md. SDK/data-flow review:
+  docs/store/DATA_SAFETY_151_INVENTORY.md. Archive:
+  /Users/prog/Meowmba-Releases/release-fixes151-20260919/.
+- Do not reset phone data, enable monitoring, relax thermal limits, restart servers,
+  operate the quarantined robot or invent tester feedback to bypass remaining gates.
 
 ## Feature queue
 
@@ -176,7 +181,7 @@ Port feature commits; do not overwrite the baseline with an experimental branch 
   keep installed editions and warn against source mixing. Removed the obsolete copy-only wizard,
   blind sandbox OpenCode auto-start and unauthenticated NetBird APK mirror from onboarding.
 - Source991fff0, installed over143 at2026-09-19 11:43:37 on RFCY61NJEVM. Full suite:
-  2,608 tests, zero failures/errors, five skipped. All148 protected runtime entries unchanged;
+  2,608 tests, zero failures/errors, five skipped. All 148 protected runtime entries unchanged;
   matching signing certificate. APK SHA256 c5c42e31749fb17ac1d42b348ebaeb1be8177507b47031f20122b0418d7ebb09.
 - Phone acceptance passes: real installed edition classified guided, no nonexistent permission,
   no replacement download offered, recovery4097 available, HUB/personal monitoring off and
@@ -209,7 +214,7 @@ Port feature commits; do not overwrite the baseline with an experimental branch 
   Answers currently serve the private panel only, not automatic personalized conversation.
 - Small continuous Lumen body sway uses the existing clock; drive target continuity retained.
 - App source621cfec; installed over142 on RFCY61NJEVM at2026-09-19 11:21:53, preserving
-  data/signature. Full suite2,601 tests, zero failures/errors, five skipped. All148 protected
+  data/signature. Full suite2,601 tests, zero failures/errors, five skipped. All 148 protected
   runtime entries match142. APK SHA256 cb275097ffa7fc2319f914ffa677533568f2a27d574a0f1e390e4621490c454a.
 - Phone UI test passes: recovery choice, HUB default-off, personal switches default-off,
   private-panel FLAG_SECURE and unchanged camera/microphone. The instrumentation harness
@@ -243,7 +248,7 @@ Port feature commits; do not overwrite the baseline with an experimental branch 
 - Terminal is not an embedded Termux session: phone UID check returns permission denied for its
   private bash. Sandbox label and Open Termux handoff are explicit. OpenCode health remains401.
 - App source3f5969c; installed in place over141 on RFCY61NJEVM, preserving app data and signature.
-- Full suite:2,592 tests, zero failures/errors, five skipped. All148 protected runtime entries match141.
+- Full suite:2,592 tests, zero failures/errors, five skipped. All 148 protected runtime entries match141.
 - APK SHA256:161525ff247e42e977efa8f5857d32d6cbb42f8d4fe67b874edde79752a1374c.
 - Device appearance/weather/home-controls check passes; screenshots visually reviewed. Care and neural
   labels hide without changing microphone/camera/driving privacy. Weather has no sample readings;
@@ -274,7 +279,7 @@ Port feature commits; do not overwrite the baseline with an experimental branch 
   rejection and no old-pool fallback. Semantic equivalence/factual accuracy cannot be absolutely guaranteed.
 - Source e407586; signed preview141 installed in place on RFCY61NJEVM, without uninstall or data reset.
 - Full suite on a96b1f9: 2,581 tests, zero failures, five skipped. Final e407586 focused tests and packaging pass.
-- All148 protected runtime entries match140. APK SHA256: 2ddead0889ca454885bf980faa20bcecbb394538325c506160218a3494594feb.
+- All 148 protected runtime entries match140. APK SHA256: 2ddead0889ca454885bf980faa20bcecbb394538325c506160218a3494594feb.
 - Device Avatar/Auto selection and privacy-preservation test passes; screenshots visually reviewed.
 - Authenticated worker test blocked: no verified password saved. User asked to enter it privately in Computer setup. A401 health response proves only password protection.
 - Artifacts: /Users/prog/Meowmba-Releases/auto141-20260919.

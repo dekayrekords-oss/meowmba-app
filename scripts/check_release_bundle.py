@@ -64,7 +64,8 @@ def main():
     with zipfile.ZipFile(args.bundle) as archive:
         names = archive.namelist()
         required = {f"base/lib/arm64-v8a/{name}" for name in (
-            "libsherpa-onnx-jni.so", "libonnxruntime.so", "libneedle_jni_bridge.so", "libsd_jni_bridge.so")}
+            "libsherpa-onnx-jni.so", "libonnxruntime.so", "libneedle_jni_bridge.so", "libsd_jni_bridge.so",
+            "libmeow_cpu_features.so")}
         result["missing_required_native_libraries"] = sorted(required - set(names))
         image_library = "base/lib/arm64-v8a/libsd_jni_bridge.so"
         # A library can be packaged and aligned yet export obsolete JNI names.
@@ -75,6 +76,11 @@ def main():
         }
         image_symbols = dynamic_exports(archive.read(image_library)) if image_library in names else set()
         result["missing_image_jni_exports"] = sorted(required_image_symbols - image_symbols)
+        cpu_library = "base/lib/arm64-v8a/libmeow_cpu_features.so"
+        cpu_symbols = dynamic_exports(archive.read(cpu_library)) if cpu_library in names else set()
+        result["missing_cpu_probe_jni_exports"] = sorted({
+            "Java_com_example_meowmba_core_agent_runtime_NativeCpuCapabilities_arm64Hwcap"
+        } - cpu_symbols)
         result["signature_entries"] = [name for name in names if
             name.upper().startswith("META-INF/") and
             name.upper().endswith((".RSA", ".DSA", ".EC", ".SF"))]
@@ -96,6 +102,7 @@ def main():
     print(json.dumps(result, indent=2))
     return 0 if (result["all_native_libraries_16kb_aligned"] and
                  not result["missing_image_jni_exports"] and
+                 not result["missing_cpu_probe_jni_exports"] and
                  not result["missing_required_native_libraries"]) else 1
 
 

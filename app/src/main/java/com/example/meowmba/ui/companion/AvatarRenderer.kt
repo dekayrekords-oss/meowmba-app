@@ -668,19 +668,25 @@ fun AvatarRenderer(
     // a face.
     val driveRig = remember { DriveVisualRig() }
     fun currentDriveFrame(): DriveVisualFrame {
-        val relativeLean = com.example.meowmba.core.sensor.MotionMath.displayRelativeLean(
-            motionScreenLean?.value ?: 0f, displayRotation)
-        val boost = state.driving && state.driveEmotionBoost
-        val leanIn = DriveEmotionBoost.amplifyImu(motionLeanState?.value ?: motionLean, boost)
-        val lurchIn = DriveEmotionBoost.amplifyImu(motionLurchState?.value ?: motionLurch, boost)
-        val frame = driveRig.step(clockSec, android.os.SystemClock.elapsedRealtime(),
-            motionObservedAtMs?.value ?: 0L, state.driving, leanIn, lurchIn,
-            (-relativeLean * 0.35f).coerceIn(-14f, 14f))
-        if (!boost) return frame
-        val emotionAdd = DriveEmotionBoost.emotionBraceAdd(
-            ConversationAffect.valence(state.emotion), driving = true)
-        val brace = DriveEmotionBoost.combineBrace(frame.brace, emotionAdd, state.obdExcitement)
-        return frame.copy(brace = brace)
+        // The clock owns redraws. Sensor heartbeats previously invalidated the
+        // Canvas between clock ticks even though the rig returned the same pose,
+        // and could keep drawing while thermal/lifecycle policy paused animation.
+        val frameTime = clockSec
+        return androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation {
+            val relativeLean = com.example.meowmba.core.sensor.MotionMath.displayRelativeLean(
+                motionScreenLean?.value ?: 0f, displayRotation)
+            val boost = state.driving && state.driveEmotionBoost
+            val leanIn = DriveEmotionBoost.amplifyImu(motionLeanState?.value ?: motionLean, boost)
+            val lurchIn = DriveEmotionBoost.amplifyImu(motionLurchState?.value ?: motionLurch, boost)
+            val frame = driveRig.step(frameTime, android.os.SystemClock.elapsedRealtime(),
+                motionObservedAtMs?.value ?: 0L, state.driving, leanIn, lurchIn,
+                (-relativeLean * 0.35f).coerceIn(-14f, 14f))
+            if (!boost) return@withoutReadObservation frame
+            val emotionAdd = DriveEmotionBoost.emotionBraceAdd(
+                ConversationAffect.valence(state.emotion), driving = true)
+            val brace = DriveEmotionBoost.combineBrace(frame.brace, emotionAdd, state.obdExcitement)
+            frame.copy(brace = brace)
+        }
     }
 
     // ── Petting: stroking the cat makes it purr ────────────────────────────

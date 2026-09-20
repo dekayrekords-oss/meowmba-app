@@ -814,6 +814,7 @@ class VisionManager internal constructor(
         displayListener = null
     }
 
+    @androidx.annotation.OptIn(androidx.camera.core.ExperimentalGetImage::class)
     @Synchronized
     private fun analyzeFrame(proxy: ImageProxy, analysis: ImageAnalysis) {
         val detector = faceDetector
@@ -1281,8 +1282,10 @@ class VisionManager internal constructor(
         if (closed) return
         if (provider != null) {
             if (captureGate.captureToken() == null) return
-            val p = preview ?: Preview.Builder().build().also { preview = it }
+            val p = preview ?: Preview.Builder().build()
             p.setSurfaceProvider(provider)
+            // A retained Preview always has a provider; avoid CameraX's restricted getter.
+            preview = p
             bindPreviewAsync()
         } else {
             preview?.setSurfaceProvider(null)
@@ -1363,7 +1366,7 @@ class VisionManager internal constructor(
                         }
                         val selector = resolveSelector(provider)
                         val useCases = mutableListOf<androidx.camera.core.UseCase>()
-                        preview?.let { p -> p.surfaceProvider?.let { useCases.add(p) } }
+                        preview?.let { useCases.add(it) }
                         imageCapture?.let { useCases.add(it) }
                         imageAnalysis?.let { useCases.add(it) }
                         // Under the manager lock: OFF cannot interleave check and bind.
@@ -1427,7 +1430,7 @@ class VisionManager internal constructor(
                 val selector = resolveSelector(provider)
                 provider.unbindAll()
                 val useCases = mutableListOf<androidx.camera.core.UseCase>(capture)
-                preview?.let { p -> p.surfaceProvider?.let { useCases.add(p) } }
+                preview?.let { useCases.add(it) }
                 imageAnalysis?.let { useCases.add(it) }
                 provider.bindToLifecycle(lifecycleOwner, selector, *useCases.toTypedArray())
                 imageCapture = capture
@@ -1437,6 +1440,7 @@ class VisionManager internal constructor(
         }
     }
 
+    @androidx.annotation.OptIn(androidx.camera.camera2.interop.ExperimentalCamera2Interop::class)
     private fun resolveSelector(provider: ProcessCameraProvider): CameraSelector {
         if (!_useFrontCamera) {
             return when {

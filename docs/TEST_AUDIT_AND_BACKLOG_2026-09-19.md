@@ -5,7 +5,22 @@ This is an acceptance/backlog report, not authorization to publish, enable monit
 operate a robot, post to accounts or replace the user's data. Historical plan checkboxes
 are not reliable current status; use the latest evidence below and BUILD_MASTER.md.
 
-## Latest follow-up — preview150 installed; production preparation
+## Latest follow-up — preview151 installed; release blockers repaired
+
+Candidate151 fixes the 21 full-lint errors and passes full debug and release lint.
+The 2,703-test suite passes with zero failures/errors and five skipped. Native bridges
+and image inference are rebuilt for baseline ARMv8-A; Needle is gated before loading
+on CPUs without dot-product support. Packaged native loading and actual Needle tool
+proposal pass on the Fold and a 16 KB emulator; the proposal is never executed.
+
+A sensor-driven redraw bug is fixed: 20 updates used to redraw a paused avatar20 times.
+The regression now passes on both devices. Matched 90-second USB/MODERATE-thermal UID
+observations fall from 87.62% to 36.40% of one CPU core. This does not establish unplugged
+battery life or eliminate all foreground CPU work. See
+[RELEASE_FIXES_151.md](store/RELEASE_FIXES_151.md) for signed-build and sustained evidence,
+remaining acceptance and Play access gates. Actual tester feedback is still required.
+
+## Previous follow-up — preview150 installed; production preparation
 
 Preview149 fixed both recorded speech crashes and passed its device cancellation test.
 Preview150 adds user-initiated diagnostics and removes autonomous Accessibility phone

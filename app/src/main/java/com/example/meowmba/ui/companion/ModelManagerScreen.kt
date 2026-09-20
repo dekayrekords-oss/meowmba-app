@@ -715,7 +715,7 @@ private fun MetaGlassesCard(viewModel: CompanionViewModel) {
     val defaultHost by bridge.defaultSshHost.collectAsState()
     var hostDraft by remember(defaultHost) { mutableStateOf(defaultHost) }
     val hasSdk = remember { gc.hasSdk() }
-    val activity = LocalContext.current as? android.app.Activity
+    val activity = androidx.activity.compose.LocalActivity.current
     val bridgeStatus = remember(hasSdk, connected, bridgeOn, defaultHost) {
         com.example.meowmba.core.glasses.MetaGlassesMeowBridge.statusLine(
             hasSdk = hasSdk,

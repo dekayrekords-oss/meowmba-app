@@ -41,8 +41,7 @@ internal object ArizonaWorkZones {
                 }
                 val code = conn.responseCode
                 check(code in 200..299) { "HTTP $code" }
-                val bytes = conn.inputStream.use { it.readNBytes(12_000_001) }
-                check(bytes.size <= 12_000_000) { "Feed exceeds size limit" }
+                val bytes = conn.inputStream.use { readFeed(it) }
                 val feed = parse(bytes.toString(Charsets.UTF_8))
                 check(now - feed.updatedAt in -60_000L..MAX_FEED_AGE_MS) { "Feed timestamp is stale" }
                 cached = feed.zones; updatedAt = feed.updatedAt; fetchedAt = now
@@ -60,6 +59,26 @@ internal object ArizonaWorkZones {
         }
         return RoadFeed.FetchResult(SOURCE, nearby(zones, lat, lon, now, updatedAt), true,
             detail = "Arizona work zones only; no police reports", fetchedAtMs = fetchedAt)
+    }
+
+    /** InputStream.readNBytes is API 33; keep the same bounded feed on Android 12. */
+    internal fun readFeed(input: java.io.InputStream, maxBytes: Int = 12_000_000): ByteArray {
+        require(maxBytes >= 0 && maxBytes < Int.MAX_VALUE)
+        val out = java.io.ByteArrayOutputStream(minOf(maxBytes, 8192))
+        val buffer = ByteArray(8192)
+        while (true) {
+            val count = input.read(buffer, 0, minOf(buffer.size, maxBytes - out.size() + 1))
+            if (count < 0) return out.toByteArray()
+            if (count == 0) {
+                val byte = input.read()
+                if (byte < 0) return out.toByteArray()
+                check(out.size() < maxBytes) { "Feed exceeds size limit" }
+                out.write(byte)
+            } else {
+                check(count <= maxBytes - out.size()) { "Feed exceeds size limit" }
+                out.write(buffer, 0, count)
+            }
+        }
     }
 
     internal fun parse(body: String): Feed {

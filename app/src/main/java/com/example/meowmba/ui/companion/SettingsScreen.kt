@@ -1794,7 +1794,6 @@ private fun SettingsSectionCard(title: String, summary: String, content: @Compos
 /** Route-id → display label for the "Default brain" selector. */
 private fun brainLabel(id: String): String = BRAIN_CHOICES.firstOrNull { it.first == id }?.second ?: "Auto"
 
-private data class SettingsCategory(val title: String, val summary: String, val icon: ImageVector)
 private val SETTINGS_CATEGORIES = listOf(
     SettingsCategory("Voice & behavior", "Wake phrase, conversation and listening", Icons.Default.Mic),
     SettingsCategory(COMPUTER_TOOLS_TITLE, "Computer setup, tasks, connections and power", Icons.Default.Computer),

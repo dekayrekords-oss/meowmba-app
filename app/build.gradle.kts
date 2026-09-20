@@ -93,8 +93,8 @@ android {
         // 85 > 84 so the affect/valence + pet wiring installs as a genuine
         // in-place upgrade, and so it is distinguishable on-device from 84 (which
         // has the drives but not the reply affect or the touch sense).
-        versionCode = 150
-        versionName = "1.3.94"
+        versionCode = 151
+        versionName = "1.3.95"
 
         buildConfigField("boolean", "HAS_MWDAT_SDK", hasMwdat.toString())
         manifestPlaceholders["mwdat_application_id"] = mwdatApplicationId
@@ -110,8 +110,10 @@ android {
             cmake {
                 arguments += listOf(
                     "-DANDROID_PLATFORM=android-31",
-                    "-DCMAKE_C_FLAGS=-march=armv8.7a",
-                    "-DCMAKE_CXX_FLAGS=-march=armv8.7a",
+                    "-DCMAKE_C_FLAGS=-march=armv8-a",
+                    "-DCMAKE_CXX_FLAGS=-march=armv8-a",
+                    "-DGGML_NATIVE=OFF",
+                    "-DGGML_CPU_ARM_ARCH=armv8-a",
                     "-DGGML_OPENMP=OFF",
                     "-DGGML_LLAMAFILE=OFF"
                 )
@@ -229,7 +231,7 @@ androidComponents {
         // Combined Computer + avatar update; bump debug-only so in-place
         // upgrade is allowed without changing release defaultConfig (85).
         variant.outputs.forEach { output ->
-            output.versionCode.set(150)
+            output.versionCode.set(151)
         }
     }
 }

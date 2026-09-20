@@ -82,12 +82,16 @@ class BluetoothRobotTransport(private val address: String) : RobotTransport {
             if (!adapter.isEnabled) return false
             val device = adapter.getRemoteDevice(address)
             val s = device.createRfcommSocketToServiceRecord(SPP_UUID)
+            socket = s // Also close a socket whose connect() fails.
             adapter.cancelDiscovery()
             s.connect()
-            socket = s
             true
-        } catch (e: Exception) {
-            socket = null
+        } catch (_: SecurityException) {
+            // Nearby-devices permission can be revoked after the Settings check.
+            close()
+            false
+        } catch (_: Exception) {
+            close()
             false
         }
     }

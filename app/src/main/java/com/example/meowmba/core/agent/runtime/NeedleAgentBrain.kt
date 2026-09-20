@@ -24,18 +24,11 @@ internal interface NeedleNative {
     fun reset()
 }
 
-internal object NeedleJniNative : NeedleNative {
-    init { System.loadLibrary("needle_jni_bridge") }
-    external override fun load(bytes: ByteArray): Int
-    external override fun initialize(systemPrompt: String, toolsJson: String): Int
-    external override fun complete(input: String, maxTokens: Int): String?
-    external override fun reset()
-}
 
 /** Tiny on-device default that proposes tool calls; policy remains in the orchestrator. */
 class NeedleAgentBrain internal constructor(
     private val modelFile: File,
-    private val native: NeedleNative = NeedleJniNative,
+    private val native: NeedleNative = defaultNeedleNative(),
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : AgentBrainRouter {
     private val ownerToken = Any()

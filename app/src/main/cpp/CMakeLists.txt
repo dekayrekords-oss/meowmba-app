@@ -87,3 +87,7 @@ target_include_directories(sd_jni_bridge PRIVATE ${stable_diffusion_cpp_SOURCE_D
 add_library(needle_jni_bridge SHARED needle_jni_bridge.cpp)
 target_link_options(needle_jni_bridge PRIVATE "-Wl,-z,max-page-size=16384")
 target_link_libraries(needle_jni_bridge PRIVATE needle_runtime log android)
+
+# This probe must load before optional vendor code on older arm64 devices.
+add_library(meow_cpu_features SHARED cpu_features.cpp)
+target_link_options(meow_cpu_features PRIVATE "-Wl,-z,max-page-size=16384")

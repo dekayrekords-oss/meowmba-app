@@ -83,7 +83,9 @@ class RobotManager(
             val n = d.name ?: ""
             n.contains("looi", ignoreCase = true) || n.contains("meow", ignoreCase = true)
         }?.address
-    } catch (e: Exception) {
+    } catch (_: SecurityException) {
+        null // Nearby-devices permission may be revoked between calls.
+    } catch (_: Exception) {
         null
     }
 
@@ -125,7 +127,7 @@ class RobotManager(
                 val latch = java.util.concurrent.CountDownLatch(1)
                 val callback = object : android.bluetooth.le.ScanCallback() {
                     override fun onScanResult(callbackType: Int, result: android.bluetooth.le.ScanResult) {
-                        runCatching {
+                        try {
                             val d = result.device
                             // device.name FIRST, advertisement name second.
                             //
@@ -144,6 +146,10 @@ class RobotManager(
                             // A later sighting can resolve a name an earlier one
                             // lacked, so upgrade rather than keeping the first.
                             if (out[d.address] == null || name != null) out[d.address] = name
+                        } catch (_: SecurityException) {
+                            // Permission can be revoked while a scan callback is queued.
+                        } catch (_: Exception) {
+                            // A malformed advertisement must not terminate discovery.
                         }
                     }
                     override fun onScanFailed(errorCode: Int) { latch.countDown() }
@@ -159,21 +165,20 @@ class RobotManager(
                     scanner.startScan(emptyList(), settings, callback)
                     scanRan = true
                     latch.await(scanMs, java.util.concurrent.TimeUnit.MILLISECONDS)
-                    runCatching { scanner.stopScan(callback) }
+                    stopScanSafely(scanner, callback)
+                } catch (_: SecurityException) {
+                    _status.value = "Can't scan: allow \"Nearby devices\" for Meowmba in system settings."
+                    stopScanSafely(scanner, callback)
                 } catch (e: Exception) {
-                    // Almost always SecurityException: BLUETOOTH_SCAN is a
-                    // runtime permission on Android 12+ and is not implied by
-                    // declaring it. Say so — silently returning the bonded list
-                    // looked like "the base is not there" for as long as the
-                    // permission was missing.
                     android.util.Log.w("RobotManager", "BLE scan did not run", e)
-                    _status.value =
-                        "Can't scan: allow \"Nearby devices\" for Meowmba in system settings."
-                    runCatching { scanner.stopScan(callback) }
+                    _status.value = "Bluetooth scan unavailable. Check that Bluetooth is on and try again."
+                    stopScanSafely(scanner, callback)
                 }
             }
-        } catch (e: Exception) {
-            // SecurityException on any missing permission: keep what we have.
+        } catch (_: SecurityException) {
+            // Keep already discovered devices if permission is revoked.
+        } catch (_: Exception) {
+            // Bluetooth can also disappear while the bounded discovery is running.
         }
         // Diagnostic: what the scan actually saw, before ranking. Without this
         // a disappointing picker is indistinguishable from a scan that never
@@ -190,6 +195,15 @@ class RobotManager(
                 "Can't scan: allow \"Nearby devices\" for Meowmba in system settings."
         }
         return rows
+    }
+
+    private fun stopScanSafely(
+        scanner: android.bluetooth.le.BluetoothLeScanner,
+        callback: android.bluetooth.le.ScanCallback,
+    ) {
+        try { scanner.stopScan(callback) }
+        catch (_: SecurityException) { /* Permission revoked while scanning. */ }
+        catch (_: Exception) { /* Adapter may have been switched off. */ }
     }
 
     /**
