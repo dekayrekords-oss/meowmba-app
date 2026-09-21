@@ -19,6 +19,7 @@ internal fun AvatarMorphControls(state: CompanionState, viewModel: CompanionView
                 context.startActivity(android.content.Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
             }) { Text("Music access") }
         }
+        SongRecognitionControls(state, viewModel)
         VoiceToggle("Include invented characters", "Use your saved generated forms too.", state.idleMorphIncludeGenerated, viewModel::setIdleMorphIncludeGenerated)
     }
 }

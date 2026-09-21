@@ -17,6 +17,7 @@ import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
+@org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
 class ChatOverlayUiTest {
     @get:Rule val compose = createComposeRule()
 
@@ -68,4 +69,22 @@ class ChatOverlayUiTest {
         compose.runOnIdle { partial.value = "Different spoken words" }
         compose.onNode(hasSetTextAction()).assertTextContains("My draft")
     }
+    @Test fun `voice buttons respond and permission feedback remains visible without a transcript`() {
+        var micClicks = 0; var callClicks = 0
+        val caption = mutableStateOf<String?>("Microphone permission is off. Allow access to speak.")
+        val listening = mutableStateOf(false)
+        compose.setContent { MaterialTheme { Box(Modifier.fillMaxSize()) {
+            ChatOverlay(true, {}, listening = listening.value, listenPartial = caption.value,
+                onMicClick = { micClicks++ }, onCallClick = { callClicks++ })
+        } } }
+        compose.onNodeWithText("Microphone permission is off. Allow access to speak.").assertIsDisplayed()
+        compose.mainClock.advanceTimeBy(500)
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Speak").assertIsDisplayed().performClick()
+        compose.onNodeWithContentDescription("Start voice call").assertIsDisplayed().performClick()
+        compose.runOnIdle { org.junit.Assert.assertEquals("microphone", 1, micClicks); org.junit.Assert.assertEquals("phone", 1, callClicks) }
+        compose.runOnIdle { listening.value = true; caption.value = null }
+        compose.onNodeWithText("Listening… Tap the mic to finish.").assertIsDisplayed()
+    }
+
 }

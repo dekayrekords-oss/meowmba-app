@@ -5,6 +5,18 @@ This supersedes historical build-location/version instructions in other document
 
 ## Current recovery
 
+- September 21 latest companion update: signed release **1.3.99/code 155** installed
+  in place on the connected Fold at 02:00 America/Phoenix; app data preserved.
+  Adds 32 prop scenes and 16 character personalities, repairs chat voice controls,
+  moves privacy controls clear of chat/text, and keeps Needle 3 status in Models.
+  Nearby-song identification is implemented with explicit 10-second capture and
+  AudD setup; live matching still needs a configured key and physical acceptance.
+  Final suite: 403 suites / 2,730 tests, zero failures/errors, five skips. Release
+  assembly and lint pass with zero lint errors. Phone checks confirm code 155,
+  clear chat controls, song setup navigation, sensors still off, and no Meow crash
+  buffer entries. All 149 protected runtime/model entries match build 153.
+  Receipt: docs/COMPANION_155_2026-09-21.md. Play/website remain on release 152.
+
 - September 21 companion update: signed release 1.3.97/code 153 installed in place
   on the connected Fold. Selected-avatar restoration, sporadic idle visits, Needle 3
   status, speech echo protection, and optional music awareness/dancing are implemented.

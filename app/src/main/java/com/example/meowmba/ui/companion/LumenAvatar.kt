@@ -49,6 +49,7 @@ class LumenPainter {
         catFeatures: Boolean = false, featureColor: Color = eyeColor,
         performance: AvatarPerformance? = null, progress: Float = 0f,
         inventedScene: CustomAnimationSpec? = null, inventedTimeMs: Float = 0f,
+        showPrivacyMarks: Boolean = true,
     ) = with(scope) {
         val unit = lumenUnit(size.width, size.height, frame)
         val center = lumenCenter(size.width, size.height, frame)
@@ -126,6 +127,7 @@ class LumenPainter {
         // Honest, quiet privacy indicators: these are not pretending to track when camera is off.
         // Keep privacy anchored to the stage, not chasing a roaming character.
         // Neither a performance, hide nor attention can move these marks away.
+        if (!showPrivacyMarks) return@with
         val badgeScale = lumenPrivacyScale(size.width, size.height, 1.dp.toPx())
         val badgeCenter = lumenPrivacyCenter(size.width, size.height, badgeScale)
         val badgeY = badgeCenter.y

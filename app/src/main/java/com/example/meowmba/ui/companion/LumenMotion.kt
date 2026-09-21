@@ -59,6 +59,7 @@ enum class AvatarAnimal(val key: String, val label: String) {
             else -> null
         }
         fun performanceFor(name: String): AvatarAnimal? {
+            LumenSignatureScenes.find(AvatarPerformanceCatalog.resolve(name)?.id)?.let { return it.animal }
             when (AvatarPerformanceCatalog.resolve(name)?.id) {
                 "lost_mouse" -> return AUSTRALIAN_SHEPHERD
                 "reading_realization" -> return OWL

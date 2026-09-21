@@ -180,9 +180,11 @@ fun ChatOverlay(
                         }
                         if (thinking) Text("Meow is thinking…", style = MaterialTheme.typography.labelMedium)
                     }
+                    if (callActive) Text("Voice conversation active · tap the phone to end", style = MaterialTheme.typography.labelMedium)
                     recognitionIssue?.let { Text(it, style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error, maxLines = 3) }
-                    if (listening && !listenPartial.isNullOrBlank()) Text(listenPartial,
+                    if (listening || !listenPartial.isNullOrBlank()) Text(
+                        listenPartial?.takeIf { it.isNotBlank() } ?: "Listening… Tap the mic to finish.",
                         maxLines = 2, style = MaterialTheme.typography.bodySmall)
                     Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         OutlinedTextField(value = draft, onValueChange = { drafts[conversationKey] = it },

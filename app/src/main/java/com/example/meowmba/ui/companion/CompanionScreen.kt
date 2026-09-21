@@ -257,30 +257,6 @@ fun CompanionScreen(
                 modifier = Modifier.align(Alignment.CenterEnd),
             )
 
-            // Privacy status line (bottom-start): explicit, text-based backup
-            // for the face-level privacy marks.
-            val privacyFlags = buildList {
-                if (!uiState.isMicEnabled) add("MIC OFF")
-                if (!uiState.isCameraEnabled) add("CAM OFF")
-                if (uiState.isMuted) add("MUTED")
-            }
-            if (!uiState.isChatExpanded) {
-                Text(
-                    text = listOfNotNull(
-                        uiState.musicPlayback.takeIf { it.playing }?.let { "♫ ${it.label}" },
-                        "Needle 3 · ${uiState.needleStatusLabel()}",
-                        privacyFlags.takeIf { it.isNotEmpty() }?.joinToString("  ·  ")
-                    ).joinToString("\n"),
-                    color = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(16.dp)
-                )
-            }
-
             if (uiState.isNoting) {
                 Surface(
                     color = MaterialTheme.colorScheme.secondaryContainer,
@@ -341,7 +317,7 @@ fun CompanionScreen(
                 exit = fadeOut() + shrinkVertically(),
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 140.dp, start = 24.dp, end = 24.dp)
+                    .padding(bottom = 164.dp, start = 24.dp, end = 24.dp)
             ) {
                 Surface(
                     color = Color.Black.copy(alpha = 0.7f),
@@ -384,7 +360,7 @@ fun CompanionScreen(
             // the privacy flags, so centering vertically avoids that overlap.
             val landscape = LocalConfiguration.current.screenWidthDp >
                 LocalConfiguration.current.screenHeightDp
-            MicButton(
+            if (!uiState.isChatExpanded) MicButton(
                 interactionState = uiState.interactionState,
                 isMicEnabled = uiState.isMicEnabled,
                 onClick = { viewModel.onMicClick() },
@@ -395,7 +371,7 @@ fun CompanionScreen(
                 } else {
                     Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = 40.dp)
+                        .padding(bottom = 8.dp)
                 }
             )
 
@@ -418,20 +394,15 @@ fun CompanionScreen(
             }
 
             // Capture controls: the camera action releases/enables capture, independent of chat.
-            MicKillButton(
-                enabled = uiState.isMicEnabled,
-                onEnabledChange = viewModel::setMicEnabled,
-                modifier = Modifier.align(Alignment.BottomEnd).imePadding()
-                    .padding(bottom = 128.dp, end = 16.dp),
-            )
-            CameraTrackingControl(
-                enabled = uiState.isCameraEnabled,
-                status = uiState.cameraTrackingStatus,
-                onToggle = { viewModel.setCameraEnabled(!uiState.isCameraEnabled) },
-                onRetry = viewModel::resumeFaceTrackingIfEnabled,
-                modifier = Modifier.align(Alignment.BottomEnd).imePadding()
-                    .padding(bottom = 72.dp, end = 16.dp),
-            )
+            if (!uiState.isChatExpanded) {
+                Row(Modifier.align(Alignment.BottomStart).padding(start = 12.dp, bottom = 64.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    MicKillButton(enabled = uiState.isMicEnabled, onEnabledChange = viewModel::setMicEnabled)
+                    CameraTrackingControl(enabled = uiState.isCameraEnabled, status = uiState.cameraTrackingStatus,
+                        onToggle = { viewModel.setCameraEnabled(!uiState.isCameraEnabled) },
+                        onRetry = viewModel::resumeFaceTrackingIfEnabled)
+                }
+            }
 
         // Live camera preview — draggable PiP so it can sit anywhere on screen.
         val density = LocalDensity.current
@@ -1209,6 +1180,8 @@ fun CompanionScreen(
                 )
             }
         }
+
+        SongRecognitionDialog(uiState, viewModel)
 
         ChatOverlay(
             recognitionIssue = uiState.voiceRecognitionStatus,

@@ -16,10 +16,10 @@ class AvatarPerformanceCatalogTest {
     private fun normalize(value: String) = value.trim().lowercase(Locale.ROOT)
         .replace(Regex("[\\s_-]+"), " ")
 
-    @Test fun `catalog contains 55 unique original performance identities and readable names`() {
-        assertEquals(55, entries.size)
-        assertEquals(55, entries.map { it.id }.toSet().size)
-        assertEquals(55, entries.map { normalize(it.title) }.toSet().size)
+    @Test fun `catalog contains 87 unique original performance identities and readable names`() {
+        assertEquals(87, entries.size)
+        assertEquals(87, entries.map { it.id }.toSet().size)
+        assertEquals(87, entries.map { normalize(it.title) }.toSet().size)
         assertEquals(entries.map { it.title }, AvatarPerformanceCatalog.names())
         entries.forEach { entry ->
             assertTrue(entry.id, Regex("[a-z][a-z0-9_]*").matches(entry.id))
@@ -182,7 +182,7 @@ class AvatarPerformanceCatalogTest {
             "reading_realization" to PerformanceAccent.BOOK,
             "hat_mishap" to PerformanceAccent.HAT_COWBOY,
         )
-        val scenes = entries.filter { it.category == "Scenes" }
+        val scenes = entries.filter { it.category == "Scenes" && !it.id.startsWith("signature_") }
         assertEquals(expected.keys, scenes.map { it.id }.toSet())
         scenes.forEach { entry ->
             assertEquals(entry.id, expected[entry.id], entry.accent)

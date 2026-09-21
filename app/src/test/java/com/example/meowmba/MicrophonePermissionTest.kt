@@ -54,6 +54,29 @@ class MicrophonePermissionTest {
         } finally { vm.viewModelScope.cancel(); Dispatchers.resetMain() }
     }
 
+    @Test fun chatVoiceTapWithMicOffRequestsPermissionAndGrantStartsTheTurn() = runTest {
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+        val context = mock(Context::class.java)
+        val storage = mock(SecureStorageManager::class.java)
+        `when`(storage.context).thenReturn(context)
+        `when`(context.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)).thenReturn(PackageManager.PERMISSION_DENIED)
+        val stt = VoicePipelineTest.FakeSpeechEngine()
+        val tts = VoicePipelineTest.FakeSpeechSynthesizer()
+        val vm = CompanionViewModel(speechService = stt, captureEngine = stt, secureStorage = storage, ttsManager = tts)
+        try {
+            vm.setMicEnabled(false); tts.onSpeechStarted?.invoke(); vm.onChatMicClick()
+            assertTrue("Stop the old reply even before asking for permission", tts.stopCalls > 0)
+            assertTrue(vm.uiState.value.microphonePermissionRequested)
+            assertFalse(vm.uiState.value.isMicEnabled)
+            assertEquals(0, stt.startListeningCalls)
+            `when`(context.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)).thenReturn(PackageManager.PERMISSION_GRANTED)
+            vm.onMicrophonePermissionResult(true); runCurrent()
+            assertTrue(vm.uiState.value.isMicEnabled)
+            assertEquals(InteractionState.LISTENING, vm.uiState.value.interactionState)
+            assertEquals(1, stt.startListeningCalls)
+        } finally { vm.viewModelScope.cancel(); Dispatchers.resetMain() }
+    }
+
     @Test fun interruptWithMissingLocalRecognizerDoesNotStayStuckSpeaking() = runTest {
         Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
         val tts = VoicePipelineTest.FakeSpeechSynthesizer()

@@ -856,7 +856,7 @@ fun AvatarRenderer(
             rotate(cancelRoll, pivot = center) {
                 lumenPainter.draw(this, LumenFrame(presence = 0f), Color(state.avatarEyeColor), Color(state.avatarGlowColor),
                     cameraOff = !state.isCameraEnabled, micOff = !state.isMicEnabled,
-                    speakerOff = state.isMuted, statusColor = privacyColor)
+                    speakerOff = state.isMuted, statusColor = privacyColor, showPrivacyMarks = false)
             }
         }
 
@@ -1063,7 +1063,7 @@ fun AvatarRenderer(
                 // Model-authored shapes cannot cover or impersonate privacy state.
                 lumenPainter.draw(this, frame.copy(presence = 0f), Color(state.avatarEyeColor), Color(state.avatarGlowColor),
                     cameraOff = !state.isCameraEnabled, micOff = !state.isMicEnabled,
-                    speakerOff = state.isMuted, statusColor = privacyColor)
+                    speakerOff = state.isMuted, statusColor = privacyColor, showPrivacyMarks = false)
                 return@Canvas
             }
             if (state.avatarStyle == AvatarStyle.FULL_FLY && onFly3DFrame != null) {
@@ -1098,7 +1098,7 @@ fun AvatarRenderer(
                     onFly3DFrame(published)
                 }
                 lumenPainter.draw(this, frame.copy(presence=0f), Color(state.avatarEyeColor), Color(state.avatarGlowColor),
-                    cameraOff=!state.isCameraEnabled,micOff=!state.isMicEnabled,speakerOff=state.isMuted,statusColor=privacyColor)
+                    cameraOff=!state.isCameraEnabled,micOff=!state.isMicEnabled,speakerOff=state.isMuted,statusColor=privacyColor, showPrivacyMarks = false)
                 return@Canvas
             }
             if (state.avatarStyle == AvatarStyle.FULL_FLY) {
@@ -1108,7 +1108,7 @@ fun AvatarRenderer(
                 // Shared renderer keeps privacy marks fixed; hide only its face.
                 lumenPainter.draw(this, frame.copy(presence = 0f), Color(state.avatarEyeColor), Color(state.avatarGlowColor),
                     cameraOff = !state.isCameraEnabled, micOff = !state.isMicEnabled,
-                    speakerOff = state.isMuted, statusColor = privacyColor)
+                    speakerOff = state.isMuted, statusColor = privacyColor, showPrivacyMarks = false)
                 return@Canvas
             }
             if (flyPose != null) {
@@ -1119,27 +1119,27 @@ fun AvatarRenderer(
                     scale(habitatFaceScale(avatarScale), habitatFaceScale(avatarScale), original) {
                         lumenPainter.draw(this, frame, Color(state.avatarEyeColor), Color(state.avatarGlowColor),
                             featureColor = Color(state.avatarFeatureColor), performance = lumenPerformance,
-                            progress = progress, inventedScene = customAnim, inventedTimeMs = animTHolder[0].toFloat())
+                            progress = progress, inventedScene = customAnim, inventedTimeMs = animTHolder[0].toFloat(), showPrivacyMarks = false)
                     }
                 }
                 state.equippedProp?.let { generatedPainter.drawProp(this, it, frame, tSec,
                     destination, lumenUnit(w, h, frame) * habitatFaceScale(avatarScale)) }
                 lumenPainter.draw(this, frame.copy(presence = 0f), Color(state.avatarEyeColor), Color(state.avatarGlowColor),
                     cameraOff = !state.isCameraEnabled, micOff = !state.isMicEnabled,
-                    speakerOff = state.isMuted, statusColor = privacyColor)
+                    speakerOff = state.isMuted, statusColor = privacyColor, showPrivacyMarks = false)
             } else {
                 val center = lumenCenter(w, h, frame)
                 avatarHitTransform[0] = AvatarHitTransform(center, center, avatarScale)
                 scale(avatarScale, avatarScale, center) {
                     lumenPainter.draw(this, frame, Color(state.avatarEyeColor), Color(state.avatarGlowColor),
                         featureColor = Color(state.avatarFeatureColor), performance = lumenPerformance,
-                        progress = progress, inventedScene = customAnim, inventedTimeMs = animTHolder[0].toFloat())
+                        progress = progress, inventedScene = customAnim, inventedTimeMs = animTHolder[0].toFloat(), showPrivacyMarks = false)
                 }
                 state.equippedProp?.let { generatedPainter.drawProp(this, it, frame, tSec,
                     center, lumenUnit(w, h, frame) * avatarScale) }
                 lumenPainter.draw(this, frame.copy(presence = 0f), Color(state.avatarEyeColor), Color(state.avatarGlowColor),
                     cameraOff = !state.isCameraEnabled, micOff = !state.isMicEnabled,
-                    speakerOff = state.isMuted, statusColor = privacyColor)
+                    speakerOff = state.isMuted, statusColor = privacyColor, showPrivacyMarks = false)
             }
             return@Canvas
         } else if (useSignalOrb) {

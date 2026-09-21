@@ -144,7 +144,7 @@ internal class LumenAccentPainter {
                 path.moveTo(0.1f, -1.25f); path.lineTo(-0.65f, 0.13f); path.lineTo(-0.05f, 0.13f)
                 path.lineTo(-0.22f, 1.22f); path.lineTo(0.76f, -0.33f); path.lineTo(0.12f, -0.33f); path.close()
             }
-            PerformanceAccent.NONE -> Unit
+            PerformanceAccent.NONE, PerformanceAccent.SIGNATURE -> Unit
             PerformanceAccent.BUTTERFLY, PerformanceAccent.DETECTIVE, PerformanceAccent.YARN,
             PerformanceAccent.BALL, PerformanceAccent.ACORN, PerformanceAccent.SNACK,
             PerformanceAccent.NEST, PerformanceAccent.RAIN, PerformanceAccent.MOUSE, PerformanceAccent.BOOK,

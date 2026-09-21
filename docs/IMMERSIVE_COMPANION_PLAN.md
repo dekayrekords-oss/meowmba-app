@@ -1,5 +1,22 @@
 # Immersive companion — detailed revision plan
 
+## September 21 follow-up: personalities, music recognition and chat controls
+
+Add 32 new native prop scenes, with two signature scenes and a distinct conversational
+tone for each of the 16 Lumen forms. The saved baseline controls personality; idle
+visitors remain brief overlays. Keep existing quiet-time, pause and interruption rules.
+
+Needle 3 status belongs in Models, not the home screen. Reserve layout space for
+privacy controls and hide them behind expanded chat. Chat mic/call taps must explicitly
+enable voice when requested, respect Android permission, show feedback and retain
+interruption ownership when a reply is already active.
+
+The owner additionally requests recognizing music heard nearby. This supersedes the
+previous no-microphone-recognition scope: on-request 10-second capture with clear AudD
+upload disclosure and a privately entered API key is supported. No automatic ambient
+recording or permission grant. Keep phone-player metadata and microphone recognition
+as separate sources, and never invent a song match. See COMPANION_155_2026-09-21.md.
+
 ## September 21 requested revision
 
 The avatar selected in settings is the baseline. Automatic character visits last

@@ -296,6 +296,11 @@ class CompanionViewModel(
     private val projectStoreMutex = kotlinx.coroutines.sync.Mutex()
     private var pendingWeatherPermission = false
     private var weatherTurn = 0L
+    private var songRecognitionJob: Job? = null
+    private var songRecognitionGeneration = 0L
+    internal var songRecognizerOverride: com.example.meowmba.core.media.SongRecognizer? = null
+    private var songRecognitionRestoreMicOff = false
+    private val songRecognizer by lazy { com.example.meowmba.core.media.SongRecognition() }
     private var idleAnimationDirector: IdleAnimationDirector? = null
     val uiState = _uiState.asStateFlow()
     private var cachedMessages: List<com.example.meowmba.core.database.MessageEntity> = emptyList()
@@ -2094,7 +2099,8 @@ class CompanionViewModel(
                         // A quiet attentive face does not erupt into random dramatic
                         // costumes, sad stories or fake celebrations between turns.
                         idlePerformanceSelector.pick(elapsedRealtimeMs(),
-                            scenesEnabled = _uiState.value.idleScenesEnabled, playfulness = _uiState.value.playfulness)?.title
+                            scenesEnabled = _uiState.value.idleScenesEnabled, playfulness = _uiState.value.playfulness,
+                            animal = baselineLumenAnimal())?.title
                     } else {
                     val saved = animStore.list()
                     // Mood-filtered, so an idle cat never hisses at nothing.
@@ -3452,6 +3458,7 @@ class CompanionViewModel(
     }
 
     override fun onCleared() {
+        cancelSongIdentification(rearm = false)
         cancelAgenticComputerChat()
         cancelAvatarFormGeneration()
         nervousSystem.pauseExternalWork()
@@ -4268,7 +4275,7 @@ class CompanionViewModel(
                 speakerName = lastSpeakerName,
                 deviceFacts = liveDeviceFacts(text),
                 voiceCall = onCall,
-                workingContext = followUpContextFor(text),
+                workingContext = listOfNotNull(followUpContextFor(text), characterTone()).joinToString("\n"),
             )
             omniRoute?.hintUserText(text)
             // Voice call uses the flash/fast lane. Other direct answers pin
@@ -5063,6 +5070,7 @@ class CompanionViewModel(
         stopAvatarPerformance()
         resetMouthEnergy()
         appInBackground = true
+        cancelSongIdentification(rearm = false)
         visionManager?.setFaceTrackingEnabled(false)
         nervousSystem.pauseExternalWork()
         finishNoting("Notes stopped when the app left the screen")
@@ -5111,6 +5119,7 @@ class CompanionViewModel(
         stopAvatarPerformance()
         resetMouthEnergy()
         appInBackground = true
+        cancelSongIdentification(rearm = false)
         visionManager?.setFaceTrackingEnabled(false)
         nervousSystem.pauseExternalWork()
         finishNoting("Notes stopped when the app left the screen")
@@ -5195,6 +5204,8 @@ class CompanionViewModel(
                 _uiState.value = _uiState.value.copy(captionText = null)
             if (resume != null) resume() else updateVoiceListeningMode()
         } else {
+            if (_uiState.value.songRecognitionPrompt) _uiState.value = _uiState.value.withFeatures(
+                songRecognitionStatus = "Microphone permission is off. Allow microphone access in Android settings to identify a song.")
             finishNoting("Notes stopped because microphone permission is off")
             followUpJob?.cancel()
             wakeAckListenJob?.cancel()
@@ -5248,6 +5259,7 @@ class CompanionViewModel(
     }
 
     private fun startWakeStandby(force: Boolean = false) {
+        if (_uiState.value.songRecognitionPrompt || _uiState.value.songRecognitionBusy) return
         if (!canCaptureMicrophone()) return
         if (handedOffToBackground) {
             // The background service owns the mic after a hand-off. Late
@@ -5326,6 +5338,7 @@ class CompanionViewModel(
 
     /** True while the foreground app owns the always-on conversation mic. */
     private fun shouldAlwaysOnMic(): Boolean {
+        if (_uiState.value.songRecognitionPrompt || _uiState.value.songRecognitionBusy) return false
         if (!canCaptureMicrophone()) return false
         val s = _uiState.value
         if (handedOffToBackground) return false
@@ -5347,6 +5360,9 @@ class CompanionViewModel(
      * turn) so the two can never disagree.
      */
     private fun updateVoiceListeningMode() {
+        if (_uiState.value.songRecognitionPrompt || _uiState.value.songRecognitionBusy) {
+            stopAlwaysOnListening(); stopWakeLoopAndRelease(); return
+        }
         if (!canCaptureMicrophone()) {
             stopAlwaysOnListening()
             stopWakeLoopAndRelease()
@@ -6421,6 +6437,7 @@ class CompanionViewModel(
      * Tapping while the companion speaks interrupts it and starts a new turn.
      */
     fun onMicClick() {
+        if (_uiState.value.songRecognitionBusy) { cancelSongIdentification(); return }
         if (!_uiState.value.isMicEnabled) {
             // Privacy toggle is easy to hit by accident (ear tap) — say why nothing happens.
             _uiState.value = _uiState.value.copy(
@@ -6554,6 +6571,7 @@ class CompanionViewModel(
     }
 
     private fun startListening(prompt: String = "Listening...") {
+        if (_uiState.value.songRecognitionPrompt || _uiState.value.songRecognitionBusy) return
         if (!_uiState.value.isMicEnabled) return
         if (!canCaptureMicrophone()) { onMicrophonePermissionResult(false); return }
         resetMouthEnergy()
@@ -6856,14 +6874,12 @@ class CompanionViewModel(
         }
         placeRequestJob?.cancel()
         placeRequestJob = null
-        if (Regex("(?i)^(what(?:’s|'s| is) (?:this song|playing|the song|the music)|what (?:song|music|track) (?:is (?:this|playing)|am i listening to)|who is (?:singing|the artist))[?.!]*$").matches(text.trim())) {
+        if (com.example.meowmba.core.media.SongRecognition.isRequest(text)) {
             val music = _uiState.value.musicPlayback
-            speak(when {
-                !music.playing -> "I don't detect music playing right now."
-                music.title != null -> "You're listening to ${music.label}."
-                !music.metadataAccess -> "I can detect audio, but need notification access to see track details. Open Avatar settings and choose Music access."
-                else -> "Audio is playing, but the player isn't sharing a track title."
-            })
+            if (music.playing && music.title != null && !text.contains("hear", ignoreCase = true) &&
+                !text.contains("listen", ignoreCase = true) && !text.contains("identify", ignoreCase = true))
+                speak("You're listening to ${music.label}.")
+            else requestSongIdentification()
             return
         }
         if (handleAvatarReviewReply(text)) return
@@ -7285,7 +7301,7 @@ class CompanionViewModel(
             val prompt = PromptBuilder.build(
                 _uiState.value.name, text, recentMessages, recalled, capabilities,
                 learned = learnedBlock(),
-                workingContext = followUpContextFor(text),
+                workingContext = listOfNotNull(followUpContextFor(text), characterTone()).joinToString("\n"),
                 speakerName = lastSpeakerName,
                 deviceFacts = liveDeviceFacts(text),
             )
@@ -8399,7 +8415,7 @@ class CompanionViewModel(
 
     private fun startInterruptionWatch() {
         val s = _uiState.value
-        if (!s.bargeInEnabled || !s.isMicEnabled || !canCaptureMicrophone()) return
+        if (s.songRecognitionPrompt || s.songRecognitionBusy || !s.bargeInEnabled || !s.isMicEnabled || !canCaptureMicrophone()) return
         stopInterruptionWatch()
         val engine = preferredSpeechEngine() ?: speechService ?: return
         interruptionEngine = engine
@@ -8609,10 +8625,39 @@ class CompanionViewModel(
         updateVoiceListeningMode()
     }
 
+    private fun baselineLumenAnimal(): AvatarAnimal = when (_uiState.value.avatarStyle) {
+        AvatarStyle.LUMEN_CAT -> AvatarAnimal.CAT
+        AvatarStyle.FULL_FLY -> AvatarAnimal.FRUIT_FLY
+        else -> _uiState.value.avatarAnimal
+    }
+
+    private fun characterTone(): String? = _uiState.value.takeIf { it.avatarStyle.isLumen && it.generatedAvatarForm == null }
+        ?.let { LumenPersonalities.prompt(baselineLumenAnimal()) }
+
+    private fun enableMicForUserAction(action: () -> Unit) {
+        if (!canCaptureMicrophone()) {
+            supersedeResponseTurn()
+            requestMicrophoneFor { enableMicForUserAction(action) }
+            return
+        }
+        if (!_uiState.value.isMicEnabled) {
+            // A disabled mic can coexist with a typed response or TTS. Revoke
+            // that response before returning to IDLE and opening a fresh capture.
+            supersedeResponseTurn()
+            // The requested action takes capture ownership itself. Re-arming here
+            // would start listening, then make the same tap immediately submit it.
+            _uiState.value = _uiState.value.copy(isMicEnabled = true, interactionState = InteractionState.IDLE,
+                captionText = null, microphonePermissionRequested = false)
+            secureStorage?.saveBooleanPreference(com.example.meowmba.core.audio.MicrophonePrivacy.PREF_KEY, false)
+        }
+        action()
+    }
+
     fun onChatMicClick() {
+        if (_uiState.value.songRecognitionPrompt) cancelSongIdentification(rearm = false)
         // Call mode still needs an explicit submit/cancel escape when a decoder
         // stops responding. The same ownership rules apply to both mic buttons.
-        onMicClick()
+        enableMicForUserAction { onMicClick() }
     }
 
     fun toggleCallMode() {
@@ -8625,10 +8670,9 @@ class CompanionViewModel(
     }
 
     private fun startCallMode() {
+        if (_uiState.value.songRecognitionPrompt) cancelSongIdentification(rearm = false)
         if (!_uiState.value.isMicEnabled) {
-            _uiState.value = _uiState.value.copy(
-                captionText = "Microphone is off — tap an ear to re-enable",
-            )
+            enableMicForUserAction { startCallMode() }
             return
         }
         if (!canCaptureMicrophone()) { requestMicrophoneFor { startCallMode() }; return }
@@ -8675,6 +8719,7 @@ class CompanionViewModel(
             microphonePermissionRequested = false)
         secureStorage?.saveBooleanPreference(com.example.meowmba.core.audio.MicrophonePrivacy.PREF_KEY, !enabled)
         if (!enabled) {
+            cancelSongIdentification(rearm = false)
             finishNoting("Notes stopped because the microphone was turned off")
             _uiState.value = _uiState.value.copy(interactionState = InteractionState.MUTED)
             pendingMicrophoneAction = null
@@ -8715,6 +8760,7 @@ class CompanionViewModel(
 
     /** Text input from the chat workspace, routed through the same pipeline as speech. */
     fun onUserTextSubmitted(text: String) {
+        if (_uiState.value.songRecognitionPrompt) cancelSongIdentification(rearm = false)
         if (text.isBlank()) return
         val trimmed = text.trim()
         val bridged = metaGlassesMeowBridge.prepareCommand(trimmed, bridgeMustBeOn = true)
@@ -11411,6 +11457,97 @@ class CompanionViewModel(
 
     private var musicDanceSequence: Long? = null
 
+    fun openSongRecognitionSettings() {
+        cancelSongIdentification(rearm = false)
+        _uiState.value = _uiState.value.copy(showAvatarScreen = true, isChatExpanded = false,
+            showTiles = false, captionText = null)
+        updateVoiceListeningMode()
+    }
+
+    fun hasSongRecognitionKey(): Boolean = !secureStorage?.getApiKey("audd").isNullOrBlank()
+
+    fun saveSongRecognitionKey(value: String) {
+        cancelSongIdentification(rearm = false)
+        secureStorage?.saveApiKey("audd", value.trim())
+        _uiState.value = _uiState.value.withFeatures(songRecognitionStatus =
+            if (hasSongRecognitionKey()) "AudD key saved." else "AudD key removed.")
+    }
+
+    fun requestSongIdentification() {
+        if (_uiState.value.songRecognitionBusy) return
+        ttsManager?.stop()
+        supersedeResponseTurn()
+        cancelCaptureTiming(); utteranceCapture?.cancel(); utteranceCapture = null
+        stopInterruptionWatch()
+        stopAlwaysOnListening(); stopWakeLoopAndRelease(); speechService?.stopListening()
+        stopAvatarPerformance()
+        _uiState.value = _uiState.value.copy(interactionState = InteractionState.IDLE,
+            captionText = "Ready to identify a nearby song").withFeatures(songRecognitionPrompt = true,
+            songRecognitionStatus = null)
+    }
+
+    fun cancelSongIdentification(rearm: Boolean = true) {
+        val active = _uiState.value.songRecognitionPrompt || _uiState.value.songRecognitionBusy
+        songRecognitionGeneration++
+        songRecognitionJob?.cancel(); songRecognitionJob = null
+        restoreMicrophoneAfterSong()
+        _uiState.value = _uiState.value.withFeatures(songRecognitionBusy = false, songRecognitionPrompt = false)
+        if (active && rearm && !appInBackground) updateVoiceListeningMode()
+    }
+
+    fun identifyNearbySong() {
+        if (!_uiState.value.songRecognitionPrompt || _uiState.value.songRecognitionBusy || appInBackground) return
+        val key = secureStorage?.getApiKey("audd")?.takeIf { it.isNotBlank() } ?: return
+        if (!canCaptureMicrophone()) { requestMicrophoneFor { identifyNearbySong() }; return }
+        val generation = ++songRecognitionGeneration
+        _uiState.value = _uiState.value.withFeatures(songRecognitionBusy = true,
+            songRecognitionStatus = "Listening for 10 seconds…")
+        // A ten-second lookup authorizes this capture, not permanent always-on
+        // listening. Reflect live capture without changing the saved preference.
+        songRecognitionRestoreMicOff = !_uiState.value.isMicEnabled
+        if (songRecognitionRestoreMicOff) _uiState.value = _uiState.value.copy(isMicEnabled = true)
+        ttsManager?.stop()
+        cancelCaptureTiming(); utteranceCapture?.cancel(); utteranceCapture = null
+        stopAlwaysOnListening(); stopWakeLoopAndRelease(); speechService?.stopListening()
+        audioFocusManager?.abandonFocus()
+        songRecognitionJob = viewModelScope.launch {
+            var sample: ByteArray? = null
+            try {
+                val recognizer = songRecognizerOverride ?: songRecognizer
+                stopWakeLoopAndAwait()
+                sample = recognizer.recordSample()
+                restoreMicrophoneAfterSong()
+                _uiState.value = _uiState.value.withFeatures(songRecognitionStatus = "Finding a song match…")
+                val match = recognizer.identify(sample, key)
+                if (generation == songRecognitionGeneration && !appInBackground) {
+                    val answer = match?.let { "This sounds like ${it.label}." }
+                        ?: "No song matched that sample. Try a clearer part of the recording."
+                    _uiState.value = _uiState.value.withFeatures(songRecognitionStatus = answer)
+                    speak(answer)
+                }
+            } catch (cancel: kotlinx.coroutines.CancellationException) {
+                throw cancel
+            } catch (failure: Exception) {
+                if (generation == songRecognitionGeneration) _uiState.value = _uiState.value.withFeatures(
+                    songRecognitionStatus = failure.message?.take(220) ?: "Song recognition failed. Please try again.")
+            } finally {
+                sample?.fill(0)
+                if (generation == songRecognitionGeneration) {
+                    songRecognitionJob = null
+                    restoreMicrophoneAfterSong()
+                    _uiState.value = _uiState.value.withFeatures(songRecognitionBusy = false)
+                }
+            }
+        }
+    }
+
+    private fun restoreMicrophoneAfterSong() {
+        if (songRecognitionRestoreMicOff) {
+            songRecognitionRestoreMicOff = false
+            _uiState.value = _uiState.value.copy(isMicEnabled = false)
+        }
+    }
+
     fun setMusicDancingEnabled(enabled: Boolean) {
         _uiState.value = _uiState.value.withFeatures(musicDancingEnabled = enabled)
         secureStorage?.saveBooleanPreference("music_dancing", enabled)
@@ -11430,7 +11567,7 @@ class CompanionViewModel(
                     }.getOrDefault(com.example.meowmba.core.media.MusicPlayback())
                     _uiState.value = _uiState.value.withFeatures(musicPlayback = playing)
                     val s = _uiState.value
-                    val canDance = playing.playing && s.musicDancingEnabled && !s.driving &&
+                    val canDance = playing.playing && s.musicDancingEnabled && !s.driving && !s.songRecognitionPrompt &&
                         s.interactionState == InteractionState.IDLE && avatarPerformanceStageAllowed &&
                         avatarSceneVisible(s) && socialContextAllowed()
                     if (!canDance && musicDanceSequence != null) {
@@ -11468,7 +11605,7 @@ class CompanionViewModel(
             scope = viewModelScope,
             canMorph = {
                 val s = _uiState.value
-                s.idleMorphEnabled && !s.musicPlayback.playing && !s.driving && !appInBackground &&
+                s.idleMorphEnabled && !s.musicPlayback.playing && !s.songRecognitionPrompt && !s.driving && !appInBackground &&
                     avatarPerformanceStageAllowed && avatarSceneVisible(s) &&
                     s.interactionState == InteractionState.IDLE &&
                     s.activeTask == null && s.pendingApproval == null && s.avatarStyle.isLumen

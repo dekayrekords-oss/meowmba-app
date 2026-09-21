@@ -4,7 +4,7 @@ import java.util.Locale
 import kotlin.random.Random
 
 enum class PerformanceAccent {
-    NONE, HEARTS, TEAR, SPARKLES, QUESTION, STAR, SLEEP, MUSIC, BUBBLE,
+    SIGNATURE, NONE, HEARTS, TEAR, SPARKLES, QUESTION, STAR, SLEEP, MUSIC, BUBBLE,
     SNOW, WIND, EMBER, LIGHTNING, WARMTH,
     BUTTERFLY, DETECTIVE, YARN, BALL, ACORN, SNACK, NEST, RAIN,
     MOUSE, BOOK, HAT_COWBOY, HAT_WIZARD, HAT_BERET,
@@ -589,7 +589,7 @@ object AvatarPerformanceCatalog {
                 f(4350, eye = 0.1f, happy = true, pupil = 0.33f, tilt = 2f, perk = 0.9f, droop = 6f),
                 f(5270, eye = 0.89f, pupil = 0.31f, gaze = 0.05f, tilt = 0.7f, perk = 0.98f, droop = 1f),
             )),
-    )
+    ) + LumenSignatureScenes.scenes.map { it.performance }
 
     private val byName: Map<String, AvatarPerformance> = buildMap {
         AvatarPerformanceCatalog.entries.forEach { entry ->

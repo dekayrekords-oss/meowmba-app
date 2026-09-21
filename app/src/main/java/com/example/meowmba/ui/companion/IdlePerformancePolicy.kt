@@ -17,7 +17,7 @@ internal fun idlePerformanceAllowed(
     stageAllowed: Boolean = true,
     socialContextAllowed: Boolean = true,
 ): Boolean = stageAllowed && socialContextAllowed && faceModeActive(state.copy(showNeuralInfo = false)) &&
-    !state.showConnectorsScreen && !state.showBrowser && !state.driving &&
+    !state.showConnectorsScreen && !state.showBrowser && !state.driving && !state.songRecognitionPrompt &&
     state.activeTask == null && state.pendingApproval == null && state.emotionPreview == null &&
     mouthEnergy.isFinite() && mouthEnergy <= .02f &&
     when (state.interactionState) {
@@ -40,6 +40,7 @@ class IdlePerformanceSelector(
 ) {
     private val quietPool = AvatarPerformanceCatalog.entries.filter { it.ambient }
     private val scenes = AvatarPerformanceCatalog.entries.filter { it.category == "Scenes" }
+    private var lastAnimal: AvatarAnimal? = null
     private val sceneBag = ArrayDeque<AvatarPerformance>()
     private var history = initialHistory.validated(wallClockMs())
     private val recentIds = ArrayDeque(history.recent.takeLast(3).map { it.id })
@@ -62,7 +63,12 @@ class IdlePerformanceSelector(
         scenesEnabled: Boolean = true,
         reducedMotion: Boolean = false,
         playfulness: Playfulness = Playfulness.BALANCED,
+        animal: AvatarAnimal? = null,
     ): AvatarPerformance? {
+        if (animal != lastAnimal) { sceneBag.clear(); lastAnimal = animal }
+        val eligibleScenes = scenes.filter { scene ->
+            LumenSignatureScenes.find(scene.id)?.let { animal == null || it.animal == animal } ?: true
+        }
         if (nowMs < 0) return null
         val last = lastPickAtMs
         if (last != null && (nowMs < last || nowMs - last < MIN_INTERVAL_MS)) return null
@@ -87,7 +93,7 @@ class IdlePerformanceSelector(
         val selected = if (scenesEnabled && !reducedMotion && playfulness != Playfulness.QUIET &&
             nowMs >= nextSceneAtMs && scenes.isNotEmpty()) {
             if (sceneBag.isEmpty()) {
-                val shuffled = scenes.shuffled(random).toMutableList()
+                val shuffled = eligibleScenes.shuffled(random).toMutableList()
                 if (shuffled.size > 1 && shuffled.first().id == lastSceneId) {
                     val other = shuffled.removeAt(1)
                     shuffled.add(0, other)

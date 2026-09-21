@@ -170,6 +170,11 @@ fun AvatarScreen(
                             label = { Text(option.label) })
                     }
                   }
+                val character = LumenPersonalities.forAnimal(animal)
+                Text(character.title, style = MaterialTheme.typography.titleMedium)
+                Text(character.voice, style = MaterialTheme.typography.bodySmall)
+                Text("Signature scenes: " + character.signatures.mapNotNull { AvatarPerformanceCatalog.resolve(it)?.title }.joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall)
                 if (generatedAvatarForm == null && style == AvatarStyle.LUMEN && (animal == AvatarAnimal.CLIPPY || animal == AvatarAnimal.WIZARD)) {
                     Text(if (animal == AvatarAnimal.CLIPPY)
                         "A springy silver paperclip with expressive eyes. Say ‘turn into Clippy’ to switch here any time."

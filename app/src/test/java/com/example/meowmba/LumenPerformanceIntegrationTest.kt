@@ -50,8 +50,8 @@ class LumenPerformanceIntegrationTest {
 
     @Test fun selectionAndSearchExposeBothNewAndLegacyPerformances() {
         val names = AvatarPerformanceCatalog.names() + "paw lick"
-        assertEquals(55, avatarAnimationChoices(names, "New", "").size)
-        assertEquals(16, avatarAnimationChoices(names, "Scenes", "").size)
+        assertEquals(87, avatarAnimationChoices(names, "New", "").size)
+        assertEquals(48, avatarAnimationChoices(names, "Scenes", "").size)
         assertEquals(listOf("Butterfly Chase"), avatarAnimationChoices(names, "New", "butterfly"))
         assertEquals(listOf("paw lick"), avatarAnimationChoices(names, "More", ""))
         assertEquals(listOf("Playful Wink"), avatarAnimationChoices(names, "More", "wink"))

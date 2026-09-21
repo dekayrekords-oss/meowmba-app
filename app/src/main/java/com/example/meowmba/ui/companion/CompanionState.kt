@@ -507,10 +507,16 @@ data class CompanionState(
     val carCameraSources: List<com.example.meowmba.core.car.camera.CarCameraSource> get() = features.carCameraSources
     val carCameraActiveId: String get() = features.carCameraActiveId
     val carDashcamRtspUrl: String get() = features.carDashcamRtspUrl
+    val songRecognitionPrompt get() = features.songRecognitionPrompt
+    val songRecognitionBusy get() = features.songRecognitionBusy
+    val songRecognitionStatus get() = features.songRecognitionStatus
     val musicPlayback get() = features.musicPlayback
     val musicDancingEnabled get() = features.musicDancingEnabled
     val needleStatus get() = features.needleStatus
     fun withFeatures(
+        songRecognitionStatus: String? = features.songRecognitionStatus,
+        songRecognitionBusy: Boolean = features.songRecognitionBusy,
+        songRecognitionPrompt: Boolean = features.songRecognitionPrompt,
         musicPlayback: com.example.meowmba.core.media.MusicPlayback = features.musicPlayback,
         musicDancingEnabled: Boolean = features.musicDancingEnabled,
         needleStatus: com.example.meowmba.core.agent.runtime.NeedleStatus = features.needleStatus,
@@ -536,6 +542,9 @@ data class CompanionState(
         carCameraActiveId: String = features.carCameraActiveId,
         carDashcamRtspUrl: String = features.carDashcamRtspUrl,
     ): CompanionState = copy(features = features.copy(
+        songRecognitionStatus = songRecognitionStatus,
+        songRecognitionBusy = songRecognitionBusy,
+        songRecognitionPrompt = songRecognitionPrompt,
         musicPlayback = musicPlayback,
         musicDancingEnabled = musicDancingEnabled,
         needleStatus = needleStatus,
@@ -763,6 +772,9 @@ fun nextDriveReaction(
 
 /** Separate feature state keeps JVM constructor/copy signatures below the 255-slot limit. */
 data class CompanionFeatures(
+    val songRecognitionStatus: String? = null,
+    val songRecognitionBusy: Boolean = false,
+    val songRecognitionPrompt: Boolean = false,
     val musicPlayback: com.example.meowmba.core.media.MusicPlayback = com.example.meowmba.core.media.MusicPlayback(),
     val musicDancingEnabled: Boolean = true,
     val needleStatus: com.example.meowmba.core.agent.runtime.NeedleStatus = com.example.meowmba.core.agent.runtime.NeedleStatus.MISSING,

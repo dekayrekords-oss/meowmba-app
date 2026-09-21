@@ -18,7 +18,7 @@ import kotlin.math.sin
 
 /** One timeline supplies prop placement and eye targets, so their contact agrees. */
 internal object LumenScenes {
-    val accents = setOf(PerformanceAccent.BUTTERFLY, PerformanceAccent.DETECTIVE,
+    val accents = setOf(PerformanceAccent.SIGNATURE, PerformanceAccent.BUTTERFLY, PerformanceAccent.DETECTIVE,
         PerformanceAccent.YARN, PerformanceAccent.BALL, PerformanceAccent.ACORN,
         PerformanceAccent.SNACK, PerformanceAccent.NEST, PerformanceAccent.RAIN,
         PerformanceAccent.MOUSE, PerformanceAccent.BOOK, PerformanceAccent.HAT_COWBOY,
@@ -34,6 +34,7 @@ internal object LumenScenes {
         val p = if (progress.isFinite()) progress.coerceIn(0f, 1f) else 0f
         LumenStoryArcs.sample(performanceId, accent, p)?.let { return it.gaze }
         return when (accent) {
+            PerformanceAccent.SIGNATURE -> LumenSignatureScenes.find(performanceId)?.let { SignatureTimeline.sample(it.prop, p).point } ?: Offset.Zero
             PerformanceAccent.BUTTERFLY -> when {
                 p < .32f -> between(p, 0f, .32f, Offset(-.32f, -.20f), Offset(.23f, -.29f))
                 p < .53f -> between(p, .32f, .53f, Offset(.23f, -.29f), Offset(.01f, .10f))
@@ -58,7 +59,7 @@ internal object LumenScenes {
     fun gaze(input: LumenInput, accent: PerformanceAccent, p: Float, performanceId: String? = null): LumenInput {
         if (accent !in accents) return input
         val arc = LumenStoryArcs.sample(performanceId, accent, p)
-        val point = arc?.gaze ?: target(accent, p)
+        val point = arc?.gaze ?: target(accent, p, performanceId)
         val weight = envelope(p)
         val glance = if (accent == PerformanceAccent.SNACK) ease((p - .57f) / .17f) else 0f
         return input.copy(sceneGazeX = (point.x / .36f).coerceIn(-1f, 1f) * (1f - glance) - .7f * glance,
@@ -183,10 +184,15 @@ internal object LumenStoryArcs {
 internal class LumenScenePainter {
     private val path = Path()
     private val storyProps = LumenStoryPropPainter()
+    private val signatures = LumenSignaturePropPainter()
 
     fun draw(scope: DrawScope, accent: PerformanceAccent, progress: Float, center: Offset,
         unit: Float, glow: Color, feature: Color, frame: LumenFrame, performanceId: String? = null) = with(scope) {
         if (accent !in LumenScenes.accents) return
+        if (accent == PerformanceAccent.SIGNATURE) {
+            LumenSignatureScenes.find(performanceId)?.let { signatures.draw(this, it, progress, center, unit) }
+            return
+        }
         val alpha = LumenScenes.envelope(progress)
         if (alpha < .001f) return
         val p = progress.coerceIn(0f, 1f)
