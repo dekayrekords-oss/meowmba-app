@@ -27,6 +27,24 @@ class NeedleAgentBrainTest {
             }
         } finally { model.delete() }
     }
+    @Test fun `native status distinguishes loading running and idle`() = kotlinx.coroutines.test.runTest {
+        val states = mutableListOf<com.example.meowmba.core.agent.runtime.NeedleStatus>()
+        val native = object : com.example.meowmba.core.agent.runtime.NeedleNative {
+            override fun load(bytes: ByteArray) = 0
+            override fun initialize(systemPrompt: String, toolsJson: String) = 12
+            override fun complete(input: String, maxTokens: Int) = "{}"
+            override fun reset() {}
+        }
+        val model = java.nio.file.Files.createTempFile("needle-status", ".cact").toFile()
+        try {
+            val brain = NeedleAgentBrain(model, native, onStatus = { synchronized(states) { states.add(it) }; Unit })
+            brain.route("Remember that my favorite color is blue", registry())
+            assertEquals(listOf(com.example.meowmba.core.agent.runtime.NeedleStatus.LOADING,
+                com.example.meowmba.core.agent.runtime.NeedleStatus.RUNNING,
+                com.example.meowmba.core.agent.runtime.NeedleStatus.IDLE), states)
+        } finally { model.delete() }
+    }
+
     private fun registry() = ToolRegistry().apply {
         register(object : Tool {
             override val definition = ToolDefinition(

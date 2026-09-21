@@ -1,9 +1,17 @@
 # Meowmba shared build authority
 
-Updated 2026-09-19. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
+Updated 2026-09-21. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
 This supersedes historical build-location/version instructions in other documents.
 
 ## Current recovery
+
+- September 21 companion update: signed release 1.3.97/code 153 installed in place
+  on the connected Fold. Selected-avatar restoration, sporadic idle visits, Needle 3
+  status, speech echo protection, and optional music awareness/dancing are implemented.
+  Full suite: 2,717 tests, zero failures/errors, five skips; release lint zero errors.
+  Home UI confirms Needle ready/on-demand with sensors off. Physical audio/music
+  acceptance remains; metadata requires user-enabled Music access. Receipt:
+  docs/COMPANION_153_2026-09-21.md. Play/website remain on the previous release.
 
 - Integrator: Codex, this recovery task. One owner performs builds and phone installs.
 - Integration branch: `recovery/known-good-138`.
@@ -11,7 +19,7 @@ This supersedes historical build-location/version instructions in other document
 - Baseline: `5efed2f`, version 1.3.82/code 138. Historical evidence is dated September 15.
 - Verified original APK: `/Users/prog/Meowmba-Releases/idle136-20260915/meow-preview138.apk`.
 - Grok source to recover: `529cc69`, preserved as `recovery/grok-lumen` remote-tracking ref.
-- Status: preview152 (1.3.96) installed in place; original debug certificate and data
+- Previous status: preview152 (1.3.96) installed in place; original debug certificate and data
   preserved. The separate signed release package is also updated to152.
 - Fixes: all 21 lint errors, API31/32 road-feed compatibility, Bluetooth revocation/socket
   cleanup, CameraX API usage and Activity lookup. Native build uses baseline ARMv8-A;

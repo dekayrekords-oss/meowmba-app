@@ -17,17 +17,59 @@ class IdleFormCyclerTest {
     @Test fun repeatedStartDoesNotPostponeTheNextForm() = kotlinx.coroutines.test.runTest {
         val targets = mutableListOf<IdleFormTarget>()
         val cycler = IdleFormCycler(backgroundScope, { true },
-            intervalMs = { 20_000L }, onTarget = targets::add)
+            random = kotlin.random.Random(7), onTarget = targets::add)
         cycler.start()
         runCurrent()
+        val wait = kotlin.random.Random(7).nextLong(60_000L, 240_001L)
         advanceTimeBy(10_000L)
         cycler.start()
-        advanceTimeBy(10_000L)
+        advanceTimeBy(wait - 10_000L + 500L)
         runCurrent()
         assertEquals(1, targets.size)
         cycler.stop()
         assertFalse(cycler.isRunning)
     }
+    @Test fun visitReturnsToBaselineAndStopsWhenBusy() = kotlinx.coroutines.test.runTest {
+        var idle = true
+        var target: IdleFormTarget? = null
+        val baseline = IdleFormTarget(animal = AvatarAnimal.CAT)
+        val cycler = IdleFormCycler(backgroundScope, { idle }, baseline = { baseline },
+            random = kotlin.random.Random(7), onTarget = { target = it }, onBaseline = { target = null })
+        assertFalse(baseline in cycler.pool())
+        cycler.start()
+        runCurrent()
+        val wait = kotlin.random.Random(7).nextLong(60_000L, 240_001L)
+        advanceTimeBy(wait + 500L); runCurrent()
+        assertTrue(target != null)
+        advanceTimeBy(6_500L); runCurrent()
+        assertEquals(null, target)
+        idle = false
+        advanceTimeBy(300_000L); runCurrent()
+        assertEquals(null, target)
+        cycler.stop()
+    }
+
+    @Test fun interruptedVisitImmediatelyRestoresBaseline() = kotlinx.coroutines.test.runTest {
+        var idle = true
+        var target: IdleFormTarget? = null
+        val cycler = IdleFormCycler(backgroundScope, { idle }, random = kotlin.random.Random(7),
+            onTarget = { target = it }, onBaseline = { target = null })
+        cycler.start(); runCurrent()
+        advanceTimeBy(kotlin.random.Random(7).nextLong(60_000L, 240_001L) + 500L); runCurrent()
+        assertTrue(target != null)
+        idle = false
+        advanceTimeBy(500L); runCurrent()
+        assertEquals(null, target)
+        cycler.stop()
+    }
+
+    @Test fun visitsHaveIrregularGaps() {
+        val cycler = IdleFormCycler(TestScope(), { true }, random = kotlin.random.Random(9), onTarget = {})
+        val gaps = List(30) { cycler.nextWaitMs() }
+        assertTrue(gaps.all { it in 60_000L..240_000L })
+        assertTrue(gaps.toSet().size > 20)
+    }
+
     @Test
     fun poolIncludesEveryAuthoredAnimalExceptEyesOnly() {
         val cycler = IdleFormCycler(

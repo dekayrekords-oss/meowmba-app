@@ -264,9 +264,13 @@ fun CompanionScreen(
                 if (!uiState.isCameraEnabled) add("CAM OFF")
                 if (uiState.isMuted) add("MUTED")
             }
-            if (privacyFlags.isNotEmpty()) {
+            if (!uiState.isChatExpanded) {
                 Text(
-                    text = privacyFlags.joinToString("  ·  "),
+                    text = listOfNotNull(
+                        uiState.musicPlayback.takeIf { it.playing }?.let { "♫ ${it.label}" },
+                        "Needle 3 · ${uiState.needleStatusLabel()}",
+                        privacyFlags.takeIf { it.isNotEmpty() }?.joinToString("  ·  ")
+                    ).joinToString("\n"),
                     color = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,

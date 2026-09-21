@@ -507,7 +507,13 @@ data class CompanionState(
     val carCameraSources: List<com.example.meowmba.core.car.camera.CarCameraSource> get() = features.carCameraSources
     val carCameraActiveId: String get() = features.carCameraActiveId
     val carDashcamRtspUrl: String get() = features.carDashcamRtspUrl
+    val musicPlayback get() = features.musicPlayback
+    val musicDancingEnabled get() = features.musicDancingEnabled
+    val needleStatus get() = features.needleStatus
     fun withFeatures(
+        musicPlayback: com.example.meowmba.core.media.MusicPlayback = features.musicPlayback,
+        musicDancingEnabled: Boolean = features.musicDancingEnabled,
+        needleStatus: com.example.meowmba.core.agent.runtime.NeedleStatus = features.needleStatus,
         pendingPropPlacement: GeneratedPropForm? = features.pendingPropPlacement,
         savedAnimationNames: List<String> = features.savedAnimationNames,
         animInventGenerating: Boolean = features.animInventGenerating,
@@ -530,6 +536,9 @@ data class CompanionState(
         carCameraActiveId: String = features.carCameraActiveId,
         carDashcamRtspUrl: String = features.carDashcamRtspUrl,
     ): CompanionState = copy(features = features.copy(
+        musicPlayback = musicPlayback,
+        musicDancingEnabled = musicDancingEnabled,
+        needleStatus = needleStatus,
         pendingPropPlacement = pendingPropPlacement,
         savedAnimationNames = savedAnimationNames,
         animInventGenerating = animInventGenerating,
@@ -754,6 +763,9 @@ fun nextDriveReaction(
 
 /** Separate feature state keeps JVM constructor/copy signatures below the 255-slot limit. */
 data class CompanionFeatures(
+    val musicPlayback: com.example.meowmba.core.media.MusicPlayback = com.example.meowmba.core.media.MusicPlayback(),
+    val musicDancingEnabled: Boolean = true,
+    val needleStatus: com.example.meowmba.core.agent.runtime.NeedleStatus = com.example.meowmba.core.agent.runtime.NeedleStatus.MISSING,
     val referencePhotoUri: String? = null,
     val referenceDescription: String? = null,
     val referencePhotoBusy: Boolean = false,

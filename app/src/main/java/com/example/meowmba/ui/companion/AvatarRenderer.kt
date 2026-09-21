@@ -286,7 +286,7 @@ fun AvatarRenderer(
     val idleGenerated = state.idleMorphGeneratedId?.let { id ->
                 state.savedGeneratedForms.firstOrNull { it.id == id }
             }
-            val generatedForm = (idleGenerated ?: state.generatedAvatarForm).takeIf { state.avatarStyle == AvatarStyle.LUMEN }
+            val generatedForm = (idleGenerated ?: state.generatedAvatarForm.takeIf { state.idleMorphAnimal == null }).takeIf { state.avatarStyle == AvatarStyle.LUMEN }
     val touchGeneratedForm by rememberUpdatedState(generatedForm)
     val generatedPlacement = remember { arrayOfNulls<GeneratedAvatarPlacement>(1) }
     val fullFlyPainter = remember { FullFlyPainter() }

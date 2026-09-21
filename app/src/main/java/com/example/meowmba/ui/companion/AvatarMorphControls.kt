@@ -9,14 +9,16 @@ import androidx.compose.ui.unit.dp
 @Composable
 internal fun AvatarMorphControls(state: CompanionState, viewModel: CompanionViewModel) {
     Column(Modifier.padding(vertical = 12.dp)) {
-        VoiceToggle("Change characters while idle", "Your chosen main avatar stays saved. Automatic changes pause during driving and conversation.", state.idleMorphEnabled, viewModel::setIdleMorphEnabled)
-        Text("Change every ${state.idleMorphIntervalSec} seconds")
-        Slider(state.idleMorphIntervalSec.toFloat(), { viewModel.setIdleMorphIntervalSec(it.toInt()) },
-            valueRange = 20f..180f, enabled = state.idleMorphEnabled)
-        Text("Randomness: ${(state.features.idleMorphRandomness * 100).toInt()}%")
-        Slider(state.features.idleMorphRandomness, viewModel::setIdleMorphRandomness,
-            enabled = state.idleMorphEnabled)
-        Text("0% cycles in order; 100% shuffles. Every available character gets a turn before repeats.", style = MaterialTheme.typography.bodySmall)
+        VoiceToggle("Occasional idle characters", "Your selected avatar is home. While idle, another character may visit for 3–6 seconds, then your avatar returns. Visits happen at random, never during conversation or driving.", state.idleMorphEnabled, viewModel::setIdleMorphEnabled)
+        VoiceToggle("Dance to music", "Your companion grooves while music plays and pauses for conversation or driving.", state.musicDancingEnabled, viewModel::setMusicDancingEnabled)
+        Text(state.musicPlayback.label, style = MaterialTheme.typography.bodySmall)
+        if (!state.musicPlayback.metadataAccess) {
+            val context = androidx.compose.ui.platform.LocalContext.current
+            Text("To show the song and artist, allow Meow notification access in Android settings. Meow reads the player’s shared title and artist without recording the music.", style = MaterialTheme.typography.bodySmall)
+            TextButton(onClick = {
+                context.startActivity(android.content.Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+            }) { Text("Music access") }
+        }
         VoiceToggle("Include invented characters", "Use your saved generated forms too.", state.idleMorphIncludeGenerated, viewModel::setIdleMorphIncludeGenerated)
     }
 }

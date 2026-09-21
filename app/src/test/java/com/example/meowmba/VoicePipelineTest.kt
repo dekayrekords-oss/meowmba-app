@@ -330,7 +330,7 @@ class VoicePipelineTest {
     }
 
     @Test
-    fun `novel user speech barges in over the companion's voice`() = pipelineTest {
+    fun `explicit stop interrupts the companion voice`() = pipelineTest {
         viewModel.onUserTextSubmitted("hi")
         advanceUntilIdle()
         fakeTts.onSpeechStarted?.invoke()
@@ -339,6 +339,18 @@ class VoicePipelineTest {
         fakeStt.simulatePartial("wait stop that")
         assertEquals(stopsBeforeBargeIn + 1, fakeTts.stopCalls)
         assertEquals(InteractionState.LISTENING, viewModel.uiState.value.interactionState)
+    }
+
+    @Test
+    fun `own spoken wake phrase does not interrupt or create a reply`() = pipelineTest {
+        viewModel.onUserTextSubmitted("hi")
+        advanceUntilIdle()
+        fakeTts.onSpeechStarted?.invoke()
+        val stops = fakeTts.stopCalls
+        val replies = fakeTts.spokenTexts.size
+        fakeStt.simulatePartial(fakeTts.spokenTexts.last())
+        assertEquals(stops, fakeTts.stopCalls)
+        assertEquals(replies, fakeTts.spokenTexts.size)
     }
 
     @Test

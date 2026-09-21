@@ -117,6 +117,9 @@ fun ModelManagerScreen(
         ) {
             // Hardware Status Card
             HardwareStatusCard(caps)
+            NeedleStatusCard(state) {
+                ModelCatalog.options.firstOrNull { it.id == "needle-3" }?.let(onDownloadModel)
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
 

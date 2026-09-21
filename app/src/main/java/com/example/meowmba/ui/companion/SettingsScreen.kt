@@ -468,7 +468,7 @@ fun SettingsScreen(
 
             VoiceToggle(
                 label = "Barge-in",
-                description = "Keep listening for 8 seconds after every reply so you can cut in without saying the wake word again.",
+                description = "Say Meow or Stop to interrupt speech, or tap the microphone. After the reply, keep listening briefly for your next turn.",
                 checked = bargeInEnabled,
                 onCheckedChange = onBargeInChange
             )

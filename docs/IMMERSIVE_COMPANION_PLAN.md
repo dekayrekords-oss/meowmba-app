@@ -1,5 +1,18 @@
 # Immersive companion — detailed revision plan
 
+## September 21 requested revision
+
+The avatar selected in settings is the baseline. Automatic character visits last
+3–6 seconds, then return to that baseline; gaps are randomized rather than a user-set
+interval. Conversation, driving, hidden/paused stage and music interrupt visits.
+This supersedes the September 19 interval/randomness controls below.
+
+Needle 3 needs visible download/readiness/loading/inference/idle/failure status.
+Own-speech echo must not create user turns, including streamed sentences and late
+recognizer results. Music playback should show available title/artist and trigger
+idle dancing, with Android notification access requested through an explicit settings
+button for metadata. No automatic permission grant or microphone music recording.
+
 ## September 19 requested revision
 
 Avatar owns separate automatic-change interval and randomness controls; sequential order at

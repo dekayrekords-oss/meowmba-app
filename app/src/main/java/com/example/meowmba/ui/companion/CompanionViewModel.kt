@@ -31,6 +31,7 @@ import com.example.meowmba.core.agent.runtime.AuditSink
 import com.example.meowmba.core.agent.runtime.HermesAgentBrain
 import com.example.meowmba.core.agent.runtime.HermesConfig
 import com.example.meowmba.core.agent.runtime.LlmToolCallRouter
+import com.example.meowmba.core.agent.runtime.NeedleStatus
 import com.example.meowmba.core.agent.runtime.NeedleAgentBrain
 import com.example.meowmba.core.agent.runtime.SubmitResult
 import com.example.meowmba.core.agent.runtime.TaskStatus
@@ -1527,8 +1528,10 @@ class CompanionViewModel(
             }
         }
         ensureNeedleDefault()
+        startMusicAwareness()
 
         ttsManager?.onSpeechStarted = {
+            clearIdleMorphOverlay()
             _uiState.value = _uiState.value.copy(interactionState = InteractionState.SPEAKING)            // HALF-DUPLEX GUARD: the moment her voice starts, close the
             // always-on mic. A session left open WILL hear the TTS through the
             // speaker and deliver it back as a user turn (measured on device:
@@ -1618,9 +1621,9 @@ class CompanionViewModel(
                     s.isMicEnabled && partial.isNotBlank()
                 ) {
                     // The recognizer is LIVE while the companion speaks.
-                    // The wake phrase always interrupts; novel user speech
-                    // barges in; the companion's own echo is suppressed.
-                    if (matcher.match(partial) != null || !selfVoiceFilter.isOwnVoice(partial)) {
+                    // Require an explicit wake or stop during playback, and never
+                    // let a wake phrase spoken by Meow bypass the echo filter.
+                    if (!selfVoiceFilter.isOwnVoice(partial) && (matcher.match(partial) != null || partial.trim().lowercase() in setOf("stop", "stop talking", "wait stop that", "stop that", "be quiet"))) {
                         interrupt()
                     }
                 }
@@ -2083,6 +2086,7 @@ class CompanionViewModel(
                     // fix) slamming them shut to show a performance nobody
                     // asked for.
                     idlePerformanceAllowed(s, _mouthEnergy.value, !appInBackground && avatarPerformanceStageAllowed, socialContextAllowed()) &&
+                        !s.musicPlayback.playing && s.idleMorphAnimal == null && s.idleMorphGeneratedId == null &&
                         s.activeAnimation == null && s.activeComposed == null
                 },
                 pickName = {
@@ -6803,6 +6807,11 @@ class CompanionViewModel(
     }
 
     private fun processUserSpeech(raw: String, fromVoice: Boolean = true, finalTranscript: Boolean = false) {
+        if (fromVoice && selfVoiceFilter.isOwnVoice(raw, filterShortNoise = false)) {
+            if (_uiState.value.interactionState == InteractionState.LISTENING) resetState()
+            return
+        }
+
         if (fromVoice && !_uiState.value.isMicEnabled) return
         val normalizedRaw = com.example.meowmba.core.audio.SpokenText.normalize(raw)
         // Glasses bridge: strip Hey Meta / Hey Meow and hint ssh/opencode tools when enabled.
@@ -6847,6 +6856,16 @@ class CompanionViewModel(
         }
         placeRequestJob?.cancel()
         placeRequestJob = null
+        if (Regex("(?i)^(what(?:’s|'s| is) (?:this song|playing|the song|the music)|what (?:song|music|track) (?:is (?:this|playing)|am i listening to)|who is (?:singing|the artist))[?.!]*$").matches(text.trim())) {
+            val music = _uiState.value.musicPlayback
+            speak(when {
+                !music.playing -> "I don't detect music playing right now."
+                music.title != null -> "You're listening to ${music.label}."
+                !music.metadataAccess -> "I can detect audio, but need notification access to see track details. Open Avatar settings and choose Music access."
+                else -> "Audio is playing, but the player isn't sharing a track title."
+            })
+            return
+        }
         if (handleAvatarReviewReply(text)) return
         if (!_uiState.value.isNoting && handleBugReport(text, fromVoice)) return
         // Agentic Computer path (chat/voice): shell-like or "Run on Computer".
@@ -8045,8 +8064,8 @@ class CompanionViewModel(
             if (first) startMockSpeaking(text)
             return
         }
-        // Word-boundary offsets are per-utterance, so the echo filter tracks per chunk.
-        selfVoiceFilter.begin(text)
+        // Keep every queued sentence: playback may still be on an earlier chunk.
+        if (first) selfVoiceFilter.begin(text) else selfVoiceFilter.append(text)
         if (first) {
             audioFocusManager?.requestFocus()
             resetMouthEnergy()
@@ -8389,7 +8408,7 @@ class CompanionViewModel(
             onResult = { text ->
                 if (generation != interruptionGeneration || _uiState.value.interactionState != InteractionState.SPEAKING ||
                     !com.example.meowmba.core.audio.SpokenText.isFinalTranscriptUsable(text)) return@startListening
-                if (matcher.match(text) != null || !selfVoiceFilter.isOwnVoice(text)) {
+                if (!selfVoiceFilter.isOwnVoice(text) && (matcher.match(text) != null || text.trim().lowercase() in setOf("stop", "stop talking", "wait stop that", "stop that", "be quiet"))) {
                     stopInterruptionWatch()
                     suppressSpeechFinished = true
                     supersedeResponseTurn()
@@ -8424,7 +8443,7 @@ class CompanionViewModel(
             interruptionEngine = null
             interruptionGeneration++
         } else stopInterruptionWatch()
-        selfVoiceFilter.clear()
+        selfVoiceFilter.finish()
         if (wakeAckPending) {
             // The ack ("Yes?") finished speaking — open the command mic NOW
             // instead of waiting out the 1.5s fallback deadline. The old fixed
@@ -9059,6 +9078,7 @@ class CompanionViewModel(
             return
         }
         dl.installedFile(option)?.let { file ->
+            if (option.id == "needle-3") loadNeedle(file)
             setDownloadProgress(option.id, ModelDownloader.DownloadProgress(file.length(), file.length(), done = true))
             refreshLoadedModels()
             return
@@ -9160,11 +9180,14 @@ class CompanionViewModel(
     }
 
     private fun loadNeedle(file: File) {
-        needleBrain = runCatching { NeedleAgentBrain(file) }.onFailure { error ->
+        needleBrain = runCatching { NeedleAgentBrain(file, onStatus = { status ->
+            viewModelScope.launch { _uiState.value = _uiState.value.withFeatures(needleStatus = status) }
+        }) }.onFailure { error ->
             if (error is UnsupportedOperationException) {
                 _uiState.value = _uiState.value.copy(captionText = error.message.orEmpty())
             }
         }.getOrNull()
+        _uiState.value = _uiState.value.withFeatures(needleStatus = if (needleBrain != null) NeedleStatus.READY else NeedleStatus.FAILED)
         if (needleBrain != null) secureStorage?.savePreference("needle_model_file", file.name)
     }
 
@@ -9309,7 +9332,12 @@ class CompanionViewModel(
     /** Delete any bundle present in the models dir (catalog or custom). */
     fun deleteInstalledModelFile(fileName: String) {
         val file = downloader?.listInstalled()?.firstOrNull { it.name == fileName } ?: return
-        file.delete()
+        if (!file.delete()) return
+        if (ModelCatalog.optionForFile(fileName)?.id == "needle-3") {
+            needleBrain = null
+            _uiState.value = _uiState.value.copy(modelDownloads = _uiState.value.modelDownloads - "needle-3")
+                .withFeatures(needleStatus = NeedleStatus.MISSING)
+        }
         if (_uiState.value.loadedModels.localPath.endsWith(fileName)) {
             secureStorage?.saveEndpoint("local", "/data/local/tmp/llm/gemma.bin")
         }
@@ -11381,6 +11409,45 @@ class CompanionViewModel(
 
     // ── Idle morph + car awareness ───────────────────────────────────────────
 
+    private var musicDanceSequence: Long? = null
+
+    fun setMusicDancingEnabled(enabled: Boolean) {
+        _uiState.value = _uiState.value.withFeatures(musicDancingEnabled = enabled)
+        secureStorage?.saveBooleanPreference("music_dancing", enabled)
+    }
+
+    private fun startMusicAwareness() {
+        if (System.getProperty("meowmba.idleAnimations", "true") == "false") return
+        val context = secureStorage?.context ?: return
+        val monitor = com.example.meowmba.core.media.MusicAwareness(context)
+        _uiState.value = _uiState.value.withFeatures(musicDancingEnabled = secureStorage?.getBooleanPreference("music_dancing", true) ?: true)
+        viewModelScope.launch {
+            while (kotlin.coroutines.coroutineContext.isActive) {
+                if (!appInBackground) {
+                    val before = _uiState.value
+                    val playing = runCatching { monitor.read(before.interactionState == InteractionState.SPEAKING ||
+                        (ttsManager as? com.example.meowmba.core.audio.TextToSpeechManager)?.isSpeaking() == true)
+                    }.getOrDefault(com.example.meowmba.core.media.MusicPlayback())
+                    _uiState.value = _uiState.value.withFeatures(musicPlayback = playing)
+                    val s = _uiState.value
+                    val canDance = playing.playing && s.musicDancingEnabled && !s.driving &&
+                        s.interactionState == InteractionState.IDLE && avatarPerformanceStageAllowed &&
+                        avatarSceneVisible(s) && socialContextAllowed()
+                    if (!canDance && musicDanceSequence != null) {
+                        if (s.avatarPerformanceSequence == musicDanceSequence && s.activeAnimation?.name == "Pocket Groove") stopAvatarPerformance()
+                        musicDanceSequence = null
+                    }
+                    if (canDance && s.activeAnimation == null && s.activeComposed == null && !s.ambientPerformance) {
+                        clearIdleMorphOverlay()
+                        playAnimationNamed("pocket_groove", userRequested = false)
+                        musicDanceSequence = _uiState.value.avatarPerformanceSequence
+                    }
+                }
+                delay(2_000L)
+            }
+        }
+    }
+
     private fun startIdleFormCyclerIfNeeded() {
         secureStorage?.getPreference("idle_morph_randomness")?.toFloatOrNull()?.takeIf { it.isFinite() }?.let { value ->
             _uiState.value = _uiState.value.copy(features = _uiState.value.features.copy(idleMorphRandomness = value.coerceIn(0f, 1f)))
@@ -11401,17 +11468,25 @@ class CompanionViewModel(
             scope = viewModelScope,
             canMorph = {
                 val s = _uiState.value
-                s.idleMorphEnabled && !s.driving && !appInBackground &&
+                s.idleMorphEnabled && !s.musicPlayback.playing && !s.driving && !appInBackground &&
+                    avatarPerformanceStageAllowed && avatarSceneVisible(s) &&
                     s.interactionState == InteractionState.IDLE &&
-                    !s.ambientPerformance && s.activeAnimation == null &&
-                    s.avatarStyle.isLumen
+                    s.activeTask == null && s.pendingApproval == null && s.avatarStyle.isLumen
+            },
+            canShow = {
+                val s = _uiState.value
+                !s.ambientPerformance && s.activeAnimation == null && s.activeComposed == null
             },
             generatedFormIds = {
                 _uiState.value.savedGeneratedForms.map { it.id }
             },
             includeGenerated = { _uiState.value.idleMorphIncludeGenerated },
-            intervalMs = { _uiState.value.idleMorphIntervalSec * 1000L },
-            randomness = { _uiState.value.features.idleMorphRandomness },
+            baseline = {
+                val s = _uiState.value
+                s.generatedAvatarForm?.let { IdleFormTarget(generatedId = it.id) }
+                    ?: IdleFormTarget(animal = if (s.avatarStyle == AvatarStyle.LUMEN_CAT) AvatarAnimal.CAT else s.avatarAnimal)
+            },
+            onBaseline = ::clearIdleMorphOverlay,
             onTarget = { applyIdleMorphTarget(it) },
         )
         idleFormCycler = cycler
@@ -12646,6 +12721,7 @@ class CompanionViewModel(
     /** Test-safe lifecycle log: android.util.Log is not mocked in JVM unit tests. */
     /** Stop talking and ignore any in-flight model stream. Never job.cancel(). */
     private fun supersedeResponseTurn(): Long {
+        selfVoiceFilter.finish()
         val next = ++responseEpoch
         responseNativeStop.requestStop()
         responseNativeStop = com.example.meowmba.core.agent.LocalInferenceCancellation()
