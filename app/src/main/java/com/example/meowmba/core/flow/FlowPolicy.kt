@@ -171,7 +171,7 @@ class FlowPolicy(private val zone: ZoneId = ZoneId.systemDefault()) {
             kind = i.kind,
             headline = i.text,
             because = because(i, s, o),
-            primary = FlowAction("primary", i.facts[FACT_ACTION] ?: defaultAction(i.kind, o != null)),
+            primary = FlowAction("primary", "Done"),
             secondary = FlowAction("later", "Later"),
             urgency = a.urgency,
             certainty = o?.certainty ?: Certainty.CONFIRMED,

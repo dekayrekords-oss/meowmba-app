@@ -12,7 +12,6 @@ import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
-import androidx.compose.ui.graphics.lerp
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -25,6 +24,10 @@ import kotlin.math.sin
 internal class LumenSpeciesParts {
     private val outline = Path()
     private val detail = Path()
+    private val colorBlends = ColorLerpCache()
+
+    /** Compose's color lerp, memoized: these blends repeat identically every frame. */
+    private fun lerp(start: Color, stop: Color, fraction: Float): Color = colorBlends.lerp(start, stop, fraction)
 
     fun backdrop(scope: DrawScope, center: Offset, unit: Float, f: LumenFrame,
         color: Color, glow: Color) = with(scope) {

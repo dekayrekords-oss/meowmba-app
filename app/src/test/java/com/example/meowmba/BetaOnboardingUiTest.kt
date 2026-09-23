@@ -75,9 +75,12 @@ class BetaOnboardingUiTest {
             SetupWizardRoute(onFinished = {}, onSkipPermissions = { skipped++ }, onEnablePermissions = { requested++ })
         } }
         tap("Let’s go")
+        compose.onNodeWithText("Tuned for your phone").assertExists()
+        tap("Continue")
         welcomeFeatures.forEach { (title, _) -> compose.onNodeWithText(title).performScrollTo().assertIsDisplayed() }
         tap("Choose my avatar"); tap("Panda"); tap("Fit to my screen"); tap("Keep this size"); tap("Next")
-        tap("Set up Computer later"); tap("Not now")
+        if (compose.onAllNodesWithText("Set up Computer later").fetchSemanticsNodes().isNotEmpty()) tap("Set up Computer later")
+        tap("Not now")
         assertEquals(1, skipped); assertEquals(0, requested)
         listOf("OpenAI", "Claude", "OpenRouter", "OpenCode Zen", "Custom API", "On this phone").forEach {
             compose.onNodeWithText(it).assertExists()

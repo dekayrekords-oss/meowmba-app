@@ -55,7 +55,7 @@ data class FlowOutcomeEntity(
 
 @Dao
 interface FlowDao {
-    @Query("SELECT * FROM flow_intentions ORDER BY createdAt")
+    @Query("SELECT * FROM flow_intentions WHERE status IN ('OPEN', 'SNOOZED') ORDER BY createdAt DESC LIMIT 200")
     fun observeIntentions(): kotlinx.coroutines.flow.Flow<List<FlowIntentionEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -119,4 +119,20 @@ class RoomIntentionStore(
     override suspend fun upsert(intention: Intention) = dao.upsert(FlowEntityMapper.toEntity(intention, clock()))
     override suspend fun setStatus(id: String, status: IntentionStatus, snoozedUntil: Long?) = dao.setStatus(id, status.name, snoozedUntil, clock())
     override suspend fun closeSatisfied(ids: Collection<String>) = dao.closeAll(ids.toList(), clock())
+}
+
+/** Bounded durable feedback, kept off the main thread by Room's suspend DAO. */
+class RoomOutcomeLog(private val dao: FlowDao) : com.example.meowmba.core.flow.OutcomeLog {
+    override suspend fun record(record: com.example.meowmba.core.flow.OutcomeRecord) {
+        dao.insertOutcome(FlowOutcomeEntity(intentionId = record.intentionId, at = record.at,
+            outcome = record.outcome.name, channel = record.channel?.name,
+            urgency = record.urgency?.name, engine = record.engine))
+        dao.pruneOutcomes(record.at - 30L * 24 * 60 * 60 * 1000)
+    }
+    override suspend fun recent(limit: Int) = dao.recentOutcomes(limit.coerceIn(0, 1000)).mapNotNull { e ->
+        runCatching { com.example.meowmba.core.flow.OutcomeRecord(e.intentionId, e.at,
+            com.example.meowmba.core.flow.Outcome.valueOf(e.outcome),
+            e.channel?.let(com.example.meowmba.core.flow.Channel::valueOf),
+            e.urgency?.let(com.example.meowmba.core.flow.Urgency::valueOf), e.engine) }.getOrNull()
+    }.reversed()
 }

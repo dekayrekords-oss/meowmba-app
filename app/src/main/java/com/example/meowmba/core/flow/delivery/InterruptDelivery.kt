@@ -12,6 +12,7 @@ import com.example.meowmba.R
 import com.example.meowmba.core.audio.SpeechSynthesizer
 import com.example.meowmba.core.flow.Channel
 import com.example.meowmba.core.flow.FlowInterrupt
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -86,8 +87,18 @@ class FlowActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val id = intent.getStringExtra(AndroidFlowNotifier.EXTRA_INTENTION) ?: return
         val action = intent.getStringExtra(AndroidFlowNotifier.EXTRA_ACTION) ?: return
-        FlowActionBus.emit(FlowActionBus.Action(id, action))
-        (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancel(AndroidFlowNotifier.NOTIFICATION_ID)
+        if (action != AndroidFlowNotifier.ACTION_PRIMARY && action != AndroidFlowNotifier.ACTION_LATER) return
+        val pending = goAsync()
+        // The process may have been recreated with no UI/controller collecting the bus.
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            try {
+                val dao = com.example.meowmba.core.database.MeowmbaDatabase.getDatabase(context.applicationContext).flowDao()
+                val now = System.currentTimeMillis()
+                val primary = action == AndroidFlowNotifier.ACTION_PRIMARY
+                dao.setStatus(id, if (primary) "DONE" else "SNOOZED", if (primary) null else now + com.example.meowmba.core.flow.FlowController.SNOOZE_MS, now)
+                (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancel(AndroidFlowNotifier.NOTIFICATION_ID)
+            } finally { pending.finish() }
+        }
     }
 }
 
@@ -126,10 +137,12 @@ class AndroidFlowNotifier(private val context: Context) : FlowNotifier {
             .setAutoCancel(true)
             .setContentIntent(open)
             .addAction(0, item.primary.label, action(item.intentionId, ACTION_PRIMARY, 1))
-            .addAction(0, if (interrupt.countdown != null) "Not today" else "Later", action(item.intentionId, ACTION_LATER, 2))
+            .addAction(0, "Later", action(item.intentionId, ACTION_LATER, 2))
             .addAction(0, "Open Meow", open)
             .build()
-        nm.notify(NOTIFICATION_ID, n)
+        if (android.os.Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(
+                android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) return
+        try { nm.notify(NOTIFICATION_ID, n) } catch (_: SecurityException) { /* permission revoked */ }
     }
 
     override fun cancel() = nm.cancel(NOTIFICATION_ID)

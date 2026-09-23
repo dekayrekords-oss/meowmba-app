@@ -147,6 +147,10 @@ fun MeowFlowHome(
                 snapshot.main?.let { main ->
                     key(main.intentionId) { MainThought(main, pushed, anchors, reduceMotion, onPrimary, onLater) }
                 }
+                if (snapshot.main == null && snapshot.more.isEmpty()) {
+                    BasicText("Nothing waiting.\nUse Add task to keep something in mind.",
+                        Modifier.padding(top = 48.dp), style = FlowType.itemDetail.copy(color = colors.ink2))
+                }
                 Spacer(Modifier.weight(1f))
                 if (snapshot.more.isNotEmpty()) {
                     FlowList(snapshot.more, snapshot.evening, pushed, anchors, reduceMotion, onPrimary)
@@ -430,7 +434,7 @@ private fun InterruptBand(
             if (cd != null && remainingMeters != null) Distance(remainingMeters, cd.startMeters, c.onAccent)
             Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
                 FlowButton(item.primary.label, c.onAccent, c.accent) { onAccept(interrupt) }
-                FlowLink(if (interrupt.countdown != null) "Not today" else "Later", c.onAccent) { onDecline(interrupt) }
+                FlowLink("Later", c.onAccent) { onDecline(interrupt) }
             }
         }
     }
@@ -442,7 +446,7 @@ private fun VoiceCaption(line: String, speaking: Boolean, color: Color) {
         drawLine(color, Offset(0f, 2.dp.toPx()), Offset(0f, size.height - 2.dp.toPx()), 2.dp.toPx())
     }.padding(start = 14.dp), verticalAlignment = Alignment.Top) {
         if (speaking) VoiceBars(color)
-        BasicText("Speaking: \"$line\"", style = FlowType.bandVoice.copy(color = color))
+        BasicText(if (speaking) "Speaking: \"$line\"" else line, style = FlowType.bandVoice.copy(color = color))
     }
 }
 
@@ -494,7 +498,7 @@ private fun LeaderLines(
     val c = LocalFlowColors.current
     val progress = remember { Animatable(1f) }
     val total = (1 + (snapshot.more.size)) * FlowDims.LINE_STAGGER_ITEM_MS + 3 * FlowDims.LINE_STAGGER_SOURCE_MS + FlowDims.LINE_DRAW_MS + 300
-    LaunchedEffect(snapshot.at, snapshot.main?.intentionId, snapshot.more.map { it.intentionId }) {
+    LaunchedEffect(snapshot.main?.intentionId, snapshot.more.map { it.intentionId }, snapshot.signals.map { it.key }, reduceMotion) {
         if (reduceMotion) { progress.snapTo(1f); return@LaunchedEffect }
         progress.snapTo(0f)
         progress.animateTo(1f, tween(total, easing = LinearEasing))

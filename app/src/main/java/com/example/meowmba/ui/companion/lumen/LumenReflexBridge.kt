@@ -136,9 +136,32 @@ class LumenReflexBridge {
         }
     }
 
+    // The renderer asks for this every frame; formatting it every frame was measurable.
+    private var labelAction: ReflexAction? = null
+    private var labelCuriosityHalf = 0L
+    private var labelSocialHalf = 0L
+    private var labelLocale: java.util.Locale? = null
+    private var label: String? = null
+
     fun summaryLabel(): String? {
         val s = state.coerced()
-        val action = competition.current.name.lowercase().replace('_', ' ')
-        return "Reflex: $action · c${"%.0f".format(s.curiosity * 100)} s${"%.0f".format(s.socialAttention * 100)}"
+        val action = competition.current
+        val curiosity = s.curiosity * 100
+        val social = s.socialAttention * 100
+        // "%.0f" rounds half up, so its text can only change when a value crosses
+        // a half-unit boundary. Within one half-unit the previous text is exact.
+        val curiosityHalf = kotlin.math.floor(curiosity.toDouble() * 2).toRawBits()
+        val socialHalf = kotlin.math.floor(social.toDouble() * 2).toRawBits()
+        val locale = java.util.Locale.getDefault()
+        if (label == null || action != labelAction || curiosityHalf != labelCuriosityHalf ||
+            socialHalf != labelSocialHalf || locale != labelLocale
+        ) {
+            label = "Reflex: ${action.name.lowercase().replace('_', ' ')} · c${"%.0f".format(curiosity)} s${"%.0f".format(social)}"
+            labelAction = action
+            labelCuriosityHalf = curiosityHalf
+            labelSocialHalf = socialHalf
+            labelLocale = locale
+        }
+        return label
     }
 }

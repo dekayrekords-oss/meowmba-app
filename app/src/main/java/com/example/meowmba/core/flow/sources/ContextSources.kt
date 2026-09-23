@@ -84,6 +84,7 @@ class SituationAssembler(
     private val route: () -> RouteFacts? = { null },
     private val opportunities: suspend (now: Long, place: String?) -> List<Opportunity> = { _, _ -> emptyList() },
     private val zone: ZoneId = ZoneId.systemDefault(),
+    private val calendarAvailable: () -> Boolean = { true },
 ) : SituationProvider {
 
     private val latest = LinkedHashMap<String, Evidence>()
@@ -99,7 +100,7 @@ class SituationAssembler(
         val activity = movement?.payload?.get("activity")?.let { runCatching { Activity.valueOf(it) }.getOrNull() } ?: Activity.UNKNOWN
         val place = ev.filter { it.type == EvidenceType.PLACE && it.payload["entering"] == "true" }.maxByOrNull { it.at }?.label
         val app = ev.firstOrNull { it.key == "app" }?.label
-        val events = calendar(now)
+        val events = if (calendarAvailable()) calendar(now) else emptyList()
         val estimate = work.estimate(now, workContext(), detectWorkEnd())
         return Situation(
             now = now, activity = activity, place = place, foregroundApp = app, upcoming = events,
@@ -121,7 +122,8 @@ class SituationAssembler(
         }
         loc?.let { out += Signal("loc", it) }
         ev.firstOrNull { it.key == "app" }?.let { out += Signal("app", it.label, fresh = now - it.at < FRESH_MS) }
-        calendarSignal(now, events)?.let { out += it }
+        if (calendarAvailable()) calendarSignal(now, events)?.let { out += it }
+        else out += Signal("cal", "Calendar not connected")
         val arrivals = ev.filter { it.key !in setOf("loc", "move", "app", "cal") && now - it.at < RECENT_MS }.sortedByDescending { it.at }
         for (a in arrivals) {
             val s = Signal(a.key, a.label, fresh = now - a.at < FRESH_MS)
@@ -131,6 +133,9 @@ class SituationAssembler(
     }
 
     private fun calendarSignal(now: Long, events: List<CalendarItem>): Signal? {
+        events.firstOrNull { it.startAt <= now && it.endAt > now }?.let {
+            return Signal("cal", "${it.title.take(18)} now")
+        }
         val next = events.filter { it.startAt >= now }.minByOrNull { it.startAt }
         val t = DateTimeFormatter.ofPattern("h:mm", Locale.US)
         return when {

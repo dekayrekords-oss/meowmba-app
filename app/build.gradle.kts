@@ -50,8 +50,8 @@ val mwdatClientToken = gradle.extra["mwdat.clientToken"] as String
 // that key in local.properties (gitignored); without it the default
 // per-machine debug keystore is used, as before.
 val debugKeystorePath = (localProps.getProperty("debugKeystore") ?: "").trim()
-// For a debug-only device test of Kotlin/UI changes, reuse the unchanged JNI
-// bridges from a verified previous APK. Release always uses the pinned sources.
+// Preview Kotlin/UI builds may reuse unchanged JNI bridges from a verified APK.
+// This applies to debug and daily; Play release always uses the pinned sources.
 val prebuiltDebugNativeDir = providers.gradleProperty("prebuiltDebugNativeDir").orNull
 println(
     when {
@@ -93,8 +93,8 @@ android {
         // 85 > 84 so the affect/valence + pet wiring installs as a genuine
         // in-place upgrade, and so it is distinguishable on-device from 84 (which
         // has the drives but not the reply affect or the touch sense).
-        versionCode = 155
-        versionName = "1.3.99"
+        versionCode = 156
+        versionName = "1.4.0"
 
         buildConfigField("boolean", "HAS_MWDAT_SDK", hasMwdat.toString())
         manifestPlaceholders["mwdat_application_id"] = mwdatApplicationId
@@ -179,6 +179,13 @@ android {
                 null
             }
         }
+        create("daily") {
+            initWith(getByName("release"))
+            isDebuggable = false
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+            buildConfigField("boolean", "PHONE_AUTOMATION_ENABLED", "true")
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -188,7 +195,10 @@ android {
     // when configured in settings.gradle.kts. verifyMwdatReleaseConfiguration
     // prevents the tokenless development variant from becoming a Play build.
     sourceSets {
-        if (prebuiltDebugNativeDir != null) getByName("debug").jniLibs.srcDir(prebuiltDebugNativeDir)
+        if (prebuiltDebugNativeDir != null) {
+            getByName("debug").jniLibs.srcDir(prebuiltDebugNativeDir)
+            getByName("daily").jniLibs.srcDir(prebuiltDebugNativeDir)
+        }
         getByName("main") {
             if (hasMwdat) {
                 java.srcDir("src/mwdat/java")
@@ -225,13 +235,17 @@ android {
 }
 
 androidComponents {
+    onVariants(selector().withBuildType("daily")) { variant ->
+        variant.applicationId.set("com.example.meowmba")
+    }
+
     onVariants(selector().withBuildType("debug")) { variant ->
         // Fold still has the old id. Release / Play stays com.meow.meowmba.
         variant.applicationId.set("com.example.meowmba")
         // Combined Computer + avatar update; bump debug-only so in-place
         // upgrade is allowed without changing release defaultConfig (85).
         variant.outputs.forEach { output ->
-            output.versionCode.set(155)
+            output.versionCode.set(156)
         }
     }
 }

@@ -10,12 +10,15 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.rotate
-import androidx.compose.ui.graphics.lerp
 
 /** Original native anatomy parts. Shared anchors follow the existing face rig. */
 class LumenAnimalParts {
     private val path = Path()
     private val detail = Path()
+    private val colorBlends = ColorLerpCache()
+
+    /** Compose's color lerp, memoized: these blends repeat identically every frame. */
+    private fun lerp(start: Color, stop: Color, fraction: Float): Color = colorBlends.lerp(start, stop, fraction)
 
     fun tail(scope: DrawScope, center: Offset, unit: Float, f: LumenFrame, color: Color, glow: Color) = with(scope) {
         val bush = f.form.bushyTail

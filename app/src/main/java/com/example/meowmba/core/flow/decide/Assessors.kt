@@ -96,7 +96,7 @@ class RulesAssessor : Assessor {
     private fun assessOne(s: Situation, i: Intention): Assessment {
         val minutes = i.dueAt?.let { (it - s.now) / 60_000.0 }
         val meeting = s.upcoming.firstOrNull { it.withPeople && it.startAt >= s.now }
-            ?.takeIf { i.kind == FlowKind.PEOPLE }
+            ?.takeIf { i.kind == FlowKind.PEOPLE && i.dueAt == it.startAt }
         val meetingIn = meeting?.let { (it.startAt - s.now) / 60_000.0 }
         val urgency = when {
             meetingIn != null && meetingIn <= 20 -> Urgency.URGENT

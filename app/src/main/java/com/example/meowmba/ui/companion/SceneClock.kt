@@ -10,6 +10,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.platform.LocalContext
 import com.example.meowmba.core.config.FeatureFlags
 import com.example.meowmba.core.thermal.ThermalGovernor
+import kotlinx.coroutines.delay
 
 /** One display-rate clock, consumed in draw only. Pausing preserves the phase. */
 internal class SceneClock {
@@ -35,11 +36,13 @@ internal fun rememberSceneClock(paused: Boolean, interacting: Boolean = true): S
     val context = LocalContext.current
     val fpsTarget = FeatureFlags.from(context).avatarFpsTarget
     val active = rememberAvatarWorkAllowed() && !paused
-    LaunchedEffect(active, interacting, fpsTarget) {
+    val sharedPhase = LocalSharedFramePhase.current
+    LaunchedEffect(active, interacting, fpsTarget, sharedPhase) {
         if (!active) return@LaunchedEffect
         var previous = 0L
-        val cadence = AvatarFrameCadence()
+        val cadence = AvatarFrameCadence(sharedPhase)
         while (true) {
+            var admitted = false
             withFrameNanos { now ->
                 if (!cadence.admit(
                         now,
@@ -48,9 +51,12 @@ internal fun rememberSceneClock(paused: Boolean, interacting: Boolean = true): S
                         thermalStatus = ThermalGovernor.currentStatus(),
                     )
                 ) return@withFrameNanos
+                admitted = true
                 if (previous != 0L) clock.advance(now - previous)
                 previous = now
             }
+            // The vsyncs before the next admissible frame would all be refused.
+            if (admitted) cadence.idleNanosAfterAdmit().takeIf { it > 0L }?.let { delay(it / 1_000_000L) }
         }
     }
     return clock

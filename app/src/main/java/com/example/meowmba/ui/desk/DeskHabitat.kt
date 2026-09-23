@@ -80,11 +80,12 @@ fun DeskHabitat(
     var bubble by remember { mutableStateOf<String?>(null) }
 
     // Walking: frame-driven only while moving, admitted by the app's cadence (thermal-aware).
-    LaunchedEffect(request, thermalStatus, reduceMotion) {
+    LaunchedEffect(request, thermalStatus, reduceMotion, fpsTarget) {
         val (targetX, obj) = request ?: return@LaunchedEffect
         bubble = null
         cat.gaze = if (targetX < cat.x) -1f else 1f
         if (reduceMotion || thermalStatus >= PowerManager.THERMAL_STATUS_SEVERE) {
+            cat.walking = false; cat.frame = 0
             cat.x = targetX
         } else {
             val cadence = AvatarFrameCadence()
@@ -101,6 +102,7 @@ fun DeskHabitat(
                 cat.x = startX + (targetX - startX) * easeInOut(t)
                 if (now - lastStep >= STEP_NS) { cat.frame = cat.frame xor 1; lastStep = now }
                 if (t >= 1f) break
+                cadence.idleNanosAfterAdmit().takeIf { it > 0 }?.let { delay(it / 1_000_000L) }
             }
             cat.walking = false; cat.frame = 0; cat.facingLeft = false
         }
@@ -113,7 +115,8 @@ fun DeskHabitat(
     }
 
     // Idle life: a blink every ~5 s, a tail flick now and then, an occasional stroll. No loop otherwise.
-    LaunchedEffect(reduceMotion, thermalStatus) {
+    LaunchedEffect(reduceMotion, thermalStatus, wanderEveryMs, idleLines) {
+        cat.blink = 0f; cat.tail = 0f
         if (reduceMotion || thermalStatus >= PowerManager.THERMAL_STATUS_SEVERE) return@LaunchedEffect
         var n = 0
         while (true) {
@@ -131,7 +134,7 @@ fun DeskHabitat(
     LaunchedEffect(bubble) { if (bubble != null) { delay(BUBBLE_MS); bubble = null } }
 
     BoxWithConstraints(modifier.fillMaxSize().background(Color(0xFF12232A)).testTag("desk_habitat")) {
-        val unit = maxWidth / SCENE_W // dp per scene unit
+        val unit = minOf(maxWidth / SCENE_W, maxHeight / 960f) // dp per scene unit
         val scale = with(androidx.compose.ui.platform.LocalDensity.current) { unit.toPx() }
 
         // 1. Static room: its own graphics layer, drawn once.

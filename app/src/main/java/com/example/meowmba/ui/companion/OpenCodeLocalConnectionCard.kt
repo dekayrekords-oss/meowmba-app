@@ -52,6 +52,8 @@ internal fun OpenCodeLocalConnectionCard(onVerified: () -> Unit = {}, supportOve
     com.example.meowmba.ui.theme.Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("OpenCode on this phone", style = MaterialTheme.typography.titleMedium)
+            val profile = remember { com.example.meowmba.core.setup.SetupDeviceScan.profile(context) }
+            if (!profile.recommendPhoneComputer) Text(profile.computerReason, style = MaterialTheme.typography.bodySmall)
             Text("${if (separate) OpenCodeLocalConnection.RECOVERY_ADDRESS else OpenCodeLocalConnection.ADDRESS} · username opencode", style = MaterialTheme.typography.bodySmall)
             OutlinedTextField(password, { password = it }, label = { Text(if (separate) "Choose a NEW connection password" else "Existing server password (or new setup password)") },
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Password),

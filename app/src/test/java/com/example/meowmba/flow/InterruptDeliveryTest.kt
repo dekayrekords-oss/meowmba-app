@@ -78,6 +78,7 @@ class InterruptDeliveryTest {
 class AndroidFlowNotifierTest {
     @Test fun postsHeadsUpWithThreeActionsOnItsOwnChannel() {
         val ctx = ApplicationProvider.getApplicationContext<Context>()
+        shadowOf(ctx as android.app.Application).grantPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
         val i = FlowPolicy(Fx.zone).decide(Fx.drivingPastStore(Surface.OTHER_APP), listOf(Fx.bulb),
             listOf(Fx.a("bulb", Urgency.WORTH_IT, 0.9, 0.92)), FlowSettings(), InterruptLedger()).snapshot.interrupt!!
         AndroidFlowNotifier(ctx).post(i)
@@ -85,7 +86,7 @@ class AndroidFlowNotifierTest {
         val posted = shadowOf(nm).allNotifications.single()
         assertEquals(AndroidFlowNotifier.CHANNEL_ID, posted.channelId)
         assertEquals(3, posted.actions.size)
-        assertEquals("Not today", posted.actions[1].title.toString())
+        assertEquals("Later", posted.actions[1].title.toString())
         assertEquals(NotificationManager.IMPORTANCE_HIGH, nm.getNotificationChannel(AndroidFlowNotifier.CHANNEL_ID).importance)
     }
 }

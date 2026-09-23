@@ -3457,7 +3457,36 @@ class CompanionViewModel(
         refreshAgenticPresenceHint()
     }
 
+    private val flowRuntimeLazy = lazy {
+        secureStorage?.let { storage ->
+            val context = storage.context.applicationContext
+            val dao = com.example.meowmba.core.database.MeowmbaDatabase.getDatabase(context).flowDao()
+            com.example.meowmba.core.flow.FlowRuntime(
+                context, viewModelScope,
+                speaker = com.example.meowmba.core.flow.delivery.FlowSpeaker { text ->
+                    val state = _uiState.value
+                    if (handedOffToBackground || state.isMuted || state.interactionState != InteractionState.IDLE) false
+                    else { speak(text); true }
+                },
+                store = com.example.meowmba.core.flow.db.RoomIntentionStore(dao, viewModelScope),
+                outcomes = com.example.meowmba.core.flow.db.RoomOutcomeLog(dao),
+                calendar = com.example.meowmba.core.flow.sources.CalendarSource(context)::upcoming,
+                calendarAvailable = { context.checkSelfPermission(android.Manifest.permission.READ_CALENDAR) == android.content.pm.PackageManager.PERMISSION_GRANTED },
+                surface = {
+                    when {
+                        handedOffToBackground -> com.example.meowmba.core.flow.Surface.OTHER_APP
+                        _uiState.value.appTheme == AppTheme.FLOW -> com.example.meowmba.core.flow.Surface.FLOW_ON_SCREEN
+                        _uiState.value.avatarStyle == AvatarStyle.DESK -> com.example.meowmba.core.flow.Surface.DESK_ON_SCREEN
+                        else -> com.example.meowmba.core.flow.Surface.OTHER_APP
+                    }
+                },
+            )
+        }
+    }
+    val flowRuntime: com.example.meowmba.core.flow.FlowRuntime? get() = flowRuntimeLazy.value
+
     override fun onCleared() {
+        if (flowRuntimeLazy.isInitialized()) flowRuntimeLazy.value?.stop()
         cancelSongIdentification(rearm = false)
         cancelAgenticComputerChat()
         cancelAvatarFormGeneration()
@@ -11559,8 +11588,10 @@ class CompanionViewModel(
         val monitor = com.example.meowmba.core.media.MusicAwareness(context)
         _uiState.value = _uiState.value.withFeatures(musicDancingEnabled = secureStorage?.getBooleanPreference("music_dancing", true) ?: true)
         viewModelScope.launch {
-            while (kotlin.coroutines.coroutineContext.isActive) {
+            try { while (kotlin.coroutines.coroutineContext.isActive) {
+                if (appInBackground) monitor.stop()
                 if (!appInBackground) {
+                    monitor.start()
                     val before = _uiState.value
                     val playing = runCatching { monitor.read(before.interactionState == InteractionState.SPEAKING ||
                         (ttsManager as? com.example.meowmba.core.audio.TextToSpeechManager)?.isSpeaking() == true)
@@ -11581,7 +11612,7 @@ class CompanionViewModel(
                     }
                 }
                 delay(2_000L)
-            }
+            } } finally { monitor.stop() }
         }
     }
 

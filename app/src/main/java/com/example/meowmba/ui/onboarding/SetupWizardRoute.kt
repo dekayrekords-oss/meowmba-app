@@ -73,6 +73,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
  */
 private enum class FirstRunPage {
     Hi,
+    DeviceCheck,
     Features,
     AvatarSize,
     GetTermux,
@@ -202,8 +203,21 @@ fun SetupWizardRoute(
                         title = "Meet your Meow.",
                         body = "Your companion, creative space and personal assistant. Let’s make it yours.",
                         primary = "Let’s go",
-                        onPrimary = { go(FirstRunPage.Features) },
+                        onPrimary = { go(FirstRunPage.DeviceCheck) },
                     )
+                    FirstRunPage.DeviceCheck -> {
+                        val profile = remember { com.example.meowmba.core.setup.SetupDeviceScan.profile(context) }
+                        LaunchedEffect(Unit) {
+                            com.example.meowmba.core.setup.SetupDeviceScan.applyDefaults(profile, storage)
+                            avatarChoice = AvatarStyle.fromKey(storage.getPreference("avatar_style")).key
+                            onAvatarPicked(AvatarStyle.fromKey(avatarChoice))
+                        }
+                        KidPage(
+                            title = "Tuned for your phone",
+                            body = "${android.os.Build.MODEL} · ${String.format(java.util.Locale.US, "%.1f", profile.ramGb)} GB RAM · ${profile.cores} processor cores\n\n${profile.summary}\n\nMeow checks the phone directly. No AI download or cloud upload is needed. Saved choices are kept; animation and Computer settings remain adjustable.",
+                            primary = "Continue", onPrimary = { go(FirstRunPage.Features) },
+                        )
+                    }
                     FirstRunPage.Features -> SetupFeaturesPage { go(FirstRunPage.Avatar) }
                     FirstRunPage.AvatarSize -> AvatarFitPage(
                         style = selectedStyle, animal = selectedAnimal,
@@ -226,6 +240,12 @@ fun SetupWizardRoute(
                         val support = refreshed ?: observed
                         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                             Text("Set up your phone Computer", style = MaterialTheme.typography.headlineMedium)
+                            val profile = remember { com.example.meowmba.core.setup.SetupDeviceScan.profile(context) }
+                            if (!profile.recommendPhoneComputer) {
+                                Text(profile.computerReason, style = MaterialTheme.typography.bodyMedium)
+                                Button(onClick = { go(FirstRunPage.Mic) }, modifier = Modifier.fillMaxWidth()) { Text("Use lighter setup (recommended)") }
+                                Text("You can still choose phone Computer below, or connect another computer later.", style = MaterialTheme.typography.bodySmall)
+                            }
                             com.example.meowmba.ui.companion.TermuxInstallGuidance(support) {
                                 refreshed = com.example.meowmba.core.computer.TermuxSetupSupport.detect(context)
                             }
@@ -344,7 +364,8 @@ fun SetupWizardRoute(
                             storage.savePreference("background_value", "")
                             onBackgroundPicked(selection)
                         },
-                        onNext = { go(FirstRunPage.GetTermux) },
+                        onNext = { go(if (com.example.meowmba.core.setup.SetupDeviceScan.profile(context).recommendPhoneComputer)
+                            FirstRunPage.GetTermux else FirstRunPage.Mic) },
                     )
                     FirstRunPage.OptionalServer -> KidPage(
                         title = "Connect a computer or neural server",

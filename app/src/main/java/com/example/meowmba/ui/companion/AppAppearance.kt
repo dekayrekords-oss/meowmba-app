@@ -3,7 +3,8 @@ package com.example.meowmba.ui.companion
 /** App layout and brightness are independent; changing one never resets the other. */
 enum class AppTheme(val key: String, val label: String) {
     COMPANION("companion", "Companion"),
-    PROFESSIONAL("professional", "Professional");
+    PROFESSIONAL("professional", "Professional"),
+    FLOW("flow", "Meow Flow");
 
     companion object {
         fun fromKey(key: String?) = entries.firstOrNull { it.key == key } ?: COMPANION

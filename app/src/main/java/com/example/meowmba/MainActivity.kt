@@ -112,6 +112,10 @@ class MainActivity : ComponentActivity() {
         speechService = SpeechService(this)
         ttsManager = TextToSpeechManager(this)
         secureStorage = SecureStorageManager(this)
+        if (!com.example.meowmba.core.setup.SetupWiring.isOnboardingDone(this)) {
+            com.example.meowmba.core.setup.SetupDeviceScan.applyDefaults(
+                com.example.meowmba.core.setup.SetupDeviceScan.profile(this), secureStorage)
+        }
         com.example.meowmba.core.audio.MicrophonePrivacy.initializeForFirstRun(secureStorage)
         audioStreamingManager = AudioStreamingManager(this)
         visionManager = com.example.meowmba.core.vision.VisionManager(this, this)
@@ -306,11 +310,18 @@ class MainActivity : ComponentActivity() {
                 androidx.compose.foundation.layout.Box(
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    CompanionScreen(
-                        viewModel = viewModel,
-                        secureStorage = secureStorage,
-                        onboardingVisible = wizardVisible,
-                    )
+                    // One frame phase for the avatar and background clocks, so their
+                    // redraws land on the same vsync instead of alternating.
+                    androidx.compose.runtime.CompositionLocalProvider(
+                        com.example.meowmba.ui.companion.LocalSharedFramePhase provides
+                            remember { com.example.meowmba.ui.companion.SharedFramePhase() },
+                    ) {
+                        CompanionScreen(
+                            viewModel = viewModel,
+                            secureStorage = secureStorage,
+                            onboardingVisible = wizardVisible,
+                        )
+                    }
                     // Retain the current step while the user peeks at Terminal.
                     val wizardState = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
                     // Onboarding wizard: full-screen overlay above everything.
@@ -505,6 +516,11 @@ class MainActivity : ComponentActivity() {
     private var pendingBusinessAgents = false
 
     private fun consumeWakeCommand(source: Intent?) {
+        if (source?.hasExtra(com.example.meowmba.core.flow.delivery.AndroidFlowNotifier.EXTRA_OPEN_FLOW) == true) {
+            secureStorage.savePreference("app_theme", "flow")
+            companionViewModel?.setAppTheme(com.example.meowmba.ui.companion.AppTheme.FLOW)
+            source.removeExtra(com.example.meowmba.core.flow.delivery.AndroidFlowNotifier.EXTRA_OPEN_FLOW)
+        }
         if (com.example.meowmba.ui.companion.isAvatarHomeIntent(source?.action, source?.categories)) {
             companionViewModel?.returnToAvatar() ?: run { pendingAvatarHome = true }
             (getSystemService(INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager)

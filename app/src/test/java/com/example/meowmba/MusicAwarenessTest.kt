@@ -21,6 +21,30 @@ import org.robolectric.annotation.Config
 class MusicAwarenessTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
 
+    @Test fun observerCachesMetadataAndReleasesCallbacks() {
+        val controller = mock(MediaController::class.java)
+        val session = android.media.session.MediaSession(context, "music-cache-test")
+        `when`(controller.sessionToken).thenReturn(session.sessionToken)
+        `when`(controller.packageName).thenReturn("example.music")
+        `when`(controller.metadata).thenReturn(MediaMetadata.Builder().putString(MediaMetadata.METADATA_KEY_TITLE, "First song").build())
+        `when`(controller.playbackState).thenReturn(PlaybackState.Builder().setState(PlaybackState.STATE_PLAYING, 0, 1f).build())
+        shadowOf(context.getSystemService(MediaSessionManager::class.java)).addController(controller)
+        val monitor = MusicAwareness(context)
+        monitor.start()
+        repeat(5) { assertEquals("First song", monitor.read(false).title) }
+        verify(controller, times(1)).metadata
+        verify(controller, times(1)).playbackState
+        val callback = org.mockito.ArgumentCaptor.forClass(MediaController.Callback::class.java)
+        verify(controller).registerCallback(callback.capture(), org.mockito.ArgumentMatchers.any(android.os.Handler::class.java))
+        callback.value.onMetadataChanged(MediaMetadata.Builder().putString(MediaMetadata.METADATA_KEY_TITLE, "Second song").build())
+        assertEquals("Second song", monitor.read(false).title)
+        callback.value.onPlaybackStateChanged(PlaybackState.Builder().setState(PlaybackState.STATE_PAUSED, 0, 0f).build())
+        assertNull(monitor.read(false).title)
+        monitor.stop()
+        verify(controller).unregisterCallback(callback.value)
+        session.release()
+    }
+
     @Test fun speakerOutputDoesNotMistakeOwnVoiceForMusic() {
         val audio = context.getSystemService(AudioManager::class.java)
         shadowOf(audio).setIsMusicActive(true)

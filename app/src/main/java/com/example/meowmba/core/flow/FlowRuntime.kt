@@ -39,6 +39,7 @@ class FlowRuntime(
     notifier: FlowNotifier = AndroidFlowNotifier(context),
     outcomes: OutcomeLog = InMemoryOutcomeLog(),
     clock: () -> Long = System::currentTimeMillis,
+    calendarAvailable: () -> Boolean = { true },
 ) {
     private val prefs = context.getSharedPreferences(FlowSettingsStore.PREFS_NAME, Context.MODE_PRIVATE)
     private val settingsStore = FlowSettingsStore(SharedPreferencesKeyValue(prefs))
@@ -47,7 +48,7 @@ class FlowRuntime(
 
     val bus = EvidenceBus()
     val work = WorkStateDetector()
-    val assembler = SituationAssembler(store, work, workContext, { settingsState.value.detectWorkEnd }, calendar, surface, route, opportunities)
+    val assembler = SituationAssembler(store, work, workContext, { settingsState.value.detectWorkEnd }, calendar, surface, route, opportunities, calendarAvailable = calendarAvailable)
 
     /** Chain rebuilt per decision so the Jev switch takes effect immediately. */
     private val chain = object : Assessor {
@@ -70,7 +71,6 @@ class FlowRuntime(
     fun start() {
         if (jobs.isNotEmpty()) return
         jobs = listOf(
-            scope.launch { bus.events.collect { assembler.observe(it) } },
             scope.launch { controller.snapshot.collect { delivery.deliver(it.interrupt) } },
             scope.launch {
                 FlowActionBus.actions.collect { a ->
@@ -82,9 +82,13 @@ class FlowRuntime(
         controller.start()
     }
 
-    fun stop() { jobs.forEach { it.cancel() }; jobs = emptyList(); controller.stop() }
+    fun stop() { jobs.forEach { it.cancel() }; jobs = emptyList(); controller.stop(); delivery.deliver(null) }
 
-    fun publish(evidence: Evidence) = bus.publish(evidence)
+    fun publish(evidence: Evidence) {
+        // Update first, even before collectors start. Two collectors raced the first snapshot.
+        assembler.observe(evidence)
+        bus.publish(evidence)
+    }
 
     fun updateSettings(s: FlowSettings) {
         val n = s.normalized()

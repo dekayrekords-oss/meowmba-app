@@ -327,7 +327,12 @@ fun AvatarRenderer(
     val latestComposed by rememberUpdatedState(composed)
     val latestPerformanceSequence by rememberUpdatedState(state.avatarPerformanceSequence)
     val latestFaceRadius by rememberUpdatedState(faceRadiusPx)
-    LaunchedEffect(paused, timings, displayRefreshRate, avatarFpsTarget) {
+    val sharedFramePhase = LocalSharedFramePhase.current
+    // Wakes the clock below out of its between-frame sleep the moment a clip or
+    // expression starts or stops, so performances begin on the next vsync as before.
+    val performanceChanged = remember { kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED) }
+    LaunchedEffect(customAnim, composed) { performanceChanged.trySend(Unit) }
+    LaunchedEffect(paused, timings, displayRefreshRate, avatarFpsTarget, sharedFramePhase) {
         timings?.setFrameCadence(displayRefreshRate?.takeIf { it.isFinite() && it > 0f }?.let { (1_000_000_000.0 / it).toLong() })
         if (paused) {
             timings?.pauseFrames()
@@ -338,8 +343,12 @@ fun AvatarRenderer(
         }
         var runningSequence: Long? = null
         var runningExpression: ComposedExpression? = null
-        val cadence = AvatarFrameCadence()
+        // The avatar keeps its own cadence; background clocks line up behind it.
+        val cadence = AvatarFrameCadence(sharedFramePhase, leader = true)
         while (true) {
+            var admitted = false
+            var admittedClip: CustomAnimationSpec? = null
+            var admittedExpression: ComposedExpression? = null
             withFrameNanos { now ->
                 val clip = latestAnimation
                 val expression = latestComposed
@@ -354,6 +363,9 @@ fun AvatarRenderer(
                         thermalStatus = ThermalGovernor.currentStatus(),
                     )
                 ) return@withFrameNanos
+                admitted = true
+                admittedClip = clip
+                admittedExpression = expression
                 timings?.framePresented(now)
                 val id = if (performing) latestPerformanceSequence else null
                 val tick = frameClock.step(now, id)
@@ -370,6 +382,15 @@ fun AvatarRenderer(
                 shotHolder[0] = if (expression != null)
                     motionEngine.update(tick.dt, latestFaceRadius.coerceIn(80f, 800f)) else null
                 drawEpoch++
+            }
+            // Sleep through vsyncs the cadence would refuse. A clip starting or
+            // ending changes the interval, so it cuts the sleep short.
+            val idleNanos = if (admitted) cadence.idleNanosAfterAdmit() else 0L
+            if (idleNanos > 0L) {
+                performanceChanged.tryReceive()
+                if (latestAnimation === admittedClip && latestComposed === admittedExpression) {
+                    kotlinx.coroutines.withTimeoutOrNull(idleNanos / 1_000_000L) { performanceChanged.receive() }
+                }
             }
         }
     }
@@ -616,11 +637,12 @@ fun AvatarRenderer(
     val earTrail = remember { Trailing(stiffness = 88f, bounce = 0.28f) }
     var earLag by remember { mutableFloatStateOf(0f) }
     val needsEarFollowThrough = needsLegacyEarFollowThrough(state.avatarStyle, useLumen)
-    LaunchedEffect(paused, needsEarFollowThrough, avatarFpsTarget) {
+    LaunchedEffect(paused, needsEarFollowThrough, avatarFpsTarget, sharedFramePhase) {
         if (paused || !needsEarFollowThrough) return@LaunchedEffect
         var last = 0L
-        val cadence = AvatarFrameCadence()
+        val cadence = AvatarFrameCadence(sharedFramePhase)
         while (true) {
+            var admitted = false
             withFrameNanos { now ->
                 if (!cadence.admit(
                         now,
@@ -628,11 +650,13 @@ fun AvatarRenderer(
                         thermalStatus = ThermalGovernor.currentStatus(),
                     )
                 ) return@withFrameNanos
+                admitted = true
                 val dt = if (last == 0L) 0.016f
                 else ((now - last) / 1_000_000_000f).coerceIn(1e-4f, 1f / 30f)
                 last = now
                 earLag = earTrail.update(headFollowX, dt, gain = 0.32f)
             }
+            if (admitted) cadence.idleNanosAfterAdmit().takeIf { it > 0L }?.let { delay(it / 1_000_000L) }
         }
     }
 

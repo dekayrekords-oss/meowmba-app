@@ -205,10 +205,24 @@ class LumenPainter {
         }
     }
 
+    // Both lenses, and every frame of a settled form, ask for the same iris blend.
+    private var irisForm: AvatarFormTraits? = null
+    private var irisSelected = Color.Unspecified
+    private var irisColor = Color.Unspecified
+
+    private fun irisColorFor(form: AvatarFormTraits, selected: Color): Color {
+        if (form != irisForm || selected != irisSelected) {
+            irisColor = lumenIrisColor(form, selected)
+            irisForm = form
+            irisSelected = selected
+        }
+        return irisColor
+    }
+
     private fun DrawScope.lens(side: Int, baseRx: Float, baseRy: Float, f: LumenFrame, selectedColor: Color, glow: Color) {
         val shape = lumenEyeShape(f.form)
         val helper = (f.form.clippy + f.form.wizard).coerceIn(0f, 1f)
-        val color = lumenIrisColor(f.form, selectedColor)
+        val color = irisColorFor(f.form, selectedColor)
         val rx = baseRx * shape.width
         val ry = baseRy * shape.height
         val m = eyeMaterials?.takeIf { it.rx == rx && it.ry == ry && it.color == color && it.glow == glow }

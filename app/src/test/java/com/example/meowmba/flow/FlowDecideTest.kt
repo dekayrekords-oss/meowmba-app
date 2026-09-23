@@ -82,7 +82,7 @@ class FlowDecideTest {
     }
 
     @Test fun rulesMakeImminentMeetingsUrgent() = runTest {
-        val call = Fx.handoff.copy(id = "sam", kind = FlowKind.PEOPLE, text = "Call with Sam")
+        val call = Fx.handoff.copy(id = "sam", kind = FlowKind.PEOPLE, text = "Call with Sam", dueAt = at(15, 30))
         val s = Fx.drivingPastStore().copy(now = at(15, 12), activity = Activity.STILL, opportunities = emptyList(),
             upcoming = listOf(CalendarItem("Tester check-in", at(15, 30), at(15, 50), withPeople = true)))
         val a = RulesAssessor().assess(s, listOf(call)).single()

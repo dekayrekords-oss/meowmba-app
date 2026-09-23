@@ -244,6 +244,7 @@
                 <action android:name="android.content.action.DOCUMENTS_PROVIDER" />
             </intent-filter>
         </provider>
+        <receiver android:name=".core.flow.delivery.FlowActionReceiver" android:exported="false" />
     </application>
 
 </manifest>

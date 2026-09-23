@@ -111,19 +111,7 @@ fun CompanionScreen(
     val habitatCovered = !avatarSceneVisible(uiState) ||
         uiState.showConnectorsScreen || showOnboarding || onboardingVisible || (uiState.showBrowser && !splitBrowser)
     val animationsPaused = !avatarWorkAllowed || habitatCovered
-    // Report the real stage policy, including thermal/fold/onboarding changes.
-    // Camera/body preferences must not cancel a visible acting performance.
-    LaunchedEffect(viewModel, animationsPaused) {
-        viewModel.setAvatarPerformanceStageAllowed(!animationsPaused)
-    }
-    DisposableEffect(viewModel) {
-        onDispose { viewModel.setAvatarPerformanceStageAllowed(false) }
-    }
-    DisposableEffect(viewModel, animationsPaused, uiState.showNeuralInfo, uiState.isCameraEnabled, uiState.robotBodyEnabled) {
-        // Brain is a visual monitor; opening it does not enable a physical body.
-        viewModel.setBodyStageAllowed(!animationsPaused && !uiState.showNeuralInfo)
-        onDispose { viewModel.setBodyStageAllowed(false) }
-    }
+    CompanionStageEffects(viewModel, uiState, animationsPaused)
 
     LaunchedEffect(uiState.showSettings, uiState.showNeuralInfo) {
         if (uiState.showSettings || uiState.showNeuralInfo) viewModel.refreshMaleCnsServer()
@@ -155,6 +143,8 @@ fun CompanionScreen(
                 AvatarMotionHost(viewModel, uiState, animationsPaused,
                     Modifier.fillMaxSize(), interactive = false)
             }
+        } else if (uiState.appTheme == AppTheme.FLOW) {
+            com.example.meowmba.ui.flow.FlowHomeRoute(viewModel, uiState, animationsPaused)
         } else if (uiState.appTheme == AppTheme.PROFESSIONAL) {
             ProfessionalWorkspace(uiState, viewModel) {
                 AvatarMotionHost(viewModel, uiState, animationsPaused || uiState.showAvatarScreen,
@@ -172,7 +162,7 @@ fun CompanionScreen(
         Box(Modifier.matchParentSize().then(brainSpace)) {
         // 0. User-chosen background always draws when set. Live weather sky too.
         // Only the empty NEO desk stays see-through.
-        if ((!isNeo || hasUserBg) && !(uiState.avatarStyle == AvatarStyle.FULL_FLY && uiState.habitatMode)) {
+        if (uiState.avatarStyle != AvatarStyle.DESK && (!isNeo || hasUserBg) && !(uiState.avatarStyle == AvatarStyle.FULL_FLY && uiState.habitatMode)) {
             AppBackground(
                 selection = if (uiState.habitatMode) com.example.meowmba.core.background.BackgroundSelection(com.example.meowmba.core.background.BackgroundKind.ANIMATION, uiState.habitatBackgroundId, 15) else uiState.background,
                 weather = uiState.ambientWeather ?: uiState.weather,
@@ -193,7 +183,7 @@ fun CompanionScreen(
         }
         }
 
-        if (!habitatCovered && !uiState.showNeuralInfo && uiState.features.careVisible) {
+        if (uiState.avatarStyle != AvatarStyle.DESK && !habitatCovered && !uiState.showNeuralInfo && uiState.features.careVisible) {
             PetCarePanel(
                 habitatMode = uiState.habitatMode, onTrick = viewModel::playCompanionTrick,
                 onHabitatMode = viewModel::setHabitatMode,
@@ -578,7 +568,8 @@ fun CompanionScreen(
         // let Reflex cover the clock and moved that collision into weather/drive.
         val presenceHint = uiState.agenticPresenceHint
             ?: uiState.reflexSummary?.takeIf { uiState.lumenReflexV2Enabled && uiState.features.neuralFeedbackVisible }
-        val companionControls = !isFlipCover && uiState.appTheme != AppTheme.PROFESSIONAL
+        val contextualHome = uiState.appTheme == AppTheme.FLOW || uiState.avatarStyle == AvatarStyle.DESK
+        val companionControls = !contextualHome && !isFlipCover && uiState.appTheme != AppTheme.PROFESSIONAL
         CompanionTopOverlays(
             priorityRevision = uiState.crashAlert,
             modifier = Modifier
@@ -586,7 +577,7 @@ fun CompanionScreen(
                 .safeDrawingPadding()
                 .padding(top = 8.dp),
             header = {
-                CompanionStatusHeader(
+                if (!contextualHome) CompanionStatusHeader(
                     showClock = companionControls && !habitatCovered,
                     presenceHint = presenceHint.takeIf {
                         uiState.agenticRuntimeV1Enabled || uiState.lumenReflexV2Enabled
@@ -606,7 +597,7 @@ fun CompanionScreen(
                     onTextContact = { viewModel.sendEmergencyText() },
                     onDismiss = { viewModel.dismissCrashAlert() },
                 )
-            } else {
+            } else if (!contextualHome) {
                 // Weather remains translucent above the existing weather scene.
                 uiState.weather?.let { w ->
                     WeatherCard(
@@ -809,170 +800,7 @@ fun CompanionScreen(
             )
         }
 
-        if (uiState.showSettings && secureStorage != null) {
-            SettingsScreen(
-                onOpenComputerFiles = viewModel::toggleAssetBrowser,
-                onOpenAuto = viewModel::openAutoScreen,
-                secureStorage = secureStorage,
-                initialPage = uiState.settingsInitialPage,
-                onOpenBrain = viewModel::toggleNeuralInfo,
-                companionName = uiState.name,
-                coverAvatarEnabled = uiState.coverAvatarEnabled,
-                onCoverAvatarChange = viewModel::setCoverAvatarEnabled,
-                wakeWordEnabled = uiState.wakeWordEnabled,
-                requireWakeWordInFace = uiState.requireWakeWordInFace,
-                conversationMode = uiState.conversationMode,
-                bargeInEnabled = uiState.bargeInEnabled,
-                routines = uiState.routines,
-                keepScreenOnInFaceMode = uiState.keepScreenOnInFaceMode,
-                agentBrainEnabled = uiState.agentBrainEnabled,
-                hermesAgentUrl = uiState.hermesAgentUrl,
-                imageServerUrl = uiState.imageServerUrl,
-                mem0ServerUrl = uiState.mem0ServerUrl,
-                preferServerImageGen = uiState.preferServerImageGen,
-                videoServerUrl = uiState.videoServerUrl,
-                imageModelInstalled = { viewModel.imageModelInstalled() },
-                imageModelDownload = uiState.modelDownloads[
-                    com.example.meowmba.core.agent.ImageModelCatalog.options.first().id
-                ],
-                musicServerUrl = uiState.musicServerUrl,
-                backgroundListeningEnabled = uiState.backgroundListeningEnabled,
-                usbAutoBridgeEnabled = uiState.usbAutoBridgeEnabled,
-                robotBodyEnabled = uiState.robotBodyEnabled,
-                robotHost = uiState.robotHost,
-                robotPort = uiState.robotPort,
-                robotStatus = uiState.robotStatus,
-                robotUseBluetooth = uiState.robotUseBluetooth,
-                robotBtAddress = uiState.robotBtAddress,
-                robotScanning = uiState.robotScanning,
-                robotScanResults = uiState.robotScanResults,
-                carModeEnabled = uiState.carModeEnabled,
-                idleMorphEnabled = uiState.idleMorphEnabled,
-                idleMorphIntervalSec = uiState.idleMorphIntervalSec,
-                idleMorphIncludeGenerated = uiState.idleMorphIncludeGenerated,
-                driveEmotionBoost = uiState.driveEmotionBoost,
-                driveDriverCameraEnabled = uiState.driveDriverCameraEnabled,
-                obdEnabled = uiState.obdEnabled,
-                obdAdapterAddress = uiState.obdAdapterAddress,
-                carDashcamRtspUrl = uiState.carDashcamRtspUrl,
-                avatarStyle = uiState.avatarStyle,
-                onAvatarStyleChange = { viewModel.setAvatarStyle(it) },
-                emergencyContact = uiState.emergencyContact,
-                onCarModeChange = { viewModel.setCarModeEnabled(it) },
-                onIdleMorphChange = { viewModel.setIdleMorphEnabled(it) },
-                onIdleMorphIntervalChange = { viewModel.setIdleMorphIntervalSec(it) },
-                onIdleMorphGeneratedChange = { viewModel.setIdleMorphIncludeGenerated(it) },
-                onDriveEmotionBoostChange = { viewModel.setDriveEmotionBoost(it) },
-                onDriveDriverCameraChange = { viewModel.setDriveDriverCameraEnabled(it) },
-                onObdEnabledChange = { viewModel.setObdEnabled(it) },
-                onObdAdapterChange = { viewModel.setObdAdapterAddress(it) },
-                onCarDashcamRtspChange = { viewModel.setCarDashcamRtspUrl(it) },
-                onEmergencyContactChange = { viewModel.setEmergencyContact(it) },
-                onRobotScan = { viewModel.scanForRobotBases() },
-                onRobotBodyChange = { viewModel.setRobotBody(it) },
-                onRobotHostChange = { viewModel.setRobotHost(it) },
-                onRobotPortChange = { viewModel.setRobotPort(it) },
-                onRobotUseBluetoothChange = { viewModel.setRobotUseBluetooth(it) },
-                onRobotBtAddressChange = { viewModel.setRobotBtAddress(it) },
-                onCompanionNameChange = { viewModel.renameCompanion(it) },
-                onWakeWordChange = { viewModel.setWakeWordEnabled(it) },
-                onRequireWakeInFaceChange = { viewModel.setRequireWakeInFace(it) },
-                onConversationModeChange = { viewModel.setConversationMode(it) },
-
-                onBargeInChange = { viewModel.setBargeIn(it) },
-                onOpenAccessibility = { viewModel.openAccessibilitySettings() },
-                onShareDiagnostics = viewModel::shareSupportDiagnostics,
-                onOpenSetup = { viewModel.toggleSettings(); viewModel.toggleSetupWizard() },
-                onOpenVoiceModels = { viewModel.toggleSettings(); viewModel.toggleVoiceModelScreen() },
-                onOpenModels = { viewModel.toggleSettings(); viewModel.toggleModelManager() },
-                appTheme = uiState.appTheme,
-                appearanceMode = uiState.appearanceMode,
-                onAppThemeChange = viewModel::setAppTheme,
-                onAppearanceModeChange = viewModel::setAppearanceMode,
-                idleChatterEnabled = uiState.idleChatterEnabled,
-                onIdleChatterChange = { viewModel.setIdleChatter(it) },
-
-                onRoutineToggle = { id, on -> viewModel.setRoutineEnabled(id, on) },
-                onKeepScreenOnChange = { viewModel.setKeepScreenOn(it) },
-                watchModeEnabled = uiState.watchModeEnabled,
-                onWatchModeChange = { viewModel.setWatchMode(it) },
-                commentaryEnabled = uiState.commentaryEnabled,
-                onCommentaryChange = { viewModel.setCommentaryMode(it) },
-                roadAlertsEnabled = uiState.roadAlertsEnabled,
-                roadAlertStatus = uiState.roadAlertStatus,
-                idleScenesEnabled = uiState.idleScenesEnabled,
-                onIdleScenesChange = viewModel::setIdleScenesEnabled,
-                onRoadAlertsChange = { viewModel.setRoadAlerts(it) },
-                onSaved = { viewModel.rebuildOmniRoute() },
-                onAgentBrainChange = { viewModel.setAgentBrainEnabled(it) },
-                onHermesUrlChange = { viewModel.setHermesAgentUrl(it) },
-                onDownloadImageModel = { viewModel.downloadImageModel() },
-                onDeleteImageModel = { viewModel.deleteImageModel() },
-                onImageServerUrlChange = { viewModel.setImageServerUrl(it) },
-                onMem0ServerUrlChange = { viewModel.setMem0ServerUrl(it) },
-                onPreferServerImageGenChange = { viewModel.setPreferServerImageGen(it) },
-                onMusicServerUrlChange = { viewModel.setMusicServerUrl(it) },
-                onVideoServerUrlChange = { viewModel.setVideoServerUrl(it) },
-                onBackgroundListeningChange = { viewModel.setBackgroundListeningEnabled(it) },
-                onUsbAutoBridgeChange = { viewModel.setUsbAutoBridge(it) },
-                maleCnsServer = uiState.maleCnsServer,
-                onPairMaleCnsServer = viewModel::pairMaleCnsServer,
-                onUsePairedComputerForMaleCns = viewModel::usePairedComputerForMaleCns,
-                onTestMaleCnsServer = viewModel::testMaleCnsServer,
-                onPairComputerForMaleCns = viewModel::openBrainPairingFromInfo,
-                neuralMode = uiState.neuralMode, neuralSubstrate = uiState.neuralSubstrate,
-                neuralTraceConsent = uiState.neuralTraceConsent, neuralDiagnostics = uiState.neuralDiagnostics,
-                onNeuralMode = viewModel::setNeuralMode, onNeuralSubstrate = viewModel::setNeuralSubstrate,
-                onNeuralTrace = viewModel::setNeuralTraceConsent, onNeuralReset = viewModel::resetNeuralController,
-                lumenReflexV2 = uiState.lumenReflexV2Enabled,
-                onLumenReflexV2Change = viewModel::setLumenReflexV2,
-                agenticRuntimeV1 = uiState.agenticRuntimeV1Enabled,
-                onAgenticRuntimeV1Change = viewModel::setAgenticRuntimeV1,
-                connectionProfiles = viewModel.listAgenticConnectionProfiles(),
-                onSaveConnectionProfile = viewModel::saveAgenticConnectionProfile,
-                onDeleteConnectionProfile = viewModel::deleteAgenticConnectionProfile,
-                onSaveAgenticCredential = viewModel::saveAgenticCredential,
-                agenticGoals = viewModel.listAgenticOpenGoals(),
-                agenticModelConfig = viewModel.agenticModelConfigSnapshot(),
-                sshCapabilitySummary = viewModel.agenticSshCapabilitySummary(),
-                onCreateAgenticGoal = viewModel::createAgenticGoal,
-                onTickAgenticGoal = viewModel::tickAgenticGoal,
-                onTickOpenAgenticGoals = viewModel::tickOpenAgenticGoals,
-                onApproveAgenticGoal = viewModel::approveAgenticGoal,
-                onRejectAgenticGoal = viewModel::rejectAgenticGoal,
-                onRefreshAgenticTasks = viewModel::refreshAgenticPresenceHint,
-                onSaveAgenticModelConfig = viewModel::saveAgenticModelConfig,
-
-
-                computerPhoneProbeSummary = uiState.computerPhoneProbeSummary,
-                computerPhoneReady = uiState.computerPhoneReady,
-                computerSetupStatus = uiState.computerSetupStatus,
-                computerStatusDetail = uiState.computerStatusDetail,
-                computerInstallLog = uiState.computerInstallLog,
-                computerPowerState = uiState.computerPowerState,
-                computerVncUrl = uiState.computerVncUrl,
-                computerSavedProfile = viewModel.computerSavedProfileOrNull(),
-                computerShowInstallPrompt = uiState.computerShowInstallPrompt,
-                onComputerSaveProfile = viewModel::saveComputerProfile,
-                onComputerTestConnection = viewModel::testComputerConnection,
-                onComputerInstall = viewModel::installComputerOnServer,
-                onComputerOpenTerminal = { viewModel.openComputerTerminal() },
-                onComputerOpenServerTerminal = viewModel::openComputerTerminal,
-                onRefreshComputerPhone = viewModel::refreshComputerPhoneProbe,
-                computerVerifiedProfile = uiState.computerVerifiedProfile,
-                onComputerOpenDesktop = viewModel::openComputerDesktopUrl,
-                onComputerConfirmInstallPrompt = viewModel::confirmComputerInstallPrompt,
-                lumenReflexGain = uiState.lumenReflexGain,
-                onLumenReflexGainChange = viewModel::setLumenReflexGain,
-                avatarFpsTarget = uiState.avatarFpsTarget,
-                onAvatarFpsTargetChange = viewModel::setAvatarFpsTarget,
-                computerPower = uiState.computerPowerState,
-                onComputerPowerChange = viewModel::setComputerPowerState,
-                computerIdleMinutes = uiState.computerIdleMinutes,
-                onComputerIdleMinutesChange = viewModel::setComputerIdleMinutes,
-                onClose = { viewModel.toggleSettings() }
-            )
-        }
+        CompanionSettingsOverlay(viewModel, uiState, secureStorage)
 
         if (uiState.showModelManager) {
             ModelManagerScreen(
@@ -1256,84 +1084,7 @@ fun CompanionScreen(
                 modifier = Modifier.align(Alignment.Center).safeDrawingPadding().padding(16.dp)
                     .heightIn(max = (coverConfiguration.screenHeightDp * 0.65f).dp))
         }
-        uiState.phoneControlSetupGoal?.let {
-            AlertDialog(onDismissRequest = viewModel::dismissPhoneControlSetup,
-                title = { Text("Reconnect phone control") },
-                text = { Text("Android has disconnected Meow Accessibility. Turn Meow off and back on in Settings → Accessibility → Installed apps, then return here. Retry will ask for task approval again; nothing will be posted automatically.") },
-                confirmButton = { TextButton(onClick = viewModel::openAccessibilitySettings) { Text("Open settings") } },
-                dismissButton = { Row {
-                    TextButton(onClick = viewModel::dismissPhoneControlSetup) { Text("Cancel") }
-                    TextButton(onClick = viewModel::retryPhoneControlSetup) { Text("Retry task") }
-                } })
-        }
-        if (uiState.modelSetupRequired && !showOnboarding) {
-            Surface(Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(16.dp),
-                shape = MaterialTheme.shapes.medium) {
-                TextButton(onClick = viewModel::repairModelSetup) { Text("Repair local AI setup") }
-            }
-        }
-        uiState.pendingApproval?.let { approval ->
-            Surface(
-                color = MaterialTheme.colorScheme.surface,
-                shape = RoundedCornerShape(16.dp),
-                border = androidx.compose.foundation.BorderStroke(
-                    1.dp,
-                    if (approval.riskLevel == com.example.meowmba.core.agent.tools.RiskLevel.DESTRUCTIVE) {
-                        MaterialTheme.colorScheme.error
-                    } else {
-                        MaterialTheme.colorScheme.tertiary
-                    }
-                ),
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .padding(32.dp)
-            ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    Text(
-                        if (approval.riskLevel == com.example.meowmba.core.agent.tools.RiskLevel.DESTRUCTIVE) {
-                            "Destructive action — your call"
-                        } else {
-                            "Approval needed"
-                        },
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(approval.title, color = MaterialTheme.colorScheme.primary, fontSize = 14.sp)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(approval.detail, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp,
-                        modifier = Modifier.fillMaxWidth().heightIn(max = (coverConfiguration.screenHeightDp * .42f).dp)
-                            .verticalScroll(rememberScrollState()))
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Button(
-                            onClick = { viewModel.resolveApproval(false) },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("Deny")
-                        }
-                        Button(
-                            onClick = { viewModel.resolveApproval(true) },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (approval.riskLevel == com.example.meowmba.core.agent.tools.RiskLevel.DESTRUCTIVE) {
-                                    MaterialTheme.colorScheme.error
-                                } else {
-                                    MaterialTheme.colorScheme.primary
-                                },
-                                contentColor = if (approval.riskLevel == com.example.meowmba.core.agent.tools.RiskLevel.DESTRUCTIVE)
-                                    MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onPrimary,
-                            ),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("Approve")
-                        }
-                    }
-                }
-            }
-        }
+        CompanionTaskOverlays(viewModel, uiState, showOnboarding, coverConfiguration.screenHeightDp)
 
         // Setup wizard: full-screen overlay for first-launch or re-open from Settings.
         // Drawn AFTER everything else so it covers the entire companion surface.
@@ -1369,6 +1120,10 @@ private fun AvatarMotionHost(
     modifier: Modifier = Modifier,
     interactive: Boolean = true,
 ) {
+    if (uiState.avatarStyle == AvatarStyle.DESK) {
+        com.example.meowmba.ui.flow.DeskRoute(viewModel, uiState, paused, modifier)
+        return
+    }
     val motionTilt = viewModel.motionScreenLeanDeg.collectAsState()
     val motionSampleTime = viewModel.motionObservedAtMs.collectAsState()
     val view = androidx.compose.ui.platform.LocalView.current
@@ -1439,4 +1194,281 @@ private fun AvatarMotionHost(
                 modifier=Modifier.align(Alignment.Center).background(MaterialTheme.colorScheme.surfaceContainerHigh).padding(16.dp))
         }
     }
+}
+
+/** Keep lifecycle wiring out of the already large screen's generated Compose method. */
+@Composable
+private fun CompanionStageEffects(viewModel: CompanionViewModel, uiState: CompanionState, animationsPaused: Boolean) {
+    if (uiState.appTheme == AppTheme.FLOW || uiState.avatarStyle == AvatarStyle.DESK) {
+        com.example.meowmba.ui.flow.FlowLifecycle(viewModel, uiState.driving)
+    }
+    // Report the real stage policy, including thermal/fold/onboarding changes.
+    // Camera/body preferences must not cancel a visible acting performance.
+    val companionStageVisible = !animationsPaused && uiState.appTheme != AppTheme.FLOW && uiState.avatarStyle != AvatarStyle.DESK
+    LaunchedEffect(viewModel, companionStageVisible) {
+        viewModel.setAvatarPerformanceStageAllowed(companionStageVisible)
+    }
+    DisposableEffect(viewModel) {
+        onDispose { viewModel.setAvatarPerformanceStageAllowed(false) }
+    }
+    DisposableEffect(viewModel, companionStageVisible, uiState.showNeuralInfo, uiState.isCameraEnabled, uiState.robotBodyEnabled) {
+        // Brain is a visual monitor; opening it does not enable a physical body.
+        viewModel.setBodyStageAllowed(companionStageVisible && !uiState.showNeuralInfo)
+        onDispose { viewModel.setBodyStageAllowed(false) }
+    }
+
+}
+
+@Composable
+private fun androidx.compose.foundation.layout.BoxScope.CompanionTaskOverlays(
+    viewModel: CompanionViewModel, uiState: CompanionState, showOnboarding: Boolean, screenHeightDp: Int,
+) {
+        uiState.phoneControlSetupGoal?.let {
+            AlertDialog(onDismissRequest = viewModel::dismissPhoneControlSetup,
+                title = { Text("Reconnect phone control") },
+                text = { Text("Android has disconnected Meow Accessibility. Turn Meow off and back on in Settings → Accessibility → Installed apps, then return here. Retry will ask for task approval again; nothing will be posted automatically.") },
+                confirmButton = { TextButton(onClick = viewModel::openAccessibilitySettings) { Text("Open settings") } },
+                dismissButton = { Row {
+                    TextButton(onClick = viewModel::dismissPhoneControlSetup) { Text("Cancel") }
+                    TextButton(onClick = viewModel::retryPhoneControlSetup) { Text("Retry task") }
+                } })
+        }
+        if (uiState.modelSetupRequired && !showOnboarding) {
+            Surface(Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(16.dp),
+                shape = MaterialTheme.shapes.medium) {
+                TextButton(onClick = viewModel::repairModelSetup) { Text("Repair local AI setup") }
+            }
+        }
+        uiState.pendingApproval?.let { approval ->
+            Surface(
+                color = MaterialTheme.colorScheme.surface,
+                shape = RoundedCornerShape(16.dp),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    if (approval.riskLevel == com.example.meowmba.core.agent.tools.RiskLevel.DESTRUCTIVE) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.tertiary
+                    }
+                ),
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(32.dp)
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Text(
+                        if (approval.riskLevel == com.example.meowmba.core.agent.tools.RiskLevel.DESTRUCTIVE) {
+                            "Destructive action — your call"
+                        } else {
+                            "Approval needed"
+                        },
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(approval.title, color = MaterialTheme.colorScheme.primary, fontSize = 14.sp)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(approval.detail, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp,
+                        modifier = Modifier.fillMaxWidth().heightIn(max = (screenHeightDp * .42f).dp)
+                            .verticalScroll(rememberScrollState()))
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Button(
+                            onClick = { viewModel.resolveApproval(false) },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Deny")
+                        }
+                        Button(
+                            onClick = { viewModel.resolveApproval(true) },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (approval.riskLevel == com.example.meowmba.core.agent.tools.RiskLevel.DESTRUCTIVE) {
+                                    MaterialTheme.colorScheme.error
+                                } else {
+                                    MaterialTheme.colorScheme.primary
+                                },
+                                contentColor = if (approval.riskLevel == com.example.meowmba.core.agent.tools.RiskLevel.DESTRUCTIVE)
+                                    MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onPrimary,
+                            ),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Approve")
+                        }
+                    }
+                }
+            }
+        }
+
+}
+
+@Composable
+private fun CompanionSettingsOverlay(viewModel: CompanionViewModel, uiState: CompanionState, secureStorage: SecureStorageManager?) {
+        if (uiState.showSettings && secureStorage != null) {
+            SettingsScreen(
+                onOpenComputerFiles = viewModel::toggleAssetBrowser,
+                onOpenAuto = viewModel::openAutoScreen,
+                secureStorage = secureStorage,
+                initialPage = uiState.settingsInitialPage,
+                onOpenBrain = viewModel::toggleNeuralInfo,
+                companionName = uiState.name,
+                coverAvatarEnabled = uiState.coverAvatarEnabled,
+                onCoverAvatarChange = viewModel::setCoverAvatarEnabled,
+                wakeWordEnabled = uiState.wakeWordEnabled,
+                requireWakeWordInFace = uiState.requireWakeWordInFace,
+                conversationMode = uiState.conversationMode,
+                bargeInEnabled = uiState.bargeInEnabled,
+                routines = uiState.routines,
+                keepScreenOnInFaceMode = uiState.keepScreenOnInFaceMode,
+                agentBrainEnabled = uiState.agentBrainEnabled,
+                hermesAgentUrl = uiState.hermesAgentUrl,
+                imageServerUrl = uiState.imageServerUrl,
+                mem0ServerUrl = uiState.mem0ServerUrl,
+                preferServerImageGen = uiState.preferServerImageGen,
+                videoServerUrl = uiState.videoServerUrl,
+                imageModelInstalled = { viewModel.imageModelInstalled() },
+                imageModelDownload = uiState.modelDownloads[
+                    com.example.meowmba.core.agent.ImageModelCatalog.options.first().id
+                ],
+                musicServerUrl = uiState.musicServerUrl,
+                backgroundListeningEnabled = uiState.backgroundListeningEnabled,
+                usbAutoBridgeEnabled = uiState.usbAutoBridgeEnabled,
+                robotBodyEnabled = uiState.robotBodyEnabled,
+                robotHost = uiState.robotHost,
+                robotPort = uiState.robotPort,
+                robotStatus = uiState.robotStatus,
+                robotUseBluetooth = uiState.robotUseBluetooth,
+                robotBtAddress = uiState.robotBtAddress,
+                robotScanning = uiState.robotScanning,
+                robotScanResults = uiState.robotScanResults,
+                carModeEnabled = uiState.carModeEnabled,
+                idleMorphEnabled = uiState.idleMorphEnabled,
+                idleMorphIntervalSec = uiState.idleMorphIntervalSec,
+                idleMorphIncludeGenerated = uiState.idleMorphIncludeGenerated,
+                driveEmotionBoost = uiState.driveEmotionBoost,
+                driveDriverCameraEnabled = uiState.driveDriverCameraEnabled,
+                obdEnabled = uiState.obdEnabled,
+                obdAdapterAddress = uiState.obdAdapterAddress,
+                carDashcamRtspUrl = uiState.carDashcamRtspUrl,
+                avatarStyle = uiState.avatarStyle,
+                onAvatarStyleChange = { viewModel.setAvatarStyle(it) },
+                emergencyContact = uiState.emergencyContact,
+                onCarModeChange = { viewModel.setCarModeEnabled(it) },
+                onIdleMorphChange = { viewModel.setIdleMorphEnabled(it) },
+                onIdleMorphIntervalChange = { viewModel.setIdleMorphIntervalSec(it) },
+                onIdleMorphGeneratedChange = { viewModel.setIdleMorphIncludeGenerated(it) },
+                onDriveEmotionBoostChange = { viewModel.setDriveEmotionBoost(it) },
+                onDriveDriverCameraChange = { viewModel.setDriveDriverCameraEnabled(it) },
+                onObdEnabledChange = { viewModel.setObdEnabled(it) },
+                onObdAdapterChange = { viewModel.setObdAdapterAddress(it) },
+                onCarDashcamRtspChange = { viewModel.setCarDashcamRtspUrl(it) },
+                onEmergencyContactChange = { viewModel.setEmergencyContact(it) },
+                onRobotScan = { viewModel.scanForRobotBases() },
+                onRobotBodyChange = { viewModel.setRobotBody(it) },
+                onRobotHostChange = { viewModel.setRobotHost(it) },
+                onRobotPortChange = { viewModel.setRobotPort(it) },
+                onRobotUseBluetoothChange = { viewModel.setRobotUseBluetooth(it) },
+                onRobotBtAddressChange = { viewModel.setRobotBtAddress(it) },
+                onCompanionNameChange = { viewModel.renameCompanion(it) },
+                onWakeWordChange = { viewModel.setWakeWordEnabled(it) },
+                onRequireWakeInFaceChange = { viewModel.setRequireWakeInFace(it) },
+                onConversationModeChange = { viewModel.setConversationMode(it) },
+
+                onBargeInChange = { viewModel.setBargeIn(it) },
+                onOpenAccessibility = { viewModel.openAccessibilitySettings() },
+                onShareDiagnostics = viewModel::shareSupportDiagnostics,
+                onOpenSetup = { viewModel.toggleSettings(); viewModel.toggleSetupWizard() },
+                onOpenVoiceModels = { viewModel.toggleSettings(); viewModel.toggleVoiceModelScreen() },
+                onOpenModels = { viewModel.toggleSettings(); viewModel.toggleModelManager() },
+                appTheme = uiState.appTheme,
+                appearanceMode = uiState.appearanceMode,
+                onAppThemeChange = viewModel::setAppTheme,
+                onAppearanceModeChange = viewModel::setAppearanceMode,
+                idleChatterEnabled = uiState.idleChatterEnabled,
+                onIdleChatterChange = { viewModel.setIdleChatter(it) },
+
+                onRoutineToggle = { id, on -> viewModel.setRoutineEnabled(id, on) },
+                onKeepScreenOnChange = { viewModel.setKeepScreenOn(it) },
+                watchModeEnabled = uiState.watchModeEnabled,
+                onWatchModeChange = { viewModel.setWatchMode(it) },
+                commentaryEnabled = uiState.commentaryEnabled,
+                onCommentaryChange = { viewModel.setCommentaryMode(it) },
+                roadAlertsEnabled = uiState.roadAlertsEnabled,
+                roadAlertStatus = uiState.roadAlertStatus,
+                idleScenesEnabled = uiState.idleScenesEnabled,
+                onIdleScenesChange = viewModel::setIdleScenesEnabled,
+                onRoadAlertsChange = { viewModel.setRoadAlerts(it) },
+                onSaved = { viewModel.rebuildOmniRoute() },
+                onAgentBrainChange = { viewModel.setAgentBrainEnabled(it) },
+                onHermesUrlChange = { viewModel.setHermesAgentUrl(it) },
+                onDownloadImageModel = { viewModel.downloadImageModel() },
+                onDeleteImageModel = { viewModel.deleteImageModel() },
+                onImageServerUrlChange = { viewModel.setImageServerUrl(it) },
+                onMem0ServerUrlChange = { viewModel.setMem0ServerUrl(it) },
+                onPreferServerImageGenChange = { viewModel.setPreferServerImageGen(it) },
+                onMusicServerUrlChange = { viewModel.setMusicServerUrl(it) },
+                onVideoServerUrlChange = { viewModel.setVideoServerUrl(it) },
+                onBackgroundListeningChange = { viewModel.setBackgroundListeningEnabled(it) },
+                onUsbAutoBridgeChange = { viewModel.setUsbAutoBridge(it) },
+                maleCnsServer = uiState.maleCnsServer,
+                onPairMaleCnsServer = viewModel::pairMaleCnsServer,
+                onUsePairedComputerForMaleCns = viewModel::usePairedComputerForMaleCns,
+                onTestMaleCnsServer = viewModel::testMaleCnsServer,
+                onPairComputerForMaleCns = viewModel::openBrainPairingFromInfo,
+                neuralMode = uiState.neuralMode, neuralSubstrate = uiState.neuralSubstrate,
+                neuralTraceConsent = uiState.neuralTraceConsent, neuralDiagnostics = uiState.neuralDiagnostics,
+                onNeuralMode = viewModel::setNeuralMode, onNeuralSubstrate = viewModel::setNeuralSubstrate,
+                onNeuralTrace = viewModel::setNeuralTraceConsent, onNeuralReset = viewModel::resetNeuralController,
+                lumenReflexV2 = uiState.lumenReflexV2Enabled,
+                onLumenReflexV2Change = viewModel::setLumenReflexV2,
+                agenticRuntimeV1 = uiState.agenticRuntimeV1Enabled,
+                onAgenticRuntimeV1Change = viewModel::setAgenticRuntimeV1,
+                connectionProfiles = viewModel.listAgenticConnectionProfiles(),
+                onSaveConnectionProfile = viewModel::saveAgenticConnectionProfile,
+                onDeleteConnectionProfile = viewModel::deleteAgenticConnectionProfile,
+                onSaveAgenticCredential = viewModel::saveAgenticCredential,
+                agenticGoals = viewModel.listAgenticOpenGoals(),
+                agenticModelConfig = viewModel.agenticModelConfigSnapshot(),
+                sshCapabilitySummary = viewModel.agenticSshCapabilitySummary(),
+                onCreateAgenticGoal = viewModel::createAgenticGoal,
+                onTickAgenticGoal = viewModel::tickAgenticGoal,
+                onTickOpenAgenticGoals = viewModel::tickOpenAgenticGoals,
+                onApproveAgenticGoal = viewModel::approveAgenticGoal,
+                onRejectAgenticGoal = viewModel::rejectAgenticGoal,
+                onRefreshAgenticTasks = viewModel::refreshAgenticPresenceHint,
+                onSaveAgenticModelConfig = viewModel::saveAgenticModelConfig,
+
+
+                computerPhoneProbeSummary = uiState.computerPhoneProbeSummary,
+                computerPhoneReady = uiState.computerPhoneReady,
+                computerSetupStatus = uiState.computerSetupStatus,
+                computerStatusDetail = uiState.computerStatusDetail,
+                computerInstallLog = uiState.computerInstallLog,
+                computerPowerState = uiState.computerPowerState,
+                computerVncUrl = uiState.computerVncUrl,
+                computerSavedProfile = viewModel.computerSavedProfileOrNull(),
+                computerShowInstallPrompt = uiState.computerShowInstallPrompt,
+                onComputerSaveProfile = viewModel::saveComputerProfile,
+                onComputerTestConnection = viewModel::testComputerConnection,
+                onComputerInstall = viewModel::installComputerOnServer,
+                onComputerOpenTerminal = { viewModel.openComputerTerminal() },
+                onComputerOpenServerTerminal = viewModel::openComputerTerminal,
+                onRefreshComputerPhone = viewModel::refreshComputerPhoneProbe,
+                computerVerifiedProfile = uiState.computerVerifiedProfile,
+                onComputerOpenDesktop = viewModel::openComputerDesktopUrl,
+                onComputerConfirmInstallPrompt = viewModel::confirmComputerInstallPrompt,
+                lumenReflexGain = uiState.lumenReflexGain,
+                onLumenReflexGainChange = viewModel::setLumenReflexGain,
+                avatarFpsTarget = uiState.avatarFpsTarget,
+                onAvatarFpsTargetChange = viewModel::setAvatarFpsTarget,
+                computerPower = uiState.computerPowerState,
+                onComputerPowerChange = viewModel::setComputerPowerState,
+                computerIdleMinutes = uiState.computerIdleMinutes,
+                onComputerIdleMinutesChange = viewModel::setComputerIdleMinutes,
+                onClose = { viewModel.toggleSettings() }
+            )
+        }
+
 }

@@ -9,12 +9,13 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [MessageEntity::class, MemoryEntity::class, MemoryFtsEntity::class, MessageFtsEntity::class, AuditEntryEntity::class, RoutineEntity::class, ProjectEntity::class, CharacterEntity::class, AgenticGoalEntity::class, AgenticEventEntity::class, ConnectionProfileEntity::class],
-    version = 10,
+    entities = [MessageEntity::class, MemoryEntity::class, MemoryFtsEntity::class, MessageFtsEntity::class, AuditEntryEntity::class, RoutineEntity::class, ProjectEntity::class, CharacterEntity::class, AgenticGoalEntity::class, AgenticEventEntity::class, ConnectionProfileEntity::class, com.example.meowmba.core.flow.db.FlowIntentionEntity::class, com.example.meowmba.core.flow.db.FlowOutcomeEntity::class],
+    version = 11,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
 abstract class MeowmbaDatabase : RoomDatabase() {
+    abstract fun flowDao(): com.example.meowmba.core.flow.db.FlowDao
     abstract fun messageDao(): MessageDao
     abstract fun memoryDao(): MemoryDao
     abstract fun auditDao(): AuditDao
@@ -26,6 +27,12 @@ abstract class MeowmbaDatabase : RoomDatabase() {
     abstract fun connectionProfileDao(): ConnectionProfileDao
 
     companion object {
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                com.example.meowmba.core.flow.db.MIGRATION_10_11_STATEMENTS.forEach(db::execSQL)
+            }
+        }
+
         /**
          * Adds the recall columns to `memories`, preserving every saved memory.
          *
@@ -174,7 +181,7 @@ abstract class MeowmbaDatabase : RoomDatabase() {
                 )
                     .addMigrations(
                         MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
-                        MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10,
+                        MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11,
                     )
                     // No fallbackToDestructiveMigration. It was silently
                     // dropping every table for anyone upgrading from v2 or v3,

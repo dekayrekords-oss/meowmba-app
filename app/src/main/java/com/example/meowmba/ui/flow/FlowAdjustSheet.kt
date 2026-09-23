@@ -143,11 +143,7 @@ fun FlowAdjustSheet(
                 }
             }
 
-            Group("Thinking", "Meow's decisions come from Laya, an open model that runs on this phone. Your context stays on the device.") {
-                SettingRow("Ask Jev on hard cases", "Sends a trimmed summary to TypeSafe's cloud") {
-                    Toggle(settings.allowJev, "Ask Jev on hard cases") { onChange(settings.copy(allowJev = it)) }
-                }
-            }
+            Group("Thinking", "Local rules are active. Laya and Jev are not connected in this version. No context is sent to a decision service.") {}
 
             Group("Work hours") {
                 BasicText("Learned so far: $learnedHours", Modifier.padding(top = 10.dp), style = FlowType.itemDetail.copy(color = c.ink2))
