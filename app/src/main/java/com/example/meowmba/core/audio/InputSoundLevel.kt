@@ -62,5 +62,7 @@ object InputSoundLevel {
     private fun publish(activity: Float, loudness: Float, nowMs: Long, source: String) {
         sample = InputSoundSample(activity, loudness, true, source)
         atMs = nowMs
+        // Surroundings for Meow's context stamp (only while the mic is already listening).
+        com.example.meowmba.core.context.live.LiveContext.noteLoudness(loudness, nowMs)
     }
 }

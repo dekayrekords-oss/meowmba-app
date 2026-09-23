@@ -11,6 +11,10 @@
     <!-- Navigation: needed to rank nearby places by distance from the user. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Meow context (docs/MEOW_CONTEXT_PLAN.md): knowing when you drive or walk, and where you
+         are while Meow is closed. Background location approved by the owner (D10). -->
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <uses-permission android:name="android.permission.CAMERA" />
     <!-- LOOI robot body over classic Bluetooth (paired device, runtime on 12+). -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
@@ -248,6 +252,13 @@
             </intent-filter>
         </provider>
         <receiver android:name=".core.flow.delivery.FlowActionReceiver" android:exported="false" />
+        <!-- Activity transitions + location batches from Play services, and re-arming after boot/update. -->
+        <receiver android:name=".core.context.live.ContextReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

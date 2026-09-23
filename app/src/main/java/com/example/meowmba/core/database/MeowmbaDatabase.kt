@@ -9,13 +9,14 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [MessageEntity::class, MemoryEntity::class, MemoryFtsEntity::class, MessageFtsEntity::class, AuditEntryEntity::class, RoutineEntity::class, ProjectEntity::class, CharacterEntity::class, AgenticGoalEntity::class, AgenticEventEntity::class, ConnectionProfileEntity::class, com.example.meowmba.core.flow.db.FlowIntentionEntity::class, com.example.meowmba.core.flow.db.FlowOutcomeEntity::class],
-    version = 11,
+    entities = [MessageEntity::class, MemoryEntity::class, MemoryFtsEntity::class, MessageFtsEntity::class, AuditEntryEntity::class, RoutineEntity::class, ProjectEntity::class, CharacterEntity::class, AgenticGoalEntity::class, AgenticEventEntity::class, ConnectionProfileEntity::class, com.example.meowmba.core.flow.db.FlowIntentionEntity::class, com.example.meowmba.core.flow.db.FlowOutcomeEntity::class, com.example.meowmba.core.context.live.LifeEventEntity::class, com.example.meowmba.core.context.live.LocationSampleEntity::class],
+    version = 12,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
 abstract class MeowmbaDatabase : RoomDatabase() {
     abstract fun flowDao(): com.example.meowmba.core.flow.db.FlowDao
+    abstract fun lifeJournalDao(): com.example.meowmba.core.context.live.LifeJournalDao
     abstract fun messageDao(): MessageDao
     abstract fun memoryDao(): MemoryDao
     abstract fun auditDao(): AuditDao
@@ -27,6 +28,13 @@ abstract class MeowmbaDatabase : RoomDatabase() {
     abstract fun connectionProfileDao(): ConnectionProfileDao
 
     companion object {
+        /** The context journal and location samples (docs/MEOW_CONTEXT_PLAN.md). */
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                com.example.meowmba.core.context.live.MIGRATION_11_12_STATEMENTS.forEach(db::execSQL)
+            }
+        }
+
         val MIGRATION_10_11 = object : Migration(10, 11) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 com.example.meowmba.core.flow.db.MIGRATION_10_11_STATEMENTS.forEach(db::execSQL)
@@ -181,7 +189,7 @@ abstract class MeowmbaDatabase : RoomDatabase() {
                 )
                     .addMigrations(
                         MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
-                        MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11,
+                        MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
                     )
                     // No fallbackToDestructiveMigration. It was silently
                     // dropping every table for anyone upgrading from v2 or v3,

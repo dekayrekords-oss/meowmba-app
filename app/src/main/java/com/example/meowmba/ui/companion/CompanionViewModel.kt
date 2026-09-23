@@ -2230,6 +2230,17 @@ class CompanionViewModel(
 
             // IMU: lean with the phone, startle on shake. RobotPoseSource for
             // the future body lives behind MotionSense's interface.
+            // Meow context (docs/MEOW_CONTEXT_PLAN.md): background activity + location, and the
+            // stamp every journal row carries. Low power; sensing starts only with permission.
+            appContext?.let { ctx -> runCatching {
+                com.example.meowmba.core.context.live.ContextStamp.init(ctx, com.example.meowmba.core.context.live.ContextStamp.Providers(
+                    weather = { (_uiState.value.ambientWeather ?: _uiState.value.weather)?.let { "${it.temperatureF}° ${it.condition.label.lowercase()}" } },
+                    nextEvent = { nextEventLine },
+                    recentApp = { recentAppLabel(ctx) },
+                    carDeviceName = { secureStorage?.getPreference(KEY_CAR_DEVICE) },
+                ))
+                com.example.meowmba.core.context.live.ContextSensing.start(ctx)
+            } }
             appContext?.let { ctx ->
                 motionSense = com.example.meowmba.core.sensor.MotionSense(ctx).also { sense ->
                     if (sense.available) {
@@ -3512,6 +3523,37 @@ class CompanionViewModel(
         }
     }
 
+    /**
+     * The user's situation for this turn (docs/MEOW_SCENARIOS.md): always a "right now" line,
+     * plus stamped journal lines when they ask when/where/what they said or did.
+     */
+    private suspend fun situationContext(text: String): String? = runCatching {
+        val ctx = secureStorage?.context?.applicationContext ?: return null
+        val recall = com.example.meowmba.core.context.live.JournalRecall
+        val now = System.currentTimeMillis()
+        val w = (_uiState.value.ambientWeather ?: _uiState.value.weather)?.let { "${it.temperatureF}° ${it.condition.label.lowercase()}" }
+        val lines = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            recall.forQuestion(text, com.example.meowmba.core.database.MeowmbaDatabase.getDatabase(ctx).lifeJournalDao(), now)
+        }
+        buildString {
+            append(recall.now(com.example.meowmba.core.context.live.LiveContext.now.value, now, nextEventLine, w))
+            if (lines.isNotEmpty()) {
+                append("\nFrom your journal of what the user said and did (newest first; answer with the time and place):\n")
+                lines.forEach { append("- ").append(it).append('\n') }
+            }
+        }.trim()
+    }.getOrNull()
+
+    /** Next calendar event for the journal stamp ("Tester check-in 3:30 PM"); refreshed with Flow's app data. */
+    @Volatile private var nextEventLine: String? = null
+    private var sensingGranted = -1
+
+    /** The app the user was in before Meow, from usage access (last 10 min); null without access. */
+    private fun recentAppLabel(ctx: android.content.Context): String? = runCatching {
+        val now = System.currentTimeMillis()
+        com.example.meowmba.core.flow.sources.UsageSource(ctx) { emptySet() }.foregroundEvidence(now - 10 * 60_000L, now).lastOrNull()?.label
+    }.getOrNull()
+
     /** Feed Flow and the Desk from data the app already has. Cheap; called on open and each minute. */
     internal suspend fun syncFlowAppData() {
         val flow = flowRuntime ?: return
@@ -3527,11 +3569,21 @@ class CompanionViewModel(
         }
         val calendarOk = ctx.checkSelfPermission(android.Manifest.permission.READ_CALENDAR) == android.content.pm.PackageManager.PERMISSION_GRANTED
         val events = if (calendarOk) com.example.meowmba.core.flow.sources.CalendarSource(ctx).upcoming(now) else emptyList()
+        nextEventLine = events.filter { it.startAt >= now }.minByOrNull { it.startAt }?.let {
+            it.title + " " + java.time.format.DateTimeFormatter.ofPattern("EEE h:mm a", java.util.Locale.US)
+                .format(java.time.Instant.ofEpochMilli(it.startAt).atZone(java.time.ZoneId.systemDefault()))
+        }
+        val sensing = com.example.meowmba.core.context.live.ContextSensing
         val access = com.example.meowmba.core.flow.sources.AppIntentions.Access(
             notifications = androidx.core.app.NotificationManagerCompat.getEnabledListenerPackages(ctx).contains(ctx.packageName),
             usage = com.example.meowmba.core.flow.sources.UsageSource(ctx) { emptySet() }.hasAccess(),
             calendar = calendarOk,
+            activity = sensing.canSenseActivity(ctx),
+            locationAlways = sensing.canLocateInBackground(ctx),
         )
+        // A permission granted since the last check: start that sensing now (registration is idempotent).
+        val granted = (if (access.activity) 1 else 0) or (if (sensing.canLocate(ctx)) 2 else 0) or (if (access.locationAlways) 4 else 0)
+        if (granted != sensingGranted) { sensingGranted = granted; sensing.start(ctx) }
         flow.syncManaged(apps.build(now, java.time.ZoneId.systemDefault(), reminders, projects, events, access), apps.MANAGED_PREFIXES)
     }
 
@@ -4354,7 +4406,7 @@ class CompanionViewModel(
                 speakerName = lastSpeakerName,
                 deviceFacts = liveDeviceFacts(text),
                 voiceCall = onCall,
-                workingContext = listOfNotNull(followUpContextFor(text), characterTone()).joinToString("\n"),
+                workingContext = listOfNotNull(followUpContextFor(text), characterTone(), situationContext(text)).joinToString("\n"),
             )
             omniRoute?.hintUserText(text)
             // Voice call uses the flash/fast lane. Other direct answers pin
@@ -6920,7 +6972,11 @@ class CompanionViewModel(
             return
         }
         // Meow Flow: "the rear light is out", "remind me to…" become things Meow keeps in mind.
-        if (!fromVoice || finalTranscript) flowRuntime?.let { flow -> viewModelScope.launch { runCatching { flow.captureFromChat(raw) } } }
+        if (!fromVoice || finalTranscript) {
+            flowRuntime?.let { flow -> viewModelScope.launch { runCatching { flow.captureFromChat(raw) } } }
+            // Everything the user tells Meow is remembered with where, when and what was going on.
+            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) { com.example.meowmba.core.context.live.ContextStamp.said(raw) }
+        }
 
         if (fromVoice && !_uiState.value.isMicEnabled) return
         val normalizedRaw = com.example.meowmba.core.audio.SpokenText.normalize(raw)
@@ -7393,7 +7449,7 @@ class CompanionViewModel(
             val prompt = PromptBuilder.build(
                 _uiState.value.name, text, recentMessages, recalled, capabilities,
                 learned = learnedBlock(),
-                workingContext = listOfNotNull(followUpContextFor(text), characterTone()).joinToString("\n"),
+                workingContext = listOfNotNull(followUpContextFor(text), characterTone(), situationContext(text)).joinToString("\n"),
                 speakerName = lastSpeakerName,
                 deviceFacts = liveDeviceFacts(text),
             )

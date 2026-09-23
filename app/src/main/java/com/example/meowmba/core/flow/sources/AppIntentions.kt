@@ -20,7 +20,8 @@ import java.util.Locale
 object AppIntentions {
     data class Reminder(val id: Long, val name: String, val timeOfDay: String?, val enabled: Boolean, val userMade: Boolean, val lastRunAt: Long)
     data class Project(val id: Long, val name: String, val kindLabel: String, val lastOpenedAt: Long)
-    data class Access(val notifications: Boolean, val usage: Boolean, val calendar: Boolean)
+    data class Access(val notifications: Boolean, val usage: Boolean, val calendar: Boolean,
+                      val activity: Boolean = true, val locationAlways: Boolean = true)
 
     /** Id prefixes this object owns; anything with them that disappears from the list is closed. */
     val MANAGED_PREFIXES = listOf(REMINDER, PROJECT, CALENDAR, SETUP)
@@ -33,6 +34,8 @@ object AppIntentions {
     const val SETUP_NOTIFICATIONS = "setup-notifications"
     const val SETUP_USAGE = "setup-usage"
     const val SETUP_CALENDAR = "setup-calendar"
+    const val SETUP_ACTIVITY = "setup-activity"
+    const val SETUP_LOCATION = "setup-location"
 
     private val HM = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
 
@@ -76,6 +79,10 @@ object AppIntentions {
             "let Meow bring up meetings before they start", now))
         if (!access.usage) add(setup(SETUP_USAGE, "Let Meow know what you're working in",
             "turn on usage access so Meow can tell when work starts and ends. Only app names are used", now))
+        if (!access.activity) add(setup(SETUP_ACTIVITY, "Let Meow know when you're driving or walking",
+            "allow physical activity. Android tells Meow when you start driving, walking or stop, using almost no battery", now))
+        if (!access.locationAlways) add(setup(SETUP_LOCATION, "Let Meow know where you are, even when it's closed",
+            "choose \"Allow all the time\" for location. Meow learns your places and remembers where you were. It stays on this phone", now))
     }
 
     /** A message notification from a person becomes "Reply to <sender>" until the notification is cleared. */

@@ -41,10 +41,12 @@ internal fun FlowLifecycle(vm: CompanionViewModel, driving: Boolean) {
     val flow = vm.flowRuntime ?: return
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     DisposableEffect(flow) { flow.start(); onDispose { flow.stop() } }
-    LaunchedEffect(flow, driving) {
-        flow.publish(Evidence(EvidenceType.MOVEMENT, System.currentTimeMillis(), "move",
-            if (driving) "Driving" else "Stopped",
-            mapOf("activity" to if (driving) Activity.DRIVING.name else Activity.STILL.name)))
+    // Movement: the car assistant's GPS flag, or Android's activity transitions when Car mode is off.
+    val live by com.example.meowmba.core.context.live.LiveContext.now.collectAsState()
+    val activity = if (driving) Activity.DRIVING else live.activity.takeIf { it != Activity.UNKNOWN } ?: Activity.STILL
+    LaunchedEffect(flow, activity) {
+        val label = when (activity) { Activity.DRIVING -> "Driving"; Activity.WALKING -> "Walking"; else -> "Stopped" }
+        flow.publish(Evidence(EvidenceType.MOVEMENT, System.currentTimeMillis(), "move", label, mapOf("activity" to activity.name)))
     }
     LaunchedEffect(flow, lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -62,12 +64,17 @@ internal fun FlowLifecycle(vm: CompanionViewModel, driving: Boolean) {
  * "connect" items open the exact system screen; everything else is marked done.
  */
 internal suspend fun handleFlowPrimary(vm: CompanionViewModel, context: Context, flow: FlowRuntime, id: String,
-                                      requestCalendar: () -> Unit) {
+                                      requestPermission: (String) -> Unit) {
     val item = flow.store.intentions.value.firstOrNull { it.id == id }
     when {
         id == AppIntentions.SETUP_NOTIFICATIONS -> context.startSafely(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
         id == AppIntentions.SETUP_USAGE -> context.startSafely(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
-        id == AppIntentions.SETUP_CALENDAR -> requestCalendar()
+        id == AppIntentions.SETUP_CALENDAR -> requestPermission(android.Manifest.permission.READ_CALENDAR)
+        id == AppIntentions.SETUP_ACTIVITY -> requestPermission(android.Manifest.permission.ACTIVITY_RECOGNITION)
+        // Android asks for location while in use first; "all the time" is a second, separate step.
+        id == AppIntentions.SETUP_LOCATION -> requestPermission(
+            if (com.example.meowmba.core.context.live.ContextSensing.canLocate(context)) android.Manifest.permission.ACCESS_BACKGROUND_LOCATION
+            else android.Manifest.permission.ACCESS_FINE_LOCATION)
         id.startsWith(AppIntentions.PROJECT) ->
             item?.facts?.get("project_id")?.toLongOrNull()?.let(vm::openProject) ?: vm.toggleProjectsScreen()
         id.startsWith(AppIntentions.MESSAGE) -> {
@@ -96,19 +103,19 @@ internal fun FlowHomeRoute(vm: CompanionViewModel, state: CompanionState, paused
     val context = LocalContext.current
     var adjust by remember { mutableStateOf(false) }
     var compose by remember { mutableStateOf(false) }
-    val calendarPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
         scope.launch { runCatching { vm.syncFlowAppData() }; flow.controller.schedule(immediate = true) }
     }
-    val requestCalendar = { calendarPermission.launch(android.Manifest.permission.READ_CALENDAR) }
+    val requestPermission: (String) -> Unit = { p -> permission.launch(p) }
 
     MeowFlowHome(snapshot, settings,
         DateTimeFormatter.ofPattern("EEE d MMM · h:mm a").format(
             Instant.ofEpochMilli(snapshot.at.takeIf { it > 0 } ?: System.currentTimeMillis()).atZone(ZoneId.systemDefault())),
         modifier = Modifier.fillMaxSize(), reduceMotion = paused || state.avatarFpsTarget <= 15,
         speaking = !paused && state.interactionState == InteractionState.SPEAKING,
-        onPrimary = { scope.launch { handleFlowPrimary(vm, context, flow, it.intentionId, requestCalendar) } },
+        onPrimary = { scope.launch { handleFlowPrimary(vm, context, flow, it.intentionId, requestPermission) } },
         onLater = { scope.launch { flow.onLater(it.intentionId) } },
-        onInterruptAccept = { scope.launch { handleFlowPrimary(vm, context, flow, it.item.intentionId, requestCalendar) } },
+        onInterruptAccept = { scope.launch { handleFlowPrimary(vm, context, flow, it.item.intentionId, requestPermission) } },
         onInterruptDecline = { scope.launch { flow.onLater(it.item.intentionId) } },
         onAdjust = { adjust = true }, onAsk = { compose = true }, onMic = vm::onFlowMicClick,
         onMenu = vm::openTiles, onDesk = { vm.setAppTheme(AppTheme.DESK) },

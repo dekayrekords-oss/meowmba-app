@@ -45,7 +45,7 @@ internal fun DeskRoute(vm: CompanionViewModel, state: CompanionState, paused: Bo
         onMenu = vm::openTiles, onSettings = vm::toggleSettings,
         onFlow = { vm.setAppTheme(AppTheme.FLOW) }, onProjects = vm::toggleProjectsScreen,
         onWeather = vm::toggleWeatherScreen, onConnections = vm::toggleConnectorsScreen, onNotes = vm::toggleVaultScreen,
-        onTaskDone = { id -> scope.launch { handleFlowPrimary(vm, context, flow, id) { vm.setAppTheme(AppTheme.FLOW) } } },
+        onTaskDone = { id -> scope.launch { handleFlowPrimary(vm, context, flow, id) { _ -> vm.setAppTheme(AppTheme.FLOW) } } },
         onTaskLater = { id -> scope.launch { flow.onLater(id) } })
 }
 

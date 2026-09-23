@@ -59,7 +59,7 @@ class FlowIntegrationRegressionTest {
             db.version = 10
         }
         val database = Room.databaseBuilder(context, MeowmbaDatabase::class.java, name)
-            .addMigrations(MeowmbaDatabase.MIGRATION_10_11).allowMainThreadQueries().build()
+            .addMigrations(MeowmbaDatabase.MIGRATION_10_11, MeowmbaDatabase.MIGRATION_11_12).allowMainThreadQueries().build()
         try {
             database.openHelper.writableDatabase.query("SELECT content FROM messages WHERE id=1").use {
                 assertTrue(it.moveToFirst()); assertEquals("preserve this", it.getString(0))
@@ -69,6 +69,11 @@ class FlowIntegrationRegressionTest {
             database.openHelper.readableDatabase.query("SELECT status FROM flow_intentions WHERE id = ?", arrayOf(Fx.bulb.id)).use {
                 assertTrue(it.moveToFirst()); assertEquals("SNOOZED", it.getString(0))
             }
+            // v12: the context journal survives the same upgrade path and is searchable.
+            val journal = database.lifeJournalDao()
+            journal.insert(com.example.meowmba.core.context.live.LifeEventEntity(at = Fx.at(8, 5), kind = "SAID",
+                text = "I'm going to work right now", place = "Home", activity = "STILL", lat = 33.4, lon = -111.9))
+            assertEquals("Home", journal.search("work", 5).single().place)
         } finally { database.close(); context.deleteDatabase(name) }
     }
 }
