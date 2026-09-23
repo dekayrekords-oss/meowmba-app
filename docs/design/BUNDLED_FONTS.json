@@ -1,0 +1,42 @@
+[
+  {
+    "file": "app/src/main/res/font/flow_serif_italic.ttf",
+    "url": "https://raw.githubusercontent.com/adobe-fonts/source-serif/release/TTF/SourceSerif4-It.ttf",
+    "sha256": "9d2950a8f1da66e21502c35d646a1d2148e79f9ea43fd2158cf02f5232e7f430"
+  },
+  {
+    "file": "app/src/main/res/font/flow_serif_regular.ttf",
+    "url": "https://raw.githubusercontent.com/adobe-fonts/source-serif/release/TTF/SourceSerif4-Regular.ttf",
+    "sha256": "e5a4ee6a3d87bb9024796be390c6771e2a0eb1883dae25effaf57ca01668e24b"
+  },
+  {
+    "file": "app/src/main/res/font/flow_serif_semibold.ttf",
+    "url": "https://raw.githubusercontent.com/adobe-fonts/source-serif/release/TTF/SourceSerif4-Semibold.ttf",
+    "sha256": "36db62940cb5728b12b1802476dc7fcf4c6c519a7bdd476ba23a4e555fc4655f"
+  },
+  {
+    "file": "app/src/main/res/font/flow_sans.ttf",
+    "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/archivo/Archivo%5Bwdth%2Cwght%5D.ttf",
+    "sha256": "0e094a7d3c7c4c25cf1310c4b30014f1dae9332220b1c2c88f4fa996f0b05053"
+  },
+  {
+    "file": "app/src/main/assets/font_licenses/archivo_OFL.txt",
+    "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/archivo/OFL.txt",
+    "sha256": "108b4e57c9c796d3d38d0428ca7ee39de47ad93187302718d9b2d8864b9b716b"
+  },
+  {
+    "file": "app/src/main/assets/font_licenses/patrick_hand_OFL.txt",
+    "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/patrickhand/OFL.txt",
+    "sha256": "377f4f9c19e935228552478eb68cc2ed82910988a60ba60e2ac73b09f32d02d1"
+  },
+  {
+    "file": "app/src/main/res/font/desk_hand.ttf",
+    "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/patrickhand/PatrickHand-Regular.ttf",
+    "sha256": "0f173b3e6cb6d1af25babf7f0057c5ac4ee11f9992b0469bb817e967ef4ad0fc"
+  },
+  {
+    "file": "app/src/main/assets/font_licenses/source_serif_OFL.md",
+    "url": "https://raw.githubusercontent.com/adobe-fonts/source-serif/release/LICENSE.md",
+    "sha256": "c21d7293d87b6d7ab1d0229a2f55b77f33a7613a6a4e66f6693d68d7d8d09464"
+  }
+]

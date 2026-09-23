@@ -32,7 +32,7 @@ internal object DeskPainter {
     private val PAPER = Color(0xFFF4EEDB)
 
     /** Handwriting on in-world paper. Patrick Hand (OFL) is not bundled yet; system cursive stands in. */
-    var hand: FontFamily = FontFamily.Cursive
+    val hand: FontFamily = FontFamily(androidx.compose.ui.text.font.Font(com.example.meowmba.R.font.desk_hand))
     var mono: FontFamily = FontFamily.Monospace
 
     private fun DrawScope.stroked(color: Color, w: Float) = Stroke(w, cap = StrokeCap.Round, join = StrokeJoin.Round)
@@ -142,11 +142,11 @@ internal object DeskPainter {
         drawCircle(Color(0xFFFF7B72), 3f, Offset(72f, 112f)); drawCircle(INK, 3f, Offset(72f, 112f), style = Stroke(1.5f))
 
         // Corkboard index card: project + tester-day tally
-        if (s.projectTitle.isNotBlank()) {
+        run {
             rotate(-2.5f, Offset(104f, 250f)) {
                 rrect(PAPER, 40f, 200f, 132f, 92f, 3f, 2.5f)
                 line(Color(0xFFE08C84), 40f, 222f, 172f, 222f, 1.2f)
-                text(m, s.projectTitle, 50f, 217f, 17f, INK)
+                text(m, s.projectTitle.ifBlank { "Your projects" }, 50f, 217f, 17f, INK)
                 if (s.tallyTotal > 0) {
                     text(m, "tester days", 50f, 242f, 15f, Color(0xFF3A4F55))
                     repeat(s.tallyTotal) { i ->
@@ -156,6 +156,7 @@ internal object DeskPainter {
                     }
                 }
                 if (s.projectStatus.isNotBlank()) text(m, s.projectStatus, 50f, 284f, 15f, Color(0xFF3A4F55))
+                else if (s.projectTitle.isBlank()) text(m, "Tap to open", 50f, 251f, 15f, Color(0xFF3A4F55))
                 drawCircle(Color(0xFFFF7B72), 5f, Offset(106f, 200f)); drawCircle(INK, 5f, Offset(106f, 200f), style = Stroke(2f))
             }
         }
@@ -172,9 +173,9 @@ internal object DeskPainter {
         if (s.monitorLines.isNotEmpty()) drawRect(Color(0xFFC6EB78), Offset(44f, 506f), Size(7f, 11f))
 
         // Sticky note: next calendar item
-        if (s.sticky.isNotEmpty()) rotate(6f, Offset(158f, 452f)) {
+        rotate(6f, Offset(158f, 452f)) {
             drawRect(Color(0xFFFFE27A), Offset(128f, 424f), Size(64f, 58f)); drawRect(INK, Offset(128f, 424f), Size(64f, 58f), style = Stroke(2.5f))
-            s.sticky.forEachIndexed { i, l -> text(m, l, 134f, 444f + i * 15f, if (i == 0) 15f else 13f, INK) }
+            s.sticky.ifEmpty { listOf("Next up", "Tap for tasks") }.forEachIndexed { i, l -> text(m, l, 134f, 444f + i * 15f, if (i == 0) 15f else 13f, INK) }
         }
 
         // Jar: coins + handwritten note (empty jar when nothing is due)

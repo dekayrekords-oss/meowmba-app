@@ -5,6 +5,8 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -16,14 +18,17 @@ import com.example.meowmba.core.flow.FlowPalette
  * Meow Flow visual tokens — docs/design/README.md is the source of truth.
  * 1 CSS px in the approved demo = 1 dp; font px = sp.
  *
- * Fonts: the approved design uses Source Serif 4 and Archivo (both OFL). They are not
- * bundled yet (adding third-party font files needs owner approval); until then these
- * fall back to the system serif / sans. Swap [FlowFonts] when the files are added under
- * res/font/flow_serif_*.ttf and flow_sans_*.ttf.
+ * Approved OFL fonts are bundled; the app never fetches typography at runtime.
  */
+@OptIn(androidx.compose.ui.text.ExperimentalTextApi::class)
 object FlowFonts {
-    var serif: FontFamily = FontFamily.Serif
-    var sans: FontFamily = FontFamily.SansSerif
+    val serif = FontFamily(
+        Font(com.example.meowmba.R.font.flow_serif_regular, FontWeight.Normal),
+        Font(com.example.meowmba.R.font.flow_serif_italic, FontWeight.Normal, FontStyle.Italic),
+        Font(com.example.meowmba.R.font.flow_serif_semibold, FontWeight.SemiBold))
+    val sans = FontFamily(listOf(FontWeight.Normal, FontWeight.Medium, FontWeight.SemiBold, FontWeight.Bold, FontWeight.ExtraBold)
+        .map { weight -> Font(com.example.meowmba.R.font.flow_sans, weight,
+            variationSettings = FontVariation.Settings(FontVariation.weight(weight.weight))) })
 }
 
 @Immutable

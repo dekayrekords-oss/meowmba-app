@@ -109,6 +109,7 @@ fun MeowFlowHome(
     onAdjust: () -> Unit = {},
     onAsk: () -> Unit = {},
     onMic: () -> Unit = {},
+    navigation: (@Composable () -> Unit)? = null,
 ) {
     val night = FlowThemes.isNight(settings.eveningLook, if (snapshot.evening) WorkState.OFF else WorkState.WORKING)
     val target = FlowColors.from(FlowThemes.palette(settings.theme, night, settings.accent))
@@ -141,7 +142,7 @@ fun MeowFlowHome(
                     .windowInsetsPadding(WindowInsets.statusBars)
                     .windowInsetsPadding(WindowInsets.navigationBars)
                     .padding(start = FlowDims.sidePadStart, end = FlowDims.sidePadEnd, top = streamTop,
-                        bottom = FlowDims.streamBottom),
+                        bottom = FlowDims.streamBottom + if (navigation != null) 48.dp else 0.dp),
             ) {
                 Dateline(dateLabel, snapshot.signals, anchors, onAdjust)
                 snapshot.main?.let { main ->
@@ -157,7 +158,9 @@ fun MeowFlowHome(
                 }
             }
 
-            AskLine(Modifier.align(Alignment.BottomCenter), onAsk, onMic)
+            AskLine(Modifier.align(Alignment.BottomCenter).padding(bottom = if (navigation != null) 48.dp else 0.dp), onAsk, onMic)
+            if (navigation != null) Box(Modifier.align(Alignment.BottomCenter)
+                .windowInsetsPadding(WindowInsets.navigationBars)) { navigation() }
 
             AnimatedVisibility(
                 visible = interrupt != null,
@@ -387,7 +390,8 @@ private fun AskLine(modifier: Modifier, onAsk: () -> Unit, onMic: () -> Unit) {
             style = FlowType.ask.copy(color = c.ink2))
         Box(
             Modifier.size(FlowDims.micSize).clip(CircleShape).border(1.5.dp, c.ink, CircleShape)
-                .clickable(role = Role.Button, onClickLabel = "Talk to Meow", onClick = onMic).testTag("flow_mic"),
+                .clickable(role = Role.Button, onClickLabel = "Talk to Meow", onClick = onMic)
+                .semantics { contentDescription = "Talk to Meow" }.testTag("flow_mic"),
             contentAlignment = Alignment.Center,
         ) { MicGlyph(c.ink) }
     }

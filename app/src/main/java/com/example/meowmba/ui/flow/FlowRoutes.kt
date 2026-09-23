@@ -59,22 +59,17 @@ internal fun FlowHomeRoute(vm: CompanionViewModel, state: CompanionState, paused
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
         flow.controller.schedule(immediate = true)
     }
-    Column(Modifier.fillMaxSize().safeDrawingPadding()) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            TextButton(onClick = vm::toggleSettings) { Text("App settings") }
-            TextButton(onClick = { add = true }) { Text("Add task") }
-            TextButton(onClick = { vm.setAppTheme(AppTheme.COMPANION); vm.setAvatarStyle(AvatarStyle.DESK) }) { Text("Desk") }
-        }
         MeowFlowHome(snapshot, settings,
             DateTimeFormatter.ofPattern("EEEE, MMM d").format(Instant.ofEpochMilli(snapshot.at.takeIf { it > 0 } ?: System.currentTimeMillis()).atZone(ZoneId.systemDefault())),
-            modifier = Modifier.weight(1f), reduceMotion = paused || state.avatarFpsTarget <= 15,
+            modifier = Modifier.fillMaxSize(), reduceMotion = paused || state.avatarFpsTarget <= 15,
             speaking = !paused && state.interactionState == InteractionState.SPEAKING,
             onPrimary = { scope.launch { flow.onPrimary(it.intentionId) } },
             onLater = { scope.launch { flow.onLater(it.intentionId) } },
             onInterruptAccept = { scope.launch { flow.onPrimary(it.item.intentionId) } },
             onInterruptDecline = { scope.launch { flow.onLater(it.item.intentionId) } },
-            onAdjust = { adjust = true }, onAsk = vm::openChat, onMic = vm::onMicClick)
-    }
+            onAdjust = { adjust = true }, onAsk = vm::openChat, onMic = vm::onMicClick,
+            navigation = { FlowHomeNavigation(vm::openTiles, { add = true },
+                { vm.setAppTheme(AppTheme.COMPANION); vm.setAvatarStyle(AvatarStyle.DESK) }, vm::toggleSettings) })
     if (adjust) ModalBottomSheet(onDismissRequest = { adjust = false }) {
         Column {
             if (context.checkSelfPermission(Manifest.permission.READ_CALENDAR) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
@@ -107,26 +102,4 @@ internal fun FlowHomeRoute(vm: CompanionViewModel, state: CompanionState, paused
             }
         }) { Text(if (saving) "Saving…" else "Save") } },
         dismissButton = { TextButton(enabled = !saving, onClick = { add = false }) { Text("Cancel") } })
-}
-
-@Composable
-internal fun DeskRoute(vm: CompanionViewModel, state: CompanionState, paused: Boolean, modifier: Modifier) {
-    val flow = vm.flowRuntime ?: return
-    val snap by flow.snapshot.collectAsState()
-    val time = Instant.ofEpochMilli(snap.at.takeIf { it > 0 } ?: System.currentTimeMillis()).atZone(ZoneId.systemDefault())
-    val facts = remember(snap.at) { DeskFacts(clockHour = time.hour, clockMinute = time.minute,
-        night = time.hour >= 19 || time.hour < 6,
-        nextEventTime = snap.main?.headline?.take(18),
-        monitorLines = listOf(MonitorLine("Meow " + com.example.meowmba.BuildConfig.VERSION_NAME))) }
-    val desk = remember(snap, facts) { DeskState.from(snap, facts) }
-    DeskHabitat(desk, modifier,
-        thermalStatus = com.example.meowmba.core.thermal.ThermalGovernor.currentStatus(),
-        fpsTarget = state.avatarFpsTarget, reduceMotion = paused,
-        wanderEveryMs = if (state.avatarFpsTarget <= 15) 0 else 26_000,
-        lineFor = { obj -> when (obj) {
-            DeskObject.TODAY -> snap.main?.headline ?: "Add a task in Meow Flow."
-            DeskObject.BUILD -> "Meow " + com.example.meowmba.BuildConfig.VERSION_NAME
-            else -> "Your saved tasks are in Meow Flow."
-        } },
-        onArrive = { vm.setAppTheme(AppTheme.FLOW) })
 }

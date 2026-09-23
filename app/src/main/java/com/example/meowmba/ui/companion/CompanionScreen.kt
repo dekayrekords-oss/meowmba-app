@@ -533,6 +533,12 @@ fun CompanionScreen(
         }
         }
 
+        // Avatar gestures are shortcuts, never the only route to the full menu.
+        if (!isFlipCover && uiState.appTheme != AppTheme.FLOW && uiState.avatarStyle != AvatarStyle.DESK) {
+            TextButton(onClick = viewModel::openTiles,
+                modifier = Modifier.align(Alignment.TopStart).safeDrawingPadding().padding(8.dp)) { Text("Menu") }
+        }
+
         // 3. Overlays (Floating Menus)
         BackgroundTiles(
             visible = uiState.showTiles,
@@ -543,6 +549,8 @@ fun CompanionScreen(
                 viewModel.onAvatarZoneClick(AvatarZone.BACKGROUND)
                 when (tileName) {
                     "Settings" -> viewModel.toggleSettings()
+                    "Flow" -> viewModel.setAppTheme(AppTheme.FLOW)
+                    "Desk" -> { viewModel.setAppTheme(AppTheme.COMPANION); viewModel.setAvatarStyle(AvatarStyle.DESK) }
                     "Computer" -> viewModel.openComputerTools()
                     "LLM", "Hardware" -> viewModel.toggleModelManager()
                     "Brain" -> viewModel.toggleNeuralInfo()
@@ -1121,7 +1129,7 @@ private fun AvatarMotionHost(
     interactive: Boolean = true,
 ) {
     if (uiState.avatarStyle == AvatarStyle.DESK) {
-        com.example.meowmba.ui.flow.DeskRoute(viewModel, uiState, paused, modifier)
+        com.example.meowmba.ui.flow.DeskRoute(viewModel, uiState, paused, modifier, interactive)
         return
     }
     val motionTilt = viewModel.motionScreenLeanDeg.collectAsState()

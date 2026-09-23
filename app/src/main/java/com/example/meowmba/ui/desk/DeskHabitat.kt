@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -25,6 +26,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.graphics.Color
@@ -66,6 +68,7 @@ fun DeskHabitat(
     thermalStatus: Int = PowerManager.THERMAL_STATUS_NONE,
     fpsTarget: Int = AvatarFrameCadence.DEFAULT_ACTIVE_FPS,
     reduceMotion: Boolean = false,
+    interactive: Boolean = true,
     /** Idle stroll interval; 0 disables wandering. */
     wanderEveryMs: Long = 9_000L,
     idleLines: List<String> = emptyList(),
@@ -82,7 +85,7 @@ fun DeskHabitat(
     // Walking: frame-driven only while moving, admitted by the app's cadence (thermal-aware).
     LaunchedEffect(request, thermalStatus, reduceMotion, fpsTarget) {
         val (targetX, obj) = request ?: return@LaunchedEffect
-        bubble = null
+        bubble = obj?.let(lineForNow)
         cat.gaze = if (targetX < cat.x) -1f else 1f
         if (reduceMotion || thermalStatus >= PowerManager.THERMAL_STATUS_SEVERE) {
             cat.walking = false; cat.frame = 0
@@ -136,6 +139,8 @@ fun DeskHabitat(
     BoxWithConstraints(modifier.fillMaxSize().background(Color(0xFF12232A)).testTag("desk_habitat")) {
         val unit = minOf(maxWidth / SCENE_W, maxHeight / 960f) // dp per scene unit
         val scale = with(androidx.compose.ui.platform.LocalDensity.current) { unit.toPx() }
+        // Render and hit-test in the same centered viewport on unfolded/landscape screens.
+        Box(Modifier.width(unit * SCENE_W).fillMaxHeight().align(Alignment.TopCenter)) {
 
         // 1. Static room: its own graphics layer, drawn once.
         Canvas(Modifier.fillMaxSize().graphicsLayer()) {
@@ -175,15 +180,19 @@ fun DeskHabitat(
             ) { BasicText(text, style = TextStyle(color = DeskPainter.INK, fontSize = 14.sp, lineHeight = 19.sp, fontWeight = FontWeight.Medium)) }
         }
         // Tap targets.
-        DeskObject.entries.forEach { o ->
+        if (interactive) DeskObject.entries.forEach { o ->
             Box(
                 Modifier
                     .offset(unit * o.left, unit * o.top)
                     .size(unit * o.width, unit * o.height)
-                    .clickable(role = Role.Button, onClickLabel = o.label) { request = o.catX to o }
+                    .clickable(role = Role.Button, onClickLabel = o.label) {
+                        bubble = lineForNow(o) ?: o.label
+                        request = o.catX to o
+                    }
                     .semantics { contentDescription = describe(o, state) }
                     .testTag("desk_" + o.name.lowercase()),
             )
+        }
         }
     }
 }

@@ -36,6 +36,7 @@ fun BackgroundTiles(
     onTileClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    if (visible) androidx.activity.compose.BackHandler(onBack = onClose)
     AnimatedVisibility(
         visible = visible,
         enter = slideInVertically { -it / 8 } + fadeIn(),
@@ -59,9 +60,9 @@ fun BackgroundTiles(
             ) {
                 Column(Modifier.padding(16.dp)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text("Memba", Modifier.weight(1f), style = MaterialTheme.typography.headlineMedium)
+                        Text("Meow menu", Modifier.weight(1f), style = MaterialTheme.typography.headlineMedium)
                         OutlinedButton(onClick = onClose,
-                            modifier = Modifier.semantics { contentDescription = "Return to avatar" }) { Text("Avatar") }
+                            modifier = Modifier.semantics { contentDescription = "Close menu" }) { Text("Close") }
                     }
                     Text("Your companion, tools & settings", style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -103,6 +104,9 @@ fun TileItem(item: MembaTile, onClick: () -> Unit) {
 data class MembaTile(val name: String, val icon: ImageVector, val color: Color)
 
 val tileItems: List<MembaTile> @Composable get() = listOf(
+    MembaTile("Settings", Icons.Default.Settings, MaterialTheme.colorScheme.tertiary),
+    MembaTile("Flow", Icons.Default.List, MaterialTheme.colorScheme.primary),
+    MembaTile("Desk", Icons.Default.Desk, MaterialTheme.colorScheme.secondary),
     MembaTile("Computer", Icons.Default.Computer, MaterialTheme.colorScheme.primary),
     MembaTile("Memory", Icons.Default.Terminal, MaterialTheme.colorScheme.primary),
     MembaTile("Files", Icons.Default.FolderOpen, MaterialTheme.colorScheme.secondary),
@@ -119,5 +123,4 @@ val tileItems: List<MembaTile> @Composable get() = listOf(
     MembaTile("Weather", Icons.Default.WbSunny, MaterialTheme.colorScheme.tertiary),
     MembaTile("Background", Icons.Default.Wallpaper, MaterialTheme.colorScheme.primary),
     MembaTile("Avatar", Icons.Default.Face, MaterialTheme.colorScheme.secondary),
-    MembaTile("Settings", Icons.Default.Settings, MaterialTheme.colorScheme.tertiary)
 )
