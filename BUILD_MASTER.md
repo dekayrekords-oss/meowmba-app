@@ -5,6 +5,12 @@ This supersedes historical build-location/version instructions in other document
 
 ## Current recovery
 
+- September 23 **1.4.5/code 161** installed by Claude at the owner's request on SM-F971U /
+  R5GL75XFCXD at 15:55 (in place, data kept). Built like 159/160 (MWDAT enabled, verified-jni);
+  all 86 native libraries of 160 plus Laya's `libonnxruntime4j_jni.so`; same certificate.
+  Adds Laya on-device (budgeted), Meow context C1–C2, Room v12. 2,897 tests, lint clean.
+  Receipt: `/Users/prog/Meowmba-Releases/context161-20260923/README.md`. Next number: 162.
+
 - **Correction (Claude, 2026-09-23 15:10):** after Codex's 160 install on SM-F971U /
   R5GL75XFCXD (12:39), Claude installed five further owner-requested daily builds on that
   phone, all carrying version code **160** from the shared build file: `5154ebd` (heat/mic/
