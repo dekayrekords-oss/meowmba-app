@@ -52,9 +52,11 @@ internal fun DeskRoute(vm: CompanionViewModel, state: CompanionState, paused: Bo
 private val HM = DateTimeFormatter.ofPattern("h:mm", Locale.US)
 
 /** Desk objects from real items (master plan §9.1): nothing is invented; empty stays empty. */
-internal fun deskFacts(now: Long, tasks: List<Intention>, project: ProjectUi?, weatherLine: String?, night: Boolean?,
+internal fun deskFacts(now: Long, open: List<Intention>, project: ProjectUi?, weatherLine: String?, night: Boolean?,
                        zone: ZoneId = ZoneId.systemDefault()): DeskFacts {
     val time = Instant.ofEpochMilli(now).atZone(zone)
+    // "Allow" setup rows belong to Flow; the desk shows real things only.
+    val tasks = open.filterNot { it.id.startsWith(AppIntentions.SETUP) }
     val next = tasks.filter { it.dueAt != null && it.dueAt >= now - 10 * 60_000L }.minByOrNull { it.dueAt!! }
     val sticky = when {
         next != null -> listOf(HM.format(Instant.ofEpochMilli(next.dueAt!!).atZone(zone))) + wrap(next.text, 2)
@@ -103,13 +105,17 @@ internal fun DeskWorkspace(desk: DeskState, tasks: List<Intention>, modifier: Mo
     onTaskDone: (String) -> Unit = {}, onTaskLater: (String) -> Unit = {}) {
     var selected by rememberSaveable { mutableStateOf<DeskObject?>(null) }
     BoxWithConstraints(modifier.fillMaxSize()) {
+        val wide = maxWidth > maxHeight
+        val insets = WindowInsets.safeDrawing.asPaddingValues()
         DeskHabitat(desk, Modifier.fillMaxSize(), thermalStatus = thermalStatus,
+            topInset = insets.calculateTopPadding() + 8.dp,
+            // Portrait: leave room for the Menu · Flow · Settings row under the desk.
+            bottomInset = insets.calculateBottomPadding() + if (interactive && !wide) 56.dp else 8.dp,
             fpsTarget = fpsTarget, reduceMotion = paused,
             interactive = interactive, wanderEveryMs = if (fpsTarget <= 15) 0 else 26_000,
             lineFor = { deskLine(it, desk) }, onTap = { if (interactive) selected = it })
-        val wide = maxWidth > maxHeight
         if (interactive) DeskNavigation(if (wide) Modifier.align(Alignment.CenterStart).safeDrawingPadding()
-            else Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(bottom = 140.dp), vertical = wide,
+            else Modifier.align(Alignment.BottomCenter).safeDrawingPadding(), vertical = wide,
             onMenu = onMenu, onFlow = onFlow, onSettings = onSettings)
     }
     val obj = selected

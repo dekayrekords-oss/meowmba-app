@@ -40,6 +40,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.meowmba.ui.companion.AvatarFrameCadence
@@ -76,6 +77,9 @@ fun DeskHabitat(
     onArrive: (DeskObject) -> Unit = {},
     /** Called the moment an object is tapped (open its panel right away; the cat still walks over). */
     onTap: (DeskObject) -> Unit = {},
+    /** Space kept clear at the top (status bar) and bottom (navigation) of the screen. */
+    topInset: Dp = 0.dp,
+    bottomInset: Dp = 0.dp,
 ) {
     val measurer = rememberTextMeasurer()
     val cat = remember { CatMotion() }
@@ -139,24 +143,31 @@ fun DeskHabitat(
     LaunchedEffect(bubble) { if (bubble != null) { delay(BUBBLE_MS); bubble = null } }
 
     BoxWithConstraints(modifier.fillMaxSize().background(Color(0xFF12232A)).testTag("desk_habitat")) {
-        val unit = minOf(maxWidth / SCENE_W, maxHeight / 960f) // dp per scene unit
-        val scale = with(androidx.compose.ui.platform.LocalDensity.current) { unit.toPx() }
-        // Render and hit-test in the same centered viewport on unfolded/landscape screens.
-        Box(Modifier.width(unit * SCENE_W).fillMaxHeight().align(Alignment.TopCenter)) {
+        // Fit the part of the scene that has content (clock to desk), not the empty floor below it,
+        // so the room is as large as the screen allows. The wall and floor extend to every edge.
+        val unit = minOf(maxWidth / SCENE_W, (maxHeight - topInset - bottomInset) / (VIEW_BOTTOM - VIEW_TOP)) // dp per scene unit
+        val ox = (maxWidth - unit * SCENE_W) / 2
+        val oy = maxHeight - bottomInset - unit * VIEW_BOTTOM // the desk sits just above the navigation
+        val density = androidx.compose.ui.platform.LocalDensity.current
+        val scale = with(density) { unit.toPx() }
+        val oxPx = with(density) { ox.toPx() }
+        val oyPx = with(density) { oy.toPx() }
+        // Render and hit-test through the same transform.
+        Box(Modifier.fillMaxSize()) {
 
         // 1. Static room: its own graphics layer, drawn once.
         Canvas(Modifier.fillMaxSize().graphicsLayer()) {
-            withTransform({ scale(scale, scale, androidx.compose.ui.geometry.Offset.Zero) }) { drawRoom() }
+            withTransform({ translate(oxPx, oyPx); scale(scale, scale, androidx.compose.ui.geometry.Offset.Zero) }) { drawRoom() }
         }
         // 2. Objects: redraw only when state changes.
         Canvas(Modifier.fillMaxSize().graphicsLayer()) {
-            withTransform({ scale(scale, scale, androidx.compose.ui.geometry.Offset.Zero) }) { drawObjects(state, measurer) }
+            withTransform({ translate(oxPx, oyPx); scale(scale, scale, androidx.compose.ui.geometry.Offset.Zero) }) { drawObjects(state, measurer) }
         }
         // 3. Cat.
         Canvas(Modifier.fillMaxSize().testTag("desk_cat").semantics {
             stateDescription = if (cat.walking) "walking" else "resting at ${cat.x.toInt()}"
         }) {
-            withTransform({ scale(scale, scale, androidx.compose.ui.geometry.Offset.Zero) }) {
+            withTransform({ translate(oxPx, oyPx); scale(scale, scale, androidx.compose.ui.geometry.Offset.Zero) }) {
                 drawCat(cat.x, CAT_Y, cat.walking, cat.frame, cat.blink, cat.tail, cat.gaze, cat.facingLeft)
             }
         }
@@ -164,11 +175,11 @@ fun DeskHabitat(
         bubble?.let { text ->
             Box(
                 Modifier
-                    .offset(x = unit * (cat.x - 40f).coerceIn(4f, SCENE_W - 214f))
+                    .offset(x = ox + unit * (cat.x - 40f).coerceIn(4f, SCENE_W - 214f))
                     .layout { measurable, constraints ->
                         // Bottom edge 6 scene units above the cat's head, whatever the text height.
                         val p = measurable.measure(constraints)
-                        val bottom = ((CAT_Y - 6f) * scale).toInt()
+                        val bottom = (oyPx + (CAT_Y - 6f) * scale).toInt()
                         layout(p.width, p.height) { p.place(0, bottom - p.height) }
                     }
                     .width(unit * 210f)
@@ -185,7 +196,7 @@ fun DeskHabitat(
         if (interactive) DeskObject.entries.forEach { o ->
             Box(
                 Modifier
-                    .offset(unit * o.left, unit * o.top)
+                    .offset(ox + unit * o.left, oy + unit * o.top)
                     .size(unit * o.width, unit * o.height)
                     .clickable(role = Role.Button, onClickLabel = o.label) {
                         bubble = lineForNow(o) ?: o.label
@@ -224,6 +235,9 @@ private class CatMotion {
 private fun easeInOut(t: Float) = if (t < .5f) 2 * t * t else 1 - (-2 * t + 2).let { it * it } / 2
 
 private const val SCENE_W = 412f
+/** Scene rows with content: from above the window/clock to the skirting under the desk. */
+private const val VIEW_TOP = 44f
+private const val VIEW_BOTTOM = 748f
 private const val CAT_Y = 516f
 private const val WALK_MS = 1_100L
 private const val STEP_NS = 110_000_000L

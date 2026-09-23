@@ -30,6 +30,7 @@ import kotlin.math.sin
 internal object DeskPainter {
     val INK = Color(0xFF172D34)
     private val PAPER = Color(0xFFF4EEDB)
+    private const val EXTEND = 2400f
 
     /** Handwriting on in-world paper. Patrick Hand (OFL) is not bundled yet; system cursive stands in. */
     val hand: FontFamily = FontFamily(androidx.compose.ui.text.font.Font(com.example.meowmba.R.font.desk_hand))
@@ -61,12 +62,14 @@ internal object DeskPainter {
 
     fun DrawScope.drawRoom() {
         // Striped wall
-        drawRect(Color(0xFF1B3139), size = Size(412f, 960f))
-        var x = 0f
-        while (x < 412f) { drawRect(Color(0xFF1D343C), Offset(x, 0f), Size(13f, 960f)); x += 26f }
+        // The wall and floor run past the 412-wide scene so wide and tall screens have no empty bands.
+        drawRect(Color(0xFF1B3139), Offset(-EXTEND, -EXTEND), Size(412f + 2 * EXTEND, 740f + EXTEND))
+        var x = -EXTEND
+        while (x < 412f + EXTEND) { drawRect(Color(0xFF1D343C), Offset(x, -EXTEND), Size(13f, 740f + EXTEND)); x += 26f }
         // Floor + skirting
-        drawRect(Color(0xFF12232A), Offset(0f, 740f), Size(412f, 220f))
-        drawRect(Color(0xFF0F1D23), Offset(0f, 732f), Size(412f, 10f)); drawRect(INK, Offset(0f, 732f), Size(412f, 10f), style = Stroke(2f))
+        drawRect(Color(0xFF12232A), Offset(-EXTEND, 740f), Size(412f + 2 * EXTEND, EXTEND))
+        drawRect(Color(0xFF0F1D23), Offset(-EXTEND, 732f), Size(412f + 2 * EXTEND, 10f))
+        line(INK, -EXTEND, 732f, 412f + EXTEND, 732f, 2f); line(INK, -EXTEND, 742f, 412f + EXTEND, 742f, 2f)
         // Window frame (the sky/moon/text are dynamic)
         // Wall clock face
         drawCircle(PAPER, 36f, Offset(72f, 112f)); drawCircle(INK, 36f, Offset(72f, 112f), style = Stroke(3f))

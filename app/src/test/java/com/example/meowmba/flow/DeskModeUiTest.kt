@@ -53,6 +53,30 @@ class DeskModeUiTest {
         assertEquals(AvatarStyle.DEFAULT, AvatarStyle.fromKey("desk"))
     }
 
+    @Test fun setupRowsStayOffTheDesk() {
+        val setup = com.example.meowmba.core.flow.sources.AppIntentions.build(now, Fx.zone, emptyList(), emptyList(), emptyList(),
+            com.example.meowmba.core.flow.sources.AppIntentions.Access(notifications = false, usage = false, calendar = false))
+        val facts = deskFacts(now, setup, null, null, false, Fx.zone)
+        assertEquals(listOf("All clear"), listOfNotNull(facts.nextEventTime) + facts.nextEventWords)
+        assertEquals("0 open", facts.monitorLines.first().text)
+    }
+
+    /** Inner screen portrait / landscape and cover screen: the room fills the screen, no empty bands. */
+    @Test @Config(qualifiers = "w704dp-h933dp-420dpi") fun innerPortraitFillsScreen() = renderFor("desk-inner-portrait")
+    @Test @Config(qualifiers = "w933dp-h704dp-420dpi") fun innerLandscapeFillsScreen() = renderFor("desk-inner-landscape")
+    @Test @Config(qualifiers = "w475dp-h751dp-420dpi") fun coverScreenFillsScreen() = renderFor("desk-cover")
+
+    private fun renderFor(name: String) {
+        val facts = deskFacts(now, tasks, ProjectUi(7, "Meowmba site", "web", "Website", "Today", 1), "82° cloudy", false, Fx.zone)
+        rule.mainClock.autoAdvance = false
+        rule.setContent { DeskWorkspace(DeskState.from(FlowSnapshot.EMPTY, facts, tasks), tasks, thermalStatus = 0) }
+        rule.mainClock.advanceTimeBy(500)
+        shoot(name)
+        rule.onNodeWithTag("desk_inbox").performClick()
+        repeat(40) { rule.mainClock.advanceTimeByFrame(); rule.waitForIdle() }
+        rule.onNodeWithTag("desk_detail").assertIsDisplayed()
+    }
+
     @Test fun deskShowsRealItemsAndOpensPanelsOnTap() {
         val facts = deskFacts(now, tasks, ProjectUi(7, "Meowmba site", "web", "Website", "Today", 1), "82° cloudy", false, Fx.zone)
         val state = DeskState.from(FlowSnapshot.EMPTY, facts, tasks)
