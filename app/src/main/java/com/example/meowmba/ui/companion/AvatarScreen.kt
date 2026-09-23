@@ -409,11 +409,6 @@ private fun EyePreview(style: AvatarStyle, modifier: Modifier = Modifier) {
         val eyeH = size.height * 0.62f
 
         when (style) {
-            AvatarStyle.DESK -> {
-                drawRect(Color(0xFF12232A))
-                drawRect(Color(0xFFB4875C), topLeft = Offset(0f, cy), size = androidx.compose.ui.geometry.Size(size.width, size.height / 3))
-                drawCircle(Color(0xFFF4EEDB), size.minDimension * .16f, Offset(cx, cy - eyeH * .2f))
-            }
             AvatarStyle.FULL_FLY -> flyPainter.draw(this, LumenFrame(), FullFlyPose(scale = 1.6f))
             AvatarStyle.LUMEN, AvatarStyle.LUMEN_CAT -> lumenPainter.draw(this,
                 LumenFrame(cat = if (style == AvatarStyle.LUMEN_CAT) 1f else 0f), Color(0xFF4DBCB7), Color(0xFF4DBCB7),

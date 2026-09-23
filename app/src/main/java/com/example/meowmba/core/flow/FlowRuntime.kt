@@ -40,6 +40,8 @@ class FlowRuntime(
     outcomes: OutcomeLog = InMemoryOutcomeLog(),
     clock: () -> Long = System::currentTimeMillis,
     calendarAvailable: () -> Boolean = { true },
+    /** Shown in the dateline when there is room, e.g. current weather. */
+    ambient: () -> Signal? = { null },
 ) {
     private val prefs = context.getSharedPreferences(FlowSettingsStore.PREFS_NAME, Context.MODE_PRIVATE)
     private val settingsStore = FlowSettingsStore(SharedPreferencesKeyValue(prefs))
@@ -48,7 +50,7 @@ class FlowRuntime(
 
     val bus = EvidenceBus()
     val work = WorkStateDetector()
-    val assembler = SituationAssembler(store, work, workContext, { settingsState.value.detectWorkEnd }, calendar, surface, route, opportunities, calendarAvailable = calendarAvailable)
+    val assembler = SituationAssembler(store, work, workContext, { settingsState.value.detectWorkEnd }, calendar, surface, route, opportunities, calendarAvailable = calendarAvailable, ambient = ambient)
 
     /** Chain rebuilt per decision so the Jev switch takes effect immediately. */
     private val chain = object : Assessor {
@@ -73,6 +75,9 @@ class FlowRuntime(
         jobs = listOf(
             scope.launch { controller.snapshot.collect { delivery.deliver(it.interrupt) } },
             scope.launch {
+                com.example.meowmba.core.flow.sources.FlowNotificationHub.events.collect { onNotification(it) }
+            },
+            scope.launch {
                 FlowActionBus.actions.collect { a ->
                     if (a.action == "primary") controller.onPrimary(a.intentionId) else controller.onLater(a.intentionId)
                     delivery.resolved(a.intentionId)
@@ -88,6 +93,54 @@ class FlowRuntime(
         // Update first, even before collectors start. Two collectors raced the first snapshot.
         assembler.observe(evidence)
         bus.publish(evidence)
+    }
+
+    /**
+     * Apply intentions generated from app data (AppIntentions). New ones are added; changed ones
+     * keep the user's status (Done/Later); managed ones that no longer apply are closed.
+     */
+    suspend fun syncManaged(fresh: List<Intention>, prefixes: List<String>) {
+        val existing = store.intentions.value.associateBy { it.id }
+        fresh.forEach { n ->
+            val old = existing[n.id]
+            when {
+                old == null -> store.upsert(n)
+                old.text != n.text || old.dueAt != n.dueAt || old.facts != n.facts ->
+                    store.upsert(n.copy(status = old.status, snoozedUntil = old.snoozedUntil, createdAt = old.createdAt))
+            }
+        }
+        val keep = fresh.map { it.id }.toSet()
+        val gone = existing.values.filter { i ->
+            i.id !in keep && prefixes.any { i.id.startsWith(it) } &&
+                (i.status == IntentionStatus.OPEN || i.status == IntentionStatus.SNOOZED)
+        }.map { it.id }
+        if (gone.isNotEmpty()) store.closeSatisfied(gone)
+    }
+
+    /** Something the user said in chat; saved only for explicit "I need to…" phrasing (rules mode). */
+    suspend fun captureFromChat(text: String, now: Long = System.currentTimeMillis()): Intention? {
+        val i = IntentionCapture(null).capture(text, now) ?: return null
+        store.upsert(i)
+        publish(com.example.meowmba.core.flow.sources.EvidenceMappers.fromCapturedNeed(i.text, now))
+        return i
+    }
+
+    private suspend fun onNotification(e: com.example.meowmba.core.flow.sources.FlowNotificationHub.Event) {
+        val hub = com.example.meowmba.core.flow.sources.FlowNotificationHub
+        val apps = com.example.meowmba.core.flow.sources.AppIntentions
+        when (e) {
+            is com.example.meowmba.core.flow.sources.FlowNotificationHub.Posted -> {
+                com.example.meowmba.core.flow.sources.EvidenceMappers
+                    .fromNotification(e.packageName, e.appLabel, e.category, e.sender, e.at)?.let(::publish)
+                if (e.category in hub.PEOPLE_CATEGORIES) apps.fromMessage(e.packageName, e.appLabel, e.sender, e.at)?.let { m ->
+                    val old = store.intentions.value.firstOrNull { it.id == m.id }
+                    // A new message reopens a finished "Reply to" for the same person.
+                    if (old == null || old.status == IntentionStatus.DONE || old.status == IntentionStatus.DROPPED) store.upsert(m)
+                }
+            }
+            is com.example.meowmba.core.flow.sources.FlowNotificationHub.Removed ->
+                apps.fromMessage(e.packageName, "", e.sender, 0L)?.let { store.closeSatisfied(listOf(it.id)) }
+        }
     }
 
     fun updateSettings(s: FlowSettings) {

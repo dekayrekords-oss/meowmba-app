@@ -11,15 +11,22 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.meowmba.BuildConfig
 import com.example.meowmba.core.flow.*
+import com.example.meowmba.core.flow.sources.AppIntentions
 import com.example.meowmba.ui.companion.*
 import com.example.meowmba.ui.desk.*
+import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
+/** Meow's Desk mode (AppTheme.DESK): the office scene bound to the same data as Meow Flow. */
 @Composable
 internal fun DeskRoute(vm: CompanionViewModel, state: CompanionState, paused: Boolean, modifier: Modifier,
     interactive: Boolean = true) {
@@ -27,38 +34,79 @@ internal fun DeskRoute(vm: CompanionViewModel, state: CompanionState, paused: Bo
     val snap by flow.snapshot.collectAsState()
     val intentions by flow.store.intentions.collectAsState()
     val now = snap.at.takeIf { it > 0 } ?: System.currentTimeMillis()
-    val time = Instant.ofEpochMilli(now).atZone(ZoneId.systemDefault())
     val tasks = intentions.filter { it.isOpenAt(now) }
     val weather = state.ambientWeather ?: state.weather
-    val project = state.projects.firstOrNull()
-    val facts = DeskFacts(clockHour = time.hour, clockMinute = time.minute,
-        night = weather?.let { !it.isDay } ?: (time.hour >= 19 || time.hour < 6),
-        projectTitle = project?.name?.take(18).orEmpty(), projectStatus = project?.kindLabel.orEmpty(),
-        pinnedNote = listOf("Meow", BuildConfig.VERSION_NAME),
-        weatherLine = weather?.let { "${it.temperatureF}° ${it.condition.name.lowercase().replace('_', ' ')}" },
-        nextEventTime = tasks.firstOrNull()?.text?.take(12), nextEventWords = if (tasks.isEmpty()) emptyList() else listOf("Tap for tasks"),
-        monitorLines = listOf(MonitorLine("Meow ${BuildConfig.VERSION_NAME}"), MonitorLine("${tasks.size} open tasks", true)))
-    DeskWorkspace(DeskState.from(snap, facts), tasks, modifier, paused = paused, covered = !avatarSceneVisible(state),
+    val facts = deskFacts(now, tasks, state.projects.firstOrNull(), weather?.let { "${it.temperatureF}° ${it.condition.label.lowercase()}" },
+        weather?.let { !it.isDay })
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    DeskWorkspace(DeskState.from(snap, facts, tasks), tasks, modifier, paused = paused,
         fpsTarget = state.avatarFpsTarget, interactive = interactive,
         onMenu = vm::openTiles, onSettings = vm::toggleSettings,
         onFlow = { vm.setAppTheme(AppTheme.FLOW) }, onProjects = vm::toggleProjectsScreen,
-        onWeather = vm::toggleWeatherScreen, onConnections = vm::toggleConnectorsScreen, onNotes = vm::toggleVaultScreen)
+        onWeather = vm::toggleWeatherScreen, onConnections = vm::toggleConnectorsScreen, onNotes = vm::toggleVaultScreen,
+        onTaskDone = { id -> scope.launch { handleFlowPrimary(vm, context, flow, id) { vm.setAppTheme(AppTheme.FLOW) } } },
+        onTaskLater = { id -> scope.launch { flow.onLater(id) } })
 }
 
-/** Real sheets remain inside Desk; leaving the scene is always an explicit action. */
+private val HM = DateTimeFormatter.ofPattern("h:mm", Locale.US)
+
+/** Desk objects from real items (master plan §9.1): nothing is invented; empty stays empty. */
+internal fun deskFacts(now: Long, tasks: List<Intention>, project: ProjectUi?, weatherLine: String?, night: Boolean?,
+                       zone: ZoneId = ZoneId.systemDefault()): DeskFacts {
+    val time = Instant.ofEpochMilli(now).atZone(zone)
+    val next = tasks.filter { it.dueAt != null && it.dueAt >= now - 10 * 60_000L }.minByOrNull { it.dueAt!! }
+    val sticky = when {
+        next != null -> listOf(HM.format(Instant.ofEpochMilli(next.dueAt!!).atZone(zone))) + wrap(next.text, 2)
+        tasks.isNotEmpty() -> listOf("Next up") + wrap(tasks.first().text, 2)
+        else -> listOf("All clear")
+    }
+    val work = tasks.firstOrNull { it.kind == FlowKind.WORK }
+    val people = tasks.count { it.kind == FlowKind.PEOPLE }
+    return DeskFacts(
+        clockHour = time.hour, clockMinute = time.minute,
+        night = night ?: (time.hour >= 19 || time.hour < 6),
+        projectTitle = project?.name?.take(18).orEmpty(),
+        projectStatus = project?.let { "${it.kindLabel} · ${it.whenLabel}".take(24) }.orEmpty(),
+        pinnedNote = listOf("Meow", BuildConfig.VERSION_NAME),
+        weatherLine = weatherLine,
+        nextEventTime = sticky.first(), nextEventWords = sticky.drop(1),
+        monitorLines = listOfNotNull(
+            // The sticky note covers the monitor's right side (as in the design): keep lines short.
+            work?.let { MonitorLine("> " + it.text.removePrefix("Continue ").take(12), true) },
+            MonitorLine("${tasks.size} open"),
+            MonitorLine("$people waiting"),
+        ).take(3),
+        ideaQueued = tasks.any { it.kind == FlowKind.OTHER && !it.id.startsWith(AppIntentions.SETUP) },
+    )
+}
+
+private fun wrap(text: String, lines: Int, width: Int = 9): List<String> {
+    val out = ArrayList<String>()
+    var cur = ""
+    for (w in text.split(' ')) {
+        if (cur.isEmpty()) cur = w else if (cur.length + 1 + w.length <= width) cur += " $w" else { out += cur; cur = w }
+        if (out.size == lines) break
+    }
+    if (out.size < lines && cur.isNotEmpty()) out += cur
+    return out.take(lines).map { it.take(width + 2) }
+}
+
+/** Panels open the moment an object is tapped; leaving the scene is always an explicit action. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun DeskWorkspace(desk: DeskState, tasks: List<Intention>, modifier: Modifier = Modifier,
-    paused: Boolean = false, covered: Boolean = false, fpsTarget: Int = 30, interactive: Boolean = true,
+    paused: Boolean = false, fpsTarget: Int = 30, interactive: Boolean = true,
     thermalStatus: Int = com.example.meowmba.core.thermal.ThermalGovernor.currentStatus(),
     onMenu: () -> Unit = {}, onSettings: () -> Unit = {}, onFlow: () -> Unit = {},
-    onProjects: () -> Unit = {}, onWeather: () -> Unit = {}, onConnections: () -> Unit = {}, onNotes: () -> Unit = {}) {
+    onProjects: () -> Unit = {}, onWeather: () -> Unit = {}, onConnections: () -> Unit = {}, onNotes: () -> Unit = {},
+    onTaskDone: (String) -> Unit = {}, onTaskLater: (String) -> Unit = {}) {
     var selected by rememberSaveable { mutableStateOf<DeskObject?>(null) }
     BoxWithConstraints(modifier.fillMaxSize()) {
         DeskHabitat(desk, Modifier.fillMaxSize(), thermalStatus = thermalStatus,
-            fpsTarget = fpsTarget, reduceMotion = paused || selected != null,
+            fpsTarget = fpsTarget, reduceMotion = paused,
             interactive = interactive, wanderEveryMs = if (fpsTarget <= 15) 0 else 26_000,
-            lineFor = { deskTitle(it) }, onArrive = { if (!covered) selected = it })
+            lineFor = { deskLine(it, desk) }, onTap = { if (interactive) selected = it })
         val wide = maxWidth > maxHeight
         if (interactive) DeskNavigation(if (wide) Modifier.align(Alignment.CenterStart).safeDrawingPadding()
             else Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(bottom = 140.dp), vertical = wide,
@@ -69,34 +117,34 @@ internal fun DeskWorkspace(desk: DeskState, tasks: List<Intention>, modifier: Mo
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = Color(0xFF193039), contentColor = Color(0xFFF4EEDB),
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp), dragHandle = null) {
-        Column(Modifier.fillMaxWidth().heightIn(max = 470.dp).verticalScroll(rememberScrollState())
+        Column(Modifier.fillMaxWidth().heightIn(max = 520.dp).verticalScroll(rememberScrollState())
             .padding(24.dp).testTag("desk_detail")) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(deskTitle(obj), Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall)
-                TextButton(onClick = { selected = null }) { Text("Close", color = Color(0xFFF4EEDB)) }
+                TextButton(onClick = { selected = null }, modifier = Modifier.testTag("desk_detail_close")) {
+                    Text("Close", color = Color(0xFFF4EEDB))
+                }
             }
-            HorizontalDivider(Modifier.padding(vertical = 12.dp))
+            HorizontalDivider(Modifier.padding(vertical = 12.dp), color = Color(0xFF33505A))
             val relevant = when (obj) {
                 DeskObject.MONEY -> tasks.filter { it.kind == FlowKind.MONEY }
                 DeskObject.INBOX -> tasks.filter { it.kind == FlowKind.PEOPLE }
-                DeskObject.IDEA -> tasks.filter { it.kind == FlowKind.OTHER }
-                DeskObject.PROJECT -> tasks.filter { it.kind == FlowKind.WORK }
-                DeskObject.TODAY -> tasks
-                else -> emptyList()
+                DeskObject.IDEA -> tasks.filter { it.kind == FlowKind.OTHER || it.kind == FlowKind.ERRAND }
+                DeskObject.PROJECT, DeskObject.BUILD -> tasks.filter { it.kind == FlowKind.WORK }
+                DeskObject.TODAY -> tasks.sortedBy { it.dueAt ?: Long.MAX_VALUE }
+                DeskObject.WINDOW -> emptyList()
             }
             val summary = when (obj) {
-                DeskObject.WINDOW -> desk.weatherLine ?: "Weather is not connected yet. Open Weather to choose a location."
-                DeskObject.PROJECT -> desk.projectTitle.takeIf { it.isNotBlank() } ?: "Your projects will appear here. Open Projects to choose or create one."
-                DeskObject.BUILD -> "Meow ${BuildConfig.VERSION_NAME}\n${tasks.size} open tasks saved on this phone."
-                DeskObject.TODAY -> if (tasks.isEmpty()) "Nothing waiting. Add a task in Flow to keep something in mind." else "Your saved tasks"
-                DeskObject.INBOX -> if (relevant.isEmpty()) "No people tasks saved. Connect your services to set up message access." else "People tasks you saved"
-                DeskObject.MONEY -> if (relevant.isEmpty()) "No money tasks saved." else "Money tasks you saved"
-                DeskObject.IDEA -> if (relevant.isEmpty()) "No ideas waiting. Open Notes to capture one." else "Notes and things to remember"
+                DeskObject.WINDOW -> desk.weatherLine ?: "Weather isn't set up yet. Open Weather to choose a location."
+                DeskObject.PROJECT -> if (desk.projectTitle.isBlank()) "No project yet. Open Projects to start one." else "${desk.projectTitle} · ${desk.projectStatus}"
+                DeskObject.BUILD -> "${tasks.size} open, ${tasks.count { it.kind == FlowKind.PEOPLE }} people waiting."
+                DeskObject.TODAY -> if (tasks.isEmpty()) "Nothing waiting. Tell Meow what's on your mind in Flow." else "Everything Meow is keeping in mind, soonest first."
+                DeskObject.INBOX -> if (relevant.isEmpty()) "Nobody is waiting on you." else "People waiting on you."
+                DeskObject.MONEY -> if (relevant.isEmpty()) "Nothing due." else "Money things coming up."
+                DeskObject.IDEA -> if (relevant.isEmpty()) "No ideas or errands waiting." else "Things you asked Meow to keep in mind."
             }
-            Text(summary, style = MaterialTheme.typography.bodyLarge)
-            relevant.take(12).forEach { task ->
-                Text(task.text, Modifier.fillMaxWidth().padding(top = 16.dp), style = MaterialTheme.typography.bodyLarge)
-            }
+            Text(summary, style = MaterialTheme.typography.bodyLarge, color = Color(0xFFBED0CD))
+            relevant.take(12).forEach { task -> DeskTaskRow(task, onTaskDone, onTaskLater) }
             val action = when (obj) {
                 DeskObject.WINDOW -> "Open Weather" to onWeather
                 DeskObject.PROJECT -> "Open Projects" to onProjects
@@ -106,18 +154,42 @@ internal fun DeskWorkspace(desk: DeskState, tasks: List<Intention>, modifier: Mo
                 else -> "Open Flow" to onFlow
             }
             OutlinedButton(onClick = { selected = null; action.second() }, border = BorderStroke(2.dp, Color(0xFF819F9F)),
-                modifier = Modifier.padding(top = 24.dp).fillMaxWidth()) { Text(action.first, color = Color(0xFFF4EEDB)) }
+                modifier = Modifier.padding(top = 24.dp).fillMaxWidth().heightIn(min = 48.dp)) { Text(action.first, color = Color(0xFFF4EEDB)) }
             Spacer(Modifier.height(20.dp))
         }
     }
 }
 
+@Composable
+private fun DeskTaskRow(task: Intention, onDone: (String) -> Unit, onLater: (String) -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(top = 14.dp).testTag("desk_task_" + task.id)) {
+        Text(task.text, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        task.facts[FlowPolicy.FACT_BECAUSE]?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = Color(0xFFBED0CD)) }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextButton(onClick = { onDone(task.id) }) { Text(task.facts[FlowPolicy.FACT_ACTION] ?: "Done", color = Color(0xFFC6EB78)) }
+            TextButton(onClick = { onLater(task.id) }) { Text("Later", color = Color(0xFFF4EEDB)) }
+        }
+        HorizontalDivider(color = Color(0xFF33505A))
+    }
+}
+
+/** What the cat says when it reaches an object: real content, one line. */
+internal fun deskLine(obj: DeskObject, s: DeskState): String = when (obj) {
+    DeskObject.INBOX -> if (s.trayCount == 0) "Nobody's waiting on you." else "${s.trayCount} ${if (s.trayCount == 1) "person is" else "people are"} waiting on you."
+    DeskObject.MONEY -> s.jarNote?.let { "$it is coming up." } ?: "Nothing due."
+    DeskObject.TODAY -> if (s.sticky.firstOrNull() == "All clear") "Nothing next. Nice." else "Next: ${s.sticky.drop(1).joinToString(" ")}"
+    DeskObject.PROJECT -> if (s.projectTitle.isBlank()) "No project pinned yet." else "Back to ${s.projectTitle}?"
+    DeskObject.BUILD -> s.monitorLines.firstOrNull()?.text?.removePrefix("> ") ?: "All quiet."
+    DeskObject.IDEA -> if (s.lampOn) "I'm keeping a few things in mind for you." else "No ideas waiting."
+    DeskObject.WINDOW -> s.weatherLine ?: "Weather isn't set up yet."
+}
+
 internal fun deskTitle(obj: DeskObject) = when (obj) {
     DeskObject.WINDOW -> "Weather"
     DeskObject.PROJECT -> "Projects"
-    DeskObject.BUILD -> "About Meow"
+    DeskObject.BUILD -> "Work"
     DeskObject.TODAY -> "Next up"
     DeskObject.MONEY -> "Money"
-    DeskObject.INBOX -> "Messages & people"
-    DeskObject.IDEA -> "Ideas & notes"
+    DeskObject.INBOX -> "People waiting"
+    DeskObject.IDEA -> "Ideas & errands"
 }

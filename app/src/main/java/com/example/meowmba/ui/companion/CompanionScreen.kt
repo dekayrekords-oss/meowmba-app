@@ -145,6 +145,8 @@ fun CompanionScreen(
             }
         } else if (uiState.appTheme == AppTheme.FLOW) {
             com.example.meowmba.ui.flow.FlowHomeRoute(viewModel, uiState, animationsPaused)
+        } else if (uiState.appTheme == AppTheme.DESK) {
+            com.example.meowmba.ui.flow.DeskRoute(viewModel, uiState, animationsPaused, Modifier.fillMaxSize())
         } else if (uiState.appTheme == AppTheme.PROFESSIONAL) {
             ProfessionalWorkspace(uiState, viewModel) {
                 AvatarMotionHost(viewModel, uiState, animationsPaused || uiState.showAvatarScreen,
@@ -162,7 +164,7 @@ fun CompanionScreen(
         Box(Modifier.matchParentSize().then(brainSpace)) {
         // 0. User-chosen background always draws when set. Live weather sky too.
         // Only the empty NEO desk stays see-through.
-        if (uiState.avatarStyle != AvatarStyle.DESK && (!isNeo || hasUserBg) && !(uiState.avatarStyle == AvatarStyle.FULL_FLY && uiState.habitatMode)) {
+        if (uiState.appTheme != AppTheme.DESK && (!isNeo || hasUserBg) && !(uiState.avatarStyle == AvatarStyle.FULL_FLY && uiState.habitatMode)) {
             AppBackground(
                 selection = if (uiState.habitatMode) com.example.meowmba.core.background.BackgroundSelection(com.example.meowmba.core.background.BackgroundKind.ANIMATION, uiState.habitatBackgroundId, 15) else uiState.background,
                 weather = uiState.ambientWeather ?: uiState.weather,
@@ -183,7 +185,7 @@ fun CompanionScreen(
         }
         }
 
-        if (uiState.avatarStyle != AvatarStyle.DESK && !habitatCovered && !uiState.showNeuralInfo && uiState.features.careVisible) {
+        if (uiState.appTheme != AppTheme.DESK && !habitatCovered && !uiState.showNeuralInfo && uiState.features.careVisible) {
             PetCarePanel(
                 habitatMode = uiState.habitatMode, onTrick = viewModel::playCompanionTrick,
                 onHabitatMode = viewModel::setHabitatMode,
@@ -534,7 +536,7 @@ fun CompanionScreen(
         }
 
         // Avatar gestures are shortcuts, never the only route to the full menu.
-        if (!isFlipCover && uiState.appTheme != AppTheme.FLOW && uiState.avatarStyle != AvatarStyle.DESK) {
+        if (!isFlipCover && uiState.appTheme != AppTheme.FLOW && uiState.appTheme != AppTheme.DESK) {
             TextButton(onClick = viewModel::openTiles,
                 modifier = Modifier.align(Alignment.TopStart).safeDrawingPadding().padding(8.dp)) { Text("Menu") }
         }
@@ -550,7 +552,7 @@ fun CompanionScreen(
                 when (tileName) {
                     "Settings" -> viewModel.toggleSettings()
                     "Flow" -> viewModel.setAppTheme(AppTheme.FLOW)
-                    "Desk" -> { viewModel.setAppTheme(AppTheme.COMPANION); viewModel.setAvatarStyle(AvatarStyle.DESK) }
+                    "Desk" -> viewModel.setAppTheme(AppTheme.DESK)
                     "Computer" -> viewModel.openComputerTools()
                     "LLM", "Hardware" -> viewModel.toggleModelManager()
                     "Brain" -> viewModel.toggleNeuralInfo()
@@ -576,7 +578,7 @@ fun CompanionScreen(
         // let Reflex cover the clock and moved that collision into weather/drive.
         val presenceHint = uiState.agenticPresenceHint
             ?: uiState.reflexSummary?.takeIf { uiState.lumenReflexV2Enabled && uiState.features.neuralFeedbackVisible }
-        val contextualHome = uiState.appTheme == AppTheme.FLOW || uiState.avatarStyle == AvatarStyle.DESK
+        val contextualHome = uiState.appTheme == AppTheme.FLOW || uiState.appTheme == AppTheme.DESK
         val companionControls = !contextualHome && !isFlipCover && uiState.appTheme != AppTheme.PROFESSIONAL
         CompanionTopOverlays(
             priorityRevision = uiState.crashAlert,
@@ -1128,10 +1130,6 @@ private fun AvatarMotionHost(
     modifier: Modifier = Modifier,
     interactive: Boolean = true,
 ) {
-    if (uiState.avatarStyle == AvatarStyle.DESK) {
-        com.example.meowmba.ui.flow.DeskRoute(viewModel, uiState, paused, modifier, interactive)
-        return
-    }
     val motionTilt = viewModel.motionScreenLeanDeg.collectAsState()
     val motionSampleTime = viewModel.motionObservedAtMs.collectAsState()
     val view = androidx.compose.ui.platform.LocalView.current
@@ -1207,12 +1205,12 @@ private fun AvatarMotionHost(
 /** Keep lifecycle wiring out of the already large screen's generated Compose method. */
 @Composable
 private fun CompanionStageEffects(viewModel: CompanionViewModel, uiState: CompanionState, animationsPaused: Boolean) {
-    if (uiState.appTheme == AppTheme.FLOW || uiState.avatarStyle == AvatarStyle.DESK) {
+    if (uiState.appTheme == AppTheme.FLOW || uiState.appTheme == AppTheme.DESK) {
         com.example.meowmba.ui.flow.FlowLifecycle(viewModel, uiState.driving)
     }
     // Report the real stage policy, including thermal/fold/onboarding changes.
     // Camera/body preferences must not cancel a visible acting performance.
-    val companionStageVisible = !animationsPaused && uiState.appTheme != AppTheme.FLOW && uiState.avatarStyle != AvatarStyle.DESK
+    val companionStageVisible = !animationsPaused && uiState.appTheme != AppTheme.FLOW && uiState.appTheme != AppTheme.DESK
     LaunchedEffect(viewModel, companionStageVisible) {
         viewModel.setAvatarPerformanceStageAllowed(companionStageVisible)
     }

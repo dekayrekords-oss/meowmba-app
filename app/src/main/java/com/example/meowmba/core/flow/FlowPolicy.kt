@@ -43,7 +43,8 @@ class FlowPolicy(private val zone: ZoneId = ZoneId.systemDefault()) {
         val now = situation.now
         val today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
         var ledger = ledgerIn.forDay(today)
-        val evening = situation.work.state == WorkState.OFF
+        // Evening = work has ended for the day. Early morning before work is not evening.
+        val evening = situation.work.state == WorkState.OFF && !situation.work.beforeWork
         val byId = assessments.associateBy { it.intentionId }
 
         val candidates = intentions.filter { it.isOpenAt(now) }.mapNotNull { i ->
@@ -79,8 +80,10 @@ class FlowPolicy(private val zone: ZoneId = ZoneId.systemDefault()) {
 
         val rest = candidates.filter { it.first.id != held?.intentionId }
             .map { (i, a, sc) -> toItem(i, a, situation, sc) }
-        val main = rest.firstOrNull()
-        val more = (listOfNotNull(held) + rest.drop(1)).take(MAX_MORE)
+        // The interrupting item already has the band at the top; don't repeat it below.
+        val below = rest.filter { it.intentionId != interrupt?.item?.intentionId }
+        val main = below.firstOrNull()
+        val more = (listOfNotNull(held) + below.drop(1)).take(MAX_MORE)
 
         return PolicyResult(
             FlowSnapshot(
@@ -170,8 +173,8 @@ class FlowPolicy(private val zone: ZoneId = ZoneId.systemDefault()) {
             intentionId = i.id,
             kind = i.kind,
             headline = i.text,
-            because = because(i, s, o),
-            primary = FlowAction("primary", "Done"),
+            because = i.facts[FACT_BECAUSE] ?: because(i, s, o),
+            primary = FlowAction("primary", i.facts[FACT_ACTION] ?: "Done"),
             secondary = FlowAction("later", "Later"),
             urgency = a.urgency,
             certainty = o?.certainty ?: Certainty.CONFIRMED,
@@ -255,6 +258,8 @@ class FlowPolicy(private val zone: ZoneId = ZoneId.systemDefault()) {
         const val FACT_ACTION = "action"
         const val FACT_ITEM = "item"
         const val FACT_SIGNALS = "signals"
+        /** Exact "because" line supplied by the source (overrides the template). */
+        const val FACT_BECAUSE = "because"
         private const val DAY_MS = 24 * 60 * 60 * 1000L
         private val DUE = DateTimeFormatter.ofPattern("EEE 'at' h:mm a", Locale.US)
     }

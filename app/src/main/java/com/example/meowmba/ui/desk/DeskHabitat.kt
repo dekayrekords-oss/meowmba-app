@@ -50,7 +50,7 @@ import kotlinx.coroutines.delay
 import kotlin.math.abs
 
 /**
- * Meow's Desk avatar scene (AvatarStyle.DESK). Draws inside the habitat area; the app's
+ * Meow's Desk scene (AppTheme.DESK mode). Draws full screen in Desk mode; the app's
  * existing mic/camera/chat controls stay outside it (no Care control, owner D2).
  *
  * Layers (master plan §9.1, same approach as IDLE_LOAD_138): the room is drawn once into
@@ -74,6 +74,8 @@ fun DeskHabitat(
     idleLines: List<String> = emptyList(),
     lineFor: (DeskObject) -> String? = { null },
     onArrive: (DeskObject) -> Unit = {},
+    /** Called the moment an object is tapped (open its panel right away; the cat still walks over). */
+    onTap: (DeskObject) -> Unit = {},
 ) {
     val measurer = rememberTextMeasurer()
     val cat = remember { CatMotion() }
@@ -188,6 +190,7 @@ fun DeskHabitat(
                     .clickable(role = Role.Button, onClickLabel = o.label) {
                         bubble = lineForNow(o) ?: o.label
                         request = o.catX to o
+                        onTap(o)
                     }
                     .semantics { contentDescription = describe(o, state) }
                     .testTag("desk_" + o.name.lowercase()),

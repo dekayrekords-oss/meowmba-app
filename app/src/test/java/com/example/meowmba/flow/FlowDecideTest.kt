@@ -125,6 +125,8 @@ class IntentionCaptureTest {
     @Test fun lowConfidenceOrNoEngineCapturesNothing() = runTest {
         val unsure = ScriptedEngine { _, _ -> listOf(Answer(IntentionCapture.Q_NEED, "no", 0.4)) }
         assertNull(IntentionCapture(unsure).capture("the rear light is out again", at(19)))
-        assertNull(IntentionCapture(null).capture("the rear light is out again", at(19)))
+        // No model (rules mode): explicit phrasing is kept, vague phrasing is not.
+        assertEquals("Fix the rear light", IntentionCapture(null).capture("the rear light is out again", at(19))?.text)
+        assertNull(IntentionCapture(null).capture("maybe I should call someone", at(19)))
     }
 }

@@ -101,7 +101,13 @@ data class Situation(
     val surface: Surface = Surface.FLOW_ON_SCREEN,
 )
 
-data class WorkEstimate(val state: WorkState, val probability: Double, val reason: String = "")
+data class WorkEstimate(
+    val state: WorkState,
+    val probability: Double,
+    val reason: String = "",
+    /** OFF because the work day hasn't started yet (morning), not because it ended. Not "evening". */
+    val beforeWork: Boolean = false,
+)
 
 /** One typed answer from a decision engine (or a plain rule). */
 data class Judgment(

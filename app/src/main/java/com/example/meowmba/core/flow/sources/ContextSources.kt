@@ -85,6 +85,8 @@ class SituationAssembler(
     private val opportunities: suspend (now: Long, place: String?) -> List<Opportunity> = { _, _ -> emptyList() },
     private val zone: ZoneId = ZoneId.systemDefault(),
     private val calendarAvailable: () -> Boolean = { true },
+    /** Something always true to show when the dateline has room (e.g. "82° cloudy"). */
+    private val ambient: () -> Signal? = { null },
 ) : SituationProvider {
 
     private val latest = LinkedHashMap<String, Evidence>()
@@ -129,6 +131,7 @@ class SituationAssembler(
             val s = Signal(a.key, a.label, fresh = now - a.at < FRESH_MS)
             if (out.size < MAX_SIGNALS) out += s else { out[out.lastIndex] = s; break }
         }
+        if (out.size < MAX_SIGNALS) ambient()?.let { a -> if (out.none { it.key == a.key }) out.add(0, a) }
         return out.take(MAX_SIGNALS)
     }
 

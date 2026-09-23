@@ -57,9 +57,9 @@ class CartoonInterfaceUiTest {
                 }
             }
         }
-        rule.onNodeWithText("Memba").assertIsDisplayed()
+        rule.onNodeWithText("Meow menu").assertIsDisplayed()
         render("cartoon-menu-$name")
-        rule.onNodeWithContentDescription("Return to avatar").assertIsDisplayed().performClick()
+        rule.onNodeWithContentDescription("Close menu").assertIsDisplayed().performClick()
         assertEquals(1, avatarReturns)
         rule.onNode(hasScrollAction()).performScrollToNode(hasText("Settings"))
         rule.onNodeWithText("Settings").performClick()
@@ -70,7 +70,7 @@ class CartoonInterfaceUiTest {
         rule.onNodeWithText("Light").assertExists()
         rule.onNodeWithContentDescription("Back to settings").performClick()
         rule.onNodeWithContentDescription("Close settings").performClick()
-        rule.onNodeWithText("Memba").assertExists()
+        rule.onNodeWithText("Meow menu").assertExists()
     }
 
     @Test @Config(qualifiers = "w375dp-h812dp")

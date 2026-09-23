@@ -4,7 +4,7 @@ import com.example.meowmba.core.flow.FlowKind
 import com.example.meowmba.core.flow.FlowSnapshot
 
 /**
- * Meow's Desk (AvatarStyle.DESK) — a second face on the same FlowSnapshot as Meow Flow
+ * Meow's Desk (AppTheme.DESK mode) — a second face on the same FlowSnapshot as Meow Flow
  * (master plan §9, docs/PRO_DESK_AVATAR_PASS_DOWN.md, docs/design/pro-desk-avatar.html).
  * Every object shows real data from the snapshot or from app facts; no fake content.
  */
@@ -60,10 +60,12 @@ data class DeskState(
 ) {
     companion object {
         /** Binds a Flow snapshot + app facts to desk objects (master plan §9.1 table). */
-        fun from(snapshot: FlowSnapshot, facts: DeskFacts): DeskState {
+        fun from(snapshot: FlowSnapshot, facts: DeskFacts, open: List<com.example.meowmba.core.flow.Intention>? = null): DeskState {
             val items = listOfNotNull(snapshot.main) + snapshot.more
-            val people = items.count { it.kind == FlowKind.PEOPLE }
-            val money = items.firstOrNull { it.kind == FlowKind.MONEY }
+            // Prefer every open intention (the tray counts everyone waiting, not just the 4 shown in Flow).
+            val people = open?.count { it.kind == FlowKind.PEOPLE } ?: items.count { it.kind == FlowKind.PEOPLE }
+            val moneyText = (open?.firstOrNull { it.kind == FlowKind.MONEY }?.text)
+                ?: items.firstOrNull { it.kind == FlowKind.MONEY }?.headline
             val sticky = facts.nextEventTime?.let { listOf(it) + facts.nextEventWords.take(2) }.orEmpty()
             return DeskState(
                 clockHour = facts.clockHour, clockMinute = facts.clockMinute,
@@ -74,8 +76,9 @@ data class DeskState(
                 monitorLines = facts.monitorLines.take(3),
                 sticky = sticky,
                 trayCount = people,
-                jarNote = facts.jarNote ?: money?.let { shortMoney(it.headline) },
-                lampOn = facts.ideaQueued || snapshot.interrupt == null && items.any { it.kind == FlowKind.OTHER },
+                jarNote = facts.jarNote ?: moneyText?.let(::shortMoney),
+                // With the full list, the caller decides (facts.ideaQueued); otherwise fall back to what Flow shows.
+                lampOn = facts.ideaQueued || (open == null && snapshot.interrupt == null && items.any { it.kind == FlowKind.OTHER }),
             )
         }
 

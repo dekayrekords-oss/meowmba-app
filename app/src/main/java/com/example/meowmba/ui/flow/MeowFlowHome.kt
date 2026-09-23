@@ -109,9 +109,17 @@ fun MeowFlowHome(
     onAdjust: () -> Unit = {},
     onAsk: () -> Unit = {},
     onMic: () -> Unit = {},
+    /** Deprecated: the design has no button bar. Use [onMenu]/[onDesk] (dateline links). */
     navigation: (@Composable () -> Unit)? = null,
+    onMenu: (() -> Unit)? = null,
+    onDesk: (() -> Unit)? = null,
 ) {
-    val night = FlowThemes.isNight(settings.eveningLook, if (snapshot.evening) WorkState.OFF else WorkState.WORKING)
+    val hour = java.time.Instant.ofEpochMilli(snapshot.at.takeIf { it > 0 } ?: System.currentTimeMillis())
+        .atZone(java.time.ZoneId.systemDefault()).hour
+    val night = when (settings.eveningLook) {
+        com.example.meowmba.core.flow.EveningLook.AUTO -> snapshot.evening && (hour >= 17 || hour < 6)
+        else -> FlowThemes.isNight(settings.eveningLook, WorkState.OFF)
+    }
     val target = FlowColors.from(FlowThemes.palette(settings.theme, night, settings.accent))
     val colors = animatedColors(target, if (reduceMotion) 0 else FlowDims.THEME_ANIM_MS)
 
@@ -144,13 +152,15 @@ fun MeowFlowHome(
                     .padding(start = FlowDims.sidePadStart, end = FlowDims.sidePadEnd, top = streamTop,
                         bottom = FlowDims.streamBottom + if (navigation != null) 48.dp else 0.dp),
             ) {
-                Dateline(dateLabel, snapshot.signals, anchors, onAdjust)
+                Dateline(dateLabel, snapshot.signals, anchors, onAdjust, onMenu, onDesk)
                 snapshot.main?.let { main ->
                     key(main.intentionId) { MainThought(main, pushed, anchors, reduceMotion, onPrimary, onLater) }
                 }
                 if (snapshot.main == null && snapshot.more.isEmpty()) {
-                    BasicText("Nothing waiting.\nUse Add task to keep something in mind.",
-                        Modifier.padding(top = 48.dp), style = FlowType.itemDetail.copy(color = colors.ink2))
+                    BasicText("Nothing needs you right now.", Modifier.padding(top = 30.dp).testTag("flow_empty"),
+                        style = FlowType.headline.copy(color = colors.ink))
+                    BasicText("Tell me what's on your mind below and I'll keep it for the right moment.",
+                        Modifier.padding(top = 12.dp), style = FlowType.because.copy(color = colors.ink2))
                 }
                 Spacer(Modifier.weight(1f))
                 if (snapshot.more.isNotEmpty()) {
@@ -201,7 +211,8 @@ private fun animatedColors(t: FlowColors, ms: Int): FlowColors {
 // ---- dateline ------------------------------------------------------------------------------
 
 @Composable
-private fun Dateline(dateLabel: String, signals: List<Signal>, anchors: MutableMap<String, LayoutCoordinates>, onAdjust: () -> Unit) {
+private fun Dateline(dateLabel: String, signals: List<Signal>, anchors: MutableMap<String, LayoutCoordinates>, onAdjust: () -> Unit,
+                     onMenu: (() -> Unit)? = null, onDesk: (() -> Unit)? = null) {
     val c = LocalFlowColors.current
     Column(Modifier.fillMaxWidth().drawBehind {
         val y = size.height - 0.75.dp.toPx()
@@ -209,6 +220,9 @@ private fun Dateline(dateLabel: String, signals: List<Signal>, anchors: MutableM
     }.padding(bottom = 12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             BasicText(dateLabel.uppercase(Locale.ROOT), Modifier.weight(1f), style = FlowType.dateline.copy(color = c.ink))
+            // Small-caps links, like the approved design's ADJUST: no separate button bar.
+            onMenu?.let { DatelineLink("MENU", "Open the Meow menu", "flow_menu", it); DatelineSep() }
+            onDesk?.let { DatelineLink("DESK", "Switch to Meow's Desk", "flow_desk", it); DatelineSep() }
             BasicText(
                 "ADJUST",
                 Modifier
@@ -220,6 +234,19 @@ private fun Dateline(dateLabel: String, signals: List<Signal>, anchors: MutableM
         }
         if (signals.isNotEmpty()) SignalLine(signals, anchors)
     }
+}
+
+@Composable
+private fun DatelineLink(label: String, description: String, tag: String, onClick: () -> Unit) {
+    val c = LocalFlowColors.current
+    BasicText(label, Modifier.clickable(role = Role.Button, onClickLabel = description, onClick = onClick)
+        .underline(c.ink, 1.dp, 0.dp).testTag(tag),
+        style = FlowType.dateline.copy(color = c.ink, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold))
+}
+
+@Composable
+private fun DatelineSep() {
+    BasicText("·", Modifier.padding(horizontal = 7.dp), style = FlowType.dateline.copy(color = LocalFlowColors.current.ink3))
 }
 
 /** One line only: shrink 12 → 10 sp in 0.5 sp steps, then ellipsize (README "Dateline line 2"). */
@@ -433,7 +460,7 @@ private fun InterruptBand(
         BasicText(item.headline, Modifier.padding(top = 8.dp).semantics { heading() }, style = FlowType.bandHeadline.copy(color = c.onAccent))
         BasicText(resolution?.message ?: item.because, Modifier.padding(top = 10.dp).alpha(0.92f), style = FlowType.bandBody.copy(color = c.onAccent))
         if (resolution == null) {
-            interrupt.spokenLine?.let { line -> VoiceCaption(line, speaking, c.onAccent) }
+            interrupt.spokenLine?.takeIf { it != item.headline }?.let { line -> VoiceCaption(line, speaking, c.onAccent) }
             val cd = interrupt.countdown
             if (cd != null && remainingMeters != null) Distance(remainingMeters, cd.startMeters, c.onAccent)
             Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {

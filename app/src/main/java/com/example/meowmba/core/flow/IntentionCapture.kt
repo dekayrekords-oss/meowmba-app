@@ -41,7 +41,7 @@ class IntentionCapture(
     suspend fun capture(utterance: String, now: Long): Intention? {
         if (!mightExpressNeed(utterance)) return null
         val parsed = parse(utterance) ?: return null
-        val engine = engine ?: return null
+        val engine = engine ?: return if (EXPLICIT.containsMatchIn(utterance.lowercase(Locale.ROOT))) build(parsed, parsed.type, utterance, now) else null
         val state = buildJsonObject {
             put("utterance", SituationBuilder.redact(utterance))
             put("candidate", parsed.text)
@@ -50,6 +50,10 @@ class IntentionCapture(
         val need = answers.firstOrNull { it.questionId == Q_NEED }?.probability ?: 0.0
         if (need < threshold) return null
         val type = answers.firstOrNull { it.questionId == Q_TYPE }?.answer ?: parsed.type
+        return build(parsed, type, utterance, now)
+    }
+
+    private fun build(parsed: Parsed, type: String, utterance: String, now: Long): Intention {
         val kind = KIND_BY_TYPE[type] ?: FlowKind.OTHER
         val stamp = STAMP.format(Instant.ofEpochMilli(now).atZone(zone))
         val quote = utterance.trim().take(120)
@@ -102,6 +106,12 @@ class IntentionCapture(
             "reply" to FlowKind.PEOPLE, "call" to FlowKind.PEOPLE, "attend" to FlowKind.PEOPLE, "other" to FlowKind.OTHER,
         )
 
+        /**
+         * Rules-only mode (no model yet): accept only unmistakable "I need to do this" phrasing,
+         * so chit-chat like "call me Meow" never becomes a task.
+         */
+        private val EXPLICIT = Regex("""\b(remind me to|don't let me forget|i need to|i have to|i've got to|i gotta|we need to|need to buy|ran out of|run out of|out of|is out|are out|is broken|is dead|isn't working|is not working|stopped working)\b""")
+
         private val CUES = listOf(
             Regex("""\b(need|needs|gotta|have to|must|should|remind me|don't let me forget|out of|ran out|run out)\b"""),
             Regex("""\b(is|are|'s) (out|broken|dead|busted|leaking|not working)\b"""),
@@ -119,6 +129,9 @@ class IntentionCapture(
             Pattern("reply", Regex("""(?i)\b(?:reply to|text|email|message)\s+(.+)""")) { "Reply to $it" },
             Pattern("pick_up", Regex("""(?i)\bpick up\s+(.+)""")) { "Pick up $it" },
             Pattern("other", Regex("""(?i)\bremind me to\s+(.+)""")) { it },
+            Pattern("other", Regex("""(?i)\bdon't let me forget (?:to\s+)?(.+)""")) { it },
+            Pattern("other", Regex("""(?i)\b(?:i|we)\s+(?:need|have|'ve got|got)\s+to\s+(.+)""")) { it },
+            Pattern("other", Regex("""(?i)\bi\s+gotta\s+(.+)""")) { it },
             Pattern("buy", Regex("""(?i)\bi need (?:a |an |some |more )?(.+)""")) { "Get $it" },
         )
 

@@ -62,9 +62,11 @@ class WorkStateDetector(private val zone: ZoneId = ZoneId.systemDefault()) {
         val hours = usualHours(t.dayOfWeek)
         val inHours = hours != null && minute in hours.first until hours.second
         val afterEnd = hours != null && minute >= hours.second
+        // Morning before the usual start (or before noon on a day off) is not "evening".
+        val before = if (hours != null) minute < hours.first else t.hour < 12
 
         val scheduleOnly = if (inHours) WorkEstimate(WorkState.WORKING, 0.8, "usual work hours")
-        else WorkEstimate(WorkState.OFF, 0.8, if (hours == null) "not a usual work day" else "outside usual hours")
+        else WorkEstimate(WorkState.OFF, 0.8, if (hours == null) "not a usual work day" else "outside usual hours", beforeWork = before)
         if (!detectWorkEnd) return scheduleOnly
 
         val recentApp = context.minutesSinceWorkApp?.let { it <= ACTIVE_WINDOW_MIN } == true
@@ -86,6 +88,7 @@ class WorkStateDetector(private val zone: ZoneId = ZoneId.systemDefault()) {
             stopped >= 3 -> WorkEstimate(WorkState.OFF, 0.85, "several signals say work has stopped early")
             stopped >= 1 && afterEnd -> WorkEstimate(WorkState.WRAPPING, 0.6, "past your usual finish and winding down")
             inHours -> WorkEstimate(WorkState.WORKING, 0.7, "usual work hours")
+            before -> WorkEstimate(WorkState.OFF, 0.7, "before your usual start", beforeWork = true)
             else -> WorkEstimate(WorkState.OFF, 0.6, "outside usual hours")
         }
     }

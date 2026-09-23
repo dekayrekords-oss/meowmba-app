@@ -1430,6 +1430,11 @@ class CompanionViewModel(
     init {
         // Restore persisted voice preferences (name, wake word, conversation mode)
         secureStorage?.let { storage ->
+            // Build 156/157 stored Meow's Desk as an avatar style; it is now a mode.
+            if (storage.getPreference(KEY_AVATAR_STYLE) == "desk") {
+                storage.savePreference(KEY_AVATAR_STYLE, AvatarStyle.DEFAULT.key)
+                storage.savePreference("app_theme", AppTheme.DESK.key)
+            }
             _uiState.value = _uiState.value.copy(features = _uiState.value.features.copy(
                 careVisible = storage.getBooleanPreference("care_visible", true),
                 carePosition = storage.getPreference("care_position") ?: "Top left",
@@ -3458,7 +3463,8 @@ class CompanionViewModel(
     }
 
     private val flowRuntimeLazy = lazy {
-        secureStorage?.let { storage ->
+        // No usable context (e.g. a bare test double): Flow stays off instead of crashing chat.
+        secureStorage?.let { storage -> runCatching {
             val context = storage.context.applicationContext
             val dao = com.example.meowmba.core.database.MeowmbaDatabase.getDatabase(context).flowDao()
             com.example.meowmba.core.flow.FlowRuntime(
@@ -3472,18 +3478,46 @@ class CompanionViewModel(
                 outcomes = com.example.meowmba.core.flow.db.RoomOutcomeLog(dao),
                 calendar = com.example.meowmba.core.flow.sources.CalendarSource(context)::upcoming,
                 calendarAvailable = { context.checkSelfPermission(android.Manifest.permission.READ_CALENDAR) == android.content.pm.PackageManager.PERMISSION_GRANTED },
+                ambient = {
+                    (_uiState.value.ambientWeather ?: _uiState.value.weather)?.let { w ->
+                        com.example.meowmba.core.flow.Signal("wx", "${w.temperatureF}° ${w.condition.label.lowercase()}")
+                    }
+                },
                 surface = {
                     when {
                         handedOffToBackground -> com.example.meowmba.core.flow.Surface.OTHER_APP
                         _uiState.value.appTheme == AppTheme.FLOW -> com.example.meowmba.core.flow.Surface.FLOW_ON_SCREEN
-                        _uiState.value.avatarStyle == AvatarStyle.DESK -> com.example.meowmba.core.flow.Surface.DESK_ON_SCREEN
+                        _uiState.value.appTheme == AppTheme.DESK -> com.example.meowmba.core.flow.Surface.DESK_ON_SCREEN
                         else -> com.example.meowmba.core.flow.Surface.OTHER_APP
                     }
                 },
             )
-        }
+        }.getOrNull() }
     }
     val flowRuntime: com.example.meowmba.core.flow.FlowRuntime? get() = flowRuntimeLazy.value
+
+    /** Feed Flow and the Desk from data the app already has. Cheap; called on open and each minute. */
+    internal suspend fun syncFlowAppData() {
+        val flow = flowRuntime ?: return
+        val ctx = secureStorage?.context?.applicationContext ?: return
+        val now = System.currentTimeMillis()
+        val apps = com.example.meowmba.core.flow.sources.AppIntentions
+        val labels = _uiState.value.projects.associate { it.id to it.kindLabel }
+        val reminders = runCatching { routineDao?.getAll()?.first().orEmpty() }.getOrDefault(emptyList()).map {
+            com.example.meowmba.core.flow.sources.AppIntentions.Reminder(it.id, it.name, it.timeOfDay, it.enabled, it.source == "user", it.lastRunAt)
+        }
+        val projects = runCatching { projectDao?.getAll()?.first().orEmpty() }.getOrDefault(emptyList()).map {
+            com.example.meowmba.core.flow.sources.AppIntentions.Project(it.id, it.name, labels[it.id] ?: "project", it.lastOpenedAt)
+        }
+        val calendarOk = ctx.checkSelfPermission(android.Manifest.permission.READ_CALENDAR) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        val events = if (calendarOk) com.example.meowmba.core.flow.sources.CalendarSource(ctx).upcoming(now) else emptyList()
+        val access = com.example.meowmba.core.flow.sources.AppIntentions.Access(
+            notifications = androidx.core.app.NotificationManagerCompat.getEnabledListenerPackages(ctx).contains(ctx.packageName),
+            usage = com.example.meowmba.core.flow.sources.UsageSource(ctx) { emptySet() }.hasAccess(),
+            calendar = calendarOk,
+        )
+        flow.syncManaged(apps.build(now, java.time.ZoneId.systemDefault(), reminders, projects, events, access), apps.MANAGED_PREFIXES)
+    }
 
     override fun onCleared() {
         if (flowRuntimeLazy.isInitialized()) flowRuntimeLazy.value?.stop()
@@ -6858,6 +6892,8 @@ class CompanionViewModel(
             if (_uiState.value.interactionState == InteractionState.LISTENING) resetState()
             return
         }
+        // Meow Flow: "the rear light is out", "remind me to…" become things Meow keeps in mind.
+        if (!fromVoice || finalTranscript) flowRuntime?.let { flow -> viewModelScope.launch { runCatching { flow.captureFromChat(raw) } } }
 
         if (fromVoice && !_uiState.value.isMicEnabled) return
         val normalizedRaw = com.example.meowmba.core.audio.SpokenText.normalize(raw)

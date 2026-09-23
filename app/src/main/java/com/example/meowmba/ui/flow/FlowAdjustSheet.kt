@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -58,6 +60,8 @@ fun FlowAdjustSheet(
     onChange: (FlowSettings) -> Unit,
     onDone: () -> Unit,
     modifier: Modifier = Modifier,
+    /** The rest of Meowmba's settings (the Flow screen has no button bar). */
+    onAppSettings: (() -> Unit)? = null,
 ) {
     val colors = FlowColors.from(FlowThemes.palette(settings.theme, night, settings.accent))
     CompositionLocalProvider(LocalFlowColors provides colors) {
@@ -73,6 +77,7 @@ fun FlowAdjustSheet(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 BasicText("Settings", Modifier.weight(1f), style = FlowType.headline.copy(fontSize = 26.sp, lineHeight = 32.sp, color = c.ink))
+                onAppSettings?.let { FlowLink("App settings", c.ink2, it); Spacer(Modifier.width(20.dp)) }
                 FlowLink("Done", c.ink, onDone)
             }
 
