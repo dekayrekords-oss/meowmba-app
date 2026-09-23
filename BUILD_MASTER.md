@@ -5,6 +5,11 @@ This supersedes historical build-location/version instructions in other document
 
 ## Current recovery
 
+- September 23 Flow/Desk repair: **1.4.2/code 158**, source `639ebd3` + version bump, daily
+  variant, owner-requested fresh install on a second phone SM-F971U / R5GL75XFCXD (API 37) at
+  09:05 America/Phoenix. The Fold (RFCY61NJEVM) still has 157. Full suite 2,846 tests, zero
+  failures; lint clean. Receipt: `docs/FLOW_DESK_REPAIR_2026-09-23.md`. Physical checks pending.
+
 - September 23 UI checkpoint: **1.4.1/code 157**, source `c9f74c9`, installed in place
   on the Fold. Visible Menu/Settings and object-specific Desk sheets restored; approved
   fonts bundled. Owner requested a stop after launch verification. Physical acceptance
