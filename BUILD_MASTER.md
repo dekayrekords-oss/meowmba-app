@@ -5,6 +5,13 @@ This supersedes historical build-location/version instructions in other document
 
 ## Current recovery
 
+- September 23 build 159 is reserved for the Fold update from `a31ac43` on
+  `feature/meow-flow-core`. Version 1.4.3/code 159 changes release metadata only;
+  Claude's application implementation is preserved. Codex is the sole build and
+  installation owner for all subsequent versions. Do not reuse 158 for another APK.
+  The owner chose **local rules for now**; Laya downloads and implementation remain
+  deferred. Installation and verification receipt will be recorded when complete.
+
 - September 23 Flow/Desk repair: **1.4.2/code 158**, source `639ebd3` + version bump, daily
   variant, owner-requested fresh install on a second phone SM-F971U / R5GL75XFCXD (API 37) at
   09:05 America/Phoenix. The Fold (RFCY61NJEVM) still has 157. Full suite 2,846 tests, zero
