@@ -9,6 +9,7 @@ and motion; the PNGs are fixed snapshots of each state for side-by-side checks.
 | `meow-flow.html` | Meow Flow home mode, full interactive demo (simulated day, settings, themes, interruptions, Maps notification). Open in Chrome. |
 | `pro-desk-avatar.html` | Meow's Desk avatar with the micro cat (tap objects). |
 | `screens/flow-*.png`, `screens/desk-*.png` | Reference screenshots at 2× (phone screen is 412 × 960 CSS px). |
+| `ARTIFACTS.md` | Index of every published claude.ai page → local file, incl. rejected explorations in `explorations/` (do not build those). |
 
 Plans: `../MEOW_FLOW_AND_DESK_MASTER_PLAN.md` (phases, gates, ownership),
 `../MEOW_FLOW_PASS_DOWN.md` (behaviour), `../PRO_DESK_AVATAR_PASS_DOWN.md` (Desk).

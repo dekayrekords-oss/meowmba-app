@@ -1,0 +1,237 @@
+<title>Work Home Screens</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;800;900&family=Roboto+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,1,0&display=block">
+<style>
+:root{color-scheme:dark;--ink:#172D34;--text:#F6F0DF;--mute:#BED0CD;--dim:#8FA7A5;--bg:#182A32;--rule:#2E4750;--line:#718E91;--lime:#C6EB78;--onlime:#20351C;--amber:#FFC56F;--pink:#F2B8B5;--raised:#213740}
+html,body{background:#0B1519}
+body{margin:0;color:var(--text);font-family:Roboto,system-ui,sans-serif;padding:28px 16px 56px}
+.ms{font-family:"Material Symbols Outlined";font-size:24px;line-height:1;font-weight:normal;font-style:normal;display:inline-block;white-space:nowrap;letter-spacing:normal;text-transform:none;direction:ltr;font-feature-settings:"liga";-webkit-font-smoothing:antialiased;font-variation-settings:"FILL" 1,"wght" 400,"GRAD" 0,"opsz" 24;user-select:none;vertical-align:middle}
+header{max-width:1360px;margin:0 auto 26px}
+header h1{margin:0;font-size:32px;line-height:1.1;font-weight:900}
+header p{margin:8px 0 0;color:var(--mute);font-size:15px;line-height:1.55;max-width:720px}
+.row{max-width:1360px;margin:0 auto;display:flex;flex-wrap:wrap;gap:28px;justify-content:center;align-items:flex-start}
+.col{flex:1 1 320px;max-width:432px;min-width:0}
+.frame{width:432px;border-radius:44px;background:#03080A;padding:10px;box-sizing:border-box;box-shadow:0 0 0 2px #22363D,0 30px 70px rgba(0,0,0,.55);transform-origin:0 0}
+.screen{position:relative;width:412px;height:960px;border-radius:36px;overflow:hidden;background:var(--bg)}
+.cap{margin-top:16px}.cap h2{margin:0;font-size:21px;font-weight:900}
+.cap p{margin:6px 0 0;color:var(--mute);font-size:14px;line-height:1.55}
+.sb{position:absolute;top:0;left:0;right:0;height:40px;display:flex;justify-content:space-between;align-items:center;padding:0 26px;font-size:14px;font-weight:700;z-index:3}
+.body{position:absolute;left:0;right:0;top:44px;bottom:170px;padding:0 22px;overflow:hidden}
+
+/* avatar: the app's lens eyes in a small visor */
+.face{display:inline-block;flex:0 0 auto;border-radius:18px;background:#0E1D23;border:2px solid #3E5E66;box-shadow:0 3px 0 var(--ink)}
+.face .eyes{transform-box:fill-box;transform-origin:center;animation:blink 5.2s infinite}
+@keyframes blink{0%,94%,100%{transform:scaleY(1)}96%{transform:scaleY(.1)}}
+
+.hello{display:flex;gap:14px;align-items:center;margin-top:14px}
+.date{color:var(--dim);font-size:13px;font-weight:500}
+.greet{font-size:15px;font-weight:700;margin-top:2px}
+.say{font-size:22px;line-height:30px;font-weight:700;margin:18px 0 0;letter-spacing:-.2px}
+.say em{font-style:normal;color:var(--lime)}
+.sec{display:flex;justify-content:space-between;align-items:baseline;margin:26px 0 4px;font-size:13px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--dim)}
+.sec a{color:var(--lime);font-size:13px;letter-spacing:0;text-transform:none;font-weight:700;text-decoration:none;cursor:pointer}
+.it{display:flex;align-items:center;gap:12px;min-height:64px;padding:8px 0;border-bottom:1px solid var(--rule);cursor:pointer}
+.it:last-child{border-bottom:0}
+.it .when{width:62px;flex:0 0 62px;font-size:13px;font-weight:700;color:var(--mute);line-height:17px}
+.it .when.hot{color:var(--amber)}
+.it .what{flex:1;min-width:0}
+.it .t{font-size:16px;font-weight:700;line-height:21px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.it .d{font-size:14px;color:var(--mute);line-height:19px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pill{flex:0 0 auto;height:36px;padding:0 14px;border-radius:18px;border:2px solid var(--line);background:transparent;color:var(--lime);font:800 14px Roboto,sans-serif;cursor:pointer}
+.pill.p{background:var(--lime);color:var(--onlime);border-color:var(--lime);box-shadow:0 2px 0 var(--ink)}
+.bar{height:6px;border-radius:3px;background:#2B444C;margin-top:7px;overflow:hidden}.bar i{display:block;height:100%;background:var(--lime);border-radius:3px}
+
+.ctrl{position:absolute;z-index:3;box-sizing:border-box;border:2px solid var(--line);box-shadow:0 3px 0 var(--ink);display:flex;align-items:center;justify-content:center;gap:8px;color:var(--text);font:700 14px Roboto,sans-serif;cursor:pointer}
+.ctrl:active,.btn:active,.pill:active{transform:translateY(2px);box-shadow:none}
+
+.scrim{position:absolute;inset:0;background:rgba(3,8,10,.55);opacity:0;pointer-events:none;transition:opacity .25s;z-index:6}.scrim.on{opacity:1;pointer-events:auto}
+.sheet{position:absolute;left:0;right:0;bottom:0;height:470px;box-sizing:border-box;background:var(--bg);border:2px solid var(--line);border-bottom:0;border-radius:24px 24px 0 0;padding:10px 22px 28px;transform:translateY(105%);transition:transform .32s cubic-bezier(.2,.8,.2,1);z-index:7;display:flex;flex-direction:column}
+.sheet.on{transform:none}
+.grab{width:36px;height:4px;border-radius:2px;background:var(--line);align-self:center;margin-bottom:10px}
+.sh{display:flex;align-items:center}.sh h3{margin:0;flex:1;font-size:22px;font-weight:800}
+.sh button{width:48px;height:48px;border:0;border-radius:24px;background:none;color:var(--text);cursor:pointer}
+.sub{color:var(--mute);font-size:14px;margin:0 0 8px}
+.sbody{flex:1;overflow:auto;font-size:15px;line-height:23px}
+.sbody p{margin:6px 0 12px}
+.kv{display:flex;justify-content:space-between;padding:11px 0;border-top:1px solid var(--rule)}.kv span{color:var(--mute)}.kv b{font-weight:700}
+.act{display:flex;gap:10px;margin-top:16px}
+.btn{height:48px;flex:1;border-radius:12px;border:2px solid var(--lime);background:var(--lime);color:var(--onlime);box-shadow:0 3px 0 var(--ink);font:800 15px Roboto,sans-serif;cursor:pointer}
+.btn.o{flex:0 0 auto;padding:0 18px;background:transparent;color:var(--lime);border-color:var(--line);box-shadow:none}
+
+/* B: one at a time */
+.stack{position:relative;z-index:0;margin-top:22px;height:350px}
+.card{position:absolute;inset:0;background:var(--raised);border:2px solid var(--line);border-radius:24px;box-shadow:0 3px 0 var(--ink);padding:22px 22px 20px;box-sizing:border-box;display:flex;flex-direction:column;transition:transform .35s cubic-bezier(.2,.8,.2,1),opacity .3s}
+.card.ghost{transform:translateY(14px) scale(.94);opacity:.55;z-index:-1}
+.card.ghost2{transform:translateY(26px) scale(.88);opacity:.25;z-index:-2}
+.card.out{transform:translateX(-120%) rotate(-6deg);opacity:0}
+.card .k{font-size:13px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--amber)}
+.card h4{margin:8px 0 0;font-size:28px;line-height:34px;font-weight:800;letter-spacing:-.3px}
+.card p{margin:12px 0 0;font-size:16px;line-height:24px;color:var(--mute)}
+.card .fill{flex:1}
+.card .btn{width:100%;flex:none}
+.card .row2{display:flex;gap:10px;margin-top:10px}.card .row2 .btn{flex:1;width:auto}
+.dots{display:flex;gap:6px;margin-left:auto}.dots i{width:8px;height:8px;border-radius:4px;background:#3E5E66}.dots i.on{background:var(--lime);width:20px}
+.next{margin-top:30px;font-size:14px;color:var(--dim)}.next b{color:var(--mute);font-weight:700}
+
+/* C: day line */
+.tl{position:relative;margin-top:18px;padding-left:28px}
+.tl::before{content:"";position:absolute;left:8px;top:6px;bottom:6px;width:2px;background:var(--rule)}
+.ev{position:relative;padding:9px 0 11px;cursor:pointer}
+.ev::before{content:"";position:absolute;left:-25px;top:15px;width:10px;height:10px;border-radius:6px;background:var(--bg);border:2px solid var(--line)}
+.ev.done{opacity:.5}.ev.done::before{background:var(--line)}
+.ev .h{font-size:13px;font-weight:700;color:var(--dim)}
+.ev .t{font-size:16px;font-weight:700;line-height:21px;margin-top:1px}
+.ev .d{font-size:14px;color:var(--mute);line-height:19px}
+.now{position:relative;display:flex;align-items:center;gap:10px;margin:4px 0 4px -28px}
+.now .ln{flex:1;height:2px;background:var(--lime)}
+.now .lb{font-size:13px;font-weight:800;color:var(--lime)}
+.also{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.chip{height:34px;padding:0 12px;border-radius:10px;border:2px solid var(--line);display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:700;color:var(--text);background:transparent;cursor:pointer}
+.chip .ms{font-size:18px;color:var(--amber)}
+@media (prefers-reduced-motion:reduce){.sheet,.scrim,.card{transition:none}.face .eyes{animation:none}}
+</style>
+
+<header>
+  <h1>Work home screens</h1>
+  <p>Three plain options. The avatar is the app's own eyes, kept small and calm. It says one useful sentence, and everything below it is ordinary text with one clear button per item. Tap anything. Mic, camera and chat stay put, and there's no Care mode. Meowmba facts are real; calls, bills and emails are examples.</p>
+</header>
+
+<div class="row">
+  <div class="col"><div class="holder"><div class="frame"><div class="screen" id="a"></div></div></div>
+    <div class="cap"><h2>A · Briefing</h2><p>Reads like a note from an assistant. First what needs you, then your project, then the rest of the day. Everything fits on one screen without scrolling.</p></div></div>
+  <div class="col"><div class="holder"><div class="frame"><div class="screen" id="b"></div></div></div>
+    <div class="cap"><h2>B · One thing at a time</h2><p>Shows only the next thing that needs you, with the button to handle it. Handle it, skip it or snooze it, and the next one slides in. Built for busy days and people who don't want a list.</p></div></div>
+  <div class="col"><div class="holder"><div class="frame"><div class="screen" id="c"></div></div></div>
+    <div class="cap"><h2>C · Your day</h2><p>Your day as a simple timeline, with a green line marking now. Anything without a time, like bills and email, sits in chips at the top.</p></div></div>
+</div>
+
+<script>
+const MS = (n, s = 24) => `<span class="ms" style="font-size:${s}px">${n}</span>`;
+let fid = 0;
+function face(w = 72, h = 48) {
+  const i = ++fid;
+  return `<svg class="face" width="${w}" height="${h}" viewBox="0 0 72 48" aria-label="Meow">
+    <defs><radialGradient id="sc${i}" cx=".38" cy=".32" r=".75"><stop offset="0" stop-color="#F7F9F2"/><stop offset=".55" stop-color="#D9E6E2"/><stop offset="1" stop-color="#7E9A9B"/></radialGradient>
+    <radialGradient id="ir${i}" cx=".5" cy=".6" r=".6"><stop offset="0" stop-color="#C9FFD9"/><stop offset=".45" stop-color="#4DFF85"/><stop offset=".8" stop-color="#1D7A55"/><stop offset="1" stop-color="#0A2330"/></radialGradient></defs>
+    <g class="eyes">
+      <circle cx="24" cy="24" r="12" fill="url(#sc${i})" stroke="#07131A" stroke-width="1.2"/><circle cx="48" cy="24" r="12" fill="url(#sc${i})" stroke="#07131A" stroke-width="1.2"/>
+      <circle cx="24" cy="25" r="8.6" fill="url(#ir${i})"/><circle cx="48" cy="25" r="8.6" fill="url(#ir${i})"/>
+      <circle cx="24" cy="25.2" r="4.3" fill="#020A14"/><circle cx="48" cy="25.2" r="4.3" fill="#020A14"/>
+      <circle cx="20.6" cy="20.4" r="2.5" fill="#fff"/><circle cx="44.6" cy="20.4" r="2.5" fill="#fff"/>
+    </g></svg>`;
+}
+const CONTROLS = `
+  <button class="ctrl" style="left:20px;top:830px;height:44px;padding:0 14px;border-radius:22px;background:#213740" aria-label="Camera off">Camera off ${MS('videocam_off', 20)}</button>
+  <button class="ctrl" style="left:170px;top:816px;width:72px;height:72px;border-radius:18px;background:#8C1D18" aria-label="Microphone off">${MS('mic_off', 30)}</button>
+  <button class="ctrl" style="left:336px;top:824px;width:56px;height:56px;border-radius:28px;background:#213740" aria-label="Open chat">${MS('chat')}</button>`;
+const SHEET = `<div class="scrim"></div><section class="sheet" aria-live="polite"><div class="grab"></div><div class="sh"><h3></h3><button aria-label="Close">${MS('close')}</button></div><p class="sub"></p><div class="sbody"></div></section>`;
+const SB = `<div class="sb"><span>3:12</span><span>${MS('signal_cellular_alt', 18)} ${MS('battery_5_bar', 18)}</span></div>`;
+const kv = (a, b) => `<div class="kv"><span>${a}</span><b>${b}</b></div>`;
+const act = (a, b) => `<div class="act"><button class="btn">${a}</button>${b ? `<button class="btn o">${b}</button>` : ''}</div>`;
+
+// shared details for every item
+const D = {
+  call: { title: 'Tester check-in', sub: 'Call · 3:30 PM · 20 min', body: `<p>Sam from the closed test. Their last note said the voice button is hard to find. I'll have their three earlier notes open during the call.</p>${kv('Joining from', 'Google Meet')}${kv('Reminder', '3:20 PM')}${act('Join at 3:30', 'Reschedule')}` },
+  bill: { title: 'Card payment', sub: 'Bill · due tomorrow', body: `<p>Your statement balance is $412. Paying today from checking leaves $5,828.</p>${kv('Amount', '$412.00')}${kv('From', 'Checking ••01')}${kv('Due', 'Wed, Sep 23')}${act('Pay $412', 'Remind me')}` },
+  mail: { title: 'Tester feedback', sub: 'Email · 2 new · 2:02 PM', body: `<p><b>Sam:</b> "Love the new voice. Took me a while to find the button to talk though."</p><p>I drafted a reply thanking them and noting it's on the fix list.</p>${act('Send my draft', 'Edit')}` },
+  play: { title: 'Meowmba on Google Play', sub: 'Closed testing · Alpha 11', body: `${kv('Play review', 'In review since Sep 19')}${kv('Tester days', '9 of 14')}${kv('Testers opted in', '12')}${kv('Latest build', '1.3.99 (155) · 2,742 tests passed')}${kv('Earliest production apply', 'Sep 28')}${act('Draft tester update', 'Open Console')}` },
+  pickup: { title: 'Pick up order', sub: '5:00 PM · Hardware store', body: `${kv('Order', 'USB-C dock')}${kv('Paid', '$64.00')}${act('Directions', 'Move')}` },
+  plan: { title: 'Plan build 156', sub: 'Tomorrow 9:00 AM · 45 min', body: `<p>Agenda I drafted: clock overlap fix, idle heat branch review, tester's voice-button note.</p>${act('Open agenda')}` },
+  standup: { title: 'Morning review', sub: '9:00 AM · done', body: `<p>You reviewed the idle heat fix and filed the clock overlap bug.</p>` },
+  commit: { title: 'Song recognition shipped', sub: '12:15 PM · commit 637697f', body: `${kv('Tests', '2,742 passed')}${act('View changes')}` },
+  lunch: { title: 'Lunch', sub: '1:00 PM', body: `<p>Nothing to do here.</p>` }
+};
+
+function mount(id, html) {
+  const el = document.getElementById(id);
+  el.innerHTML = SB + `<div class="body">${html}</div>` + CONTROLS + SHEET;
+  const sheet = el.querySelector('.sheet'), scrim = el.querySelector('.scrim');
+  const open = (k) => { const d = D[k]; if (!d) return;
+    sheet.querySelector('h3').textContent = d.title; sheet.querySelector('.sub').textContent = d.sub; sheet.querySelector('.sbody').innerHTML = d.body;
+    sheet.classList.add('on'); scrim.classList.add('on'); };
+  const close = () => { sheet.classList.remove('on'); scrim.classList.remove('on'); };
+  sheet.querySelector('.sh button').onclick = close; scrim.onclick = close;
+  el.addEventListener('click', (e) => { const h = e.target.closest('[data-k]'); if (h && el.contains(h)) open(h.dataset.k); });
+  el.querySelectorAll('[data-k]').forEach((h) => { h.tabIndex = 0; h.setAttribute('role', 'button'); h.addEventListener('keydown', (e) => { if (e.key === 'Enter') open(h.dataset.k); }); });
+  return el;
+}
+
+/* A · Briefing */
+const item = (k, when, hot, t, d, btn, primary) => `<div class="it" data-k="${k}"><div class="when${hot ? ' hot' : ''}">${when}</div><div class="what"><div class="t">${t}</div><div class="d">${d}</div></div>${btn ? `<button class="pill${primary ? ' p' : ''}" tabindex="-1">${btn}</button>` : ''}</div>`;
+mount('a', `
+  <div class="hello">${face()}<div><div class="date">Tuesday, September 22</div><div class="greet">Good afternoon</div></div></div>
+  <p class="say">Three things need you today. <em>The tester call at 3:30</em> is first.</p>
+  <div class="sec">Needs you <span>3</span></div>
+  ${item('call', '3:30<br>18 min', 1, 'Tester check-in', 'Call with Sam · notes ready', 'Join', 1)}
+  ${item('bill', 'Due<br>tomorrow', 1, 'Card payment · $412', 'From checking ••01', 'Pay')}
+  ${item('mail', '2 new', 0, 'Tester feedback', 'Voice button is hard to find', 'Reply')}
+  <div class="sec">Meowmba <a data-k="play">Details</a></div>
+  <div class="it" data-k="play" style="display:block;border:0">
+    <div style="display:flex;justify-content:space-between;font-size:16px;font-weight:700"><span>In Play review</span><span style="color:var(--mute);font-weight:500;font-size:14px">tester day 9 of 14</span></div>
+    <div class="bar"><i style="width:64%"></i></div>
+    <div class="d" style="margin-top:8px">Build 155 · all 2,742 tests passed · production apply Sep 28</div>
+  </div>
+  <div class="sec">Later</div>
+  ${item('pickup', '5:00', 0, 'Pick up order', 'Hardware store · USB-C dock')}
+  ${item('plan', 'Tomorrow', 0, 'Plan build 156', 'Agenda drafted')}
+`);
+
+/* B · One thing at a time */
+const cards = [
+  { k: 'call', kind: 'Call · in 18 minutes', title: 'Tester check-in with Sam', text: "Sam's last note: the voice button is hard to find. I'll have their notes open on the call.", main: 'Join at 3:30', alt: 'Remind 3:20' },
+  { k: 'bill', kind: 'Bill · due tomorrow', title: 'Card payment, $412', text: 'Paying from checking now leaves $5,828. Nothing else is due this week.', main: 'Pay $412', alt: 'Tomorrow' },
+  { k: 'mail', kind: 'Email · 2 new', title: 'Tester feedback', text: 'I drafted a reply thanking Sam and saying the voice button is on the fix list.', main: 'Send my reply', alt: 'Read first' }
+];
+const bEl = mount('b', `
+  <div class="hello">${face()}<div><div class="date">Tuesday, September 22</div><div class="greet" id="bcount">3 things need you</div></div><div class="dots" id="bdots"></div></div>
+  <div class="stack" id="stack"></div>
+  <div class="next" id="bnext"></div>
+`);
+let bi = 0;
+function renderB() {
+  const stack = bEl.querySelector('#stack'); stack.innerHTML = '';
+  const left = cards.length - bi;
+  bEl.querySelector('#bcount').textContent = left ? `${left} thing${left > 1 ? 's' : ''} need${left > 1 ? '' : 's'} you` : 'All clear';
+  bEl.querySelector('#bdots').innerHTML = cards.map((_, i) => `<i class="${i === bi ? 'on' : ''}"></i>`).join('');
+  if (!left) {
+    stack.innerHTML = `<div class="card"><div class="k" style="color:var(--lime)">You're clear</div><h4>Nothing needs you until 5:00</h4><p>Meowmba is still in Play review, tester day 9 of 14. I'll tell you if anything changes.</p><div class="fill"></div><button class="btn o" style="width:100%" id="again">Show what I handled</button></div>`;
+    bEl.querySelector('#again').onclick = () => { bi = 0; renderB(); };
+    bEl.querySelector('#bnext').innerHTML = `<b>Later:</b> pick up order at 5:00 · plan build 156 tomorrow`;
+    return;
+  }
+  cards.slice(bi, bi + 3).reverse().forEach((c, j, arr) => {
+    const depth = arr.length - 1 - j;
+    stack.insertAdjacentHTML('beforeend', `<div class="card${depth === 1 ? ' ghost' : depth === 2 ? ' ghost2' : ''}">
+      <div class="k">${c.kind}</div><h4>${c.title}</h4><p>${c.text}</p><div class="fill"></div>
+      <button class="btn" data-go>${c.main}</button>
+      <div class="row2"><button class="btn o" data-go>${c.alt}</button><button class="btn o" data-k="${c.k}">Details</button></div></div>`);
+  });
+  const rest = cards.slice(bi + 1).map((c) => c.title.split(',')[0]).join(' · ');
+  bEl.querySelector('#bnext').innerHTML = rest ? `<b>After this:</b> ${rest}` : `<b>Last one.</b> Then you're clear until 5:00.`;
+  stack.querySelectorAll('[data-go]').forEach((b) => b.onclick = () => { const top = stack.lastElementChild; top.classList.add('out'); setTimeout(() => { bi++; renderB(); }, 300); });
+}
+renderB();
+
+/* C · Your day */
+const ev = (k, h, t, d, done) => `<div class="ev${done ? ' done' : ''}" data-k="${k}"><div class="h">${h}</div><div class="t">${t}</div>${d ? `<div class="d">${d}</div>` : ''}</div>`;
+mount('c', `
+  <div class="hello">${face()}<div><div class="date">Tuesday, September 22</div><div class="greet">Tester call in 18 minutes</div></div></div>
+  <div class="also">
+    <button class="chip" data-k="bill">${MS('receipt_long')}Card $412 due tomorrow</button>
+    <button class="chip" data-k="mail">${MS('mail')}2 emails</button>
+    <button class="chip" data-k="play">${MS('hourglass_top')}Play review · day 9/14</button>
+  </div>
+  <div class="tl">
+    ${ev('standup', '9:00 AM', 'Morning review', '', 1)}
+    ${ev('commit', '12:15 PM', 'Song recognition shipped', 'All tests passed', 1)}
+    ${ev('lunch', '1:00 PM', 'Lunch', '', 1)}
+    <div class="now"><span class="lb">NOW 3:12</span><span class="ln"></span></div>
+    ${ev('call', '3:30 PM · 20 min', 'Tester check-in with Sam', 'Notes ready · Google Meet')}
+    ${ev('pickup', '5:00 PM', 'Pick up order', 'Hardware store · USB-C dock')}
+    ${ev('plan', 'Tomorrow 9:00 AM', 'Plan build 156', 'Agenda drafted')}
+  </div>
+`);
+
+function fit() { document.querySelectorAll('.holder').forEach((h) => { const f = h.firstElementChild, s = Math.min(1, h.clientWidth / 432); f.style.transform = `scale(${s})`; h.style.height = 980 * s + 'px'; }); }
+addEventListener('resize', fit); fit();
+</script>
