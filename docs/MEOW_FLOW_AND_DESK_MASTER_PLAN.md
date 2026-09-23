@@ -30,6 +30,12 @@ Companion documents (read in this order):
 | D12 | Store stock: **no stock sources in v1.** Meow never claims an item is in stock; it says a shop "usually carries" it and offers to call or check the store's page. Revisit only if the owner asks. | 09-22 |
 | D9 | Work first; leisure suggestions only after work is wrapped. Items are offers; nothing executes without the user. | 09-22 |
 
+## Progress (update this table as phases land)
+
+| Date | Who | Phase | State | Evidence |
+|---|---|---|---|---|
+| 2026-09-22 | Claude | 1, 3, 4, 7 + parts of 0, 5, 6 | Implemented on `feature/meow-flow-core`, **not wired** | `docs/FLOW_DESK_PROGRESS_2026-09-22.md`, `docs/FLOW_WIRING_GUIDE.md` |
+
 ---
 
 ## 1. Architecture — one engine, two faces

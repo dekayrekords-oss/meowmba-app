@@ -574,5 +574,5 @@ private fun Modifier.enterAnimation(delayMs: Int, reduceMotion: Boolean): Modifi
     if (reduceMotion) return this
     val a = remember { Animatable(0f) }
     LaunchedEffect(Unit) { a.animateTo(1f, tween(FlowDims.ITEM_IN_MS, delayMillis = delayMs)) }
-    return this.alpha(a.value).offset(y = (8 * (1 - a.value)).dp)
+    return this.alpha(a.value).offset { androidx.compose.ui.unit.IntOffset(0, (8 * (1 - a.value)).dp.roundToPx()) }
 }

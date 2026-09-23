@@ -1,6 +1,7 @@
 package com.example.meowmba.core.flow
 
 import android.content.SharedPreferences
+import androidx.core.content.edit
 
 enum class EveningLook(val key: String) {
     AUTO("auto"), DAY("day"), NIGHT("night");
@@ -50,9 +51,7 @@ interface FlowKeyValue {
 class SharedPreferencesKeyValue(private val prefs: SharedPreferences) : FlowKeyValue {
     override fun getString(key: String): String? = prefs.getString(key, null)
     override fun putAll(values: Map<String, String?>) {
-        prefs.edit().apply {
-            values.forEach { (k, v) -> if (v == null) remove(k) else putString(k, v) }
-        }.apply()
+        prefs.edit { values.forEach { (k, v) -> if (v == null) remove(k) else putString(k, v) } }
     }
 }
 

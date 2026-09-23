@@ -12,7 +12,7 @@ What's on the branch (all `com.example.meowmba`):
 | Engine | `core/flow/FlowModel.kt`, `FlowPolicy.kt`, `FlowController.kt`, `FlowSettings.kt`, `FlowThemes.kt`, `SituationBuilder.kt`, `WorkStateDetector.kt`, `IntentionCapture.kt`, `FlowStores.kt`, `FlowRuntime.kt` |
 | Decisions | `core/flow/decide/DecisionEngine.kt` (typed questions, Laya/Jev wire shape), `Assessors.kt` (model/rules chain) |
 | Delivery | `core/flow/delivery/InterruptDelivery.kt` (speech gate, heads-up notification, action receiver) |
-| Context | `core/flow/sources/ContextSources.kt` (evidence mappers, SituationAssembler) |
+| Context | `core/flow/sources/ContextSources.kt` (evidence mappers, SituationAssembler), `CalendarSource.kt`, `UsageSource.kt` |
 | Storage | `core/flow/db/FlowRoom.kt` (entities, DAO, RoomIntentionStore, migration statements) |
 | UI | `ui/flow/MeowFlowHome.kt`, `FlowAdjustSheet.kt`, `FlowTokens.kt`, `FlowSamples.kt`; `ui/desk/DeskModel.kt`, `DeskPainter.kt`, `DeskHabitat.kt` |
 | Tests | `app/src/test/java/com/example/meowmba/flow/*` + `resources/flow/cases/policy_cases_v0.json` |
@@ -66,7 +66,8 @@ drivingDetector.driving.collect { flow.publish(EvidenceMappers.fromDriving(it, n
 // RoadAlertListener.onNotificationPosted (generalise; do NOT add a second listener):
 EvidenceMappers.fromNotification(sbn.packageName, label, sbn.notification.category,
     sbn.notification.extras.getString(Notification.EXTRA_TITLE), sbn.postTime, sbn.isOngoing)?.let(flow::publish)
-// usage events (usage access, owner D10): EvidenceMappers.fromForegroundApp(pkg, label, now, workApps)
+// usage access (owner D10): UsageSource(app) { workApps }.foregroundEvidence(lastCheck, now).forEach(flow::publish)
+//   on screen-on/unlock/Flow opened — never a polling loop; workContext = { usageSource.workContext(now()).copy(atWorkPlace = …, computerClosed = …) }
 // geofences (background location, owner D10): EvidenceMappers.fromPlace(name, entering, now)
 // chat turns: IntentionCapture(engine, lookup).capture(text, now)?.let { flow.store.upsert(it); flow.publish(EvidenceMappers.fromCapturedNeed(it.text, now)) }
 ```
