@@ -1,0 +1,351 @@
+<title>Meow's Desk</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;800;900&family=Patrick+Hand&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,1,0&display=block">
+<style>
+:root{color-scheme:dark;--ink:#172D34;--paper:#F6F0DF;--mute:#BED0CD;--bg:#182A32;--card:#263E47;--line:#718E91;--lime:#C6EB78;--onlime:#20351C;--sel:#354E36;--red:#F2B8B5;--note:#F4EEDB}
+html,body{background:#0B1519}
+body{color:var(--paper);font-family:Roboto,system-ui,sans-serif;padding-inline:16px;padding-block:28px 48px}
+.ms{font-family:"Material Symbols Outlined";font-size:24px;line-height:1;font-weight:normal;font-style:normal;display:inline-block;white-space:nowrap;letter-spacing:normal;text-transform:none;direction:ltr;font-feature-settings:"liga";-webkit-font-smoothing:antialiased;font-variation-settings:"FILL" 1,"wght" 400,"GRAD" 0,"opsz" 24;user-select:none}
+.wrap{max-width:940px;margin:0 auto;display:flex;flex-wrap:wrap;gap:36px;justify-content:center;align-items:flex-start}
+.side{flex:1 1 300px;max-width:400px;padding-top:12px}
+.side h1{margin:0;font-size:34px;line-height:1.1;font-weight:900;letter-spacing:-.4px}
+.side p{color:var(--mute);font-size:15px;line-height:1.55;margin:10px 0 0}
+.side dl{margin:22px 0 0;display:grid;grid-template-columns:auto 1fr;gap:10px 14px;font-size:14px;line-height:1.45}
+.side dt{font-weight:800;white-space:nowrap}
+.side dd{margin:0;color:var(--mute)}
+.side small{display:block;margin-top:18px;color:#8FA7A5;font-size:13px;line-height:1.5}
+.phone-holder{flex:0 0 auto;width:432px;max-width:100%}
+.frame{width:432px;border-radius:44px;background:#03080A;padding:10px;box-sizing:border-box;box-shadow:0 0 0 2px #22363D,0 30px 70px rgba(0,0,0,.55);transform-origin:0 0}
+.screen{position:relative;width:412px;height:960px;border-radius:36px;overflow:hidden;background:#1B3139}
+.scene{position:absolute;inset:0}
+.hot{cursor:pointer}
+.hot:focus-visible{outline:none}
+.hot:focus-visible .ring,.hot:hover .ring{stroke:#C6EB78;stroke-width:3;stroke-dasharray:6 5}
+.ring{fill:none;stroke:transparent}
+.sb{position:absolute;top:0;left:0;right:0;height:40px;display:flex;justify-content:space-between;align-items:center;padding:0 26px;font-size:14px;font-weight:700;z-index:3}
+.cat{position:absolute;left:170px;top:516px;width:110px;height:92px;transition:left 1.1s cubic-bezier(.45,.05,.35,1);z-index:4;pointer-events:none}
+.cat .flip{transition:transform .2s}
+.bub{position:absolute;bottom:98px;left:-40px;width:210px;box-sizing:border-box;padding:9px 12px 11px;background:var(--note);color:var(--ink);border:2.5px solid var(--ink);border-radius:14px 14px 14px 4px;box-shadow:0 3px 0 var(--ink);font-size:14px;line-height:19px;font-weight:500;opacity:0;transform:translateY(6px);transition:opacity .2s,transform .2s}
+.bub.on{opacity:1;transform:none}
+.ctrl{position:absolute;z-index:3}
+.cbtn{box-sizing:border-box;border:2px solid var(--line);box-shadow:0 3px 0 var(--ink);display:flex;align-items:center;justify-content:center;gap:8px;color:var(--paper);font:700 14px Roboto,sans-serif;cursor:pointer}
+.scrim{position:absolute;inset:0;background:rgba(3,8,10,.55);opacity:0;pointer-events:none;transition:opacity .25s;z-index:6}
+.scrim.on{opacity:1;pointer-events:auto}
+.sheet{position:absolute;left:0;right:0;bottom:0;height:470px;box-sizing:border-box;background:var(--bg);border:2px solid var(--line);border-bottom:0;border-radius:24px 24px 0 0;padding:10px 20px 28px;transform:translateY(105%);transition:transform .32s cubic-bezier(.2,.8,.2,1);z-index:7;display:flex;flex-direction:column}
+.sheet.on{transform:none}
+.grab{width:36px;height:4px;border-radius:2px;background:var(--line);align-self:center;margin-bottom:10px}
+.sh{display:flex;align-items:center;gap:8px}
+.sh h2{margin:0;flex:1;font-size:22px;line-height:28px;font-weight:800}
+.sh button{width:48px;height:48px;border:0;border-radius:24px;background:none;color:var(--paper);cursor:pointer}
+.sub{color:var(--mute);font-size:14px;line-height:20px;margin:0 0 12px}
+.sbody{overflow-y:auto;flex:1;scrollbar-width:none}
+.li{display:flex;align-items:baseline;gap:12px;padding:13px 0;border-top:1px solid #33505A;font-size:15px;line-height:21px}
+.li:first-child{border-top:0}
+.li b{font-weight:700}
+.li .r{margin-left:auto;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+.li .m{color:var(--mute);font-size:13px}
+.act{display:flex;gap:10px;margin-top:14px}
+.btn{height:48px;flex:1;border-radius:12px;border:2px solid var(--line);background:var(--lime);color:var(--onlime);box-shadow:0 3px 0 var(--ink);font:800 14px Roboto,sans-serif;cursor:pointer}
+.btn.o{flex:0 0 auto;padding:0 16px;background:transparent;color:var(--lime);box-shadow:none}
+.btn:active,.cbtn:active{transform:translateY(2px);box-shadow:0 1px 0 var(--ink)}
+.tally{display:grid;grid-template-columns:repeat(14,1fr);gap:4px;margin:4px 0 6px}
+.tally i{height:16px;border-radius:4px;border:2px solid var(--ink);background:#20343C}
+.tally i.d{background:var(--lime)}
+@media (prefers-reduced-motion:reduce){.cat,.sheet,.bub,.scrim{transition:none}}
+</style>
+
+<div class="wrap">
+  <div class="phone-holder" id="holder">
+    <div class="frame" id="frame">
+      <div class="screen" id="screen">
+        <div class="sb"><span>3:40</span><span><span class="ms" style="font-size:18px">signal_cellular_alt</span> <span class="ms" style="font-size:18px">battery_5_bar</span></span></div>
+
+        <svg class="scene" viewBox="0 0 412 960" role="img" aria-label="Meow's desk. Tap the objects.">
+          <defs>
+            <pattern id="paper" width="26" height="26" patternUnits="userSpaceOnUse"><rect width="26" height="26" fill="#1B3139"/><rect width="13" height="26" fill="#1D343C"/></pattern>
+            <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0D2130"/><stop offset="1" stop-color="#2A4E61"/></linearGradient>
+            <linearGradient id="wood" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#C98E52"/><stop offset="1" stop-color="#B27A42"/></linearGradient>
+            <radialGradient id="lampglow" cx=".5" cy="0" r="1"><stop offset="0" stop-color="#FFD98A" stop-opacity=".45"/><stop offset="1" stop-color="#FFD98A" stop-opacity="0"/></radialGradient>
+            <radialGradient id="SC" cx=".38" cy=".32" r=".75"><stop offset="0" stop-color="#F7F9F2"/><stop offset=".55" stop-color="#D9E6E2"/><stop offset="1" stop-color="#7E9A9B"/></radialGradient>
+            <radialGradient id="IR" cx=".5" cy=".6" r=".6"><stop offset="0" stop-color="#C9FFD9"/><stop offset=".45" stop-color="#4DFF85"/><stop offset=".8" stop-color="#1D7A55"/><stop offset="1" stop-color="#0A2330"/></radialGradient>
+          </defs>
+          <rect width="412" height="960" fill="url(#paper)"/>
+          <!-- skirting + floor -->
+          <rect y="740" width="412" height="220" fill="#12232A"/>
+          <rect y="732" width="412" height="10" fill="#0F1D23" stroke="#172D34" stroke-width="2"/>
+
+          <!-- window: live weather -->
+          <g class="hot" data-k="weather" tabindex="0" role="button" aria-label="Window: weather">
+            <rect x="238" y="66" width="148" height="176" rx="6" fill="url(#sky)" stroke="#172D34" stroke-width="3"/>
+            <circle cx="344" cy="104" r="15" fill="#E9EFD9" stroke="#172D34" stroke-width="2"/>
+            <circle cx="351" cy="99" r="13" fill="#1A3547"/>
+            <circle cx="268" cy="96" r="1.6" fill="#E9EFD9"/><circle cx="300" cy="120" r="1.2" fill="#E9EFD9"/><circle cx="276" cy="150" r="1.4" fill="#E9EFD9"/><circle cx="364" cy="160" r="1.2" fill="#E9EFD9"/>
+            <path d="M246 214 q18 -26 44 -8 q14 -16 34 -4 q22 -10 36 8 v12 h-114z" fill="#16303E"/>
+            <path d="M312 66 v176 M238 154 h148" stroke="#172D34" stroke-width="3"/>
+            <rect x="230" y="240" width="164" height="12" rx="3" fill="#8C6A48" stroke="#172D34" stroke-width="2.5"/>
+            <text x="312" y="272" text-anchor="middle" font-family="Patrick Hand, cursive" font-size="17" fill="#BED0CD">71° clear tonight</text>
+            <rect class="ring" x="232" y="60" width="160" height="220" rx="10"/>
+          </g>
+
+          <!-- wall clock -->
+          <g aria-hidden="true">
+            <circle cx="72" cy="112" r="36" fill="#F4EEDB" stroke="#172D34" stroke-width="3"/>
+            <circle cx="72" cy="112" r="30" fill="none" stroke="#D5CDB4" stroke-width="1.5"/>
+            <path d="M72 84 v4 M72 136 v4 M44 112 h4 M96 112 h4" stroke="#172D34" stroke-width="2.5" stroke-linecap="round"/>
+            <path d="M72 112 L64 94" stroke="#172D34" stroke-width="3.5" stroke-linecap="round"/>
+            <path d="M72 112 L55 122" stroke="#172D34" stroke-width="2.5" stroke-linecap="round"/>
+            <circle cx="72" cy="112" r="3" fill="#FF7B72" stroke="#172D34" stroke-width="1.5"/>
+          </g>
+
+          <!-- corkboard: the project -->
+          <g class="hot" data-k="project" tabindex="0" role="button" aria-label="Corkboard: Meowmba project">
+            <rect x="22" y="178" width="190" height="170" rx="6" fill="#B98A5C" stroke="#172D34" stroke-width="3"/>
+            <rect x="30" y="186" width="174" height="154" rx="3" fill="#C99A68"/>
+            <circle cx="52" cy="206" r="1.5" fill="#9C7249"/><circle cx="170" cy="318" r="1.5" fill="#9C7249"/><circle cx="96" cy="326" r="1.3" fill="#9C7249"/><circle cx="188" cy="214" r="1.3" fill="#9C7249"/>
+            <g transform="rotate(-2.5 104 250)">
+              <rect x="40" y="200" width="132" height="92" rx="3" fill="#F4EEDB" stroke="#172D34" stroke-width="2.5"/>
+              <path d="M40 222 h132" stroke="#E08C84" stroke-width="1.2"/>
+              <text x="50" y="217" font-family="Patrick Hand, cursive" font-size="17" fill="#172D34">MEOWMBA → PLAY</text>
+              <text x="50" y="242" font-family="Patrick Hand, cursive" font-size="15" fill="#3A4F55">tester days</text>
+              <g id="tallyMarks"></g>
+              <text x="50" y="284" font-family="Patrick Hand, cursive" font-size="15" fill="#3A4F55">9 of 14 · in review</text>
+              <circle cx="106" cy="200" r="5" fill="#FF7B72" stroke="#172D34" stroke-width="2"/>
+            </g>
+            <g transform="rotate(4 170 318)">
+              <rect x="138" y="296" width="62" height="40" rx="2" fill="#C7F4ED" stroke="#172D34" stroke-width="2"/>
+              <text x="146" y="314" font-family="Patrick Hand, cursive" font-size="13" fill="#172D34">build 155</text>
+              <text x="146" y="329" font-family="Patrick Hand, cursive" font-size="13" fill="#172D34">2730 ✓</text>
+              <circle cx="169" cy="296" r="4" fill="#C6EB78" stroke="#172D34" stroke-width="1.8"/>
+            </g>
+            <rect class="ring" x="16" y="172" width="202" height="182" rx="10"/>
+          </g>
+
+          <!-- lamp glow (idea waiting) -->
+          <path id="glow" d="M206 478 L168 600 L290 600 L246 478 Z" fill="url(#lampglow)"/>
+
+          <!-- monitor: builds -->
+          <g class="hot" data-k="build" tabindex="0" role="button" aria-label="Monitor: latest build">
+            <rect x="26" y="438" width="150" height="104" rx="8" fill="#23363C" stroke="#172D34" stroke-width="3"/>
+            <rect x="36" y="448" width="130" height="80" rx="3" fill="#0C1A1F"/>
+            <text x="44" y="466" font-family="ui-monospace, Menlo, monospace" font-size="10" fill="#6E8C8A">$ ./gradlew test</text>
+            <text x="44" y="482" font-family="ui-monospace, Menlo, monospace" font-size="10" fill="#C6EB78">2742 passed</text>
+            <text x="44" y="498" font-family="ui-monospace, Menlo, monospace" font-size="10" fill="#6E8C8A">0 failed</text>
+            <rect x="44" y="506" width="7" height="11" fill="#C6EB78"><animate attributeName="opacity" values="1;0;1" dur="1.1s" repeatCount="indefinite"/></rect>
+            <path d="M92 542 v34 M70 578 h44" stroke="#172D34" stroke-width="7" stroke-linecap="round"/>
+            <path d="M92 542 v34 M70 578 h44" stroke="#3B5960" stroke-width="3.5" stroke-linecap="round"/>
+            <!-- sticky note: next up -->
+            <g class="hot" data-k="today" tabindex="0" role="button" aria-label="Sticky note: next up">
+              <g transform="rotate(6 158 452)">
+                <rect x="128" y="424" width="64" height="58" fill="#FFE27A" stroke="#172D34" stroke-width="2.5"/>
+                <text x="134" y="444" font-family="Patrick Hand, cursive" font-size="15" fill="#172D34">3:30</text>
+                <text x="134" y="460" font-family="Patrick Hand, cursive" font-size="13" fill="#172D34">tester</text>
+                <text x="134" y="474" font-family="Patrick Hand, cursive" font-size="13" fill="#172D34">call!</text>
+              </g>
+              <rect class="ring" x="122" y="418" width="78" height="72" rx="6"/>
+            </g>
+            <rect class="ring" x="20" y="432" width="104" height="152" rx="10"/>
+          </g>
+
+          <!-- desk -->
+          <rect x="0" y="598" width="412" height="26" fill="url(#wood)" stroke="#172D34" stroke-width="3"/>
+          <rect x="14" y="624" width="384" height="110" fill="#8E5E33" stroke="#172D34" stroke-width="3"/>
+          <rect x="30" y="640" width="150" height="40" rx="4" fill="#A26C3C" stroke="#172D34" stroke-width="2.5"/>
+          <rect x="30" y="688" width="150" height="34" rx="4" fill="#A26C3C" stroke="#172D34" stroke-width="2.5"/>
+          <rect x="92" y="656" width="26" height="6" rx="3" fill="#172D34"/><rect x="92" y="702" width="26" height="6" rx="3" fill="#172D34"/>
+          <path d="M40 606 h60 M150 612 h90 M300 606 h70" stroke="#A8743F" stroke-width="2" stroke-linecap="round"/>
+
+          <!-- jar: money -->
+          <g class="hot" data-k="money" tabindex="0" role="button" aria-label="Jar: money">
+            <rect x="286" y="548" width="44" height="52" rx="10" fill="#9FC7C4" fill-opacity=".35" stroke="#172D34" stroke-width="2.5"/>
+            <rect x="284" y="540" width="48" height="10" rx="3" fill="#6E8C8A" stroke="#172D34" stroke-width="2.5"/>
+            <ellipse cx="302" cy="590" rx="9" ry="4" fill="#FFC56F" stroke="#172D34" stroke-width="1.8"/>
+            <ellipse cx="314" cy="584" rx="9" ry="4" fill="#FFC56F" stroke="#172D34" stroke-width="1.8"/>
+            <ellipse cx="305" cy="578" rx="9" ry="4" fill="#FFC56F" stroke="#172D34" stroke-width="1.8"/>
+            <g transform="rotate(-6 306 524)"><rect x="274" y="510" width="66" height="24" rx="2" fill="#F4EEDB" stroke="#172D34" stroke-width="2"/><text x="280" y="527" font-family="Patrick Hand, cursive" font-size="14" fill="#B3261E">$412 tmrw</text></g>
+            <rect class="ring" x="270" y="506" width="68" height="100" rx="10"/>
+          </g>
+
+          <!-- letter tray: inbox -->
+          <g class="hot" data-k="inbox" tabindex="0" role="button" aria-label="Letter tray: 3 messages need you">
+            <g transform="rotate(-10 360 560)"><rect x="344" y="532" width="42" height="30" rx="2" fill="#F4EEDB" stroke="#172D34" stroke-width="2"/><path d="M344 532 l21 15 l21 -15" fill="none" stroke="#172D34" stroke-width="1.8"/></g>
+            <g transform="rotate(6 368 560)"><rect x="350" y="538" width="42" height="30" rx="2" fill="#FFE2B5" stroke="#172D34" stroke-width="2"/><path d="M350 538 l21 15 l21 -15" fill="none" stroke="#172D34" stroke-width="1.8"/></g>
+            <rect x="340" y="552" width="62" height="18" rx="2" fill="#C7F4ED" stroke="#172D34" stroke-width="2"/>
+            <path d="M336 570 h70 l-6 30 h-58 z" fill="#5E7A76" stroke="#172D34" stroke-width="2.5" stroke-linejoin="round"/>
+            <circle cx="398" cy="534" r="11" fill="#F2B8B5" stroke="#172D34" stroke-width="2"/>
+            <text x="398" y="539" text-anchor="middle" font-family="Roboto, sans-serif" font-weight="900" font-size="13" fill="#601410">3</text>
+            <rect class="ring" x="332" y="518" width="78" height="88" rx="10"/>
+          </g>
+
+          <!-- lamp: idea -->
+          <g class="hot" data-k="idea" tabindex="0" role="button" aria-label="Lamp: an idea from Meow">
+            <path d="M262 598 v-8 M250 598 h24" stroke="#172D34" stroke-width="6" stroke-linecap="round"/>
+            <path d="M262 590 L250 522 L226 470" fill="none" stroke="#172D34" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M262 590 L250 522 L226 470" fill="none" stroke="#5E7A76" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="250" cy="522" r="4" fill="#5E7A76" stroke="#172D34" stroke-width="2"/>
+            <path d="M200 474 q24 -30 52 -6 l-5 8 h-42 z" fill="#C6EB78" stroke="#172D34" stroke-width="2.5" stroke-linejoin="round"/>
+            <ellipse cx="226" cy="476" rx="9" ry="4" fill="#FFF3C4" stroke="#172D34" stroke-width="1.5"/>
+            <rect class="ring" x="194" y="440" width="84" height="164" rx="10"/>
+          </g>
+        </svg>
+
+        <!-- the avatar -->
+        <div class="cat" id="cat" aria-hidden="true">
+          <div class="bub" id="bub"></div>
+          <div class="flip" id="flip"></div>
+        </div>
+
+        <!-- real home controls, unchanged from the app -->
+        <button class="ctrl cbtn" style="left:170px;top:802px;width:72px;height:72px;border-radius:18px;background:#8C1D18" aria-label="Microphone off"><span class="ms" style="font-size:30px">mic_off</span></button>
+        <button class="ctrl cbtn" style="left:20px;top:816px;height:44px;padding:0 14px;border-radius:22px;background:#213740" aria-label="Camera off">Camera off <span class="ms" style="font-size:20px">videocam_off</span></button>
+        <button class="ctrl cbtn" style="left:336px;top:830px;width:56px;height:56px;border-radius:28px;background:#213740" aria-label="Open chat"><span class="ms">chat</span></button>
+
+        <div class="scrim" id="scrim"></div>
+        <section class="sheet" id="sheet" aria-live="polite">
+          <div class="grab"></div>
+          <div class="sh"><h2 id="sTitle"></h2><button id="close" aria-label="Close"><span class="ms">close</span></button></div>
+          <p class="sub" id="sSub"></p>
+          <div class="sbody" id="sBody"></div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <aside class="side">
+    <h1>Meow's desk</h1>
+    <p>A home-screen avatar for work days. Meow sits at a little desk, and each object in the room is one thing you track. Nothing is a widget or a card until you tap it.</p>
+    <dl>
+      <dt>Corkboard</dt><dd>Your project: Meowmba's Play review, tester days crossed off by hand</dd>
+      <dt>Monitor</dt><dd>Latest build and test run</dd>
+      <dt>Sticky note</dt><dd>What's next on your calendar</dd>
+      <dt>Letter tray</dt><dd>Texts, email and missed calls. Envelopes pile up when something needs you</dd>
+      <dt>Jar</dt><dd>Money: balances, bills, purchases and returns</dd>
+      <dt>Lamp</dt><dd>Lights up when Meow has an idea for you</dd>
+      <dt>Window</dt><dd>The weather, as the app already shows it</dd>
+    </dl>
+    <small>Tap an object on the phone: Meow walks to it and the details open in the app's own bottom sheet. Mic, camera and chat stay where they are today; there is no Care mode on work avatars. Project and build facts are real; messages and money are made-up examples.</small>
+  </aside>
+</div>
+
+<script>
+const CAT = `<svg width="110" height="92" viewBox="0 0 60 50"><ellipse cx="30" cy="47" rx="17" ry="2.6" fill="#050D10" opacity=".45"/><g id="tail"><path d="M16 31 C7.5 30 4.5 20.5 9.5 13" fill="none" stroke="#4F7079" stroke-width="5.6" stroke-linecap="round"/><path d="M16 31 C7.5 30 4.5 20.5 9.5 13" fill="none" stroke="#0E1D23" stroke-width="3.8" stroke-linecap="round"/></g>
+<g id="la"><path d="M20.5 36 L20.5 44.5" stroke="#4F7079" stroke-width="5.4" stroke-linecap="round"/><path d="M20.5 36 L20.5 44.5" stroke="#0E1D23" stroke-width="3.6" stroke-linecap="round"/></g><g id="lb"><path d="M25.5 37 L25.5 45" stroke="#4F7079" stroke-width="5.4" stroke-linecap="round"/><path d="M25.5 37 L25.5 45" stroke="#0E1D23" stroke-width="3.6" stroke-linecap="round"/></g>
+<g id="bd"><ellipse cx="28" cy="33" rx="13.2" ry="8.8" fill="#0E1D23" stroke="#4F7079" stroke-width="1.3"/><g id="lc"><path d="M33.5 37.5 L33.5 45" stroke="#4F7079" stroke-width="5.4" stroke-linecap="round"/><path d="M33.5 37.5 L33.5 45" stroke="#0E1D23" stroke-width="3.6" stroke-linecap="round"/></g><g id="ld"><path d="M38.5 36.5 L38.5 44.6" stroke="#4F7079" stroke-width="5.4" stroke-linecap="round"/><path d="M38.5 36.5 L38.5 44.6" stroke="#0E1D23" stroke-width="3.6" stroke-linecap="round"/></g>
+<path d="M31.6 13.6 L33.3 3.6 L38.8 10.3 Z" fill="#0E1D23" stroke="#4F7079" stroke-width="1.3" stroke-linejoin="round"/><path d="M42.2 10 L47.9 4 L49.4 14.2 Z" fill="#0E1D23" stroke="#4F7079" stroke-width="1.3" stroke-linejoin="round"/><path d="M33.5 11.4 L34.4 6.4 L37.1 9.9 Z" fill="#2C4A52"/><path d="M43.8 10.2 L47.1 6.8 L47.8 12.1 Z" fill="#2C4A52"/>
+<circle cx="40.5" cy="21.5" r="12.8" fill="#0E1D23" stroke="#4F7079" stroke-width="1.3"/><ellipse cx="33.4" cy="27.2" rx="2" ry="1.1" fill="#F2B8C8" opacity=".3"/><ellipse cx="47.6" cy="27.2" rx="2" ry="1.1" fill="#F2B8C8" opacity=".3"/>
+<g id="eyes"><circle cx="35.6" cy="21.8" r="5.7" fill="url(#SC)" stroke="#07131A" stroke-width=".7"/><circle cx="45.4" cy="21.8" r="5.7" fill="url(#SC)" stroke="#07131A" stroke-width=".7"/><g id="iris"><circle cx="35.6" cy="22.2" r="4.1" fill="url(#IR)"/><circle cx="45.4" cy="22.2" r="4.1" fill="url(#IR)"/><circle cx="35.6" cy="22.3" r="2.05" fill="#020A14"/><circle cx="45.4" cy="22.3" r="2.05" fill="#020A14"/></g><circle cx="34.1" cy="20" r="1.2" fill="#fff"/><circle cx="43.9" cy="20" r="1.2" fill="#fff"/></g>
+<path d="M39.5 27.6 L41.5 27.6 L40.5 28.9 Z" fill="#F2B8C8"/><path d="M38.9 29.5 Q39.7 30.4 40.5 29.5 Q41.3 30.4 42.1 29.5" fill="none" stroke="#BED0CD" stroke-width=".7" stroke-linecap="round"/><path d="M35 28.2 L28.4 27.4 M35.2 29.3 L28.9 30.4 M46 28.2 L52.6 27.4 M45.8 29.3 L52.1 30.4" stroke="#BED0CD" stroke-width=".55" stroke-linecap="round" opacity=".7"/></g></svg>`;
+
+// tally marks on the index card
+const tm = document.getElementById('tallyMarks');
+for (let i = 0; i < 14; i++) {
+  const x = 50 + i * 8.6, done = i < 9;
+  tm.insertAdjacentHTML('beforeend', `<rect x="${x}" y="250" width="6" height="16" rx="1.5" fill="${done ? '#C6EB78' : 'none'}" stroke="#172D34" stroke-width="1.6"/>`);
+}
+
+const catEl = document.getElementById('cat'), flip = document.getElementById('flip'), bub = document.getElementById('bub');
+flip.innerHTML = CAT;
+const $ = (id) => flip.querySelector('#' + id);
+let x = 170, walking = false, frame = 0, tick = 0;
+const rot = (el, d, cx, cy) => el.setAttribute('transform', `rotate(${d} ${cx} ${cy})`);
+function pose() {
+  const a = walking ? (frame ? 22 : -22) : 0;
+  rot($('la'), a, 20.5, 36); rot($('ld'), a, 38.5, 36.5); rot($('lb'), -a, 25.5, 37); rot($('lc'), -a, 33.5, 37.5);
+  $('bd').setAttribute('transform', `translate(0 ${walking && frame ? -1.2 : 0})`);
+  rot($('tail'), walking ? (frame ? 8 : -6) : (tick % 2 ? 10 : -4), 16, 31);
+}
+setInterval(() => { if (walking) { frame ^= 1; pose(); } }, 110);
+setInterval(() => {
+  if (walking) return; tick++; pose();
+  if (tick % 9 === 0) { $('eyes').setAttribute('transform', 'translate(40.5 21.8) scale(1 .12) translate(-40.5 -21.8)'); setTimeout(() => $('eyes').removeAttribute('transform'), 150); }
+}, 540);
+pose();
+
+function say(t) { bub.textContent = t; bub.classList.add('on'); clearTimeout(say.t); say.t = setTimeout(() => bub.classList.remove('on'), 5200); }
+function walkTo(nx, then) {
+  bub.classList.remove('on');
+  if (Math.abs(nx - x) < 8) { then && then(); return; }
+  flip.style.transform = `scaleX(${nx < x ? -1 : 1})`;
+  walking = true; x = nx; catEl.style.left = nx + 'px';
+  setTimeout(() => { walking = false; frame = 0; pose(); flip.style.transform = 'scaleX(1)'; then && then(); }, 1100);
+}
+// glance: eyes follow the tapped object
+function glance(dx) { $('iris').setAttribute('transform', `translate(${dx} 0)`); }
+
+const T = {
+  project: { at: 150, line: 'Nine days down, five to go. Then we can ask for production.', title: 'Meowmba', sub: 'Play closed testing · Alpha release 11',
+    body: `<div class="tally">${[...Array(14)].map((_, i) => `<i class="${i < 9 ? 'd' : ''}"></i>`).join('')}</div>
+    <div class="li"><b>Play review</b><span class="r">In review</span></div>
+    <div class="li"><b>Build on Play</b><span class="m">submitted Sep 19</span><span class="r">1.3.96 (152)</span></div>
+    <div class="li"><b>Testers opted in</b><span class="r">12</span></div>
+    <div class="li"><b>Revenue</b><span class="m">no paid tier yet</span><span class="r">$0</span></div>
+    <div class="li"><b>Open P0s</b><span class="m">idle frame pacing, clock overlap</span><span class="r">2</span></div>
+    <div class="act"><button class="btn">Draft tester update</button><button class="btn o">Masterplan</button></div>` },
+  build: { at: 150, line: 'Every test passed. I checked twice.', title: 'Latest build', sub: '1.3.99 (155) · recovery/known-good-138',
+    body: `<div class="li"><b>Unit tests</b><span class="r">2,742 passed</span></div>
+    <div class="li"><b>Failures</b><span class="r">0</span></div>
+    <div class="li"><b>Last commit</b><span class="m">Sep 21</span><span class="r">637697f</span></div>
+    <div class="li"><b>Idle heat fix</b><span class="m">waiting for review</span><span class="r">branch</span></div>
+    <div class="act"><button class="btn">Open changes</button></div>` },
+  today: { at: 150, line: 'Tester call at 3:30. I pulled their last three notes.', title: 'Next up', sub: 'Tuesday, September 22 · example calendar',
+    body: `<div class="li"><b>3:30 PM</b><span>Tester check-in call</span><span class="r m">20 min</span></div>
+    <div class="li"><b>5:00 PM</b><span>Pick up hardware order</span></div>
+    <div class="li"><b>Tomorrow 9:00</b><span>Plan build 156</span></div>
+    <div class="act"><button class="btn">Remind me at 3:20</button></div>` },
+  inbox: { at: 250, line: 'Three need you. I already drafted two replies.', title: 'Letters', sub: '3 need you · example messages',
+    body: `<div class="li"><b>Tester</b><span>voice button is hard to find</span><span class="r m">2:02</span></div>
+    <div class="li"><b>Missed call</b><span>no voicemail</span><span class="r m">2:14</span></div>
+    <div class="li"><b>Friend</b><span>still on for Thursday?</span><span class="r m">1:40</span></div>
+    <div class="li"><span class="m">Also: Play Console status, a bank notice, a delivery update, 2 newsletters</span></div>
+    <div class="act"><button class="btn">Read my drafts</button><button class="btn o">All mail</button></div>` },
+  money: { at: 205, line: 'The card payment is due tomorrow. Want me to set it up?', title: 'The jar', sub: 'September · example figures',
+    body: `<div class="li"><b>Cash, 3 accounts</b><span class="r">$6,240</span></div>
+    <div class="li"><b>Card payment</b><span class="m">due tomorrow</span><span class="r" style="color:#F2B8B5">$412</span></div>
+    <div class="li"><b>Headphones return</b><span class="m">drop off by Thursday</span><span class="r">$129</span></div>
+    <div class="li"><b>USB-C dock</b><span class="m">arriving today</span><span class="r">$64</span></div>
+    <div class="li"><b>AI API keys</b><span class="m">two unused this month</span><span class="r">$14/mo</span></div>
+    <div class="act"><button class="btn">Schedule payment</button></div>` },
+  idea: { at: 190, line: 'I had a thought while you were coding…', title: 'An idea', sub: 'For Meowmba',
+    body: `<p style="font-size:17px;line-height:26px;margin:4px 0 10px">Put a one-tap “how was that?” after chats. Testers answer in a second, and every answer is proof of engagement when you apply for production.</p>
+    <div class="li"><b>Effort</b><span class="r">small</span></div><div class="li"><b>Helps with</b><span class="r">production access</span></div>
+    <div class="act"><button class="btn">Add to masterplan</button><button class="btn o">Another</button></div>` },
+  weather: { at: 250, line: 'Clear tonight. Good night for a walk.', title: 'Outside', sub: 'Live weather, as on your current home screen',
+    body: `<div class="li"><b>Now</b><span class="r">71° clear</span></div><div class="li"><b>Tonight</b><span class="r">low 62°</span></div><div class="li"><b>Tomorrow</b><span class="r">88° sunny</span></div>` }
+};
+
+const sheet = document.getElementById('sheet'), scrim = document.getElementById('scrim');
+function open(k) {
+  const t = T[k]; glance(t.at < x ? -1 : 1);
+  walkTo(t.at, () => {
+    say(t.line);
+    document.getElementById('sTitle').textContent = t.title;
+    document.getElementById('sSub').textContent = t.sub;
+    document.getElementById('sBody').innerHTML = t.body;
+    setTimeout(() => { sheet.classList.add('on'); scrim.classList.add('on'); }, 450);
+  });
+}
+function close() { sheet.classList.remove('on'); scrim.classList.remove('on'); glance(0); }
+document.querySelectorAll('.hot').forEach((g) => {
+  const go = (e) => { e.stopPropagation(); open(g.dataset.k); };
+  g.addEventListener('click', go);
+  g.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(e); } });
+});
+document.getElementById('close').onclick = close; scrim.onclick = close;
+
+// idle life: wander the desk now and then, mention one thing
+const idle = ['Afternoon. Play is still reviewing build 152.', 'Three letters came in.', 'The lamp is on. I have an idea for you.', 'All 2,742 tests are green.'];
+let n = 0;
+setTimeout(() => say(idle[0]), 900);
+setInterval(() => {
+  if (sheet.classList.contains('on')) return;
+  n++; const spots = [170, 215, 250, 150];
+  walkTo(spots[n % spots.length], () => say(idle[n % idle.length]));
+}, 9000);
+
+// fit the phone to narrow screens
+function fit() {
+  const h = document.getElementById('holder'), f = document.getElementById('frame');
+  const s = Math.min(1, h.clientWidth / 432);
+  f.style.transform = `scale(${s})`; h.style.height = (980 * s) + 'px';
+}
+addEventListener('resize', fit); fit();
+</script>
