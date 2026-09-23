@@ -11,6 +11,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import kotlin.math.abs
 
 /** Explicit navigation survives every avatar style; decorative gestures are only shortcuts. */
 @Composable
@@ -38,3 +43,36 @@ internal fun DeskNavigation(modifier: Modifier = Modifier, vertical: Boolean = f
     if (vertical) Column(modifier.width(128.dp).padding(horizontal = 8.dp)) { controls() }
     else Row(modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween) { controls() }
 }
+
+/**
+ * The home swipes from the avatar screen, for Flow and the Desk: up = apps, down = menu,
+ * right = chat, left = browser (the setup guide's promise). Observes only, never consumes,
+ * so taps, buttons and desk objects underneath keep working. One finger, decisive strokes.
+ */
+internal fun Modifier.homeSwipes(
+    enabled: Boolean = true,
+    onUp: () -> Unit, onDown: () -> Unit, onLeft: () -> Unit, onRight: () -> Unit,
+): Modifier = if (!enabled) this else pointerInput(onUp, onDown, onLeft, onRight) {
+    val vertical = 56.dp.toPx()
+    val horizontal = 110.dp.toPx()
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        var end = down.position
+        var multi = false
+        while (true) {
+            val ev = awaitPointerEvent(PointerEventPass.Initial)
+            if (ev.changes.size > 1) multi = true
+            val c = ev.changes.firstOrNull { it.id == down.id } ?: break
+            end = c.position
+            if (!c.pressed) break
+        }
+        if (multi) return@awaitEachGesture
+        val dx = end.x - down.position.x
+        val dy = end.y - down.position.y
+        when {
+            abs(dy) > abs(dx) * 1.5f && abs(dy) > vertical -> if (dy < 0) onUp() else onDown()
+            abs(dx) > abs(dy) * 1.5f && abs(dx) > horizontal -> if (dx < 0) onLeft() else onRight()
+        }
+    }
+}
+

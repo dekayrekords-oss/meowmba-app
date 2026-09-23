@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.gestures.detectDragGestures
+import com.example.meowmba.ui.flow.homeSwipes
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
@@ -143,10 +144,13 @@ fun CompanionScreen(
                 AvatarMotionHost(viewModel, uiState, animationsPaused,
                     Modifier.fillMaxSize(), interactive = false)
             }
-        } else if (uiState.appTheme == AppTheme.FLOW) {
-            com.example.meowmba.ui.flow.FlowHomeRoute(viewModel, uiState, animationsPaused)
-        } else if (uiState.appTheme == AppTheme.DESK) {
-            com.example.meowmba.ui.flow.DeskRoute(viewModel, uiState, animationsPaused, Modifier.fillMaxSize())
+        } else if (uiState.appTheme == AppTheme.FLOW || uiState.appTheme == AppTheme.DESK) {
+            // Same home swipes as the avatar screen: up apps, down menu, right chat, left browser.
+            Box(Modifier.fillMaxSize().homeSwipes(onUp = viewModel::toggleAppDrawer, onDown = viewModel::openTiles,
+                onLeft = viewModel::toggleBrowser, onRight = viewModel::openChat)) {
+                if (uiState.appTheme == AppTheme.FLOW) com.example.meowmba.ui.flow.FlowHomeRoute(viewModel, uiState, animationsPaused)
+                else com.example.meowmba.ui.flow.DeskRoute(viewModel, uiState, animationsPaused, Modifier.fillMaxSize())
+            }
         } else if (uiState.appTheme == AppTheme.PROFESSIONAL) {
             ProfessionalWorkspace(uiState, viewModel) {
                 AvatarMotionHost(viewModel, uiState, animationsPaused || uiState.showAvatarScreen,
