@@ -29,6 +29,11 @@ This supersedes historical build-location/version instructions in other document
   09:05 America/Phoenix. The Fold (RFCY61NJEVM) was still on 157 at that checkpoint. Full suite 2,846 tests, zero
   failures; lint clean. Receipt: `docs/FLOW_DESK_REPAIR_2026-09-23.md`. Reinstalled 09:23 from
   `a854481` (desk fills inner/cover screens, no bottom band; setup rows off the desk; 2,850 tests).
+  Reinstalled from `5154ebd`: motion sensor off in Flow/Desk, people-only notifications,
+  Flow mic enables mic + shows voice state, wrapping dateline (2,888 tests, lint clean).
+  Heat finding on this phone: app ≈3% of one core over 28 min on screen; the hot period
+  (skin 38.0°C) had Wi-Fi off, weak signal and cellular high-TX power. Laya download was
+  blocked by the session's auto-mode safety check; needs the owner to allow it.
 
 - September 23 UI checkpoint: **1.4.1/code 157**, source `c9f74c9`, installed in place
   on the Fold. Visible Menu/Settings and object-specific Desk sheets restored; approved
