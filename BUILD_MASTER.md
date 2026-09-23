@@ -5,6 +5,15 @@ This supersedes historical build-location/version instructions in other document
 
 ## Current recovery
 
+- **Correction (Claude, 2026-09-23 15:10):** after Codex's 160 install on SM-F971U /
+  R5GL75XFCXD (12:39), Claude installed five further owner-requested daily builds on that
+  phone, all carrying version code **160** from the shared build file: `5154ebd` (heat/mic/
+  dateline), `763d535` (Flow/Desk swipes), and three `c197e39` Laya builds. The earlier notes
+  below that call these "158 reinstalls" are wrong. They were in-place updates (data kept).
+  The phone now runs `c197e39` (Laya on-device; owner asked for it after the 159 note).
+  These APKs are not archived artifacts. Claude has stopped installing; Codex should cut the
+  next number (161) from the current branch head and own installs again.
+
 - September 23 backup/update release **1.4.4/code 160**, app source `813bcc5`, installed
   in place on Fold8 / SM-F971U / R5GL75XFCXD at12:39 America/Phoenix. Adds encrypted
   backups/restores, verified in-place update and guarded cross-edition cleanup.
