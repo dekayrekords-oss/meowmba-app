@@ -98,3 +98,18 @@ real values, so "pick up milk" can surface when you leave work, not at a fixed t
 | C5 | Journal recall in chat (when/where questions) | Claude |
 | C6 | Sound level + Bluetooth/Wi-Fi/charging stamps | Claude |
 | C7 | Physical acceptance on the phone: a real commute, heat check | Owner + integrator |
+
+## Status (2026-09-23, Claude)
+
+- **Laya** on the phone: `c197e39`. On-device check (SM-F971U): 26/26 agree with the reference,
+  max shift 0.0158, ~1.05 s/question at 4 threads; 26 back-to-back questions raised skin 33→40 °C,
+  so production uses 2 threads, ≤2 items per burst, a 3-minute quiet gap and stops at thermal LIGHT.
+  Files: in-app Wi-Fi download (Adjust › Thinking) or adb push to
+  `/sdcard/Android/data/com.example.meowmba/files/models/laya/v1/` (then `chmod 777` the created dirs).
+- **C1–C2** done: `c02fd55`. Room v12 (`life_events`, `location_samples`), migration tested 10→12.
+- Backup note for the integrator: `UserDataBackupStore` picks up the new tables automatically, but its
+  100,000-row cap will eventually be reached by the journal (years) — consider a per-table cap or
+  exporting `life_events` in chunks. `location_samples` is pruned to 30 days.
+- Not installed: every build since `674b8f9` is for Codex to number (161+) and install.
+- Next: C3 places (dwell clustering, Home/Work, reverse-geocoded names, arrive/leave, parking map),
+  C4 situation statements, C6 surroundings (Bluetooth/DND/call state), then a real-day heat check.
