@@ -47,7 +47,7 @@ val flow = FlowRuntime(
     scope = viewModelScope,
     speaker = SynthesizerSpeaker(tts) { !isListening && !isSpeaking },   // existing speech gates
     store = RoomIntentionStore(db.flowDao(), viewModelScope),            // after §4
-    calendar = { now -> upcomingCalendarItems(now) },                     // CalendarContract, READ_CALENDAR already declared
+    calendar = CalendarSource(app)::upcoming,                             // core/flow/sources/CalendarSource.kt
     surface = { if (appInForeground && appTheme == AppTheme.FLOW) Surface.FLOW_ON_SCREEN
                 else if (appInForeground && avatarStyle == AvatarStyle.DESK) Surface.DESK_ON_SCREEN
                 else Surface.OTHER_APP },
