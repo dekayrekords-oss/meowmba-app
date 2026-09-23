@@ -34,7 +34,7 @@ data class AssetBrowserState(
 class AssetBrowserViewModel(application: Application) : AndroidViewModel(application) {
     private val context = application
     val library = AssetLibrary(File(application.filesDir, "memba_workspace"))
-    private val prefs = context.getSharedPreferences("asset_browser", 0)
+    private val prefs = com.example.meowmba.core.backup.BackupPreferences.open(context, "asset_browser", 0)
     private val _state = MutableStateFlow(AssetBrowserState())
     val state = _state.asStateFlow()
     private var work: Job? = null

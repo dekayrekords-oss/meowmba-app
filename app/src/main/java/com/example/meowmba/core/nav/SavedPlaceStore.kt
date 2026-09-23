@@ -21,7 +21,7 @@ class SavedPlaceStore(private val context: Context, suppliedStorage: com.example
     // eagerly inside CompanionViewModel's init, and doing I/O there NPE'd every test
     // that constructs the ViewModel with a mock Context.
     private val prefs by lazy {
-        context.applicationContext.getSharedPreferences("nav_saved_places", Context.MODE_PRIVATE)
+        com.example.meowmba.core.backup.BackupPreferences.open(context.applicationContext, "nav_saved_places", Context.MODE_PRIVATE)
     }
 
     data class SavedPlace(

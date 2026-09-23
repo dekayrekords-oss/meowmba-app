@@ -63,7 +63,7 @@ class PrefsAgenticMemoryIndex(
     prefsName: String = "agentic_memory_index",
 ) : AgenticMemoryIndex {
     private val prefs: SharedPreferences =
-        context.applicationContext.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
+        com.example.meowmba.core.backup.BackupPreferences.open(context.applicationContext, prefsName, Context.MODE_PRIVATE)
 
     override fun note(goalId: String, text: String): Boolean {
         val key = projectKey(goalId)

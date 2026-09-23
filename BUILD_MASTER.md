@@ -5,6 +5,11 @@ This supersedes historical build-location/version instructions in other document
 
 ## Current recovery
 
+- Backup/update candidate **1.4.4/code 160**: Codex owns this version. Adds encrypted
+  backup/restore, verified in-place update and guarded cross-edition cleanup.
+  Validation/install pending; do not claim it is installed until the receipt below
+  is updated. Feature workflow and limits: `docs/SAFE_UPDATES_160.md`.
+
 - September 23 Fold update: **1.4.3/code 159** installed in place on SM-F966U1 /
   RFCY61NJEVM at 10:40 America/Phoenix. Source `a72c62b` changes release metadata only
   from the requested `a31ac43`; Claude's application source is identical. The full

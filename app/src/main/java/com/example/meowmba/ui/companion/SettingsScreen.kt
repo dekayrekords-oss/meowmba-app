@@ -366,6 +366,9 @@ fun SettingsScreen(
                     onOpenComputerTools = { page = COMPUTER_TOOLS_TITLE },
                 )
             }
+            if (page == "Backup & updates") {
+                BackupUpdatesPanel()
+            }
             if (page == "Help & feedback") {
                 BetaHelpCard()
             Text("Support", style = MaterialTheme.typography.titleMedium)
@@ -1805,6 +1808,7 @@ private val SETTINGS_CATEGORIES = listOf(
     SettingsCategory("Neural / Lumen", "Avatar reactions, neural brain and sensitivity", Icons.Default.Bolt),
     SettingsCategory("Connections & memory", "Desktop bridge, servers and shared memory", Icons.Default.Link),
     SettingsCategory("Auto", "Driving, navigation and vehicle settings", Icons.Default.DirectionsCar),
+    SettingsCategory("Backup & updates", "Protect keys, restore data and update safely", Icons.Default.Security),
     SettingsCategory("Help & feedback", "Beta help, testing and support", Icons.Default.HelpOutline),
 )
 

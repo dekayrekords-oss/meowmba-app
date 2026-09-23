@@ -24,7 +24,7 @@ object LocalVoices {
         LocalVoice("am_michael", 16, "Michael", "Relaxed, grounded · American English", "Male"),
     )
     fun find(id: String?) = all.firstOrNull { it.id == id } ?: all.first()
-    private fun prefs(context: Context) = context.getSharedPreferences("local_neural_voice", Context.MODE_PRIVATE)
+    private fun prefs(context: Context) = com.example.meowmba.core.backup.BackupPreferences.open(context, "local_neural_voice", Context.MODE_PRIVATE)
     fun selected(context: Context) = find(prefs(context).getString("voice", null))
     fun enabled(context: Context) = prefs(context).getBoolean("enabled", false)
     fun select(context: Context, id: String) {

@@ -94,7 +94,7 @@ class PhoneAgentLoop(
         val initialService = service() ?: run {
             announce("Accessibility service isn't connected. Enable it in Settings."); return
         }
-        val recipePrefs = initialService.getSharedPreferences("phone_recipe_preferences", 0)
+        val recipePrefs = com.example.meowmba.core.backup.BackupPreferences.open(initialService, "phone_recipe_preferences", 0)
         val recipeEpoch = recipePrefs.getInt("epoch", 0)
         val store = PhoneRecipeStore(java.io.File(initialService.filesDir, "phone_recipes/recipes.json"))
         val inventory = InstalledApps.all(initialService).joinToString("; ") { it.label }.take(2500)

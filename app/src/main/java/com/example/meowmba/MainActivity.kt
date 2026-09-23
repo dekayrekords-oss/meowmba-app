@@ -194,6 +194,12 @@ class MainActivity : ComponentActivity() {
                 val showOnboarding by viewModel.showOnboarding.collectAsState()
                 val wizardVisible = (needsOnboarding || showOnboarding) && !pauseWizardForTerminal
 
+                if (!wizardVisible) {
+                    com.example.meowmba.ui.companion.BackupSafetyNotice {
+                        if (!uiState.showSettings) viewModel.toggleSettings()
+                    }
+                }
+
                 // When the user closes Chat after an OpenCode peek, return to the wizard.
                 androidx.compose.runtime.LaunchedEffect(uiState.isChatExpanded, pauseWizardForTerminal) {
                     if (pauseWizardForTerminal && !uiState.isChatExpanded) {

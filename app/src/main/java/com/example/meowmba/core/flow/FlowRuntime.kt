@@ -43,7 +43,7 @@ class FlowRuntime(
     /** Shown in the dateline when there is room, e.g. current weather. */
     ambient: () -> Signal? = { null },
 ) {
-    private val prefs = context.getSharedPreferences(FlowSettingsStore.PREFS_NAME, Context.MODE_PRIVATE)
+    private val prefs = com.example.meowmba.core.backup.BackupPreferences.open(context, FlowSettingsStore.PREFS_NAME, Context.MODE_PRIVATE)
     private val settingsStore = FlowSettingsStore(SharedPreferencesKeyValue(prefs))
     private val settingsState = MutableStateFlow(settingsStore.load())
     val settings: StateFlow<FlowSettings> = settingsState.asStateFlow()

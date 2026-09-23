@@ -13,7 +13,7 @@ import com.example.meowmba.core.agent.PhoneRecipeStore
 @Composable
 internal fun PhoneRecipeSettings() {
     val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences("phone_recipe_preferences", 0) }
+    val prefs = remember { com.example.meowmba.core.backup.BackupPreferences.open(context, "phone_recipe_preferences", 0) }
     var enabled by remember { mutableStateOf(prefs.getBoolean("enabled", true)) }
     var error by remember { mutableStateOf<String?>(null) }
     var revision by remember { mutableIntStateOf(0) }

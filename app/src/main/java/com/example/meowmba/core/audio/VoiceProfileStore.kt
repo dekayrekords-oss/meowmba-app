@@ -19,7 +19,7 @@ class VoiceProfileStore(private val context: Context) {
 
     private val prefs by lazy {
         context.applicationContext
-            .getSharedPreferences("voice_profiles", Context.MODE_PRIVATE)
+            .let { com.example.meowmba.core.backup.BackupPreferences.open(it, "voice_profiles", Context.MODE_PRIVATE) }
     }
 
     data class Profile(

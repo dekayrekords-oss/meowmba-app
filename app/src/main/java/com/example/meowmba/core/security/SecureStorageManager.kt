@@ -12,13 +12,13 @@ class SecureStorageManager(val context: Context) {
         .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
         .build()
 
-    private val sharedPreferences = EncryptedSharedPreferences.create(
+    private val sharedPreferences = com.example.meowmba.core.backup.BackupPreferences.protect(EncryptedSharedPreferences.create(
         context,
         "meowmba_secure_prefs",
         masterKey,
         EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
         EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-    )
+    ))
 
     fun saveApiKey(provider: String, key: String) {
         sharedPreferences.edit().putString("api_key_$provider", key).apply()
@@ -109,5 +109,37 @@ class SecureStorageManager(val context: Context) {
 
     fun getBooleanPreference(key: String, default: Boolean): Boolean {
         return sharedPreferences.getBoolean("pref_bool_$key", default)
+    }
+
+    /** Decrypted logical values; only the password-encrypted archive may leave private storage. */
+    internal fun portableValues(): Map<String, Any?> = sharedPreferences.all.filterKeys(::isPortableKey)
+
+    /** Missing values only, re-encrypted with this installation's Android Keystore key. */
+    @Suppress("UNCHECKED_CAST")
+    internal fun importPortableValues(values: Map<String, Any?>): Int = com.example.meowmba.core.backup.BackupPreferences.locked {
+        require(values.keys.all(::isPortableKey))
+        require(values.values.all { it is String || it is Boolean || it is Int || it is Long || it is Float || (it is Set<*> && it.all { v -> v is String }) })
+        val editor = sharedPreferences.edit()
+        var count = 0
+        values.forEach { (key, value) ->
+            if (!sharedPreferences.contains(key)) {
+                when (value) {
+                    is String -> editor.putString(key, value)
+                    is Boolean -> editor.putBoolean(key, value)
+                    is Int -> editor.putInt(key, value)
+                    is Long -> editor.putLong(key, value)
+                    is Float -> editor.putFloat(key, value)
+                    is Set<*> -> editor.putStringSet(key, value as Set<String>)
+                }
+                count++
+            }
+        }
+        check(editor.commit()) { "Could not restore private settings" }
+        count
+    }
+
+    companion object {
+        internal fun isPortableKey(key: String): Boolean = key.length in 1..1024 && '\u0000' !in key &&
+            listOf("api_key_", "endpoint_", "model_", "pref_").any(key::startsWith)
     }
 }

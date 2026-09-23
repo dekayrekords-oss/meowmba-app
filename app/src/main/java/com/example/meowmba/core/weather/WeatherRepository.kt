@@ -26,6 +26,7 @@ import java.net.URL
  */
 class WeatherRepository(private val context: Context) {
     private val preferences = context.getSharedPreferences("weather_location", Context.MODE_PRIVATE)
+        ?.let(com.example.meowmba.core.backup.BackupPreferences::protect)
     @Volatile private var locationRevision = 0L
     val selectedPlace: String get() = preferences?.getString("place", "").orEmpty()
     fun setSelectedPlace(place: String) {
