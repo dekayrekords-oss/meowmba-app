@@ -84,8 +84,8 @@ real values, so "pick up milk" can surface when you leave work, not at a fixed t
 - No new always-on sensor. Activity transitions are hardware-batched; location is balanced
   power and interval-switched; the motion sensor already stops outside the avatar.
 - Journal writes are small and batched; no per-second writes.
-- Laya runs only on meaningful changes (see `LayaAssessor` material key), ≤ 6 items per run,
-  pauses at thermal MODERATE.
+- Laya runs only on meaningful changes (see `LayaAssessor` material key), ≤ 2 items per burst,
+  a 3-minute quiet gap, 2 threads, and pauses at thermal LIGHT.
 
 ## Slices
 
