@@ -5,16 +5,18 @@ This supersedes historical build-location/version instructions in other document
 
 ## Current recovery
 
-- September 23 build 159 is reserved for the Fold update from `a31ac43` on
-  `feature/meow-flow-core`. Version 1.4.3/code 159 changes release metadata only;
-  Claude's application implementation is preserved. Codex is the sole build and
-  installation owner for all subsequent versions. Do not reuse 158 for another APK.
-  The owner chose **local rules for now**; Laya downloads and implementation remain
-  deferred. Installation and verification receipt will be recorded when complete.
+- September 23 Fold update: **1.4.3/code 159** installed in place on SM-F966U1 /
+  RFCY61NJEVM at 10:40 America/Phoenix. Source `a72c62b` changes release metadata only
+  from the requested `a31ac43`; Claude's application source is identical. The full
+  runtime bundle, app data and installed settings are retained. Signature/alignment/
+  runtime checks and cold launch pass; no preview crash entries. Receipt:
+  `docs/FLOW_159_2026-09-23.md`. Codex is the sole build, version and installation
+  owner going forward; do not reuse 158 or 159 for another installable artifact.
+  The owner chose **local rules for now**; Laya downloads and implementation remain deferred.
 
 - September 23 Flow/Desk repair: **1.4.2/code 158**, source `639ebd3` + version bump, daily
   variant, owner-requested fresh install on a second phone SM-F971U / R5GL75XFCXD (API 37) at
-  09:05 America/Phoenix. The Fold (RFCY61NJEVM) still has 157. Full suite 2,846 tests, zero
+  09:05 America/Phoenix. The Fold (RFCY61NJEVM) was still on 157 at that checkpoint. Full suite 2,846 tests, zero
   failures; lint clean. Receipt: `docs/FLOW_DESK_REPAIR_2026-09-23.md`. Reinstalled 09:23 from
   `a854481` (desk fills inner/cover screens, no bottom band; setup rows off the desk; 2,850 tests).
 
