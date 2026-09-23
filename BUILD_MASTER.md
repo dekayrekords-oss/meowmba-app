@@ -5,6 +5,14 @@ This supersedes historical build-location/version instructions in other document
 
 ## Current recovery
 
+- September 23 UI checkpoint: **1.4.1/code 157**, source `c9f74c9`, installed in place
+  on the Fold. Visible Menu/Settings and object-specific Desk sheets restored; approved
+  fonts bundled. Owner requested a stop after launch verification. Physical acceptance
+  is unfinished. Four new touch-navigation tests pass; full 2,837-test run has four stale
+  menu-label assertions to update (all other tests pass; five skips). Daily lint has zero
+  errors. Runtime/signature/alignment checks pass. Resume from
+  `docs/UI_157_CHECKPOINT_2026-09-23.md`. No server push or public release.
+
 - September 23 installed preview: **1.4.0/code 156**, source `1ef898c`, integrates
   Claude's Flow/Desk branch and reviewed idle-performance work. Room-backed tasks,
   calendar/delivery corrections, hidden-scene cleanup and hardware-aware setup are wired.
