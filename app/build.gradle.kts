@@ -230,6 +230,8 @@ android {
                 // under Play's 200 MB install cap.
                 "**/libimagegenerator_gpu.so",
             )
+            // sherpa-onnx (jniLibs) and onnxruntime-android both ship ORT 1.27.0; keep one.
+            pickFirsts += listOf("**/libonnxruntime.so")
         }
     }
 }
@@ -408,6 +410,11 @@ dependencies {
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
     implementation(libs.litert.lm.android)
+    // Laya (Meow Flow decisions) on the phone. Same ONNX Runtime version (1.27.0) as the
+    // sherpa-onnx voice runtime in src/main/jniLibs, so both share one libonnxruntime.so.
+    implementation(libs.onnxruntime.android)
+    // Low-power activity recognition + fused location for Meow's always-on context.
+    implementation(libs.play.services.location)
     implementation(libs.mlkit.image.labeling)
     implementation(libs.mlkit.text.recognition)
     implementation(libs.mlkit.face.detection)

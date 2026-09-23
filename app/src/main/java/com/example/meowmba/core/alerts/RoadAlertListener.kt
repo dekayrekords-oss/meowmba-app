@@ -26,6 +26,22 @@ class RoadAlertListener : NotificationListenerService() {
         forwardToFlow(sbn, n.extras.getCharSequence("android.title")?.toString(), posted = false)
     }
 
+    private var labels: Set<String> = emptySet()
+    private var labelsAt = 0L
+
+    /** Lower-cased names of launchable apps, refreshed at most every 6 hours. */
+    private fun appLabels(): Set<String> {
+        val now = System.currentTimeMillis()
+        if (now - labelsAt > 6 * 3_600_000L) {
+            labels = runCatching {
+                val intent = android.content.Intent(android.content.Intent.ACTION_MAIN).addCategory(android.content.Intent.CATEGORY_LAUNCHER)
+                packageManager.queryIntentActivities(intent, 0).map { it.loadLabel(packageManager).toString().lowercase(java.util.Locale.ROOT) }.toSet()
+            }.getOrDefault(labels)
+            labelsAt = now
+        }
+        return labels
+    }
+
     /** Meow Flow gets the app, category and sender only — never the message text. */
     private fun forwardToFlow(sbn: StatusBarNotification, title: String?, posted: Boolean) {
         val n = sbn.notification
@@ -37,7 +53,11 @@ class RoadAlertListener : NotificationListenerService() {
             @Suppress("DEPRECATION") val label = runCatching {
                 packageManager.getApplicationLabel(packageManager.getApplicationInfo(sbn.packageName, 0)).toString()
             }.getOrDefault(sbn.packageName.substringAfterLast('.'))
-            hub.post(com.example.meowmba.core.flow.sources.FlowNotificationHub.Posted(sbn.packageName, label, n.category, sender, sbn.postTime))
+            // Companies and bots (an "Instagram" email, "no-reply") are not people waiting on you.
+            val category = n.category?.takeIf {
+                it !in hub.PEOPLE_CATEGORIES || com.example.meowmba.core.flow.sources.AppIntentions.looksLikePerson(sender, appLabels())
+            }
+            hub.post(com.example.meowmba.core.flow.sources.FlowNotificationHub.Posted(sbn.packageName, label, category, sender, sbn.postTime))
         } else {
             hub.post(com.example.meowmba.core.flow.sources.FlowNotificationHub.Removed(sbn.packageName, sender))
         }

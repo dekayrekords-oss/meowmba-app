@@ -79,6 +79,20 @@ object AppIntentions {
     }
 
     /** A message notification from a person becomes "Reply to <sender>" until the notification is cleared. */
+    private val AUTOMATED = Regex(
+        """(?i)\b(no-?reply|do-?not-?reply|notifications?|newsletter|digest|team|support|security|alerts?|updates?|info|billing|orders?|receipts?|promo(tions)?|marketing|account|service)\b|@""")
+
+    /**
+     * A message sender that is a person, not a company or bot: not the name of an app on this
+     * phone ("Instagram" emailing you), and not an automated sender ("no-reply", "X Team").
+     */
+    fun looksLikePerson(sender: String, appLabels: Set<String>): Boolean {
+        val s = sender.trim()
+        if (s.length < 2 || s.lowercase(Locale.ROOT) in appLabels) return false
+        if (AUTOMATED.containsMatchIn(s)) return false
+        return s.any { it.isLetter() }
+    }
+
     fun fromMessage(packageName: String, appLabel: String, sender: String, at: Long): Intention? {
         val who = sender.trim().take(40).ifEmpty { return null }
         return Intention("$MESSAGE${packageName}-${who.lowercase(Locale.ROOT).hashCode().toUInt()}", "Reply to $who",

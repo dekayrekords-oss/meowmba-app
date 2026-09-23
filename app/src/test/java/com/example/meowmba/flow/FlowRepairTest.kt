@@ -58,6 +58,16 @@ class FlowRepairTest {
         assertNull(AppIntentions.fromMessage("com.whatsapp", "WhatsApp", "  ", at(12)))
     }
 
+    @Test fun companiesAndBotsAreNotPeopleWaiting() {
+        val apps = setOf("instagram", "amazon", "gmail")
+        assertFalse(AppIntentions.looksLikePerson("Instagram", apps))
+        assertFalse(AppIntentions.looksLikePerson("no-reply", apps))
+        assertFalse(AppIntentions.looksLikePerson("Chase Security Team", apps))
+        assertFalse(AppIntentions.looksLikePerson("alerts@bank.com", apps))
+        assertTrue(AppIntentions.looksLikePerson("Dana Whitfield", apps))
+        assertTrue(AppIntentions.looksLikePerson("Sial Nagromy", apps))
+    }
+
     @Test fun rulesOnlyCaptureTakesExplicitNeedsButNotChitChat() = runTest {
         val c = IntentionCapture(null, zone = Fx.zone)
         assertEquals("Fix the rear light", c.capture("ugh, the rear light is out again", at(19))?.text)

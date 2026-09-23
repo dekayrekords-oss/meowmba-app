@@ -119,7 +119,8 @@ internal fun FlowHomeRoute(vm: CompanionViewModel, state: CompanionState, paused
         containerColor = paper, shape = RoundedCornerShape(0.dp)) {
         FlowAdjustSheet(settings, "Not enough activity yet. Meow learns your hours as you use the phone.", snapshot.evening,
             onChange = flow::updateSettings, onDone = { adjust = false },
-            onAppSettings = { adjust = false; vm.toggleSettings() })
+            onAppSettings = { adjust = false; vm.toggleSettings() },
+            thinking = layaThinking(vm))
     }
     if (compose) ModalBottomSheet(onDismissRequest = { compose = false }, dragHandle = null,
         containerColor = paper, shape = RoundedCornerShape(0.dp)) {
@@ -139,6 +140,43 @@ internal fun FlowHomeRoute(vm: CompanionViewModel, state: CompanionState, paused
             },
             onAsk = { text -> compose = false; vm.onUserTextSubmitted(text); vm.openChat() },
             onCancel = { compose = false })
+    }
+}
+
+/** Laya's line in Adjust › Thinking, with the one action that fits right now. */
+@Composable
+internal fun layaThinking(vm: CompanionViewModel): ThinkingStatus {
+    val dl = vm.layaDownloader ?: return ThinkingStatus.RULES_ONLY
+    LaunchedEffect(dl) { dl.refresh() }
+    val st by dl.status.collectAsState()
+    val mb = com.example.meowmba.core.flow.laya.LayaFiles.TOTAL_BYTES / 1_000_000
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var check by remember { mutableStateOf<String?>(null) }
+    return when (val x = st) {
+        com.example.meowmba.core.flow.laya.LayaDownloader.Status.Ready -> ThinkingStatus(
+            "Laya decides on this phone" + (vm.layaEngine?.lastPassMs?.takeIf { it > 0 }?.let { " (last question took ${it} ms)" } ?: "") +
+                ". It pauses when the phone is warm and local rules take over. Nothing leaves the phone." +
+                (check?.let { "\n$it" } ?: ""),
+            ("Check Laya" to {
+                check = "Checking against the reference answers…"
+                scope.launch {
+                    val json = runCatching { context.assets.open("laya/parity.json").bufferedReader().readText() }.getOrNull()
+                    val r = json?.let { vm.layaEngine?.check(it) }
+                    check = r?.let { "Reference check: ${it.agree} of ${it.total} answers agree, largest shift ${"%.3f".format(it.maxDelta)}, ${it.avgMs} ms per question (loaded in ${it.loadMs / 1000.0} s)." }
+                        ?: "Laya could not run on this phone right now (too warm, or its files could not be loaded)."
+                }
+                Unit
+            }).takeIf { check == null || check?.startsWith("Checking") == false })
+        com.example.meowmba.core.flow.laya.LayaDownloader.Status.Missing -> ThinkingStatus(
+            "Local rules decide. Laya can judge timing better, on this phone only ($mb MB, Wi-Fi).", "Download Laya" to dl::start)
+        com.example.meowmba.core.flow.laya.LayaDownloader.Status.NeedsWifi -> ThinkingStatus(
+            "Laya downloads on Wi-Fi only ($mb MB). Connect to Wi-Fi and try again.", "Try again" to dl::start)
+        is com.example.meowmba.core.flow.laya.LayaDownloader.Status.Downloading -> ThinkingStatus(
+            "Downloading Laya: ${x.bytes / 1_000_000} of ${x.total / 1_000_000} MB.", "Cancel" to dl::cancel)
+        com.example.meowmba.core.flow.laya.LayaDownloader.Status.Verifying -> ThinkingStatus("Checking Laya's files…")
+        is com.example.meowmba.core.flow.laya.LayaDownloader.Status.Failed -> ThinkingStatus(
+            "Laya didn't finish downloading: ${x.reason}. Local rules decide meanwhile.", "Retry" to dl::start)
     }
 }
 

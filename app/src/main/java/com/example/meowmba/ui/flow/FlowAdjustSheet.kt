@@ -62,6 +62,8 @@ fun FlowAdjustSheet(
     modifier: Modifier = Modifier,
     /** The rest of Meowmba's settings (the Flow screen has no button bar). */
     onAppSettings: (() -> Unit)? = null,
+    /** Laya on this phone: what to say, and the one action that fits (Download / Cancel / Retry). */
+    thinking: ThinkingStatus = ThinkingStatus.RULES_ONLY,
 ) {
     val colors = FlowColors.from(FlowThemes.palette(settings.theme, night, settings.accent))
     CompositionLocalProvider(LocalFlowColors provides colors) {
@@ -148,7 +150,11 @@ fun FlowAdjustSheet(
                 }
             }
 
-            Group("Thinking", "Local rules are active. Laya and Jev are not connected in this version. No context is sent to a decision service.") {}
+            Group("Thinking", thinking.text) {
+                thinking.action?.let { (label, act) ->
+                    Box(Modifier.padding(top = 10.dp)) { FlowLink(label, c.ink, act) }
+                }
+            }
 
             Group("Work hours") {
                 BasicText("Learned so far: $learnedHours", Modifier.padding(top = 10.dp), style = FlowType.itemDetail.copy(color = c.ink2))
@@ -238,4 +244,11 @@ private fun Swatch(argb: Int?, selected: Boolean, c: FlowColors, onClick: () -> 
             .semantics { contentDescription = if (argb == null) "Theme accent" else "Accent colour"; this.selected = selected },
         contentAlignment = Alignment.Center,
     ) { if (argb == null) BasicText("A", style = FlowType.itemAction.copy(fontSize = 12.sp, color = c.accent)) }
+}
+
+/** Status line for the Adjust sheet's "Thinking" group. */
+data class ThinkingStatus(val text: String, val action: Pair<String, () -> Unit>? = null) {
+    companion object {
+        val RULES_ONLY = ThinkingStatus("Local rules decide. Nothing is sent to a decision service.")
+    }
 }

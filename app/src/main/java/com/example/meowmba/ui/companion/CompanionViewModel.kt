@@ -3477,6 +3477,12 @@ class CompanionViewModel(
                 store = com.example.meowmba.core.flow.db.RoomIntentionStore(dao, viewModelScope),
                 outcomes = com.example.meowmba.core.flow.db.RoomOutcomeLog(dao),
                 calendar = com.example.meowmba.core.flow.sources.CalendarSource(context)::upcoming,
+                // Laya on this phone once its files are present; rules otherwise (and whenever it's warm).
+                laya = com.example.meowmba.core.flow.laya.LayaAssessor(
+                    com.example.meowmba.core.flow.laya.LayaEngine(
+                        com.example.meowmba.core.flow.laya.LayaFiles.forContext(context), viewModelScope,
+                        thermalStatus = { com.example.meowmba.core.thermal.ThermalGovernor.currentStatus() },
+                    ).also { layaEngine = it }),
                 calendarAvailable = { context.checkSelfPermission(android.Manifest.permission.READ_CALENDAR) == android.content.pm.PackageManager.PERMISSION_GRANTED },
                 ambient = {
                     (_uiState.value.ambientWeather ?: _uiState.value.weather)?.let { w ->
@@ -3495,6 +3501,16 @@ class CompanionViewModel(
         }.getOrNull() }
     }
     val flowRuntime: com.example.meowmba.core.flow.FlowRuntime? get() = flowRuntimeLazy.value
+
+    /** Laya's engine (for its timing) and user-started download; null without a context. */
+    internal var layaEngine: com.example.meowmba.core.flow.laya.LayaEngine? = null
+        private set
+    internal val layaDownloader: com.example.meowmba.core.flow.laya.LayaDownloader? by lazy {
+        secureStorage?.context?.applicationContext?.let { ctx ->
+            com.example.meowmba.core.flow.laya.LayaDownloader(ctx,
+                com.example.meowmba.core.flow.laya.LayaFiles.forContext(ctx), viewModelScope)
+        }
+    }
 
     /** Feed Flow and the Desk from data the app already has. Cheap; called on open and each minute. */
     internal suspend fun syncFlowAppData() {
