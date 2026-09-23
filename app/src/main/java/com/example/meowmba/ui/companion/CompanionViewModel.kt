@@ -2233,7 +2233,7 @@ class CompanionViewModel(
             appContext?.let { ctx ->
                 motionSense = com.example.meowmba.core.sensor.MotionSense(ctx).also { sense ->
                     if (sense.available) {
-                        if (!appInBackground) sense.start()
+                        if (motionNeeded()) sense.start()
                         viewModelScope.launch {
                             sense.motion.collect { st ->
                                 // Counter-rotate toward level from the screen-plane
@@ -4814,6 +4814,7 @@ class CompanionViewModel(
         val deliberateEnable = enabled && !_uiState.value.robotBodyEnabled
         secureStorage?.saveBooleanPreference("robot_body_enabled", enabled)
         _uiState.value = _uiState.value.copy(robotBodyEnabled = enabled)
+        syncMotionSense()
         if (deliberateEnable) {
             robotManager.resumeBodyMotion()
             lastBleAttemptMs = 0L
@@ -5226,7 +5227,7 @@ class CompanionViewModel(
     fun reclaimWakeMicForForeground() {
         handedOffToBackground = false
         appInBackground = false
-        motionSense?.start()
+        syncMotionSense()
         syncBodyMotionGate()
         secureStorage?.context?.let { microphonePermissionBlocked = !systemMicrophonePermissionGranted(it) }
         updateVoiceListeningMode()
@@ -6499,6 +6500,16 @@ class CompanionViewModel(
      * Toggles the voice listening state (push-to-talk / tap-to-toggle).
      * Tapping while the companion speaks interrupts it and starts a new turn.
      */
+    /**
+     * Flow's mic button. Tapping it is an explicit request to talk, so it turns the
+     * microphone privacy switch back on (Flow has no ears to tap) and then listens;
+     * the system permission prompt appears if the app has never been allowed the mic.
+     */
+    fun onFlowMicClick() {
+        if (!_uiState.value.isMicEnabled) setMicEnabled(true)
+        onMicClick()
+    }
+
     fun onMicClick() {
         if (_uiState.value.songRecognitionBusy) { cancelSongIdentification(); return }
         if (!_uiState.value.isMicEnabled) {
@@ -11360,6 +11371,20 @@ class CompanionViewModel(
     fun setAppTheme(theme: AppTheme) {
         _uiState.value = _uiState.value.copy(appTheme = theme)
         secureStorage?.savePreference("app_theme", theme.key)
+        syncMotionSense()
+    }
+
+    /**
+     * The 20 Hz motion sensor only feeds the avatar's lean/startle and the robot body.
+     * Flow and the Desk show neither, so it stays off there (heat: 2 sensors x 20 Hz wakeups).
+     */
+    private fun motionNeeded(): Boolean {
+        val s = _uiState.value
+        return !appInBackground && (s.robotBodyEnabled || (s.appTheme != AppTheme.FLOW && s.appTheme != AppTheme.DESK))
+    }
+
+    private fun syncMotionSense() {
+        if (motionNeeded()) motionSense?.start() else motionSense?.stop()
     }
 
     fun setAppearanceMode(mode: AppearanceMode) {

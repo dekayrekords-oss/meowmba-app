@@ -130,9 +130,12 @@ class FlowRuntime(
         val apps = com.example.meowmba.core.flow.sources.AppIntentions
         when (e) {
             is com.example.meowmba.core.flow.sources.FlowNotificationHub.Posted -> {
+                // Only people (messages, calls) matter to Flow. Other notifications ("New from
+                // Google Maps Timeline") are not context and would re-run Flow on every post.
+                if (e.category !in hub.PEOPLE_CATEGORIES) return
                 com.example.meowmba.core.flow.sources.EvidenceMappers
                     .fromNotification(e.packageName, e.appLabel, e.category, e.sender, e.at)?.let(::publish)
-                if (e.category in hub.PEOPLE_CATEGORIES) apps.fromMessage(e.packageName, e.appLabel, e.sender, e.at)?.let { m ->
+                apps.fromMessage(e.packageName, e.appLabel, e.sender, e.at)?.let { m ->
                     val old = store.intentions.value.firstOrNull { it.id == m.id }
                     // A new message reopens a finished "Reply to" for the same person.
                     if (old == null || old.status == IntentionStatus.DONE || old.status == IntentionStatus.DROPPED) store.upsert(m)

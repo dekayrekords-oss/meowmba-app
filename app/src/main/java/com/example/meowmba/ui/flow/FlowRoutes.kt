@@ -110,8 +110,9 @@ internal fun FlowHomeRoute(vm: CompanionViewModel, state: CompanionState, paused
         onLater = { scope.launch { flow.onLater(it.intentionId) } },
         onInterruptAccept = { scope.launch { handleFlowPrimary(vm, context, flow, it.item.intentionId, requestCalendar) } },
         onInterruptDecline = { scope.launch { flow.onLater(it.item.intentionId) } },
-        onAdjust = { adjust = true }, onAsk = { compose = true }, onMic = vm::onMicClick,
-        onMenu = vm::openTiles, onDesk = { vm.setAppTheme(AppTheme.DESK) })
+        onAdjust = { adjust = true }, onAsk = { compose = true }, onMic = vm::onFlowMicClick,
+        onMenu = vm::openTiles, onDesk = { vm.setAppTheme(AppTheme.DESK) },
+        voice = flowVoice(state))
 
     val paper = FlowColors.from(FlowThemes.palette(settings.theme, snapshot.evening, settings.accent)).paper
     if (adjust) ModalBottomSheet(onDismissRequest = { adjust = false }, dragHandle = null,
@@ -139,6 +140,16 @@ internal fun FlowHomeRoute(vm: CompanionViewModel, state: CompanionState, paused
             onAsk = { text -> compose = false; vm.onUserTextSubmitted(text); vm.openChat() },
             onCancel = { compose = false })
     }
+}
+
+/** The ask line mirrors the voice pipeline so a mic tap always shows what is happening. */
+internal fun flowVoice(state: CompanionState): FlowVoice = when (state.interactionState) {
+    InteractionState.LISTENING -> FlowVoice.Listening(state.captionText?.takeUnless { it.startsWith("Listening") })
+    InteractionState.THINKING -> FlowVoice.Thinking
+    InteractionState.SPEAKING -> FlowVoice.Speaking(state.captionText)
+    InteractionState.MUTED -> FlowVoice.Note("Microphone is off. Tap the mic to turn it on.")
+    InteractionState.OFFLINE -> FlowVoice.Note(state.captionText ?: "Meow can't reach its voice right now.")
+    InteractionState.IDLE -> FlowVoice.Idle
 }
 
 /** Paper-style "tell Meow" sheet: keep something in mind, or ask Meow. Replaces the Material dialog. */

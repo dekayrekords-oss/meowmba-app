@@ -62,6 +62,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -113,6 +114,8 @@ fun MeowFlowHome(
     navigation: (@Composable () -> Unit)? = null,
     onMenu: (() -> Unit)? = null,
     onDesk: (() -> Unit)? = null,
+    /** Voice state for the ask line: listening/thinking/speaking, with what was heard or said. */
+    voice: FlowVoice = FlowVoice.Idle,
 ) {
     val hour = java.time.Instant.ofEpochMilli(snapshot.at.takeIf { it > 0 } ?: System.currentTimeMillis())
         .atZone(java.time.ZoneId.systemDefault()).hour
@@ -168,7 +171,7 @@ fun MeowFlowHome(
                 }
             }
 
-            AskLine(Modifier.align(Alignment.BottomCenter).padding(bottom = if (navigation != null) 48.dp else 0.dp), onAsk, onMic)
+            AskLine(Modifier.align(Alignment.BottomCenter).padding(bottom = if (navigation != null) 48.dp else 0.dp), onAsk, onMic, voice)
             if (navigation != null) Box(Modifier.align(Alignment.BottomCenter)
                 .windowInsetsPadding(WindowInsets.navigationBars)) { navigation() }
 
@@ -249,7 +252,11 @@ private fun DatelineSep() {
     BasicText("·", Modifier.padding(horizontal = 7.dp), style = FlowType.dateline.copy(color = LocalFlowColors.current.ink3))
 }
 
-/** One line only: shrink 12 → 10 sp in 0.5 sp steps, then ellipsize (README "Dateline line 2"). */
+/**
+ * Signals: shrink 12 → 11 sp so short lines stay on one row, then wrap to further rows.
+ * Nothing is cut off with "…" (owner review, build 158: the line was unreadable).
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun SignalLine(signals: List<Signal>, anchors: MutableMap<String, LayoutCoordinates>) {
     val c = LocalFlowColors.current
@@ -264,24 +271,28 @@ private fun SignalLine(signals: List<Signal>, anchors: MutableMap<String, Layout
             return signals.sumOf { measurer.measure(it.label.uppercase(Locale.ROOT), st).size.width } +
                 (signals.size - 1) * (measurer.measure("/", st).size.width + sepPx)
         }
-        while (size > FlowDims.DATELINE_MIN_SP && width(size) > maxPx) size -= 0.5f
+        while (size > SIGNAL_MIN_SP && width(size) > maxPx) size -= 0.5f
         val style = FlowType.dateline.copy(fontSize = size.sp)
-        Row(Modifier.fillMaxWidth().semantics { contentDescription = "Right now: " + signals.joinToString(", ") { it.label } }) {
+        androidx.compose.foundation.layout.FlowRow(
+            Modifier.fillMaxWidth().testTag("flow_signals")
+                .semantics { contentDescription = "Right now: " + signals.joinToString(", ") { it.label } },
+        ) {
             signals.forEachIndexed { i, s ->
-                if (i > 0) BasicText("/", Modifier.padding(horizontal = 5.dp), style = style.copy(color = c.ink3))
-                val last = i == signals.lastIndex
-                BasicText(
-                    s.label.uppercase(Locale.ROOT),
-                    (if (last) Modifier.weight(1f, fill = false) else Modifier)
-                        .onGloballyPositioned { anchors["sig:" + s.key] = it }
-                        .then(if (s.fresh) Modifier.underline(c.accent, 2.dp, 0.dp) else Modifier),
-                    style = style.copy(color = if (s.fresh) c.accent else c.ink2),
-                    maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis,
-                )
+                Row {
+                    BasicText(
+                        s.label.uppercase(Locale.ROOT),
+                        Modifier.onGloballyPositioned { anchors["sig:" + s.key] = it }
+                            .then(if (s.fresh) Modifier.underline(c.accent, 2.dp, 0.dp) else Modifier),
+                        style = style.copy(color = if (s.fresh) c.accent else c.ink2),
+                    )
+                    if (i < signals.lastIndex) BasicText("/", Modifier.padding(horizontal = 5.dp), style = style.copy(color = c.ink3))
+                }
             }
         }
     }
 }
+
+private const val SIGNAL_MIN_SP = 11f
 
 // ---- main thought ----------------------------------------------------------------------------
 
@@ -400,8 +411,9 @@ private fun FlowList(
 // ---- ask line ------------------------------------------------------------------------------
 
 @Composable
-private fun AskLine(modifier: Modifier, onAsk: () -> Unit, onMic: () -> Unit) {
+private fun AskLine(modifier: Modifier, onAsk: () -> Unit, onMic: () -> Unit, voice: FlowVoice = FlowVoice.Idle) {
     val c = LocalFlowColors.current
+    val live = voice !is FlowVoice.Idle
     Row(
         modifier
             .windowInsetsPadding(WindowInsets.navigationBars)
@@ -412,15 +424,20 @@ private fun AskLine(modifier: Modifier, onAsk: () -> Unit, onMic: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        BasicText("Ask, or tell me what you're doing…",
-            Modifier.weight(1f).clickable(role = Role.Button, onClickLabel = "Ask Meow", onClick = onAsk),
-            style = FlowType.ask.copy(color = c.ink2))
+        BasicText(voice.line ?: "Ask, or tell me what you're doing…",
+            Modifier.weight(1f).clickable(role = Role.Button, onClickLabel = "Ask Meow", onClick = onAsk)
+                .semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite }.testTag("flow_ask_line"),
+            style = FlowType.ask.copy(color = if (live) c.ink else c.ink2), maxLines = 2, overflow = TextOverflow.Ellipsis)
+        // Filled while Meow is listening, so a tap always shows a visible result.
+        val listening = voice is FlowVoice.Listening
         Box(
-            Modifier.size(FlowDims.micSize).clip(CircleShape).border(1.5.dp, c.ink, CircleShape)
-                .clickable(role = Role.Button, onClickLabel = "Talk to Meow", onClick = onMic)
-                .semantics { contentDescription = "Talk to Meow" }.testTag("flow_mic"),
+            Modifier.size(FlowDims.micSize).clip(CircleShape)
+                .then(if (listening) Modifier.background(c.ink, CircleShape) else Modifier)
+                .border(1.5.dp, c.ink, CircleShape)
+                .clickable(role = Role.Button, onClickLabel = if (listening) "Stop listening" else "Talk to Meow", onClick = onMic)
+                .semantics { contentDescription = if (listening) "Listening. Tap to finish" else "Talk to Meow" }.testTag("flow_mic"),
             contentAlignment = Alignment.Center,
-        ) { MicGlyph(c.ink) }
+        ) { MicGlyph(if (listening) c.paper else c.ink) }
     }
 }
 
@@ -610,4 +627,14 @@ private fun Modifier.enterAnimation(delayMs: Int, reduceMotion: Boolean): Modifi
     val a = remember { Animatable(0f) }
     LaunchedEffect(Unit) { a.animateTo(1f, tween(FlowDims.ITEM_IN_MS, delayMillis = delayMs)) }
     return this.alpha(a.value).offset { androidx.compose.ui.unit.IntOffset(0, (8 * (1 - a.value)).dp.roundToPx()) }
+}
+
+/** What the ask line shows while Meow is using the voice. */
+sealed class FlowVoice(val line: String?) {
+    data object Idle : FlowVoice(null)
+    class Listening(heard: String?) : FlowVoice(heard?.takeIf { it.isNotBlank() }?.let { "“$it”" } ?: "Listening…")
+    data object Thinking : FlowVoice("Thinking…")
+    class Speaking(said: String?) : FlowVoice(said?.takeIf { it.isNotBlank() } ?: "Meow is answering…")
+    /** A note from Meow, e.g. why the microphone can't start. */
+    class Note(text: String) : FlowVoice(text)
 }

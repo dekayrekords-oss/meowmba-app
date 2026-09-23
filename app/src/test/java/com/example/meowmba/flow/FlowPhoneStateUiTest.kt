@@ -56,4 +56,23 @@ class FlowPhoneStateUiTest {
         rule.onNodeWithTag("flow_menu").performClick(); assertTrue(menu)
         rule.onNodeWithTag("flow_desk").performClick(); assertTrue(desk)
     }
+
+    @Test fun longSignalsWrapAndMicShowsListening() {
+        val snap = com.example.meowmba.core.flow.FlowSnapshot.EMPTY.copy(at = Fx.at(13, 25),
+            signals = listOf(Signal("cal", "Free today"), Signal("wx", "82° cloudy"), Signal("move", "Walking"),
+                Signal("msg", "Dana messaged in WhatsApp"), Signal("app", "Working in Android Studio")))
+        var taps = 0
+        rule.setContent { MeowFlowHome(snap, FlowSettings(), "Wed 23 Sep · 1:25 PM", onMic = { taps++ },
+            onMenu = {}, onDesk = {}, voice = com.example.meowmba.ui.flow.FlowVoice.Listening("remind me to call Dana")) }
+        rule.mainClock.advanceTimeBy(2_000); rule.waitForIdle()
+        val v = rule.activity.window.decorView
+        val bmp = Bitmap.createBitmap(v.width, v.height, Bitmap.Config.ARGB_8888); v.draw(android.graphics.Canvas(bmp))
+        File("build/flow-shots").apply { mkdirs() }.resolve("flow-signals-wrap-listening.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        // Every signal is shown whole (no "…"), on as many rows as it needs.
+        rule.onNodeWithText("WORKING IN ANDROID STUDIO").assertIsDisplayed()
+        rule.onNodeWithText("DANA MESSAGED IN WHATSAPP").assertIsDisplayed()
+        rule.onNodeWithText("“remind me to call Dana”").assertIsDisplayed()
+        rule.onNodeWithTag("flow_mic").performClick()
+        assertTrue(taps == 1)
+    }
 }
