@@ -12,6 +12,9 @@ import com.example.meowmba.core.flow.FlowSettings
 import com.example.meowmba.core.flow.FlowSnapshot
 import com.example.meowmba.ui.flow.MeowFlowHome
 import com.example.meowmba.ui.flow.FlowSamples
+import com.example.meowmba.ui.flow.FlowAdjustSheet
+import com.example.meowmba.core.flow.Urgency
+import androidx.compose.ui.test.onAllNodesWithText
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -106,5 +109,22 @@ class MeowFlowHomeUiTest {
     @Test fun paperNightBandUsesDarkText() {
         show(FlowSamples.drivingPastStore, FlowSettings(eveningLook = EveningLook.NIGHT), date = "Tue 22 Sept · 4:58 PM", remaining = 145)
         shoot("flow-17-interrupt-paper-night")
+    }
+
+    @Test fun adjustSheetReportsChangesAndHasNoServerOption() {
+        var latest = FlowSettings()
+        rule.setContent {
+            FlowAdjustSheet(latest, "weekdays, about 8:30 to 6:00, from 3 weeks of your days", night = false,
+                onChange = { latest = it }, onDone = {})
+        }
+        rule.mainClock.advanceTimeBy(1_000); rule.waitForIdle()
+        shoot("flow-11-settings-top")
+        assertEquals(0, rule.onAllNodesWithText("Runs on").fetchSemanticsNodes().size)
+        rule.onNodeWithTag("flow_theme_stone").performClick()
+        assertEquals("stone", latest.theme)
+        rule.onNodeWithText("Urgent").performClick()
+        assertEquals(Urgency.URGENT, latest.minUrgency)
+        rule.onNodeWithText("30m").performClick()
+        assertEquals(30, latest.minGapMinutes)
     }
 }
