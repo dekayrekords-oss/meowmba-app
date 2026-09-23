@@ -27,9 +27,9 @@ integrator-owned file was edited (BUILD_MASTER / master plan §12).
 ## Verification (all on this branch)
 
 - New Flow/Desk tests: **83** (`com.example.meowmba.flow.*`), 0 failures.
-- Full unit suite: **420 suites / 2,805 tests, 0 failures, 0 errors** (run after the core,
-  UI, Desk, delivery, context and Room commits; later commits add FlowRuntime/Laya-export/
-  calendar tests, all green in the Flow run).
+- Full unit suite on the final branch state: **424 suites / 2,813 tests, 0 failures, 0 errors, 0 skipped**
+  (baseline build 155 was 403 suites / 2,730 tests). The only later change (API-level guard in
+  UsageSource) was re-verified with the Flow tests + lint.
 - Compose renders at 412×960 dp via Robolectric native graphics; compared by eye with the
   approved demo screenshots. Known differences: system fonts until OFL fonts are approved;
   Material slider thumb style in the Adjust sheet; accent choice uses preset swatches (no
@@ -37,7 +37,9 @@ integrator-owned file was edited (BUILD_MASTER / master plan §12).
 - Bugs found and fixed by tests during the work: interrupt double-counting on recompute;
   dismissed interrupts re-appearing; notification cancelled twice; Desk text scaled twice;
   driving evidence overwriting the last place.
-- Lint (`lintDebug`): **0 errors**. 186 warnings/hints project-wide, of which 2 were in new code (animated offset overload, prefs KTX) — both fixed. No new lint issues remain in `core/flow`, `ui/flow` or `ui/desk`.
+- Lint (`lintDebug`) on the final state: **0 errors**; 172 warnings + 12 hints project-wide, **none in
+  `core/flow`, `ui/flow` or `ui/desk`**. Re-running lint caught 2 real NewApi errors in UsageSource
+  (API 33 call with minSdk 31) and 2 warnings; all fixed.
 
 ## Needs the owner
 

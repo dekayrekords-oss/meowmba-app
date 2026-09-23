@@ -74,7 +74,13 @@ class UsageSource(
 
     private fun label(pkg: String): String = runCatching {
         val pm = context.packageManager
-        pm.getApplicationLabel(pm.getApplicationInfo(pkg, PackageManager.ApplicationInfoFlags.of(0))).toString()
+        // minSdk is 31; the flags overload only exists from 33.
+        val info = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            pm.getApplicationInfo(pkg, PackageManager.ApplicationInfoFlags.of(0))
+        } else {
+            @Suppress("DEPRECATION") pm.getApplicationInfo(pkg, 0)
+        }
+        pm.getApplicationLabel(info).toString()
     }.getOrDefault(pkg.substringAfterLast('.'))
 
     companion object { const val MAX_EVENTS = 5 }
