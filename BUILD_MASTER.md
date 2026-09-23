@@ -1,9 +1,24 @@
 # Meowmba shared build authority
 
-Updated 2026-09-21. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
+Updated 2026-09-23. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
 This supersedes historical build-location/version instructions in other documents.
 
 ## Current recovery
+
+- September 23 installed preview: **1.4.0/code 156**, source `1ef898c`, integrates
+  Claude's Flow/Desk branch and reviewed idle-performance work. Room-backed tasks,
+  calendar/delivery corrections, hidden-scene cleanup and hardware-aware setup are wired.
+  Flow currently uses local rules; Laya/Jev are not connected. Light phones start with
+  Classic/still/15 FPS defaults and skip Computer setup. Explicit settings are preserved.
+  Daily preview is shrunk/non-debuggable with the existing preview certificate; separate
+  Play package and website remain unchanged. Full 2,833 tests: zero failures/errors,
+  five skips; final UI-focused 117 pass; daily lint zero errors (172 warnings remain).
+  Installed in place on SM-F966U1 / RFCY61NJEVM, preserving data. Native/model entries
+  match verified 155 exactly. Receipt: `docs/FLOW_156_REVIEW_2026-09-23.md`.
+  Flow/Desk each passed ten-minute foreground runs: 0.96% / 1.78% of one CPU core,
+  all 21 thermal samples per run normal (status 0), USB powered, sensors off.
+  APK/archive: `/Users/prog/Meowmba-Releases/flow156-20260923/`.
+  Meow server SSH was unavailable; do not assume a server push happened.
 
 - September 21 latest companion update: signed release **1.3.99/code 155** installed
   in place on the connected Fold at 02:00 America/Phoenix; app data preserved.
@@ -26,8 +41,9 @@ This supersedes historical build-location/version instructions in other document
   docs/COMPANION_153_2026-09-21.md. Play/website remain on the previous release.
 
 - Integrator: Codex, this recovery task. One owner performs builds and phone installs.
-- Integration branch: `recovery/known-good-138`.
-- Integration checkout: `/Users/prog/AndroidStudioProjects/Meowmba-repair-20260914`.
+- Integration branch: `feature/meow-flow-core`.
+- Integration checkout: `/Users/prog/AndroidStudioProjects/Meowmba-flow-20260922`.
+- Earlier recovery checkout: `/Users/prog/AndroidStudioProjects/Meowmba-repair-20260914`.
 - Baseline: `5efed2f`, version 1.3.82/code 138. Historical evidence is dated September 15.
 - Verified original APK: `/Users/prog/Meowmba-Releases/idle136-20260915/meow-preview138.apk`.
 - Grok source to recover: `529cc69`, preserved as `recovery/grok-lumen` remote-tracking ref.
