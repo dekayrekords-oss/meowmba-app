@@ -38,8 +38,9 @@ class InterruptDelivery(private val speaker: FlowSpeaker, private val notifier: 
     fun deliver(interrupt: FlowInterrupt?): Delivery? {
         if (interrupt == null) { if (delivered != null) notifier.cancel(); delivered = null; return null }
         val id = interrupt.item.intentionId
-        if (id == delivered) return null
+        if (id == delivered || id == resolvedId) return null
         delivered = id
+        resolvedId = null
         val line = interrupt.spokenLine
         return when (interrupt.channel) {
             Channel.SPEAK_AND_SHOW, Channel.SPEAK_ONLY -> Delivery(id, line != null && speaker.speak(line), false)
@@ -53,8 +54,11 @@ class InterruptDelivery(private val speaker: FlowSpeaker, private val notifier: 
 
     /** The user answered or the chance passed: remove the notification. */
     fun resolved(intentionId: String) {
-        if (delivered == intentionId) notifier.cancel()
+        if (delivered == intentionId) { notifier.cancel(); delivered = null; resolvedId = intentionId }
     }
+
+    /** Remembers the last answered interruption so it isn't re-delivered while the snapshot catches up. */
+    private var resolvedId: String? = null
 }
 
 /** Adapter over the app's speech engine, gated so Meow never talks over the user. */
