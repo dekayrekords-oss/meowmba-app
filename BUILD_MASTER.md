@@ -5,10 +5,15 @@ This supersedes historical build-location/version instructions in other document
 
 ## Current recovery
 
-- Backup/update candidate **1.4.4/code 160**: Codex owns this version. Adds encrypted
-  backup/restore, verified in-place update and guarded cross-edition cleanup.
-  Validation/install pending; do not claim it is installed until the receipt below
-  is updated. Feature workflow and limits: `docs/SAFE_UPDATES_160.md`.
+- September 23 backup/update release **1.4.4/code 160**, app source `813bcc5`, installed
+  in place on Fold8 / SM-F971U / R5GL75XFCXD at12:39 America/Phoenix. Adds encrypted
+  backups/restores, verified in-place update and guarded cross-edition cleanup.
+  2,887 tests: zero failures/errors, five expected no-SDK skips; daily lint zero
+  errors. Signature, alignment and full runtime parity pass. Data/firstInstallTime
+  retained; backup warning verified and no new crashes after installation. Other
+  Play edition155 retained. Historical159 music-startup initialization crash remains
+  a separate follow-up. Receipt, limits and workflow: `docs/SAFE_UPDATES_160.md`.
+  Codex owns builds;160 is consumed. Laya remains deferred. Server SSH unavailable.
 
 - September 23 Fold update: **1.4.3/code 159** installed in place on SM-F966U1 /
   RFCY61NJEVM at 10:40 America/Phoenix. Source `a72c62b` changes release metadata only

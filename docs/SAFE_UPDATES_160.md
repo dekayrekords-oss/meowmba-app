@@ -71,3 +71,40 @@ Source and final verification receipts are recorded alongside the immutable APK.
 Full regression tests, lint, APK signature/alignment, runtime asset parity and
 connected-device smoke results are appended after completion. Laya remains deferred;
 Flow continues using the existing local rules. Flow and Desk UI structures are unchanged.
+
+### Completed September 23, 2026
+
+- Application source: `813bcc5f20975938207b3b626b762fc933a2648a`.
+- Full regression run: 438 suites, 2,887 tests, zero failures/errors, five expected
+  SDK-absent tests skipped because this build includes the real glasses SDK.
+- Daily assembly and lint pass. Lint: zero errors, 185 warnings, 12 hints. New
+  warnings are style suggestions and intentional synchronous persistence on IO
+  threads before authorizing installation/removal.
+- APK signature matches the original preview certificate; 16 KiB ZIP alignment
+  passes. All 152 fixed runtime/model entries match159; the two generated ART
+  profiles are present and changed as expected (154 total checked entries).
+- SHA-256: `eca5b2ff3c2d0696c5ac182bb322624a8ebc1b6ddb726ef3d45f83300ec42271`.
+- Installed with `adb install -r` on Fold8 / SM-F971U / R5GL75XFCXD at 12:39:10
+  America/Phoenix. Original firstInstallTime remains September23 09:05:20;
+  appId10496 retained, no uninstall or data clear. The Play edition155 remains.
+- Process1132 survived repeated checks; foreground app and the new backup warning
+  were verified. No new preview crash entries after installation. Android reported
+  launch delivery to an existing top instance, so no cold-start timing is claimed.
+- No real API key was inspected/printed and no user's backup password was chosen.
+  Real-user export awaits their private password/location choice in the app. Tests
+  use synthetic keys/data; no physical cross-edition removal was exercised.
+- Immutable APK and validation/device receipts:
+  `/Users/prog/Meowmba-Releases/backup160-20260923/`.
+- Meow SSH timed out; source is committed locally, not pushed to the server. No
+  Play upload or website update was performed as part of this backup change.
+
+### Existing issue discovered in historical device logs
+
+Build159 crashed at12:08:07, before this update, when music awareness called
+`playAnimationNamed` during ViewModel construction before the `avatarAnimationStore`
+lazy delegate had initialized. Inspection confirms the declaration-order issue.
+It remains in160; the backup change does not alter Claude's animation/music behavior.
+Smallest follow-up: move that existing property before the init blocks and add a
+regression covering construction with music already playing and immediate dispatch.
+Keep this separate from backup validation; the absence of a new crash during smoke
+checks does not establish that the historical trigger has been repaired.
