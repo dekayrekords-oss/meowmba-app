@@ -19,6 +19,7 @@ class WeatherFollowUpTest {
         `when`(weather.fetchPlace("New River Arizona")).thenReturn(WeatherRepository.Result.Failed("Offline."))
         val tts = VoicePipelineTest.FakeSpeechSynthesizer()
         val vm = CompanionViewModel(elapsedRealtimeMs = { System.nanoTime() / 1_000_000L }, weatherService = weather, ttsManager = tts)
+        vm.setSpeechMode(com.example.meowmba.ui.companion.SpeechMode.ALWAYS) // this test checks spoken follow-ups
         try {
             vm.onUserTextSubmitted("what's the weather")
             assertTrue(tts.spokenTexts.last().contains("city and state"))

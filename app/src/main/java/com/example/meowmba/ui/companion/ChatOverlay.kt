@@ -39,6 +39,10 @@ fun ChatOverlay(
     listening: Boolean = false,
     listenPartial: String? = null,
     onMicClick: () -> Unit = {},
+    /** The + button (camera / photo / file); null hides it. */
+    onAttach: ((note: String) -> Unit)? = null,
+    /** A picture or file pasted into the message box. */
+    onPasteFile: ((android.net.Uri, note: String) -> Unit)? = null,
     callActive: Boolean = false,
     onCallClick: () -> Unit = {},
     liveReply: String? = null,
@@ -187,8 +191,14 @@ fun ChatOverlay(
                         listenPartial?.takeIf { it.isNotBlank() } ?: "Listening… Tap the mic to finish.",
                         maxLines = 2, style = MaterialTheme.typography.bodySmall)
                     Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (onAttach != null) IconButton(onClick = { onAttach(draft.trim()); drafts[conversationKey] = "" }) {
+                            Icon(Icons.Default.Add, "Add a photo or file")
+                        }
                         OutlinedTextField(value = draft, onValueChange = { drafts[conversationKey] = it },
-                            modifier = Modifier.weight(1f).heightIn(max = 112.dp),
+                            modifier = Modifier.weight(1f).heightIn(max = 112.dp).then(
+                                if (onPasteFile != null) with(com.example.meowmba.ui.flow.PasteFiles) {
+                                    Modifier.accept { uri -> onPasteFile(uri, draft.trim()); drafts[conversationKey] = "" }
+                                } else Modifier),
                             placeholder = { Text("Message Meow") }, minLines = 1, maxLines = 4,
                             shape = RoundedCornerShape(22.dp))
                         IconButton(onClick = onMicClick) {

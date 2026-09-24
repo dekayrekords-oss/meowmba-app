@@ -1438,7 +1438,8 @@ class CompanionViewModel(
             _uiState.value = _uiState.value.copy(features = _uiState.value.features.copy(
                 careVisible = storage.getBooleanPreference("care_visible", true),
                 carePosition = storage.getPreference("care_position") ?: "Top left",
-                neuralFeedbackVisible = storage.getBooleanPreference("neural_feedback_visible", true)))
+                neuralFeedbackVisible = storage.getBooleanPreference("neural_feedback_visible", true),
+                speechMode = SpeechMode.fromKey(storage.getPreference(SpeechMode.PREF))))
             storage.getPreference(KEY_OWNER_SPEAKER)?.trim()?.takeIf { it.isNotEmpty() }?.let { owner ->
                 lastSpeakerName = owner
             }
@@ -3482,7 +3483,7 @@ class CompanionViewModel(
                 context, viewModelScope,
                 speaker = com.example.meowmba.core.flow.delivery.FlowSpeaker { text ->
                     val state = _uiState.value
-                    if (handedOffToBackground || state.isMuted || state.interactionState != InteractionState.IDLE) false
+                    if (handedOffToBackground || state.isMuted || state.interactionState != InteractionState.IDLE || !proactiveVoiceAllowed()) false
                     else { speak(text); true }
                 },
                 store = com.example.meowmba.core.flow.db.RoomIntentionStore(dao, viewModelScope),
@@ -5125,6 +5126,7 @@ class CompanionViewModel(
 
     /** Wake phrase heard: run the spoken command, or listen for one. */
     internal fun onWakeDetected(command: String?) {
+        noteUserTurn(voice = true) // "Hey Meow" starts a spoken conversation
         stopWakeLoopAndRelease()
         if (!_uiState.value.isMicEnabled) {
             resetState()
@@ -6971,6 +6973,7 @@ class CompanionViewModel(
             if (_uiState.value.interactionState == InteractionState.LISTENING) resetState()
             return
         }
+        noteUserTurn(fromVoice)
         // Meow Flow: "the rear light is out", "remind me to…" become things Meow keeps in mind.
         if (!fromVoice || finalTranscript) {
             flowRuntime?.let { flow -> viewModelScope.launch { runCatching { flow.captureFromChat(raw) } } }
@@ -7843,6 +7846,28 @@ class CompanionViewModel(
         pendingPlaceFix = null
         if (intent == null) return false
         val ctx = secureStorage?.context ?: return false
+        // "I'm heading home": do what a friend would — start directions if Meow knows the place,
+        // otherwise say plainly that it doesn't (never promise Maps without opening it).
+        if (intent is com.example.meowmba.core.nav.PlaceVoiceIntent.Heading) {
+            val saved = placesStore?.find(intent.name)
+                ?: com.example.meowmba.core.nav.SavedPlaceStore(ctx).get(intent.name)?.let { com.example.meowmba.core.nav.PlacesStore.Place(it.lat, it.lon) }
+            // "I'm going to finish the report" is not a trip: only saved places and plain place words are.
+            if (saved == null && intent.name !in com.example.meowmba.core.nav.PlaceVoiceIntent.COMMON_PLACES) return false
+            viewModelScope.launch { persistTurn(MessageRole.USER, text) }
+            if (saved == null) {
+                speak("I don't know where ${intent.name} is yet. When you get there, tell me \"I'm at ${intent.name}\" and I'll remember it.")
+                return true
+            }
+            lastNavigationName = intent.name
+            submitAgentIntent(AgentRouter.AgentIntent("phone", "nav.navigate", mapOf("lat" to saved.lat.toString(), "lon" to saved.lon.toString(), "name" to intent.name), "Navigate to saved place ${intent.name}"))
+            return true
+        }
+        // "I'm home now": learn the place the first time; afterwards just note it (journal), quietly.
+        if (intent is com.example.meowmba.core.nav.PlaceVoiceIntent.Arrived) {
+            viewModelScope.launch { persistTurn(MessageRole.USER, text) }
+            if (placesStore?.find(intent.name) == null) saveNamedLocation(intent.name) else resetState()
+            return true
+        }
         if (intent is com.example.meowmba.core.nav.PlaceVoiceIntent.Go) {
             val saved = placesStore?.find(intent.name)
                 ?: com.example.meowmba.core.nav.SavedPlaceStore(ctx).get(intent.name)?.let {
@@ -7878,7 +7903,9 @@ class CompanionViewModel(
             com.example.meowmba.core.nav.PlaceVoiceIntent.Destination -> speak(lastNavigationName?.let {
                 "The last place you asked Meow to open was $it. I can't verify changes made inside another maps app."
             } ?: "You haven't set a destination through Meow in this session. Ask where are we for your current location, or let's go to a saved place.")
-            is com.example.meowmba.core.nav.PlaceVoiceIntent.Go -> Unit
+            is com.example.meowmba.core.nav.PlaceVoiceIntent.Go,
+            is com.example.meowmba.core.nav.PlaceVoiceIntent.Heading,
+            is com.example.meowmba.core.nav.PlaceVoiceIntent.Arrived -> Unit
         }
         return true
     }
@@ -8259,30 +8286,114 @@ class CompanionViewModel(
         lastAssistantText = full
     }
 
-    private fun speak(text: String) {
+    /**
+     * @param urgent safety speech (crash check-in) that is always voiced.
+     *
+     * Owner (2026-09-23): "it talks a lot, and when it's not necessary". Every line still lands in
+     * the conversation and on screen; *voicing* follows [SpeechMode]:
+     *  - a reply to something typed stays silent; a reply to something spoken is voiced, first
+     *    two sentences only (the rest stays on screen);
+     *  - anything Meow starts on its own is voiced only in IMPORTANT/ALWAYS mode, and in
+     *    IMPORTANT only while driving or with headphones/car audio.
+     */
+    private fun speak(text: String) = speak(text, urgent = false)
+
+    private fun speak(text: String, urgent: Boolean) {
         fuLog("speak: \"${text.take(80)}\"")
         if (text.isBlank()) return
         recordSpokenResponse(text)
         // Background ownership only suppresses audio. The response still belongs
         // in the conversation, including direct commands and tool completions.
-        if (handedOffToBackground) return
+        if (handedOffToBackground && !urgent) return
         prepareReplyExpression(text)
         _uiState.value = _uiState.value.copy(
             captionText = text, emotion = noteReplyAffect(text))
-        if (_uiState.value.isMuted) {
+        if (_uiState.value.isMuted && !urgent) {
             resetState()
             return
         }
+        val voiced = urgent || shouldVoice()
+        if (!voiced) {
+            fuLog("speak: shown, not voiced (mode=${speechMode.key})")
+            finishSilently()
+            return
+        }
+        val spoken = if (urgent || speechMode == SpeechMode.ALWAYS) text else SpeechMode.shorten(text)
         stopAlwaysOnListening()
         if (ttsManager == null) {
             startMockSpeaking(text)
             return
         }
-        selfVoiceFilter.begin(text)
+        selfVoiceFilter.begin(spoken)
         audioFocusManager?.requestFocus()
         resetMouthEnergy()
         val timingId = activeTimingTurn
-        ttsManager.speak(text) { interactionTimings.firstSpeechOutput(timingId) }
+        ttsManager.speak(spoken) { interactionTimings.firstSpeechOutput(timingId) }
+    }
+
+    /**
+     * The + button / paste: read what the user shows Meow (on the phone), remember it, turn a
+     * tracking number into a Flow "Package on its way" item, and hand it to Meow as a typed turn.
+     */
+    fun onAttachment(uri: android.net.Uri, kind: com.example.meowmba.core.attach.Attachments.Kind, note: String? = null) {
+        val ctx = secureStorage?.context?.applicationContext ?: return
+        _uiState.value = _uiState.value.copy(captionText = "Reading what you shared…")
+        viewModelScope.launch {
+            val att = com.example.meowmba.core.attach.Attachments
+            val read = runCatching { att.read(ctx, uri, kind) }.getOrElse {
+                _uiState.value = _uiState.value.copy(captionText = "I couldn't open that file.")
+                return@launch
+            }
+            val now = System.currentTimeMillis()
+            flowRuntime?.let { flow ->
+                read.tracking.forEach { t ->
+                    flow.store.upsert(com.example.meowmba.core.flow.Intention("pkg-${t.number}", "Package on its way (${t.carrier})",
+                        com.example.meowmba.core.flow.FlowKind.HOME, "you shared a tracking number", now,
+                        facts = mapOf(com.example.meowmba.core.flow.FlowPolicy.FACT_ACTION to "Track", "url" to t.url,
+                            com.example.meowmba.core.flow.FlowPolicy.FACT_BECAUSE to "Tracking ${t.number}.")))
+                }
+            }
+            openChat()
+            onUserTextSubmitted(att.describe(read, note))
+        }
+    }
+
+    /** How much Meow speaks aloud (Flow › Adjust › "Meow speaks"). Default: only when you talk to it. */
+    internal val speechMode: SpeechMode get() = _uiState.value.features.speechMode
+    @Volatile private var lastUserTurnAt = 0L
+    @Volatile private var lastUserTurnVoice = false
+
+    fun setSpeechMode(mode: SpeechMode) {
+        secureStorage?.savePreference(SpeechMode.PREF, mode.key)
+        _uiState.value = _uiState.value.copy(features = _uiState.value.features.copy(speechMode = mode))
+    }
+
+    /** Like the end of a spoken turn, but the reply stays on screen (it was never read aloud). */
+    private fun finishSilently() {
+        followUpJob?.cancel()
+        thinkingWatchdogJob?.cancel()
+        isFollowUpListen = false
+        val wasBusy = _uiState.value.interactionState != InteractionState.IDLE
+        _uiState.value = _uiState.value.copy(interactionState = InteractionState.IDLE, emotion = CompanionEmotion.IDLE)
+        if (wasBusy) { audioFocusManager?.abandonFocus(); updateVoiceListeningMode() }
+    }
+
+    private fun noteUserTurn(voice: Boolean) { lastUserTurnAt = System.currentTimeMillis(); lastUserTurnVoice = voice }
+
+    /** A reply (within 90 s of the user's turn) follows how the user spoke; anything else is proactive. */
+    private fun shouldVoice(): Boolean {
+        if (speechMode == SpeechMode.ALWAYS) return true
+        val reply = System.currentTimeMillis() - lastUserTurnAt < 90_000L
+        return if (reply) lastUserTurnVoice else proactiveVoiceAllowed()
+    }
+
+    /** Meow may start talking on its own only in IMPORTANT mode while driving or with private audio. */
+    private fun proactiveVoiceAllowed(): Boolean = when (speechMode) {
+        SpeechMode.ALWAYS -> true
+        SpeechMode.REPLIES -> false
+        SpeechMode.IMPORTANT -> _uiState.value.driving ||
+            com.example.meowmba.core.context.live.LiveContext.now.value.activity == com.example.meowmba.core.flow.Activity.DRIVING ||
+            com.example.meowmba.core.context.live.LiveContext.now.value.audio != null
     }
 
     private fun startMockSpeaking(text: String) {
@@ -12084,21 +12195,21 @@ class CompanionViewModel(
                     crashAlert = "Possible crash detected — hard impact at $g g, speed before it was $mph mph.",
                     emotion = CompanionEmotion.ALERT,
                 )
-                speak("Are you okay? I felt a hard impact and the camera shows what looks like a crash scene. Say \"text mom\" and I'll send your location to your emergency contact.")
+                speak("Are you okay? I felt a hard impact and the camera shows what looks like a crash scene. Say \"text mom\" and I'll send your location to your emergency contact.", urgent = true)
             }
             false -> {
                 _uiState.value = _uiState.value.copy(
                     crashAlert = "I felt a hard jolt at $g g, but the camera doesn't show an obvious crash scene.",
                     emotion = CompanionEmotion.ALERT,
                 )
-                speak("I felt a hard jolt, but the camera doesn't show an obvious crash scene. Are you okay? Say \"text mom\" if you need me to send your location.")
+                speak("I felt a hard jolt, but the camera doesn't show an obvious crash scene. Are you okay? Say \"text mom\" if you need me to send your location.", urgent = true)
             }
             null -> {
                 _uiState.value = _uiState.value.copy(
                     crashAlert = "Possible crash detected — hard impact at $g g, speed before it was $mph mph. I couldn't check the camera to confirm.",
                     emotion = CompanionEmotion.ALERT,
                 )
-                speak("Are you okay? I felt a hard impact but couldn't see the camera to check. Say \"text mom\" and I'll send your location to your emergency contact.")
+                speak("Are you okay? I felt a hard impact but couldn't see the camera to check. Say \"text mom\" and I'll send your location to your emergency contact.", urgent = true)
             }
         }
     }

@@ -56,6 +56,7 @@ class ExpressionIntegrationTest {
     }
     @Test fun realStartTokenCannotCompleteAReplacedTurnAndVoiceUsesItsPlan() = runTest {
         withVm { vm, tts ->
+            vm.setSpeechMode(com.example.meowmba.ui.companion.SpeechMode.ALWAYS) // this test checks the spoken confirmation
             vm.interactionTimings.setEnabled(true)
             vm.onUserTextSubmitted("what time is it")
             runCurrent()

@@ -40,13 +40,17 @@ internal fun DeskRoute(vm: CompanionViewModel, state: CompanionState, paused: Bo
         weather?.let { !it.isDay })
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    var attach by remember { mutableStateOf(false) }
     DeskWorkspace(DeskState.from(snap, facts, tasks), tasks, modifier, paused = paused,
         fpsTarget = state.avatarFpsTarget, interactive = interactive,
         onMenu = vm::openTiles, onSettings = vm::toggleSettings,
         onFlow = { vm.setAppTheme(AppTheme.FLOW) }, onProjects = vm::toggleProjectsScreen,
         onWeather = vm::toggleWeatherScreen, onConnections = vm::toggleConnectorsScreen, onNotes = vm::toggleVaultScreen,
         onTaskDone = { id -> scope.launch { handleFlowPrimary(vm, context, flow, id) { _ -> vm.setAppTheme(AppTheme.FLOW) } } },
-        onTaskLater = { id -> scope.launch { flow.onLater(id) } })
+        onTaskLater = { id -> scope.launch { flow.onLater(id) } },
+        micOn = state.isMicEnabled, onMicToggle = { vm.setMicEnabled(!state.isMicEnabled) },
+        onAttach = { attach = true })
+    if (attach) AttachSheet(vm, onDismiss = { attach = false })
 }
 
 private val HM = DateTimeFormatter.ofPattern("h:mm", Locale.US)
@@ -102,7 +106,8 @@ internal fun DeskWorkspace(desk: DeskState, tasks: List<Intention>, modifier: Mo
     thermalStatus: Int = com.example.meowmba.core.thermal.ThermalGovernor.currentStatus(),
     onMenu: () -> Unit = {}, onSettings: () -> Unit = {}, onFlow: () -> Unit = {},
     onProjects: () -> Unit = {}, onWeather: () -> Unit = {}, onConnections: () -> Unit = {}, onNotes: () -> Unit = {},
-    onTaskDone: (String) -> Unit = {}, onTaskLater: (String) -> Unit = {}) {
+    onTaskDone: (String) -> Unit = {}, onTaskLater: (String) -> Unit = {},
+    micOn: Boolean? = null, onMicToggle: () -> Unit = {}, onAttach: (() -> Unit)? = null) {
     var selected by rememberSaveable { mutableStateOf<DeskObject?>(null) }
     BoxWithConstraints(modifier.fillMaxSize()) {
         val wide = maxWidth > maxHeight
@@ -116,7 +121,8 @@ internal fun DeskWorkspace(desk: DeskState, tasks: List<Intention>, modifier: Mo
             lineFor = { deskLine(it, desk) }, onTap = { if (interactive) selected = it })
         if (interactive) DeskNavigation(if (wide) Modifier.align(Alignment.CenterStart).safeDrawingPadding()
             else Modifier.align(Alignment.BottomCenter).safeDrawingPadding(), vertical = wide,
-            onMenu = onMenu, onFlow = onFlow, onSettings = onSettings)
+            onMenu = onMenu, onFlow = onFlow, onSettings = onSettings,
+            micOn = micOn, onMicToggle = onMicToggle, onAttach = onAttach)
     }
     val obj = selected
     if (obj != null && interactive) ModalBottomSheet(onDismissRequest = { selected = null },

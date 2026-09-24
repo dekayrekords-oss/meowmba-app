@@ -63,6 +63,7 @@ class ProjectCreationViewModelTest {
         val dao = Dao(); val planner = Planner(); val root = temp.newFolder()
         val tts = VoicePipelineTest.FakeSpeechSynthesizer(); val vm = vm(dao, planner, root, tts)
         runCurrent()
+        vm.setSpeechMode(com.example.meowmba.ui.companion.SpeechMode.ALWAYS) // this test checks the spoken confirmation
         vm.createProject("Launch", "Plan the launch"); runCurrent()
         vm.createProject("Launch", "Plan the launch"); runCurrent()
         assertEquals(1, dao.inserts)

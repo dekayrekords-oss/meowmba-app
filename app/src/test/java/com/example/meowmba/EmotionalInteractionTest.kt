@@ -15,6 +15,7 @@ class EmotionalInteractionTest {
         val engine=VoicePipelineTest.FakeSpeechEngine()
         val vm=CompanionViewModel(elapsedRealtimeMs = { System.nanoTime() / 1_000_000L }, ttsManager=tts,speechService=engine,captureEngine=engine,
             ioDispatcher=UnconfinedTestDispatcher(testScheduler))
+        vm.setSpeechMode(com.example.meowmba.ui.companion.SpeechMode.ALWAYS) // these tests drive speech directly
         try { block(vm,tts,engine) } finally { vm.viewModelScope.cancel();Dispatchers.resetMain() }
     }
     private fun speak(vm: CompanionViewModel,text:String) {

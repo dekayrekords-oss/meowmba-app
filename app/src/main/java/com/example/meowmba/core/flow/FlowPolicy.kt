@@ -130,6 +130,8 @@ class FlowPolicy(private val zone: ZoneId = ZoneId.systemDefault()) {
     // ---- interruption ----------------------------------------------------------------------
 
     private fun interruptEligible(i: Intention, a: Assessment, s: Situation): Boolean {
+        // "Allow …" setup rows are never worth interrupting for; they wait in the flow.
+        if (i.id.startsWith(com.example.meowmba.core.flow.sources.AppIntentions.SETUP)) return false
         if (!a.urgency.atLeast(Urgency.USEFUL)) return false
         val timely = a.chancePassing >= CHANCE_MIN || (a.urgency == Urgency.URGENT && a.relevantNow >= RELEVANT_MIN)
         if (!timely) return false

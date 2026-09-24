@@ -64,6 +64,9 @@ fun FlowAdjustSheet(
     onAppSettings: (() -> Unit)? = null,
     /** Laya on this phone: what to say, and the one action that fits (Download / Cancel / Retry). */
     thinking: ThinkingStatus = ThinkingStatus.RULES_ONLY,
+    /** App-wide voice level; null hides the control (previews/tests). */
+    speechMode: com.example.meowmba.ui.companion.SpeechMode? = null,
+    onSpeechMode: (com.example.meowmba.ui.companion.SpeechMode) -> Unit = {},
 ) {
     val colors = FlowColors.from(FlowThemes.palette(settings.theme, night, settings.accent))
     CompositionLocalProvider(LocalFlowColors provides colors) {
@@ -142,7 +145,9 @@ fun FlowAdjustSheet(
             }
 
             Group("How it reaches you") {
-                SettingRow("Speak out loud", "Say interruptions aloud, hands-free in the car") {
+                if (speechMode != null) SettingRow("Meow speaks", speechMode.detail) {
+                    Segmented(com.example.meowmba.ui.companion.SpeechMode.entries.map { it to it.label }, speechMode, onSpeechMode)
+                } else SettingRow("Speak out loud", "Say interruptions aloud, hands-free in the car") {
                     Toggle(settings.voice, "Speak out loud") { onChange(settings.copy(voice = it)) }
                 }
                 SettingRow("Notify in other apps", "Show as a notification when Meow isn't on screen") {

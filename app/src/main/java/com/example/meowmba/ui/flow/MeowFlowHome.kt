@@ -116,6 +116,11 @@ fun MeowFlowHome(
     onDesk: (() -> Unit)? = null,
     /** Voice state for the ask line: listening/thinking/speaking, with what was heard or said. */
     voice: FlowVoice = FlowVoice.Idle,
+    /** Microphone privacy switch; null hides the button (previews). */
+    micOn: Boolean? = null,
+    onMicToggle: () -> Unit = {},
+    /** The + button: camera, photo or file. Null hides it. */
+    onAttach: (() -> Unit)? = null,
 ) {
     val hour = java.time.Instant.ofEpochMilli(snapshot.at.takeIf { it > 0 } ?: System.currentTimeMillis())
         .atZone(java.time.ZoneId.systemDefault()).hour
@@ -166,12 +171,14 @@ fun MeowFlowHome(
                         Modifier.padding(top = 12.dp), style = FlowType.because.copy(color = colors.ink2))
                 }
                 Spacer(Modifier.weight(1f))
+                // Keep a gap even when the screen is short (cover display) and the spacer collapses.
+                Spacer(Modifier.height(20.dp))
                 if (snapshot.more.isNotEmpty()) {
                     FlowList(snapshot.more, snapshot.evening, pushed, anchors, reduceMotion, onPrimary)
                 }
             }
 
-            AskLine(Modifier.align(Alignment.BottomCenter).padding(bottom = if (navigation != null) 48.dp else 0.dp), onAsk, onMic, voice)
+            AskLine(Modifier.align(Alignment.BottomCenter).padding(bottom = if (navigation != null) 48.dp else 0.dp), onAsk, onMic, voice, micOn, onMicToggle, onAttach)
             if (navigation != null) Box(Modifier.align(Alignment.BottomCenter)
                 .windowInsetsPadding(WindowInsets.navigationBars)) { navigation() }
 
@@ -411,7 +418,8 @@ private fun FlowList(
 // ---- ask line ------------------------------------------------------------------------------
 
 @Composable
-private fun AskLine(modifier: Modifier, onAsk: () -> Unit, onMic: () -> Unit, voice: FlowVoice = FlowVoice.Idle) {
+private fun AskLine(modifier: Modifier, onAsk: () -> Unit, onMic: () -> Unit, voice: FlowVoice = FlowVoice.Idle,
+                    micOn: Boolean? = null, onMicToggle: () -> Unit = {}, onAttach: (() -> Unit)? = null) {
     val c = LocalFlowColors.current
     val live = voice !is FlowVoice.Idle
     Row(
@@ -424,7 +432,13 @@ private fun AskLine(modifier: Modifier, onAsk: () -> Unit, onMic: () -> Unit, vo
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        BasicText(voice.line ?: "Ask, or tell me what you're doing…",
+        onAttach?.let { attach ->
+            Box(Modifier.size(FlowDims.micSize * 0.8f).clip(CircleShape).border(1.5.dp, c.ink, CircleShape)
+                .clickable(role = Role.Button, onClickLabel = "Add a photo or file", onClick = attach)
+                .semantics { contentDescription = "Add a photo or file" }.testTag("flow_attach"),
+                contentAlignment = Alignment.Center) { PlusGlyph(c.ink) }
+        }
+        BasicText(voice.line ?: if (micOn == false) "Mic is off. Type, or tap the mic to talk." else "Ask, or tell me what you're doing…",
             Modifier.weight(1f).clickable(role = Role.Button, onClickLabel = "Ask Meow", onClick = onAsk)
                 .semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite }.testTag("flow_ask_line"),
             style = FlowType.ask.copy(color = if (live) c.ink else c.ink2), maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -437,12 +451,31 @@ private fun AskLine(modifier: Modifier, onAsk: () -> Unit, onMic: () -> Unit, vo
                 .clickable(role = Role.Button, onClickLabel = if (listening) "Stop listening" else "Talk to Meow", onClick = onMic)
                 .semantics { contentDescription = if (listening) "Listening. Tap to finish" else "Talk to Meow" }.testTag("flow_mic"),
             contentAlignment = Alignment.Center,
-        ) { MicGlyph(if (listening) c.paper else c.ink) }
+        ) { MicGlyph(if (listening) c.paper else if (micOn == false) c.ink3 else c.ink) }
+        // Privacy switch: filled when the mic is off, so its state reads at a glance.
+        if (micOn != null) Box(
+            Modifier.size(FlowDims.micSize * 0.8f).clip(CircleShape)
+                .then(if (!micOn) Modifier.background(c.ink, CircleShape) else Modifier)
+                .border(1.5.dp, c.ink, CircleShape)
+                .clickable(role = Role.Switch, onClickLabel = if (micOn) "Turn the microphone off" else "Turn the microphone on", onClick = onMicToggle)
+                .semantics { contentDescription = if (micOn) "Microphone on. Tap to turn off" else "Microphone off. Tap to turn on" }
+                .testTag("flow_mic_toggle"),
+            contentAlignment = Alignment.Center,
+        ) { MicGlyph(if (!micOn) c.paper else c.ink, slashed = true) }
     }
 }
 
 @Composable
-private fun MicGlyph(color: Color) {
+private fun PlusGlyph(color: Color) {
+    Canvas(Modifier.size(16.dp)) {
+        val s = 2.dp.toPx()
+        drawLine(color, Offset(size.width / 2, 0f), Offset(size.width / 2, size.height), s, StrokeCap.Round)
+        drawLine(color, Offset(0f, size.height / 2), Offset(size.width, size.height / 2), s, StrokeCap.Round)
+    }
+}
+
+@Composable
+private fun MicGlyph(color: Color, slashed: Boolean = false) {
     Canvas(Modifier.size(width = 18.dp, height = 22.dp)) {
         val s = 1.8.dp.toPx()
         val u = size.width / 18f
@@ -451,6 +484,7 @@ private fun MicGlyph(color: Color) {
         drawArc(color, 0f, 180f, false, topLeft = Offset(1.5f * u, 3f * u), size = androidx.compose.ui.geometry.Size(15 * u, 15 * u),
             style = Stroke(s, cap = StrokeCap.Round))
         drawLine(color, Offset(9 * u, 18 * u), Offset(9 * u, 21 * u), s, StrokeCap.Round)
+        if (slashed) drawLine(color, Offset(1 * u, 1 * u), Offset(17 * u, 21 * u), s, StrokeCap.Round)
     }
 }
 

@@ -355,6 +355,7 @@ class AgentViewModelTest {
         val vm = CompanionViewModel(ttsManager = fakeTts, workspaceRoot = workspaceRoot,
             ioDispatcher = testDispatcher).also { viewModels += it }
 
+        vm.setSpeechMode(com.example.meowmba.ui.companion.SpeechMode.ALWAYS) // this test checks the spoken confirmation
         vm.onUserTextSubmitted("create file called hello.txt")
         runCurrent() // settle synchronous work without tripping the approval timeout
 
@@ -378,6 +379,7 @@ class AgentViewModelTest {
         val vm = CompanionViewModel(ttsManager = fakeTts, workspaceRoot = Files.createTempDirectory("memba_vm_ws2").toFile(),
             ioDispatcher = testDispatcher).also { viewModels += it }
         // This must not be swallowed by generic "what ..." chat routing.
+        vm.setSpeechMode(com.example.meowmba.ui.companion.SpeechMode.ALWAYS) // this test checks the spoken confirmation
         vm.onUserTextSubmitted("what tasks are running")
         advanceUntilIdle()
         assertTrue(vm.uiState.value.activeTasks.any { it.toolId == "task.list" && it.status == TaskStatus.COMPLETED })

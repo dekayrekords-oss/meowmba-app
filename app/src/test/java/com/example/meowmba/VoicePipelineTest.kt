@@ -146,6 +146,26 @@ class VoicePipelineTest {
         // fallback in production just to make these tests listen.
         viewModel = CompanionViewModel(elapsedRealtimeMs = { System.nanoTime() / 1_000_000L }, speechService = fakeStt, captureEngine = fakeStt,
             ttsManager = fakeTts, ioDispatcher = testDispatcher)
+        // These pipeline tests type text as a stand-in for speech and check what gets voiced.
+        viewModel.setSpeechMode(com.example.meowmba.ui.companion.SpeechMode.ALWAYS)
+    }
+
+    // ---- Owner review 2026-09-23: "it talks a lot, and when it's not necessary" -------------
+
+    @Test
+    fun `typed question gets an on-screen answer and nothing is spoken`() = pipelineTest {
+        viewModel.setSpeechMode(com.example.meowmba.ui.companion.SpeechMode.REPLIES)
+        viewModel.onUserTextSubmitted("what time is it")
+        runCurrent()
+        assertTrue(fakeTts.spokenTexts.isEmpty())
+        assertTrue(viewModel.uiState.value.captionText.orEmpty().any { it.isDigit() })
+    }
+
+    @Test
+    fun `spoken question is answered aloud`() = pipelineTest {
+        viewModel.setSpeechMode(com.example.meowmba.ui.companion.SpeechMode.REPLIES)
+        viewModel.onExternalWakeCommand("what time is it")
+        assertEquals(1, fakeTts.spokenTexts.size)
     }
 
     @After

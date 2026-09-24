@@ -31,6 +31,14 @@ class BugIntakeAndPlacesTest {
         assertNull(intake.accept("a blue circle", 121_000))
     }
     @Test fun placeCommandsMatchTheUsersNaturalPhrases() {
+        assertEquals(PlaceVoiceIntent.Heading("home"), PlaceVoiceIntent.parse("I'm heading home"))
+        assertEquals(PlaceVoiceIntent.Heading("work"), PlaceVoiceIntent.parse("I'm going to work right now"))
+        assertEquals(PlaceVoiceIntent.Heading("work"), PlaceVoiceIntent.parse("on my way to the office"))
+        assertEquals(PlaceVoiceIntent.Arrived("home"), PlaceVoiceIntent.parse("I'm home now"))
+        assertEquals(PlaceVoiceIntent.Arrived("work"), PlaceVoiceIntent.parse("just got to work"))
+        assertEquals(null, PlaceVoiceIntent.parse("I'm going to sleep"))
+        assertEquals(null, PlaceVoiceIntent.parse("I'm going to call Dana"))
+        assertEquals(PlaceVoiceIntent.Destination, PlaceVoiceIntent.parse("where are we going"))
         assertEquals(PlaceVoiceIntent.Current, PlaceVoiceIntent.parse("Where are we?"))
         assertEquals(PlaceVoiceIntent.Destination, PlaceVoiceIntent.parse("Do you know where we’re going?"))
         assertEquals(PlaceVoiceIntent.AskName, PlaceVoiceIntent.parse("Remember here"))

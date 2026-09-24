@@ -772,6 +772,8 @@ fun nextDriveReaction(
 
 /** Separate feature state keeps JVM constructor/copy signatures below the 255-slot limit. */
 data class CompanionFeatures(
+    /** How much Meow speaks aloud (see [SpeechMode]); grouped here to keep CompanionState under the JVM slot limit. */
+    val speechMode: SpeechMode = SpeechMode.REPLIES,
     val songRecognitionStatus: String? = null,
     val songRecognitionBusy: Boolean = false,
     val songRecognitionPrompt: Boolean = false,

@@ -1025,7 +1025,13 @@ fun CompanionScreen(
 
         SongRecognitionDialog(uiState, viewModel)
 
+        var chatAttachNote by remember { mutableStateOf<String?>(null) }
+        chatAttachNote?.let { note ->
+            com.example.meowmba.ui.flow.AttachSheet(viewModel, onDismiss = { chatAttachNote = null }, note = note.ifBlank { null })
+        }
         ChatOverlay(
+            onAttach = { note -> chatAttachNote = note },
+            onPasteFile = { uri, note -> viewModel.onAttachment(uri, com.example.meowmba.core.attach.Attachments.Kind.FILE, note.ifBlank { null }) },
             recognitionIssue = uiState.voiceRecognitionStatus,
             isExpanded = uiState.isChatExpanded,
             onClose = { viewModel.toggleChat() },

@@ -32,9 +32,13 @@ internal fun FlowHomeNavigation(onMenu: () -> Unit, onAdd: () -> Unit, onDesk: (
 }
 
 @Composable
-internal fun DeskNavigation(modifier: Modifier = Modifier, vertical: Boolean = false, onMenu: () -> Unit, onFlow: () -> Unit, onSettings: () -> Unit) {
+internal fun DeskNavigation(modifier: Modifier = Modifier, vertical: Boolean = false, onMenu: () -> Unit, onFlow: () -> Unit, onSettings: () -> Unit,
+                            micOn: Boolean? = null, onMicToggle: () -> Unit = {}, onAttach: (() -> Unit)? = null) {
     val controls: @Composable () -> Unit = {
-        listOf("Menu" to onMenu, "Flow" to onFlow, "Settings" to onSettings).forEach { (label, action) ->
+        listOfNotNull("Menu" to onMenu, "Flow" to onFlow,
+            micOn?.let { (if (it) "Mic on" else "Mic off") to onMicToggle },
+            onAttach?.let { "Add" to it },
+            "Settings" to onSettings).forEach { (label, action) ->
             TextButton(onClick = action, modifier = Modifier.heightIn(min = 48.dp)) {
                 Text(label, color = Color(0xFFF4EEDB))
             }

@@ -81,6 +81,9 @@ internal suspend fun handleFlowPrimary(vm: CompanionViewModel, context: Context,
             item?.facts?.get("package")?.let { pkg -> context.packageManager.getLaunchIntentForPackage(pkg)?.let { context.startSafely(it) } }
             flow.onPrimary(id)
         }
+        item?.facts?.get("url") != null -> {
+            context.startSafely(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(item!!.facts.getValue("url"))))
+        }
         id.startsWith(AppIntentions.CALENDAR) -> context.startSafely(Intent(Intent.ACTION_VIEW,
             android.provider.CalendarContract.CONTENT_URI.buildUpon().appendPath("time")
                 .appendPath((item?.dueAt ?: System.currentTimeMillis()).toString()).build()))
@@ -103,6 +106,8 @@ internal fun FlowHomeRoute(vm: CompanionViewModel, state: CompanionState, paused
     val context = LocalContext.current
     var adjust by remember { mutableStateOf(false) }
     var compose by remember { mutableStateOf(false) }
+    var attach by remember { mutableStateOf(false) }
+    var attachNote by remember { mutableStateOf<String?>(null) }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
         scope.launch { runCatching { vm.syncFlowAppData() }; flow.controller.schedule(immediate = true) }
     }
@@ -119,7 +124,9 @@ internal fun FlowHomeRoute(vm: CompanionViewModel, state: CompanionState, paused
         onInterruptDecline = { scope.launch { flow.onLater(it.item.intentionId) } },
         onAdjust = { adjust = true }, onAsk = { compose = true }, onMic = vm::onFlowMicClick,
         onMenu = vm::openTiles, onDesk = { vm.setAppTheme(AppTheme.DESK) },
-        voice = flowVoice(state))
+        voice = flowVoice(state),
+        micOn = state.isMicEnabled, onMicToggle = { vm.setMicEnabled(!state.isMicEnabled) },
+        onAttach = { attach = true })
 
     val paper = FlowColors.from(FlowThemes.palette(settings.theme, snapshot.evening, settings.accent)).paper
     if (adjust) ModalBottomSheet(onDismissRequest = { adjust = false }, dragHandle = null,
@@ -127,8 +134,10 @@ internal fun FlowHomeRoute(vm: CompanionViewModel, state: CompanionState, paused
         FlowAdjustSheet(settings, "Not enough activity yet. Meow learns your hours as you use the phone.", snapshot.evening,
             onChange = flow::updateSettings, onDone = { adjust = false },
             onAppSettings = { adjust = false; vm.toggleSettings() },
-            thinking = layaThinking(vm))
+            thinking = layaThinking(vm),
+            speechMode = state.features.speechMode, onSpeechMode = vm::setSpeechMode)
     }
+    if (attach) AttachSheet(vm, onDismiss = { attach = false; attachNote = null }, note = attachNote)
     if (compose) ModalBottomSheet(onDismissRequest = { compose = false }, dragHandle = null,
         containerColor = paper, shape = RoundedCornerShape(0.dp)) {
         FlowComposer(settings, snapshot.evening,
@@ -146,7 +155,10 @@ internal fun FlowHomeRoute(vm: CompanionViewModel, state: CompanionState, paused
                 }
             },
             onAsk = { text -> compose = false; vm.onUserTextSubmitted(text); vm.openChat() },
-            onCancel = { compose = false })
+            onCancel = { compose = false },
+            onAttach = { note -> compose = false; attachNote = note.ifBlank { null }; attach = true },
+            onPasteFile = { uri, note -> compose = false
+                vm.onAttachment(uri, com.example.meowmba.core.attach.Attachments.Kind.FILE, note.ifBlank { null }) })
     }
 }
 
@@ -199,7 +211,8 @@ internal fun flowVoice(state: CompanionState): FlowVoice = when (state.interacti
 
 /** Paper-style "tell Meow" sheet: keep something in mind, or ask Meow. Replaces the Material dialog. */
 @Composable
-internal fun FlowComposer(settings: FlowSettings, night: Boolean, onKeep: (String) -> Unit, onAsk: (String) -> Unit, onCancel: () -> Unit) {
+internal fun FlowComposer(settings: FlowSettings, night: Boolean, onKeep: (String) -> Unit, onAsk: (String) -> Unit, onCancel: () -> Unit,
+                          onAttach: ((note: String) -> Unit)? = null, onPasteFile: ((android.net.Uri, String) -> Unit)? = null) {
     val c = FlowColors.from(FlowThemes.palette(settings.theme, night, settings.accent))
     var text by remember { mutableStateOf("") }
     val focus = remember { FocusRequester() }
@@ -213,8 +226,10 @@ internal fun FlowComposer(settings: FlowSettings, night: Boolean, onKeep: (Strin
                 Modifier.padding(top = 8.dp), style = FlowType.because.copy(color = c.ink2))
             BasicTextField(text, { text = it.take(300) }, Modifier.fillMaxWidth().padding(top = 18.dp).focusRequester(focus)
                 .drawBehind { drawLine(c.ink, Offset(0f, size.height + 8.dp.toPx()), Offset(size.width, size.height + 8.dp.toPx()), 1.5.dp.toPx()) }
+                .then(if (onPasteFile != null) Modifier.acceptPastedFiles { onPasteFile(it, text.trim()) } else Modifier)
                 .testTag("flow_composer_input"),
                 textStyle = FlowType.itemTitle.copy(color = c.ink), cursorBrush = SolidColor(c.ink), minLines = 2)
+            onAttach?.let { attach -> Box(Modifier.padding(top = 18.dp)) { FlowLink("+ Photo, camera or file", c.ink) { attach(text.trim()) } } }
             Row(Modifier.padding(top = 26.dp), horizontalArrangement = Arrangement.spacedBy(20.dp),
                 verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                 FlowButton("Keep it in mind", c.ink, c.paper) { if (text.isNotBlank()) onKeep(text.trim()) }
