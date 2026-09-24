@@ -67,6 +67,10 @@ fun FlowAdjustSheet(
     /** App-wide voice level; null hides the control (previews/tests). */
     speechMode: com.example.meowmba.ui.companion.SpeechMode? = null,
     onSpeechMode: (com.example.meowmba.ui.companion.SpeechMode) -> Unit = {},
+    /** Idle avatar key ("lumen"/"orb"/"off") and minutes; null hides the group. */
+    idleAvatar: String? = null,
+    idleMinutes: Int = com.example.meowmba.ui.companion.IdleAvatar.DEFAULT_MINUTES,
+    onIdleAvatar: (key: String, minutes: Int) -> Unit = { _, _ -> },
 ) {
     val colors = FlowColors.from(FlowThemes.palette(settings.theme, night, settings.accent))
     CompositionLocalProvider(LocalFlowColors provides colors) {
@@ -158,6 +162,15 @@ fun FlowAdjustSheet(
             Group("Thinking", thinking.text) {
                 thinking.action?.let { (label, act) ->
                     Box(Modifier.padding(top = 10.dp)) { FlowLink(label, c.ink, act) }
+                }
+            }
+
+            if (idleAvatar != null) Group("When idle", "After a while without a touch, Meow rests as an avatar. New things cross the screen; tap to come back.") {
+                SettingRow("Show", null) {
+                    Segmented(com.example.meowmba.ui.companion.IdleAvatar.MODES, idleAvatar) { onIdleAvatar(it, idleMinutes) }
+                }
+                if (idleAvatar != "off") SettingRow("After", "Minutes without a touch") {
+                    Segmented(com.example.meowmba.ui.companion.IdleAvatar.MINUTES.map { it to "${it}m" }, idleMinutes) { onIdleAvatar(idleAvatar, it) }
                 }
             }
 

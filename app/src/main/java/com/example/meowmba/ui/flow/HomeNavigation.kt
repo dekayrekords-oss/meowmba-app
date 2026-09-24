@@ -60,17 +60,21 @@ internal fun Modifier.homeSwipes(
     val vertical = 56.dp.toPx()
     val horizontal = 110.dp.toPx()
     awaitEachGesture {
-        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Final)
         var end = down.position
         var multi = false
+        var handled = false
         while (true) {
-            val ev = awaitPointerEvent(PointerEventPass.Initial)
+            // Final pass: children have had their turn; a drag they consumed (the dock handle,
+            // a scrolling list) is theirs, not a home swipe.
+            val ev = awaitPointerEvent(PointerEventPass.Final)
             if (ev.changes.size > 1) multi = true
             val c = ev.changes.firstOrNull { it.id == down.id } ?: break
+            if (c.isConsumed && c.pressed) handled = true
             end = c.position
             if (!c.pressed) break
         }
-        if (multi) return@awaitEachGesture
+        if (multi || handled) return@awaitEachGesture
         val dx = end.x - down.position.x
         val dy = end.y - down.position.y
         when {

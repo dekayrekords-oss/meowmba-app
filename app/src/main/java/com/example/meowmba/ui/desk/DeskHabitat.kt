@@ -220,6 +220,9 @@ internal fun describe(o: DeskObject, s: DeskState): String = when (o) {
     DeskObject.BUILD -> if (s.monitorLines.isEmpty()) "Monitor: nothing running" else "Monitor: " + s.monitorLines.joinToString(", ") { it.text }
     DeskObject.IDEA -> if (s.lampOn) "Lamp: Meow has an idea for you" else "Lamp: off"
     DeskObject.WINDOW -> "Window: " + (s.weatherLine ?: "weather")
+    DeskObject.CLOCK -> "Clock: open alarms and timers"
+    DeskObject.DRAWER_TOP -> "Top drawer: your apps and tools"
+    DeskObject.DRAWER_BOTTOM -> "Bottom drawer: your apps and tools"
 }
 
 private class CatMotion {

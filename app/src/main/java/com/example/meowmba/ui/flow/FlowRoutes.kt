@@ -128,14 +128,19 @@ internal fun FlowHomeRoute(vm: CompanionViewModel, state: CompanionState, paused
         micOn = state.isMicEnabled, onMicToggle = { vm.setMicEnabled(!state.isMicEnabled) },
         onAttach = { attach = true })
 
-    val paper = FlowColors.from(FlowThemes.palette(settings.theme, snapshot.evening, settings.accent)).paper
+    val flowColors = FlowColors.from(FlowThemes.palette(settings.theme, snapshot.evening, settings.accent))
+    val paper = flowColors.paper
+    // Six-app side dock, movable; drawn over the page.
+    HomeDock(vm, DockStyle.flow(flowColors))
     if (adjust) ModalBottomSheet(onDismissRequest = { adjust = false }, dragHandle = null,
         containerColor = paper, shape = RoundedCornerShape(0.dp)) {
         FlowAdjustSheet(settings, "Not enough activity yet. Meow learns your hours as you use the phone.", snapshot.evening,
             onChange = flow::updateSettings, onDone = { adjust = false },
             onAppSettings = { adjust = false; vm.toggleSettings() },
             thinking = layaThinking(vm),
-            speechMode = state.features.speechMode, onSpeechMode = vm::setSpeechMode)
+            speechMode = state.features.speechMode, onSpeechMode = vm::setSpeechMode,
+            idleAvatar = state.features.idleAvatar, idleMinutes = state.features.idleAvatarMinutes,
+            onIdleAvatar = vm::setIdleAvatar)
     }
     if (attach) AttachSheet(vm, onDismiss = { attach = false; attachNote = null }, note = attachNote)
     if (compose) ModalBottomSheet(onDismissRequest = { compose = false }, dragHandle = null,

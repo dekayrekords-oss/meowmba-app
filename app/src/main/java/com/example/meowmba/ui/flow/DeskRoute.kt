@@ -49,11 +49,25 @@ internal fun DeskRoute(vm: CompanionViewModel, state: CompanionState, paused: Bo
         onTaskDone = { id -> scope.launch { handleFlowPrimary(vm, context, flow, id) { _ -> vm.setAppTheme(AppTheme.FLOW) } } },
         onTaskLater = { id -> scope.launch { flow.onLater(id) } },
         micOn = state.isMicEnabled, onMicToggle = { vm.setMicEnabled(!state.isMicEnabled) },
-        onAttach = { attach = true })
+        onAttach = { attach = true },
+        onClock = { openClock(context) },
+        drawerContent = { top, close -> DeskDrawerPanel(vm, top, close) },
+        dock = { HomeDock(vm, DockStyle.DESK) })
     if (attach) AttachSheet(vm, onDismiss = { attach = false })
 }
 
 private val HM = DateTimeFormatter.ofPattern("h:mm", Locale.US)
+
+/** Android's Clock app on the alarms page; falls back to any clock the phone has. */
+internal fun openClock(context: android.content.Context) {
+    val intents = listOf(
+        android.content.Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS),
+        android.content.Intent(android.provider.AlarmClock.ACTION_SHOW_TIMERS),
+        context.packageManager.getLaunchIntentForPackage("com.sec.android.app.clockpackage"),
+        context.packageManager.getLaunchIntentForPackage("com.google.android.deskclock"),
+    ).filterNotNull()
+    for (i in intents) if (runCatching { context.startActivity(i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess) return
+}
 
 /** Desk objects from real items (master plan §9.1): nothing is invented; empty stays empty. */
 internal fun deskFacts(now: Long, open: List<Intention>, project: ProjectUi?, weatherLine: String?, night: Boolean?,
@@ -107,7 +121,12 @@ internal fun DeskWorkspace(desk: DeskState, tasks: List<Intention>, modifier: Mo
     onMenu: () -> Unit = {}, onSettings: () -> Unit = {}, onFlow: () -> Unit = {},
     onProjects: () -> Unit = {}, onWeather: () -> Unit = {}, onConnections: () -> Unit = {}, onNotes: () -> Unit = {},
     onTaskDone: (String) -> Unit = {}, onTaskLater: (String) -> Unit = {},
-    micOn: Boolean? = null, onMicToggle: () -> Unit = {}, onAttach: (() -> Unit)? = null) {
+    micOn: Boolean? = null, onMicToggle: () -> Unit = {}, onAttach: (() -> Unit)? = null,
+    onClock: () -> Unit = {},
+    /** Contents of an opened drawer (true = top); the route supplies the real folder. */
+    drawerContent: (@Composable (top: Boolean, close: () -> Unit) -> Unit)? = null,
+    /** Side dock, drawn above the scene. */
+    dock: (@Composable () -> Unit)? = null) {
     var selected by rememberSaveable { mutableStateOf<DeskObject?>(null) }
     BoxWithConstraints(modifier.fillMaxSize()) {
         val wide = maxWidth > maxHeight
@@ -118,7 +137,11 @@ internal fun DeskWorkspace(desk: DeskState, tasks: List<Intention>, modifier: Mo
             bottomInset = insets.calculateBottomPadding() + if (interactive && !wide) 56.dp else 8.dp,
             fpsTarget = fpsTarget, reduceMotion = paused,
             interactive = interactive, wanderEveryMs = if (fpsTarget <= 15) 0 else 26_000,
-            lineFor = { deskLine(it, desk) }, onTap = { if (interactive) selected = it })
+            lineFor = { deskLine(it, desk) }, onTap = {
+                // The clock hands straight over to Android's Clock; everything else opens its panel.
+                if (interactive) { if (it == DeskObject.CLOCK) onClock() else selected = it }
+            })
+        if (interactive) dock?.invoke()
         if (interactive) DeskNavigation(if (wide) Modifier.align(Alignment.CenterStart).safeDrawingPadding()
             else Modifier.align(Alignment.BottomCenter).safeDrawingPadding(), vertical = wide,
             onMenu = onMenu, onFlow = onFlow, onSettings = onSettings,
@@ -138,13 +161,18 @@ internal fun DeskWorkspace(desk: DeskState, tasks: List<Intention>, modifier: Mo
                 }
             }
             HorizontalDivider(Modifier.padding(vertical = 12.dp), color = Color(0xFF33505A))
+            if (obj == DeskObject.DRAWER_TOP || obj == DeskObject.DRAWER_BOTTOM) {
+                drawerContent?.invoke(obj == DeskObject.DRAWER_TOP) { selected = null }
+                Spacer(Modifier.height(20.dp))
+                return@Column
+            }
             val relevant = when (obj) {
                 DeskObject.MONEY -> tasks.filter { it.kind == FlowKind.MONEY }
                 DeskObject.INBOX -> tasks.filter { it.kind == FlowKind.PEOPLE }
                 DeskObject.IDEA -> tasks.filter { it.kind == FlowKind.OTHER || it.kind == FlowKind.ERRAND }
                 DeskObject.PROJECT, DeskObject.BUILD -> tasks.filter { it.kind == FlowKind.WORK }
                 DeskObject.TODAY -> tasks.sortedBy { it.dueAt ?: Long.MAX_VALUE }
-                DeskObject.WINDOW -> emptyList()
+                DeskObject.WINDOW, DeskObject.CLOCK, DeskObject.DRAWER_TOP, DeskObject.DRAWER_BOTTOM -> emptyList()
             }
             val summary = when (obj) {
                 DeskObject.WINDOW -> desk.weatherLine ?: "Weather isn't set up yet. Open Weather to choose a location."
@@ -154,6 +182,7 @@ internal fun DeskWorkspace(desk: DeskState, tasks: List<Intention>, modifier: Mo
                 DeskObject.INBOX -> if (relevant.isEmpty()) "Nobody is waiting on you." else "People waiting on you."
                 DeskObject.MONEY -> if (relevant.isEmpty()) "Nothing due." else "Money things coming up."
                 DeskObject.IDEA -> if (relevant.isEmpty()) "No ideas or errands waiting." else "Things you asked Meow to keep in mind."
+                DeskObject.CLOCK, DeskObject.DRAWER_TOP, DeskObject.DRAWER_BOTTOM -> ""
             }
             Text(summary, style = MaterialTheme.typography.bodyLarge, color = Color(0xFFBED0CD))
             relevant.take(12).forEach { task -> DeskTaskRow(task, onTaskDone, onTaskLater) }
@@ -194,6 +223,8 @@ internal fun deskLine(obj: DeskObject, s: DeskState): String = when (obj) {
     DeskObject.BUILD -> s.monitorLines.firstOrNull()?.text?.removePrefix("> ") ?: "All quiet."
     DeskObject.IDEA -> if (s.lampOn) "I'm keeping a few things in mind for you." else "No ideas waiting."
     DeskObject.WINDOW -> s.weatherLine ?: "Weather isn't set up yet."
+    DeskObject.CLOCK -> "Opening your clock."
+    DeskObject.DRAWER_TOP, DeskObject.DRAWER_BOTTOM -> "Here's what's in the drawer."
 }
 
 internal fun deskTitle(obj: DeskObject) = when (obj) {
@@ -204,4 +235,7 @@ internal fun deskTitle(obj: DeskObject) = when (obj) {
     DeskObject.MONEY -> "Money"
     DeskObject.INBOX -> "People waiting"
     DeskObject.IDEA -> "Ideas & errands"
+    DeskObject.CLOCK -> "Clock"
+    DeskObject.DRAWER_TOP -> "Top drawer"
+    DeskObject.DRAWER_BOTTOM -> "Bottom drawer"
 }

@@ -22,6 +22,11 @@ enum class DeskObject(
     MONEY("Jar: money", 270f, 506f, 68f, 100f, 205f),
     INBOX("Letter tray: messages", 332f, 518f, 78f, 88f, 250f),
     IDEA("Lamp: an idea from Meow", 194f, 440f, 84f, 164f, 190f),
+    /** Opens Android's Clock (alarms, timers). */
+    CLOCK("Clock: alarms and timers", 34f, 74f, 76f, 76f, 60f),
+    /** The desk drawers: folders of apps and Meow tools the user fills. */
+    DRAWER_TOP("Top drawer: apps and tools", 30f, 640f, 150f, 42f, 70f),
+    DRAWER_BOTTOM("Bottom drawer: apps and tools", 30f, 686f, 150f, 38f, 70f),
 }
 
 /** App facts the Desk shows that don't come from Flow items (project status, build, weather). */

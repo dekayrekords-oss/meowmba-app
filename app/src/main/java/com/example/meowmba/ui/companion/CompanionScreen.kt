@@ -23,6 +23,8 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import com.example.meowmba.ui.flow.homeSwipes
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.offset
@@ -145,11 +147,50 @@ fun CompanionScreen(
                     Modifier.fillMaxSize(), interactive = false)
             }
         } else if (uiState.appTheme == AppTheme.FLOW || uiState.appTheme == AppTheme.DESK) {
-            // Same home swipes as the avatar screen: up apps, down menu, right chat, left browser.
-            Box(Modifier.fillMaxSize().homeSwipes(onUp = viewModel::toggleAppDrawer, onDown = viewModel::openTiles,
-                onLeft = viewModel::toggleBrowser, onRight = viewModel::openChat)) {
+            // Idle avatar (owner, 2026-09-23): after N minutes without a touch, Lumen or the Orb covers
+            // the page until the next touch; Flow keeps running underneath and new items cross the screen.
+            var lastTouch by remember { mutableLongStateOf(System.currentTimeMillis()) }
+            var idle by remember { mutableStateOf(false) }
+            val idleKey = uiState.features.idleAvatar
+            val idleMinutes = uiState.features.idleAvatarMinutes
+            val overlayOpen = uiState.isChatExpanded || uiState.showTiles || uiState.showAppDrawer || uiState.showSettings || uiState.showBrowser
+            LaunchedEffect(idleKey, idleMinutes, overlayOpen, idle, animationsPaused) {
+                if (idleKey == "off" || idle || overlayOpen || animationsPaused) return@LaunchedEffect
+                while (true) {
+                    val wait = lastTouch + idleMinutes * 60_000L - System.currentTimeMillis()
+                    if (wait <= 0) { idle = true; break }
+                    kotlinx.coroutines.delay(wait)
+                }
+            }
+            if (overlayOpen && idle) idle = false
+            val wake = { idle = false; lastTouch = System.currentTimeMillis() }
+            // Home swipes: up apps, down menu, left-to-right Flow, right-to-left chat.
+            Box(Modifier.fillMaxSize()
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        awaitFirstDown(requireUnconsumed = false, pass = androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                        lastTouch = System.currentTimeMillis()
+                    }
+                }
+                .homeSwipes(onUp = viewModel::toggleAppDrawer, onDown = viewModel::openTiles,
+                    onLeft = viewModel::openChat, onRight = { viewModel.setAppTheme(AppTheme.FLOW) })) {
                 if (uiState.appTheme == AppTheme.FLOW) com.example.meowmba.ui.flow.FlowHomeRoute(viewModel, uiState, animationsPaused)
                 else com.example.meowmba.ui.flow.DeskRoute(viewModel, uiState, animationsPaused, Modifier.fillMaxSize())
+                if (idle) {
+                    val snap = viewModel.flowRuntime?.snapshot?.collectAsState()?.value
+                    IdleAvatarLayer(
+                        avatar = {
+                            AvatarMotionHost(viewModel, uiState.copy(avatarStyle = IdleAvatar.styleOf(idleKey)), animationsPaused,
+                                Modifier.fillMaxSize(), interactive = false)
+                        },
+                        snapshot = snap,
+                        onWake = wake,
+                        onFlow = { wake(); viewModel.setAppTheme(AppTheme.FLOW) },
+                        onChat = { wake(); viewModel.openChat() },
+                        onApps = { wake(); viewModel.toggleAppDrawer() },
+                        onMenu = { wake(); viewModel.openTiles() },
+                    )
+                }
             }
         } else if (uiState.appTheme == AppTheme.PROFESSIONAL) {
             ProfessionalWorkspace(uiState, viewModel) {
@@ -553,27 +594,7 @@ fun CompanionScreen(
                 // Picking a tile closes the tile menu. Weather in particular puts a card
                 // *behind* the still-open grid otherwise, which just looks broken.
                 viewModel.onAvatarZoneClick(AvatarZone.BACKGROUND)
-                when (tileName) {
-                    "Settings" -> viewModel.toggleSettings()
-                    "Flow" -> viewModel.setAppTheme(AppTheme.FLOW)
-                    "Desk" -> viewModel.setAppTheme(AppTheme.DESK)
-                    "Computer" -> viewModel.openComputerTools()
-                    "LLM", "Hardware" -> viewModel.toggleModelManager()
-                    "Brain" -> viewModel.toggleNeuralInfo()
-                    "Privacy" -> viewModel.togglePrivacyDashboard()
-                    "Memory" -> viewModel.toggleMemoryScreen()
-                    "Vending" -> viewModel.toggleStudioScreen()
-                    "Files" -> viewModel.toggleAssetBrowser()
-                    "Auto", "NAV" -> viewModel.toggleNavScreen()
-                    "Weather" -> viewModel.toggleWeatherScreen()
-                    "Background" -> viewModel.toggleBackgroundScreen()
-                    "Avatar" -> viewModel.toggleAvatarScreen()
-                    "Agents" -> viewModel.toggleAgentsScreen()
-                    "Projects" -> viewModel.toggleProjectsScreen()
-                    "Tools" -> viewModel.toggleConnectorsScreen()
-                    "Notes" -> viewModel.toggleVaultScreen()
-                    "Robot" -> viewModel.toggleRobotScreen()
-                }
+                viewModel.openTool(tileName)
             }
         )
 
@@ -1133,7 +1154,7 @@ fun CompanionScreen(
 
 /** Collects faceGaze + IMU only here — keeps the rest of CompanionScreen stable. */
 @Composable
-private fun AvatarMotionHost(
+internal fun AvatarMotionHost(
     viewModel: CompanionViewModel,
     uiState: CompanionState,
     paused: Boolean,
@@ -1170,8 +1191,9 @@ private fun AvatarMotionHost(
             onZoneClick = { if (interactive) viewModel.onAvatarZoneClick(it) },
             onSwipeUp = { if (interactive) viewModel.toggleAppDrawer() },
             onSwipeDown = { if (interactive) viewModel.openTiles() },
-            onSwipeLeft = { if (interactive) viewModel.toggleBrowser() },
-            onSwipeRight = { if (interactive) viewModel.openChat() },
+            // Owner (2026-09-23): left-to-right opens Flow, right-to-left opens chat, everywhere.
+            onSwipeLeft = { if (interactive) viewModel.openChat() },
+            onSwipeRight = { if (interactive) viewModel.setAppTheme(AppTheme.FLOW) },
             paused = paused,
             timings = viewModel.interactionTimings,
             displayRefreshRate = view.display?.refreshRate,

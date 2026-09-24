@@ -1,17 +1,18 @@
 package com.example.meowmba.ui.companion
 
 /**
- * How much Meow speaks aloud. Owner (2026-09-23): "it talks a lot, and when it's not necessary."
- * Everything Meow says is always on screen and in the conversation; this only decides the voice.
+ * How much Meow speaks aloud. Owner (2026-09-23): "it talks a lot, and when it's not necessary" —
+ * and "the app is supposed to be proactive more than reactive". Meow always brings things forward on
+ * screen and by notification; this only decides when it also speaks. Default IMPORTANT.
  */
 enum class SpeechMode(val key: String, val label: String, val detail: String) {
     REPLIES("replies", "When I talk", "Answers out loud only when you spoke to it. Typed questions get typed answers."),
-    IMPORTANT("important", "Important", "Also says urgent things on its own, but only while driving or with headphones."),
+    IMPORTANT("important", "Important", "Speaks up on its own when it matters, while you drive or wear headphones. Typed questions get typed answers."),
     ALWAYS("always", "Always", "Speaks every reply and reminder in full.");
 
     companion object {
         const val PREF = "speech_mode"
-        fun fromKey(key: String?) = entries.firstOrNull { it.key == key } ?: REPLIES
+        fun fromKey(key: String?) = entries.firstOrNull { it.key == key } ?: IMPORTANT
 
         /** First two sentences, at most ~240 characters: the rest stays on screen. */
         fun shorten(text: String, maxSentences: Int = 2, maxChars: Int = 240): String {

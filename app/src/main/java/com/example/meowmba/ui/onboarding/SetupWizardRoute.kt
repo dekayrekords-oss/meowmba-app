@@ -385,7 +385,7 @@ fun SetupWizardRoute(
                     )
                     FirstRunPage.Done -> KidPage(
                         title = "Make yourself at home.",
-                        body = "Swipe down for the menu, right for chat, up for your apps. AI, Computer and connected services work after their setup and connection checks. You can continue setup in Settings anytime.",
+                        body = "Swipe left-to-right for Flow, right-to-left for chat, down for the menu, up for your apps. AI, Computer and connected services work after their setup and connection checks. You can continue setup in Settings anytime.",
                         primary = "Meet my avatar",
                         onPrimary = {
                             SetupWiring.markOnboardingDone(context)

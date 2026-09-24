@@ -26,11 +26,16 @@ class HomeNavigationRegressionTest {
 
     private fun checkEveryObject(reducedMotion: Boolean) {
         rule.mainClock.autoAdvance = false
+        var clocks = 0
         rule.setContent { MeowmbaTheme {
-            DeskWorkspace(desk, emptyList(), paused = reducedMotion)
+            DeskWorkspace(desk, emptyList(), paused = reducedMotion, onClock = { clocks++ })
         } }
         rule.mainClock.advanceTimeBy(300)
-        DeskObject.entries.forEach { obj ->
+        // The clock hands over to Android's Clock app instead of opening a panel.
+        rule.onNodeWithTag("desk_${DeskObject.CLOCK.name.lowercase()}").performTouchInput { click(center) }
+        rule.waitForIdle()
+        org.junit.Assert.assertEquals(1, clocks)
+        DeskObject.entries.filter { it != DeskObject.CLOCK }.forEach { obj ->
             // Coordinate dispatch catches overlays, offset/scale errors and tiny hit targets.
             rule.onNodeWithTag("desk_${obj.name.lowercase()}").performTouchInput { click(center) }
             rule.waitForIdle()

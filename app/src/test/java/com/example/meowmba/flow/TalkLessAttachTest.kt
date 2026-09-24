@@ -30,7 +30,7 @@ class TalkLessAttachTest {
         assertEquals("Your package left the Phoenix facility this morning. It should arrive Thursday.", SpeechMode.shorten(long))
         assertEquals("Okay.", SpeechMode.shorten("Okay."))
         assertTrue(SpeechMode.shorten("x ".repeat(300)).length <= 241)
-        assertEquals(SpeechMode.REPLIES, SpeechMode.fromKey(null)) // quiet by default
+        assertEquals(SpeechMode.IMPORTANT, SpeechMode.fromKey(null)) // proactive, but quiet unless it matters
     }
 
     @Test fun findsTrackingNumbersNotPhoneNumbers() {

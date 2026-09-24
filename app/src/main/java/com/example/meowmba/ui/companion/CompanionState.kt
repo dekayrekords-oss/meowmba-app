@@ -773,7 +773,11 @@ fun nextDriveReaction(
 /** Separate feature state keeps JVM constructor/copy signatures below the 255-slot limit. */
 data class CompanionFeatures(
     /** How much Meow speaks aloud (see [SpeechMode]); grouped here to keep CompanionState under the JVM slot limit. */
-    val speechMode: SpeechMode = SpeechMode.REPLIES,
+    val speechMode: SpeechMode = SpeechMode.IMPORTANT,
+    /** Flow/Desk idle avatar: "lumen", "orb" or "off" (see [IdleAvatar]). */
+    val idleAvatar: String = IdleAvatar.DEFAULT_KEY,
+    /** Minutes without a touch before the idle avatar shows. */
+    val idleAvatarMinutes: Int = IdleAvatar.DEFAULT_MINUTES,
     val songRecognitionStatus: String? = null,
     val songRecognitionBusy: Boolean = false,
     val songRecognitionPrompt: Boolean = false,

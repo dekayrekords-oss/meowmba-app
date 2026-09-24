@@ -1439,7 +1439,10 @@ class CompanionViewModel(
                 careVisible = storage.getBooleanPreference("care_visible", true),
                 carePosition = storage.getPreference("care_position") ?: "Top left",
                 neuralFeedbackVisible = storage.getBooleanPreference("neural_feedback_visible", true),
-                speechMode = SpeechMode.fromKey(storage.getPreference(SpeechMode.PREF))))
+                speechMode = SpeechMode.fromKey(storage.getPreference(SpeechMode.PREF)),
+                idleAvatar = IdleAvatar.keyOf(storage.getPreference(IdleAvatar.PREF_MODE)),
+                idleAvatarMinutes = storage.getPreference(IdleAvatar.PREF_MINUTES)?.toIntOrNull()?.takeIf { it in IdleAvatar.MINUTES }
+                    ?: IdleAvatar.DEFAULT_MINUTES))
             storage.getPreference(KEY_OWNER_SPEAKER)?.trim()?.takeIf { it.isNotEmpty() }?.let { owner ->
                 lastSpeakerName = owner
             }
@@ -4230,6 +4233,52 @@ class CompanionViewModel(
     private fun saveDrawerFolders(next: List<DrawerFolder>) {
         _drawerFolders.value = next
         secureStorage?.savePreference(KEY_DRAWER_FOLDERS, DrawerCatalog.encodeFolders(next))
+    }
+
+    /** A Meow menu tile by name; shared by the menu, the Desk drawers and the side dock. */
+    fun openTool(name: String) {
+        when (name) {
+            "Settings" -> toggleSettings()
+            "Flow" -> setAppTheme(AppTheme.FLOW)
+            "Desk" -> setAppTheme(AppTheme.DESK)
+            "Computer" -> openComputerTools()
+            "LLM", "Hardware" -> toggleModelManager()
+            "Brain" -> toggleNeuralInfo()
+            "Privacy" -> togglePrivacyDashboard()
+            "Memory" -> toggleMemoryScreen()
+            "Vending" -> toggleStudioScreen()
+            "Files" -> toggleAssetBrowser()
+            "Auto", "NAV" -> toggleNavScreen()
+            "Weather" -> toggleWeatherScreen()
+            "Background" -> toggleBackgroundScreen()
+            "Avatar" -> toggleAvatarScreen()
+            "Agents" -> toggleAgentsScreen()
+            "Projects" -> toggleProjectsScreen()
+            "Tools" -> toggleConnectorsScreen()
+            "Notes" -> toggleVaultScreen()
+            "Robot" -> toggleRobotScreen()
+            "Chat" -> openChat()
+            "Apps" -> toggleAppDrawer()
+            "Browser" -> toggleBrowser()
+        }
+    }
+
+    /** Side dock + Desk drawers (docs: owner request 2026-09-23). */
+    internal val homeShelves: com.example.meowmba.ui.flow.HomeShelves by lazy {
+        com.example.meowmba.ui.flow.HomeShelves(
+            read = { secureStorage?.getPreference(it) },
+            write = { k, v -> secureStorage?.savePreference(k, v) },
+            defaultApps = { _pinnedPackages.value + DrawerUsage.frequentPackages(_drawerUsage.value, installed = _drawerUsage.value.launches.keys) },
+        )
+    }
+
+    /** Open a dock/drawer entry: an app (counted like the drawer does) or a Meow tool. */
+    internal fun openShelfItem(context: android.content.Context, key: String) {
+        val shelves = com.example.meowmba.ui.flow.HomeShelves
+        if (shelves.isApp(key)) {
+            val pkg = shelves.packageOf(key)
+            launchApp(context, pkg); recordDrawerLaunch(pkg)
+        } else openTool(shelves.toolOf(key))
     }
 
     /** Swipe right on the face: app drawer. */
@@ -8358,7 +8407,7 @@ class CompanionViewModel(
         }
     }
 
-    /** How much Meow speaks aloud (Flow › Adjust › "Meow speaks"). Default: only when you talk to it. */
+    /** How much Meow speaks aloud (Flow › Adjust › "Meow speaks"). Default IMPORTANT: proactive, quiet unless it matters. */
     internal val speechMode: SpeechMode get() = _uiState.value.features.speechMode
     @Volatile private var lastUserTurnAt = 0L
     @Volatile private var lastUserTurnVoice = false
@@ -8376,6 +8425,15 @@ class CompanionViewModel(
         val wasBusy = _uiState.value.interactionState != InteractionState.IDLE
         _uiState.value = _uiState.value.copy(interactionState = InteractionState.IDLE, emotion = CompanionEmotion.IDLE)
         if (wasBusy) { audioFocusManager?.abandonFocus(); updateVoiceListeningMode() }
+    }
+
+    /** Flow/Desk idle avatar: "lumen", "orb" or "off", after [minutes] without a touch. */
+    fun setIdleAvatar(key: String, minutes: Int) {
+        val k = IdleAvatar.keyOf(key)
+        val m = minutes.takeIf { it in IdleAvatar.MINUTES } ?: IdleAvatar.DEFAULT_MINUTES
+        secureStorage?.savePreference(IdleAvatar.PREF_MODE, k)
+        secureStorage?.savePreference(IdleAvatar.PREF_MINUTES, m.toString())
+        _uiState.value = _uiState.value.copy(features = _uiState.value.features.copy(idleAvatar = k, idleAvatarMinutes = m))
     }
 
     private fun noteUserTurn(voice: Boolean) { lastUserTurnAt = System.currentTimeMillis(); lastUserTurnVoice = voice }

@@ -5,6 +5,23 @@ This supersedes historical build-location/version instructions in other document
 
 ## Current recovery
 
+- September 23 **1.5.0/code 166** (Claude, owner request), installed on SM-F971U in place: idle
+  avatar (Lumen default / Orb / off, 1–10 min) over Flow and the Desk with new Flow items crossing
+  the screen as a ribbon; swipes everywhere: left-to-right Flow, right-to-left chat. 2,908 tests,
+  lint clean. Receipt: `/Users/prog/Meowmba-Releases/context166-20260923/`. Next number: 167.
+- September 23 **1.4.9/code 165** (Claude): dock grip keeps one size and place open or closed.
+  Receipt: `/Users/prog/Meowmba-Releases/context165-20260923/`.
+- September 23 **1.4.8/code 164** (Claude, owner request): the side dock now behaves like the Lumen
+  screen's edge tab — rests hidden as a grip on the edge, tap or swipe inward to open, swipe outward
+  to tuck away, drag to move or switch edges. Receipt: `/Users/prog/Meowmba-Releases/context164-20260923/`.
+  Next number: 165.
+- September 23 **1.4.7/code 163** installed by Claude (owner request) on SM-F971U, in place.
+  Desk clock opens Android Clock; drawers are app/tool folders; movable 6-slot dock on Flow and Desk;
+  speech default IMPORTANT (owner: proactive more than reactive). Full runtime kept. 2,905 tests,
+  lint clean. Receipt: `/Users/prog/Meowmba-Releases/context163-20260923/README.md`.
+- **Git blocked since 163:** macOS needs `sudo xcodebuild -license accept` before /usr/bin/git (and
+  /usr/bin/python3) run. Builds 163–164 are uncommitted working-tree changes on
+  `feature/meow-flow-core` on top of `d223e56`; commit them once the licence is accepted.
 - September 23 **1.4.6/code 162** installed by Claude (owner request) on SM-F971U, in place.
   Talks less (SpeechMode), heading-home navigation, mic switch in Flow/Desk, + for camera/photo/
   file and paste with on-phone reading and package tracking. Full runtime kept (86+1 libs).
