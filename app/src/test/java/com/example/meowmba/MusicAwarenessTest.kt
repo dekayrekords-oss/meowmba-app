@@ -16,30 +16,30 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
+/**
+ * Owner rule (2026-09-24): the live check only answers "is music playing?" (no titles/artists,
+ * no metadata reads); the song and artist are read once, only when the user asks.
+ */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33])
 class MusicAwarenessTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
 
-    @Test fun observerCachesMetadataAndReleasesCallbacks() {
+    @Test fun liveCheckFollowsPlaybackWithoutReadingMetadataAndReleasesCallbacks() {
         val controller = mock(MediaController::class.java)
-        val session = android.media.session.MediaSession(context, "music-cache-test")
+        val session = android.media.session.MediaSession(context, "music-live-test")
         `when`(controller.sessionToken).thenReturn(session.sessionToken)
         `when`(controller.packageName).thenReturn("example.music")
-        `when`(controller.metadata).thenReturn(MediaMetadata.Builder().putString(MediaMetadata.METADATA_KEY_TITLE, "First song").build())
         `when`(controller.playbackState).thenReturn(PlaybackState.Builder().setState(PlaybackState.STATE_PLAYING, 0, 1f).build())
         shadowOf(context.getSystemService(MediaSessionManager::class.java)).addController(controller)
         val monitor = MusicAwareness(context)
         monitor.start()
-        repeat(5) { assertEquals("First song", monitor.read(false).title) }
-        verify(controller, times(1)).metadata
-        verify(controller, times(1)).playbackState
+        repeat(5) { assertTrue(monitor.isPlaying(ownSpeech = false)) }
+        verify(controller, never()).metadata
         val callback = org.mockito.ArgumentCaptor.forClass(MediaController.Callback::class.java)
         verify(controller).registerCallback(callback.capture(), org.mockito.ArgumentMatchers.any(android.os.Handler::class.java))
-        callback.value.onMetadataChanged(MediaMetadata.Builder().putString(MediaMetadata.METADATA_KEY_TITLE, "Second song").build())
-        assertEquals("Second song", monitor.read(false).title)
         callback.value.onPlaybackStateChanged(PlaybackState.Builder().setState(PlaybackState.STATE_PAUSED, 0, 0f).build())
-        assertNull(monitor.read(false).title)
+        assertFalse(monitor.isPlaying(ownSpeech = false))
         monitor.stop()
         verify(controller).unregisterCallback(callback.value)
         session.release()
@@ -49,14 +49,13 @@ class MusicAwarenessTest {
         val audio = context.getSystemService(AudioManager::class.java)
         shadowOf(audio).setIsMusicActive(true)
         val monitor = MusicAwareness(context)
-        assertFalse(monitor.read(ownSpeech = true).playing)
-        assertTrue(monitor.read(ownSpeech = false).playing)
-        assertNull(monitor.read(ownSpeech = false).title)
+        assertFalse(monitor.isPlaying(ownSpeech = true))
+        assertTrue(monitor.isPlaying(ownSpeech = false))
         shadowOf(audio).setIsMusicActive(false)
-        assertFalse(monitor.read(ownSpeech = false).playing)
+        assertFalse(monitor.isPlaying(ownSpeech = false))
     }
 
-    @Test fun metadataFollowsPlayingSessionAndClearsOnPause() {
+    @Test fun songAndArtistOnlyWhenAsked() {
         val controller = mock(MediaController::class.java)
         `when`(controller.packageName).thenReturn("example.music")
         `when`(controller.metadata).thenReturn(MediaMetadata.Builder()
@@ -66,10 +65,10 @@ class MusicAwarenessTest {
             .setState(PlaybackState.STATE_PLAYING, 0, 1f).build())
         shadowOf(context.getSystemService(MediaSessionManager::class.java)).addController(controller)
         val monitor = MusicAwareness(context)
-        assertEquals("Test song — Test artist", monitor.read(false).label)
+        assertEquals("Test song — Test artist", monitor.nowPlaying().label)
         `when`(controller.playbackState).thenReturn(PlaybackState.Builder()
             .setState(PlaybackState.STATE_PAUSED, 0, 0f).build())
-        assertFalse(monitor.read(false).playing)
-        assertNull(monitor.read(false).title)
+        assertFalse(monitor.nowPlaying().playing)
+        assertNull(monitor.nowPlaying().title)
     }
 }

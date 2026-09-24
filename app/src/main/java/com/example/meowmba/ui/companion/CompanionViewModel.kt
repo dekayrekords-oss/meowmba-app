@@ -6358,6 +6358,15 @@ class CompanionViewModel(
                         fuLog("always-on result during $st (wake=$isWake): \"$text\"")
                         if (!isWake) return@startListening
                     }
+                    // Music vs the user (owner rule, 2026-09-24): while music plays, hands-free speech
+                    // without the wake phrase is taken to be the song, not the user.
+                    if (_uiState.value.musicPlayback.playing && matcher.match(text) == null) {
+                        fuLog("always-on result while music plays, no wake phrase — ignored as lyrics")
+                        if (_uiState.value.interactionState == InteractionState.LISTENING) {
+                            _uiState.value = _uiState.value.copy(interactionState = InteractionState.IDLE, captionText = null)
+                        }
+                        return@startListening
+                    }
                     processUserSpeech(text, finalTranscript = true)
                 },
                 onError = { code ->
@@ -7075,7 +7084,10 @@ class CompanionViewModel(
         placeRequestJob?.cancel()
         placeRequestJob = null
         if (com.example.meowmba.core.media.SongRecognition.isRequest(text)) {
-            val music = _uiState.value.musicPlayback
+            // The only place song/artist is read: once, because the user asked.
+            val music = secureStorage?.context?.let { ctx ->
+                runCatching { com.example.meowmba.core.media.MusicAwareness(ctx).nowPlaying() }.getOrNull()
+            } ?: com.example.meowmba.core.media.MusicPlayback()
             if (music.playing && music.title != null && !text.contains("hear", ignoreCase = true) &&
                 !text.contains("listen", ignoreCase = true) && !text.contains("identify", ignoreCase = true))
                 speak("You're listening to ${music.label}.")
@@ -11890,31 +11902,34 @@ class CompanionViewModel(
         val monitor = com.example.meowmba.core.media.MusicAwareness(context)
         _uiState.value = _uiState.value.withFeatures(musicDancingEnabled = secureStorage?.getBooleanPreference("music_dancing", true) ?: true)
         viewModelScope.launch {
-            try { while (kotlin.coroutines.coroutineContext.isActive) {
-                if (appInBackground) monitor.stop()
-                if (!appInBackground) {
-                    monitor.start()
-                    val before = _uiState.value
-                    val playing = runCatching { monitor.read(before.interactionState == InteractionState.SPEAKING ||
-                        (ttsManager as? com.example.meowmba.core.audio.TextToSpeechManager)?.isSpeaking() == true)
-                    }.getOrDefault(com.example.meowmba.core.media.MusicPlayback())
-                    _uiState.value = _uiState.value.withFeatures(musicPlayback = playing)
-                    val s = _uiState.value
-                    val canDance = playing.playing && s.musicDancingEnabled && !s.driving && !s.songRecognitionPrompt &&
-                        s.interactionState == InteractionState.IDLE && avatarPerformanceStageAllowed &&
-                        avatarSceneVisible(s) && socialContextAllowed()
-                    if (!canDance && musicDanceSequence != null) {
-                        if (s.avatarPerformanceSequence == musicDanceSequence && s.activeAnimation?.name == "Pocket Groove") stopAvatarPerformance()
-                        musicDanceSequence = null
+            // Wait before the first look. viewModelScope runs on Main.immediate and this is called from
+            // the constructor: with music already playing at launch, the first pass reached
+            // playAnimationNamed -> avatarAnimationStore (a `by lazy` declared later in the class, its
+            // delegate still null) and crashed on every start. That crash loop is also what made
+            // Android drop Meow as the default home app (builds 159-166).
+            delay(2_000L)
+            // Owner rule (2026-09-24): only while the mic is live, and only "is music playing?" so a
+            // song is not taken for the user speaking. No titles/artists here (see requestSong…/nowPlaying)
+            // and no dancing. Nothing runs at all while the mic is not listening.
+            try {
+                _uiState.map { it.isMicEnabled && !appInBackground && it.interactionState == InteractionState.LISTENING }
+                    .distinctUntilChanged()
+                    .collectLatest { micLive ->
+                        if (!micLive) {
+                            monitor.stop()
+                            if (_uiState.value.musicPlayback.playing)
+                                _uiState.value = _uiState.value.withFeatures(musicPlayback = com.example.meowmba.core.media.MusicPlayback())
+                            return@collectLatest
+                        }
+                        monitor.start()
+                        while (true) {
+                            val playing = runCatching { monitor.isPlaying(ownSpeech = false) }.getOrDefault(false)
+                            if (playing != _uiState.value.musicPlayback.playing)
+                                _uiState.value = _uiState.value.withFeatures(musicPlayback = com.example.meowmba.core.media.MusicPlayback(playing))
+                            delay(2_000L)
+                        }
                     }
-                    if (canDance && s.activeAnimation == null && s.activeComposed == null && !s.ambientPerformance) {
-                        clearIdleMorphOverlay()
-                        playAnimationNamed("pocket_groove", userRequested = false)
-                        musicDanceSequence = _uiState.value.avatarPerformanceSequence
-                    }
-                }
-                delay(2_000L)
-            } } finally { monitor.stop() }
+            } finally { monitor.stop() }
         }
     }
 

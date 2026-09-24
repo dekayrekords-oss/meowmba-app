@@ -30,6 +30,7 @@ import com.example.meowmba.ui.theme.DropdownMenu
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -512,12 +513,20 @@ fun SettingsScreen(
 
             // ── Home screen ────────────────────────────────────────────────
             val context = LocalContext.current
-            val isDefaultHome = remember {
-                val homeIntent = Intent(Intent.ACTION_MAIN)
-                    .addCategory(Intent.CATEGORY_HOME)
-                val resolved = context.packageManager
-                    .resolveActivity(homeIntent, PackageManager.MATCH_DEFAULT_ONLY)
-                resolved?.activityInfo?.packageName == context.packageName
+            fun homeIsMeow(): Boolean {
+                val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+                val resolved = context.packageManager.resolveActivity(homeIntent, PackageManager.MATCH_DEFAULT_ONLY)
+                return resolved?.activityInfo?.packageName == context.packageName
+            }
+            // Re-checked every time the screen resumes (e.g. back from Android's chooser).
+            var isDefaultHome by remember { mutableStateOf(homeIsMeow()) }
+            val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+            DisposableEffect(lifecycle) {
+                val observer = androidx.lifecycle.LifecycleEventObserver { _, e ->
+                    if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) isDefaultHome = homeIsMeow()
+                }
+                lifecycle.addObserver(observer)
+                onDispose { lifecycle.removeObserver(observer) }
             }
             Spacer(modifier = Modifier.height(8.dp))
             Text(
@@ -536,14 +545,16 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            if (!isDefaultHome) {
-                OutlinedButton(onClick = {
-                    runCatching {
-                        context.startActivity(Intent(Settings.ACTION_HOME_SETTINGS))
-                    }
-                }) {
-                    Text("Set as home screen")
-                }
+            // Owner: always open Android's default-home chooser, whether or not Meow is the home app now
+            // (Android can drop the choice, e.g. after crashes, and the owner wants one tap to fix it).
+            OutlinedButton(onClick = {
+                val tries = listOf(
+                    Intent(Settings.ACTION_HOME_SETTINGS),
+                    Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS),
+                )
+                tries.firstOrNull { runCatching { context.startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess }
+            }, modifier = Modifier.testTag("settings_set_home")) {
+                Text(if (isDefaultHome) "Choose home screen" else "Set as home screen")
             }
 
             // Base controls appear only after a real body link exists. Setup

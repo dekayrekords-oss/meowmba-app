@@ -16,7 +16,7 @@ class RoadAlertListener : NotificationListenerService() {
         val title = extras.getCharSequence("android.title")?.toString()
         val text = extras.getCharSequence("android.text")?.toString()
             ?: extras.getCharSequence("android.bigText")?.toString()
-        forwardToFlow(sbn, title, posted = true)
+        forwardToFlow(sbn, title, posted = true, text = text)
         val alert = RoadAlerts.fromNotification(sbn.packageName, title, text) ?: return
         RoadAlertBus.post(alert)
     }
@@ -42,8 +42,12 @@ class RoadAlertListener : NotificationListenerService() {
         return labels
     }
 
-    /** Meow Flow gets the app, category and sender only — never the message text. */
-    private fun forwardToFlow(sbn: StatusBarNotification, title: String?, posted: Boolean) {
+    /**
+     * Meow Flow gets the app, category and sender — never the message text. The one exception
+     * (owner, 2026-09-24): texts/emails/carrier apps are read here, on the phone, only to recognise a
+     * package update; Flow receives the result ("delivered · UPS · tracking"), not the words.
+     */
+    private fun forwardToFlow(sbn: StatusBarNotification, title: String?, posted: Boolean, text: String? = null) {
         val n = sbn.notification
         if (sbn.isOngoing || sbn.packageName == packageName) return
         if ((n.flags and android.app.Notification.FLAG_GROUP_SUMMARY) != 0) return
@@ -57,9 +61,23 @@ class RoadAlertListener : NotificationListenerService() {
             val category = n.category?.takeIf {
                 it !in hub.PEOPLE_CATEGORIES || com.example.meowmba.core.flow.sources.AppIntentions.looksLikePerson(sender, appLabels())
             }
-            hub.post(com.example.meowmba.core.flow.sources.FlowNotificationHub.Posted(sbn.packageName, label, category, sender, sbn.postTime))
+            val delivery = if (n.category in DELIVERY_CATEGORIES || sbn.packageName in DELIVERY_APPS)
+                com.example.meowmba.core.flow.sources.DeliveryNotices.parse(title, text) else null
+            hub.post(com.example.meowmba.core.flow.sources.FlowNotificationHub.Posted(sbn.packageName, label, category, sender, sbn.postTime, delivery))
         } else {
             hub.post(com.example.meowmba.core.flow.sources.FlowNotificationHub.Removed(sbn.packageName, sender))
         }
+    }
+
+    private companion object {
+        /** Messages and email: where carriers and shops text you. */
+        val DELIVERY_CATEGORIES = setOf(android.app.Notification.CATEGORY_MESSAGE, android.app.Notification.CATEGORY_EMAIL)
+        /** Text/email apps (some omit the category) and carrier/shop apps, never general promos. */
+        val DELIVERY_APPS = setOf(
+            "com.samsung.android.messaging", "com.google.android.apps.messaging", "com.android.mms",
+            "com.google.android.gm", "com.samsung.android.email.provider", "com.microsoft.office.outlook",
+            "com.amazon.mShop.android.shopping", "com.ups.mobile.android", "com.fedex.ida.android",
+            "gov.usps.mobile", "com.dhl.exp.dhlmobile",
+        )
     }
 }

@@ -130,7 +130,16 @@ class FlowRuntime(
         val apps = com.example.meowmba.core.flow.sources.AppIntentions
         when (e) {
             is com.example.meowmba.core.flow.sources.FlowNotificationHub.Posted -> {
-                // Only people (messages, calls) matter to Flow. Other notifications ("New from
+                // Package updates from texts/emails/carrier apps (any sender, including short codes).
+                e.delivery?.let { d ->
+                    val item = com.example.meowmba.core.flow.sources.DeliveryNotices.toIntention(d, e.sender, e.appLabel, e.at)
+                    val old = store.intentions.value.firstOrNull { it.id == item.id }
+                    // One item per package moves forward (shipped → arriving → delivered).
+                    if (old == null || old.facts["stage"] != item.facts["stage"]) store.upsert(item)
+                    publish(Evidence(EvidenceType.NOTIFICATION, e.at, "pkg", item.text, mapOf("stage" to d.stage.name)))
+                    return
+                }
+                // Otherwise only people (messages, calls) matter to Flow. Other notifications ("New from
                 // Google Maps Timeline") are not context and would re-run Flow on every post.
                 if (e.category !in hub.PEOPLE_CATEGORIES) return
                 com.example.meowmba.core.flow.sources.EvidenceMappers

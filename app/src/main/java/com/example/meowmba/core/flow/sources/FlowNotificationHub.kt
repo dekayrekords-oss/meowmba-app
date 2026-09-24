@@ -14,7 +14,9 @@ import kotlinx.coroutines.flow.asSharedFlow
 object FlowNotificationHub {
     sealed interface Event { val packageName: String; val sender: String }
     data class Posted(override val packageName: String, val appLabel: String, val category: String?,
-                      override val sender: String, val at: Long) : Event
+                      override val sender: String, val at: Long,
+                      /** A package update recognised on the phone from the text; the text itself is not carried. */
+                      val delivery: DeliveryNotices.Delivery? = null) : Event
     data class Removed(override val packageName: String, override val sender: String) : Event
 
     private val flow = MutableSharedFlow<Event>(extraBufferCapacity = 32, onBufferOverflow = BufferOverflow.DROP_OLDEST)
