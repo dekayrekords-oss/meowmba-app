@@ -5,6 +5,12 @@ This supersedes historical build-location/version instructions in other document
 
 ## Current recovery
 
+- September 23 **1.4.6/code 162** installed by Claude (owner request) on SM-F971U, in place.
+  Talks less (SpeechMode), heading-home navigation, mic switch in Flow/Desk, + for camera/photo/
+  file and paste with on-phone reading and package tracking. Full runtime kept (86+1 libs).
+  2,902 tests, lint clean. Receipt: `/Users/prog/Meowmba-Releases/context162-20260923/README.md`.
+  Next number: 163.
+
 - September 23 **1.4.5/code 161** installed by Claude at the owner's request on SM-F971U /
   R5GL75XFCXD at 15:55 (in place, data kept). Built like 159/160 (MWDAT enabled, verified-jni);
   all 86 native libraries of 160 plus Laya's `libonnxruntime4j_jni.so`; same certificate.
