@@ -599,7 +599,12 @@ private fun LeaderLines(
             val isMain = anchorKey.startsWith("main:")
             val tx = if (isMain) t.left - 6.dp.toPx() else t.center.x
             val ty = t.center.y
-            item.sources.forEachIndexed { j, key ->
+            // Every item hangs from the dateline, as in the design: its own sources when they are showing,
+            // else the nearest related signal, else the first one (the day's context).
+            val shown = item.sources.filter { it in signalKeys }.ifEmpty {
+                listOfNotNull(kindSignals(item.kind).firstOrNull { it in signalKeys } ?: signalKeys.firstOrNull())
+            }
+            shown.forEachIndexed { j, key ->
                 val sIdx = signalKeys.indexOf(key)
                 val s = box("sig:$key") ?: return@forEachIndexed
                 val sx = s.left + minOf(14.dp.toPx(), s.width / 2)
@@ -640,6 +645,18 @@ private fun LeaderLines(
             }
         }
     }
+}
+
+/** Dateline signals an item of this kind most naturally comes from, best first. */
+internal fun kindSignals(kind: FlowKind): List<String> = when (kind) {
+    FlowKind.PEOPLE -> listOf("msg", "mail", "app", "cal")
+    FlowKind.WORK -> listOf("app", "cal")
+    FlowKind.HOME -> listOf("pkg", "loc", "wx")
+    FlowKind.ERRAND -> listOf("loc", "need", "wx")
+    FlowKind.LEISURE -> listOf("wx", "cal", "loc")
+    FlowKind.MONEY -> listOf("mail", "msg", "cal")
+    FlowKind.HEALTH -> listOf("cal", "move")
+    FlowKind.OTHER -> listOf("need", "cal")
 }
 
 // ---- small modifiers ---------------------------------------------------------------------------
