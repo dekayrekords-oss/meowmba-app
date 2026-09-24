@@ -7,7 +7,16 @@ This supersedes historical build-location/version instructions in other document
 
 > **Codex, start here:** `docs/HANDOFF_CLAUDE_2026-09-23.md` — state after builds 158–166, how they
 > were built (full runtime flags), owner decisions, open work in priority order, and gotchas.
-> Codex is the build owner again; next version code **167**.
+> Codex is the build owner again; next version code **169**.
+
+- September 24 **1.5.2/code 168** (Claude, owner request), source `cc983fb`, installed in place on
+  SM-F971U: music check only while the mic is live (playing yes/no; song/artist only when asked; no
+  auto-dance; lyrics without the wake phrase ignored); Flow notices package texts/emails. 2,911 tests,
+  lint clean. Receipt: `/Users/prog/Meowmba-Releases/fix168-20260924/`.
+- September 24 **1.5.1/code 167** (Claude): fixes the startup crash loop when music plays at launch
+  (it made Android drop Meow as default home); home-chooser button always available.
+  Receipt: `/Users/prog/Meowmba-Releases/fix167-20260924/`.
+- Owner vision 2026-09-24: `docs/MEOW_NORTH_STAR.md` ("4th dimension" goal layer) — next feature work.
 
 - September 23 **1.5.0/code 166** (Claude, owner request), installed on SM-F971U in place: idle
   avatar (Lumen default / Orb / off, 1–10 min) over Flow and the Desk with new Flow items crossing
