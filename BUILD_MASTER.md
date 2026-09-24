@@ -19,9 +19,8 @@ This supersedes historical build-location/version instructions in other document
   Desk clock opens Android Clock; drawers are app/tool folders; movable 6-slot dock on Flow and Desk;
   speech default IMPORTANT (owner: proactive more than reactive). Full runtime kept. 2,905 tests,
   lint clean. Receipt: `/Users/prog/Meowmba-Releases/context163-20260923/README.md`.
-- **Git blocked since 163:** macOS needs `sudo xcodebuild -license accept` before /usr/bin/git (and
-  /usr/bin/python3) run. Builds 163–164 are uncommitted working-tree changes on
-  `feature/meow-flow-core` on top of `d223e56`; commit them once the licence is accepted.
+- Builds 163–166 were built while git was blocked by an unaccepted Xcode licence; the owner
+  accepted it and the source is committed as `7cc8544` on `feature/meow-flow-core`.
 - September 23 **1.4.6/code 162** installed by Claude (owner request) on SM-F971U, in place.
   Talks less (SpeechMode), heading-home navigation, mic switch in Flow/Desk, + for camera/photo/
   file and paste with on-phone reading and package tracking. Full runtime kept (86+1 libs).
