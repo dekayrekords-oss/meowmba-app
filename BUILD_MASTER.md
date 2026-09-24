@@ -5,6 +5,10 @@ This supersedes historical build-location/version instructions in other document
 
 ## Current recovery
 
+> **Codex, start here:** `docs/HANDOFF_CLAUDE_2026-09-23.md` — state after builds 158–166, how they
+> were built (full runtime flags), owner decisions, open work in priority order, and gotchas.
+> Codex is the build owner again; next version code **167**.
+
 - September 23 **1.5.0/code 166** (Claude, owner request), installed on SM-F971U in place: idle
   avatar (Lumen default / Orb / off, 1–10 min) over Flow and the Desk with new Flow items crossing
   the screen as a ribbon; swipes everywhere: left-to-right Flow, right-to-left chat. 2,908 tests,

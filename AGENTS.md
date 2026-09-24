@@ -2,7 +2,8 @@
 
 Read `BUILD_MASTER.md` FIRST for the current recovery branch, build owner,
 artifact verification and installation rules. Historical paths below are not
-the current build authority.
+the current build authority. The latest handoff (Flow, Desk, Laya, context
+journal, idle avatar; builds 158–166) is `docs/HANDOFF_CLAUDE_2026-09-23.md`.
 
 ## Android source publication restriction — owner instruction, 2026-09-13
 
