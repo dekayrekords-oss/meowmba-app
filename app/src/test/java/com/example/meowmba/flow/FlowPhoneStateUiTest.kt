@@ -62,9 +62,11 @@ class FlowPhoneStateUiTest {
             signals = listOf(Signal("cal", "Free today"), Signal("wx", "82° cloudy"), Signal("move", "Walking"),
                 Signal("msg", "Dana messaged in WhatsApp"), Signal("app", "Working in Android Studio")))
         var taps = 0
+        // Listening keeps the spine's dots moving, so the screen never goes idle: hold the clock.
+        rule.mainClock.autoAdvance = false
         rule.setContent { MeowFlowHome(snap, FlowSettings(), "Wed 23 Sep · 1:25 PM", onMic = { taps++ },
             onMenu = {}, onDesk = {}, voice = com.example.meowmba.ui.flow.FlowVoice.Listening("remind me to call Dana")) }
-        rule.mainClock.advanceTimeBy(2_000); rule.waitForIdle()
+        rule.mainClock.advanceTimeBy(2_000)
         val v = rule.activity.window.decorView
         val bmp = Bitmap.createBitmap(v.width, v.height, Bitmap.Config.ARGB_8888); v.draw(android.graphics.Canvas(bmp))
         File("build/flow-shots").apply { mkdirs() }.resolve("flow-signals-wrap-listening.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }

@@ -150,6 +150,7 @@ fun MeowFlowHome(
                 .onGloballyPositioned { root = it }
                 .testTag("flow_home"),
         ) {
+            SpineLine(snapshot, anchors, root, voice, reduceMotion)
             LeaderLines(snapshot, anchors, root, reduceMotion)
 
             Column(
@@ -160,7 +161,9 @@ fun MeowFlowHome(
                     .padding(start = FlowDims.sidePadStart, end = FlowDims.sidePadEnd, top = streamTop,
                         bottom = FlowDims.streamBottom + if (navigation != null) 48.dp else 0.dp),
             ) {
-                Dateline(dateLabel, snapshot.signals, anchors, onAdjust, onMenu, onDesk)
+                Box(Modifier.onGloballyPositioned { anchors["dateline"] = it }) {
+                    Dateline(dateLabel, snapshot.signals, anchors, onAdjust, onMenu, onDesk)
+                }
                 snapshot.main?.let { main ->
                     key(main.intentionId) { MainThought(main, pushed, anchors, reduceMotion, onPrimary, onLater) }
                 }
@@ -178,7 +181,8 @@ fun MeowFlowHome(
                 }
             }
 
-            AskLine(Modifier.align(Alignment.BottomCenter).padding(bottom = if (navigation != null) 48.dp else 0.dp), onAsk, onMic, voice, micOn, onMicToggle, onAttach)
+            AskLine(Modifier.align(Alignment.BottomCenter).padding(bottom = if (navigation != null) 48.dp else 0.dp)
+                .onGloballyPositioned { anchors["ask"] = it }, onAsk, onMic, voice, micOn, onMicToggle, onAttach)
             if (navigation != null) Box(Modifier.align(Alignment.BottomCenter)
                 .windowInsetsPadding(WindowInsets.navigationBars)) { navigation() }
 
@@ -646,6 +650,67 @@ private fun LeaderLines(
         }
     }
 }
+
+/**
+ * The permanent line (owner, 2026-09-24): one lane down the left margin from the dateline into the
+ * ask box, always drawn. It carries movement tied to the chat box: dots flow down into it while the
+ * user types or talks, up out of it while Meow thinks or answers, and one dot runs down when something
+ * new arrives. Still otherwise (no idle animation, no heat).
+ */
+@Composable
+private fun SpineLine(
+    snapshot: FlowSnapshot, anchors: Map<String, LayoutCoordinates>, root: LayoutCoordinates?,
+    voice: FlowVoice, reduceMotion: Boolean,
+) {
+    val c = LocalFlowColors.current
+    val flowing = voice !is FlowVoice.Idle && !reduceMotion
+    val downward = voice is FlowVoice.Listening
+    val phase = remember { Animatable(0f) }
+    // Continuous while the chat box is live; a single pass when the flow changes.
+    LaunchedEffect(flowing, downward) {
+        if (!flowing) return@LaunchedEffect
+        while (true) { phase.snapTo(0f); phase.animateTo(1f, tween(1_400, easing = LinearEasing)) }
+    }
+    val arrival = remember { Animatable(1f) }
+    LaunchedEffect(snapshot.main?.intentionId, snapshot.more.map { it.intentionId }, flowing) {
+        if (reduceMotion || flowing) return@LaunchedEffect
+        // A pass when the flow changes, then (owner) a small one every ~45 s while idle: one dot, 2.4 s.
+        arrival.snapTo(0f); arrival.animateTo(1f, tween(1_800, easing = LinearEasing))
+        while (true) {
+            kotlinx.coroutines.delay(IDLE_DOT_EVERY_MS)
+            arrival.snapTo(0f); arrival.animateTo(1f, tween(2_400, easing = LinearEasing))
+        }
+    }
+    val lineColor by animateColorAsState(if (flowing) c.accent else c.ink3, tween(400), label = "spine")
+    Canvas(Modifier.fillMaxSize().testTag("flow_spine")) {
+        val r = root ?: return@Canvas
+        if (!r.isAttached) return@Canvas
+        val top = anchors["dateline"]?.takeIf { it.isAttached }?.let { r.localBoundingBoxOf(it) } ?: return@Canvas
+        val ask = anchors["ask"]?.takeIf { it.isAttached }?.let { r.localBoundingBoxOf(it) } ?: return@Canvas
+        val lane = 11.dp.toPx()
+        val y0 = top.bottom
+        val yEnd = ask.top + 26.dp.toPx()
+        val xEnd = ask.left + FlowDims.sidePadStart.toPx() - 6.dp.toPx()
+        val path = Path().apply {
+            moveTo(lane, y0); lineTo(lane, yEnd - 8.dp.toPx())
+            quadraticBezierTo(lane, yEnd, lane + 8.dp.toPx(), yEnd); lineTo(xEnd, yEnd)
+        }
+        drawPath(path, lineColor, style = Stroke((if (flowing) 1.4.dp else 1.dp).toPx()))
+        drawCircle(lineColor, 2.4.dp.toPx(), Offset(lane, y0)) // anchor under the dateline
+        val m = PathMeasure().apply { setPath(path, false) }
+        if (flowing) {
+            // Three evenly spaced dots; down toward the ask box while listening, up while Meow answers.
+            for (k in 0 until 3) {
+                val f = ((phase.value + k / 3f) % 1f).let { if (downward) it else 1f - it }
+                drawCircle(c.accent, 2.6.dp.toPx(), m.getPosition(m.length * f))
+            }
+        } else if (arrival.value < 1f) {
+            drawCircle(c.ink, 2.4.dp.toPx(), m.getPosition(m.length * arrival.value))
+        }
+    }
+}
+
+private const val IDLE_DOT_EVERY_MS = 45_000L
 
 /** Dateline signals an item of this kind most naturally comes from, best first. */
 internal fun kindSignals(kind: FlowKind): List<String> = when (kind) {
