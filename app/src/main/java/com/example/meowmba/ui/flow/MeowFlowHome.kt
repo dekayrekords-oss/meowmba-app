@@ -108,6 +108,8 @@ fun MeowFlowHome(
     onInterruptAccept: (FlowInterrupt) -> Unit = {},
     onInterruptDecline: (FlowInterrupt) -> Unit = {},
     onAdjust: () -> Unit = {},
+    /** Tap on the dateline: the "needs attention" list. Null = not tappable. */
+    onTopBar: (() -> Unit)? = null,
     onAsk: () -> Unit = {},
     onMic: () -> Unit = {},
     /** Deprecated: the design has no button bar. Use [onMenu]/[onDesk] (dateline links). */
@@ -161,7 +163,10 @@ fun MeowFlowHome(
                     .padding(start = FlowDims.sidePadStart, end = FlowDims.sidePadEnd, top = streamTop,
                         bottom = FlowDims.streamBottom + if (navigation != null) 48.dp else 0.dp),
             ) {
-                Box(Modifier.onGloballyPositioned { anchors["dateline"] = it }) {
+                // Tapping the top bar (anywhere but its links) opens what needs attention.
+                Box(Modifier.onGloballyPositioned { anchors["dateline"] = it }
+                    .then(if (onTopBar != null) Modifier.clickable(onClickLabel = "Show what needs attention", onClick = onTopBar)
+                        .testTag("flow_topbar") else Modifier)) {
                     Dateline(dateLabel, snapshot.signals, anchors, onAdjust, onMenu, onDesk)
                 }
                 snapshot.main?.let { main ->
