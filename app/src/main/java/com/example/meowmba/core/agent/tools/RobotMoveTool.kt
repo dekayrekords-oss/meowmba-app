@@ -20,12 +20,13 @@ import kotlinx.coroutines.withContext
  * Honest when there is no body: with the base absent or disconnected this
  * reports that plainly instead of claiming a movement nobody saw.
  */
-class RobotMoveTool(private val robotManager: RobotManager) : Tool {
+class RobotMoveTool(private val robotManager: RobotManager,
+    private val cozmo: com.example.meowmba.core.robot.cozmo.CozmoController? = null) : Tool {
 
     override val definition = ToolDefinition(
         id = "robot.move",
         displayName = "Move the robot body",
-        description = "Move the physical LOOI robot base the companion sits on. " +
+        description = "Move the connected Cozmo or LOOI robot. Cozmo supports short forward/back/left/right moves, stop, head positions and camera light. " +
             "action is one of: forward, back, left, right, spin, stop, " +
             "look_up, look_down, look_center, nod, shake_head, wiggle, " +
             "headlight_on, headlight_off. " +
@@ -64,6 +65,11 @@ class RobotMoveTool(private val robotManager: RobotManager) : Tool {
             )
 
             val intensity = args["intensity"]?.toFloatOrNull() ?: 1f
+            if (cozmo?.state?.value?.connected == true) {
+                val result = cozmo.action(motion.name.lowercase())
+                return@withContext if (result.startsWith("Command queued") || result.startsWith("Stop requested"))
+                    ToolResult.Success(result) else ToolResult.Failure(result)
+            }
             val result = robotManager.perform(motion, intensity)
                 ?: return@withContext ToolResult.Failure(
                     "No robot body is connected, so I can't ${motion.name.lowercase().replace('_', ' ')}. " +

@@ -177,7 +177,7 @@ object AgentRegistry {
         AgentDefinition(
             id = "robot", name = "Robot base",
             purpose = "Moves an attached robot base: drive, turn, neck, headlight.",
-            allowedTools = setOf("robot.move")
+            allowedTools = setOf("robot.move", "cozmo.control")
         ),
         AgentDefinition(
             id = "studio", name = "Ink",

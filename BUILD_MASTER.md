@@ -3,11 +3,19 @@
 Updated 2026-09-25. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
 This supersedes historical build-location/version instructions in other documents.
 
+- September 25: **174 / 1.5.8 built by Codex for Cozmo integration** in this checkout.
+  Full JVM run: 2,958 tests, zero failures/errors, five skips; final targeted run: 14 pass;
+  emulator UI test passes; full daily lint zero errors. Matching signature, 16 KB alignment
+  and all 160 protected runtime entries verified against 173. APK/evidence in the Os
+  workspace at `work/cozmo-174/`. Cozmo firmware 2381 only; hardware tests outstanding.
+  No phone install; 173 is the last verified Fold install. **174 consumed; next 175**.
+  Feature/validation receipt: `docs/COZMO_INTEGRATION.md`.
+
 ## Current recovery
 
 > **Codex, start here:** `docs/HANDOFF_CLAUDE_2026-09-23.md` — state after builds 158–166, how they
 > were built (full runtime flags), owner decisions, open work in priority order, and gotchas.
-> Codex is the build owner again; **173 is installed and verified on the Fold**; next unallocated code **174**. Current Desk update:
+> Codex is the build owner again; **173 is the last verified Fold install; 174 is prepared for Cozmo**; next unallocated code **175**. Current Desk update:
 > `docs/LIVING_DESK_173.md`; preceding review: `docs/REVIEW_AND_ACTIONS_172.md`.
 
 - September 25 **1.5.7/code 173** (Codex), based on 172 / `a1f583c`, source `8d5fc87`: Living Desk.

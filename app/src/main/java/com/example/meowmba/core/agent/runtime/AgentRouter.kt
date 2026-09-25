@@ -106,6 +106,7 @@ object AgentRouter {
         // that are pure "say this phrase to do this" use [says] so they match
         // either form.
         val command = WakePhraseMatcher.normalize(stripAddress(raw))
+        parseCozmo(command)?.let { return it }
 
         // A named DAW destination wins before generic phone volume, project
         // creation and desktop routing. Track numbers are never percentages.
@@ -862,6 +863,35 @@ object AgentRouter {
             mapOf("action" to motion.name.lowercase()),
             "robot: ${motion.name.lowercase().replace('_', ' ')}",
         )
+    }
+
+    /** Exact addressed commands avoid interpreting conversation about a robot as motor intent. */
+    private fun parseCozmo(raw: String): AgentIntent? {
+        val text = raw.lowercase().trim().trimEnd('.', '!', '?')
+            .removePrefix("hey ").removePrefix("please ")
+        if (!text.startsWith("cozmo ") && !text.startsWith("cosmo ")) return null
+        val command = text.substringAfter(' ').trim().removeSuffix(" please")
+        val action = when (command) {
+            "stop", "freeze" -> "stop"
+            "status", "battery", "how is your battery" -> "status"
+            "forward", "go forward", "move forward" -> "forward"
+            "back", "go back", "backward" -> "back"
+            "left", "turn left" -> "left"
+            "right", "turn right" -> "right"
+            "look up" -> "look_up"
+            "look down" -> "look_down"
+            "look center", "look ahead" -> "look_center"
+            "lift up", "raise your lift", "raise your arms" -> "lift_up"
+            "lift down", "lower your lift", "lower your arms" -> "lift_down"
+            "headlight on" -> "headlight_on"
+            "headlight off" -> "headlight_off"
+            in com.example.meowmba.core.robot.cozmo.CozmoProtocol.EXPRESSIONS -> command
+            else -> {
+                val color = command.removePrefix("lights ")
+                if (command.startsWith("lights ") && color in com.example.meowmba.core.robot.cozmo.CozmoProtocol.COLORS) "light_$color" else return null
+            }
+        }
+        return AgentIntent("robot", "cozmo.control", mapOf("action" to action), "Cozmo: $command")
     }
 
     /** A spoken wall-clock time, already converted to 24-hour. */

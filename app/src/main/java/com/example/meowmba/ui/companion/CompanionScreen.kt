@@ -958,6 +958,7 @@ fun CompanionScreen(
 
         if (uiState.showRobotScreen) {
             RobotScreen(
+                cozmoController = viewModel.cozmoController,
                 robotStatus = uiState.robotStatus,
                 robotConnected = uiState.robotConnected,
                 robotBodyEnabled = uiState.robotBodyEnabled,

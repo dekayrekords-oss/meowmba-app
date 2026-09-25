@@ -1215,6 +1215,18 @@ class CompanionViewModel(
 
     /** Phase G2: motor API. [RobotManager] swaps simulated <-> a live LOOI body. */
     private val robotManager = com.example.meowmba.core.robot.RobotManager()
+    val cozmoController = com.example.meowmba.core.robot.cozmo.CozmoController()
+    private val cozmoMoodJob = viewModelScope.launch {
+        _uiState.map { it.moodLabel }.distinctUntilChanged().collect { mood ->
+            cozmoController.expression(when (mood) {
+                "excited", "proud" -> "happy"
+                "sleepy" -> "sleepy"
+                "curious" -> "curious"
+                "startled" -> "surprised"
+                else -> "neutral"
+            })
+        }
+    }
     private var robotConnectJob: Job? = null
     /**
      * BLE backoff: with no base nearby every resume retried a 20-40s radio
@@ -2029,8 +2041,9 @@ class CompanionViewModel(
             // The body. Without this the companion could describe moving but
             // never actually move.
             toolRegistry.register(
-                com.example.meowmba.core.agent.tools.RobotMoveTool(robotManager),
+                com.example.meowmba.core.agent.tools.RobotMoveTool(robotManager, cozmoController),
             )
+            toolRegistry.register(com.example.meowmba.core.agent.tools.CozmoControlTool(cozmoController))
 
             // The self-improving harness (Prime Agent's /refine, /goal and
             // state, ported to run on the phone). The trajectory it reviews is
@@ -3616,6 +3629,7 @@ class CompanionViewModel(
     }
 
     override fun onCleared() {
+        cozmoController.disconnect()
         if (flowRuntimeLazy.isInitialized()) flowRuntimeLazy.value?.stop()
         cancelSongIdentification(rearm = false)
         cancelAgenticComputerChat()
@@ -5272,6 +5286,7 @@ class CompanionViewModel(
      * listening at all, with every log line claiming it was.
      */
     fun releaseWakeMicForBackground() {
+        cozmoController.disconnect()
         cancelAgenticComputerChat()
         cancelAvatarFormGeneration()
         stopAvatarPerformance()
@@ -5321,6 +5336,7 @@ class CompanionViewModel(
      * WakeWordService capture the follow-up with its mic exemption.
      */
     fun handOffListeningToBackground() {
+        cozmoController.disconnect()
         cancelAvatarFormGeneration()
         handedOffToBackground = true
         stopAvatarPerformance()
@@ -7348,8 +7364,9 @@ class CompanionViewModel(
         // chat model. The generic question branch swallowed "what tasks are
         // running", giving a model/setup reply instead of the actual jobs.
         AgentRouter.route(text)?.takeIf {
-            it.toolId in setOf("task.list", "business.agents", "business.jobs", "business.open", "avatar.form")
+            it.toolId in setOf("task.list", "business.agents", "business.jobs", "business.open", "avatar.form", "cozmo.control")
         }?.let {
+            if (it.toolId == "cozmo.control" && it.args["action"] == "stop") cozmoController.stop()
             submitAgentIntent(it)
             return
         }
@@ -7367,6 +7384,7 @@ class CompanionViewModel(
         // G1: user speech = curiosity; praise gets a proud wag.
         val lower = text.lowercase()
         if (com.example.meowmba.core.robot.RobotManager.isBodyStopCommand(lower)) {
+            cozmoController.stop()
             robotManager.stopBodyMotion()
             bodyScheduler.stop()
         }
@@ -7534,7 +7552,8 @@ class CompanionViewModel(
             // Hand the chat model the same tool list the router sees, so it stops
             // describing itself as text-only when it has a full registry behind it.
             val capabilities = agentToolRegistry?.definitions()
-                ?.filter { it.id != "robot.move" || robotManager.hasLiveBody }
+                ?.filter { it.id != "robot.move" || robotManager.hasLiveBody || cozmoController.state.value.connected }
+                ?.filter { it.id != "cozmo.control" || cozmoController.state.value.connected }
                 ?.map { "${it.displayName} — ${it.description.substringBefore('.')}" }
                 ?: emptyList()
             val prompt = PromptBuilder.build(

@@ -16,6 +16,10 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -32,6 +36,7 @@ import com.example.meowmba.core.robot.RobotBaseControlPolicy
  */
 @Composable
 fun RobotScreen(
+    cozmoController: com.example.meowmba.core.robot.cozmo.CozmoController? = null,
     robotStatus: String = "simulated (no body)",
     robotBodyEnabled: Boolean = false,
     robotConnected: Boolean = false,
@@ -51,6 +56,11 @@ fun RobotScreen(
     onStop: () -> Unit = {},
     onClose: () -> Unit = {},
 ) {
+    var showCozmo by rememberSaveable { mutableStateOf(true) }
+    if (showCozmo && cozmoController != null) {
+        CozmoScreen(cozmoController, onLooi = { showCozmo = false }, onClose = onClose)
+        return
+    }
     val controlAvailable = RobotBaseControlPolicy.CONTROL_AVAILABLE
     val attached = robotConnected && controlAvailable
     val statusColor = when {
@@ -66,6 +76,7 @@ fun RobotScreen(
                 .padding(24.dp)
                 .verticalScroll(rememberScrollState())
         ) {
+            if (cozmoController != null) TextButton(onClick = { showCozmo = true }) { Text("Cozmo · Wi-Fi") }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Android, contentDescription = null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(30.dp))
                 Spacer(modifier = Modifier.width(10.dp))
