@@ -697,6 +697,7 @@ fun faceModeActive(state: CompanionState): Boolean =
         !state.showProjectsScreen &&
         !state.showToolsScreen &&
         !state.showRobotScreen &&
+        !state.features.showCozmoScreen &&
         !state.showVoiceModelScreen &&
         !state.showAppDrawer
 
@@ -778,6 +779,8 @@ fun nextDriveReaction(
 
 /** Separate feature state keeps JVM constructor/copy signatures below the 255-slot limit. */
 data class CompanionFeatures(
+    /** Cozmo has its own panel and controller, never a mode of the LOOI body panel. */
+    val showCozmoScreen: Boolean = false,
     /** How much Meow speaks aloud (see [SpeechMode]); grouped here to keep CompanionState under the JVM slot limit. */
     val speechMode: SpeechMode = SpeechMode.IMPORTANT,
     /** Flow/Desk idle avatar: "lumen", "orb" or "off" (see [IdleAvatar]). */

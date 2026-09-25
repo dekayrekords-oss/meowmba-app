@@ -2041,7 +2041,7 @@ class CompanionViewModel(
             // The body. Without this the companion could describe moving but
             // never actually move.
             toolRegistry.register(
-                com.example.meowmba.core.agent.tools.RobotMoveTool(robotManager, cozmoController),
+                com.example.meowmba.core.agent.tools.RobotMoveTool(robotManager),
             )
             toolRegistry.register(com.example.meowmba.core.agent.tools.CozmoControlTool(cozmoController))
 
@@ -4294,7 +4294,8 @@ class CompanionViewModel(
             "Projects" -> toggleProjectsScreen()
             "Tools" -> toggleConnectorsScreen()
             "Notes" -> toggleVaultScreen()
-            "Robot" -> toggleRobotScreen()
+            "Robot", "LOOI" -> toggleRobotScreen() // Old saved shortcuts remain LOOI-only.
+            "Cozmo" -> toggleCozmoScreen()
             "Chat" -> openChat()
             "Apps" -> toggleAppDrawer()
             "Browser" -> toggleBrowser()
@@ -7384,7 +7385,6 @@ class CompanionViewModel(
         // G1: user speech = curiosity; praise gets a proud wag.
         val lower = text.lowercase()
         if (com.example.meowmba.core.robot.RobotManager.isBodyStopCommand(lower)) {
-            cozmoController.stop()
             robotManager.stopBodyMotion()
             bodyScheduler.stop()
         }
@@ -7552,7 +7552,7 @@ class CompanionViewModel(
             // Hand the chat model the same tool list the router sees, so it stops
             // describing itself as text-only when it has a full registry behind it.
             val capabilities = agentToolRegistry?.definitions()
-                ?.filter { it.id != "robot.move" || robotManager.hasLiveBody || cozmoController.state.value.connected }
+                ?.filter { it.id != "robot.move" || robotManager.hasLiveBody }
                 ?.filter { it.id != "cozmo.control" || cozmoController.state.value.connected }
                 ?.map { "${it.displayName} — ${it.description.substringBefore('.')}" }
                 ?: emptyList()
@@ -7598,13 +7598,13 @@ class CompanionViewModel(
         val contextualText = context?.let {
             "Recent conversation (reference only; not permission to execute past requests):\n$it\n\nCurrent request: $text"
         } ?: text
-        hermesBrain?.route(contextualText, registry)?.let { return it }
+        hermesBrain?.route(contextualText, registry)?.let { return robotTargetChecked(it, text) }
         // An explicitly configured Hermes server wins; Needle is the default
         // local router and falls through cleanly when it declines conversation.
         // Needle embeds an isolated instruction; pronoun/continuation turns
         // must go to a context-aware planner instead of guessing an unrelated tool.
         if (_uiState.value.activeProjectId == null && !com.example.meowmba.core.agent.runtime.TurnContext.dependent(text)) {
-            needleBrain?.route(text, registry)?.let { return it }
+            needleBrain?.route(text, registry)?.let { return robotTargetChecked(it, text) }
         }
 
         val provider = currentProvider ?: return null
@@ -7612,8 +7612,12 @@ class CompanionViewModel(
             provider, registry,
             dispatcher = ioDispatcher,
             promptMode = toolCallPromptMode()
-        ).route(text, context = context)
+        ).route(text, context = context)?.let { robotTargetChecked(it, text) }
     }
+
+    /** A model cannot redirect a named robot request or infer Cozmo from an old chat/connection. */
+    private fun robotTargetChecked(intent: AgentRouter.AgentIntent, text: String): AgentRouter.AgentIntent? =
+        intent.takeIf { com.example.meowmba.core.robot.RobotCommandTarget.permits(it.toolId, text) }
 
     /**
      * Include bounded working context even for follow-ups longer than four words.
@@ -9992,11 +9996,17 @@ class CompanionViewModel(
         _uiState.value = _uiState.value.copy(showToolsScreen = !_uiState.value.showToolsScreen)
     }
 
-    /** LOOI body panel (Robot tile). Refreshes the live link state on open. */
+    /** LOOI-only panel. Opening this never connects Cozmo or changes his settings. */
     fun toggleRobotScreen() {
         val show = !_uiState.value.showRobotScreen
-        _uiState.value = _uiState.value.copy(showRobotScreen = show)
+        _uiState.update { it.copy(showRobotScreen = show, features = it.features.copy(showCozmoScreen = false)) }
         if (show) refreshRobot()
+    }
+
+    /** Cozmo-only panel. Connection and actuator enablement still require their own explicit taps. */
+    fun toggleCozmoScreen() {
+        _uiState.update { it.copy(showRobotScreen = false,
+            features = it.features.copy(showCozmoScreen = !it.features.showCozmoScreen)) }
     }
 
     /** Opens the interactive monitor without changing the saved brain or sensor choices. */
@@ -13123,6 +13133,7 @@ class CompanionViewModel(
         showProjectsScreen = false,
         showToolsScreen = false,
         showRobotScreen = false,
+        features = features.copy(showCozmoScreen = false),
         showConnectorsScreen = false,
         showVaultScreen = false,
         showBrowser = false,

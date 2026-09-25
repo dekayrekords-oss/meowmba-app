@@ -22,7 +22,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
-fun CozmoScreen(controller: CozmoController, onLooi: () -> Unit, onClose: () -> Unit) {
+fun CozmoScreen(controller: CozmoController, onClose: () -> Unit) {
     val state by controller.state.collectAsState()
     val camera by controller.image.collectAsState()
     val context = LocalContext.current
@@ -39,11 +39,7 @@ fun CozmoScreen(controller: CozmoController, onLooi: () -> Unit, onClose: () -> 
                 Text("Cozmo", style = MaterialTheme.typography.headlineMedium)
                 TextButton(onClick = onClose) { Text("Close") }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(selected = true, onClick = {}, label = { Text("Cozmo · Wi-Fi") })
-                FilterChip(selected = false, onClick = onLooi, label = { Text("LOOI · Bluetooth") })
-            }
-            Text("Meow's pocket robot", style = MaterialTheme.typography.titleMedium)
+            Text("Cozmo · Wi-Fi companion", style = MaterialTheme.typography.titleMedium)
             Text("Wake Cozmo on his charger. Join his Wi-Fi using the password on his face, close the official Cozmo app, then connect here.",
                 style = MaterialTheme.typography.bodyMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

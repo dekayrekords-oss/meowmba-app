@@ -16,10 +16,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -28,7 +24,7 @@ import androidx.compose.ui.unit.sp
 import com.example.meowmba.core.robot.RobotBaseControlPolicy
 
 /**
- * LOOI body console, opened from the Robot tile. Every body option lives here
+ * LOOI-only body console, opened from the LOOI tile. Every body option lives here
  * regardless of whether a physical base is linked — the old homescreen hid
  * this whole section until a "physical" status string appeared, which made the
  * controls look deleted. Status + connection settings + base picker all in
@@ -36,7 +32,6 @@ import com.example.meowmba.core.robot.RobotBaseControlPolicy
  */
 @Composable
 fun RobotScreen(
-    cozmoController: com.example.meowmba.core.robot.cozmo.CozmoController? = null,
     robotStatus: String = "simulated (no body)",
     robotBodyEnabled: Boolean = false,
     robotConnected: Boolean = false,
@@ -56,11 +51,6 @@ fun RobotScreen(
     onStop: () -> Unit = {},
     onClose: () -> Unit = {},
 ) {
-    var showCozmo by rememberSaveable { mutableStateOf(true) }
-    if (showCozmo && cozmoController != null) {
-        CozmoScreen(cozmoController, onLooi = { showCozmo = false }, onClose = onClose)
-        return
-    }
     val controlAvailable = RobotBaseControlPolicy.CONTROL_AVAILABLE
     val attached = robotConnected && controlAvailable
     val statusColor = when {
@@ -76,12 +66,11 @@ fun RobotScreen(
                 .padding(24.dp)
                 .verticalScroll(rememberScrollState())
         ) {
-            if (cozmoController != null) TextButton(onClick = { showCozmo = true }) { Text("Cozmo · Wi-Fi") }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Android, contentDescription = null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(30.dp))
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
-                    "Robot base",
+                    "LOOI",
                     style = MaterialTheme.typography.headlineMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f)
@@ -118,7 +107,7 @@ fun RobotScreen(
                         Text("Status", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                         Text(
                             if (!controlAvailable) RobotBaseControlPolicy.UNAVAILABLE_MESSAGE
-                            else robotStatus.replace("LOOI", "base", ignoreCase = true),
+                            else robotStatus,
                             color = if (attached) MaterialTheme.colorScheme.onSurface else statusColor,
                             fontSize = 14.sp,
                         )

@@ -5,7 +5,7 @@ import com.example.meowmba.core.robot.cozmo.CozmoController
 class CozmoControlTool(private val controller: CozmoController) : Tool {
     override val definition = ToolDefinition(
         id = "cozmo.control", displayName = "Cozmo robot",
-        description = "Control a Cozmo already connected in Robot → Cozmo. Actions: status, stop, forward, back, left, right, " +
+        description = "Control only Cozmo, never LOOI. The request must name Cozmo; connect him in the Cozmo controls first. Actions: status, stop, forward, back, left, right, " +
             "look_up, look_down, look_center, lift_up, lift_down, neutral, happy, curious, surprised, sleepy, sad, " +
             "light_green, light_blue, light_red, light_yellow, light_purple, light_white, light_off, headlight_on, headlight_off. " +
             "Movement is bounded; wheels require the user's floor-move switch. Queued means sent for processing, not confirmed movement. " +
@@ -17,7 +17,7 @@ class CozmoControlTool(private val controller: CozmoController) : Tool {
     )
     override suspend fun execute(args: Map<String, String>): ToolResult {
         val action = args["action"]?.trim()?.lowercase() ?: return ToolResult.Failure("Missing Cozmo action")
-        if (!controller.state.value.connected) return ToolResult.Failure("Cozmo is not connected. Open Robot → Cozmo.")
+        if (!controller.state.value.connected) return ToolResult.Failure("Cozmo is not connected. Open the Cozmo controls. LOOI is a separate robot.")
         val result = controller.action(action)
         return if (action == "status" || result.startsWith("Command queued") || result.startsWith("Stop requested"))
             ToolResult.Success(result) else ToolResult.Failure(result)

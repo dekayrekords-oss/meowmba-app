@@ -42,6 +42,7 @@ class BrainAvatarVisibilityTest {
             "studio" to brain.copy(showStudioScreen = true),
             "app drawer" to brain.copy(showAppDrawer = true),
             "robot" to brain.copy(showRobotScreen = true),
+            "cozmo" to brain.copy(features = brain.features.copy(showCozmoScreen = true)),
         )
         for ((name, state) in covered) assertFalse(name, avatarSceneVisible(state))
     }

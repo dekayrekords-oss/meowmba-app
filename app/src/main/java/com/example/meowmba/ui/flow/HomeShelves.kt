@@ -79,7 +79,7 @@ class HomeShelves(
 
         /** Meow tools that can live in a drawer or the dock (names match the Meow menu tiles). */
         val TOOLS = listOf("Projects", "Notes", "Weather", "Files", "Memory", "Computer", "Agents", "Tools",
-            "Brain", "Privacy", "Settings", "Chat", "Apps", "Browser", "Auto")
+            "Brain", "Privacy", "Settings", "Chat", "Apps", "Browser", "Auto", "Cozmo", "LOOI")
         val DEFAULT_TOOLS = listOf("Projects", "Notes", "Weather", "Files", "Memory", "Computer")
 
         fun app(pkg: String) = "app:$pkg"

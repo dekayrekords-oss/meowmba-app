@@ -18,6 +18,30 @@ class RobotQuarantineViewModelTest {
     @Before fun setup() { Dispatchers.setMain(dispatcher) }
     @After fun cleanup() { vm?.viewModelScope?.cancel(); Dispatchers.resetMain() }
 
+    @Test fun `separate robot navigation never changes the other connection`() = runTest {
+        val model = CompanionViewModel(ttsManager = VoicePipelineTest.FakeSpeechSynthesizer(), ioDispatcher = dispatcher)
+        vm = model
+        runCurrent()
+        val looiBefore = model.uiState.value
+        val cozmoBefore = model.cozmoController.state.value
+        model.openTool("Cozmo")
+        assertTrue(model.uiState.value.features.showCozmoScreen)
+        assertFalse(model.uiState.value.showRobotScreen)
+        assertEquals(looiBefore.robotStatus, model.uiState.value.robotStatus)
+        assertEquals(looiBefore.robotBodyEnabled, model.uiState.value.robotBodyEnabled)
+        assertEquals(cozmoBefore, model.cozmoController.state.value)
+        model.openTool("LOOI")
+        assertFalse(model.uiState.value.features.showCozmoScreen)
+        assertTrue(model.uiState.value.showRobotScreen)
+        model.setRobotBody(false)
+        model.stopRobotFromControls()
+        assertEquals(cozmoBefore, model.cozmoController.state.value)
+        model.toggleRobotScreen()
+        model.openTool("Robot") // Legacy saved shortcut never changes identity.
+        assertTrue(model.uiState.value.showRobotScreen)
+        assertFalse(model.uiState.value.features.showCozmoScreen)
+    }
+
     @Test fun `saved enabled state is revoked and connect scan refresh cannot reenable it`() = runTest {
         val storage = mock(SecureStorageManager::class.java)
         val context = mock(Context::class.java)

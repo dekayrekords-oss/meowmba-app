@@ -91,7 +91,11 @@ object AgentRouter {
         return out
     }
 
-    fun route(text: String): AgentIntent? {
+    fun route(text: String): AgentIntent? = routeUnchecked(text)?.takeIf {
+        com.example.meowmba.core.robot.RobotCommandTarget.permits(it.toolId, text)
+    }
+
+    private fun routeUnchecked(text: String): AgentIntent? {
         val raw = text.trim()
         val normalized = WakePhraseMatcher.normalize(raw)
 
@@ -837,6 +841,7 @@ object AgentRouter {
 
     /** "spin around", "turn off the headlights", "shake your head", "stop". */
     private fun parseRobotMotion(raw: String): AgentIntent? {
+        if (!com.example.meowmba.core.robot.RobotCommandTarget.permits("robot.move", raw)) return null
         val t = raw.lowercase().trim()
         if (t.isBlank()) return null
         val motion = com.example.meowmba.core.robot.RobotManager.Motion
@@ -867,6 +872,7 @@ object AgentRouter {
 
     /** Exact addressed commands avoid interpreting conversation about a robot as motor intent. */
     private fun parseCozmo(raw: String): AgentIntent? {
+        if (!com.example.meowmba.core.robot.RobotCommandTarget.permits("cozmo.control", raw)) return null
         val text = raw.lowercase().trim().trimEnd('.', '!', '?')
             .removePrefix("hey ").removePrefix("please ")
         if (!text.startsWith("cozmo ") && !text.startsWith("cosmo ")) return null
@@ -891,7 +897,7 @@ object AgentRouter {
                 if (command.startsWith("lights ") && color in com.example.meowmba.core.robot.cozmo.CozmoProtocol.COLORS) "light_$color" else return null
             }
         }
-        return AgentIntent("robot", "cozmo.control", mapOf("action" to action), "Cozmo: $command")
+        return AgentIntent("cozmo", "cozmo.control", mapOf("action" to action), "Cozmo: $command")
     }
 
     /** A spoken wall-clock time, already converted to 24-hour. */

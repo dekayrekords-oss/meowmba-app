@@ -567,12 +567,12 @@ fun SettingsScreen(
             if (physicalBaseAttached) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Robot base",
+                text = "LOOI base",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
             Text(
-                text = "A physical robot base is attached. Current: " + robotStatus.replace("LOOI", "base", ignoreCase = true) + ".",
+                text = "LOOI is attached. Current: $robotStatus.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -583,7 +583,7 @@ fun SettingsScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Enable robot body", style = MaterialTheme.typography.bodyLarge)
+                    Text("Enable LOOI body", style = MaterialTheme.typography.bodyLarge)
                 }
                 Switch(checked = robotBodyEnabled, onCheckedChange = onRobotBodyChange)
             }
@@ -618,7 +618,7 @@ fun SettingsScreen(
                 if (robotScanResults.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        "Tap your robot base to use its address:",
+                        "Tap your LOOI base to use its address:",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

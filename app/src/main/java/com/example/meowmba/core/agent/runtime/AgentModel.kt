@@ -175,9 +175,14 @@ object AgentRegistry {
             allowedTools = setOf("media.generate_image", "media.generate_video", "media.generate_audio")
         ),
         AgentDefinition(
-            id = "robot", name = "Robot base",
-            purpose = "Moves an attached robot base: drive, turn, neck, headlight.",
-            allowedTools = setOf("robot.move", "cozmo.control")
+            id = "robot", name = "LOOI",
+            purpose = "Controls only LOOI: drive, turn, neck, headlight. Never controls Cozmo.",
+            allowedTools = setOf("robot.move")
+        ),
+        AgentDefinition(
+            id = "cozmo", name = "Cozmo",
+            purpose = "Controls only Cozmo: short moves, head, lift, expressions, lights and status. Never controls LOOI.",
+            allowedTools = setOf("cozmo.control")
         ),
         AgentDefinition(
             id = "studio", name = "Ink",
