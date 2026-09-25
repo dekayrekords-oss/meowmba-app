@@ -222,8 +222,25 @@ internal object DeskPainter {
      * [walkFrame] 0/1 swings the legs; [blink] 0 = open … 1 = shut; [tail] degrees of sway;
      * [gaze] −1 … 1 shifts the irises toward a tapped object; [facingLeft] mirrors the cat.
      */
-    fun DrawScope.drawCat(x: Float, y: Float, walking: Boolean, walkFrame: Int, blink: Float, tail: Float, gaze: Float, facingLeft: Boolean) {
+    fun DrawScope.drawCat(x: Float, y: Float, walking: Boolean, walkFrame: Int, blink: Float, tail: Float, gaze: Float, facingLeft: Boolean, pose: DeskCatPose = DeskCatPose.REST, phase: Float = 0f) {
         val k = 110f / 60f
+        // Stable support keeps the writing cat grounded while it reaches the board.
+        if (pose == DeskCatPose.WRITE) {
+            line(Color(0xFF8E5E33), x + 31f, y + 78f, x + 31f, 610f, 3f)
+            line(Color(0xFF8E5E33), x + 55f, y + 78f, x + 55f, 610f, 3f)
+            line(Color(0xFFC98E52), x + 25f, y + 86f, x + 61f, y + 86f, 4f)
+            for (rung in 0..6) line(Color(0xFFC98E52), x + 29f, y + 110f + rung * 27f, x + 57f, y + 110f + rung * 27f, 4f)
+            // A temporary blank note, below the real project card; no invented goal text.
+            rrect(PAPER, x + 1f, y + 1f, 37f, 42f, 2f, 1f)
+            drawCircle(Color(0xFFE08C84), 2.4f, Offset(x + 19f, y + 4f))
+            val inkLength = 9f + (sin(phase) + 1f) * 7f
+            for (row in 0..2) line(Color(0xFF527482), x + 7f, y + 14f + row * 8f, x + 7f + inkLength, y + 14f + row * 8f, 1.1f)
+        }
+        if (pose == DeskCatPose.TYPE) {
+            rrect(Color(0xFF527482), x - 42f, y + 75f, 80f, 16f, 3f, 1.5f)
+            for (row in 0..1) for (i in 0..8) rrect(if (i == (kotlin.math.abs(sin(phase)) * 8).toInt()) Color(0xFFC6EB78) else PAPER,
+                x - 37f + i * 8f, y + 78f + row * 6f, 5f, 3f, 1f)
+        }
         withTransform({
             translate(x, y)
             scale(k, k, Offset.Zero)
@@ -236,10 +253,16 @@ internal object DeskPainter {
             }
             val swing = if (walking) (if (walkFrame == 1) 22f else -22f) else 0f
             leg(20.5f, 36f, 44.5f, swing); leg(25.5f, 37f, 45f, -swing)
-            val bob = if (walking && walkFrame == 1) -1.2f else 0f
-            withTransform({ translate(0f, bob) }) {
+            val pulse = sin(phase)
+            val bob = if (walking && walkFrame == 1) -1.2f else if (pose == DeskCatPose.SNIFF) pulse * 1.5f else 0f
+            withTransform({
+                translate(0f, bob)
+                if (pose == DeskCatPose.STRETCH) scale(1f + .12f * (pulse + 1f), .92f - .05f * pulse, Offset(20f, 44f))
+            }) {
                 drawOval(CAT_BODY, Offset(14.8f, 24.2f), Size(26.4f, 17.6f)); drawOval(CAT_LINE, Offset(14.8f, 24.2f), Size(26.4f, 17.6f), style = Stroke(1.3f))
-                leg(33.5f, 37.5f, 45f, -swing); leg(38.5f, 36.5f, 44.6f, swing)
+                val bothPawsBusy = pose == DeskCatPose.TYPE || pose == DeskCatPose.LETTER || pose == DeskCatPose.STRETCH
+                if (!bothPawsBusy) leg(33.5f, 37.5f, 45f, -swing)
+                if (!bothPawsBusy && pose != DeskCatPose.GROOM && pose != DeskCatPose.WRITE) leg(38.5f, 36.5f, 44.6f, swing)
                 ear(31.6f, 13.6f, 33.3f, 3.6f, 38.8f, 10.3f); ear(42.2f, 10f, 47.9f, 4f, 49.4f, 14.2f)
                 tri(Color(0xFF2C4A52), 33.5f, 11.4f, 34.4f, 6.4f, 37.1f, 9.9f); tri(Color(0xFF2C4A52), 43.8f, 10.2f, 47.1f, 6.8f, 47.8f, 12.1f)
                 drawCircle(CAT_BODY, 12.8f, Offset(40.5f, 21.5f)); drawCircle(CAT_LINE, 12.8f, Offset(40.5f, 21.5f), style = Stroke(1.3f))
@@ -253,6 +276,42 @@ internal object DeskPainter {
                 val w = Color(0xB3BED0CD)
                 line(w, 35f, 28.2f, 28.4f, 27.4f, 0.55f); line(w, 35.2f, 29.3f, 28.9f, 30.4f, 0.55f)
                 line(w, 46f, 28.2f, 52.6f, 27.4f, 0.55f); line(w, 45.8f, 29.3f, 52.1f, 30.4f, 0.55f)
+                when (pose) {
+                    DeskCatPose.GROOM -> {
+                        val pawY = 25f + 4f * pulse
+                        line(CAT_LINE, 38f, 36f, 43f, pawY, 5.4f); line(CAT_BODY, 38f, 36f, 43f, pawY, 3.6f)
+                        drawOval(CAT_LINE, Offset(40.5f, pawY - 2f), Size(5f, 4f))
+                        if (pulse > .1f) drawOval(Color(0xFFF2B8C8), Offset(40f, 29f), Size(2.5f, 2f + pulse * 2))
+                    }
+                    DeskCatPose.STRETCH -> {
+                        line(CAT_LINE, 33f, 36f, 49f, 45f, 5.4f); line(CAT_BODY, 33f, 36f, 49f, 45f, 3.6f)
+                        line(CAT_LINE, 38f, 36f, 54f, 43f, 5.4f); line(CAT_BODY, 38f, 36f, 54f, 43f, 3.6f)
+                    }
+                    DeskCatPose.SNIFF -> { drawCircle(Color(0xFFF2B8C8), 1.8f, Offset(52f, 27f)); line(w, 51f, 24f, 56f, 22f, 0.7f); line(w, 51f, 26f, 57f, 26f, 0.7f) }
+                    DeskCatPose.TYPE -> {
+                        val left = 4f * maxOf(0f, pulse); val right = 4f * maxOf(0f, -pulse)
+                        line(CAT_LINE, 33f, 36f, 50f, 44f - left, 5.4f); line(CAT_BODY, 33f, 36f, 50f, 44f - left, 3.6f)
+                        line(CAT_LINE, 38f, 35f, 55f, 44f - right, 5.4f); line(CAT_BODY, 38f, 35f, 55f, 44f - right, 3.6f)
+                    }
+                    DeskCatPose.LETTER -> {
+                        val lift = 2f + 2f * pulse
+                        withTransform({ translate(0f, -lift); rotate(pulse * 6f, Offset(45f, 42f)) }) {
+                            rrect(PAPER, 37f, 34f, 22f, 15f, 1f, 1f)
+                            line(INK, 37f, 34f, 48f, 42f, 1f); line(INK, 59f, 34f, 48f, 42f, 1f)
+                            line(CAT_LINE, 33f, 36f, 38f, 43f, 4f); line(CAT_LINE, 39f, 36f, 57f, 43f, 4f)
+                        }
+                    }
+                    DeskCatPose.WRITE -> {
+                        val stroke = 3f * pulse
+                        line(CAT_LINE, 38f, 36f, 49f + stroke, 21f, 5.4f)
+                        line(CAT_BODY, 38f, 36f, 49f + stroke, 21f, 3.6f)
+                        line(Color(0xFFFFE27A), 47f + stroke, 26f, 55f + stroke, 8f, 2.3f)
+                        line(INK, 55f + stroke, 8f, 56f + stroke, 5f, 1.2f)
+                    }
+                    DeskCatPose.LISTEN -> { line(Color(0xFFC6EB78), 34f, 6f, 31f, 2f, 1f); line(Color(0xFFC6EB78), 47f, 5f, 50f, 1f, 1f) }
+                    DeskCatPose.TALK -> { drawOval(Color(0xFFF2B8C8), Offset(39f, 29f), Size(3f, 1.2f + kotlin.math.abs(pulse) * 3f)) }
+                    else -> Unit
+                }
             }
         }
     }

@@ -175,7 +175,7 @@ fun CompanionScreen(
                 .homeSwipes(onUp = viewModel::toggleAppDrawer, onDown = viewModel::openTiles,
                     onLeft = viewModel::openChat, onRight = { viewModel.setAppTheme(AppTheme.FLOW) })) {
                 if (uiState.appTheme == AppTheme.FLOW) com.example.meowmba.ui.flow.FlowHomeRoute(viewModel, uiState, animationsPaused)
-                else com.example.meowmba.ui.flow.DeskRoute(viewModel, uiState, animationsPaused, Modifier.fillMaxSize())
+                else com.example.meowmba.ui.flow.DeskRoute(viewModel, uiState, animationsPaused || idle, Modifier.fillMaxSize())
                 if (idle) {
                     val snap = viewModel.flowRuntime?.snapshot?.collectAsState()?.value
                     IdleAvatarLayer(

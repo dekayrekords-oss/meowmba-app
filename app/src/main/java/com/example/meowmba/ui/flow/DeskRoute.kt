@@ -40,6 +40,18 @@ internal fun DeskRoute(vm: CompanionViewModel, state: CompanionState, paused: Bo
     val stars = vm.northStars
     val starViews = stars?.views?.collectAsState()?.value.orEmpty()
     val mainStar = starViews.firstOrNull()
+    val catActivity = when {
+        state.interactionState == InteractionState.THINKING || state.computerTaskRunning -> DeskCatActivity.THINKING
+        state.interactionState == InteractionState.LISTENING -> DeskCatActivity.LISTENING
+        state.interactionState == InteractionState.SPEAKING -> DeskCatActivity.SPEAKING
+        else -> DeskCatActivity.IDLE
+    }
+    val replies = remember(vm) { DeskCatReplies(state.activeConversationId, state.deskReplySequence, state.liveAssistantReply) }
+    var catReply by remember(vm) { mutableStateOf<DeskCatReply?>(null) }
+    LaunchedEffect(state.activeConversationId, state.deskReplySequence, state.liveAssistantReply, catActivity) {
+        catReply = replies.observe(state.activeConversationId, state.deskReplySequence, state.deskReplyConversationId, state.deskReplyText,
+            state.liveReplyConversationId, state.liveAssistantReply, catActivity)
+    }
     val facts = deskFacts(now, tasks, state.projects.firstOrNull(), weather?.let { "${it.temperatureF}° ${it.condition.label.lowercase()}" },
         weather?.let { !it.isDay }).let { f -> mainStar?.let {
             f.copy(projectTitle = it.star.title.take(28), projectStatus = it.nextStep.take(55))
@@ -50,6 +62,7 @@ internal fun DeskRoute(vm: CompanionViewModel, state: CompanionState, paused: Bo
     var northStarOpen by remember { mutableStateOf(false) }
     DeskWorkspace(DeskState.from(snap, facts, tasks), tasks, modifier, paused = paused,
         fpsTarget = state.avatarFpsTarget, interactive = interactive,
+        catActivity = catActivity, catReply = catReply, onAsk = vm::onUserTextSubmitted,
         onMenu = vm::openTiles, onSettings = vm::toggleSettings,
         onFlow = { vm.setAppTheme(AppTheme.FLOW) }, onProjects = vm::toggleProjectsScreen,
         onWeather = vm::toggleWeatherScreen, onConnections = vm::toggleConnectorsScreen, onNotes = vm::toggleVaultScreen,
@@ -141,11 +154,15 @@ internal fun DeskWorkspace(desk: DeskState, tasks: List<Intention>, modifier: Mo
     micOn: Boolean? = null, onMicToggle: () -> Unit = {}, onAttach: (() -> Unit)? = null,
     onClock: () -> Unit = {},
     onNorthStar: (() -> Unit)? = null,
+    catActivity: DeskCatActivity = DeskCatActivity.IDLE, catReply: DeskCatReply? = null,
+    onAsk: ((String) -> Unit)? = null,
     /** Contents of an opened drawer (true = top); the route supplies the real folder. */
     drawerContent: (@Composable (top: Boolean, close: () -> Unit) -> Unit)? = null,
     /** Side dock, drawn above the scene. */
     dock: (@Composable () -> Unit)? = null) {
     var selected by rememberSaveable { mutableStateOf<DeskObject?>(null) }
+    var asking by rememberSaveable { mutableStateOf(false) }
+    var question by rememberSaveable { mutableStateOf("") }
     BoxWithConstraints(modifier.fillMaxSize()) {
         val wide = maxWidth > maxHeight
         val insets = WindowInsets.safeDrawing.asPaddingValues()
@@ -154,7 +171,8 @@ internal fun DeskWorkspace(desk: DeskState, tasks: List<Intention>, modifier: Mo
             // Portrait: leave room for the Menu · Flow · Settings row under the desk.
             bottomInset = insets.calculateBottomPadding() + if (interactive && !wide) 56.dp else 8.dp,
             fpsTarget = fpsTarget, reduceMotion = paused,
-            interactive = interactive, wanderEveryMs = if (fpsTarget <= 15) 0 else 26_000,
+            activity = catActivity, reply = catReply,
+            interactive = interactive, wanderEveryMs = if (fpsTarget <= 15) 28_000 else 14_000,
             lineFor = { deskLine(it, desk) }, onTap = {
                 // The clock hands straight over to Android's Clock; everything else opens its panel.
                 if (interactive) {
@@ -163,12 +181,23 @@ internal fun DeskWorkspace(desk: DeskState, tasks: List<Intention>, modifier: Mo
                     else selected = it
                 }
             })
+        if (interactive && onAsk != null) FilledTonalButton(onClick = { asking = true },
+            modifier = Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(12.dp).testTag("desk_ask")) {
+            Text("Ask Meow")
+        }
         if (interactive) dock?.invoke()
         if (interactive) DeskNavigation(if (wide) Modifier.align(Alignment.CenterStart).safeDrawingPadding()
             else Modifier.align(Alignment.BottomCenter).safeDrawingPadding(), vertical = wide,
             onMenu = onMenu, onFlow = onFlow, onSettings = onSettings,
             micOn = micOn, onMicToggle = onMicToggle, onAttach = onAttach)
     }
+    if (asking && onAsk != null) AlertDialog(onDismissRequest = { asking = false },
+        title = { Text("Ask Meow") },
+        text = { OutlinedTextField(question, { question = it.take(4_000) }, label = { Text("What’s on your mind?") },
+            minLines = 2, maxLines = 6, modifier = Modifier.fillMaxWidth().testTag("desk_question")) },
+        confirmButton = { TextButton(enabled = question.isNotBlank() && catActivity != DeskCatActivity.THINKING,
+            onClick = { val text = question.trim(); question = ""; asking = false; onAsk(text) }, modifier = Modifier.testTag("desk_question_send")) { Text("Ask") } },
+        dismissButton = { TextButton(onClick = { asking = false }) { Text("Cancel") } })
     val obj = selected
     if (obj != null && interactive) ModalBottomSheet(onDismissRequest = { selected = null },
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),

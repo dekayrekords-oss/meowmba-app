@@ -8364,8 +8364,16 @@ class CompanionViewModel(
         if (replyConversationId == conversationId()) {
             turnContext.scope(replyConversationId)
             turnContext.add("Assistant", full)
-            _uiState.value = _uiState.value.copy(liveAssistantReply = full,
-                liveReplyConversationId = replyConversationId)
+            val state = _uiState.value
+            _uiState.value = state.copy(
+                liveAssistantReply = full,
+                liveReplyConversationId = replyConversationId,
+                features = state.features.copy(
+                    deskReplySequence = state.deskReplySequence + 1,
+                    deskReplyText = full,
+                    deskReplyConversationId = replyConversationId,
+                ),
+            )
         }
         viewModelScope.launch {
             memoryRepository?.addMessage(MessageRole.ASSISTANT, full, replyConversationId, null)

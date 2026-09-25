@@ -486,6 +486,12 @@ data class CompanionState(
     val agenticPendingApprovalTitle: String? = null,
     val features: CompanionFeatures = CompanionFeatures(),
 ) {
+    /** Monotonic event for a completed current-conversation reply shown on Desk. */
+    val deskReplySequence: Long get() = features.deskReplySequence
+    /** Full actual reply text, independent of chat persistence and speech playback. */
+    val deskReplyText: String? get() = features.deskReplyText
+    /** Conversation that owns [deskReplyText]; consumers must match it before display. */
+    val deskReplyConversationId: Long get() = features.deskReplyConversationId
     val pendingPropPlacement: GeneratedPropForm? get() = features.pendingPropPlacement
     val savedAnimationNames: List<String> get() = features.savedAnimationNames
     val animInventGenerating: Boolean get() = features.animInventGenerating
@@ -778,6 +784,10 @@ data class CompanionFeatures(
     val idleAvatar: String = IdleAvatar.DEFAULT_KEY,
     /** Minutes without a touch before the idle avatar shows. */
     val idleAvatarMinutes: Int = IdleAvatar.DEFAULT_MINUTES,
+    /** Monotonic completed current-conversation reply event for Desk. */
+    val deskReplySequence: Long = 0L,
+    val deskReplyText: String? = null,
+    val deskReplyConversationId: Long = 0L,
     val songRecognitionStatus: String? = null,
     val songRecognitionBusy: Boolean = false,
     val songRecognitionPrompt: Boolean = false,

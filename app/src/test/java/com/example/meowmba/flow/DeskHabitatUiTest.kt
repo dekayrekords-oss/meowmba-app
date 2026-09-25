@@ -72,7 +72,7 @@ class DeskHabitatUiTest {
         var arrived: DeskObject? = null
         rule.mainClock.autoAdvance = false
         rule.setContent {
-            DeskHabitat(demoState, wanderEveryMs = 0, lineFor = { "Three need you. I already drafted two replies." }, onArrive = { arrived = it })
+            DeskHabitat(demoState, wanderEveryMs = 0, lineFor = { "Three people are waiting on you." }, onArrive = { arrived = it })
         }
         rule.mainClock.advanceTimeBy(500)
         shoot("desk-01-idle")
@@ -82,7 +82,7 @@ class DeskHabitatUiTest {
         // Step frame by frame: one big clock jump skips the walk's per-frame work.
         repeat(200) { rule.mainClock.advanceTimeByFrame() }
         rule.onNodeWithTag("desk_cat").assert(androidx.compose.ui.test.SemanticsMatcher.expectValue(
-            androidx.compose.ui.semantics.SemanticsProperties.StateDescription, "resting at 250"))
+            androidx.compose.ui.semantics.SemanticsProperties.StateDescription, "reading a letter"))
         assertEquals(DeskObject.INBOX, arrived)
         rule.onNodeWithTag("desk_bubble").assertIsDisplayed()
         shoot("desk-02-at-tray")
