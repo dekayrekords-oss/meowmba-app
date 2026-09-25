@@ -5,10 +5,22 @@ import android.service.notification.StatusBarNotification
 
 /**
  * Reads Waze / Google Maps notifications for police and speed-camera reports, and tells
- * Meow Flow who is waiting on you (app + sender only). Off until the user enables
+ * Meow Flow who is waiting, with bounded text for local North Star links. Off until the user enables
  * notification access in system settings.
  */
 class RoadAlertListener : NotificationListenerService() {
+
+    override fun onListenerConnected() {
+        // Re-seed active notifications after listener/process restart so Flow can rebuild
+        // message intentions and their exact conversation targets.
+        val active = runCatching { getActiveNotifications()?.toList().orEmpty() }.getOrElse { return }
+        com.example.meowmba.core.flow.sources.FlowNotificationHub.reconcileActive(active.map { it.key }.toSet())
+        active.forEach { sbn ->
+            val n = sbn.notification
+            forwardToFlow(sbn, n.extras.getCharSequence("android.title")?.toString(), true,
+                n.extras.getCharSequence("android.text")?.toString() ?: n.extras.getCharSequence("android.bigText")?.toString(), seed = true)
+        }
+    }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         val n = sbn?.notification ?: return
@@ -43,11 +55,10 @@ class RoadAlertListener : NotificationListenerService() {
     }
 
     /**
-     * Meow Flow gets the app, category and sender — never the message text. The one exception
-     * (owner, 2026-09-24): texts/emails/carrier apps are read here, on the phone, only to recognise a
-     * package update; Flow receives the result ("delivered · UPS · tracking"), not the words.
+     * Notification text remains local: delivery parsing and bounded North Star evidence.
+     * PendingIntent is retained separately from the durable Flow item and never serialized.
      */
-    private fun forwardToFlow(sbn: StatusBarNotification, title: String?, posted: Boolean, text: String? = null) {
+    private fun forwardToFlow(sbn: StatusBarNotification, title: String?, posted: Boolean, text: String? = null, seed: Boolean = false) {
         val n = sbn.notification
         if (sbn.isOngoing || sbn.packageName == packageName) return
         if ((n.flags and android.app.Notification.FLAG_GROUP_SUMMARY) != 0) return
@@ -63,9 +74,11 @@ class RoadAlertListener : NotificationListenerService() {
             }
             val delivery = if (n.category in DELIVERY_CATEGORIES || sbn.packageName in DELIVERY_APPS)
                 com.example.meowmba.core.flow.sources.DeliveryNotices.parse(title, text) else null
-            hub.post(com.example.meowmba.core.flow.sources.FlowNotificationHub.Posted(sbn.packageName, label, category, sender, sbn.postTime, delivery))
+            hub.post(com.example.meowmba.core.flow.sources.FlowNotificationHub.Posted(
+                sbn.packageName, label, category, sender, sbn.key, sbn.postTime, n.contentIntent,
+                text?.take(500).orEmpty(), seed, delivery))
         } else {
-            hub.post(com.example.meowmba.core.flow.sources.FlowNotificationHub.Removed(sbn.packageName, sender))
+            hub.post(com.example.meowmba.core.flow.sources.FlowNotificationHub.Removed(sbn.packageName, sender, sbn.key, sbn.postTime))
         }
     }
 

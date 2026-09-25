@@ -6,7 +6,8 @@ object VisionRouter {
 
     data class VisionQuery(
         val focus: String? = null,
-        val isReadQuery: Boolean = false
+        val isReadQuery: Boolean = false,
+        val isQrQuery: Boolean = false,
     )
 
     private val EXACT = setOf(
@@ -40,6 +41,12 @@ object VisionRouter {
         val raw = text.trim()
         if (raw.isEmpty()) return null
         val normalized = WakePhraseMatcher.normalize(raw)
+        val codeMention = Regex("\\b(qr(?: code)?|bar ?code)\\b").containsMatchIn(normalized)
+        val scanRequest = Regex("\\b(scan|read|capture|open|use|look|point|get)\\b").containsMatchIn(normalized)
+        val informational = Regex("^(what is|what's|explain|how (does|do)|why)\\b").containsMatchIn(normalized)
+        if (codeMention && scanRequest && !informational) {
+            return VisionQuery(isQrQuery = true, isReadQuery = true)
+        }
         if (normalized in EXACT.map { it.removeSuffix("?") }) {
             val isRead = normalized == "read this"
             return VisionQuery(isReadQuery = isRead)
@@ -57,6 +64,7 @@ object VisionRouter {
     }
 
     fun promptFor(query: VisionQuery): String {
+        if (query.isQrQuery) return "A QR scan is being performed separately; do not invent or infer a code."
         val base = if (query.isReadQuery) {
             "Read any visible text carefully and return it verbatim."
         } else {

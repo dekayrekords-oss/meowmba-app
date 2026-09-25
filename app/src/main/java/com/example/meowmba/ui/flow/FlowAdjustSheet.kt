@@ -71,6 +71,7 @@ fun FlowAdjustSheet(
     idleAvatar: String? = null,
     idleMinutes: Int = com.example.meowmba.ui.companion.IdleAvatar.DEFAULT_MINUTES,
     onIdleAvatar: (key: String, minutes: Int) -> Unit = { _, _ -> },
+    onNorthStars: (() -> Unit)? = null,
 ) {
     val colors = FlowColors.from(FlowThemes.palette(settings.theme, night, settings.accent))
     CompositionLocalProvider(LocalFlowColors provides colors) {
@@ -89,6 +90,14 @@ fun FlowAdjustSheet(
                 onAppSettings?.let { FlowLink("App settings", c.ink2, it); Spacer(Modifier.width(20.dp)) }
                 FlowLink("Done", c.ink, onDone)
             }
+
+            onNorthStars?.let { open ->
+                Group("North Stars", "Your bigger goals, their connections, and one next step.") {
+                    Box(Modifier.padding(top = 10.dp)) { FlowLink("Goals & progress", c.ink, open) }
+                }
+            }
+
+            AskMeowSetup()
 
             Group("Colour") {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp),

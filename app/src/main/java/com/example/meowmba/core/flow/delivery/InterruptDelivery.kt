@@ -119,6 +119,10 @@ class AndroidFlowNotifier(private val context: Context) : FlowNotifier {
 
     override fun post(interrupt: FlowInterrupt) {
         val item = interrupt.item
+        val isMessage = item.intentionId.startsWith(com.example.meowmba.core.flow.sources.AppIntentions.MESSAGE)
+        val conversation = if (isMessage) com.example.meowmba.core.flow.sources.FlowNotificationHub.activePosted().firstOrNull { e ->
+            com.example.meowmba.core.flow.sources.AppIntentions.fromMessage(e.packageName, e.appLabel, e.sender, e.at, e.notificationKey)?.id == item.intentionId
+        }?.contentIntent else null
         val open = PendingIntent.getActivity(
             context, 0,
             Intent(context, MainActivity::class.java).apply {
@@ -135,8 +139,9 @@ class AndroidFlowNotifier(private val context: Context) : FlowNotifier {
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
-            .setContentIntent(open)
-            .addAction(0, item.primary.label, action(item.intentionId, ACTION_PRIMARY, 1))
+            .setContentIntent(conversation ?: open)
+            .addAction(0, if (isMessage && conversation == null) "Open Meow" else item.primary.label,
+                if (isMessage) conversation ?: open else action(item.intentionId, ACTION_PRIMARY, 1))
             .addAction(0, "Later", action(item.intentionId, ACTION_LATER, 2))
             .addAction(0, "Open Meow", open)
             .build()

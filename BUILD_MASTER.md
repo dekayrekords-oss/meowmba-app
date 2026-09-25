@@ -1,13 +1,27 @@
 # Meowmba shared build authority
 
-Updated 2026-09-23. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
+Updated 2026-09-24. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
 This supersedes historical build-location/version instructions in other documents.
 
 ## Current recovery
 
 > **Codex, start here:** `docs/HANDOFF_CLAUDE_2026-09-23.md` — state after builds 158–166, how they
 > were built (full runtime flags), owner decisions, open work in priority order, and gotchas.
-> Codex is the build owner again; next version code **169**.
+> Codex is the build owner again; next version code **173**. Current installation and review:
+> `docs/REVIEW_AND_ACTIONS_172.md`; usage: `docs/MEOW_172_USER_GUIDE.md`.
+
+- September 24 **1.5.6/code 172** (Codex), based on Claude's `1aba37b`, installed in place on
+  Fold8 / SM-F971U / R5GL75XFCXD at 22:09 America/Phoenix. Adds the first North Star layer,
+  visible QR scanning, one-shot Ask Meow screen help, honest action-result wording, and original
+  notification conversation destinations. Claude's Flow/Desk design is preserved. Room 12→13
+  migration and older backup compatibility are covered. 2,936 JVM tests (zero failures/errors,
+  five existing skips), four passing device tests, lint zero errors (197 warnings, 12 hints).
+  Same signature, 16 KB alignment and all 156 protected native/model entries verified.
+  First-install time retained, preview launches with no new crash entry, separate Play 155 retained.
+  Receipt: `/Users/prog/Meowmba-Releases/northstar172-20260924/README.md`. Next code: **173**.
+- September 24 Claude builds **169–171**: leader lines on Flow items (`5dc0ed0`), permanent line
+  into the ask box and moving dots (`927eacb`), top-bar Needs attention panel (`1aba37b`). Build 171
+  / 1.5.5 was on the Fold before this update; these additions remain in 172.
 
 - September 24 **1.5.2/code 168** (Claude, owner request), source `cc983fb`, installed in place on
   SM-F971U: music check only while the mic is live (playing yes/no; song/artist only when asked; no
@@ -16,7 +30,7 @@ This supersedes historical build-location/version instructions in other document
 - September 24 **1.5.1/code 167** (Claude): fixes the startup crash loop when music plays at launch
   (it made Android drop Meow as default home); home-chooser button always available.
   Receipt: `/Users/prog/Meowmba-Releases/fix167-20260924/`.
-- Owner vision 2026-09-24: `docs/MEOW_NORTH_STAR.md` ("4th dimension" goal layer) — next feature work.
+- Owner vision 2026-09-24: `docs/MEOW_NORTH_STAR.md` ("4th dimension" goal layer) — first implementation in 172; broader integrations remain future work.
 
 - September 23 **1.5.0/code 166** (Claude, owner request), installed on SM-F971U in place: idle
   avatar (Lumen default / Orb / off, 1–10 min) over Flow and the Desk with new Flow items crossing

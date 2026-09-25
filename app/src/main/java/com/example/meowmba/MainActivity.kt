@@ -74,6 +74,10 @@ class MainActivity : ComponentActivity() {
     ) { isGranted: Boolean ->
         companionViewModel?.onCameraPermissionResult(isGranted)
     }
+    private val qrScannerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        companionViewModel?.onQrScanResult(if (result.resultCode == RESULT_OK) result.data?.getStringExtra(com.example.meowmba.core.vision.QrScannerActivity.EXTRA_VALUE) else null,
+            result.data?.getStringExtra(com.example.meowmba.core.vision.QrScannerActivity.EXTRA_ERROR))
+    }
 
     private val locationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -158,7 +162,7 @@ class MainActivity : ComponentActivity() {
                             ).also {
                                 companionViewModel = it
                                 if (pendingAvatarHome) { pendingAvatarHome = false; it.returnToAvatar() }
-                                if (pendingBusinessAgents) { pendingBusinessAgents = false; it.openBusinessAgents() }
+                if (pendingBusinessAgents) { pendingBusinessAgents = false; it.openBusinessAgents() }
                                 // onResume often runs before first composition assigns
                                 // the VM — arm always-on / wake here so the face mic
                                 // is not left dead until the next resume.
@@ -177,12 +181,30 @@ class MainActivity : ComponentActivity() {
                     }
                 )
 
+                // The factory is skipped when Android retains the ViewModel across a
+                // configuration change. Bind this Activity and drain shares on every
+                // committed composition so a recreated Activity cannot lose its input.
+                androidx.compose.runtime.SideEffect {
+                    companionViewModel = viewModel
+                    deliverPendingSharedScreen(viewModel)
+                }
                 val uiState by viewModel.uiState.collectAsState()
+                val qrRequested by viewModel.qrScannerRequested.collectAsState()
+                androidx.compose.runtime.LaunchedEffect(qrRequested) {
+                    if (qrRequested) {
+                        viewModel.consumeQrScannerRequest()
+                        qrScannerLauncher.launch(Intent(this@MainActivity, com.example.meowmba.core.vision.QrScannerActivity::class.java))
+                    }
+                }
                 MeowmbaTheme(
                     darkTheme = uiState.appearanceMode.isDark(androidx.compose.foundation.isSystemInDarkTheme()),
                     dynamicColor = false,
                     professional = uiState.appTheme == com.example.meowmba.ui.companion.AppTheme.PROFESSIONAL,
                 ) {
+                val sharedScreen by viewModel.screenHelp.collectAsState()
+                sharedScreen?.let {
+                    com.example.meowmba.ui.flow.ScreenHelpSheet(it, viewModel::askAboutSharedScreen, viewModel::closeScreenHelp)
+                }
 
                 // First-launch onboarding gate: computed once from persisted prefs.
                 var needsOnboarding by remember {
@@ -405,6 +427,7 @@ class MainActivity : ComponentActivity() {
         }
 
         consumeWakeCommand(intent)
+        consumeSharedScreen(intent)
     }
 
     // ── Background wake-word handoff (Phase 2.5) ────────────────────────────
@@ -514,12 +537,45 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         consumeWakeCommand(intent)
+        consumeSharedScreen(intent)
     }
 
     /** Wake command arriving before the ViewModel exists (cold launch). */
     private var pendingAvatarHome = false
     private var pendingWakeCommand: String? = null
     private var pendingBusinessAgents = false
+    private var pendingSharedText: String? = null
+    private var pendingSharedImage: android.net.Uri? = null
+    private var pendingSharedAt: Long = 0
+
+    private fun deliverPendingSharedScreen(vm: CompanionViewModel) {
+        val text = pendingSharedText ?: return
+        val image = pendingSharedImage
+        val at = pendingSharedAt.takeIf { it > 0 } ?: System.currentTimeMillis()
+        pendingSharedText = null
+        pendingSharedImage = null
+        pendingSharedAt = 0
+        vm.onExternalScreenShare(text, image, at)
+    }
+
+    private fun consumeSharedScreen(source: Intent?) {
+        if (source?.action != Intent.ACTION_SEND) return
+        val text = source.getStringExtra(Intent.EXTRA_TEXT)?.take(4000)
+        val image = source.getParcelableExtra<android.net.Uri>(Intent.EXTRA_STREAM)?.takeIf { it.scheme == "content" }
+        val observedAt = if (image?.authority == "$packageName.fileprovider")
+            source.getLongExtra(com.example.meowmba.core.screen.ScreenCaptureOnceService.EXTRA_CAPTURED_AT, System.currentTimeMillis())
+            else System.currentTimeMillis()
+        if (text == null && image == null) return
+        val vm = companionViewModel
+        if (vm == null) {
+            pendingSharedText = text ?: ""
+            pendingSharedImage = image
+            pendingSharedAt = observedAt
+        } else {
+            vm.onExternalScreenShare(text ?: "", image, observedAt)
+        }
+        source.action = null
+    }
 
     private fun consumeWakeCommand(source: Intent?) {
         if (source?.hasExtra(com.example.meowmba.core.flow.delivery.AndroidFlowNotifier.EXTRA_OPEN_FLOW) == true) {

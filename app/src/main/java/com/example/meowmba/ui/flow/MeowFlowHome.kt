@@ -123,6 +123,7 @@ fun MeowFlowHome(
     onMicToggle: () -> Unit = {},
     /** The + button: camera, photo or file. Null hides it. */
     onAttach: (() -> Unit)? = null,
+    northStar: (@Composable () -> Unit)? = null,
 ) {
     val hour = java.time.Instant.ofEpochMilli(snapshot.at.takeIf { it > 0 } ?: System.currentTimeMillis())
         .atZone(java.time.ZoneId.systemDefault()).hour
@@ -169,6 +170,7 @@ fun MeowFlowHome(
                         .testTag("flow_topbar") else Modifier)) {
                     Dateline(dateLabel, snapshot.signals, anchors, onAdjust, onMenu, onDesk)
                 }
+                northStar?.invoke()
                 snapshot.main?.let { main ->
                     key(main.intentionId) { MainThought(main, pushed, anchors, reduceMotion, onPrimary, onLater) }
                 }

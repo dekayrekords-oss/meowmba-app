@@ -114,6 +114,15 @@ class VisionPipelineTest {
     }
 
     @Test
+    fun `qr requests are explicit one shot scans`() {
+        val q = VisionRouter.parse("scan this QR code")
+        assertNotNull(q)
+        assertTrue(q!!.isQrQuery)
+        assertTrue(q.isReadQuery)
+        assertTrue(VisionRouter.promptFor(q).contains("separately"))
+    }
+
+    @Test
     fun `read the screen triggers as read query with focus`() {
         val q = VisionRouter.parse("read the screen")
         assertEquals("screen", q?.focus)

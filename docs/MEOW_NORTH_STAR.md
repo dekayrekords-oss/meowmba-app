@@ -1,4 +1,18 @@
-# Meow's 4th dimension — guiding the user toward the life they're building (design, 2026-09-24)
+# Meow's 4th dimension — guiding the user toward the life they're building
+
+## Implementation update — preview 172, September 24, 2026
+
+The first North Star layer is implemented on top of Claude's Flow and Desk. Open **Flow → Adjust → North Stars**, or tap the goal line beneath the date. Add a goal, why it matters, a horizon, and editable steps. Explicit long-term statements in chat can also create goals; ordinary app commands do not.
+
+- Goals, steps and evidence links live in Room on the phone. The additive database migration preserves existing chats, settings and context. Version 12 backups remain importable after the version 13 update without overwriting goals already on the phone.
+- Existing Flow items, recent journal entries and active notifications are checked for connections. Shared attachments enter through the existing local text/chat pipeline. A newly added goal also checks currently active notifications. Rules handle clear word/phrase matches; the existing on-device Laya engine can assess uncertain candidates when available, under a shared inference budget. No cloud service was added to goal linking.
+- Flow shows one next step, evidence-based momentum and goal labels on linked items. The goal sheet shows a seven-day review and the excerpts behind each connection. The Desk corkboard shows the first/pinned goal. Without a goal it retains its existing Projects action.
+- Completed checkboxes and reported achievements can count as progress. Plans, negatives, model relevance and mere calendar entries do not prove completion. Missed opportunities are counted only when explicitly reported. Suggestions are editable starting points, not verified facts about the user's life.
+- Editing the meaning of a goal clears obsolete visible links. Updated source text is reassessed; dismissed connections stay dismissed. The recent view is bounded to 500 connections across goals and a 90-day retention window. Delete a goal to remove all of its links.
+
+This version establishes the goal layer. It does not infer bank balances, prove that an event was attended, know unshared conversations, or guarantee comprehensive semantic matching. The examples below describe the broader direction; evidence outside the current local inputs still requires further integrations. It never sends a message or spends money for a goal automatically.
+
+The original owner vision and design follow.
 
 ## The owner's words
 

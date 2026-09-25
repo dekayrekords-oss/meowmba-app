@@ -78,8 +78,28 @@ internal suspend fun handleFlowPrimary(vm: CompanionViewModel, context: Context,
         id.startsWith(AppIntentions.PROJECT) ->
             item?.facts?.get("project_id")?.toLongOrNull()?.let(vm::openProject) ?: vm.toggleProjectsScreen()
         id.startsWith(AppIntentions.MESSAGE) -> {
-            item?.facts?.get("package")?.let { pkg -> context.packageManager.getLaunchIntentForPackage(pkg)?.let { context.startSafely(it) } }
-            flow.onPrimary(id)
+            val target = item?.facts?.get("notification_key")?.let(com.example.meowmba.core.flow.sources.FlowNotificationHub::target)
+            val opened = target?.let {
+                runCatching {
+                    if (android.os.Build.VERSION.SDK_INT >= 36) {
+                        val options = android.app.ActivityOptions.makeBasic().apply {
+                            setPendingIntentBackgroundActivityStartMode(
+                                android.app.ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOW_IF_VISIBLE)
+                        }
+                        it.send(context, 0, null, null, null, null, options.toBundle())
+                    } else if (android.os.Build.VERSION.SDK_INT >= 34) {
+                        val options = android.app.ActivityOptions.makeBasic().apply {
+                            @Suppress("DEPRECATION")
+                            setPendingIntentBackgroundActivityStartMode(android.app.ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED)
+                        }
+                        it.send(context, 0, null, null, null, null, options.toBundle())
+                    } else it.send()
+                    true
+                }.getOrDefault(false)
+            } == true
+            // Opening a conversation is not proof that the user replied. The original
+            // notification's removal closes its Flow row; sending is owned by that app.
+            if (!opened) android.widget.Toast.makeText(context, "That conversation is no longer available. Open the messaging app to find it.", android.widget.Toast.LENGTH_LONG).show()
         }
         item?.facts?.get("url") != null -> {
             context.startSafely(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(item!!.facts.getValue("url"))))
@@ -100,7 +120,11 @@ private fun Context.startSafely(intent: Intent) {
 @Composable
 internal fun FlowHomeRoute(vm: CompanionViewModel, state: CompanionState, paused: Boolean) {
     val flow = vm.flowRuntime ?: return
-    val snapshot by flow.snapshot.collectAsState()
+    val rawSnapshot by flow.snapshot.collectAsState()
+    val stars = vm.northStars
+    val starViews = stars?.views?.collectAsState()?.value.orEmpty()
+    val intentions by flow.store.intentions.collectAsState()
+    val snapshot = stars?.decorate(rawSnapshot, intentions) ?: rawSnapshot
     val settings by flow.settings.collectAsState()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -109,6 +133,7 @@ internal fun FlowHomeRoute(vm: CompanionViewModel, state: CompanionState, paused
     var attach by remember { mutableStateOf(false) }
     var attachNote by remember { mutableStateOf<String?>(null) }
     var attention by remember { mutableStateOf(false) }
+    var northStarOpen by remember { mutableStateOf(false) }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
         scope.launch { runCatching { vm.syncFlowAppData() }; flow.controller.schedule(immediate = true) }
     }
@@ -128,7 +153,8 @@ internal fun FlowHomeRoute(vm: CompanionViewModel, state: CompanionState, paused
         voice = flowVoice(state),
         micOn = state.isMicEnabled, onMicToggle = { vm.setMicEnabled(!state.isMicEnabled) },
         onAttach = { attach = true },
-        onTopBar = { attention = true })
+        onTopBar = { attention = true },
+        northStar = { NorthStarLine(starViews.firstOrNull()) { northStarOpen = true } })
 
     val flowColors = FlowColors.from(FlowThemes.palette(settings.theme, snapshot.evening, settings.accent))
     val paper = flowColors.paper
@@ -142,7 +168,18 @@ internal fun FlowHomeRoute(vm: CompanionViewModel, state: CompanionState, paused
             thinking = layaThinking(vm),
             speechMode = state.features.speechMode, onSpeechMode = vm::setSpeechMode,
             idleAvatar = state.features.idleAvatar, idleMinutes = state.features.idleAvatarMinutes,
-            onIdleAvatar = vm::setIdleAvatar)
+            onIdleAvatar = vm::setIdleAvatar,
+            onNorthStars = { adjust = false; northStarOpen = true })
+    }
+    if (northStarOpen && stars != null) ModalBottomSheet(onDismissRequest = { northStarOpen = false },
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = paper, contentColor = flowColors.ink) {
+        NorthStarSheet(stars, onClose = { northStarOpen = false }, onOpenSource = { id ->
+            if (flow.store.intentions.value.any { it.id == id }) {
+                northStarOpen = false
+                scope.launch { handleFlowPrimary(vm, context, flow, id, requestPermission) }
+            } else android.widget.Toast.makeText(context, "That item is no longer active. Its saved evidence is shown here.", android.widget.Toast.LENGTH_LONG).show()
+        })
     }
     if (attach) AttachSheet(vm, onDismiss = { attach = false; attachNote = null }, note = attachNote)
     if (attention) ModalBottomSheet(onDismissRequest = { attention = false }, dragHandle = null,

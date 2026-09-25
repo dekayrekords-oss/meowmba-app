@@ -74,7 +74,7 @@ object AppIntentions {
 
         // Plain, dismissible "connect" items. They disappear as soon as access is granted.
         if (!access.notifications) add(setup(SETUP_NOTIFICATIONS, "Let Meow see who's waiting on you",
-            "turn on notification access. Meow only uses the app and sender name, never the message text", now))
+            "turn on notification access. Meow uses the sender and notification text on this phone to connect messages to your goals", now))
         if (!access.calendar) add(setup(SETUP_CALENDAR, "Connect your calendar",
             "let Meow bring up meetings before they start", now))
         if (!access.usage) add(setup(SETUP_USAGE, "Let Meow know what you're working in",
@@ -100,11 +100,14 @@ object AppIntentions {
         return s.any { it.isLetter() }
     }
 
-    fun fromMessage(packageName: String, appLabel: String, sender: String, at: Long): Intention? {
+    fun fromMessage(packageName: String, appLabel: String, sender: String, at: Long, notificationKey: String = sender.trim().lowercase(Locale.ROOT)): Intention? {
         val who = sender.trim().take(40).ifEmpty { return null }
-        return Intention("$MESSAGE${packageName}-${who.lowercase(Locale.ROOT).hashCode().toUInt()}", "Reply to $who",
+        val keyHash = java.security.MessageDigest.getInstance("SHA-256").digest(notificationKey.toByteArray())
+            .joinToString("") { "%02x".format(it) }.take(32)
+        return Intention("$MESSAGE${packageName}-$keyHash", "Reply to $who",
             FlowKind.PEOPLE, "messaged you in $appLabel", at,
             facts = mapOf(FlowPolicy.FACT_ACTION to "Reply", FlowPolicy.FACT_SIGNALS to "msg", "package" to packageName,
+                "notification_key" to notificationKey,
                 FlowPolicy.FACT_BECAUSE to "Messaged you in $appLabel."),
             waitingPeople = listOf(who))
     }

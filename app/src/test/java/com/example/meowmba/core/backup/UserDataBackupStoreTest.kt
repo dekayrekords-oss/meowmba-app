@@ -129,6 +129,32 @@ class UserDataBackupStoreTest {
         assertTrue(store().restore(source).complete)
     }
 
+    @Test fun schema12ImportRestoresOldRowsAndPreservesTargetNorthStars() {
+        db.close()
+        db = newDatabase(12, includeNorthStars = false).writableDatabase
+        db.execSQL("INSERT INTO records VALUES ('old','from backup',7,NULL,NULL)")
+        val source = temp("schema12-source"); store().snapshot(source)
+
+        db.close()
+        db = newDatabase(13, includeNorthStars = true).writableDatabase
+        db.execSQL("INSERT INTO north_stars VALUES ('keep','Owner goal')")
+        val result = store().restore(source)
+
+        assertTrue(result.complete)
+        assertEquals("from backup", db.query("SELECT value FROM records WHERE id='old'").use { it.moveToFirst(); it.getString(0) })
+        assertEquals(1, db.query("SELECT COUNT(*) FROM north_stars").use { it.moveToFirst(); it.getInt(0) })
+    }
+
+    @Test fun unsupportedSchemaVersionIsRejectedBeforeAnyRestore() {
+        db.execSQL("INSERT INTO records VALUES ('old','from backup',7,NULL,NULL)")
+        val source = temp("bad-version-source"); store().snapshot(source)
+        val json = JSONObject(File(source, "user-data.json").readText()).put("databaseVersion", 11)
+        File(source, "user-data.json").writeText(json.toString())
+        db.execSQL("DELETE FROM records")
+        try { store().restore(source); fail("unsupported schema must be rejected") } catch (_: IllegalArgumentException) { }
+        assertEquals(0, db.query("SELECT COUNT(*) FROM records").use { it.moveToFirst(); it.getInt(0) })
+    }
+
     @Test fun savedAvatarsAndFactHistorySurviveRestore() {
         val paths = listOf("avatar_forms/custom.json", "facts/history.jsonl", "neural/core.json")
         paths.forEach { path -> File(context.filesDir, path).apply { parentFile!!.mkdirs(); writeText("test $path") } }
@@ -156,10 +182,13 @@ class UserDataBackupStoreTest {
 
     private fun store() = UserDataBackupStore(context, { db }, { secure.toMap() }) { secure.putAll(it) }
     private fun temp(name: String) = File(context.cacheDir, name).apply { deleteRecursively(); mkdirs() }
-    private fun newDatabase(): SupportSQLiteOpenHelper = FrameworkSQLiteOpenHelperFactory().create(
+    private fun newDatabase(version: Int = 1, includeNorthStars: Boolean = false): SupportSQLiteOpenHelper = FrameworkSQLiteOpenHelperFactory().create(
         SupportSQLiteOpenHelper.Configuration.builder(context).name("backup-test-${System.nanoTime()}.db")
-            .callback(object : SupportSQLiteOpenHelper.Callback(1) {
-                override fun onCreate(db: SupportSQLiteDatabase) { db.execSQL("CREATE TABLE records (id TEXT PRIMARY KEY NOT NULL, value TEXT, number INTEGER, raw BLOB, nullable TEXT)") }
+            .callback(object : SupportSQLiteOpenHelper.Callback(version) {
+                override fun onCreate(db: SupportSQLiteDatabase) {
+                    db.execSQL("CREATE TABLE records (id TEXT PRIMARY KEY NOT NULL, value TEXT, number INTEGER, raw BLOB, nullable TEXT)")
+                    if (includeNorthStars) db.execSQL("CREATE TABLE north_stars (id TEXT PRIMARY KEY NOT NULL, text TEXT NOT NULL)")
+                }
                 override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
             }).build())
 }

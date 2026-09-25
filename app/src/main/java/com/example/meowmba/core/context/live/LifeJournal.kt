@@ -58,6 +58,9 @@ interface LifeJournalDao {
     @Query("SELECT * FROM life_events ORDER BY at DESC LIMIT :limit")
     suspend fun recent(limit: Int): List<LifeEventEntity>
 
+    @Query("SELECT * FROM life_events ORDER BY at DESC LIMIT :limit")
+    fun observeRecent(limit: Int): kotlinx.coroutines.flow.Flow<List<LifeEventEntity>>
+
     @Query("SELECT * FROM life_events WHERE at BETWEEN :from AND :to ORDER BY at")
     suspend fun between(from: Long, to: Long): List<LifeEventEntity>
 

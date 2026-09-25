@@ -101,8 +101,12 @@ class UserDataBackupStore internal constructor(
         val db = database(); val conflicts = mutableListOf<String>(); var unchanged = 0; var restored = 0
         db.beginTransaction()
         try {
-            require(root.getInt("databaseVersion") == db.version) { "Backup database version is not compatible" }
-            val expected = schemas(db).associateBy { it.name }
+            val sourceVersion = root.getInt("databaseVersion")
+            val targetVersion = db.version
+            val compatibleNorthStarImport = sourceVersion == 12 && targetVersion == 13
+            require(sourceVersion == targetVersion || compatibleNorthStarImport) { "Backup database version is not compatible" }
+            val excludedForCompatibility = if (compatibleNorthStarImport) setOf("north_stars", "north_star_links") else emptySet()
+            val expected = schemas(db).filterNot { it.name in excludedForCompatibility }.associateBy { it.name }
             val tableArray = root.getJSONArray("tables")
             require(tableArray.length() == expected.size)
             val seen = mutableSetOf<String>(); var count = 0

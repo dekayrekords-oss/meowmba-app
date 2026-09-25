@@ -55,6 +55,8 @@ data class FlowOutcomeEntity(
 
 @Dao
 interface FlowDao {
+    @Query("SELECT * FROM flow_intentions WHERE id = :id LIMIT 1")
+    suspend fun findIntention(id: String): FlowIntentionEntity?
     @Query("SELECT * FROM flow_intentions WHERE status IN ('OPEN', 'SNOOZED') ORDER BY createdAt DESC LIMIT 200")
     fun observeIntentions(): kotlinx.coroutines.flow.Flow<List<FlowIntentionEntity>>
 
@@ -117,6 +119,7 @@ class RoomIntentionStore(
             .stateIn(scope, SharingStarted.Eagerly, emptyList())
 
     override suspend fun upsert(intention: Intention) = dao.upsert(FlowEntityMapper.toEntity(intention, clock()))
+    override suspend fun find(id: String): Intention? = dao.findIntention(id)?.let(FlowEntityMapper::fromEntity)
     override suspend fun setStatus(id: String, status: IntentionStatus, snoozedUntil: Long?) = dao.setStatus(id, status.name, snoozedUntil, clock())
     override suspend fun closeSatisfied(ids: Collection<String>) = dao.closeAll(ids.toList(), clock())
 }

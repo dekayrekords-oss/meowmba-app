@@ -247,7 +247,20 @@ class CompanionViewModel(
     /** Same time base as camera timestamps; plain-JVM tests supply their own clock. */
     private val elapsedRealtimeMs: () -> Long = android.os.SystemClock::elapsedRealtime,
 ) : ViewModel() {
+    private val _qrScannerRequested = kotlinx.coroutines.flow.MutableStateFlow(false)
+    val qrScannerRequested: kotlinx.coroutines.flow.StateFlow<Boolean> = _qrScannerRequested
+    fun consumeQrScannerRequest() { _qrScannerRequested.value = false }
+    fun onQrScanResult(value: String?, error: String? = null) {
+        openChat()
+        if (error != null) speak(error)
+        else if (value.isNullOrBlank()) speak("Scan cancelled. No code was saved or opened.")
+        else speak("I scanned this code: ${value.take(8192)}\nNothing was opened automatically.")
+    }
     private val _uiState = MutableStateFlow(CompanionState())
+    private val _screenHelp = MutableStateFlow<com.example.meowmba.core.screen.ScreenHelpState?>(null)
+    val screenHelp: kotlinx.coroutines.flow.StateFlow<com.example.meowmba.core.screen.ScreenHelpState?> = _screenHelp
+    private var screenHelpJob: kotlinx.coroutines.Job? = null
+    private var screenHelpEpoch = 0L
 
     // --- Companion interactive terminal (persistent shell / ChannelShell) ---
     private val terminalSessionLock = Any()
@@ -3477,6 +3490,16 @@ class CompanionViewModel(
         refreshAgenticPresenceHint()
     }
 
+    private var flowDecisionEngine: com.example.meowmba.core.flow.decide.DecisionEngine? = null
+    private val northStarLazy = lazy {
+        secureStorage?.context?.applicationContext?.let { ctx -> runCatching {
+            val db = com.example.meowmba.core.database.MeowmbaDatabase.getDatabase(ctx)
+            com.example.meowmba.core.northstar.NorthStarRuntime(db.northStarDao(), db.lifeJournalDao(), viewModelScope,
+                engine = { flowDecisionEngine })
+        }.getOrNull() }
+    }
+    val northStars: com.example.meowmba.core.northstar.NorthStarRuntime? get() = northStarLazy.value
+
     private val flowRuntimeLazy = lazy {
         // No usable context (e.g. a bare test double): Flow stays off instead of crashing chat.
         secureStorage?.let { storage -> runCatching {
@@ -3494,10 +3517,10 @@ class CompanionViewModel(
                 calendar = com.example.meowmba.core.flow.sources.CalendarSource(context)::upcoming,
                 // Laya on this phone once its files are present; rules otherwise (and whenever it's warm).
                 laya = com.example.meowmba.core.flow.laya.LayaAssessor(
-                    com.example.meowmba.core.flow.laya.LayaEngine(
+                    com.example.meowmba.core.flow.decide.SharedDecisionBudget(com.example.meowmba.core.flow.laya.LayaEngine(
                         com.example.meowmba.core.flow.laya.LayaFiles.forContext(context), viewModelScope,
                         thermalStatus = { com.example.meowmba.core.thermal.ThermalGovernor.currentStatus() },
-                    ).also { layaEngine = it }),
+                    ).also { layaEngine = it }).also { flowDecisionEngine = it }),
                 calendarAvailable = { context.checkSelfPermission(android.Manifest.permission.READ_CALENDAR) == android.content.pm.PackageManager.PERMISSION_GRANTED },
                 ambient = {
                     (_uiState.value.ambientWeather ?: _uiState.value.weather)?.let { w ->
@@ -3512,7 +3535,7 @@ class CompanionViewModel(
                         else -> com.example.meowmba.core.flow.Surface.OTHER_APP
                     }
                 },
-            )
+            ).also { northStars?.start(it) }
         }.getOrNull() }
     }
     val flowRuntime: com.example.meowmba.core.flow.FlowRuntime? get() = flowRuntimeLazy.value
@@ -3561,6 +3584,7 @@ class CompanionViewModel(
     /** Feed Flow and the Desk from data the app already has. Cheap; called on open and each minute. */
     internal suspend fun syncFlowAppData() {
         val flow = flowRuntime ?: return
+        northStars?.refresh()
         val ctx = secureStorage?.context?.applicationContext ?: return
         val now = System.currentTimeMillis()
         val apps = com.example.meowmba.core.flow.sources.AppIntentions
@@ -7034,7 +7058,10 @@ class CompanionViewModel(
         noteUserTurn(fromVoice)
         // Meow Flow: "the rear light is out", "remind me to…" become things Meow keeps in mind.
         if (!fromVoice || finalTranscript) {
-            flowRuntime?.let { flow -> viewModelScope.launch { runCatching { flow.captureFromChat(raw) } } }
+            flowRuntime?.let { flow -> viewModelScope.launch {
+                runCatching { flow.captureFromChat(raw) }
+                runCatching { northStars?.capture(raw) }
+            } }
             // Everything the user tells Meow is remembered with where, when and what was going on.
             viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) { com.example.meowmba.core.context.live.ContextStamp.said(raw) }
         }
@@ -7700,7 +7727,7 @@ class CompanionViewModel(
             true
         }.getOrDefault(false)
         if (launched) {
-            speak("Sending that to ${req.target.spoken}.")
+            speak(if (req.query.isNullOrBlank()) "Opening ${req.target.spoken}." else "Opening ${req.target.spoken} for that search.")
         } else {
             speak("${req.target.spoken} isn't installed, and I couldn't open it in the browser.")
         }
@@ -8498,6 +8525,10 @@ class CompanionViewModel(
      * screen" use a read-focused prompt for the vision provider.
      */
     internal fun lookAround(query: com.example.meowmba.core.vision.VisionRouter.VisionQuery) {
+        if (query.isQrQuery) {
+            _qrScannerRequested.value = true
+            return
+        }
         val vm = visionManager
         if (vm == null) {
             speak("I don't have a camera in this build.")
@@ -8568,6 +8599,73 @@ class CompanionViewModel(
                     resetState()
                 }
             )
+        }
+    }
+
+    /** Explicit Android Sharesheet handoff. Shared content is untrusted and is
+     * described on-device only; it cannot trigger tools or actions. */
+    fun onExternalScreenShare(text: String, imageUri: android.net.Uri?, observedAt: Long = System.currentTimeMillis()) {
+        val ctx = secureStorage?.context ?: return
+        screenHelpJob?.cancel()
+        val epoch = ++screenHelpEpoch
+        val helper = com.example.meowmba.core.screen.ScreenHelp
+        if (!helper.fresh(observedAt, System.currentTimeMillis())) {
+            viewModelScope.launch(Dispatchers.IO) { helper.deleteOwnedCapture(ctx, imageUri) }
+            _screenHelp.value = com.example.meowmba.core.screen.ScreenHelpState(observedAt, error = "That screen capture has expired. Share a fresh screen to get help.")
+            return
+        }
+        _screenHelp.value = com.example.meowmba.core.screen.ScreenHelpState(observedAt, reading = true)
+        screenHelpJob = viewModelScope.launch {
+            try {
+                val read = withTimeout(70_000) { helper.read(ctx, text, imageUri, observedAt) }
+                if (epoch == screenHelpEpoch) _screenHelp.value = read
+            } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                if (epoch == screenHelpEpoch) _screenHelp.value = com.example.meowmba.core.screen.ScreenHelpState(observedAt, error = "Reading this screen took too long. Try sharing selected text instead.")
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) {
+                if (epoch == screenHelpEpoch) _screenHelp.value = com.example.meowmba.core.screen.ScreenHelpState(observedAt,
+                    error = "Couldn't read the shared screen. Share a smaller screenshot or selected text.")
+            }
+        }
+    }
+
+    fun closeScreenHelp() {
+        ++screenHelpEpoch; screenHelpJob?.cancel(); screenHelpJob = null; _screenHelp.value = null
+    }
+
+    fun askAboutSharedScreen(question: String, useConfiguredAi: Boolean) {
+        val captured = _screenHelp.value ?: return
+        if (captured.reading || captured.busy || captured.text.isBlank()) return
+        val helper = com.example.meowmba.core.screen.ScreenHelp
+        if (!helper.fresh(captured.observedAt, System.currentTimeMillis())) {
+            _screenHelp.value = captured.copy(error = "This picture is over ten minutes old. Share a fresh screen first.")
+            return
+        }
+        val epoch = screenHelpEpoch
+        _screenHelp.value = captured.copy(busy = true, error = null, answer = null)
+        screenHelpJob = viewModelScope.launch {
+            try {
+                val prompt = helper.prompt(captured.text, question)
+                val answer = withTimeout(60_000) {
+                    withContext(ioDispatcher) {
+                        if (useConfiguredAi) askAssetBrain(prompt)
+                        else {
+                            val local = localAnimationProvider() ?: error("No local chat model is installed. You can read the extracted text here, or choose ‘Use my configured AI’ for this question.")
+                            when (val result = local.generate(prompt)) {
+                                is ModelResponse.Complete -> result.text
+                                is ModelResponse.Error -> error("The local model couldn't answer. Try again when the phone is cooler, or use your configured AI.")
+                                else -> error("The local model didn't finish its answer.")
+                            }
+                        }
+                    }
+                }
+                if (epoch == screenHelpEpoch) _screenHelp.value = captured.copy(answer = answer.take(12000).ifBlank { "The model returned no answer. Please try again." })
+            } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                if (epoch == screenHelpEpoch) _screenHelp.value = captured.copy(error = "That answer took too long. Try a shorter question.")
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) {
+                if (epoch == screenHelpEpoch) _screenHelp.value = captured.copy(error = e.message?.take(400) ?: "The screen question couldn't be answered.")
+            }
         }
     }
 

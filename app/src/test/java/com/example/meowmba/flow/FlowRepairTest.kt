@@ -46,7 +46,7 @@ class FlowRepairTest {
         val items = AppIntentions.build(at(9), Fx.zone, emptyList(), emptyList(), emptyList(), none)
         assertEquals(setOf(AppIntentions.SETUP_NOTIFICATIONS, AppIntentions.SETUP_CALENDAR, AppIntentions.SETUP_USAGE), items.map { it.id }.toSet())
         assertTrue(items.all { it.facts[FlowPolicy.FACT_ACTION] == "Allow" })
-        assertTrue(items.first().facts[FlowPolicy.FACT_BECAUSE]!!.contains("never the message text"))
+        assertTrue(items.first().facts[FlowPolicy.FACT_BECAUSE]!!.contains("on this phone"))
         assertTrue(AppIntentions.build(at(9), Fx.zone, emptyList(), emptyList(), emptyList(), all).isEmpty())
     }
 
@@ -56,6 +56,15 @@ class FlowRepairTest {
         assertEquals("Messaged you in WhatsApp.", m.facts[FlowPolicy.FACT_BECAUSE])
         assertEquals(m.id, AppIntentions.fromMessage("com.whatsapp", "", "dana", 0)!!.id) // removal matches by sender
         assertNull(AppIntentions.fromMessage("com.whatsapp", "WhatsApp", "  ", at(12)))
+    }
+
+    @Test fun messageNotificationsUseKeysAndRetainConversationTargetFact() {
+        val first = AppIntentions.fromMessage("com.whatsapp", "WhatsApp", "Jim", at(12), "key-1")!!
+        val replacement = AppIntentions.fromMessage("com.whatsapp", "WhatsApp", "Jim", at(12), "key-2")!!
+        assertTrue(first.id != replacement.id)
+        assertEquals("key-1", first.facts["notification_key"])
+        assertEquals("key-2", replacement.facts["notification_key"])
+        assertEquals("com.whatsapp", first.facts["package"])
     }
 
     @Test fun companiesAndBotsAreNotPeopleWaiting() {

@@ -74,7 +74,7 @@ class FlowRuntime(
         if (jobs.isNotEmpty()) return
         jobs = listOf(
             scope.launch { controller.snapshot.collect { delivery.deliver(it.interrupt) } },
-            scope.launch {
+            scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
                 com.example.meowmba.core.flow.sources.FlowNotificationHub.events.collect { onNotification(it) }
             },
             scope.launch {
@@ -84,6 +84,11 @@ class FlowRuntime(
                 }
             },
         )
+        // Reconcile active notifications after the collector is installed. This covers a
+        // listener connection that happened before FlowRuntime started without replaying removals.
+        jobs = jobs + scope.launch {
+            com.example.meowmba.core.flow.sources.FlowNotificationHub.activePosted().forEach { onNotification(it.copy(seed = true)) }
+        }
         controller.start()
     }
 
@@ -130,6 +135,7 @@ class FlowRuntime(
         val apps = com.example.meowmba.core.flow.sources.AppIntentions
         when (e) {
             is com.example.meowmba.core.flow.sources.FlowNotificationHub.Posted -> {
+                if (e.seed && hub.activePosted().none { it.notificationKey == e.notificationKey && it.at == e.at }) return
                 // Package updates from texts/emails/carrier apps (any sender, including short codes).
                 e.delivery?.let { d ->
                     val item = com.example.meowmba.core.flow.sources.DeliveryNotices.toIntention(d, e.sender, e.appLabel, e.at)
@@ -144,14 +150,17 @@ class FlowRuntime(
                 if (e.category !in hub.PEOPLE_CATEGORIES) return
                 com.example.meowmba.core.flow.sources.EvidenceMappers
                     .fromNotification(e.packageName, e.appLabel, e.category, e.sender, e.at)?.let(::publish)
-                apps.fromMessage(e.packageName, e.appLabel, e.sender, e.at)?.let { m ->
-                    val old = store.intentions.value.firstOrNull { it.id == m.id }
+                apps.fromMessage(e.packageName, e.appLabel, e.sender, e.at, e.notificationKey)?.let { m ->
+                    // Replace pre-172 sender-only rows, which cannot identify a conversation.
+                    val legacy = "${apps.MESSAGE}${e.packageName}-${e.sender.trim().take(40).lowercase(java.util.Locale.ROOT).hashCode().toUInt()}"
+                    if (store.find(legacy) != null) store.closeSatisfied(listOf(legacy))
+                    val old = store.find(m.id)
                     // A new message reopens a finished "Reply to" for the same person.
-                    if (old == null || old.status == IntentionStatus.DONE || old.status == IntentionStatus.DROPPED) store.upsert(m)
+                    if (old == null || (!e.seed && (old.status == IntentionStatus.DONE || old.status == IntentionStatus.DROPPED))) store.upsert(m)
                 }
             }
             is com.example.meowmba.core.flow.sources.FlowNotificationHub.Removed ->
-                apps.fromMessage(e.packageName, "", e.sender, 0L)?.let { store.closeSatisfied(listOf(it.id)) }
+                apps.fromMessage(e.packageName, "", e.sender, 0L, e.notificationKey)?.let { store.closeSatisfied(listOf(it.id)) }
         }
     }
 

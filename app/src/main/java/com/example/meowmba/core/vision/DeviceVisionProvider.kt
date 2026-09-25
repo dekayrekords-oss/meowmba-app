@@ -64,6 +64,8 @@ class DeviceVisionProvider : VisionProvider {
                 }
             } catch (e: Exception) {
                 Result.failure(Exception("on-device vision failed: ${e.message}"))
+            } finally {
+                bitmap.recycle()
             }
         }
     }

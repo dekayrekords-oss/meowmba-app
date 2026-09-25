@@ -27,6 +27,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /** Meow's Desk mode (AppTheme.DESK): the office scene bound to the same data as Meow Flow. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun DeskRoute(vm: CompanionViewModel, state: CompanionState, paused: Boolean, modifier: Modifier,
     interactive: Boolean = true) {
@@ -36,11 +37,17 @@ internal fun DeskRoute(vm: CompanionViewModel, state: CompanionState, paused: Bo
     val now = snap.at.takeIf { it > 0 } ?: System.currentTimeMillis()
     val tasks = intentions.filter { it.isOpenAt(now) }
     val weather = state.ambientWeather ?: state.weather
+    val stars = vm.northStars
+    val starViews = stars?.views?.collectAsState()?.value.orEmpty()
+    val mainStar = starViews.firstOrNull()
     val facts = deskFacts(now, tasks, state.projects.firstOrNull(), weather?.let { "${it.temperatureF}° ${it.condition.label.lowercase()}" },
-        weather?.let { !it.isDay })
+        weather?.let { !it.isDay }).let { f -> mainStar?.let {
+            f.copy(projectTitle = it.star.title.take(28), projectStatus = it.nextStep.take(55))
+        } ?: f }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var attach by remember { mutableStateOf(false) }
+    var northStarOpen by remember { mutableStateOf(false) }
     DeskWorkspace(DeskState.from(snap, facts, tasks), tasks, modifier, paused = paused,
         fpsTarget = state.avatarFpsTarget, interactive = interactive,
         onMenu = vm::openTiles, onSettings = vm::toggleSettings,
@@ -51,9 +58,19 @@ internal fun DeskRoute(vm: CompanionViewModel, state: CompanionState, paused: Bo
         micOn = state.isMicEnabled, onMicToggle = { vm.setMicEnabled(!state.isMicEnabled) },
         onAttach = { attach = true },
         onClock = { openClock(context) },
+        onNorthStar = if (mainStar != null) ({ northStarOpen = true }) else null,
         drawerContent = { top, close -> DeskDrawerPanel(vm, top, close) },
         dock = { HomeDock(vm, DockStyle.DESK) })
     if (attach) AttachSheet(vm, onDismiss = { attach = false })
+    if (northStarOpen && stars != null) ModalBottomSheet(onDismissRequest = { northStarOpen = false },
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        NorthStarSheet(stars, onClose = { northStarOpen = false }, onOpenSource = { id ->
+            if (tasks.any { it.id == id }) {
+                northStarOpen = false
+                scope.launch { handleFlowPrimary(vm, context, flow, id) { _ -> vm.setAppTheme(AppTheme.FLOW) } }
+            } else android.widget.Toast.makeText(context, "That item is no longer active.", android.widget.Toast.LENGTH_SHORT).show()
+        })
+    }
 }
 
 private val HM = DateTimeFormatter.ofPattern("h:mm", Locale.US)
@@ -123,6 +140,7 @@ internal fun DeskWorkspace(desk: DeskState, tasks: List<Intention>, modifier: Mo
     onTaskDone: (String) -> Unit = {}, onTaskLater: (String) -> Unit = {},
     micOn: Boolean? = null, onMicToggle: () -> Unit = {}, onAttach: (() -> Unit)? = null,
     onClock: () -> Unit = {},
+    onNorthStar: (() -> Unit)? = null,
     /** Contents of an opened drawer (true = top); the route supplies the real folder. */
     drawerContent: (@Composable (top: Boolean, close: () -> Unit) -> Unit)? = null,
     /** Side dock, drawn above the scene. */
@@ -139,7 +157,11 @@ internal fun DeskWorkspace(desk: DeskState, tasks: List<Intention>, modifier: Mo
             interactive = interactive, wanderEveryMs = if (fpsTarget <= 15) 0 else 26_000,
             lineFor = { deskLine(it, desk) }, onTap = {
                 // The clock hands straight over to Android's Clock; everything else opens its panel.
-                if (interactive) { if (it == DeskObject.CLOCK) onClock() else selected = it }
+                if (interactive) {
+                    if (it == DeskObject.CLOCK) onClock()
+                    else if (it == DeskObject.PROJECT && onNorthStar != null) onNorthStar()
+                    else selected = it
+                }
             })
         if (interactive) dock?.invoke()
         if (interactive) DeskNavigation(if (wide) Modifier.align(Alignment.CenterStart).safeDrawingPadding()

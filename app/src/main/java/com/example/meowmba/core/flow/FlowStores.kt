@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.update
 interface IntentionStore {
     val intentions: StateFlow<List<Intention>>
     suspend fun upsert(intention: Intention)
+    suspend fun find(id: String): Intention? = intentions.value.firstOrNull { it.id == id }
     suspend fun setStatus(id: String, status: IntentionStatus, snoozedUntil: Long? = null)
     /** Close every open intention a confirmed change satisfied (catalogue #295, #600). */
     suspend fun closeSatisfied(ids: Collection<String>)
