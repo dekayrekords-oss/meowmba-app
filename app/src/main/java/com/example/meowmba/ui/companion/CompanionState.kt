@@ -12,7 +12,9 @@ data class ChatUiMessage(
     val id: Long = 0,
     val sender: String,
     val text: String,
-    val isCompanion: Boolean
+    val isCompanion: Boolean,
+    /** System/task progress remains in history, but must not replace the latest actual answer. */
+    val isAssistantReply: Boolean = isCompanion,
 )
 
 /** A memory that was recalled for the current turn, with its explanation. */

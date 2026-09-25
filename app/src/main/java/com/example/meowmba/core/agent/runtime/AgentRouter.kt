@@ -134,6 +134,10 @@ object AgentRouter {
         AvatarSceneRequest.parse(command)?.let { name ->
             return AgentIntent(AgentRegistry.MAIN, "avatar.animate", mapOf("name" to name), "play $name")
         }
+        com.example.meowmba.core.shopping.ShoppingRequest.parse(stripAddress(raw))?.let {
+            return AgentIntent("phone", "shopping.store_deals", mapOf("request" to stripAddress(raw)),
+                if (it.store == null) "identify the nearby store" else "look up deals at ${it.store}")
+        }
         MusicRequest.parse(raw)?.let {
             return AgentIntent("phone", "phone.play_music", mapOf("query" to it.query, "app" to it.app.orEmpty()),
                 "play ${it.query.ifBlank { "music" }}${it.app?.let { app -> " in $app" }.orEmpty()}")

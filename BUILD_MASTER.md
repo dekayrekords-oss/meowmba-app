@@ -3,6 +3,20 @@
 Updated 2026-09-25. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
 This supersedes historical build-location/version instructions in other documents.
 
+- September 25: **177 / 1.5.11 built by Codex — on-request store/deal assistance**.
+  On-request store identification from existing place sources; no arrival announcements.
+  Named-store deal search with source links, explicit uncertainty, and a one-shot human-request
+  guard. Sharing inferred store names with search engines awaits owner consent; the default
+  asks for a named deal request first. No new place provider or phone install authorized.
+  Final JVM: **3,028 tests, zero failures/errors, five existing skips**. Six emulator UI
+  checks pass, including saved-answer/source links after task status. Lint: zero errors,
+  197 warnings, 12 hints. All 161 protected runtime entries preserved against 176,
+  matching signature and 16 KB alignment; optimized cold launch 536 ms, remains foreground,
+  crash buffer unchanged. APK/evidence: Os `work/store-177/`; SHA-256
+  `dce9f1db761e6c8b214ff5c2129763620b740a6e2f591019039d8b1d95caaa3e`.
+  Details/limits: `docs/SHOPPING_177.md`. No phone install; Fold remains173.
+  **177 consumed; next unallocated code 178**.
+
 - September 25: **176 / 1.5.10 built by Codex for the owner-requested chat/behavior audit**.
   Classifier-vs-chat guards, nonhuman ASR filtering with human-sound observations, quiet and
   driving/media speech rules, emoji/GPS speech cleanup, avatar quick launch, app completion,
@@ -39,7 +53,7 @@ This supersedes historical build-location/version instructions in other document
 
 > **Codex, start here:** `docs/HANDOFF_CLAUDE_2026-09-23.md` — state after builds 158–166, how they
 > were built (full runtime flags), owner decisions, open work in priority order, and gotchas.
-> Codex is the build owner again; **173 is the last verified Fold install; 175 is prepared with separate Cozmo/LOOI controls**; next unallocated code **176**. Current Desk update:
+> Codex is the build owner again; **173 is the last verified Fold install; 177 is prepared with separate Cozmo/LOOI controls, behavior repairs and on-request store help**; next unallocated code **178**. Current Desk update:
 > `docs/LIVING_DESK_173.md`; preceding review: `docs/REVIEW_AND_ACTIONS_172.md`.
 
 - September 25 **1.5.7/code 173** (Codex), based on 172 / `a1f583c`, source `8d5fc87`: Living Desk.

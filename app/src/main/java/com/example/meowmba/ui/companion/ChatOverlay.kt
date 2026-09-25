@@ -185,10 +185,10 @@ fun ChatOverlay(
                             }
                         }
                     } else {
-                        val reply = liveReply?.takeIf { it.isNotBlank() } ?: messages.lastOrNull { it.isCompanion }?.text
+                        val reply = liveReply?.takeIf { it.isNotBlank() } ?: messages.lastOrNull { it.isAssistantReply }?.text
                         if (!reply.isNullOrBlank()) {
                             LazyColumn(Modifier.weight(1f, fill = false).fillMaxWidth(), state = replyState) {
-                                item { SelectionContainer { Text(reply, Modifier.padding(vertical = 8.dp),
+                                item { SelectionContainer { Text(chatSourceLinks(reply), Modifier.padding(vertical = 8.dp),
                                     style = MaterialTheme.typography.bodyLarge) } }
                             }
                         }
@@ -254,8 +254,23 @@ fun ChatMessage(sender: String, message: String, isCompanion: Boolean, onDelete:
         }
         Surface(shape = RoundedCornerShape(16.dp), color = if (isCompanion)
             MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primaryContainer) {
-            SelectionContainer { Text(message, Modifier.fillMaxWidth().padding(12.dp),
+            SelectionContainer { Text(chatSourceLinks(message), Modifier.fillMaxWidth().padding(12.dp),
                 color = if (isCompanion) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onPrimaryContainer) }
         }
     }
 }
+
+/** Sources stay readable/selectable; a browser is opened only when the user taps a HTTPS link. */
+internal fun chatSourceLinks(text: String): androidx.compose.ui.text.AnnotatedString =
+    androidx.compose.ui.text.buildAnnotatedString {
+        append(text)
+        Regex("https://[^\\s<>]+", RegexOption.IGNORE_CASE).findAll(text).forEach { match ->
+            val url = match.value.trimEnd('.', ',', ';', '!', '?', ')', ']')
+            if (com.example.meowmba.core.shopping.DealEvidence.safeHost(url) != null) {
+                addLink(androidx.compose.ui.text.LinkAnnotation.Url(url,
+                    androidx.compose.ui.text.TextLinkStyles(style = androidx.compose.ui.text.SpanStyle(
+                        textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline))),
+                    match.range.first, match.range.first + url.length)
+            }
+        }
+    }

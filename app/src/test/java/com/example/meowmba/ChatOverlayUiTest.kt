@@ -60,6 +60,27 @@ class ChatOverlayUiTest {
         compose.onNodeWithText("The answer starts here and continues").assertIsDisplayed()
     }
 
+    @Test fun `a saved answer survives later task status while progress remains in history`() {
+        val answer = "Store evidence and https://www.target.com/deals"
+        val live = mutableStateOf<String?>(answer)
+        val messages = mutableStateOf(emptyList<com.example.meowmba.ui.companion.ChatUiMessage>())
+        compose.setContent { MaterialTheme { Box(Modifier.fillMaxSize()) {
+            ChatOverlay(true, {}, messages = messages.value, liveReply = live.value, installedApps = emptyList())
+        } } }
+        compose.onNodeWithText(answer).assertIsDisplayed()
+        compose.runOnIdle {
+            messages.value = listOf(
+                com.example.meowmba.ui.companion.ChatUiMessage(1, "Meow", answer, true),
+                com.example.meowmba.ui.companion.ChatUiMessage(2, "Meow", "Paws finished", true, isAssistantReply = false),
+            )
+            live.value = null
+        }
+        compose.onNodeWithText(answer).assertIsDisplayed()
+        compose.onNodeWithText("Paws finished").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Show full conversation").performClick()
+        compose.onNodeWithText("Paws finished").assertIsDisplayed()
+    }
+
     @Test fun `mic transcript does not overwrite typed draft`() {
         val partial = mutableStateOf<String?>(null)
         compose.setContent { MaterialTheme { Box(Modifier.fillMaxSize()) {

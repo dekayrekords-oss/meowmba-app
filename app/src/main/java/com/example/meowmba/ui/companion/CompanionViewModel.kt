@@ -2356,6 +2356,15 @@ class CompanionViewModel(
             toolRegistry.register(NavigateTool(appContext))
             toolRegistry.register(SavePlaceTool(appContext, savedPlaces))
             toolRegistry.register(ListSavedPlacesTool(savedPlaces))
+            toolRegistry.register(com.example.meowmba.core.agent.tools.StoreShoppingTool(
+                authorize = { request -> shoppingAuthorization.consume(request, conversationId().toString(), System.currentTimeMillis()) },
+                location = { com.example.meowmba.core.nav.CurrentLocation.fresh(appContext,
+                    maxAgeMs = com.example.meowmba.core.shopping.StoreEvidence.MAX_AGE_MS,
+                    maxAccuracyMeters = com.example.meowmba.core.shopping.StoreEvidence.MAX_ACCURACY_METERS) },
+                nearby = { fix -> placeRepo.nearbyShops(fix.lat, fix.lon,
+                    com.example.meowmba.core.shopping.StoreEvidence.RADIUS_METERS) },
+                search = { query -> WebSearchTool().search(query) },
+            ))
 
             // Car assistant: fuse GPS speed + accelerometer + a configured car
             // Bluetooth device to know when the user is driving, track the trip, and
@@ -2612,6 +2621,10 @@ class CompanionViewModel(
                         // the tool result just confuses the user.
                         if (task.toolId in setOf("avatar.animate", "avatar.describe_animation", "avatar.form", "avatar.invent")) {
                             // no-op: playCustomAnimation already set activeAnimation
+                        } else if (task.toolId == com.example.meowmba.core.agent.tools.StoreShoppingTool.ID) {
+                            // Keep every source/condition in chat, but do not read URLs/excerpts aloud.
+                            speak(result, urgent = false,
+                                spokenText = com.example.meowmba.core.agent.tools.StoreShoppingTool.spokenSummary(result))
                         } else {
                             // Check for generated media
                             val artifacts = com.example.meowmba.core.media.ArtifactViewer.resultsForTool(task.toolId, result)
@@ -7137,6 +7150,7 @@ class CompanionViewModel(
         }
         placeRequestJob?.cancel()
         placeRequestJob = null
+        shoppingAuthorization.clear()
         if (SpeechInterruptionPolicy.isQuietRequest(text)) {
             viewModelScope.launch { persistTurn(MessageRole.USER, text) }
             stayQuiet()
@@ -7202,6 +7216,7 @@ class CompanionViewModel(
             updateVoiceListeningMode()
             return
         }
+        shoppingAuthorization.acceptUserText(AgentRouter.stripAddress(text), conversationId().toString(), System.currentTimeMillis())
         if (_uiState.value.callMode && isHangupCommand(text)) {
             endCallMode()
             speak("Call ended.")
@@ -7392,7 +7407,7 @@ class CompanionViewModel(
         // running", giving a model/setup reply instead of the actual jobs.
         AgentRouter.route(text)?.takeIf {
             it.toolId in setOf("task.list", "business.agents", "business.jobs", "business.open", "avatar.form", "cozmo.control",
-                "calendar.cancel_event", "phone.play_music", "phone.media_control")
+                "calendar.cancel_event", "phone.play_music", "phone.media_control", "shopping.store_deals")
         }?.let {
             if (it.toolId == "cozmo.control" && it.args["action"] == "stop") cozmoController.stop()
             submitAgentIntent(it)
@@ -7906,6 +7921,10 @@ class CompanionViewModel(
                 // returns. Its real result has already been spoken; a late
                 // "is on it" preamble would overwrite that answer.
                 if (orchestrator.tasks.value.any { it.id == result.taskId && it.isTerminal }) return
+                if (intent.toolId == com.example.meowmba.core.agent.tools.StoreShoppingTool.ID) {
+                    _uiState.value = _uiState.value.copy(captionText = "Checking your store request…")
+                    return
+                }
                 val agentName = AgentRegistry.byId(intent.agentId)?.name ?: "Agent"
                 speak(
                     if (result.queued) {
@@ -7919,6 +7938,7 @@ class CompanionViewModel(
     }
 
     private val bugReportIntake = com.example.meowmba.core.diagnostics.BugReportIntake()
+    private val shoppingAuthorization = com.example.meowmba.core.shopping.ShoppingAuthorization()
     private var placeRequestJob: Job? = null
     private var pendingPlaceFix: com.example.meowmba.core.nav.CurrentLocation.Fix? = null
     private var pendingPlaceUntil = 0L
@@ -8456,7 +8476,7 @@ class CompanionViewModel(
      */
     private fun speak(text: String) = speak(text, urgent = false)
 
-    private fun speak(text: String, urgent: Boolean, announcement: Boolean = false, routine: Boolean = false) {
+    private fun speak(text: String, urgent: Boolean, announcement: Boolean = false, routine: Boolean = false, spokenText: String? = null) {
         fuLog("speak: \"${text.take(80)}\"")
         if (text.isBlank()) return
         recordSpokenResponse(text)
@@ -8484,7 +8504,7 @@ class CompanionViewModel(
             return
         }
         val spoken = com.example.meowmba.core.audio.SpeechText.clean(
-            if (urgent || speechMode == SpeechMode.ALWAYS) text else SpeechMode.shorten(text))
+            if (spokenText != null) spokenText else if (urgent || speechMode == SpeechMode.ALWAYS) text else SpeechMode.shorten(text))
         if (spoken.isBlank()) { finishSilently(); return }
         stopAlwaysOnListening()
         if (ttsManager == null) {
@@ -9288,6 +9308,7 @@ class CompanionViewModel(
     fun onUserTextSubmitted(text: String) {
         if (_uiState.value.songRecognitionPrompt) cancelSongIdentification(rearm = false)
         if (text.isBlank()) return
+        shoppingAuthorization.clear()
         if (SpeechInterruptionPolicy.isQuietRequest(text)) {
             processUserSpeech(text, fromVoice = false)
             return
@@ -10700,7 +10721,8 @@ class CompanionViewModel(
                         else -> "You"
                     },
                     text = message.content,
-                    isCompanion = message.role != MessageRole.USER
+                    isCompanion = message.role != MessageRole.USER,
+                    isAssistantReply = message.role == MessageRole.ASSISTANT,
                 )
             }
         )

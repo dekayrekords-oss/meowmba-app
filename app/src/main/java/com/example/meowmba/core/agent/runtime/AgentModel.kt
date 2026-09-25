@@ -157,6 +157,7 @@ object AgentRegistry {
                 "phone.cleanup",
                 "phone.bluetooth_devices", "phone.bluetooth_setup",
                 "nav.find_places", "nav.navigate", "nav.save_place", "nav.list_saved_places",
+                "shopping.store_deals",
                 "car.status", "car.drive_mode", "car.trip", "car.eta", "car.help",
                 "car.vehicle", "car.obd", "car.obd_connect", "car.cameras",
             )
