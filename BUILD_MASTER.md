@@ -1,23 +1,25 @@
 # Meowmba shared build authority
 
-Updated 2026-09-24. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
+Updated 2026-09-25. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
 This supersedes historical build-location/version instructions in other documents.
 
 ## Current recovery
 
 > **Codex, start here:** `docs/HANDOFF_CLAUDE_2026-09-23.md` — state after builds 158–166, how they
 > were built (full runtime flags), owner decisions, open work in priority order, and gotchas.
-> Codex is the build owner again; **173 is built and verified; Fold install awaits reconnection**; next unallocated code **174**. Last observed Fold installation and review:
-> `docs/REVIEW_AND_ACTIONS_172.md`; usage: `docs/MEOW_172_USER_GUIDE.md`.
+> Codex is the build owner again; **173 is installed and verified on the Fold**; next unallocated code **174**. Current Desk update:
+> `docs/LIVING_DESK_173.md`; preceding review: `docs/REVIEW_AND_ACTIONS_172.md`.
 
-- September 24 **1.5.7/code 173** (Codex), based on 172 / `a1f583c`: Living Desk candidate.
+- September 25 **1.5.7/code 173** (Codex), based on 172 / `a1f583c`, source `8d5fc87`: Living Desk.
   Adds irregular room/floor movement, grooming/stretching, computer/letter/board performances,
   an in-Desk Ask Meow action and scrollable real-reply bubbles. The optimized APK and emulator
   Ask/reply smoke check pass. Full daily lint: zero errors, 197 warnings, 12 hints. Full JVM run:
   2,940 pass, five existing skips, one Robolectric dialog-idling scenario moved unchanged to
   Android instrumentation (passes); the remaining three Desk UI checks pass on rerun.
   Same preview signature, 16 KB alignment, all 160 protected entries and 88 native libraries
-  verified against 172. Fold disconnected before installation; last observed build is 172.
+  verified against 172. Installed in place on Fold8 / SM-F971U / R5GL75XFCXD at 00:21
+  America/Phoenix after reconnection. Original first-install time retained, launch passes,
+  no new app crash-buffer entries, separate Play 155 unchanged. App data/settings kept.
   Install the archived 173 rather than rebuilding another artifact with that number.
   Receipt: `/Users/prog/Meowmba-Releases/living-desk173-20260924/README.md`.
   Usage: `docs/LIVING_DESK_173.md`.

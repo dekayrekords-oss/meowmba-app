@@ -19,6 +19,6 @@ Your existing idle-avatar setting still applies and can cover Desk after its cho
 
 Preview **1.5.7 / 173** follows predecessor build 172 at revision `a1f583c`, with the same package and preview signing identity. The signed, optimized APK is built and verified. It passes the real Android Ask/type/send test and the optimized app shows the real answer without leaving Desk. Full daily lint has zero errors; native/model parity and 16 KB alignment pass.
 
-The Fold disconnected before installation. Build 173 is ready at `/Users/prog/Meowmba-Releases/living-desk173-20260924/meow-preview-1.5.7-code173.apk`; the last observed Fold version was 172. Update in place with this APK to preserve the existing app’s data and settings.
+Build 173 was installed in place on the Fold 8 on September 25 at 00:21 America/Phoenix, preserving the existing app’s data and settings. Version and launch checks pass, the original first-install time is retained, and no new app crash entry appeared. The separate Play edition remains unchanged. The verified APK is archived at `/Users/prog/Meowmba-Releases/living-desk173-20260924/meow-preview-1.5.7-code173.apk`.
 
 The complete validation history, including the Robolectric dialog scenario moved to a passing Android instrumentation test, is recorded in the release folder’s `README.md` and `validation/`.
