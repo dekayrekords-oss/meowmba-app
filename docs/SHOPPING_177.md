@@ -57,7 +57,7 @@ send, avatar/app-completion and separate robot controls. Full daily lint: zero e
 197 warnings, 12 hints. Preview signature, 16 KB alignment and 161 protected runtime entries
 against preview176 pass; only generated ART profiles differ. Optimized cold launch: 536 ms,
 same PID remains foreground afterward, crash buffer unchanged. Actual saved-chat smoke
-test passes on the optimized APK. No physical phone installation authorized or performed.
+test passes on the optimized APK. The owner subsequently explicitly requested phone installation.
 No real user location or inferred store has been sent to a search provider during development.
 No actual live deal or indoor-store accuracy claim is made by the fixture-based tests.
 An intermediate emulator smoke test exposed the task-progress display bug; its APK is
@@ -67,4 +67,17 @@ tests the transition from a live reply to a saved reply followed by a task-statu
 Final APK/evidence: Os workspace `work/store-177/`. Version 1.5.11 / 177, package
 `com.example.meowmba`, SHA-256:
 `dce9f1db761e6c8b214ff5c2129763620b740a6e2f591019039d8b1d95caaa3e`.
-177 is consumed; next unallocated code178. Fold remains173. No source push performed.
+Installed in place on Fold SM-F971U (`R5GL75XFCXD`) over173 at2026-09-25 13:49:34 MST,
+using the unchanged final APK and `adb install -r`. The installed/candidate certificates
+match; all160 protected runtime entries from173 are unchanged. Verified177 / 1.5.11,
+original firstInstallTime `2026-09-23 09:05:20` and appId10496 retained, separate Play155
+unchanged. No data clearing, permission changes or default-app changes.
+
+Home UI with existing content was visually verified. Fresh-process launches reported WARM,
+not COLD; PID18951 survived62seconds with an empty crash buffer. Another app (`dev.myvu.probe`)
+took foreground during observation and was left alone, so sustained Meow foreground residency
+is not established. Evidence: Os `work/store-177/validation/phone-install/`.
+No store query, calendar mutation, music action or robot command was performed during installation.
+Inferred-store-name sharing and new public map downloads remain unapproved/disabled.
+
+177 is consumed; next unallocated code178. Fold verified177. No source push performed.
