@@ -189,8 +189,8 @@ class SkillRunner(private val context: Context) {
     }
 
     private fun helpfulFallback(text: String): String {
-        return "Running \"$text\" — that skill doesn't map to a built-in action yet, but I'm standing by. " +
-            "Name a skill after what it should do (timer, reminder, open an app, toast, read screen) and it'll actually work."
+        return "I couldn't run \"$text\": that skill has no supported action. Nothing was performed. " +
+            "Choose a supported timer, reminder, app-launch or screen-reading action."
     }
 
     private fun postChime(title: String, body: String) {
@@ -198,7 +198,11 @@ class SkillRunner(private val context: Context) {
     }
 
     private fun speak(text: String) {
-        runCatching { TextToSpeechManager(context).speak(text) }
+        runCatching {
+            if (com.example.meowmba.core.security.SecureStorageManager(context)
+                    .getBooleanPreference("quiet_until_addressed", false)) return
+            TextToSpeechManager(context).speak(text)
+        }
     }
 
     private fun capMessage(text: String) {

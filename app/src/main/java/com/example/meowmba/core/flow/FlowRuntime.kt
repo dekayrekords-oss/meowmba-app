@@ -123,6 +123,16 @@ class FlowRuntime(
     }
 
     /** Something the user said in chat; saved only for explicit "I need to…" phrasing (rules mode). */
+    suspend fun cancelCalendarOccurrence(title: String, begin: Long) {
+        val id = "${com.example.meowmba.core.flow.sources.AppIntentions.CALENDAR}$begin-${title.take(60).hashCode().toUInt()}"
+        // Exact provider title + occurrence key; never retire unrelated recurring reminders.
+        store.setStatus(id, IntentionStatus.DROPPED)
+        controller.onPrimary(id, completes = false)
+        delivery.resolved(id)
+        publish(Evidence(EvidenceType.CALENDAR, System.currentTimeMillis(), "cal", "Calendar cancellation confirmed"))
+    }
+
+    /** Something the user said in chat; saved only for explicit "I need to…" phrasing (rules mode). */
     suspend fun captureFromChat(text: String, now: Long = System.currentTimeMillis()): Intention? {
         val i = IntentionCapture(null).capture(text, now) ?: return null
         store.upsert(i)

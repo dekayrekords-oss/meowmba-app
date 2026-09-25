@@ -198,20 +198,19 @@ class PlayMusicTool(private val context: Context) : Tool {
     )
 
     override suspend fun execute(args: Map<String, String>): ToolResult = withContext(Dispatchers.IO) {
-        val query = args["query"]?.takeIf { it.isNotBlank() }
+        val query = args["query"]?.trim()
             ?: return@withContext ToolResult.Failure("Missing 'query' — what should I play?")
         val appName = args["app"]?.takeIf { it.isNotBlank() }
 
-        // Resolve the target audio app. A named app is looked up among installed
-        // apps; otherwise prefer Spotify when present, and fall back to an implicit
-        // intent so the user's default music handler picks it up.
+        // A named player wins, then the active AUDIO player, then Android's default.
+        // Never send "play music" to an unrelated active video session.
+        val sessions = musicControllers(context)
         val targetPackage: String? = when {
             appName != null -> InstalledApps.find(context, appName)?.packageName
                 ?: return@withContext ToolResult.Failure(
                     "No installed app matches \"$appName\". Ask me to list your apps."
                 )
-            InstalledApps.find(context, "spotify") != null ->
-                InstalledApps.find(context, "spotify")!!.packageName
+            sessions.isNotEmpty() -> sessions.first().packageName
             else -> null
         }
 
@@ -223,8 +222,19 @@ class PlayMusicTool(private val context: Context) : Tool {
         }
         val appLabel = appName ?: targetPackage?.let { "the music app" }
         return@withContext try {
-            context.startActivity(play)
-            ToolResult.Success("Playing \"$query\"${appLabel?.let { " in $it" } ?: ""}.")
+            val controller = sessions.firstOrNull { targetPackage == null || it.packageName == targetPackage }
+            val before = controller?.playbackState?.state
+            if (query.isBlank() && controller != null) controller.transportControls.play()
+            else if (controller != null && (controller.playbackState?.actions ?: 0L) and PlaybackState.ACTION_PLAY_FROM_SEARCH != 0L)
+                controller.transportControls.playFromSearch(query, null)
+            else context.startActivity(play)
+            kotlinx.coroutines.delay(900)
+            val after = musicControllers(context).firstOrNull { targetPackage == null || it.packageName == targetPackage }
+            val began = before != PlaybackState.STATE_PLAYING && after?.playbackState?.state == PlaybackState.STATE_PLAYING
+            val requested = query.ifBlank { "music" }
+            ToolResult.Success(if (began) "Playback started${appLabel?.let { " in $it" } ?: ""}. Requested: $requested."
+                else "Sent the playback request for $requested${appLabel?.let { " to $it" } ?: " to your phone's music player"}. Playback of the request isn't confirmed yet; the player may need you to sign in or select a result.")
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e
         } catch (e: Exception) {
             ToolResult.Failure("Couldn't start playback of \"$query\": ${e.message}")
         }
@@ -687,12 +697,12 @@ class MediaControlTool(private val context: Context) : Tool {
             return@withContext ToolResult.Failure("I need play, pause, next, or previous.")
         }
         try {
-            val msm = context.getSystemService(Context.MEDIA_SESSION_SERVICE) as? MediaSessionManager
-            val sessions = msm?.getActiveSessions(null)?.toList() ?: emptyList()
+            val sessions = activeMediaControllers(context)
             val controller = sessions.firstOrNull { s ->
                 s.playbackState?.state == PlaybackState.STATE_PLAYING
             } ?: sessions.firstOrNull()
-                ?: return@withContext ToolResult.Failure("Nothing is playing right now.")
+                ?: return@withContext if (action == "play") PlayMusicTool(context).execute(mapOf("query" to ""))
+                    else ToolResult.Failure("No controllable media session. Allow notification access or open your music player first.")
             val controls = controller.transportControls
             when (action) {
                 "play" -> controls.play()
@@ -700,18 +710,33 @@ class MediaControlTool(private val context: Context) : Tool {
                 "next" -> controls.skipToNext()
                 "previous" -> controls.skipToPrevious()
             }
-            ToolResult.Success(
-                when (action) {
-                    "play" -> "Playing."
-                    "pause" -> "Paused."
-                    "next" -> "Skipped to the next track."
-                    else -> "Back to the previous track."
-                }
-            )
+            kotlinx.coroutines.delay(500)
+            val verified = when (action) {
+                "play" -> controller.playbackState?.state == PlaybackState.STATE_PLAYING
+                "pause" -> controller.playbackState?.state in setOf(PlaybackState.STATE_PAUSED, PlaybackState.STATE_STOPPED)
+                else -> false
+            }
+            ToolResult.Success(if (verified) (if (action == "play") "Playback is running." else "Playback is paused.")
+                else "Sent $action to the media player; the resulting playback change isn't confirmed yet.")
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e
         } catch (e: Exception) {
             ToolResult.Failure("Couldn't control playback: ${e.message}")
         }
     }
+}
+
+private fun activeMediaControllers(context: Context): List<android.media.session.MediaController> = try {
+    context.getSystemService(MediaSessionManager::class.java)?.getActiveSessions(
+        android.content.ComponentName(context, com.example.meowmba.core.alerts.RoadAlertListener::class.java))
+        .orEmpty().filter { it.packageName != context.packageName }
+        .sortedByDescending { it.playbackState?.state == PlaybackState.STATE_PLAYING }
+} catch (_: SecurityException) { emptyList() }
+
+private fun musicControllers(context: Context) = activeMediaControllers(context).filter { controller ->
+    controller.packageName in setOf("com.spotify.music", "com.google.android.apps.youtube.music", "com.apple.android.music",
+        "com.amazon.mp3", "com.pandora.android", "com.aspiro.tidal", "deezer.android.app") || runCatching {
+        context.packageManager.getApplicationInfo(controller.packageName, 0).category == android.content.pm.ApplicationInfo.CATEGORY_AUDIO
+    }.getOrDefault(false)
 }
 
 /** `phone.set_brightness` — screen brightness percent; needs one-time write-settings grant. */

@@ -157,7 +157,9 @@ class TextToSpeechManager(private val context: Context) : SpeechSynthesizer {
         neural.enqueue("Hi, I'm ${voice.name}. What would you like to do next?", true, voice)
     }
 
-    private fun enqueue(text: String, flush: Boolean, onStarted: (() -> Unit)? = null) {
+    private fun enqueue(raw: String, flush: Boolean, onStarted: (() -> Unit)? = null) {
+        val text = SpeechText.clean(raw)
+        if (text.isBlank()) return
         if (useNeural()) {
             if (flush) { synchronized(this) { pendingUtterances = 0; activeIds.clear(); startCallbacks.clear(); speakingStarted = false }; tts?.stop() }
             LocalVoiceRuntime.lastError.value = null

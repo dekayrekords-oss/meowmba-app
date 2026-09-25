@@ -20,7 +20,7 @@ class NavAgent(
         /** Not a navigation request; caller should keep looking for a handler. */
         data object NotNavigation : Outcome
 
-        /** Routing now. */
+        /** A destination is selected; the caller must launch Maps and report its result. */
         data class Navigating(val place: Place, val say: String) : Outcome
 
         /** Offered a list; awaiting a pick. */
@@ -67,7 +67,7 @@ class NavAgent(
         pending?.let { list ->
             resolveChoice(text, list)?.let { chosen ->
                 pending = null
-                return Outcome.Navigating(chosen, "Routing to ${chosen.name}")
+                return Outcome.Navigating(chosen, "Ready to open ${chosen.name} in Maps.")
             }
             // Not a choice — fall through and treat it as a fresh request.
         }
@@ -104,7 +104,7 @@ class NavAgent(
                     nearest,
                     "Nearest ${request.query} is ${nearest.name}" +
                         (nearest.distanceLabel()?.let { ", $it away" } ?: "") +
-                        ". Routing you there.",
+                        ". Ready to open it in Maps.",
                 )
             }
 

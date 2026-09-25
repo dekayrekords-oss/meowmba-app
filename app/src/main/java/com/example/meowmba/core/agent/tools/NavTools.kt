@@ -139,7 +139,7 @@ class NavigateTool(private val context: Context) : Tool {
         val name = args["name"]?.takeIf { it.isNotBlank() } ?: "Destination"
         val place = Place(name = name, lat = lat, lon = lon)
         return if (NavigationLauncher.navigateTo(context, place)) {
-            ToolResult.Success("Navigating to $name.")
+            ToolResult.Success("Opened Maps for $name. Check the maps app to start or confirm turn-by-turn navigation.")
         } else {
             ToolResult.Failure("No maps app on this phone could handle that.")
         }

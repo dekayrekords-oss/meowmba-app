@@ -139,7 +139,7 @@ object AgentRegistry {
         AgentDefinition(
             id = "calendar", name = "Planner",
             purpose = "Manages the calendar: lists upcoming events and creates new ones.",
-            allowedTools = setOf("calendar.list_events", "calendar.create_event")
+            allowedTools = setOf("calendar.list_events", "calendar.create_event", "calendar.cancel_event")
         ),
         AgentDefinition(
             id = "computer", name = "Computer",

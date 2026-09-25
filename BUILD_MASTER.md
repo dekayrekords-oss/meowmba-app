@@ -3,6 +3,20 @@
 Updated 2026-09-25. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
 This supersedes historical build-location/version instructions in other documents.
 
+- September 25: **176 / 1.5.10 built by Codex for the owner-requested chat/behavior audit**.
+  Classifier-vs-chat guards, nonhuman ASR filtering with human-sound observations, quiet and
+  driving/media speech rules, emoji/GPS speech cleanup, avatar quick launch, app completion,
+  verified calendar cancellation, and honest music/navigation/skill action receipts.
+  Final full JVM: **2,997 tests, zero failures/errors, five skips**; four emulator UI tests pass.
+  Full daily lint: zero errors, 197 warnings, 12 hints. Signature, 16 KB alignment and runtime
+  comparison with 175 pass (161 entries checked, only generated ART profiles changed).
+  Optimized emulator cold launch passes (3,132 ms), stays foreground, crash buffer unchanged.
+  APK/evidence: Os workspace `work/behavior-176/`; SHA-256
+  `775e6b76bc2e5db1531236ad56f84831822681c79b5e139a4641df9d1beec1e3`.
+  No phone install or actual calendar mutation; Fold remains verified preview173. Automatic
+  public map downloads/nearest-intersection data require additional location-sharing approval.
+  Audit/limits: `docs/BEHAVIOR_176.md`. **176 consumed; next unallocated code 177**.
+
 - September 25: **175 / 1.5.9 built by Codex for robot separation**. Cozmo and LOOI
   have separate menu entries, panels, tool owners and command routing; no connected-robot
   substitution. 124 focused JVM tests and two emulator UI tests pass; full daily lint:

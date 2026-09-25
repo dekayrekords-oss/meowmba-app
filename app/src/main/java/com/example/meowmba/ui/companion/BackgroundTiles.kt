@@ -107,6 +107,7 @@ val tileItems: List<MembaTile> @Composable get() = listOf(
     MembaTile("Settings", Icons.Default.Settings, MaterialTheme.colorScheme.tertiary),
     MembaTile("Flow", Icons.Default.List, MaterialTheme.colorScheme.primary),
     MembaTile("Desk", Icons.Default.Desk, MaterialTheme.colorScheme.secondary),
+    MembaTile("Show avatar", Icons.Default.Face, MaterialTheme.colorScheme.primary),
     MembaTile("Computer", Icons.Default.Computer, MaterialTheme.colorScheme.primary),
     MembaTile("Memory", Icons.Default.Terminal, MaterialTheme.colorScheme.primary),
     MembaTile("Files", Icons.Default.FolderOpen, MaterialTheme.colorScheme.secondary),

@@ -72,7 +72,7 @@ class CalendarListTool(private val context: Context) : Tool {
         val selection = "${CalendarContract.Events.CALENDAR_ID} = ? AND " +
             "${CalendarContract.Events.DTSTART} >= ? AND " +
             "${CalendarContract.Events.DTSTART} <= ? AND " +
-            "${CalendarContract.Events.DELETED} = 0"
+            "${CalendarContract.Events.DELETED} = 0 AND ${com.example.meowmba.core.calendar.CalendarEventSelection.active}"
         val selArgs = arrayOf(primaryId.toString(), now.toString(), end.toString())
 
         val cursor = resolver.query(

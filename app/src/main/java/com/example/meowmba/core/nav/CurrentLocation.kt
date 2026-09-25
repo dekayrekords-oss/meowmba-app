@@ -203,7 +203,12 @@ object CurrentLocation {
                     android.location.Geocoder(context, java.util.Locale.getDefault()).getFromLocation(
                         fix.lat, fix.lon, 1, object : android.location.Geocoder.GeocodeListener {
                             override fun onGeocode(addresses: MutableList<android.location.Address>) {
-                                if (continuation.isActive) continuation.resumeWith(Result.success(addresses.firstOrNull()?.getAddressLine(0)))
+                                val a = addresses.firstOrNull()
+                                // A street address is not evidence of a cross street. Never invent an intersection.
+                                val road = a?.thoroughfare?.takeIf { it.isNotBlank() }
+                                val label = if (road != null) listOfNotNull(road, a.locality).distinct().joinToString(", ")
+                                    else a?.getAddressLine(0)
+                                if (continuation.isActive) continuation.resumeWith(Result.success(label))
                             }
                             override fun onError(errorMessage: String?) {
                                 if (continuation.isActive) continuation.resumeWith(Result.success(null))

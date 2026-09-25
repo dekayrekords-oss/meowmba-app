@@ -39,6 +39,7 @@ class IntentionCapture(
     }
 
     suspend fun capture(utterance: String, now: Long): Intention? {
+        if (Regex("(?i)\\bcancel(?:ed|led)?\\b").containsMatchIn(utterance)) return null
         if (!mightExpressNeed(utterance)) return null
         val parsed = parse(utterance) ?: return null
         val engine = engine ?: return if (EXPLICIT.containsMatchIn(utterance.lowercase(Locale.ROOT))) build(parsed, parsed.type, utterance, now) else null

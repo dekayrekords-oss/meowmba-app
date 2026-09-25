@@ -42,7 +42,8 @@ class CalendarSource(private val context: Context, private val horizonMs: Long =
             CalendarContract.Instances.SELF_ATTENDEE_STATUS,
         )
         /** Skip events the user declined. */
-        private val SELECTION = "${CalendarContract.Instances.SELF_ATTENDEE_STATUS} != ${CalendarContract.Attendees.ATTENDEE_STATUS_DECLINED}"
+        private val SELECTION = "(${CalendarContract.Instances.SELF_ATTENDEE_STATUS} IS NULL OR ${CalendarContract.Instances.SELF_ATTENDEE_STATUS} != ${CalendarContract.Attendees.ATTENDEE_STATUS_DECLINED}) AND " +
+            com.example.meowmba.core.calendar.CalendarEventSelection.active
 
         /** Pure mapping from a cursor over [PROJECTION]; all-day and finished events are skipped. */
         fun mapRows(c: Cursor, now: Long, limit: Int = 12): List<CalendarItem> {

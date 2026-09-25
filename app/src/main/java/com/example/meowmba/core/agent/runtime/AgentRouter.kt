@@ -134,6 +134,10 @@ object AgentRouter {
         AvatarSceneRequest.parse(command)?.let { name ->
             return AgentIntent(AgentRegistry.MAIN, "avatar.animate", mapOf("name" to name), "play $name")
         }
+        MusicRequest.parse(raw)?.let {
+            return AgentIntent("phone", "phone.play_music", mapOf("query" to it.query, "app" to it.app.orEmpty()),
+                "play ${it.query.ifBlank { "music" }}${it.app?.let { app -> " in $app" }.orEmpty()}")
+        }
 
         /** True when the user said [phrases], with or without a wake word. */
         fun says(vararg phrases: String): Boolean {
@@ -285,6 +289,10 @@ object AgentRouter {
         }
 
         // Calendar
+        com.example.meowmba.core.agent.tools.CalendarCancellation.parse(stripAddress(raw))?.let {
+            return AgentIntent("calendar", "calendar.cancel_event", mapOf("query" to stripAddress(raw)),
+                "cancel one calendar occurrence: ${stripAddress(raw)}")
+        }
         if (normalized in setOf("what's on my calendar", "whats on my calendar",
                 "show my calendar", "what are my upcoming events", "list my events",
                 "show me my calendar", "calendar", "my events")) {
@@ -844,6 +852,11 @@ object AgentRouter {
         if (!com.example.meowmba.core.robot.RobotCommandTarget.permits("robot.move", raw)) return null
         val t = raw.lowercase().trim()
         if (t.isBlank()) return null
+        // "Look up the manual" is research, never a neck command. A bare look-up/down
+        // movement must be the complete imperative, not a substring in another task.
+        if (Regex("\\blook (?:up|down)\\b").containsMatchIn(t) &&
+            !Regex("^(?:(?:hey )?(?:meow|meowmba|memba|looi)[, ]+)?(?:please )?(?:can you |could you )?look (?:up|down)(?: please)?[.!?]*$")
+                .matches(t)) return null
         val motion = com.example.meowmba.core.robot.RobotManager.Motion
             .fromPhrase(t, includeFaceOwned = false)
             ?: return null

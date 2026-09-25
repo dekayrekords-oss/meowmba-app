@@ -74,6 +74,7 @@ class VoiceRecoveryRegressionTest {
         assertFalse(engine.isListening.value)
     } }
     @Test fun completeOnlyProviderAnswerIsVisibleAndSpoken() = runTest { withVm { vm, _, tts ->
+        vm.setSpeechMode(com.example.meowmba.ui.companion.SpeechMode.ALWAYS)
         vm.currentProvider = Provider(flowOf(ModelResponse.Complete("The sky scatters blue light.")))
         vm.onUserTextSubmitted("why is the sky blue")
         runCurrent()
@@ -82,12 +83,14 @@ class VoiceRecoveryRegressionTest {
         assertNull(vm.uiState.value.errorMessage)
     } }
     @Test fun similarExplicitTypedQuestionsAreSeparateTurns() = runTest { withVm { vm, _, tts ->
+        vm.setSpeechMode(com.example.meowmba.ui.companion.SpeechMode.ALWAYS)
         vm.currentProvider = Provider(flowOf(ModelResponse.Complete("Here is the answer.")))
         vm.onUserTextSubmitted("why is the moon bright"); runCurrent()
         vm.onUserTextSubmitted("why is venus bright"); runCurrent()
         assertEquals(2, tts.spokenTexts.size)
     } }
     @Test fun finalCorrectionReplacesDraftAndDuplicateTerminalCannotSpeakAgain() = runTest { withVm { vm, _, tts ->
+        vm.setSpeechMode(com.example.meowmba.ui.companion.SpeechMode.ALWAYS)
         vm.currentProvider = Provider(flowOf(
             ModelResponse.Partial("The planet is entirely made of a very unusual substance. "),
             ModelResponse.Complete("The planet is rocky."),
@@ -105,6 +108,32 @@ class VoiceRecoveryRegressionTest {
         assertTrue(vm.uiState.value.liveAssistantReply.orEmpty().contains("This is the part that arrived"))
         assertTrue(vm.uiState.value.liveAssistantReply.orEmpty().contains("ended before completion"))
         assertEquals(InteractionState.OFFLINE, vm.uiState.value.interactionState)
+    } }
+    @Test fun typedReplyHonorsImportantModeAndDoesNotLeaveThinkingStuck() = runTest { withVm { vm, _, tts ->
+        vm.currentProvider = Provider(flowOf(ModelResponse.Complete("This reply stays in chat.")))
+        vm.onUserTextSubmitted("why is the sky blue"); runCurrent()
+        assertEquals("This reply stays in chat.", vm.uiState.value.liveAssistantReply)
+        assertTrue(tts.spokenTexts.isEmpty())
+        assertEquals(InteractionState.IDLE, vm.uiState.value.interactionState)
+    } }
+    @Test fun safetyClassifierLabelsNeverLeakIntoChatOrSpeech() = runTest { withVm { vm, _, tts ->
+        vm.setSpeechMode(com.example.meowmba.ui.companion.SpeechMode.ALWAYS)
+        vm.currentProvider = Provider(flowOf(ModelResponse.Partial("User Safety: "), ModelResponse.Complete("User Safety: safe")))
+        vm.onUserTextSubmitted("why is the sky blue"); runCurrent()
+        assertTrue(tts.spokenTexts.isEmpty())
+        assertNotEquals("User Safety: safe", vm.uiState.value.liveAssistantReply)
+        assertTrue(vm.uiState.value.errorMessage.orEmpty().contains("classification labels"))
+    } }
+    @Test fun quietStopsSpeechAndNewTypedAddressReleasesTheLatch() = runTest { withVm { vm, _, tts ->
+        vm.setSpeechMode(com.example.meowmba.ui.companion.SpeechMode.ALWAYS)
+        vm.currentProvider = Provider(flowOf(ModelResponse.Complete("An answer.")))
+        vm.onUserTextSubmitted("why are trees green"); runCurrent()
+        val before = tts.spokenTexts.size
+        vm.onUserTextSubmitted("be quiet"); runCurrent()
+        assertEquals(before, tts.spokenTexts.size)
+        assertTrue(vm.uiState.value.liveAssistantReply.orEmpty().contains("stay quiet"))
+        vm.onUserTextSubmitted("why is grass green"); runCurrent()
+        assertEquals(before + 1, tts.spokenTexts.size)
     } }
     @Test fun mutedFinalReplyReleasesThinkingImmediately() = runTest { withVm { vm, _, tts ->
         vm.setMuted(true)

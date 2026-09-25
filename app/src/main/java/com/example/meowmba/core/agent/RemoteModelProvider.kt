@@ -69,6 +69,10 @@ class RemoteModelProvider(
     }
 
     override fun generateStreaming(prompt: String): Flow<ModelResponse> = flow {
+        if (!ChatModelSuitability.isChatModel(model)) {
+            emit(ModelResponse.Error(ChatModelSuitability.ERROR))
+            return@flow
+        }
         if (style != ApiStyle.OLLAMA && apiKey.isNullOrBlank()) {
             emit(ModelResponse.Error("No API key configured for $name — add it in Settings"))
             return@flow

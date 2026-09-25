@@ -37,6 +37,16 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class FlowRuntimeTest {
+    @Test fun confirmedCalendarCancellationDropsOnlyThatOccurrence() = runTest {
+        val title = "Dentist"
+        val start = Fx.at(16)
+        val id = "cal-$start-${title.hashCode().toUInt()}"
+        val store = InMemoryIntentionStore(listOf(Fx.bulb.copy(id = id, text = "Dentist at 4 PM", dueAt = start), Fx.bulb))
+        val rt = FlowRuntime(ctx, backgroundScope, { true }, store, notifier = FakeNotifier())
+        rt.cancelCalendarOccurrence(title, start)
+        assertEquals(IntentionStatus.DROPPED, store.find(id)?.status)
+        assertEquals(IntentionStatus.OPEN, store.find(Fx.bulb.id)?.status)
+    }
     private val ctx get() = ApplicationProvider.getApplicationContext<Context>()
 
     private class FakeLaya : Assessor {

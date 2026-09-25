@@ -1370,7 +1370,7 @@ class CompanionViewModel(
                 if (!_uiState.value.roadAlertsEnabled) return@collect
                 val was = _uiState.value.policeAlert
                 _uiState.value = _uiState.value.copy(policeAlert = alert.summary)
-                if (was != alert.summary) speak(alert.summary)
+                if (was != alert.summary) speak(alert.summary, urgent = false, announcement = true)
                 viewModelScope.launch {
                     delay(20_000L)
                     if (_uiState.value.policeAlert == alert.summary) {
@@ -1663,7 +1663,7 @@ class CompanionViewModel(
                     // Require an explicit wake or stop during playback, and never
                     // let a wake phrase spoken by Meow bypass the echo filter.
                     if (!selfVoiceFilter.isOwnVoice(partial) && (matcher.match(partial) != null || partial.trim().lowercase() in setOf("stop", "stop talking", "wait stop that", "stop that", "be quiet"))) {
-                        interrupt()
+                        if (SpeechInterruptionPolicy.isQuietRequest(partial)) stayQuiet() else interrupt()
                     }
                 }
             }
@@ -1991,6 +1991,9 @@ class CompanionViewModel(
             toolRegistry.register(EmailSendTool(appContext))
             toolRegistry.register(CalendarListTool(appContext))
             toolRegistry.register(CalendarCreateTool(appContext))
+            toolRegistry.register(com.example.meowmba.core.agent.tools.CalendarCancelTool(appContext) { title, begin ->
+                flowRuntime?.cancelCalendarOccurrence(title, begin)
+            })
         }
         // Phone control: open apps, links, and settings pages on this device.
         if (appContext != null) {
@@ -2898,18 +2901,16 @@ class CompanionViewModel(
             val inputSound = com.example.meowmba.core.audio.InputSoundLevel.snapshot(
                 com.example.meowmba.core.audio.InputSoundLevel.monotonicNowMs(),
                 suppressOwnSpeech = state.interactionState == InteractionState.SPEAKING || !state.isMicEnabled)
-            if (inputSound.fresh) nervousSystem.onEvent(SensoryEvent(SensoryKind.VOICE_ACTIVITY, SensorySource.VOICE,
-                floatArrayOf(inputSound.activity, inputSound.loudness)))
+            if (inputSound.humanVocalization) nervousSystem.onEvent(SensoryEvent(SensoryKind.VOICE_ACTIVITY, SensorySource.VOICE,
+                floatArrayOf(.6f, 0f)))
         }
         val hasFace = fresh && track?.hasFace == true
         val stale = track != null && !fresh && state.isCameraEnabled
         val cueActive = hasFace && track!!.cue != com.example.meowmba.core.vision.SocialCue.NONE &&
             track.cue != com.example.meowmba.core.vision.SocialCue.BLINK
         val speechEnergy = maxOf(_mouthEnergy.value, track?.mouthOpen ?: 0f)
-        val inputSound = com.example.meowmba.core.audio.InputSoundLevel.snapshot(
-            com.example.meowmba.core.audio.InputSoundLevel.monotonicNowMs(),
-            suppressOwnSpeech = state.interactionState == InteractionState.SPEAKING || !state.isMicEnabled)
-        val loud = inputSound.fresh && inputSound.loudness >= .78f
+        // Unclassified energy (keys, road noise, music) is not a human reaction cue.
+        val loud = false
         val affection = nowElapsedMs < affectionUntilElapsedMs
         val emotionChanged = nowElapsedMs < emotionPulseUntilElapsedMs
         val motionMag = maxOf(
@@ -3523,7 +3524,7 @@ class CompanionViewModel(
                 speaker = com.example.meowmba.core.flow.delivery.FlowSpeaker { text ->
                     val state = _uiState.value
                     if (handedOffToBackground || state.isMuted || state.interactionState != InteractionState.IDLE || !proactiveVoiceAllowed()) false
-                    else { speak(text); true }
+                    else { speak(text, urgent = false, announcement = true); true }
                 },
                 store = com.example.meowmba.core.flow.db.RoomIntentionStore(dao, viewModelScope),
                 outcomes = com.example.meowmba.core.flow.db.RoomOutcomeLog(dao),
@@ -4193,7 +4194,7 @@ class CompanionViewModel(
                     ) playCustomAnimation(spec, userRequested = false)
                 }
             },
-            onComment = { text -> if (canOfferSocialSpeech()) speak(text) },
+            onComment = { text -> if (canOfferSocialSpeech()) speak(text, urgent = false, routine = true) },
             commentaryEnabled = _uiState.value.commentaryEnabled,
             canSpeak = {
                 canOfferSocialSpeech()
@@ -4279,6 +4280,10 @@ class CompanionViewModel(
             "Settings" -> toggleSettings()
             "Flow" -> setAppTheme(AppTheme.FLOW)
             "Desk" -> setAppTheme(AppTheme.DESK)
+            "Show avatar" -> {
+                _uiState.update { it.atAvatarHome() }
+                setAppTheme(AppTheme.COMPANION)
+            }
             "Computer" -> openComputerTools()
             "LLM", "Hardware" -> toggleModelManager()
             "Brain" -> toggleNeuralInfo()
@@ -4846,7 +4851,8 @@ class CompanionViewModel(
             ) {
                 moodEngine.markChattered(now)
                 fact()?.let {
-                    if (canOfferSocialSpeech() && _uiState.value.captionText == null) speak(it)
+                    if (canOfferSocialSpeech() && _uiState.value.captionText == null)
+                        speak(it, urgent = false, routine = true)
                 }
             }
         }
@@ -5106,18 +5112,18 @@ class CompanionViewModel(
         dao.markRun(id, System.currentTimeMillis())
         val ctx = secureStorage?.context
         when (routine.action) {
-            "morning_brief" -> speak(buildMorningBrief())
-            "memory_followup" -> speak(buildMemoryFollowUp())
+            "morning_brief" -> speak(buildMorningBrief(), urgent = false, routine = true)
+            "memory_followup" -> speak(buildMemoryFollowUp(), urgent = false, routine = true)
             "play_music" -> if (ctx != null) {
                 val result = com.example.meowmba.core.agent.tools.PlayMusicTool(ctx)
                     .execute(mapOf("query" to routine.launchTarget.ifBlank { "music" }))
                 val line = when (result) {
                     is com.example.meowmba.core.agent.tools.ToolResult.Success ->
-                        "Playing ${routine.name}."
+                        result.output
                     is com.example.meowmba.core.agent.tools.ToolResult.Failure -> result.error
                 }
-                speak(line)
-            } else if (routine.message.isNotBlank()) speak(routine.message)
+                speak(line, urgent = false, routine = true)
+            } else if (routine.message.isNotBlank()) speak(routine.message, urgent = false, routine = true)
             "launch_app" -> if (ctx != null) {
                 val result = com.example.meowmba.core.agent.tools.LaunchAppTool(ctx)
                     .execute(mapOf("name" to routine.launchTarget.ifBlank { "music" }))
@@ -5125,9 +5131,10 @@ class CompanionViewModel(
                     is com.example.meowmba.core.agent.tools.ToolResult.Success -> result.output
                     is com.example.meowmba.core.agent.tools.ToolResult.Failure -> result.error
                 }
-                speak(line)
-            } else if (routine.message.isNotBlank()) speak(routine.message)
-            else -> if (routine.message.isNotBlank()) speak(routine.message)
+                speak(line, urgent = false, routine = true)
+            } else if (routine.message.isNotBlank()) speak(routine.message, urgent = false, routine = true)
+            // A scheduled message is an explicit user-authored announcement.
+            else -> if (routine.message.isNotBlank()) speak(routine.message, urgent = false, announcement = true)
         }
     }
 
@@ -5214,6 +5221,7 @@ class CompanionViewModel(
 
     /** Wake phrase heard: run the spoken command, or listen for one. */
     internal fun onWakeDetected(command: String?) {
+        resumeSpeechFromUser()
         noteUserTurn(voice = true) // "Hey Meow" starts a spoken conversation
         stopWakeLoopAndRelease()
         if (!_uiState.value.isMicEnabled) {
@@ -6680,6 +6688,7 @@ class CompanionViewModel(
     }
 
     fun onMicClick() {
+        resumeSpeechFromUser()
         if (_uiState.value.songRecognitionBusy) { cancelSongIdentification(); return }
         if (!_uiState.value.isMicEnabled) {
             // Privacy toggle is easy to hit by accident (ear tap) — say why nothing happens.
@@ -7072,15 +7081,15 @@ class CompanionViewModel(
             if (_uiState.value.interactionState == InteractionState.LISTENING) resetState()
             return
         }
-        noteUserTurn(fromVoice)
-        // Meow Flow: "the rear light is out", "remind me to…" become things Meow keeps in mind.
-        if (!fromVoice || finalTranscript) {
-            flowRuntime?.let { flow -> viewModelScope.launch {
-                runCatching { flow.captureFromChat(raw) }
-                runCatching { northStars?.capture(raw) }
-            } }
-            // Everything the user tells Meow is remembered with where, when and what was going on.
-            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) { com.example.meowmba.core.context.live.ContextStamp.said(raw) }
+        if (fromVoice) {
+            com.example.meowmba.core.audio.NonSpeechSound.parse(raw)?.let { observation ->
+                // Human coughs/sighs remain sensory observations, never commands or safety diagnoses.
+                if (_uiState.value.isMicEnabled && observation.kind == com.example.meowmba.core.audio.NonSpeechSound.Kind.HUMAN)
+                    com.example.meowmba.core.audio.InputSoundLevel.noteHumanVocalization()
+                if (_uiState.value.interactionState == InteractionState.LISTENING) resetState()
+                return
+            }
+            if (quietUntilAddressed && matcher.match(raw) == null) return
         }
 
         if (fromVoice && !_uiState.value.isMicEnabled) return
@@ -7100,7 +7109,8 @@ class CompanionViewModel(
             return
         }
         if (fromVoice && com.example.meowmba.core.audio.VoiceIntentGuard.needsClarification(normalizedRaw)) {
-            speak("That may have been background audio. If you meant a request for me, please say Meow and repeat it.")
+            // Background ambiguity is not a reason to interrupt with the same question.
+            if (_uiState.value.interactionState == InteractionState.LISTENING) resetState()
             return
         }
         // Transport-level idempotence (prog): overlapping callbacks and
@@ -7127,6 +7137,22 @@ class CompanionViewModel(
         }
         placeRequestJob?.cancel()
         placeRequestJob = null
+        if (SpeechInterruptionPolicy.isQuietRequest(text)) {
+            viewModelScope.launch { persistTurn(MessageRole.USER, text) }
+            stayQuiet()
+            return
+        }
+        resumeSpeechFromUser()
+        noteUserTurn(fromVoice)
+        if (fromVoice) com.example.meowmba.core.audio.InputSoundLevel.noteHumanVocalization()
+        // Only accepted human turns can create intentions or journal entries.
+        if (!fromVoice || finalTranscript) {
+            flowRuntime?.let { flow -> viewModelScope.launch {
+                runCatching { flow.captureFromChat(raw) }
+                runCatching { northStars?.capture(raw) }
+            } }
+            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) { com.example.meowmba.core.context.live.ContextStamp.said(raw) }
+        }
         if (com.example.meowmba.core.media.SongRecognition.isRequest(text)) {
             // The only place song/artist is read: once, because the user asked.
             val music = secureStorage?.context?.let { ctx ->
@@ -7365,7 +7391,8 @@ class CompanionViewModel(
         // chat model. The generic question branch swallowed "what tasks are
         // running", giving a model/setup reply instead of the actual jobs.
         AgentRouter.route(text)?.takeIf {
-            it.toolId in setOf("task.list", "business.agents", "business.jobs", "business.open", "avatar.form", "cozmo.control")
+            it.toolId in setOf("task.list", "business.agents", "business.jobs", "business.open", "avatar.form", "cozmo.control",
+                "calendar.cancel_event", "phone.play_music", "phone.media_control")
         }?.let {
             if (it.toolId == "cozmo.control" && it.args["action"] == "stop") cozmoController.stop()
             submitAgentIntent(it)
@@ -8007,8 +8034,9 @@ class CompanionViewModel(
                     val nearby = placesStore?.all()?.entries?.minByOrNull {
                         com.example.meowmba.core.alerts.RoadFeed.metersBetween(fix.lat, fix.lon, it.value.lat, it.value.lon)
                     }?.takeIf { com.example.meowmba.core.alerts.RoadFeed.metersBetween(fix.lat, fix.lon, it.value.lat, it.value.lon) <= 100.0 }
-                    val location = address ?: "latitude ${"%.5f".format(java.util.Locale.US, fix.lat)}, longitude ${"%.5f".format(java.util.Locale.US, fix.lon)}"
-                    speak("You're ${nearby?.let { "near your saved place ${it.key}, at " } ?: "near "}$location. GPS accuracy is about ${fix.accuracyMeters?.toInt()} meters.")
+                    val location = address ?: nearby?.let { "your saved place ${it.key}" }
+                    speak(if (location != null) "You're near $location." else
+                        "I have a location fix, but no verified road or cross-street name here. I won't read coordinates aloud.")
                 }
             }
             com.example.meowmba.core.nav.PlaceVoiceIntent.Destination -> speak(lastNavigationName?.let {
@@ -8089,7 +8117,12 @@ class CompanionViewModel(
             resetState()
             return
         }
-        speak("${name.lowercase()} is at ${"%.4f".format(place.lat)}, ${"%.4f".format(place.lon)}.")
+        val ctx = secureStorage?.context
+        viewModelScope.launch {
+            val address = ctx?.let { com.example.meowmba.core.nav.CurrentLocation.address(it,
+                com.example.meowmba.core.nav.CurrentLocation.Fix(place.lat, place.lon)) }
+            speak(address?.let { "$name is near $it." } ?: "$name is saved, but I don't have a verified road name for it. Ask me to navigate there.")
+        }
     }
 
     private fun handleNoteIntent(intent: NoteSessionIntent) {
@@ -8278,6 +8311,7 @@ class CompanionViewModel(
                 when (response) {
                     is ModelResponse.Partial -> {
                         fullResponse += normalize(response.text)
+                        if (com.example.meowmba.core.agent.ChatModelSuitability.holdPrefix(fullResponse)) return@collect
                         _uiState.value = _uiState.value.copy(captionText = fullResponse,
                             liveAssistantReply = fullResponse, liveReplyConversationId = replyConversationId)
                         val chunk = com.example.meowmba.core.audio.SpeechChunker.nextChunk(fullResponse, spokenUpTo)
@@ -8290,6 +8324,10 @@ class CompanionViewModel(
                     is ModelResponse.Complete -> {
                         terminal = true
                         val final = normalize(response.text).takeIf { it.isNotBlank() } ?: fullResponse
+                        if (com.example.meowmba.core.agent.ChatModelSuitability.isClassifierReply(final)) {
+                            showProviderError(com.example.meowmba.core.agent.ChatModelSuitability.ERROR)
+                            return@collect
+                        }
                         if (final.isBlank()) {
                             showProviderError("${_uiState.value.selectedModel} returned an empty response")
                         } else {
@@ -8304,7 +8342,8 @@ class CompanionViewModel(
                             val tail = final.substring(spokenUpTo).trim()
                             if (tail.isNotEmpty()) speakStreaming(tail, first = spokenUpTo == 0)
                             recordSpokenResponse(final, replyConversationId)
-                            if (_uiState.value.isMuted && !handedOffToBackground) resetState()
+                            if ((!speechAllowed(SpeechInterruptionPolicy.Purpose.REPLY) ||
+                                com.example.meowmba.core.audio.SpeechText.clean(final).isBlank()) && !handedOffToBackground) resetState()
                             if (!_uiState.value.memoryPaused) {
                                 memoryRepository?.saveEpisodicCheckpoint(userText, final, userMessageId)
                                 pushMemoriesToMem0()
@@ -8353,8 +8392,9 @@ class CompanionViewModel(
      * anything stale and taking audio focus); later chunks are appended so they do not
      * cut off what is still playing.
      */
-    private fun speakStreaming(text: String, first: Boolean) {
-        if (text.isBlank() || handedOffToBackground) return
+    private fun speakStreaming(raw: String, first: Boolean) {
+        val text = com.example.meowmba.core.audio.SpeechText.clean(raw)
+        if (text.isBlank() || handedOffToBackground || !speechAllowed(SpeechInterruptionPolicy.Purpose.REPLY)) return
         if (first) prepareReplyExpression(text)
         if (_uiState.value.isMuted) return
         if (first) stopAlwaysOnListening()
@@ -8406,18 +8446,17 @@ class CompanionViewModel(
     }
 
     /**
-     * @param urgent safety speech (crash check-in) that is always voiced.
+     * @param urgent safety speech, still subject to an explicit quiet/mute instruction.
      *
      * Owner (2026-09-23): "it talks a lot, and when it's not necessary". Every line still lands in
      * the conversation and on screen; *voicing* follows [SpeechMode]:
      *  - a reply to something typed stays silent; a reply to something spoken is voiced, first
      *    two sentences only (the rest stays on screen);
-     *  - anything Meow starts on its own is voiced only in IMPORTANT/ALWAYS mode, and in
-     *    IMPORTANT only while driving or with headphones/car audio.
+     *  - driving/media never authorize routine chatter; producers explicitly mark announcements.
      */
     private fun speak(text: String) = speak(text, urgent = false)
 
-    private fun speak(text: String, urgent: Boolean) {
+    private fun speak(text: String, urgent: Boolean, announcement: Boolean = false, routine: Boolean = false) {
         fuLog("speak: \"${text.take(80)}\"")
         if (text.isBlank()) return
         recordSpokenResponse(text)
@@ -8431,13 +8470,22 @@ class CompanionViewModel(
             resetState()
             return
         }
-        val voiced = urgent || shouldVoice()
+        val purpose = when {
+            urgent -> SpeechInterruptionPolicy.Purpose.URGENT
+            announcement -> SpeechInterruptionPolicy.Purpose.ANNOUNCEMENT
+            routine -> SpeechInterruptionPolicy.Purpose.ROUTINE
+            System.currentTimeMillis() - lastUserTurnAt < 90_000L -> SpeechInterruptionPolicy.Purpose.REPLY
+            else -> SpeechInterruptionPolicy.Purpose.ROUTINE
+        }
+        val voiced = speechAllowed(purpose)
         if (!voiced) {
             fuLog("speak: shown, not voiced (mode=${speechMode.key})")
             finishSilently()
             return
         }
-        val spoken = if (urgent || speechMode == SpeechMode.ALWAYS) text else SpeechMode.shorten(text)
+        val spoken = com.example.meowmba.core.audio.SpeechText.clean(
+            if (urgent || speechMode == SpeechMode.ALWAYS) text else SpeechMode.shorten(text))
+        if (spoken.isBlank()) { finishSilently(); return }
         stopAlwaysOnListening()
         if (ttsManager == null) {
             startMockSpeaking(text)
@@ -8481,6 +8529,26 @@ class CompanionViewModel(
     internal val speechMode: SpeechMode get() = _uiState.value.features.speechMode
     @Volatile private var lastUserTurnAt = 0L
     @Volatile private var lastUserTurnVoice = false
+    @Volatile private var quietUntilAddressed = secureStorage?.getBooleanPreference("quiet_until_addressed", false) ?: false
+
+    private fun resumeSpeechFromUser() {
+        if (!quietUntilAddressed && secureStorage?.getBooleanPreference("quiet_until_addressed", false) != true) return
+        quietUntilAddressed = false
+        secureStorage?.saveBooleanPreference("quiet_until_addressed", false)
+    }
+
+    private fun stayQuiet() {
+        quietUntilAddressed = true
+        secureStorage?.saveBooleanPreference("quiet_until_addressed", true)
+        suppressSpeechFinished = true
+        try { supersedeResponseTurn() } finally { suppressSpeechFinished = false }
+        followUpJob?.cancel()
+        stopInterruptionWatch()
+        resetMouthEnergy()
+        audioFocusManager?.abandonFocus()
+        recordSpokenResponse("I'll stay quiet. Say Meow, tap the microphone, or send a message when you want me again.")
+        finishSilently()
+    }
 
     fun setSpeechMode(mode: SpeechMode) {
         secureStorage?.savePreference(SpeechMode.PREF, mode.key)
@@ -8509,20 +8577,19 @@ class CompanionViewModel(
     private fun noteUserTurn(voice: Boolean) { lastUserTurnAt = System.currentTimeMillis(); lastUserTurnVoice = voice }
 
     /** A reply (within 90 s of the user's turn) follows how the user spoke; anything else is proactive. */
-    private fun shouldVoice(): Boolean {
-        if (speechMode == SpeechMode.ALWAYS) return true
-        val reply = System.currentTimeMillis() - lastUserTurnAt < 90_000L
-        return if (reply) lastUserTurnVoice else proactiveVoiceAllowed()
+    private fun speechAllowed(purpose: SpeechInterruptionPolicy.Purpose): Boolean {
+        val state = _uiState.value
+        val live = com.example.meowmba.core.context.live.LiveContext.now.value
+        return SpeechInterruptionPolicy.maySpeak(SpeechInterruptionPolicy.Context(
+            quiet = quietUntilAddressed || secureStorage?.getBooleanPreference("quiet_until_addressed", false) == true, muted = state.isMuted,
+            driving = state.driving || live.activity == com.example.meowmba.core.flow.Activity.DRIVING,
+            mediaPlaying = state.musicPlayback.playing || runCatching {
+                secureStorage?.context?.getSystemService(android.media.AudioManager::class.java)?.isMusicActive == true
+            }.getOrDefault(false),
+            privateAudio = live.audio != null, voiceReply = lastUserTurnVoice, mode = speechMode), purpose)
     }
 
-    /** Meow may start talking on its own only in IMPORTANT mode while driving or with private audio. */
-    private fun proactiveVoiceAllowed(): Boolean = when (speechMode) {
-        SpeechMode.ALWAYS -> true
-        SpeechMode.REPLIES -> false
-        SpeechMode.IMPORTANT -> _uiState.value.driving ||
-            com.example.meowmba.core.context.live.LiveContext.now.value.activity == com.example.meowmba.core.flow.Activity.DRIVING ||
-            com.example.meowmba.core.context.live.LiveContext.now.value.audio != null
-    }
+    private fun proactiveVoiceAllowed(): Boolean = speechAllowed(SpeechInterruptionPolicy.Purpose.ANNOUNCEMENT)
 
     private fun startMockSpeaking(text: String) {
         viewModelScope.launch {
@@ -9112,6 +9179,7 @@ class CompanionViewModel(
     }
 
     fun onChatMicClick() {
+        resumeSpeechFromUser()
         if (_uiState.value.songRecognitionPrompt) cancelSongIdentification(rearm = false)
         // Call mode still needs an explicit submit/cancel escape when a decoder
         // stops responding. The same ownership rules apply to both mic buttons.
@@ -9220,6 +9288,11 @@ class CompanionViewModel(
     fun onUserTextSubmitted(text: String) {
         if (_uiState.value.songRecognitionPrompt) cancelSongIdentification(rearm = false)
         if (text.isBlank()) return
+        if (SpeechInterruptionPolicy.isQuietRequest(text)) {
+            processUserSpeech(text, fromVoice = false)
+            return
+        }
+        resumeSpeechFromUser()
         val trimmed = text.trim()
         val bridged = metaGlassesMeowBridge.prepareCommand(trimmed, bridgeMustBeOn = true)
         val effective = bridged?.text ?: trimmed
@@ -9292,7 +9365,7 @@ class CompanionViewModel(
         val sound = com.example.meowmba.core.audio.InputSoundLevel.snapshot(
             com.example.meowmba.core.audio.InputSoundLevel.monotonicNowMs(), ownSpeech)
         val dance = personalReactionDirector.sample(track, elapsedRealtimeMs(),
-            _uiState.value.isMicEnabled && sound.fresh && sound.activity > .5f)
+            _uiState.value.isMicEnabled && sound.humanVocalization)
         if (dance != null && !ownSpeech && faceModeActive(_uiState.value)) {
             playAnimationNamed(dance, userRequested = false)
             return
@@ -10941,7 +11014,7 @@ class CompanionViewModel(
         awaitingNameFaceId = askId
         awaitingNameUntilMs = now + NewPersonAsk.AWAIT_MS
         lastNameAskAtMs = now
-        speak("Hey — I don't think we've met. What's your name?")
+        speak("Hey — I don't think we've met. What's your name?", urgent = false, routine = true)
     }
 
     private fun projectWhenLabel(at: Long): String {
@@ -12423,24 +12496,7 @@ class CompanionViewModel(
     }
 
     private fun classifyCrashDanger(description: String?): Boolean? {
-        if (description == null) return null
-        val d = description.lowercase()
-        val danger = listOf(
-            "danger", "crash", "wreck", "accident", "debris", "glass", "smoke",
-            "fire", "flam", "injured", "blood", "flipped", "overturn", "collision",
-            "airbag", "shattered", "damaged", "bent", "emergency", "scene",
-        )
-        val safe = listOf(
-            "safe", "no danger", "no sign", "no obvious", "normal", "nothing",
-            "cannot", "can't", "unable", "not see", "clear", "empty",
-        )
-        val isDanger = danger.any { d.contains(it) }
-        return when {
-            isDanger -> true
-            safe.any { d.contains(it) } -> false
-            // The camera looked and found nothing alarming — don't false-alarm.
-            else -> false
-        }
+        return com.example.meowmba.core.car.CrashSceneVerdict.parse(description)
     }
 
     fun setMusicServerUrl(url: String) {
@@ -12474,6 +12530,7 @@ class CompanionViewModel(
      * exact same pipeline as an in-app utterance.
      */
     fun onExternalWakeCommand(command: String) {
+        resumeSpeechFromUser()
         noteMoodEvent(com.example.meowmba.core.personality.MoodEvent.WakeGreeting)
         if (command.isBlank()) return
         stopWakeLoopAndRelease()

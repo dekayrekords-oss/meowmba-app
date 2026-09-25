@@ -95,6 +95,7 @@ object SpokenText {
      * Fold often ends with an empty final).
      */
     fun preferFinal(official: String, partial: String): String {
+        observeHumanSound(official)
         if (isNonSpeechAnnotation(official)) return ""
         val o = normalize(official).trim()
         val p = normalize(partial).trim()
@@ -127,6 +128,7 @@ object SpokenText {
 
     /** Only explicit decoder annotations, not speech ABOUT music/noise. */
     fun isNonSpeechAnnotation(raw: String): Boolean {
+        if (NonSpeechSound.parse(raw) != null) return true
         val trimmed = raw.trim().trimEnd('.', ',', '!', '?').trim()
         if (trimmed.isEmpty()) return false
         val annotations = NON_SPEECH_ANNOTATION.findAll(trimmed).toList()
@@ -138,9 +140,16 @@ object SpokenText {
     /** A successful noise/empty final must not resurrect a hallucinated partial.
      * Null is reserved for unavailable/failed refinement, where streaming wins.
      */
-    internal fun refinedTranscript(streaming: String, refined: String?): String? = when {
-        refined == null -> streaming.takeIf(::isUsable)
-        else -> refined.takeIf(::isFinalTranscriptUsable)
+    internal fun refinedTranscript(streaming: String, refined: String?): String? {
+        refined?.let(::observeHumanSound)
+        return when {
+            refined == null -> streaming.takeIf(::isUsable)
+            else -> refined.takeIf(::isFinalTranscriptUsable)
+        }
+    }
+
+    private fun observeHumanSound(text: String) {
+        if (NonSpeechSound.parse(text)?.kind == NonSpeechSound.Kind.HUMAN) InputSoundLevel.noteHumanVocalization()
     }
 
     /** Final ASR must preserve numbers, other scripts, and natural repetitions.

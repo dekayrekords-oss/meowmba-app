@@ -49,6 +49,8 @@ fun ChatOverlay(
     thinking: Boolean = false,
     recognitionIssue: String? = null,
     conversationKey: String = "inbox",
+    /** Optional catalog for deterministic previews; normal UI uses PackageManager. */
+    installedApps: List<DrawerApp>? = null,
     terminalTargets: List<CompanionTerminalTarget> = listOf(CompanionTerminalTarget.Local()),
     terminalStatus: CompanionTerminalStatus = CompanionTerminalStatus.Disconnected,
     terminalStatusDetail: String? = null,
@@ -74,6 +76,14 @@ fun ChatOverlay(
         save = { it.toMap() }, restore = { saved -> saved.map { it.key to it.value as String }.toMutableStateMap() }
     )) { mutableStateMapOf<String, String>() }
     val draft = drafts[conversationKey].orEmpty()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var completionApps by remember { mutableStateOf(installedApps ?: DrawerApps.snapshot(context)) }
+    LaunchedEffect(isExpanded, installedApps) {
+        if (installedApps != null) completionApps = installedApps
+        else if (isExpanded) completionApps = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            DrawerApps.loadFast(context)
+        }
+    }
     var history by rememberSaveable { mutableStateOf(false) }
     var pane by rememberSaveable { mutableStateOf(CompanionChatPane.Chat.name) }
     val currentPane = runCatching { CompanionChatPane.valueOf(pane) }.getOrDefault(CompanionChatPane.Chat)
@@ -190,6 +200,15 @@ fun ChatOverlay(
                     if (listening || !listenPartial.isNullOrBlank()) Text(
                         listenPartial?.takeIf { it.isNotBlank() } ?: "Listening… Tap the mic to finish.",
                         maxLines = 2, style = MaterialTheme.typography.bodySmall)
+                    val completions = remember(draft, completionApps) { OpenAppCompletion.suggest(draft, completionApps) }
+                    if (completions.isNotEmpty()) {
+                        androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            items(completions) { completion ->
+                                SuggestionChip(onClick = { drafts[conversationKey] = completion },
+                                    label = { Text(completion) })
+                            }
+                        }
+                    }
                     Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         if (onAttach != null) IconButton(onClick = { onAttach(draft.trim()); drafts[conversationKey] = "" }) {
                             Icon(Icons.Default.Add, "Add a photo or file")

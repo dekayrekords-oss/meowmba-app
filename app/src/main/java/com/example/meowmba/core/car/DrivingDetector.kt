@@ -445,6 +445,8 @@ class DrivingDetector(
     }
 
     private fun checkImpact(g: Float, timestampNanos: Long) {
+        // Handling a stationary phone is not evidence of a vehicle collision.
+        if (!_driving.value.isDriving) { crashAboveSince = 0L; return }
         val nowMs = timestampNanos / 1_000_000
         if (g < params.crashG) {
             // Impact ended (or never started) — the sustain window resets.

@@ -230,7 +230,8 @@ class WakeWordService : Service() {
             return START_NOT_STICKY
         }
 
-        if (intent?.getStringExtra(EXTRA_MODE) == MODE_FOLLOW_UP) {
+        if (intent?.getStringExtra(EXTRA_MODE) == MODE_FOLLOW_UP &&
+            !secureStorage.getBooleanPreference("quiet_until_addressed", false)) {
             followUpPending = true
             android.util.Log.i("WakeWordService", "follow-up hand-off requested")
         }
@@ -405,6 +406,7 @@ class WakeWordService : Service() {
      */
     private fun maybeStartFollowUpCapture() {
         if (!ensureMicrophoneEnabled()) return
+        if (secureStorage.getBooleanPreference("quiet_until_addressed", false)) { followUpPending = false; return }
         if (!followUpPending || !engineStarted || capturingCommand) {
             android.util.Log.i(
                 "WakeWordService",
@@ -507,6 +509,7 @@ class WakeWordService : Service() {
     // ── Wake handling ───────────────────────────────────────────────────────
 
     private fun handleWake(command: String?) {
+        if (::secureStorage.isInitialized) secureStorage.saveBooleanPreference("quiet_until_addressed", false)
         if (!ensureMicrophoneEnabled()) return
         if (command != null) {
             acknowledgeAndDeliver(command)
@@ -534,6 +537,15 @@ class WakeWordService : Service() {
 
     private fun acknowledgeAndDeliver(command: String, launchNow: Boolean = false) {
         if (!ensureMicrophoneEnabled()) return
+        if (NonSpeechSound.parse(command) != null) { rearmWakeEngine(); return }
+        if (com.example.meowmba.ui.companion.SpeechInterruptionPolicy.isQuietRequest(command)) {
+            secureStorage.saveBooleanPreference("quiet_until_addressed", true)
+            followUpPending = false
+            capturingCommand = false
+            tts.stop()
+            rearmWakeEngine()
+            return
+        }
         wakeEngine?.stop()
         if (launchNow) {
             deliverToApp(command)
@@ -629,6 +641,8 @@ class WakeWordService : Service() {
             } catch (e: Exception) {
                 ToolResult.Failure(e.message ?: "Something went wrong.")
             }
+            // The user may have said "be quiet" while the tool was running.
+            if (secureStorage.getBooleanPreference("quiet_until_addressed", false)) return@launch
             when (result) {
                 is ToolResult.Success -> tts.speak(result.output)
                 is ToolResult.Failure -> tts.speak(result.error)

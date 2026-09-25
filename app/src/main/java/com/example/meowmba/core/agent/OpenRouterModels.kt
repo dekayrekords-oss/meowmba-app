@@ -58,6 +58,7 @@ object OpenRouterModels {
             val obj = el as? kotlinx.serialization.json.JsonObject ?: return@mapNotNull null
             val id = obj["id"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
             val name = obj["name"]?.jsonPrimitive?.contentOrNull ?: id
+            if (!ChatModelSuitability.isChatModel(id, name)) return@mapNotNull null
             val arch = obj["architecture"] as? kotlinx.serialization.json.JsonObject
             val inputs = (arch?.get("input_modalities") as? kotlinx.serialization.json.JsonArray)
                 ?.mapNotNull { it.jsonPrimitive.contentOrNull }

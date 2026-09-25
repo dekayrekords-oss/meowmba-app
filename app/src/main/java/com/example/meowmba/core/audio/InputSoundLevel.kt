@@ -3,7 +3,8 @@ package com.example.meowmba.core.audio
 import kotlin.math.log10
 import kotlin.math.sqrt
 
-data class InputSoundSample(val activity: Float, val loudness: Float, val fresh: Boolean, val source: String = "none")
+data class InputSoundSample(val activity: Float, val loudness: Float, val fresh: Boolean, val source: String = "none",
+    val humanVocalization: Boolean = false)
 
 /** Latest microphone energy only: no recording, transcript, direction, or speech
  * recognition claim. Capture paths publish at most 10 Hz using their existing
@@ -13,10 +14,16 @@ data class InputSoundSample(val activity: Float, val loudness: Float, val fresh:
 object InputSoundLevel {
     private var sample = InputSoundSample(0f, 0f, false)
     private var atMs = -1L
+    private var humanAtMs = -1L
     const val FRESH_MS = 800L
     private const val MIN_UPDATE_MS = 100L
 
     fun monotonicNowMs(): Long = System.nanoTime() / 1_000_000L
+
+    /** Only accepted speech / human-vocalization labels call this. RMS is not human evidence. */
+    @Synchronized fun noteHumanVocalization(nowMs: Long = monotonicNowMs()) {
+        humanAtMs = nowMs
+    }
 
     /** PCM16 amplitude RMS converted to dBFS; -60..0 dBFS maps to 0..1.
      * Activity rises above -45 dBFS and saturates at -25 dBFS. These are
@@ -45,8 +52,10 @@ object InputSoundLevel {
     @Synchronized fun snapshot(nowMs: Long, suppressOwnSpeech: Boolean): InputSoundSample {
         // Erase own-speech energy so it cannot reappear when TTS suppression ends.
         if (suppressOwnSpeech) { clear(); return sample }
-        if (atMs < 0 || nowMs < atMs || nowMs - atMs >= FRESH_MS) return InputSoundSample(0f, 0f, false)
-        return sample
+        val human = humanAtMs >= 0 && nowMs >= humanAtMs && nowMs - humanAtMs < 1500L
+        if (atMs < 0 || nowMs < atMs || nowMs - atMs >= FRESH_MS)
+            return InputSoundSample(0f, 0f, false, humanVocalization = human)
+        return sample.copy(humanVocalization = human)
     }
 
     /** Source-aware close avoids a previous engine clearing a newer source. */
@@ -54,6 +63,7 @@ object InputSoundLevel {
         if (source != null && sample.source != source) return
         sample = InputSoundSample(0f, 0f, false)
         atMs = -1L
+        humanAtMs = -1L
     }
 
     private fun acceptTime(nowMs: Long): Boolean = nowMs >= 0 &&
