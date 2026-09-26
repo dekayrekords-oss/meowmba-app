@@ -499,6 +499,7 @@ fun SettingsScreen(
                 onCheckedChange = onCoverAvatarChange,
             )
             FlipCoverSetupCard(showOnAllDevices = true)
+            WirelessAvatarSettings()
 
             if (com.example.meowmba.BuildConfig.PHONE_AUTOMATION_ENABLED) {
                 Spacer(modifier = Modifier.height(8.dp))

@@ -162,6 +162,7 @@ class MainActivity : ComponentActivity() {
                             ).also {
                                 companionViewModel = it
                                 if (pendingAvatarHome) { pendingAvatarHome = false; it.returnToAvatar() }
+                                if (pendingChargingAvatar) { pendingChargingAvatar = false; it.openTool("Show avatar") }
                 if (pendingBusinessAgents) { pendingBusinessAgents = false; it.openBusinessAgents() }
                                 // onResume often runs before first composition assigns
                                 // the VM — arm always-on / wake here so the face mic
@@ -543,6 +544,7 @@ class MainActivity : ComponentActivity() {
 
     /** Wake command arriving before the ViewModel exists (cold launch). */
     private var pendingAvatarHome = false
+    private var pendingChargingAvatar = false
     private var pendingFlowComment: String? = null
     private var pendingWakeCommand: String? = null
     private var pendingBusinessAgents = false
@@ -579,7 +581,18 @@ class MainActivity : ComponentActivity() {
         source.action = null
     }
 
+    fun showWirelessAvatar() {
+        if (companionViewModel?.showOnboarding?.value == true) return
+        companionViewModel?.openTool("Show avatar") ?: run { pendingChargingAvatar = true }
+        (getSystemService(INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager)
+            ?.hideSoftInputFromWindow(window.decorView.windowToken, 0)
+    }
+
     private fun consumeWakeCommand(source: Intent?) {
+        if (source?.action == com.example.meowmba.core.setup.WirelessAvatarMonitor.ACTION) {
+            showWirelessAvatar()
+            source.action = null
+        }
         source?.getStringExtra(com.example.meowmba.core.flow.delivery.AndroidFlowNotifier.EXTRA_COMMENT_FLOW)?.let { id ->
             companionViewModel?.openFlowComment(id) ?: run { pendingFlowComment = id }
             source.removeExtra(com.example.meowmba.core.flow.delivery.AndroidFlowNotifier.EXTRA_COMMENT_FLOW)

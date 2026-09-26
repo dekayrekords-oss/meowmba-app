@@ -74,6 +74,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 private enum class FirstRunPage {
     Hi,
     DeviceCheck,
+    HomeScreen,
     Features,
     AvatarSize,
     GetTermux,
@@ -114,6 +115,8 @@ fun SetupWizardRoute(
         runCatching { FirstRunPage.valueOf(page) }.getOrDefault(FirstRunPage.Hi)
     }
     var history by rememberSaveable { mutableStateOf(arrayListOf<String>()) }
+    var homeReviewed by rememberSaveable { mutableStateOf(false) }
+    var quickFinish by rememberSaveable { mutableStateOf(false) }
     val storage = remember { SecureStorageManager(context) }
     var githubToken by remember { mutableStateOf(storage.getApiKey(GitHubProjectSetup.STORAGE_KEY).orEmpty()) }
     var githubRepoName by rememberSaveable { mutableStateOf("meowmba-projects") }
@@ -141,8 +144,10 @@ fun SetupWizardRoute(
     }
 
     fun finish() {
+        quickFinish = true
         // Even the quick path includes an explicit avatar choice and size review.
         go(when {
+            !homeReviewed -> FirstRunPage.HomeScreen
             !avatarConfirmed -> FirstRunPage.Avatar
             !sizeConfirmed -> FirstRunPage.AvatarSize
             else -> FirstRunPage.Done
@@ -215,8 +220,12 @@ fun SetupWizardRoute(
                         KidPage(
                             title = "Tuned for your phone",
                             body = "${android.os.Build.MODEL} · ${String.format(java.util.Locale.US, "%.1f", profile.ramGb)} GB RAM · ${profile.cores} processor cores\n\n${profile.summary}\n\nMeow checks the phone directly. No AI download or cloud upload is needed. Saved choices are kept; animation and Computer settings remain adjustable.",
-                            primary = "Continue", onPrimary = { go(FirstRunPage.Features) },
+                            primary = "Continue", onPrimary = { go(FirstRunPage.HomeScreen) },
                         )
+                    }
+                    FirstRunPage.HomeScreen -> HomeLauncherSetup {
+                        homeReviewed = true
+                        if (quickFinish) finish() else go(FirstRunPage.Features)
                     }
                     FirstRunPage.Features -> SetupFeaturesPage { go(FirstRunPage.Avatar) }
                     FirstRunPage.AvatarSize -> AvatarFitPage(

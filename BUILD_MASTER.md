@@ -3,6 +3,10 @@
 Updated 2026-09-25. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
 This supersedes historical build-location/version instructions in other documents.
 
+- September25 **181 / 1.5.15 reserved by Codex**: wireless-charger avatar and
+  optional launcher onboarding. Implementation/validation in progress; not installed.
+  One build owner; preserve preview180 and its runtime assets.
+
 - September25 **180 / 1.5.14 prepared by Codex**: on-demand Development Studio;
   manual Claude Code/OpenCode, bounded per-file checkpoints/Keep/Undo, local website
   preview, approved npm/Gradle builds and verified APK transfer to Android confirmation.

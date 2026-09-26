@@ -18,6 +18,7 @@ class MeowmbaApp : Application() {
     override fun onCreate() {
         super.onCreate()
         ThermalGovernor.install(this)
+        com.example.meowmba.core.setup.WirelessAvatarMonitor(this).install()
         // Periodic agentic ticks when flag ON (no-op / cancelled when OFF).
         runCatching { AgenticScheduler.recover(this) }
     }

@@ -38,6 +38,8 @@ class BetaOnboardingUiTest {
                 onAnimalPicked = { picked = it }, onAvatarSized = { size = it })
         } }
         compose.onNodeWithText("Finish later").performClick()
+        compose.onNodeWithText("Make Meow your home screen?").assertExists()
+        tap("Not now")
         assertFalse(finished)
         compose.onNodeWithText("Fit to my screen").assertIsNotEnabled()
         tap("Rabbit"); assertEquals(AvatarAnimal.RABBIT, picked)
@@ -60,7 +62,7 @@ class BetaOnboardingUiTest {
     @Test fun manualSizePersistsAndAutoFitCanBeRestored() {
         var size = 0f
         compose.setContent { MeowmbaTheme(darkTheme = false) { SetupWizardRoute(onFinished = {}, onAvatarSized = { size = it }) } }
-        compose.onNodeWithText("Finish later").performClick(); tap("Owl"); tap("Fit to my screen"); tap("Adjust size")
+        compose.onNodeWithText("Finish later").performClick(); tap("Not now"); tap("Owl"); tap("Fit to my screen"); tap("Adjust size")
         compose.onNodeWithTag("onboarding-avatar-size").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress) { it(1.1f) }
         render("manual-owl-light"); tap("Use this size"); assertEquals(1.1f, size, .001f)
         compose.onNodeWithText("Back").performClick(); tap("Auto-fit again")
@@ -77,6 +79,8 @@ class BetaOnboardingUiTest {
         tap("Let’s go")
         compose.onNodeWithText("Tuned for your phone").assertExists()
         tap("Continue")
+        compose.onNodeWithText("Make Meow your home screen?").assertExists()
+        tap("Not now")
         welcomeFeatures.forEach { (title, _) -> compose.onNodeWithText(title).performScrollTo().assertIsDisplayed() }
         tap("Choose my avatar"); tap("Panda"); tap("Fit to my screen"); tap("Keep this size"); tap("Next")
         if (compose.onAllNodesWithText("Set up Computer later").fetchSemanticsNodes().isNotEmpty()) tap("Set up Computer later")
@@ -92,7 +96,7 @@ class BetaOnboardingUiTest {
     @Test fun rotationRestoresSelectionAndManualAdjustment() {
         val restoration = StateRestorationTester(compose)
         restoration.setContent { MeowmbaTheme { SetupWizardRoute(onFinished = {}) } }
-        compose.onNodeWithText("Finish later").performClick(); tap("Duck"); tap("Fit to my screen"); tap("Adjust size")
+        compose.onNodeWithText("Finish later").performClick(); tap("Not now"); tap("Duck"); tap("Fit to my screen"); tap("Adjust size")
         compose.onNodeWithTag("onboarding-avatar-size").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress) { it(1.2f) }
         restoration.emulateSavedInstanceStateRestore()
         compose.onNodeWithText("Fitted to your screen").assertExists()
@@ -107,7 +111,7 @@ class BetaOnboardingUiTest {
                 MeowmbaTheme(darkTheme = false) { SetupWizardRoute(onFinished = {}) }
             }
         }
-        compose.onNodeWithText("Finish later").performClick(); tap("Cat"); tap("Fit to my screen")
+        compose.onNodeWithText("Finish later").performClick(); tap("Not now"); tap("Cat"); tap("Fit to my screen")
         render("landscape-large-text")
         tap("Adjust size"); tap("Use this size")
         compose.onNodeWithText("Pick a background").assertExists()
