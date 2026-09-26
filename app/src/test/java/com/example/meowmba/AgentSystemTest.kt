@@ -214,9 +214,9 @@ class OrchestratorTest {
         }
     }
 
-    private fun registry(): ToolRegistry = ToolRegistry().apply {
+    private fun registry(scope: TestScope): ToolRegistry = ToolRegistry().apply {
         register(FileReadTool(workspace))
-        register(FileWriteTool(workspace))
+        register(FileWriteTool(workspace, UnconfinedTestDispatcher(scope.testScheduler)))
         register(FileDeleteTool(workspace))
     }
 
@@ -224,7 +224,7 @@ class OrchestratorTest {
     // while advanceUntilIdle() still controls timeouts and delays.
     private fun orchestrator(scope: TestScope) = AgentOrchestrator(
         TestScope(UnconfinedTestDispatcher(scope.testScheduler)),
-        registry(),
+        registry(scope),
         auditSink
     )
 

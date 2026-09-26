@@ -290,6 +290,12 @@ class CompanionViewModel(
     private var asrDownloadJob: Job? = null
     private var asrDownloadFailed = false
     private val turnContext = com.example.meowmba.core.agent.runtime.TurnContext()
+    private val companionTaskJournal by lazy {
+        secureStorage?.context?.applicationContext?.let {
+            com.example.meowmba.core.agent.runtime.RoomTaskJournal(
+                com.example.meowmba.core.database.MeowmbaDatabase.getDatabase(it).companionTaskDao())
+        }
+    }
     private val projectWorkStore by lazy { workspaceRoot?.let { com.example.meowmba.core.work.ProjectWorkStore(it) } }
     private val possibleBugReports by lazy { workspaceRoot?.let { com.example.meowmba.core.diagnostics.PossibleBugReports(it) } }
     private val projectCreationService by lazy {
@@ -1783,7 +1789,7 @@ class CompanionViewModel(
         if (workspaceRoot != null) {
             val workspace = Workspace(workspaceRoot) { _uiState.value.activeProjectId?.let { "projects/project-$it" } }
             toolRegistry.register(FileReadTool(workspace))
-            toolRegistry.register(FileWriteTool(workspace))
+            toolRegistry.register(FileWriteTool(workspace, ioDispatcher))
             toolRegistry.register(FileDeleteTool(workspace))
             toolRegistry.register(FileListTool(workspace))
             val assetLibrary = com.example.meowmba.core.files.AssetLibrary(workspaceRoot)
@@ -2579,10 +2585,10 @@ class CompanionViewModel(
                     mgr.registerToolsInto(toolRegistry)
                 }
             }
-            val orchestrator = AgentOrchestrator(viewModelScope, toolRegistry, agentAuditSink)
+            val orchestrator = AgentOrchestrator(viewModelScope, toolRegistry, agentAuditSink, journal = companionTaskJournal)
             toolRegistry.register(TaskListTool {
                 orchestrator.tasks.value.filter { it.toolId != "task.list" }
-                    .take(10).map { "[${it.status}] ${it.title} (${it.agentId})" }
+                    .take(10).map { "[${com.example.meowmba.core.agent.runtime.TaskHistory.label(it)}] ${it.title} (${it.agentId})" }
             })
             orchestrator.onTaskCompleted = taskCompleted@ { task ->
                 val result = task.result ?: ""
@@ -2608,7 +2614,7 @@ class CompanionViewModel(
                                         vault.append(
                                             title = "Task log: ${task.title}",
                                             text = buildString {
-                                                append("- completed ${java.time.Instant.now()} by ${task.agentId} via ${task.toolId}\n")
+                                                append("- ${com.example.meowmba.core.agent.runtime.TaskHistory.label(task)} ${java.time.Instant.now()} by ${task.agentId} via ${task.toolId}\n")
                                                 append("- result: ${result.take(1200)}")
                                             },
                                         )
@@ -2664,16 +2670,20 @@ class CompanionViewModel(
                             com.example.meowmba.core.access.MeowAccessibilityService.instance == null) {
                             _uiState.value = _uiState.value.copy(phoneControlSetupGoal = task.args["goal"])
                         }
-                        speak("Sorry, that didn't work: ${task.result}")
+                        speak(if (task.outcome == com.example.meowmba.core.agent.tools.ToolOutcome.UNCONFIRMED)
+                            "I couldn't confirm the outcome: ${task.result}" else "Sorry, that didn't work: ${task.result}")
                     }
                     else -> { /* cancelled tasks stay quiet */ }
                 }
                 }
             }
             agentOrchestrator = orchestrator
+            viewModelScope.launch { orchestrator.historyProblem.collect { problem ->
+                _uiState.value = _uiState.value.withTaskHistory(taskHistoryProblem = problem)
+            } }
             viewModelScope.launch {
                 orchestrator.tasks.collect { tasks ->
-                    tasks.forEach(::recordProjectTask)
+                    tasks.filterNot { it.recovered }.forEach(::recordProjectTask)
                     narrateAgentProgress(tasks.filterNot { projectExecutionScope == (it.projectId to it.conversationId) })
                     _uiState.value = _uiState.value.copy(activeTasks = tasks)
                 }
@@ -3780,8 +3790,8 @@ class CompanionViewModel(
         val id = (submitted as SubmitResult.Started).taskId
         try {
             val task = runner.tasks.first { tasks -> tasks.any { it.id == id && it.isTerminal } }.first { it.id == id }
-            return if (task.status == TaskStatus.COMPLETED) com.example.meowmba.core.agent.tools.ToolResult.Success(task.result.orEmpty())
-                else com.example.meowmba.core.agent.tools.ToolResult.Failure(task.result ?: "Desktop step cancelled")
+            return if (task.status == TaskStatus.COMPLETED) com.example.meowmba.core.agent.tools.ToolResult.Success(task.result.orEmpty(), task.outcome)
+                else com.example.meowmba.core.agent.tools.ToolResult.Failure(task.result ?: "Desktop step cancelled", task.outcome)
         } catch (e: kotlinx.coroutines.CancellationException) {
             runner.cancel(id)
             throw e
@@ -10512,6 +10522,10 @@ class CompanionViewModel(
                         "Paused after ${result.tasks.size} actions. Review progress, then continue the step if needed."
                     com.example.meowmba.core.work.ProjectStepRunner.StopReason.REPEATED_ACTION ->
                         "Stopped because the AI tried to repeat an identical action. Your existing results are saved."
+                    com.example.meowmba.core.work.ProjectStepRunner.StopReason.HANDOFF_REQUIRED ->
+                        "Paused for you to continue in the opened app. Review the result before continuing this project step."
+                    com.example.meowmba.core.work.ProjectStepRunner.StopReason.OUTCOME_UNCONFIRMED ->
+                        "Paused because an action's outcome is unconfirmed. Check its destination before repeating or continuing it."
                     else -> "Project work stopped: ${result.reason.name.lowercase().replace('_', ' ')}. Review the action result."
                 }
                 if (projectExecutionScope == runScope && projectExecutionEpoch == runEpoch) {
@@ -11062,6 +11076,32 @@ class CompanionViewModel(
     /** User decision on the pending tool approval card. */
     fun resolveApproval(approved: Boolean) {
         agentOrchestrator?.resolveApproval(approved)
+    }
+
+    fun openTaskHistory(taskId: String? = null) {
+        _uiState.value = _uiState.value.withTaskHistory(showTaskHistory = true, selectedWorkTaskId = taskId,
+            archivedWorkTask = null, taskHistoryNotice = null)
+        if (taskId != null && _uiState.value.activeTasks.none { it.id == taskId }) viewModelScope.launch {
+            val task = runCatching { companionTaskJournal?.find(taskId) }.getOrNull()
+            if (_uiState.value.selectedWorkTaskId == taskId) _uiState.value = _uiState.value.withTaskHistory(archivedWorkTask = task,
+                taskHistoryNotice = if (task == null) "This saved task is no longer available." else null)
+        }
+    }
+
+    fun removeTaskHistory(taskId: String) {
+        agentOrchestrator?.removeSavedTask(taskId)
+        _uiState.value = _uiState.value.withTaskHistory(selectedWorkTaskId = null, archivedWorkTask = null, taskHistoryNotice = null)
+    }
+
+    fun closeTaskHistory() { _uiState.value = _uiState.value.withTaskHistory(showTaskHistory = false, selectedWorkTaskId = null, archivedWorkTask = null, taskHistoryNotice = null) }
+
+    fun linkTaskToNorthStar(taskId: String, starId: String) {
+        val task = _uiState.value.activeTasks.firstOrNull { it.id == taskId }
+            ?: _uiState.value.archivedWorkTask?.takeIf { it.id == taskId } ?: return
+        viewModelScope.launch {
+            val saved = runCatching { checkNotNull(northStars).linkTask(starId, task) }.getOrDefault(false)
+            _uiState.value = _uiState.value.withTaskHistory(taskHistoryNotice = if (saved) "Linked to your North Star. Goal progress is unchanged." else "The link could not be saved. Please try again.")
+        }
     }
 
     fun cancelTask(taskId: String) {
@@ -12820,6 +12860,7 @@ class CompanionViewModel(
     private fun narrateAgentProgress(tasks: List<AgentTask>) {
         var raisePanel = false
         for (task in tasks) {
+            if (task.recovered) { narratedTaskStatus[task.id] = task.status; continue }
             val previous = narratedTaskStatus[task.id]
             if (previous == task.status) continue
             narratedTaskStatus[task.id] = task.status
@@ -12837,8 +12878,9 @@ class CompanionViewModel(
                         null
                     }
                 TaskStatus.WAITING_APPROVAL -> "$agent needs your OK for: ${task.title}"
-                TaskStatus.COMPLETED -> "$agent finished: ${task.title}"
-                TaskStatus.FAILED -> "$agent couldn't finish: ${task.title}"
+                TaskStatus.COMPLETED -> "$agent: ${com.example.meowmba.core.agent.runtime.TaskHistory.label(task)} — ${task.title}"
+                TaskStatus.FAILED -> if (task.outcome == com.example.meowmba.core.agent.tools.ToolOutcome.UNCONFIRMED)
+                    "$agent needs you to check the outcome: ${task.title}" else "$agent couldn't finish: ${task.title}"
                 TaskStatus.CANCELLED -> "$agent stopped: ${task.title}"
             }
             // Raised for any task the panel has not shown yet, terminal or not: a
@@ -13223,7 +13265,7 @@ class CompanionViewModel(
         showProjectsScreen = false,
         showToolsScreen = false,
         showRobotScreen = false,
-        features = features.copy(showCozmoScreen = false),
+        features = features.copy(showCozmoScreen = false, showTaskHistory = false, selectedWorkTaskId = null, archivedWorkTask = null, taskHistoryNotice = null),
         showConnectorsScreen = false,
         showVaultScreen = false,
         showBrowser = false,

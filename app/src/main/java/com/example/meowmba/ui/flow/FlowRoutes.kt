@@ -177,7 +177,15 @@ internal fun FlowHomeRoute(vm: CompanionViewModel, state: CompanionState, paused
         micOn = state.isMicEnabled, onMicToggle = { vm.setMicEnabled(!state.isMicEnabled) },
         onAttach = { attach = true },
         onTopBar = { attention = true },
-        northStar = { NorthStarLine(starViews.firstOrNull()) { northStarOpen = true } })
+        northStar = {
+            Column {
+                NorthStarLine(starViews.firstOrNull()) { northStarOpen = true }
+                TextButton(onClick = { vm.openTaskHistory() }, modifier = Modifier.testTag("flow_work")) {
+                    val active = state.activeTasks.count { !it.isTerminal }
+                    Text(if (active > 0) "Meow’s work · $active active" else "Meow’s work")
+                }
+            }
+        })
 
     val flowColors = FlowColors.from(FlowThemes.palette(settings.theme, snapshot.evening, settings.accent))
     val paper = flowColors.paper
@@ -199,7 +207,8 @@ internal fun FlowHomeRoute(vm: CompanionViewModel, state: CompanionState, paused
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = paper, contentColor = flowColors.ink) {
         NorthStarSheet(stars, onClose = { northStarOpen = false }, onOpenSource = { id ->
-            if (flow.store.intentions.value.any { it.id == id }) {
+            if (id.startsWith("task:")) { northStarOpen = false; vm.openTaskHistory(id.removePrefix("task:")) }
+            else if (flow.store.intentions.value.any { it.id == id }) {
                 northStarOpen = false
                 if (id in guidedSetupIds) accessSetup = true
                 else scope.launch { handleFlowPrimary(vm, context, flow, id, requestPermission) }

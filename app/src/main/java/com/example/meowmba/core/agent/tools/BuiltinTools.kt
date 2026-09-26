@@ -93,7 +93,8 @@ class FileReadTool(private val workspace: Workspace) : Tool {
     }
 }
 
-class FileWriteTool(private val workspace: Workspace) : Tool {
+class FileWriteTool(private val workspace: Workspace,
+    private val ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO) : Tool {
     override val definition = ToolDefinition(
         id = "file.write",
         displayName = "Write file",
@@ -109,12 +110,26 @@ class FileWriteTool(private val workspace: Workspace) : Tool {
         if (java.io.File(path).extension.lowercase() in setOf("pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "png", "jpg", "jpeg", "webp", "gif", "mp4", "webm", "mp3", "wav", "zip")) {
             return ToolResult.Failure("file.write creates text, not binary files. Use .md, .txt or .html for a readable document, or a real export/generation tool for this format. No file was written.")
         }
-        return if (workspace.write(path, content)) {
-            val file = workspace.resolveWrite(path)!!
-            ToolResult.Success("Wrote ${file.relativeTo(workspace.root).path} (${content.length} chars)\nMEDIA_FILE:${file.absolutePath}")
+        return kotlinx.coroutines.withContext(ioDispatcher) { if (workspace.write(path, content)) {
+            val file = workspace.resolveWrite(path) ?: return@withContext ToolResult.Failure("The saved file could not be located.", ToolOutcome.UNCONFIRMED)
+            // Bounded readback avoids a second full document allocation on older phones.
+            val verified = file.bufferedReader().use { reader ->
+                val buffer = CharArray(8_192)
+                var offset = 0
+                while (true) {
+                    val count = reader.read(buffer)
+                    if (count < 0) break
+                    if (offset + count > content.length) return@use false
+                    for (index in 0 until count) if (buffer[index] != content[offset + index]) return@use false
+                    offset += count
+                }
+                offset == content.length
+            }
+            if (!verified) return@withContext ToolResult.Failure("The file write returned, but its contents could not be verified. Check the file before repeating it.", ToolOutcome.UNCONFIRMED)
+            ToolResult.Success("Wrote ${file.relativeTo(workspace.root).path} (${content.length} chars)\nMEDIA_FILE:${file.absolutePath}", ToolOutcome.VERIFIED)
         } else {
             ToolResult.Failure("Cannot write '$path' (outside the workspace)")
-        }
+        } }
     }
 }
 

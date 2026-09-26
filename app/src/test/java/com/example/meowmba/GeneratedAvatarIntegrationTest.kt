@@ -319,6 +319,8 @@ class GeneratedAvatarIntegrationTest {
             assertNotNull(model.uiState.value.features.avatarCreationReview)
             assertFalse(model.uiState.value.avatarFormGenerating)
             model.chooseAvatarExample(false)
+            // Settle the launched coroutine without advancing the model's 35-second delay.
+            runCurrent()
             assertTrue(model.uiState.value.avatarFormGenerating)
             advanceTimeBy(35_001)
             runCurrent()

@@ -684,6 +684,7 @@ fun CompanionScreen(
                 visible = uiState.agentActivityVisible,
                 onDismiss = { viewModel.dismissAgentActivity() },
                 onOpenAgent = { viewModel.openAgentDetail(it) },
+                onOpenTask = { viewModel.openTaskHistory(it) },
             )
         }
 
@@ -925,11 +926,22 @@ fun CompanionScreen(
             BusinessAgentsScreen(onOpenFiles = { viewModel.openBusinessFiles() },
                 onOpenBugReports = { viewModel.openBusinessFiles(diagnostics = true) }) { viewModel.closeBusinessAgents() }
         }
+        if (uiState.showTaskHistory) {
+            val taskStars = viewModel.northStars?.views?.collectAsState()?.value.orEmpty()
+            TaskHistorySheet(tasks = (uiState.activeTasks + listOfNotNull(uiState.archivedWorkTask)).distinctBy { it.id },
+                selectedId = uiState.selectedWorkTaskId, stars = taskStars, problem = uiState.taskHistoryProblem,
+                notice = uiState.taskHistoryNotice, onClose = viewModel::closeTaskHistory,
+                onSelect = viewModel::openTaskHistory, onCancel = viewModel::cancelTask,
+                onLink = viewModel::linkTaskToNorthStar, onFile = { viewModel.closeTaskHistory(); viewModel.showFileInBrowser(it) },
+                onApproval = { viewModel.closeTaskHistory() }, onRemove = viewModel::removeTaskHistory)
+        }
+
         if (uiState.showAgentsScreen) {
             AgentsScreen(
                 state = uiState,
                 onCancelTask = { viewModel.cancelTask(it) },
                 onSelectAgent = { viewModel.selectAgent(it) },
+                onOpenWork = { viewModel.toggleAgentsScreen(); viewModel.openTaskHistory() },
                 onClose = { viewModel.toggleAgentsScreen() }
             )
         }

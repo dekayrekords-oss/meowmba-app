@@ -41,9 +41,9 @@ internal fun DeskRoute(vm: CompanionViewModel, state: CompanionState, paused: Bo
     val starViews = stars?.views?.collectAsState()?.value.orEmpty()
     val mainStar = starViews.firstOrNull()
     val catActivity = when {
-        state.interactionState == InteractionState.THINKING || state.computerTaskRunning -> DeskCatActivity.THINKING
         state.interactionState == InteractionState.LISTENING -> DeskCatActivity.LISTENING
         state.interactionState == InteractionState.SPEAKING -> DeskCatActivity.SPEAKING
+        state.interactionState == InteractionState.THINKING || state.computerTaskRunning || state.activeTasks.any { it.status == com.example.meowmba.core.agent.runtime.TaskStatus.RUNNING } -> DeskCatActivity.THINKING
         else -> DeskCatActivity.IDLE
     }
     val replies = remember(vm) { DeskCatReplies(state.activeConversationId, state.deskReplySequence, state.liveAssistantReply) }
@@ -63,7 +63,7 @@ internal fun DeskRoute(vm: CompanionViewModel, state: CompanionState, paused: Bo
     DeskWorkspace(DeskState.from(snap, facts, tasks), tasks, modifier, paused = paused,
         fpsTarget = state.avatarFpsTarget, interactive = interactive,
         catActivity = catActivity, catReply = catReply, onAsk = vm::onUserTextSubmitted,
-        onMenu = vm::openTiles, onSettings = vm::toggleSettings,
+        onMenu = vm::openTiles, onSettings = vm::toggleSettings, onWork = { vm.openTaskHistory() },
         onFlow = { vm.setAppTheme(AppTheme.FLOW) }, onProjects = vm::toggleProjectsScreen,
         onWeather = vm::toggleWeatherScreen, onConnections = vm::toggleConnectorsScreen, onNotes = vm::toggleVaultScreen,
         onTaskDone = { id -> scope.launch { handleFlowPrimary(vm, context, flow, id) { _ -> vm.setAppTheme(AppTheme.FLOW) } } },
@@ -72,13 +72,17 @@ internal fun DeskRoute(vm: CompanionViewModel, state: CompanionState, paused: Bo
         onAttach = { attach = true },
         onClock = { openClock(context) },
         onNorthStar = if (mainStar != null) ({ northStarOpen = true }) else null,
-        drawerContent = { top, close -> DeskDrawerPanel(vm, top, close) },
+        drawerContent = { top, close ->
+            TextButton(onClick = { close(); vm.openTaskHistory() }, modifier = Modifier.testTag("desk_work")) { Text("Meow’s work") }
+            DeskDrawerPanel(vm, top, close)
+        },
         dock = { HomeDock(vm, DockStyle.DESK) })
     if (attach) AttachSheet(vm, onDismiss = { attach = false })
     if (northStarOpen && stars != null) ModalBottomSheet(onDismissRequest = { northStarOpen = false },
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         NorthStarSheet(stars, onClose = { northStarOpen = false }, onOpenSource = { id ->
-            if (tasks.any { it.id == id }) {
+            if (id.startsWith("task:")) { northStarOpen = false; vm.openTaskHistory(id.removePrefix("task:")) }
+            else if (tasks.any { it.id == id }) {
                 northStarOpen = false
                 scope.launch { handleFlowPrimary(vm, context, flow, id) { _ -> vm.setAppTheme(AppTheme.FLOW) } }
             } else android.widget.Toast.makeText(context, "That item is no longer active.", android.widget.Toast.LENGTH_SHORT).show()
@@ -159,7 +163,8 @@ internal fun DeskWorkspace(desk: DeskState, tasks: List<Intention>, modifier: Mo
     /** Contents of an opened drawer (true = top); the route supplies the real folder. */
     drawerContent: (@Composable (top: Boolean, close: () -> Unit) -> Unit)? = null,
     /** Side dock, drawn above the scene. */
-    dock: (@Composable () -> Unit)? = null) {
+    dock: (@Composable () -> Unit)? = null,
+    onWork: (() -> Unit)? = null) {
     var selected by rememberSaveable { mutableStateOf<DeskObject?>(null) }
     var asking by rememberSaveable { mutableStateOf(false) }
     var question by rememberSaveable { mutableStateOf("") }
@@ -236,6 +241,8 @@ internal fun DeskWorkspace(desk: DeskState, tasks: List<Intention>, modifier: Mo
                 DeskObject.CLOCK, DeskObject.DRAWER_TOP, DeskObject.DRAWER_BOTTOM -> ""
             }
             Text(summary, style = MaterialTheme.typography.bodyLarge, color = Color(0xFFBED0CD))
+            if (obj == DeskObject.BUILD && onWork != null) OutlinedButton(onClick = { selected = null; onWork() },
+                modifier = Modifier.testTag("desk_monitor_work")) { Text("Meow’s work") }
             relevant.take(12).forEach { task -> DeskTaskRow(task, onTaskDone, onTaskLater) }
             val action = when (obj) {
                 DeskObject.WINDOW -> "Open Weather" to onWeather

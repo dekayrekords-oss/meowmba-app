@@ -58,8 +58,11 @@ class DesktopNavigationTool(
                     title="$app: ${params["action"]} ${target["label"]?.jsonPrimitive?.content.orEmpty().take(120)}"
                 }
                 when(val result=step(params,title)) {
-                    is ToolResult.Failure -> return ToolResult.Failure("Stopped without retrying the desktop action: ${result.error}")
-                    is ToolResult.Success -> history.add("$title: ${result.output.take(400)}")
+                    is ToolResult.Failure -> return ToolResult.Failure("Stopped without retrying the desktop action: ${result.error}", result.outcome)
+                    is ToolResult.Success -> {
+                        if (result.outcome == ToolOutcome.HANDOFF || result.outcome == ToolOutcome.UNCONFIRMED) return result
+                        history.add("$title: ${result.output.take(400)}")
+                    }
                 }
             }
             return ToolResult.Failure("Desktop step budget reached. Review the current screen before continuing.")

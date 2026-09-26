@@ -42,6 +42,18 @@ class ProjectStepRunnerTest {
         assertNull(ProjectExecutionContext.projectId)
     }
 
+    @Test fun handoffsAndUnconfirmedOutcomesStopBeforeAnotherPlan() = runTest {
+        for ((outcome, reason) in listOf(
+            com.example.meowmba.core.agent.tools.ToolOutcome.HANDOFF to ProjectStepRunner.StopReason.HANDOFF_REQUIRED,
+            com.example.meowmba.core.agent.tools.ToolOutcome.UNCONFIRMED to ProjectStepRunner.StopReason.OUTCOME_UNCONFIRMED)) {
+            var plans = 0
+            val runner = ProjectStepRunner(7, 70, { plans++; intent("file.write") },
+                { task(it).copy(outcome = outcome) }, { true })
+            assertEquals(reason, runner.run("Prepare a message", "").reason)
+            assertEquals(1, plans)
+        }
+    }
+
     @Test fun repeatedWriteIsNotExecutedTwice() = runTest {
         val proposed = intent("file.write", mapOf("path" to "draft.md", "content" to "Draft"))
         var executions = 0

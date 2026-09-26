@@ -29,7 +29,7 @@ class ProjectStepRunner(
 
     enum class StopReason {
         NO_NEXT_ACTION, ACTION_LIMIT, REPEATED_ACTION, TOOL_FAILED, TOOL_CANCELLED,
-        SCOPE_CHANGED, INVALID_RESULT, EMPTY_RESULT,
+        SCOPE_CHANGED, INVALID_RESULT, EMPTY_RESULT, HANDOFF_REQUIRED, OUTCOME_UNCONFIRMED,
     }
 
     /** Successful tools are evidence of actions only, never of overall completion. */
@@ -66,6 +66,10 @@ class ProjectStepRunner(
                 }
                 tasks += task
                 if (!isCurrent()) return@withContext stopped(StopReason.SCOPE_CHANGED)
+                if (task.outcome == com.example.meowmba.core.agent.tools.ToolOutcome.HANDOFF)
+                    return@withContext stopped(StopReason.HANDOFF_REQUIRED)
+                if (task.outcome == com.example.meowmba.core.agent.tools.ToolOutcome.UNCONFIRMED)
+                    return@withContext stopped(StopReason.OUTCOME_UNCONFIRMED)
                 when (task.status) {
                     TaskStatus.FAILED -> return@withContext stopped(StopReason.TOOL_FAILED)
                     TaskStatus.CANCELLED -> return@withContext stopped(StopReason.TOOL_CANCELLED)

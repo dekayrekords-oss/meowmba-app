@@ -23,6 +23,21 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class NorthStarRuntimeTest {
+    @Test fun ownerLinkedTaskIsRelevanceAndNeverAutomaticProgress() = runBlocking {
+        val dao = FakeDao(); val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        try {
+            val runtime = NorthStarRuntime(dao, FakeJournal(), scope, clock = { NOW })
+            val id = runtime.save(null, "Europe band", "", "Someday", listOf("Book a tour"))
+            val task = com.example.meowmba.core.agent.runtime.AgentTask(id = "result", agentId = "research", toolId = "web.search", title = "Find festivals",
+                status = com.example.meowmba.core.agent.runtime.TaskStatus.COMPLETED, result = "I booked the entire tour", completedAt = NOW)
+            assertTrue(runtime.linkTask(id, task)); assertTrue(runtime.linkTask(id, task))
+            assertEquals(1, dao.links.size); assertEquals("CONNECTION", dao.links.single().kind)
+            assertEquals("task:result", dao.links.single().sourceKey)
+            assertTrue(dao.stars().single().ingredients().none { it.doneAt != null })
+            assertTrue(!runtime.linkTask("missing", task))
+        } finally { scope.cancel() }
+    }
+
     @Test fun stableSourceUpdatesExcerptAndDismissalErasesPrivateSource() = runBlocking {
         val dao = FakeDao()
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)

@@ -6,7 +6,7 @@ internal fun isAvatarHomeIntent(action: String?, categories: Set<String>?): Bool
 
 /** Navigation reset only: drafts, ongoing work, appearance and privacy preferences survive. */
 internal fun CompanionState.atAvatarHome() = copy(
-    features = features.copy(showCozmoScreen = false),
+    features = features.copy(showCozmoScreen = false, showTaskHistory = false, selectedWorkTaskId = null, archivedWorkTask = null, taskHistoryNotice = null),
     isChatExpanded = false, isPreviewVisible = false,
     showTiles = false, showSettings = false, showModelManager = false,
     showPrivacyDashboard = false, showMemoryScreen = false, showStudioScreen = false,

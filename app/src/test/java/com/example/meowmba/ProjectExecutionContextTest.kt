@@ -54,7 +54,7 @@ class ProjectExecutionContextTest {
 
     @Test fun approvalKeepsOriginalProjectAndNeverWritesUntilApproved() = runTest {
         val ws = Workspace(temp.root)
-        val registry = ToolRegistry().apply { register(FileWriteTool(ws)) }
+        val registry = ToolRegistry().apply { register(FileWriteTool(ws, kotlinx.coroutines.test.StandardTestDispatcher(testScheduler))) }
         val runner = AgentOrchestrator(backgroundScope, registry, object : AuditSink {
             override suspend fun log(action: String, agentId: String, taskId: String?, detail: String) = Unit
         })

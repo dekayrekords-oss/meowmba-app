@@ -111,7 +111,9 @@ internal fun NorthStarSheet(runtime: NorthStarRuntime, onClose: () -> Unit, onOp
                     Text(link.text, style = MaterialTheme.typography.bodyMedium)
                     Text(link.reason, style = MaterialTheme.typography.bodySmall)
                     Row {
-                        if (link.sourceKey.startsWith("flow:")) TextButton(onClick = { onOpenSource(link.sourceKey.removePrefix("flow:")) }) { Text("Open item") }
+                        if (link.sourceKey.startsWith("flow:") || link.sourceKey.startsWith("task:")) TextButton(onClick = {
+                            onOpenSource(if (link.sourceKey.startsWith("flow:")) link.sourceKey.removePrefix("flow:") else link.sourceKey)
+                        }) { Text(if (link.sourceKey.startsWith("task:")) "Open task result" else "Open item") }
                         TextButton(onClick = { action { runtime.dismiss(link.id) } }) { Text("Remove connection") }
                     }
                 }

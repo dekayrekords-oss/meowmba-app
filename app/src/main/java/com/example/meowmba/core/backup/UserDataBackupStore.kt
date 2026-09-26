@@ -103,9 +103,12 @@ class UserDataBackupStore internal constructor(
         try {
             val sourceVersion = root.getInt("databaseVersion")
             val targetVersion = db.version
-            val compatibleNorthStarImport = sourceVersion == 12 && targetVersion == 13
-            require(sourceVersion == targetVersion || compatibleNorthStarImport) { "Backup database version is not compatible" }
-            val excludedForCompatibility = if (compatibleNorthStarImport) setOf("north_stars", "north_star_links") else emptySet()
+            val compatibleAdditiveImport = sourceVersion in 12..14 && targetVersion in sourceVersion..14
+            require(sourceVersion == targetVersion || compatibleAdditiveImport) { "Backup database version is not compatible" }
+            val excludedForCompatibility = buildSet {
+                if (sourceVersion < 13 && targetVersion >= 13) addAll(setOf("north_stars", "north_star_links"))
+                if (sourceVersion < 14 && targetVersion >= 14) add("companion_tasks")
+            }
             val expected = schemas(db).filterNot { it.name in excludedForCompatibility }.associateBy { it.name }
             val tableArray = root.getJSONArray("tables")
             require(tableArray.length() == expected.size)

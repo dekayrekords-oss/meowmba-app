@@ -488,6 +488,24 @@ data class CompanionState(
     val agenticPendingApprovalTitle: String? = null,
     val features: CompanionFeatures = CompanionFeatures(),
 ) {
+    val showTaskHistory get() = features.showTaskHistory
+    val selectedWorkTaskId get() = features.selectedWorkTaskId
+    val archivedWorkTask get() = features.archivedWorkTask
+    val taskHistoryProblem get() = features.taskHistoryProblem
+    val taskHistoryNotice get() = features.taskHistoryNotice
+
+    fun withTaskHistory(
+        showTaskHistory: Boolean = features.showTaskHistory,
+        selectedWorkTaskId: String? = features.selectedWorkTaskId,
+        archivedWorkTask: com.example.meowmba.core.agent.runtime.AgentTask? = features.archivedWorkTask,
+        taskHistoryProblem: String? = features.taskHistoryProblem,
+        taskHistoryNotice: String? = features.taskHistoryNotice,
+    ) = copy(features = features.copy(
+        showTaskHistory = showTaskHistory, selectedWorkTaskId = selectedWorkTaskId,
+        archivedWorkTask = archivedWorkTask, taskHistoryProblem = taskHistoryProblem,
+        taskHistoryNotice = taskHistoryNotice,
+    ))
+
     /** Monotonic event for a completed current-conversation reply shown on Desk. */
     val deskReplySequence: Long get() = features.deskReplySequence
     /** Full actual reply text, independent of chat persistence and speech playback. */
@@ -781,6 +799,11 @@ fun nextDriveReaction(
 
 /** Separate feature state keeps JVM constructor/copy signatures below the 255-slot limit. */
 data class CompanionFeatures(
+    val showTaskHistory: Boolean = false,
+    val selectedWorkTaskId: String? = null,
+    val archivedWorkTask: com.example.meowmba.core.agent.runtime.AgentTask? = null,
+    val taskHistoryProblem: String? = null,
+    val taskHistoryNotice: String? = null,
     /** Cozmo has its own panel and controller, never a mode of the LOOI body panel. */
     val showCozmoScreen: Boolean = false,
     /** How much Meow speaks aloud (see [SpeechMode]); grouped here to keep CompanionState under the JVM slot limit. */

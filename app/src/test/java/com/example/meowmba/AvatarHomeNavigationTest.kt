@@ -24,7 +24,7 @@ class AvatarHomeNavigationTest {
             showRobotScreen=true, showVoiceModelScreen=true, showVaultScreen=true, showConnectorsScreen=true,
             avatarStyle=AvatarStyle.FULL_FLY, avatarScale=1.5f, habitatMode=true, background=wallpaper,
             isCameraEnabled=false, isMicEnabled=false,
-            features=CompanionFeatures(showCozmoScreen=true),
+            features=CompanionFeatures(showCozmoScreen=true, showTaskHistory=true, selectedWorkTaskId="saved-task"),
             showNeuralInfo=true, settingsInitialPage="Neural / Lumen", neuralInputNotice="Pet sent to the brain",
         )
         val after=before.atAvatarHome()
@@ -34,6 +34,8 @@ class AvatarHomeNavigationTest {
         }
         assertFalse(after.isChatExpanded); assertFalse(after.isPreviewVisible)
         assertFalse(after.features.showCozmoScreen)
+        assertFalse(after.showTaskHistory); assertNull(after.selectedWorkTaskId)
+        assertEquals(before.activeTasks, after.activeTasks)
         assertNull(after.settingsInitialPage); assertNull(after.neuralInputNotice)
         assertEquals(before.avatarStyle,after.avatarStyle);assertEquals(before.avatarScale,after.avatarScale,0f)
         assertEquals(before.background,after.background);assertEquals(before.habitatMode,after.habitatMode)

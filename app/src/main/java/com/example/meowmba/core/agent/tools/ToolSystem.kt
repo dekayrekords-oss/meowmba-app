@@ -45,10 +45,14 @@ data class ToolDefinition(
     val auditLogged: Boolean = true
 )
 
+/** Only concrete adapters may claim a verified outcome; a normal return is not proof of a user's goal. */
+@kotlinx.serialization.Serializable
+enum class ToolOutcome { RESULT, VERIFIED, HANDOFF, UNCONFIRMED }
+
 /** Result of one tool execution. Never throws across the boundary. */
 sealed class ToolResult {
-    data class Success(val output: String) : ToolResult()
-    data class Failure(val error: String) : ToolResult()
+    data class Success(val output: String, val outcome: ToolOutcome = ToolOutcome.RESULT) : ToolResult()
+    data class Failure(val error: String, val outcome: ToolOutcome = ToolOutcome.RESULT) : ToolResult()
 }
 
 /** A runnable tool. */

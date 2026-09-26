@@ -145,6 +145,23 @@ class UserDataBackupStoreTest {
         assertEquals(1, db.query("SELECT COUNT(*) FROM north_stars").use { it.moveToFirst(); it.getInt(0) })
     }
 
+    @Test fun schema12And13ImportsPreserveNewTaskHistory() {
+        for (sourceVersion in listOf(12, 13)) {
+            db.close()
+            db = newDatabase(sourceVersion, includeNorthStars = sourceVersion >= 13).writableDatabase
+            db.execSQL("INSERT INTO records VALUES ('old','old data',7,NULL,NULL)")
+            val source = temp("schema$sourceVersion-source"); store().snapshot(source)
+            db.close()
+            db = newDatabase(14, includeNorthStars = true).writableDatabase
+            db.execSQL(com.example.meowmba.core.agent.runtime.TASK_HISTORY_MIGRATION)
+            db.execSQL("INSERT INTO companion_tasks VALUES ('keep',1,1,'saved result')")
+            db.execSQL("INSERT INTO north_stars VALUES ('keep','Owner goal')")
+            assertTrue(store().restore(source).complete)
+            assertEquals("old data", db.query("SELECT value FROM records WHERE id='old'").use { it.moveToFirst(); it.getString(0) })
+            assertEquals("saved result", db.query("SELECT payload FROM companion_tasks WHERE id='keep'").use { it.moveToFirst(); it.getString(0) })
+        }
+    }
+
     @Test fun unsupportedSchemaVersionIsRejectedBeforeAnyRestore() {
         db.execSQL("INSERT INTO records VALUES ('old','from backup',7,NULL,NULL)")
         val source = temp("bad-version-source"); store().snapshot(source)

@@ -40,6 +40,7 @@ fun AgentsScreen(
     state: CompanionState,
     onCancelTask: (String) -> Unit,
     onSelectAgent: (String?) -> Unit = {},
+    onOpenWork: (() -> Unit)? = null,
     onClose: () -> Unit
 ) {
     // One agent selected: show what that agent has actually done instead of the roster.
@@ -75,6 +76,8 @@ fun AgentsScreen(
             }
 
             Spacer(modifier = Modifier.height(16.dp))
+
+            onOpenWork?.let { open -> OutlinedButton(onClick = open) { Text("Meow’s work · saved results") } }
 
             // ── Agent roster ────────────────────────────────────────────────
             BusinessAgentsLauncher()
@@ -209,8 +212,8 @@ private fun TaskCard(task: AgentTask, onCancel: () -> Unit) {
         TaskStatus.QUEUED -> "QUEUED" to MaterialTheme.colorScheme.onSurfaceVariant
         TaskStatus.RUNNING -> "RUNNING" to MaterialTheme.colorScheme.primary
         TaskStatus.WAITING_APPROVAL -> "NEEDS YOU" to MaterialTheme.colorScheme.tertiary
-        TaskStatus.COMPLETED -> "DONE" to MaterialTheme.colorScheme.primary
-        TaskStatus.FAILED -> "FAILED" to MaterialTheme.colorScheme.error
+        TaskStatus.COMPLETED -> com.example.meowmba.core.agent.runtime.TaskHistory.label(task) to MaterialTheme.colorScheme.primary
+        TaskStatus.FAILED -> com.example.meowmba.core.agent.runtime.TaskHistory.label(task) to MaterialTheme.colorScheme.error
         TaskStatus.CANCELLED -> "CANCELLED" to MaterialTheme.colorScheme.onSurfaceVariant
     }
     Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(12.dp)) {

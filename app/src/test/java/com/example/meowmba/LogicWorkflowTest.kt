@@ -18,6 +18,23 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 class LogicWorkflowTest {
+    @Test fun uncertainOrHandedOffActionStopsBeforeAnotherPlanningStep() = runTest {
+        for (receipt in listOf(ToolResult.Success("Check the destination", ToolOutcome.UNCONFIRMED),
+            ToolResult.Success("Continue in the app", ToolOutcome.HANDOFF),
+            ToolResult.Failure("Timed out", ToolOutcome.UNCONFIRMED))) {
+            var plans = 0
+            var actions = 0
+            val tool = LogicSessionTool({ _, _ -> Result.success(frame) },
+                { plans++; """{"action":"act","index":1,"operation":"press","value":""}""" },
+                { _, _, _ -> actions++; receipt })
+            val result = tool.execute(mapOf("goal" to "Open Gain"))
+            val outcome = when (result) { is ToolResult.Success -> result.outcome; is ToolResult.Failure -> result.outcome }
+            val expected = when (receipt) { is ToolResult.Success -> receipt.outcome; is ToolResult.Failure -> receipt.outcome }
+            assertEquals(expected, outcome)
+            assertEquals(1, plans); assertEquals(1, actions); assertFalse(tool.isActive)
+        }
+    }
+
     @Test fun logicPlanningUsesLogicSchemaAndValidatorAtTheProviderBoundary() = runTest {
         var called=false
         val client=HttpClient(MockEngine { request ->

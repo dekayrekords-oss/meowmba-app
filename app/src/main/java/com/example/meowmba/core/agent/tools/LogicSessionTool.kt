@@ -128,8 +128,9 @@ class LogicSessionTool(
                         repeats[key] = (repeats[key] ?: 0) + 1
                         if (repeats.getValue(key) > 2) return ToolResult.Failure("Stopped a repeating Logic action. Review the current project before continuing.")
                         when (val result = approvedStep(if (editing) "logic.edit" else "logic.act", params, "Logic: $op $label → ${text("value")}".take(1000))) {
-                            is ToolResult.Failure -> return ToolResult.Failure("Logic workflow stopped: ${result.error}")
+                            is ToolResult.Failure -> return ToolResult.Failure("Logic workflow stopped: ${result.error}", result.outcome)
                             is ToolResult.Success -> {
+                                if (result.outcome == ToolOutcome.HANDOFF || result.outcome == ToolOutcome.UNCONFIRMED) return result
                                 history.add("$label: ${result.output.take(1800)}")
                                 if (directVolume != null) directMutationSent = true
                             }

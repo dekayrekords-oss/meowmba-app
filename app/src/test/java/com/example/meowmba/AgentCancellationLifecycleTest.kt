@@ -133,7 +133,8 @@ class AgentCancellationLifecycleTest {
         advanceUntilIdle()
         val final = orchestrator.tasks.value.single()
         assertEquals(TaskStatus.FAILED, final.status)
-        assertEquals("Tool timed out after 50ms", final.result)
+        assertTrue(final.result!!.startsWith("Tool timed out after 50ms"))
+        assertEquals(com.example.meowmba.core.agent.tools.ToolOutcome.UNCONFIRMED, final.outcome)
         assertEquals(1, audit.count("task.fail", task.taskId))
         assertEquals(0, audit.count("task.cancelled", task.taskId))
     }

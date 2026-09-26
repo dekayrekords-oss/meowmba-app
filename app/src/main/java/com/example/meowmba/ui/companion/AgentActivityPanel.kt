@@ -69,6 +69,7 @@ fun AgentActivityPanel(
     onDismiss: () -> Unit,
     onOpenAgent: (String) -> Unit,
     modifier: Modifier = Modifier,
+    onOpenTask: ((String) -> Unit)? = null,
 ) {
     val live = tasks.filter { !it.isTerminal }
     // Terminal tasks are worth a moment on screen — vanishing the instant a job finishes
@@ -134,7 +135,7 @@ fun AgentActivityPanel(
                 Spacer(Modifier.height(8.dp))
 
                 recent.forEach { task ->
-                    TaskLine(task, onClick = { onOpenAgent(task.agentId) })
+                    TaskLine(task, onClick = { if (onOpenTask != null) onOpenTask(task.id) else onOpenAgent(task.agentId) })
                 }
 
                 if (live.isNotEmpty()) {
@@ -156,8 +157,13 @@ private fun TaskLine(task: AgentTask, onClick: () -> Unit) {
         TaskStatus.QUEUED -> "queued" to MaterialTheme.colorScheme.onSurfaceVariant
         TaskStatus.RUNNING -> "running" to MaterialTheme.colorScheme.secondary
         TaskStatus.WAITING_APPROVAL -> "needs you" to MaterialTheme.colorScheme.tertiary
-        TaskStatus.COMPLETED -> "done" to MaterialTheme.colorScheme.primary
-        TaskStatus.FAILED -> "failed" to MaterialTheme.colorScheme.error
+        TaskStatus.COMPLETED -> (when (task.outcome) {
+            com.example.meowmba.core.agent.tools.ToolOutcome.HANDOFF -> "your turn"
+            com.example.meowmba.core.agent.tools.ToolOutcome.VERIFIED -> "verified"
+            com.example.meowmba.core.agent.tools.ToolOutcome.UNCONFIRMED -> "check outcome"
+            else -> "result"
+        }) to MaterialTheme.colorScheme.primary
+        TaskStatus.FAILED -> (if (task.outcome == com.example.meowmba.core.agent.tools.ToolOutcome.UNCONFIRMED) "check outcome" else "failed") to MaterialTheme.colorScheme.error
         TaskStatus.CANCELLED -> "stopped" to MaterialTheme.colorScheme.onSurfaceVariant
     }
     Row(

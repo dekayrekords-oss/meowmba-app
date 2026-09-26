@@ -46,7 +46,7 @@ class EmailSendTool(private val context: Context) : Tool {
         }
         if (intent.resolveActivity(context.packageManager) != null) {
             context.startActivity(intent)
-            return ToolResult.Success("Email composer opened for $to with subject \"$subject\".")
+            return ToolResult.Success("Email composer opened for $to with subject \"$subject\". Review it and tap Send there; Meow has not sent it.", ToolOutcome.HANDOFF)
         } else {
             return ToolResult.Failure("No email app found on this device.")
         }

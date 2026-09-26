@@ -85,6 +85,20 @@ class NorthStarRuntime(
         refresh()
     }
 
+    suspend fun linkTask(starId: String, task: com.example.meowmba.core.agent.runtime.AgentTask) = lock.withLock {
+        val star = dao.star(starId) ?: return@withLock false
+        if (!task.isTerminal || task.result.isNullOrBlank()) return@withLock false
+        val key = "task:${task.id}"
+        val evidence = StarEvidence(key, task.title, task.completedAt ?: task.createdAt)
+        val id = NorthStarPolicy.linkId(star, evidence)
+        val record = NorthStarLink(id, starId, key,
+            com.example.meowmba.core.agentic.AgenticOutput.scrub(task.title + "\n" + task.result, 2_000),
+            evidence.at, "You linked this task result. Review its outcome; this does not mark the goal achieved.", "CONNECTION", "owner")
+        if (dao.link(id) == null) dao.insertLink(record) else dao.updateLink(record)
+        refresh()
+        true
+    }
+
     suspend fun remove(id: String) = lock.withLock { dao.delete(id); attempted.clear() }
     suspend fun dismiss(id: String) = lock.withLock { dao.dismiss(id) }
     suspend fun pin(id: String) = lock.withLock { dao.pin(id, clock()) }

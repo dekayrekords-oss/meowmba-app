@@ -394,7 +394,7 @@ class SetAlarmTool(private val context: Context) : Tool {
                     .putExtra(AlarmClock.EXTRA_SKIP_UI, true)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
-            ToolResult.Success("Alarm set for ${hour}:${minutes.toString().padStart(2, '0')}.")
+            ToolResult.Success("Requested an alarm for ${hour}:${minutes.toString().padStart(2, '0')}. Check the Clock app to confirm it was saved.", ToolOutcome.HANDOFF)
         } catch (e: Exception) {
             ToolResult.Failure("Couldn't set the alarm: ${e.message}")
         }
@@ -426,7 +426,7 @@ class SetTimerTool(private val context: Context) : Tool {
                     .putExtra(AlarmClock.EXTRA_SKIP_UI, true)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
-            ToolResult.Success("Timer started: ${seconds / 60} min ${seconds % 60} s.")
+            ToolResult.Success("Requested a timer for ${seconds / 60} min ${seconds % 60} s. Check the Clock app to confirm it started.", ToolOutcome.HANDOFF)
         } catch (e: Exception) {
             ToolResult.Failure("Couldn't start the timer: ${e.message}")
         }
@@ -621,7 +621,7 @@ class TakePhotoTool(private val context: Context) : Tool {
         val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         return@withContext try {
             context.startActivity(intent)
-            ToolResult.Success("Camera is open — say cheese.")
+            ToolResult.Success("Camera app requested. Take the photo there; no photo has been captured by Meow.", ToolOutcome.HANDOFF)
         } catch (e: Exception) {
             ToolResult.Failure("Couldn't open the camera: ${e.message}")
         }
@@ -648,7 +648,7 @@ class ComposeSmsTool(private val context: Context) : Tool {
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         return@withContext try {
             context.startActivity(intent)
-            ToolResult.Success("Opened a text to $recipient — ready when you are.")
+            ToolResult.Success("Text composer requested for $recipient. Review it and tap Send there; Meow has not sent it.", ToolOutcome.HANDOFF)
         } catch (e: Exception) {
             ToolResult.Failure("Couldn't open the messaging app: ${e.message}")
         }
@@ -673,7 +673,7 @@ class DialCallTool(private val context: Context) : Tool {
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         return@withContext try {
             context.startActivity(intent)
-            ToolResult.Success("Dialer ready for $number.")
+            ToolResult.Success("Dialer requested for $number. Start the call there.", ToolOutcome.HANDOFF)
         } catch (e: Exception) {
             ToolResult.Failure("Couldn't open the dialer: ${e.message}")
         }
@@ -717,7 +717,8 @@ class MediaControlTool(private val context: Context) : Tool {
                 else -> false
             }
             ToolResult.Success(if (verified) (if (action == "play") "Playback is running." else "Playback is paused.")
-                else "Sent $action to the media player; the resulting playback change isn't confirmed yet.")
+                else "Sent $action to the media player; the resulting playback change isn't confirmed yet.",
+                if (verified) ToolOutcome.VERIFIED else ToolOutcome.UNCONFIRMED)
         } catch (e: kotlinx.coroutines.CancellationException) { throw e
         } catch (e: Exception) {
             ToolResult.Failure("Couldn't control playback: ${e.message}")

@@ -13,6 +13,7 @@ import java.util.UUID
  */
 
 /** Lifecycle of one agent task. */
+@kotlinx.serialization.Serializable
 enum class TaskStatus {
     QUEUED,
     RUNNING,
@@ -39,8 +40,9 @@ data class AgentDefinition(
 )
 
 /** One unit of work owned by an agent. */
+@kotlinx.serialization.Serializable
 data class AgentTask(
-    val id: String = UUID.randomUUID().toString().take(8),
+    val id: String = UUID.randomUUID().toString(),
     val agentId: String,
     val toolId: String,
     val title: String,
@@ -55,6 +57,12 @@ data class AgentTask(
     /** Captured at submission; changing projects never reassigns in-flight work. */
     val projectId: Long? = null,
     val conversationId: Long? = null,
+    val outcome: com.example.meowmba.core.agent.tools.ToolOutcome = com.example.meowmba.core.agent.tools.ToolOutcome.RESULT,
+    /** Written before dispatch. An interrupted call may have changed an external system. */
+    val executionStarted: Boolean = false,
+    /** Restored history is displayed quietly, never replayed or spoken as a new result. */
+    val recovered: Boolean = false,
+    val resultTruncated: Boolean = false,
 ) {
     val isTerminal: Boolean
         get() = status == TaskStatus.COMPLETED || status == TaskStatus.FAILED ||
