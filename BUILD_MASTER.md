@@ -1,7 +1,13 @@
 # Meowmba shared build authority
 
-Updated 2026-09-25. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
+Updated 2026-09-26. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
 This supersedes historical build-location/version instructions in other documents.
+
+- September26 **184 / 1.5.18 reserved by Codex** for Facebook destination selection and
+  preview-loop lifecycle repair. Claude's `feature/desk-apartment` (183) has been merged
+  into `feature/meow-flow-core`, preserving apartment features. Tests/build in progress;
+  NOT installed or published. Phone remains183. See `docs/FACEBOOK_PREVIEW_184.md`.
+  **184 reserved; next185.**
 
 - September25 **183 / 1.5.17 built and installed by Claude** at the owner's explicit request:
   Meow's apartment (living room, office, bedroom), room media, Dev Studio projects on the Desk computer,

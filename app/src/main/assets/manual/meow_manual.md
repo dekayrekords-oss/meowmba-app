@@ -54,3 +54,20 @@ Tapping a message's action opens that conversation through the messaging app's o
 ## Privacy
 
 Meow's memory of your day and Flow's decisions stay on your phone. Cloud AI is optional and off until you turn it on. Meow never sends, buys or acts on your behalf without your yes.
+
+## Facebook posts
+
+Say “Make a Facebook post for my page about …”. Meow opens Facebook and asks
+which Page/profile to use from the destinations visible in its account switcher.
+Choose a destination, or use **More pages** to scroll its list. **Cancel** stops
+without posting. Facebook must be signed in and Meow Accessibility enabled.
+
+Meow prepares the draft in Facebook. Review the account, audience and text before
+posting. Preparing a draft does not publish it. If Facebook does not expose the
+page list or Meow cannot verify the selected account, it asks you to continue
+manually. A browser preview is never proof that a Facebook post was published.
+
+## Website previews
+
+Completed previews stay in place. Meow stops after completion, a failed model
+request or its action limit. Ask for another change to continue.

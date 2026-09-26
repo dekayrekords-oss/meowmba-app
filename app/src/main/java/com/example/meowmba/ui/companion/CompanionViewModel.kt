@@ -4406,7 +4406,7 @@ class CompanionViewModel(
             }
             when {
                 req.url != null -> com.example.meowmba.core.browser.WebViewBridge.loadUrl(req.url)
-                draft != null -> com.example.meowmba.core.browser.WebViewBridge.loadHtml(draft)
+                draft != null && browserAgent == null -> com.example.meowmba.core.browser.WebViewBridge.loadHtml(draft)
             }
             if (req.url != null) delay(900)
             val agent = browserAgent
@@ -7373,6 +7373,12 @@ class CompanionViewModel(
         // stay with the agent.
         extractSearchQuery(WakePhraseMatcher.normalize(text))?.let { query ->
             showSearchInBrowser(query)
+            return
+        }
+        // An actual social post takes precedence over HTML creation and chat questions.
+        if (com.example.meowmba.core.agent.SocialPostRequest.matches(text)) {
+            browserAgent?.clearGoal()
+            submitPhoneGoal(text)
             return
         }
         com.example.meowmba.core.work.BrowserRequestParser.parse(text)?.let { req ->

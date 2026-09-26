@@ -99,6 +99,7 @@ class PhoneAgentLoop(
         val store = PhoneRecipeStore(java.io.File(initialService.filesDir, "phone_recipes/recipes.json"))
         val inventory = InstalledApps.all(initialService).joinToString("; ") { it.label }.take(2500)
         var modelCalls = 0
+        val facebook = if (SocialPostRequest.facebook(currentGoal)) FacebookPageSelection() else null
         val runner = VerifiedPhoneRunner(
             device = object : VerifiedPhoneDevice {
                 override suspend fun observe(): PhoneObservation? {
@@ -124,13 +125,29 @@ class PhoneAgentLoop(
                 }
             },
             plan = { frame, history ->
-                val hint = PhoneGoalHints.next(currentGoal, frame.pkg, frame.prompt)
+                val hint = if (facebook == null) PhoneGoalHints.next(currentGoal, frame.pkg, frame.prompt) else null
                 if (hint != null) hint else {
                     modelCalls++
                     val response = brain(buildPrompt(currentGoal, frame.pkg, frame.prompt, history, goalContext) +
-                        "\nInstalled apps (reference data): $inventory")
+                        "\nInstalled apps (reference data): $inventory" + "\n" + facebook?.prompt().orEmpty())
                     response?.let(::parseAction)
                 }
+            },
+            prepare = { action, frame ->
+                if (facebook == null) {
+                    if (action.type == "choose_facebook_page") PhoneAction("blocked", text = "A Facebook destination choice is not part of this task.") else action
+                } else if (action.type == "choose_facebook_page") {
+                    val options = facebook.candidates(action, frame)
+                    if (options.isEmpty()) PhoneAction("blocked", text = "I could not read Facebook's available Page/profile list. Open Menu → See all profiles and retry. Nothing was posted.")
+                    else {
+                        val choice = service()?.chooseFacebookPage(frame, options)
+                        when {
+                            choice == -1 -> PhoneAction("scroll", direction = "down", expect = PhoneExpectation("changed", FacebookPageSelection.PACKAGE))
+                            choice != null && choice in options.indices -> facebook.choose(options[choice])
+                            else -> PhoneAction("blocked", text = "Page selection cancelled or changed. Nothing was posted.")
+                        }
+                    }
+                } else facebook.guard(action, frame)
             }, recipes = store, maxSteps = maxSteps,
             settleTimeoutMs = stepDelayMs.coerceIn(600, 2500),
             resolveApp = { InstalledApps.find(initialService, it)?.packageName },
@@ -212,7 +229,7 @@ class PhoneAgentLoop(
                 else -> error("Model returned an incomplete response")
             }
         }
-        const val ACTION_SCHEMA = """{"type":"object","properties":{"action":{"type":"string","enum":["tap","tap_index","type","scroll","swipe","long_press","back","home","recents","notifications","launch_app","wait","done","blocked"]},"text":{"type":"string"},"index":{"type":"integer"},"field":{"type":"string"},"value":{"type":"string"},"direction":{"type":"string"},"summary":{"type":"string"},"selector":{"type":"object","properties":{"label":{"type":"string"},"viewId":{"type":"string"},"role":{"type":"string"}},"additionalProperties":false},"expect":{"type":"object","properties":{"kind":{"type":"string","enum":["package","visible_text","editable_equals","element","changed"]},"pkg":{"type":"string"},"text":{"type":"string"},"selector":{"type":"object","properties":{"label":{"type":"string"},"viewId":{"type":"string"},"role":{"type":"string"}},"additionalProperties":false}},"required":["kind"],"additionalProperties":false}},"required":["action"],"additionalProperties":false}"""
+        const val ACTION_SCHEMA = """{"type":"object","properties":{"action":{"type":"string","enum":["tap","tap_index","type","scroll","swipe","long_press","back","home","recents","notifications","launch_app","wait","done","blocked","choose_facebook_page"]},"text":{"type":"string"},"index":{"type":"integer"},"field":{"type":"string"},"value":{"type":"string"},"direction":{"type":"string"},"summary":{"type":"string"},"selector":{"type":"object","properties":{"label":{"type":"string"},"viewId":{"type":"string"},"role":{"type":"string"}},"additionalProperties":false},"expect":{"type":"object","properties":{"kind":{"type":"string","enum":["package","visible_text","editable_equals","element","changed"]},"pkg":{"type":"string"},"text":{"type":"string"},"selector":{"type":"object","properties":{"label":{"type":"string"},"viewId":{"type":"string"},"role":{"type":"string"}},"additionalProperties":false}},"required":["kind"],"additionalProperties":false}},"required":["action"],"additionalProperties":false}"""
         /** Static check for WakeWordService: skip "One moment" TTS when the loop is running. */
         @Volatile var activeGoal: String? = null
             private set
@@ -298,7 +315,7 @@ class PhoneAgentLoop(
             return runCatching {
                 val obj = Json.parseToJsonElement(text.substring(start, end + 1)) as JsonObject
                 val type = obj["action"]?.jsonPrimitive?.contentOrNull?.lowercase() ?: return null
-                if (type !in setOf("tap", "tap_index", "type", "scroll", "swipe", "long_press", "back", "home", "recents", "notifications", "launch_app", "wait", "done", "blocked")) return null
+                if (type !in setOf("tap", "tap_index", "type", "scroll", "swipe", "long_press", "back", "home", "recents", "notifications", "launch_app", "wait", "done", "blocked", "choose_facebook_page")) return null
                 val suppliedIndex = obj["index"]?.jsonPrimitive?.contentOrNull?.toIntOrNull()?.takeIf { it in 1..200 }
                 val spokenIndex = if (type == "tap") obj["text"]?.jsonPrimitive?.contentOrNull?.toIntOrNull()?.takeIf { it in 1..200 }
                     ?: suppliedIndex.takeIf { obj["text"]?.jsonPrimitive?.contentOrNull.isNullOrBlank() } else null

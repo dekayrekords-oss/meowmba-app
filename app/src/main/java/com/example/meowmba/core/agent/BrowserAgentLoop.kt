@@ -6,6 +6,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -43,15 +45,18 @@ class BrowserAgentLoop(
 
     val isActive: Boolean get() = goal != null
     private var job: Job? = null
+    private var generation = 0
 
     /** A new instruction from the user (voice or text) while browsing. */
     fun setGoal(newGoal: String) {
+        generation++
         goal = newGoal
         announce("On it — working on the page.")
         restart()
     }
 
     fun clearGoal() {
+        generation++
         goal = null
         job?.cancel()
         job = null
@@ -69,15 +74,23 @@ class BrowserAgentLoop(
     }
 
     private fun restart() {
+        generation++
         job?.cancel()
-        job = scope.launch { runLoop() }
+        val run = generation
+        job = scope.launch {
+            try { runLoop() }
+            catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (_: Exception) { if (run == generation) announce("Page work stopped unexpectedly. The last preview is unchanged; ask me to try again.") }
+            finally { if (run == generation) goal = null }
+        }
     }
 
     private suspend fun runLoop() {
         var steps = 0
         var looks = 0
         var pendingLook = false
-        while (scope.isActive && goal != null) {
+        var attempts = 0
+        while (currentCoroutineContext().isActive && goal != null && attempts++ < MAX_STEPS) {
             delay(if (steps == 0) 250L else stepDelayMs)
             val g = goal ?: break
 
@@ -86,15 +99,13 @@ class BrowserAgentLoop(
                 val href = evalJs("String(location.href)")
                 if (href.contains("meow.local") || href.contains("about:blank")) {
                     announce("Open a URL first, then say scrape this page.")
-                    delay(monitorEveryMs)
-                    continue
+                    return
                 }
                 val result = execute(AgentAction(type = "scrape", name = "scrape"))
                 lastReport = result
                 announce(result.take(240))
                 steps = 1
-                delay(monitorEveryMs)
-                continue
+                return
             }
 
             val isBuild = isBuildGoal(g)
@@ -119,36 +130,35 @@ class BrowserAgentLoop(
                 val fromBrain = brain(planPrompt(g, dom, steps))
                 pickPlanner(fromBrain, null)
             }
+            currentCoroutineContext().ensureActive()
             if (text == null) {
                 announce("I can't reach a model to drive the page. Check Settings for OpenRouter.")
-                delay(monitorEveryMs)
-                continue
+                return
             }
             if (text.startsWith("ERROR:")) {
                 announce(text.removePrefix("ERROR:").trim().take(240))
-                delay(monitorEveryMs)
-                continue
+                return
             }
 
+            currentCoroutineContext().ensureActive()
             var action = parseAction(text)
             if (action == null) {
                 announce(text.take(240))
-                delay(monitorEveryMs)
-                continue
+                return
             }
             if (shouldRefuseDone(isBuild, looks) && action.type == "done") {
                 announce("That's still a draft — restyling it.")
                 val retry = brain(planPrompt(g, currentDom(), steps))
                 action = parseAction(retry.orEmpty()) ?: action
             }
+            currentCoroutineContext().ensureActive()
             publishSource(action)
 
             when (action.type) {
                 "done" -> {
                     lastReport = action.text ?: "Page matches the goal."
                     announce(lastReport!!)
-                    steps = 0
-                    delay(monitorEveryMs)
+                    return
                 }
                 "wait" -> delay(stepDelayMs)
                 "say" -> announce(action.text ?: "")
@@ -159,12 +169,12 @@ class BrowserAgentLoop(
                     steps++
                     if (steps >= MAX_STEPS) {
                         announce("That's $MAX_STEPS changes in a row — tell me to keep going if you want more.")
-                        steps = 0
-                        delay(monitorEveryMs)
+                        return
                     }
                 }
             }
         }
+        announce("Page work reached its limit and stopped. Ask me to continue if you want more changes.")
     }
 
     private fun publishSource(action: AgentAction) {
@@ -194,7 +204,12 @@ class BrowserAgentLoop(
         return brain(prompt)
     }
 
-    private suspend fun execute(a: AgentAction): String = when (a.type) {
+    private suspend fun execute(a: AgentAction): String {
+        currentCoroutineContext().ensureActive()
+        return executeActive(a)
+    }
+
+    private suspend fun executeActive(a: AgentAction): String = when (a.type) {
         "open" -> a.url?.let {
             evalJs("window.location.href = '${jsEscape(it)}'; 'navigating'")
         } ?: "no url"
@@ -250,9 +265,8 @@ class BrowserAgentLoop(
         }
 
         fun isBuildGoal(goal: String): Boolean {
-            val t = goal.lowercase()
-            return t.contains("page") || t.contains("website") || t.contains("web site") ||
-                t.contains("html") || t.contains("landing") || t.contains("site")
+            return com.example.meowmba.core.work.BrowserRequestParser.parse(goal)?.job ==
+                com.example.meowmba.core.work.BrowserJob.BUILD
         }
 
         /** Topic words from a voice goal, for the instant first draft. */

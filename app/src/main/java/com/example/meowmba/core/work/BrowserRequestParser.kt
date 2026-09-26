@@ -16,7 +16,7 @@ object BrowserRequestParser {
 
     fun parse(text: String): BrowserRequest? {
         val raw = text.trim()
-        if (raw.isEmpty()) return null
+        if (raw.isEmpty() || com.example.meowmba.core.agent.SocialPostRequest.matches(raw)) return null
         val t = stripLead(raw.lowercase().replace(Regex("\\s+"), " "))
         if (t.isEmpty()) return null
         val url = extractUrl(raw)

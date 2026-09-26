@@ -416,7 +416,7 @@ object AgentRouter {
         // Direct social drafting is still a phone goal, not proof of a post.
         // Keep the full request for the planner and its final-action gate.
         val socialDraft = Regex("^(?:please )?(?:can you |could you )?(?:make|write|draft|create|compose) (?:me )?(?:a |the |this )?(?:new )?post (?:on|in|for) (linkedin|linked in|linked it|facebook|reddit|instagram|twitter|x)\\b", RegexOption.IGNORE_CASE)
-        if (socialDraft.containsMatchIn(stripLeadIn(stripAddress(raw)))) {
+        if (com.example.meowmba.core.agent.SocialPostRequest.matches(raw) || socialDraft.containsMatchIn(stripLeadIn(stripAddress(raw)))) {
             return AgentIntent("phone_control", "phone.run_goal", mapOf("goal" to raw), raw.take(100))
         }
         // "open X" reaching here means an app, not a workspace file.

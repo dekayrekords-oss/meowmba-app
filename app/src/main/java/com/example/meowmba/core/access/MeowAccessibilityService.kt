@@ -394,6 +394,33 @@ class MeowAccessibilityService : AccessibilityService() {
         } ?: "Confirmation cancelled: verification expired. Nothing was tapped."
     }
 
+    suspend fun chooseFacebookPage(
+        before: com.example.meowmba.core.agent.PhoneObservation,
+        options: List<com.example.meowmba.core.agent.PhoneControl>,
+    ): Int? = kotlinx.coroutines.withTimeoutOrNull(120_000) {
+        if (observeForAgent()?.let(before::sameControls) != true) return@withTimeoutOrNull null
+        kotlinx.coroutines.suspendCancellableCoroutine<Int?> { cont ->
+            val handler = android.os.Handler(mainLooper)
+            fun finish(choice: Int?) {
+                handler.postDelayed({
+                    if (cont.isActive) cont.resume(choice.takeIf {
+                        observeForAgent()?.let(before::sameControls) == true
+                    })
+                }, 350)
+            }
+            val dialog = android.app.AlertDialog.Builder(android.view.ContextThemeWrapper(this@MeowAccessibilityService, android.R.style.Theme_Material_Dialog_Alert))
+                .setTitle("Which Facebook Page/profile?")
+                .setItems(options.map { it.label }.toTypedArray()) { _, choice -> finish(choice) }
+                .setNegativeButton("Cancel") { _, _ -> finish(null) }
+                .setNeutralButton("More pages") { _, _ -> finish(-1) }
+                .create()
+            dialog.setOnCancelListener { finish(null) }
+            dialog.window?.setType(android.view.WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY)
+            cont.invokeOnCancellation { handler.post { dialog.dismiss() } }
+            try { dialog.show() } catch (_: Exception) { if (cont.isActive) cont.resume(null) }
+        }
+    }
+
     private fun confirmationScreen(): String? {
         // Full editable content is included, not the planner's shortened labels.
         val edits = collectInteractiveElements().filter { it.isEditable }.map { readableLabel(it, 8001).orEmpty() }

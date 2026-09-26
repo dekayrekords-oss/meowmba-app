@@ -28,6 +28,7 @@ class VerifiedPhoneRunner(
     private val learningAllowed: () -> Boolean = { true },
     private val verificationTimeoutMs: Long = 8000,
     private val metric: suspend (String) -> Unit = {},
+    private val prepare: suspend (PhoneAction, PhoneObservation) -> PhoneAction = { action, _ -> action },
 ) {
     private suspend fun stable(expect: PhoneExpectation? = null, before: PhoneObservation? = null, action: PhoneAction? = null, targetPackage: String? = null): PhoneObservation? =
         withTimeoutOrNull(if (action == null) settleTimeoutMs.coerceIn(200, 5000) else verificationTimeoutMs.coerceIn(200, 15_000)) {
@@ -67,7 +68,7 @@ class VerifiedPhoneRunner(
             while (attempts++ < maxSteps.coerceIn(1, 40)) {
                 currentCoroutineContext().ensureActive()
                 val fromRecipe = replay != null
-                val action = if (fromRecipe) {
+                val proposed = if (fromRecipe) {
                     if (!learningAllowed()) return@withTimeoutOrNull result(false, "Learned workflow stopped because its settings changed.", "revoked")
                     replayed = true
                     replay!!.getOrNull(replayIndex)?.also {
@@ -81,9 +82,12 @@ class VerifiedPhoneRunner(
                     currentCoroutineContext().ensureActive()
                     planned ?: return@withTimeoutOrNull result(false, "The planner did not return a valid action in time. No completion was verified.", "planner")
                 }
+                val action = prepare(proposed, frame)
+                currentCoroutineContext().ensureActive()
                 val fresh = device.observe()
                 currentCoroutineContext().ensureActive()
                 if (fresh == null || !frame.sameControls(fresh)) {
+                    if (proposed.type == "choose_facebook_page") return@withTimeoutOrNull result(false, "Facebook changed during page selection. Nothing was typed or posted; please retry from its profile picker.", "stale")
                     if (fromRecipe) return@withTimeoutOrNull result(false, "The screen changed during replay. The workflow was stopped.", "stale")
                     history += "Screen changed during planning; action discarded."
                     frame = stable() ?: return@withTimeoutOrNull result(false, "The screen is still changing. No action was taken.", "unstable")
