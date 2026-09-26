@@ -79,7 +79,7 @@ internal fun ComputerToolsScreen(
 ) {
     val uriHandler=LocalUriHandler.current
     var linkError by remember { mutableStateOf<String?>(null) }
-    var history by rememberSaveable { mutableStateOf(listOf(ComputerToolsPage.HOME.name)) }
+    var history by rememberSaveable { mutableStateOf(listOfNotNull(ComputerToolsPage.HOME.name, ComputerToolsLaunch.consume()?.takeIf { it != ComputerToolsPage.HOME }?.name)) }
     val page=ComputerToolsPage.valueOf(history.last())
     fun navigate(next:ComputerToolsPage) { if(next!=page) history=history+next.name }
     val back:()->Unit={ if(history.size>1)history=history.dropLast(1) else onClose() }

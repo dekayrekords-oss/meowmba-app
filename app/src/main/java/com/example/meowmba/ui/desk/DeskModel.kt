@@ -10,24 +10,77 @@ import com.example.meowmba.core.flow.FlowSnapshot
  */
 enum class DeskObject(
     val label: String,
-    /** Tap target in the 412 × 960 scene. */
+    /** Tap target in scene units. The office is x 0–412; the living room is left of it (negative x), the bedroom right (412–824). */
     val left: Float, val top: Float, val width: Float, val height: Float,
     /** Where the cat walks to (scene x of the cat's left edge). */
     val catX: Float,
 ) {
     WINDOW("Window: weather", 232f, 60f, 160f, 220f, 250f),
     PROJECT("Corkboard: project", 16f, 172f, 202f, 182f, 150f),
-    BUILD("Monitor: latest build", 20f, 432f, 104f, 152f, 150f),
-    TODAY("Sticky note: next up", 122f, 418f, 78f, 72f, 150f),
+    /** The computer on the old Gateway 2000: opens Computer and Development Studio. */
+    BUILD("Computer: Development Studio", 18f, 404f, 184f, 196f, 150f),
+    TODAY("Sticky note: next up", 202f, 414f, 66f, 64f, 150f),
     MONEY("Jar: money", 270f, 506f, 68f, 100f, 205f),
     INBOX("Letter tray: messages", 332f, 518f, 78f, 88f, 250f),
-    IDEA("Lamp: an idea from Meow", 194f, 440f, 84f, 164f, 190f),
+    IDEA("Lamp: an idea from Meow", 286f, 404f, 120f, 92f, 190f),
     /** Opens Android's Clock (alarms, timers). */
     CLOCK("Clock: alarms and timers", 34f, 74f, 76f, 76f, 60f),
     /** The desk drawers: folders of apps and Meow tools the user fills. */
     DRAWER_TOP("Top drawer: apps and tools", 30f, 640f, 150f, 42f, 70f),
     DRAWER_BOTTOM("Bottom drawer: apps and tools", 30f, 686f, 150f, 38f, 70f),
+
+    // ---- bedroom (right of the office) ----
+    BIG_WINDOW("Big window: weather", 522f, 86f, 220f, 300f, 546f),
+    /** The old TV and the console under it open the MAME arcade. */
+    ARCADE("Old TV and game console: arcade", 424f, 520f, 128f, 220f, 552f),
+    TOWER_BED("Cat tower by the window", 568f, 356f, 66f, 384f, 546f),
+    BED("Bed", 682f, 576f, 140f, 164f, 702f),
+    FOOD("Food tray", 632f, 692f, 52f, 48f, 562f),
+    LITTER("Litter box", 504f, 684f, 60f, 56f, 478f),
+
+    // ---- living room (left of the office) ----
+    BOOKSHELF("Bookshelf: audiobooks and the manual", -402f, 420f, 82f, 320f, -382f),
+    BIG_TV("Big-screen TV: what's on YouTube", -272f, 336f, 190f, 118f, -242f),
+    STEREO("Stereo: what's playing", -150f, 576f, 142f, 164f, -192f),
+    COUCH("Couch", -266f, 628f, 116f, 112f, -242f),
+    TOWER_LIVING("Cat tower in the living room", -316f, 466f, 44f, 274f, -342f),
+    ;
+
+    val room: DeskRoom get() = DeskRoom.of(left + width / 2 - 55f)
+    /** Objects the cat uses on its own; tapping them sends the cat there, no panel opens. */
+    val catOnly: Boolean get() = this in setOf(TOWER_BED, BED, FOOD, LITTER, COUCH, TOWER_LIVING)
 }
+
+/** The three rooms of Meow's place, left to right. Scene x ranges; the office is the original Desk. */
+enum class DeskRoom(val label: String, val left: Float, val right: Float) {
+    LIVING("Living room", -412f, 0f), OFFICE("Office", 0f, 412f), BEDROOM("Bedroom", 412f, 824f);
+
+    val center: Float get() = (left + right) / 2
+
+    companion object {
+        const val APT_LEFT = -412f
+        const val APT_RIGHT = 824f
+        const val APT_WIDTH = APT_RIGHT - APT_LEFT
+        /** The room the cat is in; [catX] is the cat's left edge (the sprite is 110 wide). */
+        fun of(catX: Float): DeskRoom { val c = catX + 55f; return when { c < 0f -> LIVING; c < 412f -> OFFICE; else -> BEDROOM } }
+    }
+}
+
+/** Something playing on the phone, as shown on the stereo, the TV or the bookshelf. */
+data class RoomMedia(val title: String, val subtitle: String? = null, val playing: Boolean = false, val app: String? = null)
+
+/** One Development Studio project, as the desk computer lists it. */
+data class StudioLine(val name: String, val status: String)
+
+/** Live things in the rest of the apartment. Empty stays empty: nothing is invented. */
+data class RoomState(
+    val music: RoomMedia? = null,
+    val video: RoomMedia? = null,
+    val audiobook: RoomMedia? = null,
+    /** False when Android's notification access (which media titles need) is off. */
+    val mediaAccess: Boolean = true,
+    val studio: List<StudioLine> = emptyList(),
+)
 
 /** App facts the Desk shows that don't come from Flow items (project status, build, weather). */
 data class DeskFacts(
@@ -62,10 +115,11 @@ data class DeskState(
     val trayCount: Int,
     val jarNote: String?,
     val lampOn: Boolean,
+    val room: RoomState = RoomState(),
 ) {
     companion object {
         /** Binds a Flow snapshot + app facts to desk objects (master plan §9.1 table). */
-        fun from(snapshot: FlowSnapshot, facts: DeskFacts, open: List<com.example.meowmba.core.flow.Intention>? = null): DeskState {
+        fun from(snapshot: FlowSnapshot, facts: DeskFacts, open: List<com.example.meowmba.core.flow.Intention>? = null, room: RoomState = RoomState()): DeskState {
             val items = listOfNotNull(snapshot.main) + snapshot.more
             // Prefer every open intention (the tray counts everyone waiting, not just the 4 shown in Flow).
             val people = open?.count { it.kind == FlowKind.PEOPLE } ?: items.count { it.kind == FlowKind.PEOPLE }
@@ -78,12 +132,13 @@ data class DeskState(
                 projectTitle = facts.projectTitle, tallyDone = facts.tallyDone.coerceIn(0, facts.tallyTotal.coerceAtLeast(0)),
                 tallyTotal = facts.tallyTotal.coerceIn(0, MAX_TALLY), projectStatus = facts.projectStatus,
                 pinnedNote = facts.pinnedNote.take(2),
-                monitorLines = facts.monitorLines.take(3),
+                monitorLines = facts.monitorLines.take(4),
                 sticky = sticky,
                 trayCount = people,
                 jarNote = facts.jarNote ?: moneyText?.let(::shortMoney),
                 // With the full list, the caller decides (facts.ideaQueued); otherwise fall back to what Flow shows.
                 lampOn = facts.ideaQueued || (open == null && snapshot.interrupt == null && items.any { it.kind == FlowKind.OTHER }),
+                room = room,
             )
         }
 

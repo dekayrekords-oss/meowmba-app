@@ -24,7 +24,7 @@ class HomeNavigationRegressionTest {
     @get:Rule val rule = createAndroidComposeRule<androidx.activity.ComponentActivity>()
     private val desk = DeskState.from(FlowSnapshot.EMPTY, DeskFacts())
 
-    private fun checkEveryObject(reducedMotion: Boolean) {
+    private fun checkEveryObject(reducedMotion: Boolean, allRooms: Boolean = false) {
         rule.mainClock.autoAdvance = false
         var clocks = 0
         rule.setContent { MeowmbaTheme {
@@ -35,12 +35,14 @@ class HomeNavigationRegressionTest {
         rule.onNodeWithTag("desk_${DeskObject.CLOCK.name.lowercase()}").performTouchInput { click(center) }
         rule.waitForIdle()
         org.junit.Assert.assertEquals(1, clocks)
-        DeskObject.entries.filter { it != DeskObject.CLOCK }.forEach { obj ->
+        // Objects the cat uses on its own open no panel; the arcade launches MAME when installed.
+        // Folded, only the office is on screen; the wide layout shows all three rooms.
+        DeskObject.entries.filter { it != DeskObject.CLOCK && !it.catOnly && (allRooms || it.room == DeskRoom.OFFICE) }.forEach { obj ->
             // Coordinate dispatch catches overlays, offset/scale errors and tiny hit targets.
             rule.onNodeWithTag("desk_${obj.name.lowercase()}").performTouchInput { click(center) }
             rule.waitForIdle()
             repeat(180) { rule.mainClock.advanceTimeByFrame(); rule.waitForIdle() }
-            rule.onNodeWithTag("desk_detail").assertIsDisplayed()
+            try { rule.onNodeWithTag("desk_detail").assertIsDisplayed() } catch (e: AssertionError) { throw AssertionError("$obj opened no panel", e) }
             rule.onNode(hasText(deskTitle(obj)) and hasAnyAncestor(hasTestTag("desk_detail")), useUnmergedTree = true).assertIsDisplayed()
             rule.onNodeWithText("Close").performTouchInput { click() }
             rule.waitForIdle()
@@ -52,7 +54,7 @@ class HomeNavigationRegressionTest {
     @Test fun everyDeskObjectOpensItsOwnSheetByTouch() = checkEveryObject(false)
 
     @Test @Config(qualifiers = "w840dp-h460dp-xxhdpi")
-    fun centeredWideDeskTargetsWorkWithReducedMotion() = checkEveryObject(true)
+    fun centeredWideDeskTargetsWorkWithReducedMotion() = checkEveryObject(true, allRooms = true)
 
     @Test fun deskHasVisibleMenuSettingsAndFlowWithoutGestures() {
         var menus = 0; var settings = 0; var flows = 0

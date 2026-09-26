@@ -57,6 +57,8 @@ internal fun DevelopmentStudioPanel() {
             batch.append(next)
         }
         output = DevelopmentStudioPolicy.appendOutput(output, batch.toString().takeLast(64_000))
+        // The Desk computer lists Studio projects from these same status lines (kept on this phone).
+        DevStudioProjects.get(context).record(batch.toString())
         DevelopmentApkReceipt.latest(output)?.let {
             if (receiptText != it.line) { receiptText = it.line; preparedApk = null }
         }

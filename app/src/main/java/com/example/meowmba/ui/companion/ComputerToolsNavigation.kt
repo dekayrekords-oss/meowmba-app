@@ -25,3 +25,9 @@ internal fun sameComputerConnection(a: ConnectionProfile?, b: ConnectionProfile?
         a.port == b.port && a.username == b.username && a.credentialRef == b.credentialRef &&
         a.workspaceRoot == b.workspaceRoot && a.hostKeyFingerprint == b.hostKeyFingerprint &&
         a.pinHostKeyOnFirstConnect == b.pinHostKeyOnFirstConnect
+
+/** A one-time request to open Computer on a specific page (the Desk computer opens Development Studio). */
+internal object ComputerToolsLaunch {
+    @Volatile var next: ComputerToolsPage? = null
+    fun consume(): ComputerToolsPage? = next.also { next = null }
+}

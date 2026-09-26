@@ -11902,7 +11902,22 @@ class CompanionViewModel(
     }
 
 
+    /** Flow or Desk to restore after a drive showed the avatar; see [DriveAvatarPolicy]. */
+    private var driveThemeReturn: AppTheme? = null
+
+    private fun applyDriveAvatar(driving: Boolean) {
+        val current = _uiState.value.appTheme
+        val (show, returnTo) = DriveAvatarPolicy.onDriving(driving, current, driveThemeReturn)
+        driveThemeReturn = returnTo
+        if (show != current) {
+            // Not saved: the user's chosen home stays Flow/Desk across restarts.
+            _uiState.value = _uiState.value.copy(appTheme = show)
+            syncMotionSense()
+        }
+    }
+
     fun setAppTheme(theme: AppTheme) {
+        driveThemeReturn = null // the user's own choice wins over the drive switch
         _uiState.value = _uiState.value.copy(appTheme = theme)
         secureStorage?.savePreference("app_theme", theme.key)
         syncMotionSense()
@@ -12434,6 +12449,7 @@ class CompanionViewModel(
             driveReaction = reaction, driveReason = s.reason, driveManual = s.manualOverride,
         )
         if (active) idleFormCycler?.stop() else startIdleFormCyclerIfNeeded()
+        applyDriveAvatar(active)
         driveReactionExpiry?.cancel()
         if (reaction in setOf(DriveReaction.LEAN_LEFT, DriveReaction.LEAN_RIGHT, DriveReaction.LURCH)) {
             driveReactionExpiry = viewModelScope.launch {

@@ -52,15 +52,41 @@ internal fun DeskRoute(vm: CompanionViewModel, state: CompanionState, paused: Bo
         catReply = replies.observe(state.activeConversationId, state.deskReplySequence, state.deskReplyConversationId, state.deskReplyText,
             state.liveReplyConversationId, state.liveAssistantReply, catActivity)
     }
+    val context = LocalContext.current
+    // The rooms' stereo, TV and bookshelf follow media sessions only while the Desk is on screen.
+    val watcher = remember { com.example.meowmba.core.media.RoomMediaWatcher(context.applicationContext) }
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, watcher) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) watcher.start()
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_PAUSE) watcher.stop()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        if (lifecycleOwner.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) watcher.start()
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer); watcher.stop() }
+    }
+    val media by watcher.now.collectAsState()
+    val studio by com.example.meowmba.core.computer.DevStudioProjects.get(context).projects.collectAsState()
     val facts = deskFacts(now, tasks, state.projects.firstOrNull(), weather?.let { "${it.temperatureF}° ${it.condition.label.lowercase()}" },
         weather?.let { !it.isDay }).let { f -> mainStar?.let {
             f.copy(projectTitle = it.star.title.take(28), projectStatus = it.nextStep.take(55))
-        } ?: f }
-    val context = LocalContext.current
+        } ?: f }.let { studioFacts(it, studio) }
+    val room = roomState(media, studio, now)
+    val roomActions = remember(context, watcher, vm) { DeskRoomActions(
+        openComputer = vm::openComputerTools,
+        openStudio = { ComputerToolsLaunch.next = ComputerToolsPage.DEVELOPMENT; vm.openComputerTools() },
+        openArcade = { RoomApps.launchFirst(context, RoomApps.MAME) },
+        getArcade = { RoomApps.store(context, RoomApps.MAME.first()) },
+        toggle = watcher::togglePlay, next = watcher::next,
+        openApp = { kind -> RoomApps.openFor(context, kind, watcher.now.value) },
+        allowMedia = { runCatching { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) } },
+        manual = { runCatching { context.assets.open("manual/meow_manual.md").bufferedReader().use { it.readText() } }.getOrDefault("") },
+    ) }
     val scope = rememberCoroutineScope()
     var attach by remember { mutableStateOf(false) }
     var northStarOpen by remember { mutableStateOf(false) }
-    DeskWorkspace(DeskState.from(snap, facts, tasks), tasks, modifier, paused = paused,
+    DeskWorkspace(DeskState.from(snap, facts, tasks, room), tasks, modifier, paused = paused, roomActions = roomActions,
         fpsTarget = state.avatarFpsTarget, interactive = interactive,
         catActivity = catActivity, catReply = catReply, onAsk = vm::onUserTextSubmitted,
         onMenu = vm::openTiles, onSettings = vm::toggleSettings, onWork = { vm.openTaskHistory() },
@@ -122,7 +148,6 @@ internal fun deskFacts(now: Long, open: List<Intention>, project: ProjectUi?, we
         night = night ?: (time.hour >= 19 || time.hour < 6),
         projectTitle = project?.name?.take(18).orEmpty(),
         projectStatus = project?.let { "${it.kindLabel} · ${it.whenLabel}".take(24) }.orEmpty(),
-        pinnedNote = listOf("Meow", BuildConfig.VERSION_NAME),
         weatherLine = weatherLine,
         nextEventTime = sticky.first(), nextEventWords = sticky.drop(1),
         monitorLines = listOfNotNull(
@@ -133,6 +158,69 @@ internal fun deskFacts(now: Long, open: List<Intention>, project: ProjectUi?, we
         ).take(3),
         ideaQueued = tasks.any { it.kind == FlowKind.OTHER && !it.id.startsWith(AppIntentions.SETUP) },
     )
+}
+
+/** The Desk computer shows Development Studio projects on its screen and a note on the corkboard. */
+internal fun studioFacts(f: DeskFacts, studio: List<com.example.meowmba.core.computer.StudioProject>): DeskFacts =
+    if (studio.isEmpty()) f else f.copy(
+        monitorLines = studio.take(2).flatMap { listOf(MonitorLine("> " + it.name, true), MonitorLine("  " + it.lastEvent)) },
+        pinnedNote = listOf("Studio", "${studio.size} project" + if (studio.size == 1) "" else "s"),
+    )
+
+internal fun roomState(media: com.example.meowmba.core.media.RoomNowPlaying, studio: List<com.example.meowmba.core.computer.StudioProject>, now: Long) = RoomState(
+    music = media.music?.let { RoomMedia(it.title, it.subtitle, it.playing, it.packageName) },
+    video = media.video?.let { RoomMedia(it.title, it.subtitle, it.playing, it.packageName) },
+    audiobook = media.audiobook?.let { RoomMedia(it.title, it.subtitle, it.playing, it.packageName) },
+    mediaAccess = media.access,
+    studio = studio.take(8).map { StudioLine(it.name, "${it.lastEvent} · ${com.example.meowmba.core.computer.DevStudioLog.ago(it.at, now)}") },
+)
+
+/** What the living room and bedroom can do. Everything is a user tap; nothing runs by itself. */
+internal class DeskRoomActions(
+    val openComputer: () -> Unit = {},
+    val openStudio: () -> Unit = {},
+    /** Opens MAME4droid; false when it isn't installed. */
+    val openArcade: () -> Boolean = { false },
+    val getArcade: () -> Unit = {},
+    val toggle: (com.example.meowmba.core.media.MediaKind) -> Unit = {},
+    val next: (com.example.meowmba.core.media.MediaKind) -> Unit = {},
+    val openApp: (com.example.meowmba.core.media.MediaKind) -> Unit = {},
+    val allowMedia: () -> Unit = {},
+    val manual: () -> String = { "" },
+)
+
+/** Opening other apps from the rooms. Launcher-visible apps only (manifest <queries>). */
+internal object RoomApps {
+    val MAME = listOf("com.seleuco.mame4d2024", "com.seleuco.mame4droid", "com.seleuco.mame4all")
+
+    fun launch(context: android.content.Context, pkg: String): Boolean =
+        context.packageManager.getLaunchIntentForPackage(pkg)?.let { intent ->
+            runCatching { context.startActivity(intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
+        } ?: false
+
+    fun launchFirst(context: android.content.Context, pkgs: List<String>) = pkgs.any { launch(context, it) }
+
+    /** Google Play's page for an app: the user decides whether to install. */
+    fun store(context: android.content.Context, pkg: String) {
+        val market = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("market://details?id=$pkg"))
+        val web = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://play.google.com/store/apps/details?id=$pkg"))
+        for (i in listOf(market, web)) if (runCatching { context.startActivity(i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess) return
+    }
+
+    fun openFor(context: android.content.Context, kind: com.example.meowmba.core.media.MediaKind, now: com.example.meowmba.core.media.RoomNowPlaying) {
+        val current = when (kind) {
+            com.example.meowmba.core.media.MediaKind.MUSIC -> now.music
+            com.example.meowmba.core.media.MediaKind.VIDEO -> now.video
+            com.example.meowmba.core.media.MediaKind.AUDIOBOOK -> now.audiobook
+        }?.packageName
+        val fallbacks = when (kind) {
+            com.example.meowmba.core.media.MediaKind.VIDEO -> listOf("com.google.android.youtube")
+            com.example.meowmba.core.media.MediaKind.AUDIOBOOK -> com.example.meowmba.core.media.RoomMediaWatcher.AUDIOBOOK_APPS
+            com.example.meowmba.core.media.MediaKind.MUSIC -> listOf("com.spotify.music", "com.google.android.apps.youtube.music", "com.sec.android.app.music")
+        }
+        if (!launchFirst(context, listOfNotNull(current) + fallbacks))
+            android.widget.Toast.makeText(context, "No app for that is installed.", android.widget.Toast.LENGTH_SHORT).show()
+    }
 }
 
 private fun wrap(text: String, lines: Int, width: Int = 9): List<String> {
@@ -164,12 +252,15 @@ internal fun DeskWorkspace(desk: DeskState, tasks: List<Intention>, modifier: Mo
     drawerContent: (@Composable (top: Boolean, close: () -> Unit) -> Unit)? = null,
     /** Side dock, drawn above the scene. */
     dock: (@Composable () -> Unit)? = null,
-    onWork: (() -> Unit)? = null) {
+    onWork: (() -> Unit)? = null,
+    roomActions: DeskRoomActions = DeskRoomActions()) {
     var selected by rememberSaveable { mutableStateOf<DeskObject?>(null) }
     var asking by rememberSaveable { mutableStateOf(false) }
     var question by rememberSaveable { mutableStateOf("") }
     BoxWithConstraints(modifier.fillMaxSize()) {
-        val wide = maxWidth > maxHeight
+        // Only a short (landscape phone) screen puts Menu · Flow · Settings down the side; the
+        // unfolded panorama keeps it along the bottom instead of floating over the living room.
+        val wide = maxHeight < 480.dp
         val insets = WindowInsets.safeDrawing.asPaddingValues()
         DeskHabitat(desk, Modifier.fillMaxSize(), thermalStatus = thermalStatus,
             topInset = insets.calculateTopPadding() + 8.dp,
@@ -183,7 +274,9 @@ internal fun DeskWorkspace(desk: DeskState, tasks: List<Intention>, modifier: Mo
                 if (interactive) {
                     if (it == DeskObject.CLOCK) onClock()
                     else if (it == DeskObject.PROJECT && onNorthStar != null) onNorthStar()
-                    else selected = it
+                    // The console hands straight over to the arcade; the panel only explains how to get it.
+                    else if (it == DeskObject.ARCADE) { if (!roomActions.openArcade()) selected = it }
+                    else if (!it.catOnly) selected = it
                 }
             })
         if (interactive && onAsk != null) FilledTonalButton(onClick = { asking = true },
@@ -222,15 +315,21 @@ internal fun DeskWorkspace(desk: DeskState, tasks: List<Intention>, modifier: Mo
                 Spacer(Modifier.height(20.dp))
                 return@Column
             }
-            val relevant = when (obj) {
+            if (obj in ROOM_PANELS) {
+                DeskRoomPanel(obj, desk, roomActions, close = { selected = null }, onWork = onWork)
+                Spacer(Modifier.height(20.dp))
+                return@Column
+            }
+            val o = if (obj == DeskObject.BIG_WINDOW) DeskObject.WINDOW else obj
+            val relevant = when (o) {
                 DeskObject.MONEY -> tasks.filter { it.kind == FlowKind.MONEY }
                 DeskObject.INBOX -> tasks.filter { it.kind == FlowKind.PEOPLE }
                 DeskObject.IDEA -> tasks.filter { it.kind == FlowKind.OTHER || it.kind == FlowKind.ERRAND }
                 DeskObject.PROJECT, DeskObject.BUILD -> tasks.filter { it.kind == FlowKind.WORK }
                 DeskObject.TODAY -> tasks.sortedBy { it.dueAt ?: Long.MAX_VALUE }
-                DeskObject.WINDOW, DeskObject.CLOCK, DeskObject.DRAWER_TOP, DeskObject.DRAWER_BOTTOM -> emptyList()
+                else -> emptyList()
             }
-            val summary = when (obj) {
+            val summary = when (o) {
                 DeskObject.WINDOW -> desk.weatherLine ?: "Weather isn't set up yet. Open Weather to choose a location."
                 DeskObject.PROJECT -> if (desk.projectTitle.isBlank()) "No project yet. Open Projects to start one." else "${desk.projectTitle} · ${desk.projectStatus}"
                 DeskObject.BUILD -> "${tasks.size} open, ${tasks.count { it.kind == FlowKind.PEOPLE }} people waiting."
@@ -238,13 +337,13 @@ internal fun DeskWorkspace(desk: DeskState, tasks: List<Intention>, modifier: Mo
                 DeskObject.INBOX -> if (relevant.isEmpty()) "Nobody is waiting on you." else "People waiting on you."
                 DeskObject.MONEY -> if (relevant.isEmpty()) "Nothing due." else "Money things coming up."
                 DeskObject.IDEA -> if (relevant.isEmpty()) "No ideas or errands waiting." else "Things you asked Meow to keep in mind."
-                DeskObject.CLOCK, DeskObject.DRAWER_TOP, DeskObject.DRAWER_BOTTOM -> ""
+                else -> ""
             }
             Text(summary, style = MaterialTheme.typography.bodyLarge, color = Color(0xFFBED0CD))
             if (obj == DeskObject.BUILD && onWork != null) OutlinedButton(onClick = { selected = null; onWork() },
                 modifier = Modifier.testTag("desk_monitor_work")) { Text("Meow’s work") }
             relevant.take(12).forEach { task -> DeskTaskRow(task, onTaskDone, onTaskLater) }
-            val action = when (obj) {
+            val action = when (o) {
                 DeskObject.WINDOW -> "Open Weather" to onWeather
                 DeskObject.PROJECT -> "Open Projects" to onProjects
                 DeskObject.BUILD -> "App settings" to onSettings
@@ -278,17 +377,27 @@ internal fun deskLine(obj: DeskObject, s: DeskState): String = when (obj) {
     DeskObject.MONEY -> s.jarNote?.let { "$it is coming up." } ?: "Nothing due."
     DeskObject.TODAY -> if (s.sticky.firstOrNull() == "All clear") "Nothing next. Nice." else "Next: ${s.sticky.drop(1).joinToString(" ")}"
     DeskObject.PROJECT -> if (s.projectTitle.isBlank()) "No project pinned yet." else "Back to ${s.projectTitle}?"
-    DeskObject.BUILD -> s.monitorLines.firstOrNull()?.text?.removePrefix("> ") ?: "All quiet."
+    DeskObject.BUILD -> s.room.studio.firstOrNull()?.let { "${it.name}: ${it.status}" } ?: s.monitorLines.firstOrNull()?.text?.removePrefix("> ") ?: "All quiet."
     DeskObject.IDEA -> if (s.lampOn) "I'm keeping a few things in mind for you." else "No ideas waiting."
     DeskObject.WINDOW -> s.weatherLine ?: "Weather isn't set up yet."
     DeskObject.CLOCK -> "Opening your clock."
     DeskObject.DRAWER_TOP, DeskObject.DRAWER_BOTTOM -> "Here's what's in the drawer."
+    DeskObject.BIG_WINDOW -> s.weatherLine?.let { "$it. Nice view." } ?: "Nice view."
+    DeskObject.ARCADE -> "Player one, ready."
+    DeskObject.TOWER_BED -> "Best seat in the house."
+    DeskObject.BED -> "Nap time."
+    DeskObject.FOOD -> "Snack break!"
+    DeskObject.LITTER -> "A little privacy, please."
+    DeskObject.BOOKSHELF -> s.room.audiobook?.let { "Listening to ${it.title}." } ?: "Audiobooks, and the Meow manual."
+    DeskObject.BIG_TV -> s.room.video?.let { "On YouTube: ${it.title}" } ?: "Nothing on YouTube right now."
+    DeskObject.STEREO -> s.room.music?.let { "♪ ${it.title}${it.subtitle?.let { a -> " · $a" } ?: ""}" } ?: "The stereo's quiet."
+    DeskObject.COUCH -> "Couch time."
+    DeskObject.TOWER_LIVING -> "Up I go!"
 }
 
 internal fun deskTitle(obj: DeskObject) = when (obj) {
     DeskObject.WINDOW -> "Weather"
     DeskObject.PROJECT -> "Projects"
-    DeskObject.BUILD -> "Work"
     DeskObject.TODAY -> "Next up"
     DeskObject.MONEY -> "Money"
     DeskObject.INBOX -> "People waiting"
@@ -296,4 +405,104 @@ internal fun deskTitle(obj: DeskObject) = when (obj) {
     DeskObject.CLOCK -> "Clock"
     DeskObject.DRAWER_TOP -> "Top drawer"
     DeskObject.DRAWER_BOTTOM -> "Bottom drawer"
+    DeskObject.BUILD -> "Computer"
+    DeskObject.BIG_WINDOW -> "Weather"
+    DeskObject.ARCADE -> "Arcade"
+    DeskObject.BOOKSHELF -> "Bookshelf"
+    DeskObject.BIG_TV -> "TV"
+    DeskObject.STEREO -> "Stereo"
+    else -> obj.label
+}
+
+private val ROOM_PANELS = setOf(DeskObject.BUILD, DeskObject.STEREO, DeskObject.BIG_TV, DeskObject.BOOKSHELF, DeskObject.ARCADE)
+private val SHEET_TEXT = Color(0xFFF4EEDB)
+private val SHEET_MUTE = Color(0xFFBED0CD)
+
+/** Panels for the computer, the stereo, the TV, the bookshelf and the arcade. */
+@Composable
+private fun DeskRoomPanel(obj: DeskObject, desk: DeskState, actions: DeskRoomActions, close: () -> Unit, onWork: (() -> Unit)?) {
+    val r = desk.room
+    when (obj) {
+        DeskObject.BUILD -> {
+            Text(if (r.studio.isEmpty()) "No Development Studio projects yet. Open Development Studio and name a project; it shows up here."
+                else "Development Studio projects, most recent first.", style = MaterialTheme.typography.bodyLarge, color = SHEET_MUTE)
+            r.studio.forEach { p ->
+                Column(Modifier.fillMaxWidth().padding(top = 12.dp).testTag("desk_studio_" + p.name)) {
+                    Text(p.name, style = MaterialTheme.typography.titleMedium)
+                    Text(p.status, style = MaterialTheme.typography.bodyMedium, color = SHEET_MUTE)
+                }
+                HorizontalDivider(Modifier.padding(top = 8.dp), color = Color(0xFF33505A))
+            }
+            Button(onClick = { close(); actions.openStudio() }, modifier = Modifier.padding(top = 20.dp).fillMaxWidth().heightIn(min = 48.dp)
+                .testTag("desk_open_studio")) { Text("Development Studio") }
+            OutlinedButton(onClick = { close(); actions.openComputer() }, border = BorderStroke(2.dp, Color(0xFF819F9F)),
+                modifier = Modifier.padding(top = 8.dp).fillMaxWidth().heightIn(min = 48.dp).testTag("desk_open_computer")) { Text("Open Computer", color = SHEET_TEXT) }
+            if (onWork != null) TextButton(onClick = { close(); onWork() }, modifier = Modifier.padding(top = 4.dp).testTag("desk_monitor_work")) { Text("Meow’s work", color = SHEET_TEXT) }
+        }
+        DeskObject.STEREO -> MediaPanel(com.example.meowmba.core.media.MediaKind.MUSIC, r.music, r.mediaAccess, "Nothing is playing. Start music in any app and the stereo shows it.", actions)
+        DeskObject.BIG_TV -> MediaPanel(com.example.meowmba.core.media.MediaKind.VIDEO, r.video, r.mediaAccess, "Nothing on YouTube right now. Play a video and the TV shows it.", actions)
+        DeskObject.BOOKSHELF -> {
+            MediaPanel(com.example.meowmba.core.media.MediaKind.AUDIOBOOK, r.audiobook, r.mediaAccess, "No audiobook playing.", actions)
+            var reading by rememberSaveable { mutableStateOf(false) }
+            OutlinedButton(onClick = { reading = !reading }, border = BorderStroke(2.dp, Color(0xFF819F9F)),
+                modifier = Modifier.padding(top = 16.dp).fillMaxWidth().heightIn(min = 48.dp).testTag("desk_manual")) {
+                Text(if (reading) "Close the manual" else "Read the Meow manual", color = SHEET_TEXT)
+            }
+            if (reading) ManualText(remember { actions.manual() })
+        }
+        DeskObject.ARCADE -> {
+            Text("The old console opens the MAME arcade (MAME4droid). It isn’t installed on this phone yet. MAME4droid is free on Google Play; you’ll need your own game files.",
+                style = MaterialTheme.typography.bodyLarge, color = SHEET_MUTE)
+            Button(onClick = { close(); actions.getArcade() }, modifier = Modifier.padding(top = 20.dp).fillMaxWidth().heightIn(min = 48.dp)
+                .testTag("desk_get_arcade")) { Text("View MAME4droid on Google Play") }
+        }
+        else -> Unit
+    }
+}
+
+@Composable
+private fun MediaPanel(kind: com.example.meowmba.core.media.MediaKind, now: RoomMedia?, access: Boolean, empty: String, actions: DeskRoomActions) {
+    if (!access) {
+        Text("To show what's playing, Meow needs Android's notification access. Meow reads media titles only while this room is on screen, and never uses the microphone for this.",
+            style = MaterialTheme.typography.bodyLarge, color = SHEET_MUTE)
+        Button(onClick = actions.allowMedia, modifier = Modifier.padding(top = 16.dp).fillMaxWidth().heightIn(min = 48.dp)) { Text("Allow media info") }
+        return
+    }
+    if (now == null) Text(empty, style = MaterialTheme.typography.bodyLarge, color = SHEET_MUTE)
+    else Column(Modifier.testTag("desk_now_playing")) {
+        Text(if (now.playing) "Playing" else "Paused", style = MaterialTheme.typography.labelLarge, color = Color(0xFFC6EB78))
+        Text(now.title, style = MaterialTheme.typography.titleLarge)
+        now.subtitle?.let { Text(it, style = MaterialTheme.typography.bodyLarge, color = SHEET_MUTE) }
+        Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { actions.toggle(kind) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (now.playing) "Pause" else "Play") }
+            if (kind != com.example.meowmba.core.media.MediaKind.AUDIOBOOK)
+                OutlinedButton(onClick = { actions.next(kind) }, border = BorderStroke(2.dp, Color(0xFF819F9F)), modifier = Modifier.heightIn(min = 48.dp)) { Text("Next", color = SHEET_TEXT) }
+        }
+    }
+    val app = when (kind) { com.example.meowmba.core.media.MediaKind.MUSIC -> "Open music"; com.example.meowmba.core.media.MediaKind.VIDEO -> "Open YouTube"; else -> "Open audiobooks" }
+    OutlinedButton(onClick = { actions.openApp(kind) }, border = BorderStroke(2.dp, Color(0xFF819F9F)),
+        modifier = Modifier.padding(top = 12.dp).fillMaxWidth().heightIn(min = 48.dp)) { Text(app, color = SHEET_TEXT) }
+}
+
+/** The manual's small Markdown subset: # headings, bullets and **bold**. */
+@Composable
+private fun ManualText(md: String) {
+    Column(Modifier.padding(top = 12.dp).testTag("desk_manual_text")) {
+        md.lines().forEach { raw ->
+            val line = raw.trimEnd()
+            when {
+                line.startsWith("# ") -> Text(line.removePrefix("# "), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(top = 8.dp))
+                line.startsWith("## ") -> Text(line.removePrefix("## "), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 16.dp))
+                line.isBlank() -> Spacer(Modifier.height(6.dp))
+                else -> Text(bold(if (line.startsWith("- ")) "•  " + line.removePrefix("- ") else line), style = MaterialTheme.typography.bodyMedium, color = SHEET_MUTE)
+            }
+        }
+    }
+}
+
+private fun bold(text: String) = androidx.compose.ui.text.buildAnnotatedString {
+    text.split("**").forEachIndexed { i, part ->
+        if (i % 2 == 1) with(this) { pushStyle(androidx.compose.ui.text.SpanStyle(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = SHEET_TEXT)); append(part); pop() }
+        else append(part)
+    }
 }
