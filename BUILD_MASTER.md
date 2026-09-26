@@ -3,9 +3,19 @@
 Updated 2026-09-25. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
 This supersedes historical build-location/version instructions in other documents.
 
-- September25 **181 / 1.5.15 reserved by Codex**: wireless-charger avatar and
-  optional launcher onboarding. Implementation/validation in progress; not installed.
-  One build owner; preserve preview180 and its runtime assets.
+- September25 **181 / 1.5.15 prepared by Codex**: opt-in wireless-charger avatar
+  (foreground or separately approved background opening, unlock deferral, silent
+  notification fallback, coil-dropout debounce) and optional HOME-role onboarding.
+  Source `a08b5e2970bf6fd483ff7e11cdb22f419e1a35dd`. Full3,070 JVM tests: zero
+  failures/errors, five existing skips. Lint0errors/205warnings/12hints; three new
+  warnings are KTX style suggestions. Signature/16KB alignment pass; all162
+  protected180 runtime entries preserved. APK/receipt: Os `work/charging-181/`;
+  SHA256 `9fa8b05f152eeaca2701bfce89dd378d0639b0ea5215f0d844eb0d4aef924e6d`.
+  Owner explicitly chose **Skip emulator installation**; no emulator/phone install,
+  native startup/UI check, default-home change, permission grant or robot action.
+  Phone remains180. Actual charger/background/unlock acceptance pending. Android
+  reports wireless power, not magnets/charger identity; process must be running.
+  Details: `docs/CHARGING_LAUNCHER_181.md`. **181 consumed; next182**.
 
 - September25 **180 / 1.5.14 prepared by Codex**: on-demand Development Studio;
   manual Claude Code/OpenCode, bounded per-file checkpoints/Keep/Undo, local website
