@@ -77,4 +77,26 @@ class WirelessAvatarMonitorTest {
         assertTrue(notifications().isEmpty())
         assertNull(shadowOf(app).nextStartedActivity)
     }
+    @Test fun lockedCoilDropoutStillShowsOnceAfterPowerReturnsAndUserUnlocks() {
+        shadowOf(app.getSystemService(KeyguardManager::class.java)).setKeyguardLocked(true)
+        power(4)
+        power(0)
+        power(4)
+        assertTrue(notifications().isEmpty())
+        shadowOf(app.getSystemService(KeyguardManager::class.java)).setKeyguardLocked(false)
+        app.sendBroadcast(Intent(Intent.ACTION_USER_PRESENT))
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(800))
+        assertEquals(1, notifications().size)
+    }
+    @Test fun unknownPowerReadingCannotDeliverPendingLockedRequest() {
+        shadowOf(app.getSystemService(KeyguardManager::class.java)).setKeyguardLocked(true)
+        power(4)
+        power(-1)
+        shadowOf(app.getSystemService(KeyguardManager::class.java)).setKeyguardLocked(false)
+        app.sendBroadcast(Intent(Intent.ACTION_USER_PRESENT))
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(800))
+        assertTrue(notifications().isEmpty())
+        power(4)
+        assertEquals(1, notifications().size)
+    }
 }

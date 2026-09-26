@@ -55,8 +55,14 @@ class WirelessAvatarMonitor(private val app: Application) : Application.Activity
     private fun evaluate() {
         val enabled = prefs.getBoolean(ENABLED, false)
         if (policy.update(plugged, enabled, SystemClock.elapsedRealtime())) pending = true
-        if (!enabled || (plugged >= 0 && plugged and BatteryManager.BATTERY_PLUGGED_WIRELESS == 0)) {
+        if (!enabled) {
             pending = false
+            notifications().cancel(NOTIFICATION)
+            return
+        }
+        if (plugged < 0 || plugged and BatteryManager.BATTERY_PLUGGED_WIRELESS == 0) {
+            // Never navigate without a current wireless reading. Retain an undelivered
+            // request through a brief coil dropout; it can only run if power returns.
             notifications().cancel(NOTIFICATION)
             return
         }
