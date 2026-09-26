@@ -81,9 +81,24 @@ not measured battery/thermal improvement claims.
 
 ## Validation
 
-In progress. Local deterministic backend and focused Kotlin/UI tests pass. Final
-build, full suite, lint, emulator UI, APK signature/runtime comparison and immutable
-receipt must be recorded before this is called a prepared release. No phone install.
+Prepared APK, not phone-installed. App source `9d755427dd134c0d1d774d27286532c7b6cf3091`.
+Final build succeeded in10m59s. Full3,054 JVM tests: zero failures/errors, five existing
+skips;18 backend tests pass. One emulator UI acceptance test passes (2.257s); corrected
+Compose capture visually inspected. Initial UIAutomation capture was blank despite
+passing assertions; retained as diagnostic evidence, not a visual pass.
+Lint: zero errors,202warnings,12hints. Two added warnings: intentional preview JavaScript
+and a Uri.parse/UseKtx suggestion. No permission bridge/credentials exposed to WebView.
+APK certificate matches preview;16KB alignment passes; all161 protected baseline179
+runtime entries retained (only generated ART profiles changed). Bundled Python program
+matches source SHA256 `62216e131dd977a33e360a53cfa42a01c7e72d378238cf961828ca0cec95c836`.
+Optimized emulator cold start849ms, PID5955 alive86seconds; foreground verified and
+crash buffer unchanged. These are smoke results, not comparative performance claims.
+APK368,582,815bytes; SHA256
+`11f16a3ccb4c64ee38e2a927ec20cda66b4829c169c58988ca33c11d7e95aadd`.
+Immutable APK/evidence in Os `work/development-180/`. Fold R5GL75XFCXD connected but
+still177/1.5.11; Termux package absent and both Computer ports refused connections.
+No account login, actual Claude/model call, phone install, SDK download/license agreement,
+generated APK installation or physical robot command performed.
 
 ## References used
 

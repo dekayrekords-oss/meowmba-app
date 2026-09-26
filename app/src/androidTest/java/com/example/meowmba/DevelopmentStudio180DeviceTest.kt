@@ -4,6 +4,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
@@ -17,12 +20,14 @@ import java.io.File
 class DevelopmentStudio180DeviceTest {
     @get:Rule val rule = createComposeRule()
     @Test fun developerControlsRequireAnExplicitSessionAndVerifiedArtifact() {
-        rule.setContent { MeowmbaTheme { Column(Modifier.verticalScroll(rememberScrollState())) { DevelopmentStudioPanel() } } }
+        rule.setContent { MeowmbaTheme { Surface(color = MaterialTheme.colorScheme.background) {
+            Column(Modifier.verticalScroll(rememberScrollState())) { DevelopmentStudioPanel() }
+        } } }
         rule.onNodeWithText("Development Studio").assertIsDisplayed()
         rule.onNodeWithText("Close session").assertIsNotEnabled()
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         File(instrumentation.targetContext.getExternalFilesDir(null), "development-studio-180.png").outputStream().use {
-            instrumentation.uiAutomation.takeScreenshot().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+            rule.onRoot().captureToImage().asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
         }
         rule.onNodeWithText("Fetch built APK").performScrollTo().assertIsNotEnabled()
         rule.onNodeWithText("Review installation in Android").assertDoesNotExist()

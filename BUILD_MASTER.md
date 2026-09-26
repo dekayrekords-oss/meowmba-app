@@ -3,11 +3,20 @@
 Updated 2026-09-25. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
 This supersedes historical build-location/version instructions in other documents.
 
-- **180 / 1.5.14 reserved by Codex**: Development Studio, manual Claude Code/OpenCode
-  sessions, bounded source checkpoints, local website preview and explicit project builds.
-  Ownership: core/computer development helpers, Computer navigation/panel, asset toolkit,
-  corresponding tests and version. Preserve existing Ubuntu, credentials and robot features.
-  In progress; not built, released or installed. No performance improvement claimed yet.
+- September25 **180 / 1.5.14 prepared by Codex**: on-demand Development Studio;
+  manual Claude Code/OpenCode, bounded per-file checkpoints/Keep/Undo, local website
+  preview, approved npm/Gradle builds and verified APK transfer to Android confirmation.
+  Reuses existing Ubuntu; no permission bypass or new always-on worker. App source
+  `9d755427dd134c0d1d774d27286532c7b6cf3091`. Full3,054 JVM tests: zero failures,
+  five existing skips;18 Python tests and one emulator UI test pass. Lint0errors,
+  202warnings,12hints. Signature/16KB/runtime checks pass, all161 protected entries
+  preserved. Optimized emulator COLD849ms, PID5955 alive86seconds; foreground/crash
+  checks pass. No speed/battery improvement claim. Receipt/APK: Os `work/development-180/`;
+  SHA256 `11f16a3ccb4c64ee38e2a927ec20cda66b4829c169c58988ca33c11d7e95aadd`.
+  Details/limits: `docs/DEVELOPMENT_STUDIO_180.md`. Automatic Android SDK provisioning,
+  physical Ubuntu/Claude/build acceptance remain pending. Fold R5GL75XFCXD connected,
+  still177; Termux absent and4096/4097 closed. No phone install authorized this turn.
+  **180 consumed; next181**. Cozmo/LOOI remain separate, unchanged.
 
 - September 25: **179 / 1.5.13 built by Codex — Cozmo repair and original gestures**.
   Fixes confirmed WakeWordService uninitialized-storage crash; isolates bounded camera
@@ -94,7 +103,7 @@ This supersedes historical build-location/version instructions in other document
 
 > **Codex, start here:** `docs/HANDOFF_CLAUDE_2026-09-23.md` — state after builds 158–166, how they
 > were built (full runtime flags), owner decisions, open work in priority order, and gotchas.
-> Codex is the build owner; **177 is the last verified Fold install; 179 Cozmo repair is prepared, not installed on the phone**; next unallocated code **180**. Cozmo and LOOI remain separate. Current Desk update:
+> Codex is the build owner; **177 is the last verified Fold install; 180 Development Studio includes the earlier179 Cozmo repair and is prepared, not phone-installed**; next unallocated code **181**. Cozmo and LOOI remain separate. Current Desk update:
 > `docs/LIVING_DESK_173.md`; preceding review: `docs/REVIEW_AND_ACTIONS_172.md`.
 
 - September 25 **1.5.7/code 173** (Codex), based on 172 / `a1f583c`, source `8d5fc87`: Living Desk.
