@@ -35,6 +35,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.withTransform
@@ -92,6 +93,12 @@ fun DeskHabitat(
     bottomInset: Dp = 0.dp,
     activity: DeskCatActivity = DeskCatActivity.IDLE,
     reply: DeskCatReply? = null,
+    /**
+     * Meow's whole place: living room left, office, bedroom right. Unfolded (wide) screens show all
+     * three rooms; the folded cover screen shows one room and follows the cat between them.
+     * False keeps the original single office.
+     */
+    apartment: Boolean = true,
 ) {
     val measurer = rememberTextMeasurer()
     val cat = remember { CatMotion() }
@@ -105,9 +112,13 @@ fun DeskHabitat(
     val lifecycle by androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle.currentStateFlow.collectAsState()
     val visible = lifecycle.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)
     val animate = !reduceMotion && thermalStatus < PowerManager.THERMAL_STATUS_MODERATE
+    var petting by remember { mutableIntStateOf(0) }
+    /** A room the user asked to look at; the camera shows it until the cat gets there. */
+    var lookRoom by remember { mutableStateOf<DeskRoom?>(null) }
+    var wideLayout by remember { mutableStateOf(false) }
 
     // One owner cancels idle work immediately when a question, tap, pause or heat arrives.
-    LaunchedEffect(request, activity, reply?.key, animate, visible, fpsTarget, wanderEveryMs) {
+    LaunchedEffect(request, activity, reply?.key, animate, visible, fpsTarget, wanderEveryMs, lookRoom) {
         cat.walking = false
         cat.phase = 0f
         cat.blink = 0f
@@ -129,28 +140,39 @@ fun DeskHabitat(
                 cadence.idleNanosAfterAdmit().takeIf { it > 0 }?.let { delay(it / 1_000_000L) }
             }
         }
-        suspend fun moveTo(spot: DeskCatSpot) {
-            if (!animate) { cat.x = spot.x; cat.y = spot.y; return }
+        suspend fun leg(spot: DeskCatSpot) {
             val sx = cat.x; val sy = cat.y
             val distance = kotlin.math.hypot(spot.x - sx, spot.y - sy)
             if (distance < 1f) return
             cat.pose = DeskCatPose.WALK; cat.walking = true
+            cat.face = DeskCatFace.NEUTRAL
             cat.facingLeft = spot.x < sx
-            val ms = (distance * 7).toLong().coerceIn(550, 2_200)
+            val ms = (distance * 7).toLong().coerceIn(550, 4_500)
+            // A hop between desk/floor/perches, higher for tall climbs; level travel has a walking gait.
+            val arc = maxOf(32f, abs(spot.y - sy) * .3f)
             frames(ms) { t ->
                 val eased = easeInOut(t)
                 cat.x = sx + (spot.x - sx) * eased
-                // A little hop between desk/floor/perches; level travel has a walking gait.
-                cat.y = sy + (spot.y - sy) * eased - if (abs(spot.y - sy) > 20f) sin(t * PI).toFloat() * 32f else 0f
+                cat.y = sy + (spot.y - sy) * eased - if (abs(spot.y - sy) > 20f) sin(t * PI).toFloat() * arc else 0f
                 cat.frame = ((t * ms / 110).toInt() % 2)
                 cat.tail = sin(t * PI * 4).toFloat() * 8f
             }
             cat.x = spot.x; cat.y = spot.y; cat.walking = false; cat.frame = 0
         }
+        suspend fun moveTo(spot: DeskCatSpot) {
+            if (!animate) { cat.x = spot.x; cat.y = spot.y; return }
+            // Going far (another room, across the office): hop down, walk the floor, hop up.
+            val far = DeskRoom.of(cat.x) != DeskRoom.of(spot.x) || abs(spot.x - cat.x) > 200f
+            val floor = DeskCatBehavior.FLOOR
+            if (far && cat.y < floor - 20f) leg(DeskCatSpot(cat.x, floor))
+            if (far && abs(spot.y - floor) > 20f) leg(DeskCatSpot(spot.x, floor))
+            leg(spot)
+        }
         suspend fun perform(act: DeskCatAct, arrival: (() -> Unit)? = null) {
             moveTo(act.spot)
             cat.pose = act.pose
-            cat.facingLeft = act.pose == DeskCatPose.TYPE || act.pose == DeskCatPose.WRITE
+            cat.face = act.face ?: DeskCatBehavior.defaultFace(act.pose)
+            cat.facingLeft = act.facingLeft ?: (act.pose == DeskCatPose.TYPE || act.pose == DeskCatPose.WRITE)
             arrival?.invoke()
             if (animate) frames(act.durationMs) { t ->
                 cat.phase = t * (2 * PI).toFloat() * 3
@@ -163,23 +185,34 @@ fun DeskHabitat(
             while (remaining > 0 && isActive) {
                 val wait = minOf(remaining, random.nextLong(2_700, 6_300))
                 delay(wait); remaining -= wait
-                if (animate) { cat.blink = 1f; delay(140); cat.blink = 0f }
+                if (!animate || cat.pose == DeskCatPose.SLEEP) continue
+                // Between blinks the face drifts through small moods: a yawn, a slow blink, a blep.
+                when (random.nextInt(10)) {
+                    0 -> { cat.face = DeskCatFace.YAWN; delay(1_300); cat.face = DeskCatFace.NEUTRAL }
+                    1 -> cat.face = DeskCatFace.SLEEPY
+                    2 -> { cat.face = DeskCatFace.PLAYFUL; delay(1_600); cat.face = DeskCatFace.NEUTRAL }
+                    3 -> cat.face = DeskCatFace.PURR
+                    4 -> cat.face = DeskCatFace.CURIOUS
+                    else -> { if (cat.face != DeskCatFace.NEUTRAL && random.nextBoolean()) cat.face = DeskCatFace.NEUTRAL
+                        cat.blink = 1f; delay(140); cat.blink = 0f }
+                }
             }
         }
         try {
             when (activity) {
                 DeskCatActivity.THINKING -> {
                     // A visual performance accompanies actual inference; it does not run tools.
-                    perform(DeskCatAct(DeskCatBehavior.computer, DeskCatPose.TYPE, 3_600))
+                    perform(DeskCatAct(DeskCatBehavior.computer, DeskCatPose.TYPE, 3_600, DeskCatFace.FOCUSED))
                     while (animate && isActive) {
                         rest(random.nextLong(900, 2_000))
-                        perform(DeskCatAct(DeskCatBehavior.computer, DeskCatPose.TYPE, random.nextLong(2_500, 4_500)))
+                        perform(DeskCatAct(DeskCatBehavior.computer, DeskCatPose.TYPE, random.nextLong(2_500, 4_500), DeskCatFace.FOCUSED))
                     }
                 }
                 DeskCatActivity.LISTENING, DeskCatActivity.SPEAKING -> {
                     val pose = if (activity == DeskCatActivity.LISTENING) DeskCatPose.LISTEN else DeskCatPose.TALK
-                    perform(DeskCatAct(DeskCatBehavior.home, pose, 2_000))
-                    while (animate && isActive) perform(DeskCatAct(DeskCatBehavior.home, pose, 2_000))
+                    val face = if (activity == DeskCatActivity.LISTENING) DeskCatFace.CURIOUS else DeskCatFace.HAPPY
+                    perform(DeskCatAct(DeskCatBehavior.home, pose, 2_000, face))
+                    while (animate && isActive) perform(DeskCatAct(DeskCatBehavior.home, pose, 2_000, face))
                 }
                 DeskCatActivity.IDLE -> {
                     request?.takeIf { it.first != cat.handledRequest }?.let { (id, obj) ->
@@ -190,44 +223,78 @@ fun DeskHabitat(
                     }
                     reply?.takeIf { it.key != cat.handledReply }?.let {
                         cat.handledReply = it.key
-                        perform(DeskCatAct(DeskCatBehavior.home, DeskCatPose.TALK, 3_600))
+                        perform(DeskCatAct(DeskCatBehavior.home, DeskCatPose.TALK, 3_600, DeskCatFace.HAPPY))
                     }
+                    lookRoom?.takeIf { apartment && it != DeskRoom.of(cat.x) }?.let { room ->
+                        // The user looked into another room: the cat trots over to join them.
+                        moveTo(DeskCatSpot(room.center - 55f, DeskCatBehavior.FLOOR))
+                        cat.pose = DeskCatPose.REST; cat.face = DeskCatFace.HAPPY
+                    }
+                    lookRoom = null
                     if (!animate) return@LaunchedEffect
                     // Leave an elevated prop with a visible hop before putting it away.
-                    if (cat.y < 516f) moveTo(DeskCatBehavior.home)
-                    cat.pose = DeskCatPose.REST
+                    fun settle() = if (DeskRoom.of(cat.x) == DeskRoom.OFFICE || !apartment) DeskCatBehavior.home else DeskCatSpot(cat.x, DeskCatBehavior.FLOOR)
+                    if (cat.y < 516f) moveTo(settle())
+                    if (cat.pose != DeskCatPose.SLEEP) cat.pose = DeskCatPose.REST
                     var previous = DeskCatPose.REST
                     while (isActive) {
                         rest(DeskCatBehavior.restMs(random, wanderEveryMs.takeIf { it > 0 } ?: 20_000))
                         if (wanderEveryMs <= 0) continue
-                        val act = DeskCatBehavior.idle(random, previous, stateNow.trayCount > 0, stateNow.projectTitle.isNotBlank())
+                        val act = if (!apartment) DeskCatBehavior.idle(random, previous, stateNow.trayCount > 0, stateNow.projectTitle.isNotBlank())
+                            else DeskCatBehavior.apartmentIdle(random, previous, DeskRoom.of(cat.x), stateNow.trayCount > 0,
+                                stateNow.projectTitle.isNotBlank(), stateNow.room.music?.playing == true, stateNow.room.video?.playing == true,
+                                roomChance = if (wideLayout) .3f else .55f)
                         previous = act.pose
                         perform(act)
-                        if (cat.y < 516f) moveTo(DeskCatBehavior.home)
-                        cat.pose = DeskCatPose.REST
+                        if (cat.y < 516f) moveTo(settle())
+                        // Sleeping cats stay curled up until the next thing to do.
+                        if (cat.pose != DeskCatPose.SLEEP) { cat.pose = DeskCatPose.REST; cat.face = DeskCatFace.NEUTRAL }
                     }
                 }
             }
         } finally { cat.walking = false; cat.blink = 0f }
     }
     LaunchedEffect(bubble) { if (bubble != null) { delay(BUBBLE_MS); bubble = null } }
+    LaunchedEffect(petting) {
+        if (petting == 0) return@LaunchedEffect
+        // Petting: a startled blink, then a happy face (a sleeping cat yawns awake first).
+        val wasAsleep = cat.pose == DeskCatPose.SLEEP
+        cat.face = if (wasAsleep) DeskCatFace.YAWN else DeskCatFace.SURPRISED
+        delay(if (wasAsleep) 1_200 else 450)
+        cat.face = listOf(DeskCatFace.HAPPY, DeskCatFace.PURR, DeskCatFace.LOVE).random(random)
+        delay(2_400)
+        if (cat.pose == DeskCatPose.SLEEP) cat.face = DeskCatFace.ASLEEP
+    }
 
-    BoxWithConstraints(modifier.fillMaxSize().background(Color(0xFF12232A)).testTag("desk_habitat")) {
+    BoxWithConstraints(modifier.fillMaxSize().background(Color(0xFF12232A)).clipToBounds().testTag("desk_habitat")) {
         val viewportWidth = maxWidth
         val viewportHeight = maxHeight
+        val usableHeight = maxHeight - topInset - bottomInset
+        // Unfolded (or any wide screen): all three rooms side by side. Folded: one room, following the cat.
+        val wide = apartment && (maxWidth >= usableHeight || maxWidth >= 600.dp)
+        wideLayout = wide
+        val sceneWidth = if (wide) DeskRoom.APT_WIDTH else SCENE_W
         // Fit the part of the scene that has content (clock to desk), not the empty floor below it,
-        // so the room is as large as the screen allows. The wall and floor extend to every edge.
-        val unit = minOf(maxWidth / SCENE_W, (maxHeight - topInset - bottomInset) / (VIEW_BOTTOM - VIEW_TOP)) // dp per scene unit
-        val ox = (maxWidth - unit * SCENE_W) / 2
+        // so the rooms are as large as the screen allows. The walls and floor extend to every edge.
+        val unit = minOf(maxWidth / sceneWidth, usableHeight / (VIEW_BOTTOM - VIEW_TOP)) // dp per scene unit
+        // Screen x of scene x = 0 (the office's left wall) with the office centred / the panorama centred.
+        val ox = if (wide) (maxWidth - unit * DeskRoom.APT_WIDTH) / 2 - unit * DeskRoom.APT_LEFT else (maxWidth - unit * SCENE_W) / 2
         val oy = maxHeight - bottomInset - unit * VIEW_BOTTOM // the desk sits just above the navigation
         val density = androidx.compose.ui.platform.LocalDensity.current
         val scale = with(density) { unit.toPx() }
         val oxPx = with(density) { ox.toPx() }
         val oyPx = with(density) { oy.toPx() }
+        // Folded: the camera pans (a layer translation, no redraw) to the room in view.
+        val catRoom by remember { androidx.compose.runtime.derivedStateOf { DeskRoom.of(cat.x) } }
+        val focus = if (!apartment || wide) DeskRoom.OFFICE else lookRoom ?: catRoom
+        val camTarget = (DeskRoom.OFFICE.center - focus.center) * scale
+        val cam by androidx.compose.animation.core.animateFloatAsState(camTarget,
+            if (animate) androidx.compose.animation.core.tween(900, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+            else androidx.compose.animation.core.snap(), label = "desk_camera")
         // Render and hit-test through the same transform.
-        Box(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize().graphicsLayer { translationX = cam }) {
 
-        // 1. Static room: its own graphics layer, drawn once.
+        // 1. Static rooms: their own graphics layer, drawn once.
         Canvas(Modifier.fillMaxSize().graphicsLayer()) {
             withTransform({ translate(oxPx, oyPx); scale(scale, scale, androidx.compose.ui.geometry.Offset.Zero) }) { drawRoom() }
         }
@@ -235,22 +302,41 @@ fun DeskHabitat(
         Canvas(Modifier.fillMaxSize().graphicsLayer()) {
             withTransform({ translate(oxPx, oyPx); scale(scale, scale, androidx.compose.ui.geometry.Offset.Zero) }) { drawObjects(state, measurer) }
         }
-        // 3. Cat.
+        // 3. Cat (and the litter box's front lip when it's inside).
         Canvas(Modifier.fillMaxSize().testTag("desk_cat").semantics {
             stateDescription = DeskCatBehavior.description(cat.pose, cat.x)
         }) {
             withTransform({ translate(oxPx, oyPx); scale(scale, scale, androidx.compose.ui.geometry.Offset.Zero) }) {
-                drawCat(cat.x, cat.y, cat.walking, cat.frame, cat.blink, cat.tail, cat.gaze, cat.facingLeft, cat.pose, cat.phase)
+                drawCat(cat.x, cat.y, cat.walking, cat.frame, cat.blink, cat.tail, cat.gaze, cat.facingLeft, cat.pose, cat.phase, cat.face)
+                if (cat.pose == DeskCatPose.DIG) with(DeskApartment) { drawLitterFront() }
             }
         }
+        // The cat's head can be petted. It sits under the room's objects, so the cat never blocks one.
+        if (interactive) Box(Modifier
+            .offset { androidx.compose.ui.unit.IntOffset((oxPx + (cat.x + 46f) * scale).toInt(), (oyPx + (cat.y + 8f) * scale).toInt()) }
+            .size(unit * 58f, unit * 62f)
+            .clickable(role = Role.Button, onClickLabel = "Pet Meow") {
+                petting++
+                bubble = DeskCatBehavior.petLines.random(random)
+            }
+            .semantics { contentDescription = "Meow, " + DeskCatBehavior.description(cat.pose, cat.x) }
+            .testTag("desk_cat_pet"))
         // Tap targets share the room transform and remain immediate, independent of walking.
-        if (interactive) DeskObject.entries.forEach { o ->
+        if (interactive) DeskObject.entries.filter { apartment || it.room == DeskRoom.OFFICE }.forEach { o ->
             Box(Modifier.offset(ox + unit * o.left, oy + unit * o.top).size(unit * o.width, unit * o.height)
                 .clickable(role = Role.Button, onClickLabel = o.label) {
                     bubble = lineForNow(o) ?: o.label
                     request = ((request?.first ?: 0) + 1) to o
                     onTap(o)
                 }.semantics { contentDescription = describe(o, state) }.testTag("desk_" + o.name.lowercase()))
+        }
+        }
+        // Folded: step into the next room (the cat comes along).
+        if (apartment && !wide && interactive) Row(Modifier.align(Alignment.TopStart).padding(top = topInset, start = 8.dp)) {
+            val left = DeskRoom.entries.getOrNull(focus.ordinal - 1)
+            val right = DeskRoom.entries.getOrNull(focus.ordinal + 1)
+            left?.let { r -> RoomStep("‹ ${r.label}", "desk_room_left") { lookRoom = r } }
+            right?.let { r -> RoomStep("${r.label} ›", "desk_room_right") { lookRoom = r } }
         }
         // Actual replies have priority over decorative object hints and can be read in full.
         val shownReply = reply?.takeIf { it.key != dismissedReply && it.text.isNotBlank() }
@@ -262,7 +348,7 @@ fun DeskHabitat(
                 Modifier
                     .offset {
                         androidx.compose.ui.unit.IntOffset(
-                            (ox + unit * (cat.x + 55f) - bubbleWidth / 2).coerceIn(12.dp, viewportWidth - bubbleWidth - 12.dp).roundToPx(), 0)
+                            (ox + unit * (cat.x + 55f) + cam.toDp() - bubbleWidth / 2).coerceIn(12.dp, viewportWidth - bubbleWidth - 12.dp).roundToPx(), 0)
                     }
                     .layout { measurable, constraints ->
                         val p = measurable.measure(constraints)
@@ -292,8 +378,16 @@ fun DeskHabitat(
                 }
             }
         }
-        }
     }
+}
+
+@Composable
+private fun RoomStep(label: String, tag: String, onClick: () -> Unit) {
+    BasicText(label, Modifier
+        .clickable(role = Role.Button, onClick = onClick)
+        .padding(horizontal = 10.dp, vertical = 12.dp)
+        .testTag(tag),
+        style = TextStyle(color = Color(0xFFF4EEDB), fontSize = 14.sp, fontWeight = FontWeight.Bold))
 }
 
 /** Screen-reader description that states the object's data, not just its name. */
@@ -308,10 +402,21 @@ internal fun describe(o: DeskObject, s: DeskState): String = when (o) {
     DeskObject.CLOCK -> "Clock: open alarms and timers"
     DeskObject.DRAWER_TOP -> "Top drawer: your apps and tools"
     DeskObject.DRAWER_BOTTOM -> "Bottom drawer: your apps and tools"
+    DeskObject.BIG_WINDOW -> "Big window: " + (s.weatherLine ?: "the view")
+    DeskObject.ARCADE -> "Old TV and game console: open the arcade"
+    DeskObject.TOWER_BED -> "Cat tower by the window"
+    DeskObject.BED -> "Bed: nap time"
+    DeskObject.FOOD -> "Food tray"
+    DeskObject.LITTER -> "Litter box"
+    DeskObject.BOOKSHELF -> "Bookshelf: " + (s.room.audiobook?.let { "listening to ${it.title}" } ?: "audiobooks and the Meow manual")
+    DeskObject.BIG_TV -> "TV: " + (s.room.video?.let { "${it.title}${it.subtitle?.let { c -> ", $c" } ?: ""}" } ?: "nothing on YouTube")
+    DeskObject.STEREO -> "Stereo: " + (s.room.music?.let { "${it.title}${it.subtitle?.let { a -> " by $a" } ?: ""}" } ?: "nothing playing")
+    DeskObject.COUCH -> "Couch"
+    DeskObject.TOWER_LIVING -> "Cat tower"
 }
 
 private class CatMotion {
-    var x by mutableFloatStateOf(170f)
+    var x by mutableFloatStateOf(180f)
     var y by mutableFloatStateOf(516f)
     var pose by mutableStateOf(DeskCatPose.REST)
     var phase by mutableFloatStateOf(0f)
@@ -323,6 +428,7 @@ private class CatMotion {
     var tail by mutableFloatStateOf(0f)
     var gaze by mutableFloatStateOf(0f)
     var facingLeft by mutableStateOf(false)
+    var face by mutableStateOf(DeskCatFace.NEUTRAL)
 }
 
 private fun easeInOut(t: Float) = if (t < .5f) 2 * t * t else 1 - (-2 * t + 2).let { it * it } / 2

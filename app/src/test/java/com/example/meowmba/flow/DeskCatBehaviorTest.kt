@@ -29,7 +29,12 @@ class DeskCatBehaviorTest {
         assertEquals(DeskCatPose.TYPE, DeskCatBehavior.atObject(DeskObject.BUILD).pose)
         assertEquals(DeskCatBehavior.letters, DeskCatBehavior.atObject(DeskObject.INBOX).spot)
         assertEquals(DeskCatBehavior.board, DeskCatBehavior.atObject(DeskObject.PROJECT).spot)
-        assertTrue(objectActs.all { it.spot.x in 0f..412f && it.spot.y in 0f..748f })
+        // Office objects keep the cat in the office; the other rooms' objects keep it in theirs.
+        DeskObject.entries.forEach { o ->
+            val act = DeskCatBehavior.atObject(o)
+            assertEquals("$o", o.room, com.example.meowmba.ui.desk.DeskRoom.of(act.spot.x))
+            assertTrue("$o", act.spot.y in 0f..748f)
+        }
         assertTrue(objectActs.any { it.spot.y == 516f }) // floor / desktop baseline
         assertTrue(objectActs.any { it.spot.y == 300f }) // corkboard perch
         assertTrue(objectActs.any { it.spot.y == 656f }) // paws meet the floor beside the drawers
