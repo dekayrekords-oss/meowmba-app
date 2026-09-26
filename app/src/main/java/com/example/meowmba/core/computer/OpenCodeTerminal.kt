@@ -39,15 +39,24 @@ internal class OpenCodeTerminal(private val password: String) {
         }
     }
 
-    suspend fun connect(onOutput: (String) -> Unit, onClosed: () -> Unit) = withContext(Dispatchers.IO) {
+    suspend fun connect(onOutput: (String) -> Unit, onClosed: () -> Unit) = connectProgram(null, onOutput, onClosed)
+
+    suspend fun connectDevelopment(developmentProgram: String, onOutput: (String) -> Unit, onClosed: () -> Unit) =
+        connectProgram(developmentProgram, onOutput, onClosed)
+
+    private suspend fun connectProgram(developmentProgram: String?, onOutput: (String) -> Unit, onClosed: () -> Unit) = withContext(Dispatchers.IO) {
         OpenCodeLocalConnection.verify(password, address)
         val paths = call("GET", "/path")
         val home = paths.optString("home")
         check(home.startsWith('/') && !home.startsWith("/data/")) {
             "OpenCode is not running inside the Ubuntu guest. Run Setup computer first."
         }
-        val info = call("POST", "/pty", JSONObject().put("command", "/bin/bash")
-            .put("args", org.json.JSONArray().put("-l")).put("title", "Meow manual Ubuntu terminal"))
+        // Only the app-bundled development menu uses this path. No model/tool can
+        // call this manual terminal or supply a launch program.
+        val info = call("POST", "/pty", JSONObject().put("command", if (developmentProgram == null) "/bin/bash" else "python3")
+            .put("args", if (developmentProgram == null) org.json.JSONArray().put("-l")
+                else org.json.JSONArray().put("-u").put("-c").put(developmentProgram))
+            .put("title", if (developmentProgram == null) "Meow manual Ubuntu terminal" else "Meow Development Studio"))
         val id = OpenCodeComputer.id(info.getString("id"))
         ownedId = id
         try {

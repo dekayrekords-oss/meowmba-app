@@ -3,6 +3,12 @@
 Updated 2026-09-25. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
 This supersedes historical build-location/version instructions in other documents.
 
+- **180 / 1.5.14 reserved by Codex**: Development Studio, manual Claude Code/OpenCode
+  sessions, bounded source checkpoints, local website preview and explicit project builds.
+  Ownership: core/computer development helpers, Computer navigation/panel, asset toolkit,
+  corresponding tests and version. Preserve existing Ubuntu, credentials and robot features.
+  In progress; not built, released or installed. No performance improvement claimed yet.
+
 - September 25: **179 / 1.5.13 built by Codex — Cozmo repair and original gestures**.
   Fixes confirmed WakeWordService uninitialized-storage crash; isolates bounded camera
   decoding from robot UDP; adds animation ticks, initialization/ACK health, calibration,

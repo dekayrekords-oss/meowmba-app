@@ -118,6 +118,7 @@ internal fun ComputerToolsScreen(
                             OutlinedButton(onClick={onComputerOpenServerTerminal(p)},modifier=Modifier.fillMaxWidth()) { Text("Open ${p.displayName}") }
                         }
                         ComputerDestinationCard("Tasks & approvals","Computer · OpenCode tasks, live progress, results and permission requests.",Icons.Default.TaskAlt) { navigate(ComputerToolsPage.TASKS) }
+                        ComputerDestinationCard("Development Studio", "Claude Code, website preview, source review/Undo and Android project builds.", Icons.Default.Code) { navigate(ComputerToolsPage.DEVELOPMENT) }
                         Text("Default agent: Computer · powered by OpenCode", style=MaterialTheme.typography.bodyMedium)
                         ComputerDestinationCard("Advanced legacy planner","Optional older task planner settings; Computer uses OpenCode's model.",Icons.Default.Psychology) { navigate(ComputerToolsPage.MODEL) }
                         ComputerDestinationCard("Saved connections",if(agenticRuntimeV1) "${connectionProfiles.size} saved · add or edit SSH targets." else "Set up the connections used by task automation.",Icons.Default.Link) { navigate(ComputerToolsPage.PROFILES) }
@@ -126,6 +127,7 @@ internal fun ComputerToolsScreen(
                         TextButton(onClick={navigate(ComputerToolsPage.LEGACY_TASKS)}) { Text("Legacy tasks") }
                     }
                     ComputerToolsPage.TASKS -> { OpenCodeComputerPanel(onOpenFiles = onOpenComputerFiles) }
+                    ComputerToolsPage.DEVELOPMENT -> { DevelopmentStudioPanel() }
                     ComputerToolsPage.HUB -> { ComputerHubPanel() }
                     ComputerToolsPage.PERSONAL -> { PersonalCompanionPanel() }
                     ComputerToolsPage.LEGACY_TASKS -> {
