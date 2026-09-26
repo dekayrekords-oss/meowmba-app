@@ -77,7 +77,7 @@ Source `05c540b6a668f322949ee881ff0aa91051bb8b6b`. Full JVM suite: 3,094 tests, 
 failures/errors, five existing skips. Lint: zero errors, 205 warnings, 12 hints. The
 optimized daily APK passes certificate and 16 KB alignment checks; all 162 protected
 runtime entries match preview 181. Native component renders include a 320 dp phone at
-2× system text size. No installed-device acceptance or performance comparison is claimed.
+2× system text size. Full real-service acceptance and comparative performance measurements remain pending.
 
 APK SHA-256: `4b3f43a227231a4823660c1a7c930826fe30b78602298e157ed1656b489d5e31`.
 APK, detailed use instructions and validation evidence: Os `work/tasks-182/README.md`.
@@ -87,7 +87,7 @@ The owner then explicitly requested installation. Fold R5GL75XFCXD updated180→
 place at21:54:58 Phoenix time, September25. Original firstInstallTime/appId and saved Desk
 content retained; separate Play155 unchanged. Installed APK checksum matches the verified
 artifact. PID22154 survived109.5seconds foreground with unchanged crash logs; Desk and the
-new saved-work screen were visually verified, then returned to Desk. Android auto-resumed
+new saved-work screen were visually verified. Final foreground screen: Computer & task tools. Android auto-resumed
 Home (UNKNOWN launch state), so no measured cold-start claim. No emulator installation,
 account action, permission grant, charger simulation or robot actuation. Phone receipt:
 Os `work/tasks-182/validation/phone-install/README.md`. Real-service acceptance is pending.

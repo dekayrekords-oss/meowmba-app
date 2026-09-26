@@ -17,7 +17,7 @@ This supersedes historical build-location/version instructions in other document
   Subsequently installed on Fold R5GL75XFCXD at21:54:58 MST September25 after explicit
   owner request:180→182 in place, firstInstallTime/appId retained, Play155 unchanged.
   Installed APK hash matches; PID22154 foreground/alive109.5seconds, crash buffer unchanged.
-  Saved Desk and new work screen visually verified; left on Desk. UNKNOWN launch state
+  Saved Desk and new work screen verified; final foreground screen Computer & task tools. UNKNOWN launch state
   because Home auto-resumed; no measured cold-start claim. Receipt: Os
   `work/tasks-182/validation/phone-install/README.md`. No emulator install, remote push,
   Play upload or real external action; real-service acceptance pending.
