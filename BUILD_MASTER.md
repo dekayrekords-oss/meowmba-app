@@ -9,7 +9,11 @@ This supersedes historical build-location/version instructions in other document
   3,117 tests,0 failures/errors,5 skips; lint0 errors/208 warnings/12 hints.
   Signature/16KB alignment/native-model preservation verified; manual asset intentionally
   updated. APK/receipt: Os `work/facebook-repair-184/`.
-  NOT installed or published. Phone remains183; live Facebook acceptance pending.
+  Installed on Fold R5GL75XFCXD September26 at15:25:25 MST over183 with matching
+  certificate/hash, original appId/firstInstallTime retained and Play package unchanged.
+  Foreground PID survived79.1seconds; crash buffer unchanged. Receipt:
+  Os `work/facebook-repair-184/validation/phone-install/README.md`.
+  No public upload; live Facebook acceptance pending.
   See `docs/FACEBOOK_PREVIEW_184.md`. **184 consumed; next185.**
 
 - September25 **183 / 1.5.17 built and installed by Claude** at the owner's explicit request:

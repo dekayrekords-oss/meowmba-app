@@ -45,8 +45,8 @@ The picker shows only Facebook's currently accessible destination rows. It is no
 complete API inventory of every business asset. Facebook layout/localization changes,
 composite labels or inaccessible controls can require manual handoff. Live signed-in
 account selection/composer delivery have not been accepted on the Fold. Do not claim
-Facebook publishing is verified from JVM tests. No phone install is authorized in this
-request; leave183 and its settings/data intact until the owner asks to install.
+Facebook publishing is verified from JVM tests. The owner subsequently confirmed the phone was connected and authorized installation;
+see the installation receipt below.
 
 ## Validation
 
@@ -57,10 +57,18 @@ All existing native/model files unchanged. Strict asset verifier reports only th
 intentional user-manual update; its packaged bytes match source. No baseline weakened.
 APK SHA256: `d8284c1e5b5d0c92a8b5142e674e486ae3761b55904a61989d5e05805a90e358`.
 APK and full receipt: Os workspace `work/facebook-repair-184/`.
-Not installed on phone or emulator; live Facebook selection/composer acceptance pending.
+Subsequently installed on the Fold; no emulator install. Live Facebook selection/composer acceptance pending.
 
 The browser classifier also treated any mention of “page” as a new build request;
 it now uses the explicit browser-request parser. Regression coverage verifies inspection
 leaves the preview alone, completion never restarts it, errors do not repeat, wait loops
 are bounded, and late cancelled replies cannot mutate a page or clear a replacement.
 
+
+## Installation
+
+September26 at15:25:25 MST:184 installed over183 on Fold R5GL75XFCXD via adb install -r.
+Signing certificate and installed APK hash verified; original firstInstallTime/appId retained,
+Play package unchanged. MainActivity foreground and same PID alive79.1seconds; crash buffer
+unchanged. Existing activity resumed (UNKNOWN launch state), not a measured cold start.
+Receipt: Os `work/facebook-repair-184/validation/phone-install/README.md`. No Facebook post sent.
