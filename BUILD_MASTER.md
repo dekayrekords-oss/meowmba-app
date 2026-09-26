@@ -3,6 +3,17 @@
 Updated 2026-09-25. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
 This supersedes historical build-location/version instructions in other documents.
 
+- September25 **183 / 1.5.17 built and installed by Claude** at the owner's explicit request:
+  Meow's apartment (living room, office, bedroom), room media, Dev Studio projects on the Desk computer,
+  MAME launch, 13 cat expressions, auto avatar while driving. Branch `feature/desk-apartment`
+  (worktree `Meowmba-apartment-20260925`, based on 182's `80e28c1`); **not yet merged into
+  feature/meow-flow-core — the integrator must merge it before building 184, or 184 drops these features.**
+  3,103 JVM tests, 0 failures; lint not run. Signature/16KB OK; all 162 protected runtime entries match 182.
+  SHA256 `da4281766e7278cddc6643a0dec58f513a676c3bcd7c508a7719f52c5dedb59c`. Installed on Fold
+  R5GL75XFCXD at 22:44:50 MST in place; data retained; crash buffer unchanged. Receipt:
+  `/Users/prog/Meowmba-Releases/apartment183-20260925/README.md`. Details: `docs/MEOW_PLACE_APARTMENT.md`
+  (in the branch). **183 consumed; next184**.
+
 - September25 **182 / 1.5.16 prepared by Codex**: native saved companion work/results,
   action checkpoints, explicit verified/handoff/unconfirmed receipts, Flow/Desk/chat review,
   owner-selected North Star evidence links and paused project/desktop continuation at
