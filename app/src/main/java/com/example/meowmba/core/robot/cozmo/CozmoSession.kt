@@ -24,7 +24,7 @@ data class CozmoCube(val factoryId: Int, val type: Int, val rssi: Int, val objec
 
 /** Reliable ordered packets; telemetry/image events are out of band and never advance the ACK. */
 internal class CozmoReliability {
-    data class Pending(var packet: CozmoProtocol.Packet, var sentAt: Long)
+    data class Pending(var packet: CozmoProtocol.Packet, var sentAt: Long, val createdAt: Long = sentAt)
     val pending = linkedMapOf<Int, Pending>()
     private val received = mutableMapOf<Int, CozmoProtocol.Packet>()
     private var nextSend = 0
@@ -64,7 +64,7 @@ internal class CozmoReliability {
         // Preserve sequence continuity while ensuring an old unacknowledged move cannot be replayed after stop.
         pending.values.filter { it.packet.id in MOTORS }.forEach { it.packet = CozmoProtocol.command(0x3b) }
     }
-    companion object { val MOTORS = setOf(0x32, 0x34, 0x35, 0x36, 0x37) }
+    companion object { val MOTORS = setOf(0x32, 0x34, 0x35, 0x36, 0x37, 0x58) }
 }
 
 /** One socket-owning worker per explicit connection. No reconnect or motion replay after link loss. */
@@ -81,6 +81,7 @@ class CozmoSession(
         data class Camera(val enabled: Boolean) : Request()
         data class Expression(val name: String) : Request()
         data class Companion(val enabled: Boolean) : Request()
+        data class Reaction(val name: String, val created: Long) : Request()
     }
     @Volatile var state = CozmoState(); private set
     private val queue = ArrayBlockingQueue<Request>(32)
@@ -100,6 +101,9 @@ class CozmoSession(
     private var blinkUntil = 0L
     private var lastCameraRequest = 0L
     private var pingCounter = 0
+    private var initializedAt = 0L
+    private var lastAnimationTick = 0L
+    private val reactionSteps = ArrayDeque<Pair<Long, CozmoReactionStep>>()
 
     fun start() = worker.start()
     private fun publish(next: CozmoState = state) { state = next; onState(next) }
@@ -116,6 +120,7 @@ class CozmoSession(
         if (action == "stop") { stop(); return "Stop requested; check that Cozmo stops" }
         if (action == "status") return statusText()
         val p = CozmoProtocol
+        if (action in CozmoReactions.names) return enqueue(Request.Reaction(action, clock()))
         if (action in p.EXPRESSIONS) return expression(action)
         if (action.startsWith("light_")) {
             val color = p.COLORS[action.removePrefix("light_")] ?: return "Unknown backpack color"
@@ -126,6 +131,8 @@ class CozmoSession(
             "back" -> -40f to -40f
             "left" -> -35f to 35f
             "right" -> 35f to -35f
+            "arc_left" -> 20f to 45f
+            "arc_right" -> 45f to 20f
             else -> null
         }
         if (wheels != null) {
@@ -135,11 +142,17 @@ class CozmoSession(
             return enqueue(Request.Command(listOf(p.wheels(wheels.first, wheels.second)), true, true, clock(), 350))
         }
         val packet = when (action) {
-            "look_up" -> p.head(35f)
-            "look_down" -> p.head(-20f)
+            "look_up" -> p.head(44.5f)
+            "look_down" -> p.head(-25f)
             "look_center" -> p.head(0f)
-            "lift_up" -> p.lift(85f)
+            "lift_up" -> p.lift(92f)
+            "lift_middle" -> p.lift(62f)
             "lift_down" -> p.lift(32f)
+            "calibrate" -> {
+                val block = state.telemetry?.motionBlock(clock()) ?: if (state.telemetry == null) "Waiting for sensors" else null
+                if (block != null) return block
+                p.command(0x58, byteArrayOf(1, 1))
+            }
             "headlight_on" -> p.command(0x0b, byteArrayOf(1))
             "headlight_off" -> p.command(0x0b, byteArrayOf(0))
             else -> return "Unsupported Cozmo action: $action"
@@ -174,11 +187,11 @@ class CozmoSession(
     }
     private fun sendFace(expression: String, blink: Boolean = false) {
         // The firmware animation engine advances display frames with audio ticks (silence here).
-        send(CozmoProtocol.command(0x8f))
         send(CozmoProtocol.face(CozmoProtocol.eyes(expression, blink)))
     }
     private fun stopNow(disarm: Boolean = true) {
-        queue.removeIf { it is Request.Command && it.motor || it is Request.Wheels }
+        queue.removeIf { it is Request.Command && it.motor || it is Request.Wheels || it is Request.Reaction }
+        reactionSteps.clear()
         wire.revokeMotion()
         wheelUntil = 0
         if (firmwareSupported) {
@@ -194,7 +207,7 @@ class CozmoSession(
         var lastReset = 0L
         var handshake = false
         try {
-            socket.soTimeout = 25
+            socket.soTimeout = 10
             publish(state.copy(connecting = true, message = "Contacting Cozmo…"))
             while (!stopping.get()) {
                 val now = clock()
@@ -203,7 +216,7 @@ class CozmoSession(
                     lastReset = now
                 }
                 if (!state.connected && now - started > 10_000) error("No compatible Cozmo response. Join Cozmo's Wi-Fi and close the official app.")
-                if (handshake && now - lastPing >= 250) {
+                if (handshake && now - lastPing >= 33) {
                     val ping = CozmoProtocol.buffer(17).putDouble(now / 1000.0).putInt(pingCounter++).putInt(0).put(0).array()
                     sendRaw(CozmoProtocol.Frame(11, CozmoProtocol.OOB, CozmoProtocol.OOB, wire.ack, listOf(CozmoProtocol.Packet(11, data = ping))))
                     lastPing = now
@@ -212,7 +225,29 @@ class CozmoSession(
                 if (wheelUntil > 0 && (now >= wheelUntil || state.telemetry?.motionBlock(now) != null))
                     stopNow(disarm = state.telemetry?.motionBlock(now) != null)
                 if (state.connected && now - lastStateAt > 1500) error("Cozmo connection lost; reconnect manually")
+                if (wire.pending.values.any { now - it.createdAt > 2000 })
+                    error("Cozmo is not acknowledging commands; reconnect manually")
                 if (wire.pending.size < 8) queue.poll()?.let { process(it, now) }
+                if (state.connected && wire.pending.size < 8 && now - lastAnimationTick >= 33) {
+                    // Firmware animation clock: the reference continuously sends 30 Hz silence,
+                    // not one audio frame per occasional expression update. Never catch up in bursts.
+                    send(CozmoProtocol.command(0x8f))
+                    lastAnimationTick = now
+                }
+                if (reactionSteps.isNotEmpty() && state.telemetry?.motionBlock(now) != null) {
+                    stopNow()
+                }
+                if (wire.pending.size < 8 && reactionSteps.firstOrNull()?.first?.let { now >= it } == true) {
+                    val (due, step) = reactionSteps.removeFirst()
+                    if (now - due > 500) {
+                        reactionSteps.clear()
+                        publish(state.copy(lastEvent = "Reaction canceled: robot link delayed"))
+                    } else {
+                        step.head?.let { send(CozmoProtocol.head(it)) }
+                        step.lift?.let { send(CozmoProtocol.lift(it)) }
+                        step.expression?.let { sendFace(it); publish(state.copy(expression = it)) }
+                    }
+                }
                 if (state.connected && wire.pending.size < 8 && blinkUntil > 0 && now >= blinkUntil) {
                     sendFace(state.expression)
                     blinkUntil = 0
@@ -267,11 +302,30 @@ class CozmoSession(
                 sendFace(request.name)
                 publish(state.copy(expression = request.name))
             }
+            is Request.Reaction -> {
+                val block = state.telemetry?.motionBlock(now) ?: if (state.telemetry == null) "Waiting for sensors" else null
+                if (block != null || now - request.created > 500) {
+                    publish(state.copy(lastEvent = block ?: "Reaction expired; try again"))
+                } else {
+                    reactionSteps.clear()
+                    CozmoReactions.steps(request.name).forEach { reactionSteps.addLast(now + it.atMs to it) }
+                    publish(state.copy(lastEvent = "${request.name.replace('_', ' ')} requested; Stop cancels it"))
+                }
+            }
             is Request.Command -> {
-                if (now - request.created > 500) return
-                if (request.motor && (state.telemetry == null || now - lastStateAt > 500 || state.telemetry?.falling == true)) return
-                if (request.wheels && (!state.wheelsEnabled || state.telemetry?.motionBlock(now) != null)) return
+                val block = when {
+                    now - request.created > 500 -> "Command expired; try again"
+                    request.motor && (state.telemetry == null || now - lastStateAt > 500) -> "Waiting for fresh robot sensors"
+                    request.motor && state.telemetry?.falling == true -> "Motor command blocked: Cozmo is falling"
+                    request.packets.any { it.id == 0x58 } -> state.telemetry?.motionBlock(now)
+                    request.wheels && !state.wheelsEnabled -> "Enable short floor moves first"
+                    request.wheels -> state.telemetry?.motionBlock(now)
+                    else -> null
+                }
+                if (block != null) { publish(state.copy(lastEvent = block)); return }
+                if (request.motor) reactionSteps.clear()
                 request.packets.forEach(::send)
+                publish(state.copy(lastEvent = "Command sent to Cozmo; check the sensor values for movement"))
                 if (request.wheels) wheelUntil = now + request.duration
             }
         }
@@ -300,15 +354,30 @@ class CozmoSession(
                 send(CozmoProtocol.command(0x9f))
                 send(CozmoProtocol.command(0x60, byteArrayOf(1)))
                 send(CozmoProtocol.command(0x0a, byteArrayOf(1)))
+                initializedAt = now
             }
             0xf0 -> if (bodySeen) {
                 val telemetry = CozmoTelemetry.decode(p.data, now) ?: return
+                val oldTelemetry = state.telemetry
                 val timestamp = b.getInt(0).toLong() and 0xffffffffL
                 val previous = lastRobotTimestamp
                 if (previous != null && ((timestamp - previous) and 0xffffffffL) !in 1..0x7fffffffL) return
                 lastRobotTimestamp = timestamp
                 lastStateAt = now
-                state = state.copy(telemetry = telemetry, connecting = false, connected = true, message = "Cozmo connected")
+                val ready = now - initializedAt >= 500
+                state = state.copy(telemetry = telemetry, connecting = !ready, connected = ready,
+                    message = if (ready) "Cozmo connected" else "Waiting for motor initialization…")
+                // Sensor reactions change the face only; never start unsolicited motors.
+                if (ready && state.companionEyes && oldTelemetry != null) {
+                    val reaction = when {
+                        telemetry.falling && !oldTelemetry.falling -> "surprised"
+                        telemetry.pickedUp && !oldTelemetry.pickedUp -> "curious"
+                        telemetry.onCharger && !oldTelemetry.onCharger -> "sleepy"
+                        !telemetry.pickedUp && oldTelemetry.pickedUp -> "happy"
+                        else -> null
+                    }
+                    reaction?.let { queue.offer(Request.Expression(it)) }
+                }
                 if (now - lastPublishedAt >= 200) { publish(); lastPublishedAt = now }
             }
             0xf2 -> if (state.cameraEnabled) camera.accept(p.data)?.let(onImage)
@@ -325,7 +394,12 @@ class CozmoSession(
                 publish(state.copy(cubes = state.cubes.map { if (it.factoryId == factory) it.copy(objectId = objectId.takeIf { connected }) else it },
                     lastEvent = "Cube ${if (connected) "connected" else "disconnected"}"))
             }
-            0xb6 -> if (p.data.size >= 9) publish(state.copy(lastEvent = "Cube tapped ${p.data[8].toInt() and 255} time(s)"))
+            0xb6 -> if (p.data.size >= 9) {
+                publish(state.copy(lastEvent = "Cube tapped ${p.data[8].toInt() and 255} time(s)"))
+                if (state.companionEyes) queue.offer(Request.Expression("happy"))
+            }
+            0xd1 -> if (p.data.size >= 3) publish(state.copy(lastEvent =
+                "${if (p.data[0].toInt() == 3) "Head" else "Lift"} calibration: ${if (p.data[1].toInt() != 0) "started" else "finished"}"))
         }
     }
     override fun close() { stopping.set(true); halt.set(true) }

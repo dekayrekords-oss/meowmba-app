@@ -25,6 +25,16 @@ private fun <T> anyCallback(): (T) -> Unit = any<(T) -> Unit>() ?: { _ -> }
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class MicrophonePrivacyTest {
+    @Test fun followUpAfterEarlyOnCreateReturnDoesNotReadUninitializedStorage() {
+        val service = Robolectric.buildService(WakeWordService::class.java).get()
+        WakeWordService::class.java.getDeclaredField("isForeground").apply {
+            isAccessible = true; set(service, true)
+        }
+        try {
+            assertEquals(Service.START_NOT_STICKY, service.onStartCommand(
+                Intent().putExtra(WakeWordService.EXTRA_MODE, WakeWordService.MODE_FOLLOW_UP), 0, 1))
+        } finally { service.onDestroy() }
+    }
     @Test fun freshSetupPersistsMicrophoneOffBeforeAnyViewModelOrServiceStarts() {
         val storage = mock(SecureStorageManager::class.java)
         MicrophonePrivacy.initializeForFirstRun(storage)

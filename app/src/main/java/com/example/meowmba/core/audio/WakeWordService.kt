@@ -230,11 +230,6 @@ class WakeWordService : Service() {
             return START_NOT_STICKY
         }
 
-        if (intent?.getStringExtra(EXTRA_MODE) == MODE_FOLLOW_UP &&
-            !secureStorage.getBooleanPreference("quiet_until_addressed", false)) {
-            followUpPending = true
-            android.util.Log.i("WakeWordService", "follow-up hand-off requested")
-        }
         // Second chance at the promise onCreate may have failed to keep. Giving
         // up here is the graceful path; leaving it unkept is the fatal one.
         if (!isForeground && !promoteToForeground()) {
@@ -250,6 +245,14 @@ class WakeWordService : Service() {
             return START_NOT_STICKY
         }
         if (!ensureMicrophoneEnabled()) return START_NOT_STICKY
+        // onCreate can return before storage initialization (foreground denial,
+        // stop/start race, or storage failure). Check privacy/readiness BEFORE
+        // reading settings; Android still calls onStartCommand in those cases.
+        if (intent?.getStringExtra(EXTRA_MODE) == MODE_FOLLOW_UP &&
+            !secureStorage.getBooleanPreference("quiet_until_addressed", false)) {
+            followUpPending = true
+            android.util.Log.i("WakeWordService", "follow-up hand-off requested")
+        }
         // The engine builds asynchronously (see startEngineAsync); a follow-up
         // requested before it exists is armed when the init lands.
         maybeStartFollowUpCapture()

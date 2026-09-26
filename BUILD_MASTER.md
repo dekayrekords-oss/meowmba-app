@@ -3,6 +3,20 @@
 Updated 2026-09-25. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
 This supersedes historical build-location/version instructions in other documents.
 
+- September 25: **179 / 1.5.13 built by Codex — Cozmo repair and original gestures**.
+  Fixes confirmed WakeWordService uninitialized-storage crash; isolates bounded camera
+  decoding from robot UDP; adds animation ticks, initialization/ACK health, calibration,
+  full-range presets, half lift, curves, six finite gestures and sensor-only face reactions.
+  **75 focused JVM tests pass**, no failures/errors/skips; two emulator UI tests pass.
+  Daily lint: zero errors,200warnings,12hints. Signature/16KB alignment pass; all161
+  protected entries preserved against178 (only generated ART profiles differ).
+  Optimized emulator COLD1822ms, PID3311 foreground/alive73seconds; crash buffer unchanged.
+  APK/receipt: Os `work/cozmo-repair-179/`, SHA256
+  `8c8c7488ff45847e3f9623da28ec784e336f9592da34338e7fd5e2625824eb81`.
+  Details: `docs/COZMO_REPAIR_179.md`. NOT full official-app parity. Actual motor failure
+  root cause and real camera/movement acceptance remain unproven pending owner testing.
+  No phone install or physical motor command; Fold remains177. **179 consumed; next180**.
+
 - September 25: **178 / 1.5.12 built by Codex — guided access and Flow comments**.
   Calendar read/write, Gmail, notification and on-screen-tool guidance with live access
   rechecks; Comment on main/more/attention/interrupt cards and Android notifications.
@@ -74,7 +88,7 @@ This supersedes historical build-location/version instructions in other document
 
 > **Codex, start here:** `docs/HANDOFF_CLAUDE_2026-09-23.md` — state after builds 158–166, how they
 > were built (full runtime flags), owner decisions, open work in priority order, and gotchas.
-> Codex is the build owner again; **177 is the last verified Fold install; 178 is prepared with guided access and contextual Flow comments**; next unallocated code **179**. Cozmo and LOOI remain separate. Current Desk update:
+> Codex is the build owner; **177 is the last verified Fold install; 179 Cozmo repair is prepared, not installed on the phone**; next unallocated code **180**. Cozmo and LOOI remain separate. Current Desk update:
 > `docs/LIVING_DESK_173.md`; preceding review: `docs/REVIEW_AND_ACTIONS_172.md`.
 
 - September 25 **1.5.7/code 173** (Codex), based on 172 / `a1f583c`, source `8d5fc87`: Living Desk.

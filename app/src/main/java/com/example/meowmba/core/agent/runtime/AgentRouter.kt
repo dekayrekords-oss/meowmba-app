@@ -906,6 +906,10 @@ object AgentRouter {
             "look center", "look ahead" -> "look_center"
             "lift up", "raise your lift", "raise your arms" -> "lift_up"
             "lift down", "lower your lift", "lower your arms" -> "lift_down"
+            "half lift", "lift halfway" -> "lift_middle"
+            "curve left" -> "arc_left"
+            "curve right" -> "arc_right"
+            in com.example.meowmba.core.robot.cozmo.CozmoReactions.names -> command
             "headlight on" -> "headlight_on"
             "headlight off" -> "headlight_off"
             in com.example.meowmba.core.robot.cozmo.CozmoProtocol.EXPRESSIONS -> command

@@ -13,6 +13,39 @@ import java.util.concurrent.CopyOnWriteArrayList
 class CozmoTest {
     private val p = CozmoProtocol
     private fun hex(s: String) = s.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+    @Test fun `gestures are finite bounded and explicitly routed only to Cozmo`() {
+        CozmoReactions.names.forEach { name ->
+            val steps = CozmoReactions.steps(name)
+            assertTrue(steps.isNotEmpty())
+            assertTrue(steps.last().atMs <= 3000)
+            assertEquals(steps.sortedBy { it.atMs }, steps)
+            steps.forEach {
+                it.head?.let { value -> assertTrue(value in -25f..44.5f) }
+                it.lift?.let { value -> assertTrue(value in 32f..92f) }
+                it.expression?.let { value -> assertTrue(value in p.EXPRESSIONS) }
+            }
+            assertEquals("cozmo.control", AgentRouter.route("Cozmo $name")?.toolId)
+            assertNotEquals("cozmo.control", AgentRouter.route("LOOI $name")?.toolId)
+        }
+    }
+    @Test fun `animation clock continues and stop cancels future gesture motors`() {
+        FakeRobot().use { robot ->
+            val session = CozmoSession(robot.client, {})
+            session.start()
+            try {
+                waitFor { session.state.connected }
+                val ticks = robot.commands.count { it.id == 0x8f }
+                waitFor { robot.commands.count { it.id == 0x8f } >= ticks + 8 }
+                session.action("greet")
+                waitFor { robot.commands.any { it.id == 0x36 } }
+                session.stop()
+                waitFor { robot.commands.any { it.id == 0x3b } }
+                val motors = robot.commands.count { it.id in CozmoReliability.MOTORS }
+                Thread.sleep(1000)
+                assertEquals(motors, robot.commands.count { it.id in CozmoReliability.MOTORS })
+            } finally { session.close(); session.awaitClosed() }
+        }
+    }
     @Test fun `reset and stop match reference wire bytes`() {
         assertArrayEquals(hex("434f5a0352450101010001000000"), p.encode(CozmoProtocol.Frame(1, 0, 0, p.OOB, emptyList())))
         assertArrayEquals(hex("434f5a03524501070100010000000401003b"), p.encode(CozmoProtocol.Frame(7, 0, 0, p.OOB, listOf(p.command(0x3b)))))
@@ -144,8 +177,46 @@ class CozmoTest {
             } finally { session.close(); session.awaitClosed() }
         }
     }
-    private fun telemetry(time: Int): ByteArray = p.buffer(91).apply {
+    @Test fun `telemetry alone cannot hide an unacknowledged command link`() {
+        FakeRobot().use { robot ->
+            val session = CozmoSession(robot.client, {})
+            session.start()
+            try {
+                waitFor { session.state.connected }
+                robot.acknowledgeCommands = false
+                session.action("look_up")
+                waitFor(4000) { !session.state.connected }
+                assertTrue(session.state.message.contains("not acknowledging"))
+            } finally { session.close(); session.awaitClosed() }
+        }
+    }
+    @Test fun `camera traffic preserves motor stop deadlines and sensor-only face reactions`() {
+        FakeRobot().use { robot ->
+            val images = CopyOnWriteArrayList<ByteArray>()
+            val session = CozmoSession(robot.client, {}, { it?.let(images::add) })
+            session.start()
+            try {
+                waitFor { session.state.connected }
+                session.setCamera(true)
+                waitFor { session.state.cameraEnabled }
+                robot.sendImages = true
+                waitFor { images.size >= 3 }
+                session.setWheels(true)
+                waitFor { session.state.wheelsEnabled }
+                session.action("forward")
+                waitFor { robot.commands.any { it.id == 0x32 } }
+                waitFor { robot.commands.any { it.id == 0x3b } }
+                assertTrue(session.state.connected)
+                val motorCount = robot.commands.count { it.id in CozmoReliability.MOTORS }
+                robot.status = 8
+                waitFor { session.state.expression == "curious" }
+                assertEquals(motorCount, robot.commands.count { it.id in CozmoReliability.MOTORS })
+            } finally { session.close(); session.awaitClosed() }
+        }
+    }
+    private fun telemetry(time: Int, status: Int = 0): ByteArray = p.buffer(91).apply {
         putInt(0, time); putFloat(44, 45f); putFloat(72, 4f)
+        putInt(76, status)
         (0..3).forEach { putShort(80 + it * 2, ((it + 1) * 100).toShort()) }
     }.array()
     private fun waitFor(timeout: Long = 3000, condition: () -> Boolean) {
@@ -158,6 +229,9 @@ class CozmoTest {
         val client = DatagramSocket().apply { connect(InetAddress.getLoopbackAddress(), server.localPort) }
         val commands = CopyOnWriteArrayList<CozmoProtocol.Packet>()
         @Volatile var sendTelemetry = true
+        @Volatile var acknowledgeCommands = true
+        @Volatile var sendImages = false
+        @Volatile var status = 0
         @Volatile private var running = true
         private val worker = Thread {
             var target: java.net.SocketAddress? = null
@@ -178,11 +252,17 @@ class CozmoTest {
                             val firmware = p.buffer(4 + json.size).putShort(0).putShort(json.size.toShort()).put(json).array()
                             send(CozmoProtocol.Frame(9, 0, 2, ack, listOf(CozmoProtocol.Packet(2), p.command(0xee, firmware), p.command(0xed, ByteArray(12)))))
                         } else if (frame.type == 7) {
-                            commands.addAll(frame.packets); ack = frame.last
+                            commands.addAll(frame.packets)
+                            if (acknowledgeCommands) ack = frame.last
                         }
                     } catch (_: SocketTimeoutException) { }
                     if (target != null && sendTelemetry) send(CozmoProtocol.Frame(9, p.OOB, p.OOB, ack,
-                        listOf(CozmoProtocol.Packet(5, 0xf0, telemetry(++timestamp)))))
+                        listOf(CozmoProtocol.Packet(5, 0xf0, telemetry(++timestamp, status)))))
+                    if (target != null && sendImages) {
+                        val chunk = p.buffer(22).putInt(timestamp).putInt(timestamp).putInt(0)
+                            .put(8).put(4).put(1).put(0).putShort(0).putShort(2).put(0).put(33).array()
+                        send(CozmoProtocol.Frame(9, p.OOB, p.OOB, ack, listOf(CozmoProtocol.Packet(5, 0xf2, chunk))))
+                    }
                 } catch (_: Exception) { if (running) throw AssertionError("Fake robot failed") }
             }
         }.apply { isDaemon = true; start() }

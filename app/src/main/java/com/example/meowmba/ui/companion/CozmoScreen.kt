@@ -14,6 +14,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.example.meowmba.core.robot.cozmo.CozmoController
 import com.example.meowmba.core.robot.cozmo.CozmoProtocol
+import com.example.meowmba.core.robot.cozmo.CozmoReactions
 import com.example.meowmba.ui.theme.Button
 import com.example.meowmba.ui.theme.OutlinedButton
 import com.example.meowmba.ui.theme.Surface
@@ -69,7 +70,9 @@ fun CozmoScreen(controller: CozmoController, onClose: () -> Unit) {
             HorizontalDivider()
             Text("Head and lift", style = MaterialTheme.typography.titleMedium)
             CozmoButtons(listOf("look_up" to "Look up", "look_center" to "Center", "look_down" to "Look down"), state.connected, action)
-            CozmoButtons(listOf("lift_up" to "Lift up", "lift_down" to "Lift down"), state.connected, action)
+            CozmoButtons(listOf("lift_up" to "Lift up", "lift_middle" to "Half lift", "lift_down" to "Lift down"), state.connected, action)
+            CozmoButtons(listOf("calibrate" to "Calibrate head and lift"), state.connected, action)
+            Text("If head or lift does not respond, place Cozmo on a clear floor and calibrate. This moves both joints; keep fingers clear.", style = MaterialTheme.typography.bodySmall)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Short floor moves", modifier = Modifier.weight(1f))
                 Switch(state.wheelsEnabled, controller::setWheels, enabled = state.connected)
@@ -77,10 +80,15 @@ fun CozmoScreen(controller: CozmoController, onClose: () -> Unit) {
             Text("Use on a clear floor. Each tap moves for at most 0.35 seconds. Stop and disconnect disable driving. Do not rely on edge sensors on a table.",
                 style = MaterialTheme.typography.bodySmall)
             CozmoButtons(listOf("forward" to "Forward", "back" to "Back", "left" to "Left", "right" to "Right"), state.connected && state.wheelsEnabled, action)
+            CozmoButtons(listOf("arc_left" to "Curve left", "arc_right" to "Curve right"), state.connected && state.wheelsEnabled, action)
             HorizontalDivider()
             Text("Personality", style = MaterialTheme.typography.titleMedium)
+            Text("Original head/lift reactions — use on a clear floor. STOP cancels the sequence. These are not the official app's games or animations.", style = MaterialTheme.typography.bodySmall)
+            CozmoReactions.names.chunked(3).forEach { names ->
+                CozmoButtons(names.map { it to it.replaceFirstChar(Char::uppercaseChar) }, state.connected, action)
+            }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("React to Meow and blink", modifier = Modifier.weight(1f))
+                Text("React to Meow, pickup and cubes; blink", modifier = Modifier.weight(1f))
                 Switch(state.companionEyes, controller::setCompanion, enabled = state.connected)
             }
             CozmoProtocol.EXPRESSIONS.chunked(3).forEach { names ->

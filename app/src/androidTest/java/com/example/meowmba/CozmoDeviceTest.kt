@@ -26,6 +26,9 @@ class CozmoDeviceTest {
             screenshot.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
         }
         rule.onNodeWithText("Forward").performScrollTo().assertIsNotEnabled()
+        rule.onNodeWithText("Calibrate head and lift").performScrollTo().assertIsNotEnabled()
+        rule.onNodeWithText("Greet").performScrollTo().assertIsNotEnabled()
+        rule.onNodeWithText("Curve left").performScrollTo().assertIsNotEnabled()
         rule.onNodeWithText("Cozmo camera").performScrollTo().assertIsDisplayed()
         rule.onNodeWithText("Cubes").performScrollTo().assertIsDisplayed()
         rule.onNodeWithText("LOOI", substring = true).assertDoesNotExist()

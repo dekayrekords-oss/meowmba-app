@@ -1,5 +1,9 @@
 # Cozmo integration — separate Cozmo and LOOI controls (175 / 1.5.9)
 
+For the owner's hardware report and the179 repair/gesture additions, see
+[COZMO_REPAIR_179.md](COZMO_REPAIR_179.md). The entries below are historical
+174/175 receipts, not evidence of successful physical motor/camera operation.
+
 ## Use
 
 Open **Cozmo** in Meowmba's menu. Wake Cozmo on his charger and use **Wi-Fi settings** to join the network whose password appears on his face. Android may ask whether to stay on a network without internet; keep this connection. Close the official Cozmo app, return to Meowmba, and tap **Connect**. The robot itself must return firmware, body identity and fresh sensor packets before the screen reports connected.
