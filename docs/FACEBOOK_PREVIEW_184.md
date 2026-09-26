@@ -48,4 +48,19 @@ account selection/composer delivery have not been accepted on the Fold. Do not c
 Facebook publishing is verified from JVM tests. No phone install is authorized in this
 request; leave183 and its settings/data intact until the owner asks to install.
 
-Validation results will be recorded after tests complete.
+## Validation
+
+Implementation commit `6bbc098`. Full optimized build succeeded in42m40s.
+3,117 JVM tests: zero failures/errors, five existing skips. Lint: zero errors,
+208 warnings and12 hints. Matching preview signature and16KB ZIP alignment verified.
+All existing native/model files unchanged. Strict asset verifier reports only the
+intentional user-manual update; its packaged bytes match source. No baseline weakened.
+APK SHA256: `d8284c1e5b5d0c92a8b5142e674e486ae3761b55904a61989d5e05805a90e358`.
+APK and full receipt: Os workspace `work/facebook-repair-184/`.
+Not installed on phone or emulator; live Facebook selection/composer acceptance pending.
+
+The browser classifier also treated any mention of “page” as a new build request;
+it now uses the explicit browser-request parser. Regression coverage verifies inspection
+leaves the preview alone, completion never restarts it, errors do not repeat, wait loops
+are bounded, and late cancelled replies cannot mutate a page or clear a replacement.
+

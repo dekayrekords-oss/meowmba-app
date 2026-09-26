@@ -3,11 +3,14 @@
 Updated 2026-09-26. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
 This supersedes historical build-location/version instructions in other documents.
 
-- September26 **184 / 1.5.18 reserved by Codex** for Facebook destination selection and
+- September26 **184 / 1.5.18 prepared by Codex** for Facebook destination selection and
   preview-loop lifecycle repair. Claude's `feature/desk-apartment` (183) has been merged
-  into `feature/meow-flow-core`, preserving apartment features. Tests/build in progress;
-  NOT installed or published. Phone remains183. See `docs/FACEBOOK_PREVIEW_184.md`.
-  **184 reserved; next185.**
+  into `feature/meow-flow-core`, preserving apartment features. Source `6bbc098`;
+  3,117 tests,0 failures/errors,5 skips; lint0 errors/208 warnings/12 hints.
+  Signature/16KB alignment/native-model preservation verified; manual asset intentionally
+  updated. APK/receipt: Os `work/facebook-repair-184/`.
+  NOT installed or published. Phone remains183; live Facebook acceptance pending.
+  See `docs/FACEBOOK_PREVIEW_184.md`. **184 consumed; next185.**
 
 - September25 **183 / 1.5.17 built and installed by Claude** at the owner's explicit request:
   Meow's apartment (living room, office, bedroom), room media, Dev Studio projects on the Desk computer,
