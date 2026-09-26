@@ -83,6 +83,11 @@ APK SHA-256: `4b3f43a227231a4823660c1a7c930826fe30b78602298e157ed1656b489d5e31`.
 APK, detailed use instructions and validation evidence: Os `work/tasks-182/README.md`.
 The exact tested app snapshot is committed locally; no remote push or Play upload.
 
-The owner previously chose **Skip emulator installation**. No emulator/phone installation,
-account action, permission grant, charger simulation or robot actuation is part of this
-validation. Physical phone remains last verified preview 180 until a later installation.
+The owner then explicitly requested installation. Fold R5GL75XFCXD updated180→182 in
+place at21:54:58 Phoenix time, September25. Original firstInstallTime/appId and saved Desk
+content retained; separate Play155 unchanged. Installed APK checksum matches the verified
+artifact. PID22154 survived109.5seconds foreground with unchanged crash logs; Desk and the
+new saved-work screen were visually verified, then returned to Desk. Android auto-resumed
+Home (UNKNOWN launch state), so no measured cold-start claim. No emulator installation,
+account action, permission grant, charger simulation or robot actuation. Phone receipt:
+Os `work/tasks-182/validation/phone-install/README.md`. Real-service acceptance is pending.

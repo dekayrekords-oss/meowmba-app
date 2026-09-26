@@ -14,9 +14,14 @@ This supersedes historical build-location/version instructions in other document
   all162 protected181 runtime entries preserved. APK/receipt: Os `work/tasks-182/`;
   SHA256 `4b3f43a227231a4823660c1a7c930826fe30b78602298e157ed1656b489d5e31`.
   Native Robolectric component renders verified, including small-phone large text.
-  No emulator/phone install, remote push, Play upload or real external action. Phone
-  remains last verified180; cold startup, in-place upgrade and real-service acceptance
-  pending. Server browser/container workers and recurring website watches are future
+  Subsequently installed on Fold R5GL75XFCXD at21:54:58 MST September25 after explicit
+  owner request:180→182 in place, firstInstallTime/appId retained, Play155 unchanged.
+  Installed APK hash matches; PID22154 foreground/alive109.5seconds, crash buffer unchanged.
+  Saved Desk and new work screen visually verified; left on Desk. UNKNOWN launch state
+  because Home auto-resumed; no measured cold-start claim. Receipt: Os
+  `work/tasks-182/validation/phone-install/README.md`. No emulator install, remote push,
+  Play upload or real external action; real-service acceptance pending.
+  Server browser/container workers and recurring website watches are future
   components. Details: `docs/WORK_RESULTS_182.md`. **182 consumed; next183**.
 
 - September25 **181 / 1.5.15 prepared by Codex**: opt-in wireless-charger avatar
