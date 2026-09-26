@@ -3,6 +3,22 @@
 Updated 2026-09-25. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
 This supersedes historical build-location/version instructions in other documents.
 
+- September25 **182 / 1.5.16 prepared by Codex**: native saved companion work/results,
+  action checkpoints, explicit verified/handoff/unconfirmed receipts, Flow/Desk/chat review,
+  owner-selected North Star evidence links and paused project/desktop continuation at
+  uncertain outcomes. Interrupted actions are never replayed. Additive Room14 and
+  compatible schema12/13 backup import. Based on181; charger/launcher, Development Studio,
+  permissions, model configuration and native runtimes retained. Source
+  `05c540b6a668f322949ee881ff0aa91051bb8b6b`. Full3,094 JVM tests: zero failures/errors,
+  five existing skips; lint0errors/205warnings/12hints. Signature/16KB alignment pass;
+  all162 protected181 runtime entries preserved. APK/receipt: Os `work/tasks-182/`;
+  SHA256 `4b3f43a227231a4823660c1a7c930826fe30b78602298e157ed1656b489d5e31`.
+  Native Robolectric component renders verified, including small-phone large text.
+  No emulator/phone install, remote push, Play upload or real external action. Phone
+  remains last verified180; cold startup, in-place upgrade and real-service acceptance
+  pending. Server browser/container workers and recurring website watches are future
+  components. Details: `docs/WORK_RESULTS_182.md`. **182 consumed; next183**.
+
 - September25 **181 / 1.5.15 prepared by Codex**: opt-in wireless-charger avatar
   (foreground or separately approved background opening, unlock deferral, silent
   notification fallback, coil-dropout debounce) and optional HOME-role onboarding.
