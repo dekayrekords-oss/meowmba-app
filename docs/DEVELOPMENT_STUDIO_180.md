@@ -81,7 +81,7 @@ not measured battery/thermal improvement claims.
 
 ## Validation
 
-Prepared APK, not phone-installed. App source `9d755427dd134c0d1d774d27286532c7b6cf3091`.
+Prepared APK; subsequently phone-installed as recorded below. App source `9d755427dd134c0d1d774d27286532c7b6cf3091`.
 Final build succeeded in10m59s. Full3,054 JVM tests: zero failures/errors, five existing
 skips;18 backend tests pass. One emulator UI acceptance test passes (2.257s); corrected
 Compose capture visually inspected. Initial UIAutomation capture was blank despite
@@ -98,7 +98,15 @@ APK368,582,815bytes; SHA256
 Immutable APK/evidence in Os `work/development-180/`. Fold R5GL75XFCXD connected but
 still177/1.5.11; Termux package absent and both Computer ports refused connections.
 No account login, actual Claude/model call, phone install, SDK download/license agreement,
-generated APK installation or physical robot command performed.
+generated APK installation or physical robot command performed during development.
+
+Owner subsequently explicitly authorized the Meow update. Fold R5GL75XFCXD upgraded
+177→180 in place at2026-09-25 19:51:44 MST. First-install time/appId retained; Play155
+unchanged. Exact installed baseline signature and all161 protected runtime entries
+verified. Fresh PID26400 survived65seconds with no new crash entries; foreground and
+saved-content Home visually verified. Android's Home reuse produced UNKNOWN launch
+state, not a cold-start measurement. App left open; no coding-runtime installation,
+permission grant or robot motion. Phone receipt: Os `work/development-180/validation/phone-install/`.
 
 ## References used
 

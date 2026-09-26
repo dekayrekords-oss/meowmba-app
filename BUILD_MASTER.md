@@ -14,8 +14,13 @@ This supersedes historical build-location/version instructions in other document
   checks pass. No speed/battery improvement claim. Receipt/APK: Os `work/development-180/`;
   SHA256 `11f16a3ccb4c64ee38e2a927ec20cda66b4829c169c58988ca33c11d7e95aadd`.
   Details/limits: `docs/DEVELOPMENT_STUDIO_180.md`. Automatic Android SDK provisioning,
-  physical Ubuntu/Claude/build acceptance remain pending. Fold R5GL75XFCXD connected,
-  still177; Termux absent and4096/4097 closed. No phone install authorized this turn.
+  physical Ubuntu/Claude/build acceptance remain pending. Owner subsequently authorized
+  installation: Fold R5GL75XFCXD updated177→180 at19:51:44 MST, retaining firstInstallTime
+  and appId; Play155 unchanged. Installed certificate/all161 runtime entries verified.
+  Fresh PID26400 alive65seconds, crash buffer unchanged, foreground/saved-content UI
+  verified. Android reported UNKNOWN launch state (Home auto-restarted), not COLD.
+  Phone receipt: Os `work/development-180/validation/phone-install/README.md`.
+  Termux/Ubuntu/Claude setup still pending; no permission grants or robot commands.
   **180 consumed; next181**. Cozmo/LOOI remain separate, unchanged.
 
 - September 25: **179 / 1.5.13 built by Codex — Cozmo repair and original gestures**.
@@ -103,7 +108,7 @@ This supersedes historical build-location/version instructions in other document
 
 > **Codex, start here:** `docs/HANDOFF_CLAUDE_2026-09-23.md` — state after builds 158–166, how they
 > were built (full runtime flags), owner decisions, open work in priority order, and gotchas.
-> Codex is the build owner; **177 is the last verified Fold install; 180 Development Studio includes the earlier179 Cozmo repair and is prepared, not phone-installed**; next unallocated code **181**. Cozmo and LOOI remain separate. Current Desk update:
+> Codex is the build owner; **180 is the last verified Fold install, including Development Studio and the earlier179 Cozmo repair**; next unallocated code **181**. Cozmo and LOOI remain separate. Current Desk update:
 > `docs/LIVING_DESK_173.md`; preceding review: `docs/REVIEW_AND_ACTIONS_172.md`.
 
 - September 25 **1.5.7/code 173** (Codex), based on 172 / `a1f583c`, source `8d5fc87`: Living Desk.
