@@ -6,6 +6,7 @@ import android.content.ContentValues
 import android.content.Context
 import android.content.pm.PackageManager
 import android.provider.CalendarContract
+import com.example.meowmba.core.calendar.CalendarOccurrence
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.Instant
@@ -23,17 +24,25 @@ class CalendarCancelTool(private val context: Context,
         inputSchema = mapOf("query" to "string"), riskLevel = RiskLevel.MODERATE,
         environments = setOf(ToolEnvironment.PHONE), confirmationPolicy = ConfirmationPolicy.ALWAYS, timeoutMs = 15_000)
 
-    override suspend fun execute(args: Map<String, String>): ToolResult = withContext(Dispatchers.IO) {
+    override suspend fun execute(args: Map<String, String>): ToolResult {
         val request = CalendarCancellation.parse(args["query"].orEmpty())
-            ?: return@withContext ToolResult.Failure("Tell me the event title and today, tomorrow, or a date like 2026-09-26. Nothing was changed.")
+            ?: return ToolResult.Failure("Tell me the event title and today, tomorrow, or a date like 2026-09-26. Nothing was changed.")
+        return cancel(request, null)
+    }
+
+    /** Only the deliberate Flow comment submission calls this; IDs are not model tool arguments. */
+    suspend fun cancelOccurrence(target: CalendarOccurrence): ToolResult = cancel(null, target)
+
+    private suspend fun cancel(request: CalendarCancellation.Request?, expected: CalendarOccurrence?): ToolResult = withContext(Dispatchers.IO) {
         if (listOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR).any {
                 context.checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED })
             return@withContext ToolResult.Failure("Allow calendar read/write access in Settings so I can cancel the actual event. Nothing was changed.")
         try {
             val zone = ZoneId.systemDefault()
-            val date = request.day ?: LocalDate.now()
+            val date = expected?.let { Instant.ofEpochMilli(it.begin).atZone(zone).toLocalDate() }
+                ?: request?.day ?: LocalDate.now()
             val start = date.atStartOfDay(zone).toInstant().toEpochMilli()
-            val end = date.plusDays(if (request.day == null) 30 else 1).atStartOfDay(zone).toInstant().toEpochMilli()
+            val end = date.plusDays(if (expected == null && request?.day == null) 30 else 1).atStartOfDay(zone).toInstant().toEpochMilli()
             val uri = CalendarContract.Instances.CONTENT_URI.buildUpon().also {
                 ContentUris.appendId(it, start - 86_400_000L); ContentUris.appendId(it, end + 86_400_000L)
             }.build()
@@ -52,14 +61,20 @@ class CalendarCancelTool(private val context: Context,
                     val allDay = c.getInt(4) == 1
                     val begin = c.getLong(2)
                     val localDay = Instant.ofEpochMilli(begin).atZone(if (allDay) ZoneOffset.UTC else zone).toLocalDate()
-                    if (request.day?.let { localDay == it } ?: (begin in start until end)) {
-                        if (CalendarCancellation.matchesTitle(request, title)) matches += Match(c.getLong(0), title, begin,
+                    val selected = if (expected != null) c.getLong(0) == expected.eventId && begin == expected.begin &&
+                        c.getLong(3) == expected.end && title == expected.title
+                    else request != null && (request.day?.let { localDay == it } ?: (begin in start until end)) &&
+                        CalendarCancellation.matchesTitle(request, title)
+                    if (selected) {
+                        matches += Match(c.getLong(0), title, begin,
                             c.getLong(3), allDay, !c.getString(5).isNullOrBlank() || !c.getString(8).isNullOrBlank(), c.getInt(6), c.getString(7).orEmpty())
                     }
                 }
             } ?: return@withContext ToolResult.Failure("Calendar could not be read; nothing was changed.")
             val unique = matches.distinctBy { it.id to it.begin }
-            if (unique.isEmpty()) return@withContext ToolResult.Failure("No matching calendar occurrence was found. Nothing was changed; give me its exact title and date.")
+            if (unique.isEmpty()) return@withContext ToolResult.Failure(if (expected != null)
+                "This calendar event changed or is no longer available. Nothing was changed. Refresh Flow and comment on the current event."
+                else "No matching calendar occurrence was found. Nothing was changed; give me its exact title and date.")
             if (unique.size != 1) return@withContext ToolResult.Failure("More than one event matches; nothing was changed. Which one? " +
                 unique.take(6).joinToString("; ") { "${it.title} (${it.calendar}, ${Instant.ofEpochMilli(it.begin).atZone(zone)})" })
             val target = unique.single()
@@ -83,7 +98,7 @@ class CalendarCancelTool(private val context: Context,
             } == true
             if (!verified) return@withContext ToolResult.Failure("The calendar did not confirm cancellation. Check the event before relying on it being canceled.")
             onCanceled(target.title, target.begin)
-            ToolResult.Success("Canceled ${target.title} on ${request.day ?: Instant.ofEpochMilli(target.begin).atZone(zone).toLocalDate()} in ${target.calendar}. " +
+            ToolResult.Success("Canceled ${target.title} on ${request?.day ?: Instant.ofEpochMilli(target.begin).atZone(zone).toLocalDate()} in ${target.calendar}. " +
                 if (target.recurring) "Only that occurrence was canceled; the rest of the series is unchanged." else "Calendar cancellation verified.")
         } catch (e: kotlinx.coroutines.CancellationException) { throw e }
         catch (_: Exception) { ToolResult.Failure("Calendar cancellation could not be completed or verified. Check calendar access and the event; I won't claim it is canceled.") }

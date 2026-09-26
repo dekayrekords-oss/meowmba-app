@@ -3566,6 +3566,16 @@ class CompanionViewModel(
         }.getOrNull() }
     }
     val flowRuntime: com.example.meowmba.core.flow.FlowRuntime? get() = flowRuntimeLazy.value
+    private val _flowCommentRequest = MutableStateFlow<String?>(null)
+    val flowCommentRequest = _flowCommentRequest.asStateFlow()
+
+    /** Opens a composer only. Even a forged external intent can never submit a comment. */
+    fun openFlowComment(id: String) {
+        if (id.isBlank() || id.length > 300) return
+        setAppTheme(AppTheme.FLOW)
+        _flowCommentRequest.value = id
+    }
+    fun consumeFlowCommentRequest(id: String) { _flowCommentRequest.compareAndSet(id, null) }
 
     /** Laya's engine (for its timing) and user-started download; null without a context. */
     internal var layaEngine: com.example.meowmba.core.flow.laya.LayaEngine? = null
@@ -3633,6 +3643,7 @@ class CompanionViewModel(
             notifications = androidx.core.app.NotificationManagerCompat.getEnabledListenerPackages(ctx).contains(ctx.packageName),
             usage = com.example.meowmba.core.flow.sources.UsageSource(ctx) { emptySet() }.hasAccess(),
             calendar = calendarOk,
+            calendarWrite = ctx.checkSelfPermission(android.Manifest.permission.WRITE_CALENDAR) == android.content.pm.PackageManager.PERMISSION_GRANTED,
             activity = sensing.canSenseActivity(ctx),
             locationAlways = sensing.canLocateInBackground(ctx),
         )

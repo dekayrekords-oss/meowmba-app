@@ -134,6 +134,26 @@ internal fun FlowHomeRoute(vm: CompanionViewModel, state: CompanionState, paused
     var attachNote by remember { mutableStateOf<String?>(null) }
     var attention by remember { mutableStateOf(false) }
     var northStarOpen by remember { mutableStateOf(false) }
+    var accessSetup by remember { mutableStateOf(false) }
+    var commentItem by remember { mutableStateOf<Intention?>(null) }
+    var commentBusy by remember { mutableStateOf(false) }
+    var commentResult by remember { mutableStateOf<String?>(null) }
+    val guidedSetupIds = setOf(AppIntentions.SETUP_CALENDAR, AppIntentions.SETUP_NOTIFICATIONS, AppIntentions.SETUP_USAGE)
+    val openComment: (FlowItem) -> Unit = { card ->
+        commentItem = intentions.firstOrNull { it.id == card.intentionId }
+        commentResult = null
+    }
+    val requestedComment by vm.flowCommentRequest.collectAsState()
+    LaunchedEffect(requestedComment, commentBusy) {
+        val id = requestedComment ?: return@LaunchedEffect
+        if (commentBusy) return@LaunchedEffect
+        val item = flow.store.find(id)
+        if (item != null && item.status in setOf(IntentionStatus.OPEN, IntentionStatus.SNOOZED)) {
+            commentItem = item
+            commentResult = null
+        } else android.widget.Toast.makeText(context, "That Flow is no longer active. Nothing was changed.", android.widget.Toast.LENGTH_LONG).show()
+        vm.consumeFlowCommentRequest(id)
+    }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
         scope.launch { runCatching { vm.syncFlowAppData() }; flow.controller.schedule(immediate = true) }
     }
@@ -144,9 +164,12 @@ internal fun FlowHomeRoute(vm: CompanionViewModel, state: CompanionState, paused
             Instant.ofEpochMilli(snapshot.at.takeIf { it > 0 } ?: System.currentTimeMillis()).atZone(ZoneId.systemDefault())),
         modifier = Modifier.fillMaxSize(), reduceMotion = paused || state.avatarFpsTarget <= 15,
         speaking = !paused && state.interactionState == InteractionState.SPEAKING,
-        onPrimary = { scope.launch { handleFlowPrimary(vm, context, flow, it.intentionId, requestPermission) } },
+        onPrimary = { if (it.intentionId in guidedSetupIds) accessSetup = true
+            else scope.launch { handleFlowPrimary(vm, context, flow, it.intentionId, requestPermission) } },
         onLater = { scope.launch { flow.onLater(it.intentionId) } },
-        onInterruptAccept = { scope.launch { handleFlowPrimary(vm, context, flow, it.item.intentionId, requestPermission) } },
+        onComment = openComment,
+        onInterruptAccept = { if (it.item.intentionId in guidedSetupIds) accessSetup = true
+            else scope.launch { handleFlowPrimary(vm, context, flow, it.item.intentionId, requestPermission) } },
         onInterruptDecline = { scope.launch { flow.onLater(it.item.intentionId) } },
         onAdjust = { adjust = true }, onAsk = { compose = true }, onMic = vm::onFlowMicClick,
         onMenu = vm::openTiles, onDesk = { vm.setAppTheme(AppTheme.DESK) },
@@ -169,7 +192,8 @@ internal fun FlowHomeRoute(vm: CompanionViewModel, state: CompanionState, paused
             speechMode = state.features.speechMode, onSpeechMode = vm::setSpeechMode,
             idleAvatar = state.features.idleAvatar, idleMinutes = state.features.idleAvatarMinutes,
             onIdleAvatar = vm::setIdleAvatar,
-            onNorthStars = { adjust = false; northStarOpen = true })
+            onNorthStars = { adjust = false; northStarOpen = true },
+            onAccessSetup = { adjust = false; accessSetup = true })
     }
     if (northStarOpen && stars != null) ModalBottomSheet(onDismissRequest = { northStarOpen = false },
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -177,7 +201,8 @@ internal fun FlowHomeRoute(vm: CompanionViewModel, state: CompanionState, paused
         NorthStarSheet(stars, onClose = { northStarOpen = false }, onOpenSource = { id ->
             if (flow.store.intentions.value.any { it.id == id }) {
                 northStarOpen = false
-                scope.launch { handleFlowPrimary(vm, context, flow, id, requestPermission) }
+                if (id in guidedSetupIds) accessSetup = true
+                else scope.launch { handleFlowPrimary(vm, context, flow, id, requestPermission) }
             } else android.widget.Toast.makeText(context, "That item is no longer active. Its saved evidence is shown here.", android.widget.Toast.LENGTH_LONG).show()
         })
     }
@@ -185,9 +210,60 @@ internal fun FlowHomeRoute(vm: CompanionViewModel, state: CompanionState, paused
     if (attention) ModalBottomSheet(onDismissRequest = { attention = false }, dragHandle = null,
         containerColor = paper, shape = RoundedCornerShape(0.dp)) {
         AttentionSheet(needsAttention(snapshot), flowColors,
-            onPrimary = { item -> attention = false; scope.launch { handleFlowPrimary(vm, context, flow, item.intentionId, requestPermission) } },
+            onPrimary = { item -> attention = false
+                if (item.intentionId in guidedSetupIds) accessSetup = true
+                else scope.launch { handleFlowPrimary(vm, context, flow, item.intentionId, requestPermission) } },
             onLater = { item -> scope.launch { flow.onLater(item.intentionId) } },
-            onClose = { attention = false })
+            onClose = { attention = false },
+            onComment = { attention = false; openComment(it) })
+    }
+    commentItem?.let { original ->
+        ModalBottomSheet(onDismissRequest = { if (!commentBusy) commentItem = null },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true,
+                confirmValueChange = { !commentBusy || it != SheetValue.Hidden })) {
+            FlowCommentSheet(original, commentBusy, commentResult, onSubmit = { text ->
+                if (!commentBusy) {
+                    commentBusy = true
+                    scope.launch {
+                        try {
+                            val current = flow.store.find(original.id)
+                            val target = FlowComments.target(original)
+                            if (current == null || current.status !in setOf(IntentionStatus.OPEN, IntentionStatus.SNOOZED)) {
+                                commentResult = "This Flow is no longer active. Nothing was changed."
+                            } else if (FlowComments.requestsCancellation(text)) {
+                                if (target == null || FlowComments.target(current) != target) {
+                                    commentResult = "This event changed. Refresh Flow and comment on the current event; nothing was changed."
+                                } else {
+                                    val result = com.example.meowmba.core.agent.tools.CalendarCancelTool(context) { title, at ->
+                                        flow.cancelCalendarOccurrence(title, at, target.eventId)
+                                    }.cancelOccurrence(target)
+                                    commentResult = when (result) {
+                                        is com.example.meowmba.core.agent.tools.ToolResult.Success -> result.output
+                                        is com.example.meowmba.core.agent.tools.ToolResult.Failure -> result.error
+                                    }
+                                    if (result is com.example.meowmba.core.agent.tools.ToolResult.Success) vm.syncFlowAppData()
+                                }
+                            } else {
+                                val saved = flow.saveComment(original.id, text)
+                                commentResult = if (saved) "Comment saved on this Flow. No calendar change or message was sent."
+                                    else "This Flow is no longer available. The comment was not saved."
+                                if (saved) commentItem = flow.store.find(original.id)
+                            }
+                        } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                        catch (_: Exception) { commentResult = "Could not finish. Check the event before relying on a change." }
+                        finally { commentBusy = false }
+                    }
+                }
+            }, onSetup = { accessSetup = true }, onClose = { commentItem = null })
+        }
+    }
+    if (accessSetup) androidx.compose.ui.window.Dialog(onDismissRequest = { accessSetup = false },
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(Modifier.fillMaxWidth().fillMaxHeight(0.94f)) {
+            AccessSetupGuide(onClose = { accessSetup = false }, onChanged = {
+                scope.launch { runCatching { vm.syncFlowAppData() }; flow.controller.schedule(immediate = true) }
+            })
+        }
     }
     if (compose) ModalBottomSheet(onDismissRequest = { compose = false }, dragHandle = null,
         containerColor = paper, shape = RoundedCornerShape(0.dp)) {
@@ -267,9 +343,10 @@ internal fun needsAttention(s: FlowSnapshot): List<FlowItem> =
         .filter { it.urgency.atLeast(Urgency.WORTH_IT) || it.heldReason != null }
         .sortedByDescending { it.urgency.ordinal }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun AttentionSheet(items: List<FlowItem>, c: FlowColors, onPrimary: (FlowItem) -> Unit,
-                            onLater: (FlowItem) -> Unit, onClose: () -> Unit) {
+                            onLater: (FlowItem) -> Unit, onClose: () -> Unit, onComment: (FlowItem) -> Unit = {}) {
     CompositionLocalProvider(LocalFlowColors provides c) {
         Column(Modifier.fillMaxWidth().background(c.paper)
             .drawBehind { drawLine(c.ink, Offset(0f, 0f), Offset(size.width, 0f), 1.5.dp.toPx()) }
@@ -288,10 +365,11 @@ internal fun AttentionSheet(items: List<FlowItem>, c: FlowColors, onPrimary: (Fl
                     BasicText(item.headline, Modifier.padding(top = 4.dp), style = FlowType.itemTitle.copy(color = c.ink))
                     item.because.takeIf { it.isNotBlank() }?.let { BasicText(it, Modifier.padding(top = 3.dp), style = FlowType.itemDetail.copy(color = c.ink2)) }
                     item.heldReason?.let { BasicText(it, Modifier.padding(top = 3.dp), style = FlowType.itemDetail.copy(color = c.accent)) }
-                    Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(18.dp),
-                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    FlowRow(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         FlowButton(item.primary.label, c.ink, c.paper) { onPrimary(item) }
                         FlowLink("Later", c.ink) { onLater(item) }
+                        FlowLink("Comment", c.ink) { onComment(item) }
                     }
                 }
             }

@@ -223,6 +223,13 @@ fun SettingsScreen(
     var page by rememberSaveable(initialPage) {
         mutableStateOf(initialPage?.takeIf { requested -> SETTINGS_CATEGORIES.any { it.title == requested } })
     }
+    var accessSetup by rememberSaveable { mutableStateOf(false) }
+    if (accessSetup) androidx.compose.ui.window.Dialog(onDismissRequest = { accessSetup = false },
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(Modifier.fillMaxWidth().fillMaxHeight(0.94f)) {
+            com.example.meowmba.ui.flow.AccessSetupGuide(onClose = { accessSetup = false })
+        }
+    }
     var opencodeKey by remember { mutableStateOf(secureStorage.getApiKey("opencode") ?: "") }
     var defaultBrain by remember { mutableStateOf(secureStorage.getPreference("default_brain") ?: "openrouter") }
     var brainMenuOpen by remember { mutableStateOf(false) }
@@ -335,6 +342,9 @@ fun SettingsScreen(
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
+            OutlinedButton(onClick = { accessSetup = true }, modifier = Modifier.fillMaxWidth()) {
+                Text("Connect apps & tools — guided access")
+            }
             SETTINGS_CATEGORIES.forEach { category ->
                 SettingsCategoryCard(category) { page = category.title }
                 Spacer(Modifier.height(10.dp))
@@ -480,6 +490,7 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
             if (page == "Phone & device") {
+            OutlinedButton(onClick = { accessSetup = true }) { Text("Calendar, Gmail & tool access guide") }
 
             VoiceToggle(
                 label = "Cover-screen avatar",

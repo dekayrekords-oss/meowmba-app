@@ -89,7 +89,8 @@ class MeowFlowHomeUiTest {
         rule.onNodeWithText("IF YOU FEEL LIKE IT").assertIsDisplayed()
         shoot("flow-09-work-wraps-night")
         val bmp = capture()
-        val p = bmp.getPixel(bmp.width / 2, bmp.height / 2)
+        // Sample the paper margin, not the center where new card actions can move text.
+        val p = bmp.getPixel(bmp.width - 2, bmp.height / 2)
         assertTrue("night paper should be dark", (p shr 16 and 0xFF) < 60)
     }
 

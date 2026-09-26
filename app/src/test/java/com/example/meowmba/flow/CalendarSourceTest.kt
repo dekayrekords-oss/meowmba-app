@@ -18,13 +18,14 @@ import org.robolectric.annotation.Config
 class CalendarSourceTest {
     @Test fun mapsRowsSkippingAllDayAndFinished() {
         val c = MatrixCursor(CalendarSource.PROJECTION).apply {
-            addRow(arrayOf("Standup", at(9), at(9, 15), 0, 1, 1))            // finished
-            addRow(arrayOf("Holiday", at(0), at(23, 59), 1, 0, 1))          // all day
-            addRow(arrayOf("Tester check-in", at(15, 30), at(15, 50), 0, 1, 1))
-            addRow(arrayOf("", at(17), at(18), 0, 0, 1))
+            addRow(arrayOf("Standup", at(9), at(9, 15), 0, 1, 1, 1L))            // finished
+            addRow(arrayOf("Holiday", at(0), at(23, 59), 1, 0, 1, 2L))          // all day
+            addRow(arrayOf("Tester check-in", at(15, 30), at(15, 50), 0, 1, 1, 3L))
+            addRow(arrayOf("", at(17), at(18), 0, 0, 1, 4L))
         }
         val items = CalendarSource.mapRows(c, at(15, 12))
-        assertEquals(listOf("Tester check-in", "Busy"), items.map { it.title })
+        assertEquals(listOf("Tester check-in", ""), items.map { it.title })
+        assertEquals(listOf(3L, 4L), items.map { it.eventId })
         assertTrue(items.first().withPeople)
     }
 

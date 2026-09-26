@@ -3,6 +3,22 @@
 Updated 2026-09-25. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
 This supersedes historical build-location/version instructions in other documents.
 
+- September 25: **178 / 1.5.12 built by Codex — guided access and Flow comments**.
+  Calendar read/write, Gmail, notification and on-screen-tool guidance with live access
+  rechecks; Comment on main/more/attention/interrupt cards and Android notifications.
+  Notes persist on their Flow; explicit cancellation submissions target provider ID +
+  occurrence, verify the write and retire only that reminder. No new Gmail OAuth integration.
+  Full JVM: **3,043 tests, zero failures/errors, five existing skips**; eight emulator UI
+  checks pass. Daily lint: zero errors, 200 warnings, 12 hints (three new UseKtx style hints
+  reported as warnings). Matching signature/16KB alignment and all161 runtime entries
+  preserved against177. Optimized emulator COLD launch2485ms, samePID31865 foreground
+  after36seconds, crash buffer unchanged; actual guide and comment deep link checked.
+  APK/receipt: Os `work/flow-access-178/`, SHA256
+  `fb1fe9472bcea72b45b0956ab90e626fc05b734eb34693cdca30fb48f3a9647c`.
+  Details: `docs/FLOW_COMMENTS_178.md`. No phone install, real-calendar mutation,
+  permission grant or account sign-in during testing. Fold last verified177.
+  **178 consumed; next unallocated code179**.
+
 - September 25: **177 / 1.5.11 built by Codex — on-request store/deal assistance**.
   On-request store identification from existing place sources; no arrival announcements.
   Named-store deal search with source links, explicit uncertainty, and a one-shot human-request
@@ -58,7 +74,7 @@ This supersedes historical build-location/version instructions in other document
 
 > **Codex, start here:** `docs/HANDOFF_CLAUDE_2026-09-23.md` — state after builds 158–166, how they
 > were built (full runtime flags), owner decisions, open work in priority order, and gotchas.
-> Codex is the build owner again; **177 is the last verified Fold install, with separate Cozmo/LOOI controls, behavior repairs and on-request store help**; next unallocated code **178**. Current Desk update:
+> Codex is the build owner again; **177 is the last verified Fold install; 178 is prepared with guided access and contextual Flow comments**; next unallocated code **179**. Cozmo and LOOI remain separate. Current Desk update:
 > `docs/LIVING_DESK_173.md`; preceding review: `docs/REVIEW_AND_ACTIONS_172.md`.
 
 - September 25 **1.5.7/code 173** (Codex), based on 172 / `a1f583c`, source `8d5fc87`: Living Desk.

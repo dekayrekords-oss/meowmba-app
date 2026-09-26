@@ -70,7 +70,8 @@ data class Evidence(
 /** One word/phrase in the dateline. [fresh] = newly arrived, drawn in the accent colour. */
 data class Signal(val key: String, val label: String, val fresh: Boolean = false)
 
-data class CalendarItem(val title: String, val startAt: Long, val endAt: Long, val withPeople: Boolean)
+data class CalendarItem(val title: String, val startAt: Long, val endAt: Long, val withPeople: Boolean,
+                        val eventId: Long? = null)
 
 data class RouteFacts(val destination: String, val etaMinutes: Int, val bufferMinutes: Int)
 

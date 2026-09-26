@@ -21,7 +21,8 @@ object AppIntentions {
     data class Reminder(val id: Long, val name: String, val timeOfDay: String?, val enabled: Boolean, val userMade: Boolean, val lastRunAt: Long)
     data class Project(val id: Long, val name: String, val kindLabel: String, val lastOpenedAt: Long)
     data class Access(val notifications: Boolean, val usage: Boolean, val calendar: Boolean,
-                      val activity: Boolean = true, val locationAlways: Boolean = true)
+                      val activity: Boolean = true, val locationAlways: Boolean = true,
+                      val calendarWrite: Boolean = calendar)
 
     /** Id prefixes this object owns; anything with them that disappears from the list is closed. */
     val MANAGED_PREFIXES = listOf(REMINDER, PROJECT, CALENDAR, SETUP)
@@ -66,17 +67,21 @@ object AppIntentions {
         // Timed calendar events in the next 24 hours.
         calendar.filter { it.startAt in (now - 10 * 60_000L)..(now + 86_400_000L) }.take(4).forEach { c ->
             val at = Instant.ofEpochMilli(c.startAt).atZone(zone)
-            add(Intention("$CALENDAR${c.startAt}-${c.title.hashCode().toUInt()}",
-                "${c.title} at ${HM.format(at)}", if (c.withPeople) FlowKind.PEOPLE else FlowKind.WORK,
+            add(Intention(c.eventId?.let { "${CALENDAR}event-$it-${c.startAt}" }
+                ?: "$CALENDAR${c.startAt}-${c.title.take(60).hashCode().toUInt()}",
+                "${c.title.ifBlank { "Busy" }.take(60)} at ${HM.format(at)}", if (c.withPeople) FlowKind.PEOPLE else FlowKind.WORK,
                 if (c.withPeople) "on your calendar with other people" else "on your calendar", now, dueAt = c.startAt,
-                facts = mapOf(FlowPolicy.FACT_ACTION to "Open", FlowPolicy.FACT_SIGNALS to "cal")))
+                facts = mapOf(FlowPolicy.FACT_ACTION to "Open", FlowPolicy.FACT_SIGNALS to "cal",
+                    "calendar_title" to c.title, "calendar_begin" to c.startAt.toString(),
+                    "calendar_end" to c.endAt.toString()) +
+                    (c.eventId?.let { mapOf("calendar_event_id" to it.toString()) } ?: emptyMap())))
         }
 
         // Plain, dismissible "connect" items. They disappear as soon as access is granted.
         if (!access.notifications) add(setup(SETUP_NOTIFICATIONS, "Let Meow see who's waiting on you",
             "turn on notification access. Meow uses the sender and notification text on this phone to connect messages to your goals", now))
-        if (!access.calendar) add(setup(SETUP_CALENDAR, "Connect your calendar",
-            "let Meow bring up meetings before they start", now))
+        if (!access.calendar || !access.calendarWrite) add(setup(SETUP_CALENDAR, "Connect your calendar",
+            "follow the access guide to read events and allow calendar changes when you ask", now))
         if (!access.usage) add(setup(SETUP_USAGE, "Let Meow know what you're working in",
             "turn on usage access so Meow can tell when work starts and ends. Only app names are used", now))
         if (!access.activity) add(setup(SETUP_ACTIVITY, "Let Meow know when you're driving or walking",

@@ -37,6 +37,43 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class FlowRuntimeTest {
+    @Test fun providerIdentityUpgradeKeepsUsersLaterChoice() = runTest {
+        val start = Fx.at(12)
+        val old = Fx.bulb.copy(id = "cal-$start-${"Dentist".hashCode().toUInt()}", text = "Dentist at noon",
+            status = IntentionStatus.SNOOZED, snoozedUntil = start)
+        val fresh = com.example.meowmba.core.flow.sources.AppIntentions.build(Fx.at(9), Fx.zone, emptyList(), emptyList(),
+            listOf(com.example.meowmba.core.flow.CalendarItem("Dentist", start, Fx.at(13), false, 7)),
+            com.example.meowmba.core.flow.sources.AppIntentions.Access(true, true, true)).single()
+        val store = InMemoryIntentionStore(listOf(old))
+        val rt = FlowRuntime(ctx, backgroundScope, { true }, store, notifier = FakeNotifier())
+        rt.syncManaged(listOf(fresh), listOf("cal-"))
+        assertEquals(IntentionStatus.SNOOZED, store.find(fresh.id)?.status)
+        assertEquals(start, store.find(fresh.id)?.snoozedUntil)
+    }
+    @Test fun commentsSurviveManagedRefreshAndDoNotCloseTheFlow() = runTest {
+        val original = Fx.bulb.copy(id = "cal-event-7-123", facts = mapOf("calendar_title" to "First"))
+        val store = InMemoryIntentionStore(listOf(original))
+        val rt = FlowRuntime(ctx, backgroundScope, { true }, store, notifier = FakeNotifier())
+        assertTrue(rt.saveComment(original.id, "Bring notes"))
+        rt.syncManaged(listOf(original.copy(facts = mapOf("calendar_title" to "Updated"))), listOf("cal-"))
+        assertEquals("Bring notes", store.find(original.id)?.facts?.get(com.example.meowmba.core.flow.FlowComments.TEXT))
+        assertEquals("Updated", store.find(original.id)?.facts?.get("calendar_title"))
+        assertEquals(IntentionStatus.OPEN, store.find(original.id)?.status)
+        store.setStatus(original.id, IntentionStatus.DROPPED)
+        org.junit.Assert.assertFalse(rt.saveComment(original.id, "Late comment"))
+    }
+    @Test fun exactCalendarRetirementDoesNotDropDuplicateTitle() = runTest {
+        val apps = com.example.meowmba.core.flow.sources.AppIntentions
+        val events = apps.build(Fx.at(9), Fx.zone, emptyList(), emptyList(), listOf(
+            com.example.meowmba.core.flow.CalendarItem("Dentist", Fx.at(12), Fx.at(13), false, 1),
+            com.example.meowmba.core.flow.CalendarItem("Dentist", Fx.at(12), Fx.at(13), false, 2)),
+            com.example.meowmba.core.flow.sources.AppIntentions.Access(true, true, true))
+        val store = InMemoryIntentionStore(events)
+        val rt = FlowRuntime(ctx, backgroundScope, { true }, store, notifier = FakeNotifier())
+        rt.cancelCalendarOccurrence("Dentist", Fx.at(12), 2)
+        assertEquals(IntentionStatus.OPEN, store.find(events[0].id)?.status)
+        assertEquals(IntentionStatus.DROPPED, store.find(events[1].id)?.status)
+    }
     @Test fun confirmedCalendarCancellationDropsOnlyThatOccurrence() = runTest {
         val title = "Dentist"
         val start = Fx.at(16)

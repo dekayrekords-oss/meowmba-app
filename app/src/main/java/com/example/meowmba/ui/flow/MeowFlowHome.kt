@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -124,6 +126,7 @@ fun MeowFlowHome(
     /** The + button: camera, photo or file. Null hides it. */
     onAttach: (() -> Unit)? = null,
     northStar: (@Composable () -> Unit)? = null,
+    onComment: (FlowItem) -> Unit = {},
 ) {
     val hour = java.time.Instant.ofEpochMilli(snapshot.at.takeIf { it > 0 } ?: System.currentTimeMillis())
         .atZone(java.time.ZoneId.systemDefault()).hour
@@ -172,7 +175,7 @@ fun MeowFlowHome(
                 }
                 northStar?.invoke()
                 snapshot.main?.let { main ->
-                    key(main.intentionId) { MainThought(main, pushed, anchors, reduceMotion, onPrimary, onLater) }
+                    key(main.intentionId) { MainThought(main, pushed, anchors, reduceMotion, onPrimary, onLater, onComment) }
                 }
                 if (snapshot.main == null && snapshot.more.isEmpty()) {
                     BasicText("Nothing needs you right now.", Modifier.padding(top = 30.dp).testTag("flow_empty"),
@@ -184,7 +187,7 @@ fun MeowFlowHome(
                 // Keep a gap even when the screen is short (cover display) and the spacer collapses.
                 Spacer(Modifier.height(20.dp))
                 if (snapshot.more.isNotEmpty()) {
-                    FlowList(snapshot.more, snapshot.evening, pushed, anchors, reduceMotion, onPrimary)
+                    FlowList(snapshot.more, snapshot.evening, pushed, anchors, reduceMotion, onPrimary, onLater, onComment)
                 }
             }
 
@@ -205,7 +208,7 @@ fun MeowFlowHome(
                     InterruptBand(
                         shown, distanceRemainingMeters, speaking, bandResolution,
                         Modifier.onSizeChanged { with(density) { bandHeight = it.height.toDp() } },
-                        onInterruptAccept, onInterruptDecline,
+                        onInterruptAccept, onInterruptDecline, onComment,
                     )
                 }
             }
@@ -325,10 +328,11 @@ internal fun kindLabel(item: FlowItem, evening: Boolean = false): String = when 
     FlowKind.OTHER -> "For you"
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun MainThought(
     item: FlowItem, compact: Boolean, anchors: MutableMap<String, LayoutCoordinates>, reduceMotion: Boolean,
-    onPrimary: (FlowItem) -> Unit, onLater: (FlowItem) -> Unit,
+    onPrimary: (FlowItem) -> Unit, onLater: (FlowItem) -> Unit, onComment: (FlowItem) -> Unit,
 ) {
     val c = LocalFlowColors.current
     Column(Modifier.padding(top = if (compact) 18.dp else 30.dp).enterAnimation(0, reduceMotion).testTag("flow_main")) {
@@ -342,10 +346,11 @@ private fun MainThought(
         if (!compact && item.because.isNotBlank()) {
             BasicText(item.because, Modifier.padding(top = 12.dp), style = FlowType.because.copy(color = c.ink2))
         }
-        Row(Modifier.padding(top = if (compact) 14.dp else 20.dp), horizontalArrangement = Arrangement.spacedBy(20.dp),
-            verticalAlignment = Alignment.CenterVertically) {
+        FlowRow(Modifier.padding(top = if (compact) 14.dp else 20.dp), horizontalArrangement = Arrangement.spacedBy(20.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)) {
             FlowButton(item.primary.label, c.ink, c.paper) { onPrimary(item) }
             item.secondary?.let { FlowLink(it.label, c.ink) { onLater(item) } }
+            FlowLink("Comment", c.ink) { onComment(item) }
         }
     }
 }
@@ -372,10 +377,11 @@ internal fun FlowLink(label: String, color: Color, onClick: () -> Unit) {
 
 // ---- more items ------------------------------------------------------------------------------
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun FlowList(
     items: List<FlowItem>, evening: Boolean, compact: Boolean, anchors: MutableMap<String, LayoutCoordinates>,
-    reduceMotion: Boolean, onPrimary: (FlowItem) -> Unit,
+    reduceMotion: Boolean, onPrimary: (FlowItem) -> Unit, onLater: (FlowItem) -> Unit, onComment: (FlowItem) -> Unit,
 ) {
     val c = LocalFlowColors.current
     Column(Modifier.fillMaxWidth().testTag("flow_more")) {
@@ -415,10 +421,12 @@ private fun FlowList(
                         if (!compact && item.because.isNotBlank()) {
                             BasicText(item.because, Modifier.padding(top = 2.dp), style = FlowType.itemDetail.copy(color = c.ink2))
                         }
-                    }
-                    Box(Modifier.height(32.dp).clickable(role = Role.Button, onClickLabel = item.primary.label) { onPrimary(item) },
-                        contentAlignment = Alignment.CenterEnd) {
-                        BasicText(item.primary.label + " →", style = FlowType.itemAction.copy(color = c.ink))
+                        FlowRow(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FlowLink(item.primary.label, c.ink) { onPrimary(item) }
+                            FlowLink("Later", c.ink) { onLater(item) }
+                            FlowLink("Comment", c.ink) { onComment(item) }
+                        }
                     }
                 }
             }
@@ -501,10 +509,11 @@ private fun MicGlyph(color: Color, slashed: Boolean = false) {
 
 // ---- interruption band -----------------------------------------------------------------------
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun InterruptBand(
     interrupt: FlowInterrupt, remainingMeters: Int?, speaking: Boolean, resolution: BandResolution?,
-    modifier: Modifier, onAccept: (FlowInterrupt) -> Unit, onDecline: (FlowInterrupt) -> Unit,
+    modifier: Modifier, onAccept: (FlowInterrupt) -> Unit, onDecline: (FlowInterrupt) -> Unit, onComment: (FlowItem) -> Unit,
 ) {
     val c = LocalFlowColors.current
     val item = interrupt.item
@@ -525,9 +534,10 @@ private fun InterruptBand(
             interrupt.spokenLine?.takeIf { it != item.headline }?.let { line -> VoiceCaption(line, speaking, c.onAccent) }
             val cd = interrupt.countdown
             if (cd != null && remainingMeters != null) Distance(remainingMeters, cd.startMeters, c.onAccent)
-            Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
+            FlowRow(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 FlowButton(item.primary.label, c.onAccent, c.accent) { onAccept(interrupt) }
                 FlowLink("Later", c.onAccent) { onDecline(interrupt) }
+                FlowLink("Comment", c.onAccent) { onComment(item) }
             }
         }
     }

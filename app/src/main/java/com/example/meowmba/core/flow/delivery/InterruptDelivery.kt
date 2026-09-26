@@ -131,6 +131,13 @@ class AndroidFlowNotifier(private val context: Context) : FlowNotifier {
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+        val comment = PendingIntent.getActivity(context, 3,
+            Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                data = android.net.Uri.parse("meow-flow://comment/${android.net.Uri.encode(item.intentionId)}")
+                putExtra(EXTRA_OPEN_FLOW, item.intentionId)
+                putExtra(EXTRA_COMMENT_FLOW, item.intentionId)
+            }, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val n = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(item.headline)
@@ -143,7 +150,7 @@ class AndroidFlowNotifier(private val context: Context) : FlowNotifier {
             .addAction(0, if (isMessage && conversation == null) "Open Meow" else item.primary.label,
                 if (isMessage) conversation ?: open else action(item.intentionId, ACTION_PRIMARY, 1))
             .addAction(0, "Later", action(item.intentionId, ACTION_LATER, 2))
-            .addAction(0, "Open Meow", open)
+            .addAction(0, "Comment", comment)
             .build()
         if (android.os.Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(
                 android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) return
@@ -164,6 +171,7 @@ class AndroidFlowNotifier(private val context: Context) : FlowNotifier {
         const val EXTRA_INTENTION = "meow_flow_intention"
         const val EXTRA_ACTION = "meow_flow_action"
         const val EXTRA_OPEN_FLOW = "meow_flow_open"
+        const val EXTRA_COMMENT_FLOW = "meow_flow_comment"
         const val ACTION_PRIMARY = "primary"
         const val ACTION_LATER = "later"
     }

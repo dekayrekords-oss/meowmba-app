@@ -49,6 +49,28 @@ class CalendarCancelToolTest {
         assertTrue(CalendarCancelTool(ctx).execute(mapOf("query" to "cancel the event tomorrow")) is ToolResult.Failure)
         assertEquals(0, provider.updates + provider.inserts)
     }
+    @Test fun flowIdentitySelectsOneOfIdenticalOccurrences() = runTest {
+        provider.duplicate = true
+        val target = com.example.meowmba.core.calendar.CalendarOccurrence(2, "Dentist", begin, begin + 3600000L)
+        assertTrue(CalendarCancelTool(ctx).cancelOccurrence(target) is ToolResult.Success)
+        assertEquals(1, provider.updates)
+        assertEquals("2", provider.updateUri?.lastPathSegment)
+    }
+    @Test fun staleFlowTitleTimeOrIdentityNeverWrites() = runTest {
+        val target = com.example.meowmba.core.calendar.CalendarOccurrence(1, "Dentist", begin, begin + 3600000L)
+        listOf(target.copy(title = "Other"), target.copy(begin = begin + 60000L), target.copy(end = begin + 7200000L),
+            target.copy(eventId = 99)).forEach { assertTrue(CalendarCancelTool(ctx).cancelOccurrence(it) is ToolResult.Failure) }
+        assertEquals(0, provider.updates + provider.inserts)
+    }
+    @Test fun flowRecurringCancellationUsesExactOccurrenceAndPermissions() = runTest {
+        val target = com.example.meowmba.core.calendar.CalendarOccurrence(1, "Dentist", begin, begin + 3600000L)
+        provider.recurring = true
+        assertTrue(CalendarCancelTool(ctx).cancelOccurrence(target) is ToolResult.Success)
+        assertEquals(begin, provider.insertValues?.getAsLong(CalendarContract.Events.ORIGINAL_INSTANCE_TIME))
+        Shadows.shadowOf(ctx as Application).denyPermissions(Manifest.permission.WRITE_CALENDAR)
+        assertTrue(CalendarCancelTool(ctx).cancelOccurrence(target) is ToolResult.Failure)
+        assertEquals(1, provider.inserts)
+    }
     @Test fun recurrenceCreatesOnlyAnException() = runTest {
         provider.recurring = true
         assertTrue(CalendarCancelTool(ctx).execute(mapOf("query" to "cancel dentist tomorrow")) is ToolResult.Success)
@@ -84,6 +106,7 @@ class CalendarCancelToolTest {
         var duplicate = false; var recurring = false; var readOnly = false; var refuseUpdate = false
         var updates = 0; var inserts = 0; var status = CalendarContract.Events.STATUS_CONFIRMED
         var insertUri: Uri? = null; var insertValues: ContentValues? = null
+        var updateUri: Uri? = null
         override fun onCreate() = true
         override fun getType(uri: Uri) = "vnd.android.cursor.item/event"
         override fun query(uri: Uri, projection: Array<out String>?, selection: String?, args: Array<out String>?, sort: String?): Cursor {
@@ -112,6 +135,7 @@ class CalendarCancelToolTest {
         }
         override fun update(uri: Uri, values: ContentValues?, selection: String?, args: Array<out String>?): Int {
             updates++
+            updateUri = uri
             if (refuseUpdate) return 0
             status = values!!.getAsInteger(CalendarContract.Events.STATUS)
             return 1

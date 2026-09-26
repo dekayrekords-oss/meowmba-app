@@ -87,6 +87,11 @@ class AndroidFlowNotifierTest {
         assertEquals(AndroidFlowNotifier.CHANNEL_ID, posted.channelId)
         assertEquals(3, posted.actions.size)
         assertEquals("Later", posted.actions[1].title.toString())
+        assertEquals("Comment", posted.actions[2].title.toString())
+        val commentIntent = shadowOf(posted.actions[2].actionIntent).savedIntent
+        assertEquals(i.item.intentionId, commentIntent.getStringExtra(AndroidFlowNotifier.EXTRA_COMMENT_FLOW))
+        assertEquals("comment", commentIntent.data?.host)
+        assertTrue(shadowOf(posted.actions[2].actionIntent).isActivity)
         assertEquals(NotificationManager.IMPORTANCE_HIGH, nm.getNotificationChannel(AndroidFlowNotifier.CHANNEL_ID).importance)
     }
 }

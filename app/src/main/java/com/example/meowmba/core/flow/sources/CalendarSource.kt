@@ -40,6 +40,7 @@ class CalendarSource(private val context: Context, private val horizonMs: Long =
             CalendarContract.Instances.ALL_DAY,
             CalendarContract.Instances.HAS_ATTENDEE_DATA,
             CalendarContract.Instances.SELF_ATTENDEE_STATUS,
+            CalendarContract.Instances.EVENT_ID,
         )
         /** Skip events the user declined. */
         private val SELECTION = "(${CalendarContract.Instances.SELF_ATTENDEE_STATUS} IS NULL OR ${CalendarContract.Instances.SELF_ATTENDEE_STATUS} != ${CalendarContract.Attendees.ATTENDEE_STATUS_DECLINED}) AND " +
@@ -52,8 +53,9 @@ class CalendarSource(private val context: Context, private val horizonMs: Long =
                 val allDay = c.getInt(3) == 1
                 val end = c.getLong(2)
                 if (allDay || end < now) continue
-                val title = c.getString(0)?.trim().orEmpty().ifEmpty { "Busy" }.take(60)
-                out += CalendarItem(title, c.getLong(1), end, withPeople = c.getInt(4) == 1)
+                val title = c.getString(0).orEmpty()
+                out += CalendarItem(title, c.getLong(1), end, withPeople = c.getInt(4) == 1,
+                    eventId = if (c.isNull(6)) null else c.getLong(6))
             }
             return out
         }

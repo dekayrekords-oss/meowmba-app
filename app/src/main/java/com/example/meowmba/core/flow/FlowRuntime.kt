@@ -16,6 +16,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.time.LocalDate
 
 /**
@@ -43,6 +45,7 @@ class FlowRuntime(
     /** Shown in the dateline when there is room, e.g. current weather. */
     ambient: () -> Signal? = { null },
 ) {
+    private val managedWriteLock = Mutex()
     private val prefs = com.example.meowmba.core.backup.BackupPreferences.open(context, FlowSettingsStore.PREFS_NAME, Context.MODE_PRIVATE)
     private val settingsStore = FlowSettingsStore(SharedPreferencesKeyValue(prefs))
     private val settingsState = MutableStateFlow(settingsStore.load())
@@ -104,13 +107,24 @@ class FlowRuntime(
      * Apply intentions generated from app data (AppIntentions). New ones are added; changed ones
      * keep the user's status (Done/Later); managed ones that no longer apply are closed.
      */
-    suspend fun syncManaged(fresh: List<Intention>, prefixes: List<String>) {
+    suspend fun syncManaged(fresh: List<Intention>, prefixes: List<String>) = managedWriteLock.withLock {
         val existing = store.intentions.value.associateBy { it.id }
-        fresh.forEach { n ->
-            val old = existing[n.id]
+        fresh.forEach { source ->
+            val legacyId = FlowComments.target(source)?.let {
+                "${com.example.meowmba.core.flow.sources.AppIntentions.CALENDAR}${it.begin}-${it.title.trim().ifBlank { "Busy" }.take(60).hashCode().toUInt()}"
+            }
+            // Preserve Later/Done across the legacy title-hash → provider-ID migration,
+            // but never transfer a colliding legacy card's state to two different events.
+            val legacy = legacyId?.takeIf { key -> fresh.count { candidate ->
+                FlowComments.target(candidate)?.let {
+                    "${com.example.meowmba.core.flow.sources.AppIntentions.CALENDAR}${it.begin}-${it.title.trim().ifBlank { "Busy" }.take(60).hashCode().toUInt()}"
+                } == key
+            } == 1 }?.let { store.find(it) }
+            val old = store.find(source.id) ?: legacy
+            val n = source.copy(facts = FlowComments.retainComment(source.facts, old?.facts.orEmpty()))
             when {
                 old == null -> store.upsert(n)
-                old.text != n.text || old.dueAt != n.dueAt || old.facts != n.facts ->
+                old.id != n.id || old.text != n.text || old.dueAt != n.dueAt || old.facts != n.facts ->
                     store.upsert(n.copy(status = old.status, snoozedUntil = old.snoozedUntil, createdAt = old.createdAt))
             }
         }
@@ -123,13 +137,30 @@ class FlowRuntime(
     }
 
     /** Something the user said in chat; saved only for explicit "I need to…" phrasing (rules mode). */
-    suspend fun cancelCalendarOccurrence(title: String, begin: Long) {
+    suspend fun cancelCalendarOccurrence(title: String, begin: Long, eventId: Long? = null) = managedWriteLock.withLock {
         val id = "${com.example.meowmba.core.flow.sources.AppIntentions.CALENDAR}$begin-${title.take(60).hashCode().toUInt()}"
         // Exact provider title + occurrence key; never retire unrelated recurring reminders.
-        store.setStatus(id, IntentionStatus.DROPPED)
-        controller.onPrimary(id, completes = false)
-        delivery.resolved(id)
+        val ids = store.intentions.value.filter { item ->
+            val target = FlowComments.target(item)
+            if (target != null) target.begin == begin && target.title == title &&
+                (eventId == null || eventId == target.eventId)
+            else item.id == id
+        }.map { it.id }.ifEmpty { listOf(eventId?.let { "cal-event-$it-$begin" } ?: id) }
+        ids.forEach { key ->
+            store.setStatus(key, IntentionStatus.DROPPED)
+            controller.onPrimary(key, completes = false)
+            delivery.resolved(key)
+        }
         publish(Evidence(EvidenceType.CALENDAR, System.currentTimeMillis(), "cal", "Calendar cancellation confirmed"))
+    }
+
+    suspend fun saveComment(id: String, text: String): Boolean = managedWriteLock.withLock {
+        val item = store.find(id) ?: return@withLock false
+        if (item.status !in setOf(IntentionStatus.OPEN, IntentionStatus.SNOOZED) || text.isBlank()) return@withLock false
+        store.upsert(item.copy(facts = item.facts + mapOf(FlowComments.TEXT to text.trim().take(1000),
+            FlowComments.AT to System.currentTimeMillis().toString())))
+        controller.schedule(immediate = true)
+        true
     }
 
     /** Something the user said in chat; saved only for explicit "I need to…" phrasing (rules mode). */

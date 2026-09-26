@@ -187,6 +187,7 @@ class MainActivity : ComponentActivity() {
                 androidx.compose.runtime.SideEffect {
                     companionViewModel = viewModel
                     deliverPendingSharedScreen(viewModel)
+                    pendingFlowComment?.let { id -> pendingFlowComment = null; viewModel.openFlowComment(id) }
                 }
                 val uiState by viewModel.uiState.collectAsState()
                 val qrRequested by viewModel.qrScannerRequested.collectAsState()
@@ -542,6 +543,7 @@ class MainActivity : ComponentActivity() {
 
     /** Wake command arriving before the ViewModel exists (cold launch). */
     private var pendingAvatarHome = false
+    private var pendingFlowComment: String? = null
     private var pendingWakeCommand: String? = null
     private var pendingBusinessAgents = false
     private var pendingSharedText: String? = null
@@ -578,6 +580,10 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun consumeWakeCommand(source: Intent?) {
+        source?.getStringExtra(com.example.meowmba.core.flow.delivery.AndroidFlowNotifier.EXTRA_COMMENT_FLOW)?.let { id ->
+            companionViewModel?.openFlowComment(id) ?: run { pendingFlowComment = id }
+            source.removeExtra(com.example.meowmba.core.flow.delivery.AndroidFlowNotifier.EXTRA_COMMENT_FLOW)
+        }
         if (source?.hasExtra(com.example.meowmba.core.flow.delivery.AndroidFlowNotifier.EXTRA_OPEN_FLOW) == true) {
             secureStorage.savePreference("app_theme", "flow")
             companionViewModel?.setAppTheme(com.example.meowmba.ui.companion.AppTheme.FLOW)
