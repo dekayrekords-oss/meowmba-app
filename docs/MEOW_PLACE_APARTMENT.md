@@ -90,3 +90,38 @@ These changes are on branch `feature/desk-apartment`, based on Codex's 184 (`d23
   - A wider rack (82 units) between slim tower speakers.
   - A 74×44 display shows ▶ PLAYING / ❚❚ PAUSED, the app name, the song (13 characters) and the artist, with level meters.
 - **Tests:** `DeskCatLifeTest.kt` covers the setting mapping, that "Never" stays in the room, that the gait, breathing, crouch, sit and loaf all change the drawing, and that a long-press opens the routine sheet.
+
+## Update 2026-09-26 (evening): living room, one moon, landscape rooms
+
+Owner request: only one moon (office window); clouds in the bedroom window; a wider stereo and TV
+so what's playing is readable; the cat tower behind the couch with more levels; a customisable
+picture; and, in landscape only, a wider bookshelf, a much bigger TV and a longer bed.
+
+- **One moon.** The office window has one crescent moon (drawn as a real crescent, no ghost outline).
+  The bedroom window shows clouds day and night, with no sun or moon, so the unfolded view never
+  shows two.
+- **Living room, left to right:** the bookshelf with the picture above it, then the couch with the
+  tower behind it, then the stereo with the TV on the wall above.
+  - **Tower:** two sisal posts, five levels, a cubby and a toy. The cat climbs and leaves it via
+    the middle platform (`RoomSpots.towerStep`).
+  - **Stereo:** now 176 units wide; its receiver display is 120 × 60. Titles are fitted by
+    measuring, not by character count.
+  - **TV:** the text scales with the set.
+  - Geometry lives in one place, `DeskLayout.living` (`LivingPlan`). The painter, the tap frames
+    (`DeskObject.frame(layout)`) and the cat spots (`DeskCatBehavior.spots(layout)`) all read it.
+- **Picture (`DeskObject.PICTURE`).**
+  - Tapping it opens a panel with "Choose a photo" (Android photo picker, no permission needed)
+    and "Back to the painting".
+  - `DeskPicture` keeps a JPEG copy of at most 720 px in `filesDir/desk/`. The original photo is
+    never touched or uploaded.
+- **Landscape (`DeskLayout.LANDSCAPE`).** Chosen when the screen is wider than it is tall. It adds
+  a 180-unit wing on each side; the office and doorways don't move.
+  - Bookshelf 156 wide (was 80).
+  - TV 316 × 186 (about 2× the area).
+  - Stereo 280 wide.
+  - Bed 264 long (was 140), plus a nightstand and lamp.
+  - The rooms are laid out clear of the side navigation (`startInset`). Portrait and the unfolded
+    portrait screen keep `STANDARD`.
+- **Tests:** `DeskLivingRoomTest.kt` covers bounds, overlap, sizes, tower climbing, the picture
+  panel, and renders (`apartment-landscape-night`, `apartment-open-night`,
+  `apartment-cover-living`, `apartment-cover-bedroom-day`).

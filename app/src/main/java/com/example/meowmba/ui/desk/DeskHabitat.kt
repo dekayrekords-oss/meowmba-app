@@ -93,6 +93,8 @@ fun DeskHabitat(
     /** Space kept clear at the top (status bar) and bottom (navigation) of the screen. */
     topInset: Dp = 0.dp,
     bottomInset: Dp = 0.dp,
+    /** Space kept clear on the left (the landscape side navigation). */
+    startInset: Dp = 0.dp,
     activity: DeskCatActivity = DeskCatActivity.IDLE,
     reply: DeskCatReply? = null,
     /**
@@ -105,6 +107,8 @@ fun DeskHabitat(
     roomTrips: Float = DeskRoomTrips.DEFAULT.chance,
     /** Long-press on the cat (opens its routine settings). */
     onCatLongPress: (() -> Unit)? = null,
+    /** The user's photo for the living-room picture frame; null shows the painting. */
+    picture: androidx.compose.ui.graphics.ImageBitmap? = null,
 ) {
     val measurer = rememberTextMeasurer()
     val cat = remember { CatMotion() }
@@ -123,11 +127,17 @@ fun DeskHabitat(
     /** A room the user asked to look at; the camera shows it until the cat gets there. */
     var lookRoom by remember { mutableStateOf<DeskRoom?>(null) }
     var wideLayout by remember { mutableStateOf(false) }
+    /** Landscape spreads the living room and bedroom out; set from the screen size below. */
+    var layout by remember { mutableStateOf(DeskLayout.STANDARD) }
 
     // One owner cancels idle work immediately when a question, tap, pause or heat arrives.
-    LaunchedEffect(request, activity, reply?.key, animate, visible, fpsTarget, wanderEveryMs, lookRoom) {
+    LaunchedEffect(request, activity, reply?.key, animate, visible, fpsTarget, wanderEveryMs, lookRoom, layout) {
         cat.walking = false
         cat.phase = 0f
+        if (apartment && (cat.x < layout.left - 20f || cat.x + 110f > layout.right + 20f)) {
+            // Turned from landscape to portrait while the cat was in the extra space: bring it in.
+            cat.x = cat.x.coerceIn(layout.left + 10f, layout.right - 120f); cat.y = DeskCatBehavior.FLOOR; cat.pose = DeskCatPose.REST
+        }
         cat.blink = 0f
         if ((!visible || !animate) && cat.pose == DeskCatPose.WALK) {
             // A suspended hop must not leave a frozen cat hanging between the desk and floor.
@@ -208,6 +218,15 @@ fun DeskHabitat(
             // Going far (another room, across the office): hop down, walk the floor, hop up.
             val far = DeskRoom.of(cat.x) != DeskRoom.of(spot.x) || abs(spot.x - cat.x) > 200f
             val floor = DeskCatBehavior.FLOOR
+            // The living-room tower is tall: the cat climbs it, and leaves it, by its middle platform.
+            val spots = DeskCatBehavior.spots(layout)
+            val onTower = abs(cat.x - spots.livingTower.x) < 2f && abs(cat.y - spots.livingTower.y) < 2f
+            if (onTower && spot != spots.livingTower) leg(spots.towerStep)
+            if (spot == spots.livingTower && !onTower) {
+                if (abs(cat.y - floor) > 20f && cat.y > spots.towerStep.y) leg(DeskCatSpot(cat.x, floor))
+                if (abs(cat.y - spots.towerStep.y) > 2f) { leg(DeskCatSpot(spots.towerStep.x, floor)); leg(spots.towerStep) }
+                leg(spot); return
+            }
             if (far && cat.y < floor - 20f) leg(DeskCatSpot(cat.x, floor))
             if (far && abs(spot.y - floor) > 20f) leg(DeskCatSpot(spot.x, floor))
             leg(spot)
@@ -311,7 +330,7 @@ fun DeskHabitat(
                 }
                 DeskCatActivity.IDLE -> {
                     request?.takeIf { it.first != cat.handledRequest }?.let { (id, obj) ->
-                        perform(DeskCatBehavior.atObject(obj)) {
+                        perform(DeskCatBehavior.atObject(obj, layout)) {
                             cat.handledRequest = id
                             bubble = lineForNow(obj); onArriveNow(obj)
                         }
@@ -338,7 +357,7 @@ fun DeskHabitat(
                         val act = if (!apartment) DeskCatBehavior.idle(random, previous, stateNow.trayCount > 0, stateNow.projectTitle.isNotBlank())
                             else DeskCatBehavior.apartmentIdle(random, previous, DeskRoom.of(cat.x), stateNow.trayCount > 0,
                                 stateNow.projectTitle.isNotBlank(), stateNow.room.music?.playing == true, stateNow.room.video?.playing == true,
-                                roomChance = roomTripsNow)
+                                roomChance = roomTripsNow, layout = layout)
                         previous = act.pose
                         perform(act)
                         if (cat.y < 516f) moveTo(settle())
@@ -369,12 +388,16 @@ fun DeskHabitat(
         // Unfolded (or any wide screen): all three rooms side by side. Folded: one room, following the cat.
         val wide = apartment && (maxWidth >= usableHeight || maxWidth >= 600.dp)
         wideLayout = wide
-        val sceneWidth = if (wide) DeskRoom.APT_WIDTH else SCENE_W
+        // A landscape screen has width to spare: the outer rooms grow (bigger TV, bookshelf and bed).
+        val plan = if (wide && maxWidth > maxHeight) DeskLayout.LANDSCAPE else DeskLayout.STANDARD
+        layout = plan
+        val sceneWidth = if (wide) plan.width else SCENE_W
         // Fit the part of the scene that has content (clock to desk), not the empty floor below it,
         // so the rooms are as large as the screen allows. The walls and floor extend to every edge.
-        val unit = minOf(maxWidth / sceneWidth, usableHeight / (VIEW_BOTTOM - VIEW_TOP)) // dp per scene unit
+        val usableWidth = maxWidth - startInset
+        val unit = minOf(usableWidth / sceneWidth, usableHeight / (VIEW_BOTTOM - VIEW_TOP)) // dp per scene unit
         // Screen x of scene x = 0 (the office's left wall) with the office centred / the panorama centred.
-        val ox = if (wide) (maxWidth - unit * DeskRoom.APT_WIDTH) / 2 - unit * DeskRoom.APT_LEFT else (maxWidth - unit * SCENE_W) / 2
+        val ox = startInset + if (wide) (usableWidth - unit * plan.width) / 2 - unit * plan.left else (usableWidth - unit * SCENE_W) / 2
         val oy = maxHeight - bottomInset - unit * VIEW_BOTTOM // the desk sits just above the navigation
         val density = androidx.compose.ui.platform.LocalDensity.current
         val scale = with(density) { unit.toPx() }
@@ -392,11 +415,11 @@ fun DeskHabitat(
 
         // 1. Static rooms: their own graphics layer, drawn once.
         Canvas(Modifier.fillMaxSize().graphicsLayer()) {
-            withTransform({ translate(oxPx, oyPx); scale(scale, scale, androidx.compose.ui.geometry.Offset.Zero) }) { drawRoom() }
+            withTransform({ translate(oxPx, oyPx); scale(scale, scale, androidx.compose.ui.geometry.Offset.Zero) }) { drawRoom(plan) }
         }
         // 2. Objects: redraw only when state changes.
         Canvas(Modifier.fillMaxSize().graphicsLayer()) {
-            withTransform({ translate(oxPx, oyPx); scale(scale, scale, androidx.compose.ui.geometry.Offset.Zero) }) { drawObjects(state, measurer) }
+            withTransform({ translate(oxPx, oyPx); scale(scale, scale, androidx.compose.ui.geometry.Offset.Zero) }) { drawObjects(state, measurer, plan, picture) }
         }
         // 3. Cat (and the litter box's front lip when it's inside).
         Canvas(Modifier.fillMaxSize().testTag("desk_cat").semantics {
@@ -422,7 +445,8 @@ fun DeskHabitat(
             .testTag("desk_cat_pet"))
         // Tap targets share the room transform and remain immediate, independent of walking.
         if (interactive) DeskObject.entries.filter { apartment || it.room == DeskRoom.OFFICE }.forEach { o ->
-            Box(Modifier.offset(ox + unit * o.left, oy + unit * o.top).size(unit * o.width, unit * o.height)
+            val f = o.frame(plan)
+            Box(Modifier.offset(ox + unit * f.left, oy + unit * f.top).size(unit * f.width, unit * f.height)
                 .clickable(role = Role.Button, onClickLabel = o.label) {
                     bubble = lineForNow(o) ?: o.label
                     request = ((request?.first ?: 0) + 1) to o
@@ -512,6 +536,7 @@ internal fun describe(o: DeskObject, s: DeskState): String = when (o) {
     DeskObject.STEREO -> "Stereo: " + (s.room.music?.let { "${it.title}${it.subtitle?.let { a -> " by $a" } ?: ""}" } ?: "nothing playing")
     DeskObject.COUCH -> "Couch"
     DeskObject.TOWER_LIVING -> "Cat tower"
+    DeskObject.PICTURE -> "Picture on the wall: choose your own photo"
 }
 
 private class CatMotion {

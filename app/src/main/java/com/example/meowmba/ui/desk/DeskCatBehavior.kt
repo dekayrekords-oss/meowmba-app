@@ -47,19 +47,31 @@ internal object DeskCatBehavior {
     val letters = DeskCatSpot(250f, 516f)
     val board = DeskCatSpot(126f, 300f)
 
-    // Living room (left)
-    val couch = DeskCatSpot(-242f, 598f)
-    val livingTower = DeskCatSpot(-352f, 382f)
-    val stereo = DeskCatSpot(-192f, FLOOR)
-    val bookshelf = DeskCatSpot(-382f, FLOOR)
+    /** Living-room and bed spots follow the furniture, which a landscape layout spreads out. */
+    class RoomSpots(layout: DeskLayout) {
+        private val p = layout.living
+        val couch = DeskCatSpot(p.towerX - 34f, 598f)
+        /** The top perch of the tower behind the couch. */
+        val livingTower = DeskCatSpot(p.towerX - 67f, 236f)
+        /** The tower's middle platform: the cat climbs up and down in two jumps. */
+        val towerStep = DeskCatSpot(p.towerX - 76f, 372f)
+        val stereo = DeskCatSpot(p.stereoX + p.stereoW / 2 - 55f, FLOOR)
+        val bookshelf = DeskCatSpot(p.shelfX + p.shelfW / 2 - 21f, FLOOR)
+        /** Paws up on the couch's arm. */
+        val scratch = DeskCatSpot(p.couchX - 70f, FLOOR)
+        val bed = DeskCatSpot(if (layout == DeskLayout.LANDSCAPE) 770f else 702f, 578f)
+    }
+    private val standardSpots = RoomSpots(DeskLayout.STANDARD)
+    private val landscapeSpots = RoomSpots(DeskLayout.LANDSCAPE)
+    fun spots(layout: DeskLayout) = if (layout == DeskLayout.LANDSCAPE) landscapeSpots else standardSpots
+
     // Bedroom (right)
-    val bed = DeskCatSpot(702f, 578f)
     val windowPerch = DeskCatSpot(538f, 294f)
     val food = DeskCatSpot(564f, FLOOR)
     val litter = DeskCatSpot(484f, 626f)
     val arcade = DeskCatSpot(548f, FLOOR)
 
-    fun atObject(obj: DeskObject): DeskCatAct = when (obj) {
+    fun atObject(obj: DeskObject, layout: DeskLayout = DeskLayout.STANDARD): DeskCatAct = spots(layout).let { sp -> when (obj) {
         DeskObject.BUILD -> DeskCatAct(computer, DeskCatPose.TYPE, 3_600, DeskCatFace.FOCUSED)
         DeskObject.INBOX -> DeskCatAct(letters, DeskCatPose.LETTER, 3_600, DeskCatFace.CURIOUS)
         DeskObject.PROJECT, DeskObject.TODAY -> DeskCatAct(board, DeskCatPose.WRITE, 3_600, DeskCatFace.FOCUSED)
@@ -68,16 +80,19 @@ internal object DeskCatBehavior {
         DeskObject.MONEY -> DeskCatAct(DeskCatSpot(obj.catX, 516f), DeskCatPose.SNIFF, 2_400, DeskCatFace.CURIOUS)
         DeskObject.BIG_WINDOW, DeskObject.TOWER_BED -> DeskCatAct(windowPerch, DeskCatPose.PERCH, 5_000, DeskCatFace.CURIOUS)
         DeskObject.ARCADE -> DeskCatAct(arcade, DeskCatPose.GAME, 5_000, DeskCatFace.PLAYFUL, facingLeft = true)
-        DeskObject.BED -> DeskCatAct(bed, DeskCatPose.SLEEP, 9_000, DeskCatFace.ASLEEP)
+        DeskObject.BED -> DeskCatAct(sp.bed, DeskCatPose.SLEEP, 9_000, DeskCatFace.ASLEEP)
         DeskObject.FOOD -> DeskCatAct(food, DeskCatPose.EAT, 4_500, DeskCatFace.CHEW, facingLeft = false)
         DeskObject.LITTER -> DeskCatAct(litter, DeskCatPose.DIG, 3_600, DeskCatFace.FOCUSED)
-        DeskObject.BOOKSHELF -> DeskCatAct(bookshelf, DeskCatPose.READ, 4_500, DeskCatFace.FOCUSED)
-        DeskObject.BIG_TV -> DeskCatAct(couch, DeskCatPose.WATCH, 5_000, DeskCatFace.CURIOUS)
-        DeskObject.STEREO -> DeskCatAct(stereo, DeskCatPose.BOB, 5_000, DeskCatFace.PURR, facingLeft = false)
-        DeskObject.COUCH -> DeskCatAct(couch, DeskCatPose.SLEEP, 8_000, DeskCatFace.ASLEEP)
-        DeskObject.TOWER_LIVING -> DeskCatAct(livingTower, DeskCatPose.PERCH, 4_500, DeskCatFace.HAPPY)
+        DeskObject.BOOKSHELF -> DeskCatAct(sp.bookshelf, DeskCatPose.READ, 4_500, DeskCatFace.FOCUSED)
+        // The TV hangs to the right of the couch.
+        DeskObject.BIG_TV -> DeskCatAct(sp.couch, DeskCatPose.WATCH, 5_000, DeskCatFace.CURIOUS, facingLeft = false)
+        DeskObject.STEREO -> DeskCatAct(sp.stereo, DeskCatPose.BOB, 5_000, DeskCatFace.PURR, facingLeft = false)
+        DeskObject.COUCH -> DeskCatAct(sp.couch, DeskCatPose.SLEEP, 8_000, DeskCatFace.ASLEEP)
+        DeskObject.TOWER_LIVING -> DeskCatAct(sp.livingTower, DeskCatPose.PERCH, 4_500, DeskCatFace.HAPPY)
+        // Admires the picture from the top of the tower beside it.
+        DeskObject.PICTURE -> DeskCatAct(sp.livingTower, DeskCatPose.PERCH, 4_000, DeskCatFace.LOVE, facingLeft = true)
         else -> DeskCatAct(DeskCatSpot(obj.catX, 516f), DeskCatPose.SNIFF, 2_400)
-    }
+    } }
 
     /** Long, irregular rests; no interval at which the room must perform. */
     fun restMs(random: Random, baseMs: Long): Long {
@@ -113,20 +128,22 @@ internal object DeskCatBehavior {
      * (higher on the folded cover screen, where it wanders back and forth between rooms).
      */
     fun apartmentIdle(random: Random, previous: DeskCatPose, current: DeskRoom, hasMail: Boolean, hasGoal: Boolean,
-                      musicPlaying: Boolean, videoPlaying: Boolean, roomChance: Float): DeskCatAct {
+                      musicPlaying: Boolean, videoPlaying: Boolean, roomChance: Float,
+                      layout: DeskLayout = DeskLayout.STANDARD): DeskCatAct {
+        val sp = spots(layout)
         val room = if (random.nextFloat() < roomChance) DeskRoom.entries.filter { it != current }.random(random) else current
         val acts: List<DeskCatAct> = when (room) {
             DeskRoom.OFFICE -> return idle(random, previous, hasMail, hasGoal)
             DeskRoom.LIVING -> buildList {
-                add(DeskCatAct(couch, DeskCatPose.SLEEP, random.nextLong(6_000, 10_001), DeskCatFace.ASLEEP))
-                add(DeskCatAct(livingTower, DeskCatPose.PERCH, random.nextLong(3_600, 6_001), DeskCatFace.HAPPY))
-                add(DeskCatAct(DeskCatSpot(-372f, FLOOR), DeskCatPose.SCRATCH, 3_000, DeskCatFace.PLAYFUL, facingLeft = false))
-                add(DeskCatAct(bookshelf, DeskCatPose.READ, random.nextLong(4_000, 6_001), DeskCatFace.FOCUSED))
-                if (videoPlaying) add(DeskCatAct(couch, DeskCatPose.WATCH, 6_000, DeskCatFace.CURIOUS))
-                if (musicPlaying) add(DeskCatAct(stereo, DeskCatPose.BOB, 6_000, DeskCatFace.PURR, facingLeft = false))
+                add(DeskCatAct(sp.couch, DeskCatPose.SLEEP, random.nextLong(6_000, 10_001), DeskCatFace.ASLEEP))
+                add(DeskCatAct(sp.livingTower, DeskCatPose.PERCH, random.nextLong(3_600, 6_001), DeskCatFace.HAPPY))
+                add(DeskCatAct(sp.scratch, DeskCatPose.SCRATCH, 3_000, DeskCatFace.PLAYFUL, facingLeft = false))
+                add(DeskCatAct(sp.bookshelf, DeskCatPose.READ, random.nextLong(4_000, 6_001), DeskCatFace.FOCUSED))
+                if (videoPlaying) add(DeskCatAct(sp.couch, DeskCatPose.WATCH, 6_000, DeskCatFace.CURIOUS, facingLeft = false))
+                if (musicPlaying) add(DeskCatAct(sp.stereo, DeskCatPose.BOB, 6_000, DeskCatFace.PURR, facingLeft = false))
             }
             DeskRoom.BEDROOM -> listOf(
-                DeskCatAct(bed, DeskCatPose.SLEEP, random.nextLong(7_000, 12_001), DeskCatFace.ASLEEP),
+                DeskCatAct(sp.bed, DeskCatPose.SLEEP, random.nextLong(7_000, 12_001), DeskCatFace.ASLEEP),
                 DeskCatAct(windowPerch, DeskCatPose.PERCH, random.nextLong(4_000, 7_001), DeskCatFace.CURIOUS),
                 DeskCatAct(food, DeskCatPose.EAT, random.nextLong(3_600, 5_201), DeskCatFace.CHEW, facingLeft = false),
                 DeskCatAct(litter, DeskCatPose.DIG, 3_000, DeskCatFace.FOCUSED),

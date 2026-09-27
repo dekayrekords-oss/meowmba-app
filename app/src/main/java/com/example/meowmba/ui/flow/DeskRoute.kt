@@ -73,6 +73,18 @@ internal fun DeskRoute(vm: CompanionViewModel, state: CompanionState, paused: Bo
             f.copy(projectTitle = it.star.title.take(28), projectStatus = it.nextStep.take(55))
         } ?: f }.let { studioFacts(it, studio) }
     val room = roomState(media, studio, now)
+    val scope = rememberCoroutineScope()
+    // The living room's picture: a small copy of a photo the user picks, kept in Meow's storage.
+    var picture by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+    LaunchedEffect(Unit) { picture = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { DeskPicture.load(context) } }
+    val picker = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) scope.launch {
+            val chosen = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { DeskPicture.save(context, uri) }
+            if (chosen != null) picture = chosen
+            else android.widget.Toast.makeText(context, "Couldn't open that photo.", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
     val roomActions = remember(context, watcher, vm) { DeskRoomActions(
         openComputer = vm::openComputerTools,
         openStudio = { ComputerToolsLaunch.next = ComputerToolsPage.DEVELOPMENT; vm.openComputerTools() },
@@ -83,12 +95,15 @@ internal fun DeskRoute(vm: CompanionViewModel, state: CompanionState, paused: Bo
         allowMedia = { runCatching { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
             .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) } },
         manual = { runCatching { context.assets.open("manual/meow_manual.md").bufferedReader().use { it.readText() } }.getOrDefault("") },
+        choosePicture = { picker.launch(androidx.activity.result.PickVisualMediaRequest(
+            androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+        resetPicture = { scope.launch { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { DeskPicture.reset(context) }; picture = null } },
     ) }
-    val scope = rememberCoroutineScope()
     var attach by remember { mutableStateOf(false) }
     var northStarOpen by remember { mutableStateOf(false) }
     DeskWorkspace(DeskState.from(snap, facts, tasks, room), tasks, modifier, paused = paused, roomActions = roomActions,
         roomTrips = DeskRoomTrips.of(state.features.deskRoomTrips), onRoomTrips = { vm.setDeskRoomTrips(it.key) },
+        picture = picture,
         fpsTarget = state.avatarFpsTarget, interactive = interactive,
         catActivity = catActivity, catReply = catReply, onAsk = vm::onUserTextSubmitted,
         onMenu = vm::openTiles, onSettings = vm::toggleSettings, onWork = { vm.openTaskHistory() },
@@ -189,6 +204,10 @@ internal class DeskRoomActions(
     val openApp: (com.example.meowmba.core.media.MediaKind) -> Unit = {},
     val allowMedia: () -> Unit = {},
     val manual: () -> String = { "" },
+    /** Opens Android's photo picker for the living-room picture. */
+    val choosePicture: () -> Unit = {},
+    /** Puts the painting back in the frame. */
+    val resetPicture: () -> Unit = {},
 )
 
 /** Opening other apps from the rooms. Launcher-visible apps only (manifest <queries>). */
@@ -258,7 +277,9 @@ internal fun DeskWorkspace(desk: DeskState, tasks: List<Intention>, modifier: Mo
     roomActions: DeskRoomActions = DeskRoomActions(),
     roomTrips: DeskRoomTrips = DeskRoomTrips.DEFAULT,
     /** Null hides the cat's routine sheet (long-press on the cat). */
-    onRoomTrips: ((DeskRoomTrips) -> Unit)? = null) {
+    onRoomTrips: ((DeskRoomTrips) -> Unit)? = null,
+    /** The user's photo in the living-room frame; null shows the painting. */
+    picture: androidx.compose.ui.graphics.ImageBitmap? = null) {
     var selected by rememberSaveable { mutableStateOf<DeskObject?>(null) }
     var asking by rememberSaveable { mutableStateOf(false) }
     var question by rememberSaveable { mutableStateOf("") }
@@ -272,11 +293,14 @@ internal fun DeskWorkspace(desk: DeskState, tasks: List<Intention>, modifier: Mo
             topInset = insets.calculateTopPadding() + 8.dp,
             // Portrait: leave room for the Menu · Flow · Settings row under the desk.
             bottomInset = insets.calculateBottomPadding() + if (interactive && !wide) 56.dp else 8.dp,
+            // Landscape: keep the rooms clear of the Menu · Flow · Settings column on the left.
+            startInset = if (interactive && wide) insets.calculateLeftPadding(androidx.compose.ui.unit.LayoutDirection.Ltr) + 104.dp else 0.dp,
             fpsTarget = fpsTarget, reduceMotion = paused,
             activity = catActivity, reply = catReply,
             interactive = interactive, wanderEveryMs = if (fpsTarget <= 15) 28_000 else 14_000,
             roomTrips = roomTrips.chance,
             onCatLongPress = if (interactive && onRoomTrips != null) ({ routine = true }) else null,
+            picture = picture,
             lineFor = { deskLine(it, desk) }, onTap = {
                 // The clock hands straight over to Android's Clock; everything else opens its panel.
                 if (interactive) {
@@ -342,7 +366,7 @@ internal fun DeskWorkspace(desk: DeskState, tasks: List<Intention>, modifier: Mo
                 return@Column
             }
             if (obj in ROOM_PANELS) {
-                DeskRoomPanel(obj, desk, roomActions, close = { selected = null }, onWork = onWork)
+                DeskRoomPanel(obj, desk, roomActions, close = { selected = null }, onWork = onWork, hasPicture = picture != null)
                 Spacer(Modifier.height(20.dp))
                 return@Column
             }
@@ -419,6 +443,7 @@ internal fun deskLine(obj: DeskObject, s: DeskState): String = when (obj) {
     DeskObject.STEREO -> s.room.music?.let { "♪ ${it.title}${it.subtitle?.let { a -> " · $a" } ?: ""}" } ?: "The stereo's quiet."
     DeskObject.COUCH -> "Couch time."
     DeskObject.TOWER_LIVING -> "Up I go!"
+    DeskObject.PICTURE -> "Nice picture."
 }
 
 internal fun deskTitle(obj: DeskObject) = when (obj) {
@@ -437,16 +462,18 @@ internal fun deskTitle(obj: DeskObject) = when (obj) {
     DeskObject.BOOKSHELF -> "Bookshelf"
     DeskObject.BIG_TV -> "TV"
     DeskObject.STEREO -> "Stereo"
+    DeskObject.PICTURE -> "Picture"
     else -> obj.label
 }
 
-private val ROOM_PANELS = setOf(DeskObject.BUILD, DeskObject.STEREO, DeskObject.BIG_TV, DeskObject.BOOKSHELF, DeskObject.ARCADE)
+private val ROOM_PANELS = setOf(DeskObject.BUILD, DeskObject.STEREO, DeskObject.BIG_TV, DeskObject.BOOKSHELF, DeskObject.ARCADE, DeskObject.PICTURE)
 private val SHEET_TEXT = Color(0xFFF4EEDB)
 private val SHEET_MUTE = Color(0xFFBED0CD)
 
-/** Panels for the computer, the stereo, the TV, the bookshelf and the arcade. */
+/** Panels for the computer, the stereo, the TV, the bookshelf, the arcade and the picture. */
 @Composable
-private fun DeskRoomPanel(obj: DeskObject, desk: DeskState, actions: DeskRoomActions, close: () -> Unit, onWork: (() -> Unit)?) {
+private fun DeskRoomPanel(obj: DeskObject, desk: DeskState, actions: DeskRoomActions, close: () -> Unit, onWork: (() -> Unit)?,
+                          hasPicture: Boolean = false) {
     val r = desk.room
     when (obj) {
         DeskObject.BUILD -> {
@@ -481,6 +508,17 @@ private fun DeskRoomPanel(obj: DeskObject, desk: DeskState, actions: DeskRoomAct
                 style = MaterialTheme.typography.bodyLarge, color = SHEET_MUTE)
             Button(onClick = { close(); actions.getArcade() }, modifier = Modifier.padding(top = 20.dp).fillMaxWidth().heightIn(min = 48.dp)
                 .testTag("desk_get_arcade")) { Text("View MAME4droid on Google Play") }
+        }
+        DeskObject.PICTURE -> {
+            Text(if (hasPicture) "Your photo is in the frame. Choose another, or put the painting back."
+                else "Put one of your photos in the frame. Meow keeps a small copy on this phone only; your original isn't changed.",
+                style = MaterialTheme.typography.bodyLarge, color = SHEET_MUTE)
+            Button(onClick = { close(); actions.choosePicture() }, modifier = Modifier.padding(top = 20.dp).fillMaxWidth().heightIn(min = 48.dp)
+                .testTag("desk_choose_picture")) { Text(if (hasPicture) "Choose another photo" else "Choose a photo") }
+            if (hasPicture) OutlinedButton(onClick = { close(); actions.resetPicture() }, border = BorderStroke(2.dp, Color(0xFF819F9F)),
+                modifier = Modifier.padding(top = 8.dp).fillMaxWidth().heightIn(min = 48.dp).testTag("desk_reset_picture")) {
+                Text("Back to the painting", color = SHEET_TEXT)
+            }
         }
         else -> Unit
     }

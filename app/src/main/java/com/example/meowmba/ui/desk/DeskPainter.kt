@@ -61,9 +61,9 @@ internal object DeskPainter {
 
     // ---- static room --------------------------------------------------------------------------
 
-    fun DrawScope.drawRoom() {
+    fun DrawScope.drawRoom(layout: DeskLayout = DeskLayout.STANDARD) {
         // Walls and floors of all three rooms (and their extension past the edges), then the office.
-        with(DeskApartment) { drawShell() }
+        with(DeskApartment) { drawShell(layout) }
         // Wall clock face
         drawCircle(PAPER, 36f, Offset(72f, 112f)); drawCircle(INK, 36f, Offset(72f, 112f), style = Stroke(3f))
         drawCircle(Color(0xFFD5CDB4), 30f, Offset(72f, 112f), style = Stroke(1.5f))
@@ -119,12 +119,13 @@ internal object DeskPainter {
         drawPath(shade, Color(0xFFC6EB78)); drawPath(shade, INK, style = Stroke(2.5f, join = StrokeJoin.Round))
         drawOval(Color(0xFFFFF3C4), Offset(318f, 458f), Size(18f, 8f)); drawOval(INK, Offset(318f, 458f), Size(18f, 8f), style = Stroke(1.5f))
         // The other two rooms' furniture
-        with(DeskApartment) { drawLivingRoom(); drawBedroom() }
+        with(DeskApartment) { drawLivingRoom(layout); drawBedroom(layout) }
     }
 
     // ---- data-driven objects -------------------------------------------------------------------
 
-    fun DrawScope.drawObjects(s: DeskState, m: TextMeasurer) {
+    fun DrawScope.drawObjects(s: DeskState, m: TextMeasurer, layout: DeskLayout = DeskLayout.STANDARD,
+                              picture: androidx.compose.ui.graphics.ImageBitmap? = null) {
         // Lamp glow (idea queued) — behind everything else on the desk
         if (s.lampOn) {
             val glow = Path().apply { moveTo(306f, 470f); lineTo(214f, 598f); lineTo(360f, 598f); lineTo(346f, 452f); close() }
@@ -135,8 +136,12 @@ internal object DeskPainter {
             if (s.night) listOf(Color(0xFF0D2130), Color(0xFF2A4E61)) else listOf(Color(0xFF6FA7C4), Color(0xFFBFDCE6)), 66f, 242f),
             Offset(238f, 66f), Size(148f, 176f), CornerRadius(6f))
         if (s.night) {
-            drawCircle(Color(0xFFE9EFD9), 15f, Offset(344f, 104f)); drawCircle(INK, 15f, Offset(344f, 104f), style = Stroke(2f))
-            drawCircle(Color(0xFF1A3547), 13f, Offset(351f, 99f))
+            // One crescent moon (the bedroom window shows clouds instead).
+            val moon = Path().apply {
+                op(Path().apply { addOval(androidx.compose.ui.geometry.Rect(Offset(344f, 104f), 15f)) },
+                    Path().apply { addOval(androidx.compose.ui.geometry.Rect(Offset(351f, 99f), 13f)) }, androidx.compose.ui.graphics.PathOperation.Difference)
+            }
+            drawPath(moon, Color(0xFFE9EFD9)); drawPath(moon, INK, style = Stroke(2f, join = StrokeJoin.Round))
             listOf(Triple(268f, 96f, 1.6f), Triple(300f, 120f, 1.2f), Triple(276f, 150f, 1.4f), Triple(364f, 160f, 1.2f))
                 .forEach { (cx, cy, r) -> drawCircle(Color(0xFFE9EFD9), r, Offset(cx, cy)) }
         } else {
@@ -221,7 +226,7 @@ internal object DeskPainter {
             text(m, if (s.trayCount > 9) "9+" else s.trayCount.toString(), 398f, 539f, 13f, Color(0xFF601410),
                 family = FontFamily.SansSerif, weight = FontWeight.Black, center = true)
         }
-        with(DeskApartment) { drawLivingRoomObjects(s, m); drawBedroomObjects(s, m) }
+        with(DeskApartment) { drawLivingRoomObjects(s, m, layout, picture); drawBedroomObjects(s, m) }
     }
 
     private fun DrawScope.envelope(x: Float, y: Float, fill: Color) {

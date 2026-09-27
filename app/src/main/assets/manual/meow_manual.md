@@ -20,15 +20,19 @@ Tap Meow to pet it. Long-press Meow to choose how often it visits other rooms wh
 
 ## The living room
 
-- **Stereo:** the song that's playing, with play, pause and next.
+- **Stereo:** the song that's playing, with play, pause and next. Its display shows whether it's playing, the app, the song and the artist.
 - **Big-screen TV:** what's on YouTube.
 - **Bookshelf:** the audiobook you're listening to, your audiobook app, and this manual.
+- **Picture:** tap it to put one of your photos in the frame, or to bring back the painting. Meow keeps a small copy on this phone only; your original isn't changed.
+- **Cat tower:** behind the couch. Meow climbs it in two jumps.
+
+Turn the phone sideways and the living room and bedroom get more space: a wider bookshelf, a much bigger TV and a longer bed with a nightstand.
 
 The stereo, TV and bookshelf need Android's notification access for Meow, which lets Meow see media titles. Meow reads them only while the room is on screen. It never listens through the microphone for them.
 
 ## The bedroom
 
-- **Big window:** the weather.
+- **Big window:** the weather, with clouds over the city. The moon is in the office window.
 - **Old TV and console:** opens the MAME arcade (MAME4droid). You need MAME4droid and your own game files.
 
 ## When you drive
