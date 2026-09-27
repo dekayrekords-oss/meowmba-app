@@ -1,3 +1,4 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 package com.example.meowmba.ui.desk
 
 import android.os.PowerManager
@@ -5,6 +6,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
@@ -99,6 +101,10 @@ fun DeskHabitat(
      * False keeps the original single office.
      */
     apartment: Boolean = true,
+    /** Chance an idle act takes the cat to another room (Desk setting "visits other rooms"). */
+    roomTrips: Float = DeskRoomTrips.DEFAULT.chance,
+    /** Long-press on the cat (opens its routine settings). */
+    onCatLongPress: (() -> Unit)? = null,
 ) {
     val measurer = rememberTextMeasurer()
     val cat = remember { CatMotion() }
@@ -109,6 +115,7 @@ fun DeskHabitat(
     var dismissedReply by remember { mutableStateOf<String?>(null) }
     val random = remember { Random(System.nanoTime()) }
     val stateNow by rememberUpdatedState(state)
+    val roomTripsNow by rememberUpdatedState(roomTrips)
     val lifecycle by androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle.currentStateFlow.collectAsState()
     val visible = lifecycle.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)
     val animate = !reduceMotion && thermalStatus < PowerManager.THERMAL_STATUS_MODERATE
@@ -140,27 +147,64 @@ fun DeskHabitat(
                 cadence.idleNanosAfterAdmit().takeIf { it > 0 }?.let { delay(it / 1_000_000L) }
             }
         }
+        // Low-power resting life (breathing, ears, tail, glances) only when the phone is cool.
+        val lively = animate && thermalStatus < PowerManager.THERMAL_STATUS_LIGHT
+        suspend fun ease(ms: Long, step: (Float) -> Unit) = if (animate) frames(ms, step) else step(1f)
+        /** Crouch before a jump (or to stand up), 0 → [depth]. */
+        suspend fun crouch(depth: Float, ms: Long) { val from = cat.squash; ease(ms) { t -> cat.squash = from + (depth - from) * easeInOut(t) } }
+        suspend fun standUp() {
+            if (cat.pose !in setOf(DeskCatPose.SIT, DeskCatPose.LOAF, DeskCatPose.SLEEP)) return
+            // Getting up is a small event: a stretch, then a settle onto four paws.
+            cat.pose = DeskCatPose.REST
+            crouch(.45f, 220); crouch(-.25f, 260); crouch(0f, 180)
+        }
         suspend fun leg(spot: DeskCatSpot) {
             val sx = cat.x; val sy = cat.y
-            val distance = kotlin.math.hypot(spot.x - sx, spot.y - sy)
+            val dx = spot.x - sx; val dy = spot.y - sy
+            val distance = kotlin.math.hypot(dx, dy)
             if (distance < 1f) return
-            cat.pose = DeskCatPose.WALK; cat.walking = true
-            cat.face = DeskCatFace.NEUTRAL
-            cat.facingLeft = spot.x < sx
-            val ms = (distance * 7).toLong().coerceIn(550, 4_500)
-            // A hop between desk/floor/perches, higher for tall climbs; level travel has a walking gait.
-            val arc = maxOf(32f, abs(spot.y - sy) * .3f)
-            frames(ms) { t ->
-                val eased = easeInOut(t)
-                cat.x = sx + (spot.x - sx) * eased
-                cat.y = sy + (spot.y - sy) * eased - if (abs(spot.y - sy) > 20f) sin(t * PI).toFloat() * arc else 0f
-                cat.frame = ((t * ms / 110).toInt() % 2)
-                cat.tail = sin(t * PI * 4).toFloat() * 8f
+            standUp()
+            val left = dx < 0f
+            if (left != cat.facingLeft && abs(dx) > 2f) {
+                // Turning around: a quick shuffle rather than an instant mirror.
+                crouch(.25f, 110); cat.facingLeft = left; crouch(0f, 120)
             }
-            cat.x = spot.x; cat.y = spot.y; cat.walking = false; cat.frame = 0
+            cat.pose = DeskCatPose.WALK; cat.walking = true
+            if (cat.face == DeskCatFace.ASLEEP || cat.face == DeskCatFace.SLEEPY) cat.face = DeskCatFace.NEUTRAL
+            val hop = abs(dy) > 20f
+            if (hop) {
+                // Anticipation, flight with a stretched body, and a soft landing.
+                crouch(.8f, 200)
+                val ms = (170 + abs(dy) * 1.6f + abs(dx) * 2.2f).toLong().coerceIn(320, 900)
+                val arc = maxOf(28f, abs(dy) * .45f + 12f)
+                val g0 = cat.gait
+                ease(ms) { t ->
+                    cat.x = sx + dx * t
+                    cat.y = sy + dy * t - sin(t * PI).toFloat() * arc
+                    cat.squash = if (t < .15f) .8f * (1f - t / .15f) - .3f * (t / .15f) else -.3f + .3f * ((t - .15f) / .85f)
+                    cat.gait = g0 + t * 1.5f
+                    cat.tail = -10f + 16f * t
+                }
+                cat.x = spot.x; cat.y = spot.y
+                crouch(.6f, 90); crouch(0f, 200)
+            } else {
+                // Stroll nearby, trot across rooms. Legs are driven by distance, so paws never slide.
+                val speed = if (distance > 260f) 150f else 92f
+                val ms = (distance / speed * 1000f + 260f).toLong().coerceIn(420, 6_000)
+                val g0 = cat.gait
+                ease(ms) { t ->
+                    val e = smoothWalk(t)
+                    cat.x = sx + dx * e
+                    cat.y = sy + dy * e
+                    cat.gait = g0 + (distance * e / STRIDE) * (2 * PI).toFloat()
+                    cat.tail = -6f + sin(cat.gait * .5f) * 7f
+                }
+                cat.x = spot.x; cat.y = spot.y
+            }
+            cat.walking = false; cat.frame = 0
         }
         suspend fun moveTo(spot: DeskCatSpot) {
-            if (!animate) { cat.x = spot.x; cat.y = spot.y; return }
+            if (!animate) { cat.x = spot.x; cat.y = spot.y; cat.pose = DeskCatPose.REST; return }
             // Going far (another room, across the office): hop down, walk the floor, hop up.
             val far = DeskRoom.of(cat.x) != DeskRoom.of(spot.x) || abs(spot.x - cat.x) > 200f
             val floor = DeskCatBehavior.FLOOR
@@ -177,26 +221,77 @@ fun DeskHabitat(
             if (animate) frames(act.durationMs) { t ->
                 cat.phase = t * (2 * PI).toFloat() * 3
                 cat.tail = sin(cat.phase * .5f) * 8f
+                cat.breath = sin(t * act.durationMs / 1000f * (2 * PI).toFloat() / 3.2f)
                 cat.blink = if (t in .44f.. .48f) 1f else 0f
             }
         }
+        /**
+         * Resting is not frozen: the cat breathes, twitches an ear, flicks its tail, glances about,
+         * blinks, and after a while sits down and later lies in a loaf. Runs at a low frame rate
+         * ([IDLE_FPS]); when the phone is warm it falls back to still rests with occasional blinks.
+         */
         suspend fun rest(ms: Long) {
-            var remaining = ms
-            while (remaining > 0 && isActive) {
-                val wait = minOf(remaining, random.nextLong(2_700, 6_300))
-                delay(wait); remaining -= wait
-                if (!animate || cat.pose == DeskCatPose.SLEEP) continue
-                // Between blinks the face drifts through small moods: a yawn, a slow blink, a blep.
-                when (random.nextInt(10)) {
-                    0 -> { cat.face = DeskCatFace.YAWN; delay(1_300); cat.face = DeskCatFace.NEUTRAL }
-                    1 -> cat.face = DeskCatFace.SLEEPY
-                    2 -> { cat.face = DeskCatFace.PLAYFUL; delay(1_600); cat.face = DeskCatFace.NEUTRAL }
-                    3 -> cat.face = DeskCatFace.PURR
-                    4 -> cat.face = DeskCatFace.CURIOUS
-                    else -> { if (cat.face != DeskCatFace.NEUTRAL && random.nextBoolean()) cat.face = DeskCatFace.NEUTRAL
-                        cat.blink = 1f; delay(140); cat.blink = 0f }
+            if (!lively) {
+                var remaining = ms
+                while (remaining > 0 && isActive) {
+                    val wait = minOf(remaining, random.nextLong(2_700, 6_300))
+                    delay(wait); remaining -= wait
+                    if (animate && cat.pose != DeskCatPose.SLEEP) { cat.blink = 1f; delay(140); cat.blink = 0f }
                 }
+                return
             }
+            val cadence = AvatarFrameCadence()
+            val start = withFrameNanos { it }
+            var restedSince = if (cat.pose in setOf(DeskCatPose.REST, DeskCatPose.SIT, DeskCatPose.LOAF)) cat.restedMs else 0L
+            var next = random.nextLong(900, 2_600)
+            var event = 0; var eventAt = 0L; var eventMs = 1L
+            var gazeFrom = cat.gaze; var gazeTo = cat.gaze
+            val breathPeriod = if (cat.pose == DeskCatPose.SLEEP || cat.pose == DeskCatPose.LOAF) 4.4f else 3.2f
+            while (isActive) {
+                val now = withFrameNanos { it }
+                if (!cadence.admit(now, active = true, fpsTarget = minOf(fpsTarget, IDLE_FPS), thermalStatus = thermalStatus)) continue
+                val el = (now - start) / 1_000_000L
+                if (el >= ms) break
+                cat.restedMs = restedSince + el
+                cat.breath = sin(el / 1000f * (2 * PI).toFloat() / breathPeriod)
+                val asleep = cat.pose == DeskCatPose.SLEEP
+                if (event == 0 && el >= next) {
+                    event = if (asleep) 1 else 1 + random.nextInt(6); eventAt = el
+                    eventMs = when (event) { 1 -> 340L; 2 -> 700L; 3 -> random.nextLong(900, 2_200); 4 -> 150L; else -> 1L }
+                    if (event == 3) { gazeFrom = cat.gaze; gazeTo = if (random.nextInt(3) == 0) 0f else random.nextFloat() * 2f - 1f }
+                    when (event) {
+                        5 -> when (random.nextInt(8)) {   // a passing mood
+                            0 -> cat.face = DeskCatFace.YAWN
+                            1 -> cat.face = DeskCatFace.PLAYFUL
+                            2 -> cat.face = DeskCatFace.PURR
+                            3 -> cat.face = DeskCatFace.CURIOUS
+                            else -> cat.face = if (cat.pose == DeskCatPose.LOAF) DeskCatFace.SLEEPY else DeskCatFace.NEUTRAL
+                        }
+                        6 -> when {                        // settling: stand → sit → loaf
+                            cat.pose == DeskCatPose.REST && cat.restedMs > 5_000 -> { cat.pose = DeskCatPose.SIT; cat.squash = .3f }
+                            cat.pose == DeskCatPose.SIT && cat.restedMs > 18_000 && random.nextBoolean() -> { cat.pose = DeskCatPose.LOAF; cat.face = DeskCatFace.SLEEPY; cat.squash = .3f }
+                        }
+                    }
+                }
+                if (event != 0) {
+                    val t = ((el - eventAt).toFloat() / eventMs).coerceIn(0f, 1f)
+                    when (event) {
+                        1 -> cat.ear = sin(t * PI).toFloat()                              // ear twitch
+                        2 -> cat.tail = sin(t * (2 * PI).toFloat() * 1.5f) * 16f * (1f - t) // tail flick
+                        3 -> cat.gaze = gazeFrom + (gazeTo - gazeFrom) * easeInOut((t * 4f).coerceAtMost(1f)) // glance and hold
+                        4 -> cat.blink = sin(t * PI).toFloat()                            // blink
+                    }
+                    if (cat.squash > 0f && event == 6) cat.squash = (cat.squash - .05f).coerceAtLeast(0f)
+                    if (el - eventAt >= eventMs) {
+                        if (event == 5 && cat.face == DeskCatFace.YAWN) cat.face = DeskCatFace.NEUTRAL
+                        if (event == 6) cat.squash = 0f
+                        cat.ear = 0f; cat.blink = 0f
+                        event = 0; next = el + random.nextLong(if (asleep) 3_000 else 1_100, if (asleep) 7_000 else 3_400)
+                    }
+                }
+                cadence.idleNanosAfterAdmit().takeIf { it > 0 }?.let { delay(it / 1_000_000L) }
+            }
+            cat.ear = 0f; cat.blink = 0f
         }
         try {
             when (activity) {
@@ -235,7 +330,7 @@ fun DeskHabitat(
                     // Leave an elevated prop with a visible hop before putting it away.
                     fun settle() = if (DeskRoom.of(cat.x) == DeskRoom.OFFICE || !apartment) DeskCatBehavior.home else DeskCatSpot(cat.x, DeskCatBehavior.FLOOR)
                     if (cat.y < 516f) moveTo(settle())
-                    if (cat.pose != DeskCatPose.SLEEP) cat.pose = DeskCatPose.REST
+                    if (cat.pose !in setOf(DeskCatPose.SLEEP, DeskCatPose.SIT, DeskCatPose.LOAF)) cat.pose = DeskCatPose.REST
                     var previous = DeskCatPose.REST
                     while (isActive) {
                         rest(DeskCatBehavior.restMs(random, wanderEveryMs.takeIf { it > 0 } ?: 20_000))
@@ -243,12 +338,13 @@ fun DeskHabitat(
                         val act = if (!apartment) DeskCatBehavior.idle(random, previous, stateNow.trayCount > 0, stateNow.projectTitle.isNotBlank())
                             else DeskCatBehavior.apartmentIdle(random, previous, DeskRoom.of(cat.x), stateNow.trayCount > 0,
                                 stateNow.projectTitle.isNotBlank(), stateNow.room.music?.playing == true, stateNow.room.video?.playing == true,
-                                roomChance = if (wideLayout) .3f else .55f)
+                                roomChance = roomTripsNow)
                         previous = act.pose
                         perform(act)
                         if (cat.y < 516f) moveTo(settle())
                         // Sleeping cats stay curled up until the next thing to do.
                         if (cat.pose != DeskCatPose.SLEEP) { cat.pose = DeskCatPose.REST; cat.face = DeskCatFace.NEUTRAL }
+                        cat.restedMs = 0
                     }
                 }
             }
@@ -307,7 +403,8 @@ fun DeskHabitat(
             stateDescription = DeskCatBehavior.description(cat.pose, cat.x)
         }) {
             withTransform({ translate(oxPx, oyPx); scale(scale, scale, androidx.compose.ui.geometry.Offset.Zero) }) {
-                drawCat(cat.x, cat.y, cat.walking, cat.frame, cat.blink, cat.tail, cat.gaze, cat.facingLeft, cat.pose, cat.phase, cat.face)
+                drawCat(cat.x, cat.y, cat.walking, cat.frame, cat.blink, cat.tail, cat.gaze, cat.facingLeft, cat.pose, cat.phase, cat.face,
+                    gait = if (cat.walking) cat.gait else -1f, breath = cat.breath, ear = cat.ear, squash = cat.squash)
                 if (cat.pose == DeskCatPose.DIG) with(DeskApartment) { drawLitterFront() }
             }
         }
@@ -315,7 +412,9 @@ fun DeskHabitat(
         if (interactive) Box(Modifier
             .offset { androidx.compose.ui.unit.IntOffset((oxPx + (cat.x + 46f) * scale).toInt(), (oyPx + (cat.y + 8f) * scale).toInt()) }
             .size(unit * 58f, unit * 62f)
-            .clickable(role = Role.Button, onClickLabel = "Pet Meow") {
+            .combinedClickable(role = Role.Button, onClickLabel = "Pet Meow",
+                onLongClickLabel = if (onCatLongPress != null) "Meow's routine" else null,
+                onLongClick = onCatLongPress) {
                 petting++
                 bubble = DeskCatBehavior.petLines.random(random)
             }
@@ -429,7 +528,25 @@ private class CatMotion {
     var gaze by mutableFloatStateOf(0f)
     var facingLeft by mutableStateOf(false)
     var face by mutableStateOf(DeskCatFace.NEUTRAL)
+    var gait by mutableFloatStateOf(0f)
+    var breath by mutableFloatStateOf(0f)
+    var ear by mutableFloatStateOf(0f)
+    var squash by mutableFloatStateOf(0f)
+    /** How long the cat has been resting in place (drives sitting down, then lying down). */
+    var restedMs: Long = 0
 }
+
+/** Ease-in/out for walking: a gentle start and stop, steady in the middle. */
+private fun smoothWalk(t: Float): Float = when {
+    t < .2f -> 2.5f * t * t
+    t > .8f -> 1f - 2.5f * (1f - t) * (1f - t)
+    else -> .1f + (t - .2f) * (.8f / .6f)
+}
+
+/** Scene units per full walk cycle (both front paws step once). */
+private const val STRIDE = 34f
+/** Resting life (breathing, ears, tail) runs at most this often: low and cool. */
+private const val IDLE_FPS = 12
 
 private fun easeInOut(t: Float) = if (t < .5f) 2 * t * t else 1 - (-2 * t + 2).let { it * it } / 2
 

@@ -105,25 +105,28 @@ internal object DeskApartment {
         rrect(Color(0xFF2E5A52), -272f, 660f, 18f, 56f, 8f, 2.5f); rrect(Color(0xFF2E5A52), -162f, 660f, 18f, 56f, 8f, 2.5f)
         rrect(Color(0xFF274C45), -266f, 712f, 116f, 16f, 3f, 2f)
         line(INK, -256f, 728f, -256f, 738f, 4f); line(INK, -160f, 728f, -160f, 738f, 4f)
-        // Stereo: two big speakers either side of a component rack
-        speaker(-150f); speaker(-48f)
-        rrect(Color(0xFF2B2B2E), -108f, 576f, 56f, 164f, 3f, 2.5f)
-        rrect(Color(0xFF3A3A3E), -106f, 578f, 52f, 14f, 2f, 1.5f)               // turntable
-        drawOval(Color(0xFF151515), Offset(-100f, 579f), Size(34f, 8f)); drawCircle(Color(0xFFE5484D), 1.6f, Offset(-83f, 583f))
-        line(Color(0xFFBDBDBD), -60f, 580f, -70f, 586f, 1.5f)
-        rrect(Color(0xFF3A3A3E), -104f, 596f, 48f, 28f, 2f, 1.5f)               // tuner (display is dynamic)
-        rrect(Color(0xFF3A3A3E), -104f, 628f, 48f, 26f, 2f, 1.5f)               // cassette deck
-        rrect(Color(0xFF1A1A1C), -100f, 633f, 18f, 11f, 1f, 1f); rrect(Color(0xFF1A1A1C), -78f, 633f, 18f, 11f, 1f, 1f)
-        rrect(Color(0xFF3A3A3E), -104f, 658f, 48f, 32f, 2f, 1.5f)               // amplifier
-        for (k in 0..2) { drawCircle(Color(0xFFBDBDBD), 4f, Offset(-94f + k * 14f, 674f)); drawCircle(INK, 4f, Offset(-94f + k * 14f, 674f), style = Stroke(1f)) }
+        // Stereo: a wide component rack between two tall tower speakers. The receiver's big display
+        // (dynamic) shows the song, the artist and whether it's playing.
+        speaker(-142f, 24f); speaker(-32f, 24f)
+        rrect(Color(0xFF2B2B2E), -116f, 562f, 82f, 178f, 3f, 2.5f)
+        rrect(Color(0xFF3A3A3E), -114f, 564f, 78f, 16f, 2f, 1.5f)               // turntable
+        drawOval(Color(0xFF151515), Offset(-104f, 566f), Size(44f, 10f)); drawCircle(Color(0xFFE5484D), 1.8f, Offset(-82f, 571f))
+        line(Color(0xFFBDBDBD), -44f, 567f, -58f, 575f, 1.5f)
+        rrect(Color(0xFF3A3A3E), -114f, 584f, 78f, 52f, 2f, 1.5f)               // receiver (display is dynamic)
+        rrect(Color(0xFF3A3A3E), -114f, 640f, 78f, 24f, 2f, 1.5f)               // cassette deck
+        rrect(Color(0xFF1A1A1C), -108f, 645f, 30f, 12f, 1f, 1f); rrect(Color(0xFF1A1A1C), -72f, 645f, 30f, 12f, 1f, 1f)
+        rrect(Color(0xFF3A3A3E), -114f, 668f, 78f, 30f, 2f, 1.5f)               // amplifier
+        for (k in 0..3) { drawCircle(Color(0xFFBDBDBD), 4.5f, Offset(-102f + k * 18f, 683f)); drawCircle(INK, 4.5f, Offset(-102f + k * 18f, 683f), style = Stroke(1f)) }
     }
 
-    private fun DrawScope.speaker(x: Float) {
-        rrect(Color(0xFF3B2A20), x, 600f, 40f, 140f, 3f, 2.5f)
-        drawCircle(Color(0xFF1A1A1C), 6f, Offset(x + 20f, 618f)); drawCircle(Color(0xFF6E6E72), 2.4f, Offset(x + 20f, 618f))
-        drawCircle(Color(0xFF1A1A1C), 15f, Offset(x + 20f, 652f)); drawCircle(Color(0xFF4A4A4E), 7f, Offset(x + 20f, 652f))
-        drawCircle(Color(0xFF1A1A1C), 15f, Offset(x + 20f, 694f)); drawCircle(Color(0xFF4A4A4E), 7f, Offset(x + 20f, 694f))
-        rrect(Color(0xFF1A1A1C), x + 12f, 718f, 16f, 6f, 3f)
+    /** A tall, slim tower speaker: tweeter on top, two woofers, a port. */
+    private fun DrawScope.speaker(x: Float, w: Float) {
+        val cx = x + w / 2
+        rrect(Color(0xFF3B2A20), x, 580f, w, 160f, 3f, 2.5f)
+        drawCircle(Color(0xFF1A1A1C), 4.5f, Offset(cx, 596f)); drawCircle(Color(0xFF6E6E72), 1.8f, Offset(cx, 596f))
+        drawCircle(Color(0xFF1A1A1C), 10f, Offset(cx, 626f)); drawCircle(Color(0xFF4A4A4E), 4.5f, Offset(cx, 626f))
+        drawCircle(Color(0xFF1A1A1C), 10f, Offset(cx, 660f)); drawCircle(Color(0xFF4A4A4E), 4.5f, Offset(cx, 660f))
+        rrect(Color(0xFF1A1A1C), cx - 6f, 718f, 12f, 5f, 2.5f)
     }
 
     private fun DrawScope.sisal(x: Float, top: Float, w: Float, h: Float) {
@@ -150,14 +153,25 @@ internal object DeskApartment {
                 drawRect(Color(0x55FFFFFF), Offset(-262f, 440f), Size(170f, 3f)); drawRect(Color(0xFFE5302A), Offset(-262f, 440f), Size(if (video.playing) 64f else 40f, 3f))
             }
         }
-        // Tuner display: the song on the stereo
+        // Receiver display: status, song and artist, big enough to read.
         val music = r.music
-        drawRoundRect(Color(0xFF0B1A12), Offset(-101f, 600f), Size(42f, 20f), CornerRadius(1.5f))
+        val lcd = Color(0xFF7BE06A); val dim = Color(0xFF3E7A43)
+        drawRoundRect(Color(0xFF0B1A12), Offset(-112f, 586f), Size(74f, 44f), CornerRadius(2f))
+        drawRoundRect(Color(0x3322FF66), Offset(-112f, 586f), Size(74f, 44f), CornerRadius(2f), style = Stroke(1f))
         if (music != null) {
-            text(m, music.title.take(9), -99f, 609f, 6.5f, Color(0xFF7BE06A), family = FontFamily.Monospace)
-            text(m, (music.subtitle ?: if (music.playing) "PLAY" else "PAUSE").take(9), -99f, 617f, 6f, Color(0xFF4FA048), family = FontFamily.Monospace)
-            if (music.playing) { note(-130f, 586f); note(-28f, 580f) }
-        } else text(m, if (r.mediaAccess) "-- --" else "NO INFO", -99f, 613f, 6.5f, Color(0xFF356E3A), family = FontFamily.Monospace)
+            val status = if (music.playing) "▶ PLAYING" else "❚❚ PAUSED"
+            text(m, status, -109f, 595f, 6.5f, if (music.playing) lcd else Color(0xFFE0B66A), family = FontFamily.Monospace, weight = FontWeight.Bold)
+            music.app?.let { appLabel(it) }?.let { text(m, it, -41f, 595f, 5.5f, dim, family = FontFamily.Monospace, rightAlign = true) }
+            text(m, music.title.take(13), -109f, 609f, 9f, lcd, family = FontFamily.Monospace, weight = FontWeight.Bold)
+            text(m, (music.subtitle ?: "").take(15), -109f, 620f, 7.5f, Color(0xFF5FB866), family = FontFamily.Monospace)
+            // Level meters: tall and lively when playing, flat when paused.
+            val levels = if (music.playing) listOf(.9f, .6f, .8f, .45f, .7f, .55f) else List(6) { .08f }
+            levels.forEachIndexed { i, v -> drawRect(if (i < 3) lcd else Color(0xFF9EE06A), Offset(-109f + i * 11f, 628f - 5f * v - 1f), Size(8f, 5f * v)) }
+            if (music.playing) { note(-150f, 568f); note(-24f, 562f) }
+        } else {
+            text(m, if (r.mediaAccess) "STEREO" else "NO MEDIA INFO", -75f, 604f, 7.5f, dim, family = FontFamily.Monospace, weight = FontWeight.Bold, center = true)
+            text(m, if (r.mediaAccess) "Nothing playing" else "Allow in Settings", -75f, 618f, 7f, dim, family = FontFamily.Monospace, center = true)
+        }
         // The manual on the second shelf, and a "now reading" tag when an audiobook is on.
         rrect(Color(0xFFC0392B), -372f, 490f, 11f, 42f, 1f, 1.2f)
         rotate(-90f, Offset(-366.5f, 511f)) { text(m, "MANUAL", -366.5f, 514f, 6.5f, Color(0xFFFFF3C4), family = SANS, weight = FontWeight.Bold, center = true) }
@@ -167,6 +181,18 @@ internal object DeskApartment {
             // The book being listened to glows on the top shelf.
             drawRoundRect(Color(0x80FFE27A), Offset(-396f, 430f), Size(70f, 52f), CornerRadius(3f))
         }
+    }
+
+    /** A short name for the app playing, e.g. SPOTIFY, from its package. */
+    private fun appLabel(pkg: String): String? = when {
+        "spotify" in pkg -> "SPOTIFY"
+        "youtube.music" in pkg -> "YT MUSIC"
+        "sec.android.app.music" in pkg -> "SAMSUNG"
+        "pandora" in pkg -> "PANDORA"
+        "soundcloud" in pkg -> "SOUNDCLOUD"
+        "amazon.mp3" in pkg -> "AMAZON"
+        "tidal" in pkg -> "TIDAL"
+        else -> null
     }
 
     private fun DrawScope.playBadge(x: Float, y: Float, h: Float, c: Color) {

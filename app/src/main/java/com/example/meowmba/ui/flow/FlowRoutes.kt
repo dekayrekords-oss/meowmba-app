@@ -200,6 +200,7 @@ internal fun FlowHomeRoute(vm: CompanionViewModel, state: CompanionState, paused
             speechMode = state.features.speechMode, onSpeechMode = vm::setSpeechMode,
             idleAvatar = state.features.idleAvatar, idleMinutes = state.features.idleAvatarMinutes,
             onIdleAvatar = vm::setIdleAvatar,
+            deskRoomTrips = state.features.deskRoomTrips, onDeskRoomTrips = vm::setDeskRoomTrips,
             onNorthStars = { adjust = false; northStarOpen = true },
             onAccessSetup = { adjust = false; accessSetup = true })
     }

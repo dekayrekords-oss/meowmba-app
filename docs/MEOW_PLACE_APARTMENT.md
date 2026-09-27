@@ -73,3 +73,20 @@ The apartment keeps the Desk's three-layer design:
   4. Development Studio projects appear on the monitor after a session.
   5. The console opens MAME4droid, or its Play page if it isn't installed.
   6. A manual drive ("drive mode on") shows the avatar, and turning it off returns to the Desk.
+
+## Update 2026-09-26: a livelier cat, a room-trips setting, a readable stereo
+
+These changes are on branch `feature/desk-apartment`, based on Codex's 184 (`d2313da`).
+
+- **Motion:**
+  - A continuous walk cycle with diagonal leg pairs, driven by distance travelled so the paws don't slide. A gentle start and stop, a stroll nearby and a trot across rooms. The body bobs while the head stays steadier. Turning around is a short shuffle instead of an instant mirror.
+  - Jumps have anticipation (a crouch), a stretched arc and a landing squash. The cat stands up with a stretch before leaving a sit or a loaf.
+- **Resting life** (`rest()` in `DeskHabitat.kt`):
+  - The cat breathes, twitches an ear, flicks its tail, glances around and holds the look, blinks, and passes through small moods.
+  - After about 5 s it sits (new pose `SIT`), and after about 18 s it may lie down (new pose `LOAF`).
+  - This runs at most 12 fps through `AvatarFrameCadence`. At thermal LIGHT or above, or with reduced motion, it falls back to the old still rests with blinks.
+- **Setting:** "Desk cat visits other rooms": Never, Rarely, Sometimes (default) or Often (`DeskRoomTrips`, preference `desk_room_trips`, `CompanionFeatures.deskRoomTrips`). Set it in Flow → Adjust → When idle, or long-press the cat on the Desk for "Meow's routine". This replaces the old fixed 30% (open) / 55% (folded) chance.
+- **Stereo:**
+  - A wider rack (82 units) between slim tower speakers.
+  - A 74×44 display shows ▶ PLAYING / ❚❚ PAUSED, the app name, the song (13 characters) and the artist, with level meters.
+- **Tests:** `DeskCatLifeTest.kt` covers the setting mapping, that "Never" stays in the room, that the gait, breathing, crouch, sit and loaf all change the drawing, and that a long-press opens the routine sheet.

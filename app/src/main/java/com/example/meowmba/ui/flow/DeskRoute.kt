@@ -3,6 +3,7 @@ package com.example.meowmba.ui.flow
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -87,6 +88,7 @@ internal fun DeskRoute(vm: CompanionViewModel, state: CompanionState, paused: Bo
     var attach by remember { mutableStateOf(false) }
     var northStarOpen by remember { mutableStateOf(false) }
     DeskWorkspace(DeskState.from(snap, facts, tasks, room), tasks, modifier, paused = paused, roomActions = roomActions,
+        roomTrips = DeskRoomTrips.of(state.features.deskRoomTrips), onRoomTrips = { vm.setDeskRoomTrips(it.key) },
         fpsTarget = state.avatarFpsTarget, interactive = interactive,
         catActivity = catActivity, catReply = catReply, onAsk = vm::onUserTextSubmitted,
         onMenu = vm::openTiles, onSettings = vm::toggleSettings, onWork = { vm.openTaskHistory() },
@@ -253,10 +255,14 @@ internal fun DeskWorkspace(desk: DeskState, tasks: List<Intention>, modifier: Mo
     /** Side dock, drawn above the scene. */
     dock: (@Composable () -> Unit)? = null,
     onWork: (() -> Unit)? = null,
-    roomActions: DeskRoomActions = DeskRoomActions()) {
+    roomActions: DeskRoomActions = DeskRoomActions(),
+    roomTrips: DeskRoomTrips = DeskRoomTrips.DEFAULT,
+    /** Null hides the cat's routine sheet (long-press on the cat). */
+    onRoomTrips: ((DeskRoomTrips) -> Unit)? = null) {
     var selected by rememberSaveable { mutableStateOf<DeskObject?>(null) }
     var asking by rememberSaveable { mutableStateOf(false) }
     var question by rememberSaveable { mutableStateOf("") }
+    var routine by rememberSaveable { mutableStateOf(false) }
     BoxWithConstraints(modifier.fillMaxSize()) {
         // Only a short (landscape phone) screen puts Menu · Flow · Settings down the side; the
         // unfolded panorama keeps it along the bottom instead of floating over the living room.
@@ -269,6 +275,8 @@ internal fun DeskWorkspace(desk: DeskState, tasks: List<Intention>, modifier: Mo
             fpsTarget = fpsTarget, reduceMotion = paused,
             activity = catActivity, reply = catReply,
             interactive = interactive, wanderEveryMs = if (fpsTarget <= 15) 28_000 else 14_000,
+            roomTrips = roomTrips.chance,
+            onCatLongPress = if (interactive && onRoomTrips != null) ({ routine = true }) else null,
             lineFor = { deskLine(it, desk) }, onTap = {
                 // The clock hands straight over to Android's Clock; everything else opens its panel.
                 if (interactive) {
@@ -296,6 +304,24 @@ internal fun DeskWorkspace(desk: DeskState, tasks: List<Intention>, modifier: Mo
         confirmButton = { TextButton(enabled = question.isNotBlank() && catActivity != DeskCatActivity.THINKING,
             onClick = { val text = question.trim(); question = ""; asking = false; onAsk(text) }, modifier = Modifier.testTag("desk_question_send")) { Text("Ask") } },
         dismissButton = { TextButton(onClick = { asking = false }) { Text("Cancel") } })
+    if (routine && onRoomTrips != null) ModalBottomSheet(onDismissRequest = { routine = false },
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = Color(0xFF193039), contentColor = Color(0xFFF4EEDB)) {
+        Column(Modifier.fillMaxWidth().padding(24.dp).testTag("desk_routine")) {
+            Text("Meow's routine", style = MaterialTheme.typography.headlineSmall)
+            Text("How often Meow wanders to another room while you're not using the Desk.",
+                style = MaterialTheme.typography.bodyLarge, color = Color(0xFFBED0CD), modifier = Modifier.padding(top = 6.dp, bottom = 8.dp))
+            DeskRoomTrips.entries.forEach { option ->
+                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                    .selectable(selected = option == roomTrips, role = androidx.compose.ui.semantics.Role.RadioButton) { onRoomTrips(option) }
+                    .testTag("desk_trips_" + option.key), verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(selected = option == roomTrips, onClick = null)
+                    Text(option.label, Modifier.padding(start = 12.dp), style = MaterialTheme.typography.bodyLarge)
+                }
+            }
+            TextButton(onClick = { routine = false }, modifier = Modifier.align(Alignment.End)) { Text("Done", color = Color(0xFFF4EEDB)) }
+        }
+    }
     val obj = selected
     if (obj != null && interactive) ModalBottomSheet(onDismissRequest = { selected = null },
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),

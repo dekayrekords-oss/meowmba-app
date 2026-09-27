@@ -4,7 +4,7 @@
 
 Meow lives in three rooms. The office is in the middle, the living room is to the left and the bedroom is to the right. On a large or unfolded screen you see all three. On the folded cover screen you see one room at a time, and the view follows Meow as it wanders. Tap the room names at the top to look next door; Meow comes along.
 
-Tap Meow to pet it. Tap the bed, the food tray, the litter box, the couch or a cat tower and Meow goes there. These are only for fun: there are no hunger or care meters.
+Tap Meow to pet it. Long-press Meow to choose how often it visits other rooms while you're away (Never, Rarely, Sometimes or Often); the same choice is in Flow → Adjust → When idle. Left alone, Meow breathes, twitches an ear, flicks its tail, looks around, then sits down and eventually lies down. Tap the bed, the food tray, the litter box, the couch or a cat tower and Meow goes there. These are only for fun: there are no hunger or care meters.
 
 ## The office
 

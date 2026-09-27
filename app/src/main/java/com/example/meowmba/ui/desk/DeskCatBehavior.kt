@@ -12,7 +12,20 @@ enum class DeskCatPose { REST, WALK, GROOM, STRETCH, SNIFF, TYPE, LETTER, WRITE,
     /** Controller in paws at the old console. */ GAME,
     /** Head bobbing to the stereo. */ BOB,
     /** A book open in its paws. */ READ,
-    /** Up on its hind legs, clawing a scratching post. */ SCRATCH }
+    /** Up on its hind legs, clawing a scratching post. */ SCRATCH,
+    /** Sat down on its haunches, tail curled round (a rest that has gone on a while). */ SIT,
+    /** Lying down in a loaf, paws tucked, eyes open or drowsy (a long rest). */ LOAF }
+
+/** How often the Desk cat wanders to another room while idle (owner setting, 2026-09-26). */
+enum class DeskRoomTrips(val key: String, val label: String, val chance: Float) {
+    NEVER("never", "Never", 0f), RARELY("rarely", "Rarely", .12f), SOMETIMES("sometimes", "Sometimes", .35f), OFTEN("often", "Often", .65f);
+
+    companion object {
+        const val PREF = "desk_room_trips"
+        val DEFAULT = SOMETIMES
+        fun of(key: String?) = entries.firstOrNull { it.key == key } ?: DEFAULT
+    }
+}
 
 /** The cat's face. Independent of the pose, so any pose can carry any mood. */
 enum class DeskCatFace { NEUTRAL, HAPPY, PURR, LOVE, CURIOUS, SURPRISED, FOCUSED, SLEEPY, ASLEEP, YAWN, ANNOYED, PLAYFUL, CHEW }
@@ -133,6 +146,7 @@ internal object DeskCatBehavior {
         DeskCatPose.TALK -> DeskCatFace.HAPPY
         DeskCatPose.BOB, DeskCatPose.GROOM -> DeskCatFace.PURR
         DeskCatPose.GAME, DeskCatPose.SCRATCH -> DeskCatFace.PLAYFUL
+        DeskCatPose.LOAF -> DeskCatFace.SLEEPY
         else -> DeskCatFace.NEUTRAL
     }
 
@@ -159,5 +173,7 @@ internal object DeskCatBehavior {
         DeskCatPose.BOB -> "listening to music"
         DeskCatPose.READ -> "reading a book"
         DeskCatPose.SCRATCH -> "scratching the post"
+        DeskCatPose.SIT -> "sitting"
+        DeskCatPose.LOAF -> "lying down"
     }
 }

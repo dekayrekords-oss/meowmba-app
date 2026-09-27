@@ -71,6 +71,9 @@ fun FlowAdjustSheet(
     idleAvatar: String? = null,
     idleMinutes: Int = com.example.meowmba.ui.companion.IdleAvatar.DEFAULT_MINUTES,
     onIdleAvatar: (key: String, minutes: Int) -> Unit = { _, _ -> },
+    /** Desk cat room trips key; null hides the row. */
+    deskRoomTrips: String? = null,
+    onDeskRoomTrips: (String) -> Unit = {},
     onNorthStars: (() -> Unit)? = null,
     onAccessSetup: (() -> Unit)? = null,
 ) {
@@ -186,6 +189,9 @@ fun FlowAdjustSheet(
                 }
                 if (idleAvatar != "off") SettingRow("After", "Minutes without a touch") {
                     Segmented(com.example.meowmba.ui.companion.IdleAvatar.MINUTES.map { it to "${it}m" }, idleMinutes) { onIdleAvatar(idleAvatar, it) }
+                }
+                if (deskRoomTrips != null) SettingRow("Desk cat visits other rooms", "How often Meow wanders between rooms on the Desk") {
+                    Segmented(com.example.meowmba.ui.desk.DeskRoomTrips.entries.map { it.key to it.label }, deskRoomTrips) { onDeskRoomTrips(it) }
                 }
             }
 

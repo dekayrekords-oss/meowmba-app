@@ -1473,7 +1473,8 @@ class CompanionViewModel(
                 speechMode = SpeechMode.fromKey(storage.getPreference(SpeechMode.PREF)),
                 idleAvatar = IdleAvatar.keyOf(storage.getPreference(IdleAvatar.PREF_MODE)),
                 idleAvatarMinutes = storage.getPreference(IdleAvatar.PREF_MINUTES)?.toIntOrNull()?.takeIf { it in IdleAvatar.MINUTES }
-                    ?: IdleAvatar.DEFAULT_MINUTES))
+                    ?: IdleAvatar.DEFAULT_MINUTES,
+                deskRoomTrips = com.example.meowmba.ui.desk.DeskRoomTrips.of(storage.getPreference(com.example.meowmba.ui.desk.DeskRoomTrips.PREF)).key))
             storage.getPreference(KEY_OWNER_SPEAKER)?.trim()?.takeIf { it.isNotEmpty() }?.let { owner ->
                 lastSpeakerName = owner
             }
@@ -8619,6 +8620,13 @@ class CompanionViewModel(
         secureStorage?.savePreference(IdleAvatar.PREF_MODE, k)
         secureStorage?.savePreference(IdleAvatar.PREF_MINUTES, m.toString())
         _uiState.value = _uiState.value.copy(features = _uiState.value.features.copy(idleAvatar = k, idleAvatarMinutes = m))
+    }
+
+    /** Desk cat: how often it wanders to another room while idle. */
+    fun setDeskRoomTrips(key: String) {
+        val k = com.example.meowmba.ui.desk.DeskRoomTrips.of(key).key
+        secureStorage?.savePreference(com.example.meowmba.ui.desk.DeskRoomTrips.PREF, k)
+        _uiState.value = _uiState.value.copy(features = _uiState.value.features.copy(deskRoomTrips = k))
     }
 
     private fun noteUserTurn(voice: Boolean) { lastUserTurnAt = System.currentTimeMillis(); lastUserTurnVoice = voice }
