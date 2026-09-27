@@ -75,19 +75,33 @@ data class DeskFrame(val left: Float, val top: Float, val width: Float, val heig
 
 /**
  * How Meow's place is laid out. A landscape screen has width to spare, so the living room grows
- * to the left and the bedroom to the right (the office and both doorways stay where they are):
- * a wider bookshelf, a much bigger TV and a longer bed. Portrait and the unfolded screen use
- * [STANDARD].
+ * to the left and the bedroom to the right by [wing] scene units (0…[MAX_WING]); the office and
+ * both doorways stay where they are. The furniture grows with it: a wider bookshelf, a much
+ * bigger TV and a longer bed. The Desk picks the wing that fits the screen ("auto fit").
  */
-enum class DeskLayout(val wing: Float, val living: LivingPlan, val bedRight: Float) {
-    STANDARD(0f, LivingPlan(shelfX = -404f, shelfW = 80f, pictureX = -404f, pictureY = 222f, pictureW = 88f, pictureH = 114f,
-        couchX = -320f, tvX = -232f, tvY = 356f, tvW = 218f, tvH = 132f, stereoX = -190f, stereoW = 176f), 826f),
-    LANDSCAPE(180f, LivingPlan(shelfX = -584f, shelfW = 156f, pictureX = -566f, pictureY = 200f, pictureW = 120f, pictureH = 140f,
-        couchX = -424f, tvX = -330f, tvY = 306f, tvW = 316f, tvH = 186f, stereoX = -294f, stereoW = 280f), 946f);
-
+data class DeskLayout(val wing: Float) {
+    /** 0 = standard rooms, 1 = the full landscape rooms. */
+    private val t: Float get() = (wing / MAX_WING).coerceIn(0f, 1f)
+    val living: LivingPlan get() = if (t == 0f) STD_PLAN else if (t == 1f) WIDE_PLAN else STD_PLAN.lerp(WIDE_PLAN, t)
+    val bedRight: Float get() = 826f + 120f * t
+    /** A nightstand fits beside the bed once the bedroom has grown enough. */
+    val nightstand: Boolean get() = wing >= 120f
     val left: Float get() = DeskRoom.APT_LEFT - wing
     val right: Float get() = DeskRoom.APT_RIGHT + wing
     val width: Float get() = right - left
+
+    companion object {
+        const val MAX_WING = 180f
+        val STANDARD = DeskLayout(0f)
+        val LANDSCAPE = DeskLayout(MAX_WING)
+        val entries = listOf(STANDARD, DeskLayout(90f), LANDSCAPE)
+        /** The layout for a screen with room for [wing] extra units per side, in steps of 10. */
+        fun fitting(wing: Float) = DeskLayout(((wing.coerceIn(0f, MAX_WING)) / 10f).toInt() * 10f)
+        private val STD_PLAN = LivingPlan(shelfX = -404f, shelfW = 80f, pictureX = -404f, pictureY = 222f, pictureW = 88f, pictureH = 114f,
+            couchX = -320f, tvX = -232f, tvY = 356f, tvW = 218f, tvH = 132f, stereoX = -190f, stereoW = 176f)
+        private val WIDE_PLAN = LivingPlan(shelfX = -584f, shelfW = 156f, pictureX = -566f, pictureY = 200f, pictureW = 120f, pictureH = 140f,
+            couchX = -424f, tvX = -330f, tvY = 306f, tvW = 316f, tvH = 186f, stereoX = -294f, stereoW = 280f)
+    }
 }
 
 /**
@@ -104,9 +118,15 @@ data class LivingPlan(
     /** The stereo: a component rack between two tower speakers, standing on the floor. */
     val stereoX: Float, val stereoW: Float,
 ) {
+    fun lerp(o: LivingPlan, t: Float): LivingPlan {
+        fun l(a: Float, b: Float) = a + (b - a) * t
+        return LivingPlan(l(shelfX, o.shelfX), l(shelfW, o.shelfW), l(pictureX, o.pictureX), l(pictureY, o.pictureY),
+            l(pictureW, o.pictureW), l(pictureH, o.pictureH), l(couchX, o.couchX), l(tvX, o.tvX), l(tvY, o.tvY),
+            l(tvW, o.tvW), l(tvH, o.tvH), l(stereoX, o.stereoX), l(stereoW, o.stereoW))
+    }
     val couchW: Float get() = 128f
     val towerX: Float get() = couchX + couchW / 2
-    val speakerW: Float get() = if (stereoW > 220f) 34f else 20f
+    val speakerW: Float get() = (20f + (stereoW - 176f) * 14f / 104f).coerceIn(20f, 34f)
     val rackX: Float get() = stereoX + speakerW + 2f
     val rackW: Float get() = stereoW - 2 * speakerW - 4f
     val displayX: Float get() = rackX + 6f

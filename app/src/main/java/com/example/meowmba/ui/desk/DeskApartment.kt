@@ -385,7 +385,7 @@ internal object DeskApartment {
         for (k in 0..3) drawCircle(Color(0xFF8E5E33), 1.6f, Offset(639f + k * 4f, 723f))
         bed(layout.bedRight)
         // A landscape bedroom has room for a nightstand and lamp beside the longer bed.
-        if (layout == DeskLayout.LANDSCAPE) nightstand(layout.bedRight + 8f)
+        if (layout.nightstand) nightstand(layout.bedRight + 8f)
         // Litter box (its front lip is also drawn over the cat when it's inside)
         rrect(Color(0xFF5E7A76), 506f, 692f, 58f, 48f, 5f, 2.5f)
         drawRect(Color(0xFFE3D3A8), Offset(510f, 694f), Size(50f, 6f))

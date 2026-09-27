@@ -59,11 +59,10 @@ internal object DeskCatBehavior {
         val bookshelf = DeskCatSpot(p.shelfX + p.shelfW / 2 - 21f, FLOOR)
         /** Paws up on the couch's arm. */
         val scratch = DeskCatSpot(p.couchX - 70f, FLOOR)
-        val bed = DeskCatSpot(if (layout == DeskLayout.LANDSCAPE) 770f else 702f, 578f)
+        val bed = DeskCatSpot(702f + (layout.bedRight - 826f) * .57f, 578f)
     }
-    private val standardSpots = RoomSpots(DeskLayout.STANDARD)
-    private val landscapeSpots = RoomSpots(DeskLayout.LANDSCAPE)
-    fun spots(layout: DeskLayout) = if (layout == DeskLayout.LANDSCAPE) landscapeSpots else standardSpots
+    private var cached: Pair<DeskLayout, RoomSpots> = DeskLayout.STANDARD to RoomSpots(DeskLayout.STANDARD)
+    fun spots(layout: DeskLayout): RoomSpots = cached.takeIf { it.first == layout }?.second ?: RoomSpots(layout).also { cached = layout to it }
 
     // Bedroom (right)
     val windowPerch = DeskCatSpot(538f, 294f)

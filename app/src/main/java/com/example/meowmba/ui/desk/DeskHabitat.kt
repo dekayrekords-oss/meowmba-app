@@ -388,14 +388,25 @@ fun DeskHabitat(
         // Unfolded (or any wide screen): all three rooms side by side. Folded: one room, following the cat.
         val wide = apartment && (maxWidth >= usableHeight || maxWidth >= 600.dp)
         wideLayout = wide
+        val usableWidth = maxWidth - startInset
+        val heightUnit = usableHeight / (VIEW_BOTTOM - VIEW_TOP)
+        // The folded cover screen turned sideways is short: auto fit. The rooms fill its height, the
+        // side rooms grow only as far as the width allows, and if even the standard rooms are too
+        // wide the view pans gently to the room the cat is in.
+        val shortLandscape = wide && maxWidth > maxHeight && maxHeight < 480.dp
         // A landscape screen has width to spare: the outer rooms grow (bigger TV, bookshelf and bed).
-        val plan = if (wide && maxWidth > maxHeight) DeskLayout.LANDSCAPE else DeskLayout.STANDARD
+        val plan = when {
+            shortLandscape -> DeskLayout.fitting((usableWidth / heightUnit - DeskRoom.APT_WIDTH) / 2)
+            wide && maxWidth > maxHeight -> DeskLayout.LANDSCAPE
+            else -> DeskLayout.STANDARD
+        }
         layout = plan
         val sceneWidth = if (wide) plan.width else SCENE_W
         // Fit the part of the scene that has content (clock to desk), not the empty floor below it,
         // so the rooms are as large as the screen allows. The walls and floor extend to every edge.
-        val usableWidth = maxWidth - startInset
-        val unit = minOf(usableWidth / sceneWidth, usableHeight / (VIEW_BOTTOM - VIEW_TOP)) // dp per scene unit
+        // Everything always fits; short landscape only trades the side rooms' extra width for height.
+        val unit = minOf(usableWidth / sceneWidth, heightUnit) // dp per scene unit
+        val overflow = if (shortLandscape) (unit * sceneWidth - usableWidth).coerceAtLeast(0.dp) else 0.dp
         // Screen x of scene x = 0 (the office's left wall) with the office centred / the panorama centred.
         val ox = startInset + if (wide) (usableWidth - unit * plan.width) / 2 - unit * plan.left else (usableWidth - unit * SCENE_W) / 2
         val oy = maxHeight - bottomInset - unit * VIEW_BOTTOM // the desk sits just above the navigation
@@ -405,8 +416,12 @@ fun DeskHabitat(
         val oyPx = with(density) { oy.toPx() }
         // Folded: the camera pans (a layer translation, no redraw) to the room in view.
         val catRoom by remember { androidx.compose.runtime.derivedStateOf { DeskRoom.of(cat.x) } }
-        val focus = if (!apartment || wide) DeskRoom.OFFICE else lookRoom ?: catRoom
-        val camTarget = (DeskRoom.OFFICE.center - focus.center) * scale
+        val panning = overflow > 0.dp
+        val focus = if (!apartment || (wide && !panning)) DeskRoom.OFFICE else lookRoom ?: catRoom
+        val camTarget = if (panning) {
+            val limit = with(density) { overflow.toPx() } / 2
+            ((DeskRoom.OFFICE.center - focus.center) * scale).coerceIn(-limit, limit)
+        } else (DeskRoom.OFFICE.center - focus.center) * scale
         val cam by androidx.compose.animation.core.animateFloatAsState(camTarget,
             if (animate) androidx.compose.animation.core.tween(900, easing = androidx.compose.animation.core.FastOutSlowInEasing)
             else androidx.compose.animation.core.snap(), label = "desk_camera")

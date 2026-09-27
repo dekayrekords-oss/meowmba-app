@@ -179,3 +179,18 @@ class DeskCoverLivingRoomTest {
         shoot(rule, "apartment-cover-bedroom-day")
     }
 }
+
+/** The folded cover screen turned sideways (Fold R5GL75XFCXD cover: 1972×1248 px at 450 dpi ≈ 701×443 dp). */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [35], qualifiers = "w701dp-h443dp-land-xxhdpi")
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+class DeskCoverLandscapeTest {
+    @get:Rule val rule = createAndroidComposeRule<androidx.activity.ComponentActivity>()
+
+    @Test fun coverLandscapeFitsTheScreen() {
+        rule.mainClock.autoAdvance = false
+        rule.setContent { DeskWorkspace(desk.copy(night = false), emptyList(), thermalStatus = 0, picture = photo(), onAsk = {}) }
+        rule.settle(37)
+        shoot(rule, "apartment-cover-landscape")
+    }
+}
