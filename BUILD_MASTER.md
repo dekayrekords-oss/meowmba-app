@@ -3,6 +3,17 @@
 Updated 2026-09-26. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
 This supersedes historical build-location/version instructions in other documents.
 
+- September26 **185 / 1.5.19 built and installed by Claude** at the owner's explicit request:
+  Desk cat moves like a real cat (walk cycle, jumps, breathing, sit/loaf), a "visits other rooms" setting,
+  living room redone (tower behind the couch, wider stereo and TV, a picture the user chooses), one moon
+  (office window; clouds in the bedroom), and landscape-only bigger rooms (bookshelf, TV, bed).
+  Branch `feature/desk-apartment` on `d2313da`; 3,128 tests, 0 failures/errors/skips; lint not run.
+  Certificate/16KB alignment verified; runtime check vs 184: 163 protected entries, none missing, only the
+  manual asset intentionally changed. Installed on Fold R5GL75XFCXD 23:45:27 MST over 184, firstInstallTime
+  retained, PID alive, crash buffer unchanged. Receipt: `/Users/prog/Meowmba-Releases/desk-living185-20260926/README.md`.
+  **Integrator: merge `feature/desk-apartment` before building 186, or 186 drops these features.**
+  **185 consumed; next 186.**
+
 - September26 **184 / 1.5.18 prepared by Codex** for Facebook destination selection and
   preview-loop lifecycle repair. Claude's `feature/desk-apartment` (183) has been merged
   into `feature/meow-flow-core`, preserving apartment features. Source `6bbc098`;
