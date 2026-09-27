@@ -814,6 +814,8 @@ data class CompanionFeatures(
     val idleAvatarMinutes: Int = IdleAvatar.DEFAULT_MINUTES,
     /** Desk cat: how often it visits other rooms while idle ([com.example.meowmba.ui.desk.DeskRoomTrips] key). */
     val deskRoomTrips: String = com.example.meowmba.ui.desk.DeskRoomTrips.DEFAULT.key,
+    /** Desk room size in percent of the size that fits the screen ([com.example.meowmba.ui.desk.DeskScale]). */
+    val deskScale: Int = com.example.meowmba.ui.desk.DeskScale.DEFAULT,
     /** Monotonic completed current-conversation reply event for Desk. */
     val deskReplySequence: Long = 0L,
     val deskReplyText: String? = null,

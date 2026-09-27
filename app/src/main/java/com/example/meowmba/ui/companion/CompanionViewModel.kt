@@ -1474,7 +1474,8 @@ class CompanionViewModel(
                 idleAvatar = IdleAvatar.keyOf(storage.getPreference(IdleAvatar.PREF_MODE)),
                 idleAvatarMinutes = storage.getPreference(IdleAvatar.PREF_MINUTES)?.toIntOrNull()?.takeIf { it in IdleAvatar.MINUTES }
                     ?: IdleAvatar.DEFAULT_MINUTES,
-                deskRoomTrips = com.example.meowmba.ui.desk.DeskRoomTrips.of(storage.getPreference(com.example.meowmba.ui.desk.DeskRoomTrips.PREF)).key))
+                deskRoomTrips = com.example.meowmba.ui.desk.DeskRoomTrips.of(storage.getPreference(com.example.meowmba.ui.desk.DeskRoomTrips.PREF)).key,
+                deskScale = com.example.meowmba.ui.desk.DeskScale.of(storage.getPreference(com.example.meowmba.ui.desk.DeskScale.PREF))))
             storage.getPreference(KEY_OWNER_SPEAKER)?.trim()?.takeIf { it.isNotEmpty() }?.let { owner ->
                 lastSpeakerName = owner
             }
@@ -8627,6 +8628,12 @@ class CompanionViewModel(
         val k = com.example.meowmba.ui.desk.DeskRoomTrips.of(key).key
         secureStorage?.savePreference(com.example.meowmba.ui.desk.DeskRoomTrips.PREF, k)
         _uiState.value = _uiState.value.copy(features = _uiState.value.features.copy(deskRoomTrips = k))
+    }
+
+    fun setDeskScale(percent: Int) {
+        val p = percent.coerceIn(com.example.meowmba.ui.desk.DeskScale.MIN, com.example.meowmba.ui.desk.DeskScale.MAX)
+        secureStorage?.savePreference(com.example.meowmba.ui.desk.DeskScale.PREF, p.toString())
+        _uiState.value = _uiState.value.copy(features = _uiState.value.features.copy(deskScale = p))
     }
 
     private fun noteUserTurn(voice: Boolean) { lastUserTurnAt = System.currentTimeMillis(); lastUserTurnVoice = voice }

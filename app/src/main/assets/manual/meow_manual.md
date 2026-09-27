@@ -4,7 +4,11 @@
 
 Meow lives in three rooms. The office is in the middle, the living room is to the left and the bedroom is to the right. On a large or unfolded screen you see all three. On the folded cover screen you see one room at a time, and the view follows Meow as it wanders. Tap the room names at the top to look next door; Meow comes along.
 
-Tap Meow to pet it. Long-press Meow to choose how often it visits other rooms while you're away (Never, Rarely, Sometimes or Often); the same choice is in Flow → Adjust → When idle. Left alone, Meow breathes, twitches an ear, flicks its tail, looks around, then sits down and eventually lies down. Tap the bed, the food tray, the litter box, the couch or a cat tower and Meow goes there. These are only for fun: there are no hunger or care meters.
+Tap Meow to pet it. Long-press Meow for **Meow's routine**: how often it visits other rooms while you're away (Never, Rarely, Sometimes or Often) and the **room size** (60–200%; bigger zooms in and the view follows Meow, with buttons to step between rooms). Both are also in Flow → Adjust → When idle. Turned sideways, the menu moves to the top and the rooms fill the screen edge to edge.
+
+Meow has habits of its own: it looks things up on the computer (an animation only; nothing is searched or sent), reads on the couch, plays the old console, chases a toy mouse, gets the zoomies, bats a ball of yarn and the toy on the cat tower, knocks the pen off the desk, sits on the keyboard, chases its tail, hides in the cardboard box, rolls over for a belly rub, kneads the bed before a nap, naps in the sunbeam, watches birds on the windowsill, and at night swats at the moth by the lamp.
+
+The windows show the real time of day and your weather: sunrise, midday, golden hour, sunset and night, with drifting clouds, rain or snow. Keep an eye out for the occasional plane (and something rarer). The office cursor blinks, the sticky note lifts in a draught, and the old TV plays a game. Left alone, Meow breathes, twitches an ear, flicks its tail, looks around, then sits down and eventually lies down. Tap the bed, the food tray, the litter box, the couch or a cat tower and Meow goes there. These are only for fun: there are no hunger or care meters.
 
 ## The office
 
@@ -13,7 +17,7 @@ Tap Meow to pet it. Long-press Meow to choose how often it visits other rooms wh
 - **Sticky note:** what's next.
 - **Letter tray:** people waiting on you.
 - **Jar:** money things coming up.
-- **Lamp:** lights up when Meow is keeping an idea for you.
+- **Lamp:** on at night. By day it glows, with a little spark, when Meow is keeping an idea for you.
 - **Clock:** opens your phone's alarms and timers.
 - **Drawers:** folders for your favourite apps and tools.
 - **Ask Meow:** type a question without leaving the room.

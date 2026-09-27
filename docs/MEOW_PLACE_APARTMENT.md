@@ -125,3 +125,72 @@ picture; and, in landscape only, a wider bookshelf, a much bigger TV and a longe
 - **Tests:** `DeskLivingRoomTest.kt` covers bounds, overlap, sizes, tower climbing, the picture
   panel, and renders (`apartment-landscape-night`, `apartment-open-night`,
   `apartment-cover-living`, `apartment-cover-bedroom-day`).
+
+## Update 2026-09-27: landscape fill, room size, a room that moves, a cat with habits
+
+Owner request:
+- In landscape: the bookshelf touches the edge of the phone, the menu moves to the top, and the rooms fill the screen completely.
+- A room-size slider.
+- A blinking cursor.
+- Clouds that move with the real time of day.
+- A very rare plane, and a UFO as an easter egg.
+- A sticky note that flaps now and then.
+- A lamp that is on at night and that the cat bats.
+- A game on the old TV.
+- More personality: reading, games, "searching the web for ideas", mice, zoomies, yarn, and ten more habits.
+
+### Layout and size
+
+- **Landscape** (any wide screen that's wider than tall):
+  - `DeskWorkspace` puts `DeskNavigation` in a top row beside Ask Meow (`desk_nav_top`); there is no side column any more.
+  - `DeskHabitat` picks `DeskLayout.fitting(wing)` so that, at full height, the scene is exactly as wide as the screen. `DeskLayout` is now continuous: the furniture interpolates between the standard and full-landscape plans (`LivingPlan.lerp`).
+  - The bookshelf is flush with the outer wall (`shelfX = layout.left`). The bed runs to the right wall, or to the nightstand once `wing >= 162`.
+  - On screens narrower than the standard apartment, the rooms fit the width.
+- **Room size:**
+  - `DeskScale` is a percentage, 60–200, stored in preference `desk_scale` as `CompanionFeatures.deskScale`.
+  - It is set from the slider in Meow's routine sheet (long-press the cat), with a "Fit the screen" reset, and from Flow → Adjust.
+  - When the scene is larger than the screen, a `graphicsLayer` translation follows the cat, clamped to the edges; it never recomposes. The room-step buttons appear.
+
+### The room's own motion (`DeskAmbient.kt`)
+
+This is a separate canvas layer between the objects and the cat. It runs at `DeskAmbient.FPS = 8`, only while the Desk is visible, motion isn't reduced and the thermal status is below LIGHT; otherwise it holds still.
+
+- **Sky** (`DeskSky`):
+  - Colours follow the time: dawn, morning, day, golden hour, sunset, dusk and night.
+  - They are dulled by the weather parsed from the weather line.
+  - The sun and moon cross the office window through the day and night.
+  - A sunbeam falls on the bedroom floor on clear days and moves with the hour.
+- **Windows:**
+  - Clouds drift, with rain, snow, fog or storm flashes to match the weather.
+  - A plane crosses about every 25 minutes of viewing time (`PLANE_EVERY_MIN`), with contrails by day and blinking lights at night.
+  - One flight in 30 is a UFO with a tractor beam.
+  - **Easter egg:** long-press either window to call in the UFO.
+  - A bird lands on the bedroom sill when the cat goes to watch.
+- **Office and bedroom:**
+  - The cursor blinks.
+  - The monitor shows a browser while the cat "researches" (an animation only: nothing is searched or sent) and fills with f's when it sits on the keyboard.
+  - The sticky note lifts every 25–70 s.
+  - The lamp is on at night. By day it glows with a spark when Flow has ideas queued (the old meaning). It swings when batted, and a moth circles it at night.
+  - The dangling toy on the living-room tower swings.
+  - The old TV plays a little invaders game: attract mode, or a score while the cat plays.
+
+### Cat habits
+
+These are `DeskCatTrick`s, choreographed in `DeskHabitat.trick()`:
+
+- The owner's list: research at the computer, reading on the couch, the arcade, chasing a wind-up toy mouse, zoomies, and batting a ball of yarn that rolls and unravels.
+- Ten more:
+  - knocks the pen off the desk (it's tidied up once the cat leaves the office);
+  - sits on the keyboard;
+  - chases its tail;
+  - naps in the sunbeam;
+  - watches and chatters at a bird;
+  - kneads the bed, then naps;
+  - hides in the cardboard box;
+  - rolls on its back for a belly rub (petting then gets its own line);
+  - bats the dangling tower toy;
+  - swats the moth at night.
+- New poses: `BAT`, `KNEAD`, `ROLL` and `HIDE`.
+- After researching, the cat mentions queued ideas once ("They're by the lamp"), and only when Flow really has some.
+
+Tests: `DeskLifeTest.kt` (sky, weather, fill, tricks, scale, renders `desk-ambient-*`, `desk-cat-bat/knead/roll/hide`, `desk-landscape-fill`, `desk-scale-160`).

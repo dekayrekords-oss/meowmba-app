@@ -140,9 +140,7 @@ internal object DeskApartment {
         rrect(pad, t - 44f, 316f, 64f, 14f, 6f, 2.5f)
         val rim = Path().apply { moveTo(t - 42f, 318f); quadraticTo(t - 44f, 304f, t - 34f, 306f); lineTo(t + 10f, 306f); quadraticTo(t + 20f, 304f, t + 18f, 318f) }
         drawPath(rim, Color(0xFFB27FA0), style = Stroke(5f)); drawPath(rim, INK, style = Stroke(1.2f))
-        // Mouse toy on a string under the top perch.
-        line(INK, t - 36f, 330f, t - 36f, 364f, 1f)
-        drawOval(Color(0xFF9B9B9B), Offset(t - 42f, 362f), Size(12f, 8f)); line(Color(0xFFF2B8C8), t - 42f, 366f, t - 48f, 370f, 1.2f)
+        // (The mouse toy on a string under the top perch swings, so DeskAmbientPainter draws it.)
     }
 
     private fun DrawScope.couch(x: Float) {
@@ -425,21 +423,13 @@ internal object DeskApartment {
     }
 
     fun DrawScope.drawBedroomObjects(s: DeskState, m: TextMeasurer) {
-        // Big window: sky, clouds, a little city. The moon (or sun) is in the office window only,
-        // so the unfolded view never shows two.
-        val sky = if (s.night) listOf(Color(0xFF0B1A2A), Color(0xFF26405A)) else listOf(Color(0xFF6FA7C4), Color(0xFFCFE4EC))
-        drawRoundRect(Brush.verticalGradient(sky, 90f, 380f), Offset(522f, 90f), Size(220f, 290f), CornerRadius(6f))
-        if (s.night) {
-            listOf(Offset(548f, 124f), Offset(596f, 170f), Offset(640f, 110f), Offset(566f, 214f), Offset(718f, 206f), Offset(702f, 118f))
-                .forEach { drawCircle(Color(0xFFE9EFD9), 1.6f, it) }
-            // Night clouds, lit from above.
-            cloud(650f, 150f, 72f, Color(0xFF3A5068), Color(0xFF6C84A0))
-            cloud(544f, 196f, 52f, Color(0xFF30455C), Color(0xFF5A7290))
-        } else {
-            cloud(650f, 146f, 76f, Color(0xF2FFFFFF), null)
-            cloud(546f, 186f, 56f, Color(0xE6FFFFFF), null)
-            cloud(610f, 108f, 40f, Color(0xCCFFFFFF), null)
-        }
+        // Big window: the sky for this time of day and weather, stars at night, a little city. The
+        // moon (or sun) is in the office window only, so the unfolded view never shows two. Clouds,
+        // weather, the odd plane and the frame are drawn by DeskAmbientPainter.
+        val (skyTop, skyBottom) = DeskSky.colors(s)
+        drawRoundRect(Brush.verticalGradient(listOf(skyTop, skyBottom), 90f, 380f), Offset(522f, 90f), Size(220f, 290f), CornerRadius(6f))
+        if (s.night) listOf(Offset(548f, 124f), Offset(596f, 170f), Offset(640f, 110f), Offset(566f, 214f), Offset(718f, 206f), Offset(702f, 118f))
+            .forEach { drawCircle(Color(0xFFE9EFD9), 1.6f, it) }
         val city = if (s.night) Color(0xFF0E1C2C) else Color(0xFF6E8FA6)
         val towers = listOf(Triple(526f, 300f, 34f), Triple(562f, 270f, 28f), Triple(592f, 316f, 40f), Triple(634f, 256f, 30f), Triple(666f, 292f, 36f), Triple(704f, 312f, 38f))
         towers.forEach { (x, top, w) ->
@@ -451,20 +441,13 @@ internal object DeskApartment {
         line(INK, 632f, 90f, 632f, 380f, 3.5f); line(INK, 522f, 236f, 742f, 236f, 3.5f)
         rrect(Color(WOOD), 512f, 380f, 240f, 12f, 3f, 2.5f)
         s.weatherLine?.let { text(m, it, 690f, 414f, 16f, Color(0xFFB8C4D6), center = true) } // right of the tower post
-        // The old TV's screen: an arcade attract screen, inviting a game
-        drawRoundRect(Color(0xFF10161A), Offset(446f, 538f), Size(70f, 60f), CornerRadius(10f))
-        val px = Color(0xFF7BE06A)
-        val invader = listOf("0010000100", "0001111000", "0011011100", "0111111110", "0101111010", "0100000010")
-        invader.forEachIndexed { row, cols -> cols.forEachIndexed { col, c -> if (c == '1') drawRect(px, Offset(461f + col * 4f, 546f + row * 4f), Size(3.6f, 3.6f)) } }
-        text(m, "INSERT COIN", 481f, 590f, 7f, Color(0xFFFFE27A), family = FontFamily.Monospace, weight = FontWeight.Bold, center = true)
-    }
-
-    /** A puffy cloud [w] wide, centred on [cx]; [rim] lights its top edge (moonlight at night). */
-    private fun DrawScope.cloud(cx: Float, cy: Float, w: Float, body: Color, rim: Color?) {
-        val puffs = listOf(Triple(-.30f, .06f, .22f), Triple(-.08f, -.12f, .30f), Triple(.20f, -.04f, .24f), Triple(.36f, .08f, .16f))
-        rim?.let { c -> puffs.forEach { (dx, dy, r) -> drawCircle(c, w * r + 1.5f, Offset(cx + dx * w, cy + dy * w - 1.5f)) } }
-        puffs.forEach { (dx, dy, r) -> drawCircle(body, w * r, Offset(cx + dx * w, cy + dy * w)) }
-        drawRoundRect(body, Offset(cx - w * .5f, cy), Size(w, w * .2f), CornerRadius(w * .1f))
+        // (The old TV's game animates, so DeskAmbientPainter draws its screen.)
+        // A sunbeam from the big window warms a patch of floor; it moves with the time of day.
+        DeskSky.sunbeamX(s)?.let { cx ->
+            val shaft = Path().apply { moveTo(530f, 380f); lineTo(740f, 380f); lineTo(cx + 80f, 738f); lineTo(cx - 80f, 738f); close() }
+            drawPath(shaft, Brush.verticalGradient(listOf(Color(0x00FFE9A8), Color(0x22FFE9A8)), 380f, 738f))
+            drawOval(Color(0x33FFE9A8), Offset(cx - 84f, 724f), Size(168f, 18f))
+        }
     }
 
     // ---- text fitting -----------------------------------------------------------------------------

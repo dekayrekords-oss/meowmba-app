@@ -74,6 +74,8 @@ fun FlowAdjustSheet(
     /** Desk cat room trips key; null hides the row. */
     deskRoomTrips: String? = null,
     onDeskRoomTrips: (String) -> Unit = {},
+    deskScale: Int? = null,
+    onDeskScale: (Int) -> Unit = {},
     onNorthStars: (() -> Unit)? = null,
     onAccessSetup: (() -> Unit)? = null,
 ) {
@@ -192,6 +194,12 @@ fun FlowAdjustSheet(
                 }
                 if (deskRoomTrips != null) SettingRow("Desk cat visits other rooms", "How often Meow wanders between rooms on the Desk") {
                     Segmented(com.example.meowmba.ui.desk.DeskRoomTrips.entries.map { it.key to it.label }, deskRoomTrips) { onDeskRoomTrips(it) }
+                }
+                if (deskScale != null) SettingRow("Desk room size", "$deskScale% · bigger zooms in and follows Meow") {
+                    androidx.compose.material3.Slider(deskScale.toFloat(), { onDeskScale((it / 10f).toInt() * 10) },
+                        valueRange = com.example.meowmba.ui.desk.DeskScale.MIN.toFloat()..com.example.meowmba.ui.desk.DeskScale.MAX.toFloat(),
+                        steps = (com.example.meowmba.ui.desk.DeskScale.MAX - com.example.meowmba.ui.desk.DeskScale.MIN) / 10 - 1,
+                        modifier = Modifier.width(180.dp).testTag("flow_desk_scale"))
                 }
             }
 

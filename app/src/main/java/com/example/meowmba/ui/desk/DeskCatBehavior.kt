@@ -14,7 +14,20 @@ enum class DeskCatPose { REST, WALK, GROOM, STRETCH, SNIFF, TYPE, LETTER, WRITE,
     /** A book open in its paws. */ READ,
     /** Up on its hind legs, clawing a scratching post. */ SCRATCH,
     /** Sat down on its haunches, tail curled round (a rest that has gone on a while). */ SIT,
-    /** Lying down in a loaf, paws tucked, eyes open or drowsy (a long rest). */ LOAF }
+    /** Lying down in a loaf, paws tucked, eyes open or drowsy (a long rest). */ LOAF,
+    /** Sitting with one front paw swiping (yarn, a toy, the pen, a moth). */ BAT,
+    /** Standing, front paws pressing in turn ("making biscuits"). */ KNEAD,
+    /** On its back, paws in the air, asking for a belly rub. */ ROLL,
+    /** Sitting in the cardboard box: only the head shows. */ HIDE }
+
+/**
+ * A little routine the cat plays out once it arrives (chasing, batting, knocking things over).
+ * Acting only: nothing here opens an app, searches the web or changes the user's data.
+ */
+enum class DeskCatTrick { NONE, YARN, MOUSE, ZOOMIES, TAIL, PEN, LAMP, MOTH, KEYBOARD, RESEARCH, TOY, BIRD, BOX, KNEAD, ROLL }
+
+/** What the idle cat can see: it only chases a moth at night and naps in a sunbeam by day. */
+internal data class DeskIdleContext(val night: Boolean = false, val sunbeamX: Float? = null)
 
 /** How often the Desk cat wanders to another room while idle (owner setting, 2026-09-26). */
 enum class DeskRoomTrips(val key: String, val label: String, val chance: Float) {
@@ -27,6 +40,15 @@ enum class DeskRoomTrips(val key: String, val label: String, val chance: Float) 
     }
 }
 
+/** The Desk's room size, a percentage of the size that fits the screen (owner setting, 2026-09-27). */
+object DeskScale {
+    const val PREF = "desk_scale"
+    const val MIN = 60
+    const val MAX = 200
+    const val DEFAULT = 100
+    fun of(value: String?): Int = value?.toIntOrNull()?.coerceIn(MIN, MAX) ?: DEFAULT
+}
+
 /** The cat's face. Independent of the pose, so any pose can carry any mood. */
 enum class DeskCatFace { NEUTRAL, HAPPY, PURR, LOVE, CURIOUS, SURPRISED, FOCUSED, SLEEPY, ASLEEP, YAWN, ANNOYED, PLAYFUL, CHEW }
 
@@ -37,7 +59,7 @@ data class DeskCatReply(val key: String, val text: String)
 
 internal data class DeskCatSpot(val x: Float, val y: Float)
 internal data class DeskCatAct(val spot: DeskCatSpot, val pose: DeskCatPose, val durationMs: Long,
-    val face: DeskCatFace? = null, val facingLeft: Boolean? = null)
+    val face: DeskCatFace? = null, val facingLeft: Boolean? = null, val trick: DeskCatTrick = DeskCatTrick.NONE)
 
 internal object DeskCatBehavior {
     /** Floor level for the cat's top edge (paws on the floor at y 740). */
@@ -57,12 +79,25 @@ internal object DeskCatBehavior {
         val towerStep = DeskCatSpot(p.towerX - 76f, 372f)
         val stereo = DeskCatSpot(p.stereoX + p.stereoW / 2 - 55f, FLOOR)
         val bookshelf = DeskCatSpot(p.shelfX + p.shelfW / 2 - 21f, FLOOR)
+        /** Where the ball of yarn rests on the rug, and the cat's spot beside it. */
+        val yarnHome = p.couchX + 70f
+        val yarn = DeskCatSpot(yarnHome - 100f, FLOOR)
+        /** On the rug in front of the couch. */
+        val rug = DeskCatSpot(p.couchX + 10f, FLOOR)
         /** Paws up on the couch's arm. */
         val scratch = DeskCatSpot(p.couchX - 70f, FLOOR)
         val bed = DeskCatSpot(702f + (layout.bedRight - 826f) * .57f, 578f)
     }
     private var cached: Pair<DeskLayout, RoomSpots> = DeskLayout.STANDARD to RoomSpots(DeskLayout.STANDARD)
     fun spots(layout: DeskLayout): RoomSpots = cached.takeIf { it.first == layout }?.second ?: RoomSpots(layout).also { cached = layout to it }
+
+    // Office props
+    /** On the desk beside the pen, facing it. */
+    val pen = DeskCatSpot(150f, 516f)
+    /** On the desk under the lamp's shade. */
+    val lamp = DeskCatSpot(232f, 516f)
+    /** Sitting in the cardboard box on the office floor. */
+    val box = DeskCatSpot(282f, 632f)
 
     // Bedroom (right)
     val windowPerch = DeskCatSpot(538f, 294f)
@@ -122,17 +157,39 @@ internal object DeskCatBehavior {
         return DeskCatAct(spot, if (pose == DeskCatPose.WALK) DeskCatPose.REST else pose, random.nextLong(2_400, 5_201), face)
     }
 
+    /** The office's personality acts: web "research", the keyboard, the pen, the lamp, the box. */
+    fun officeTricks(random: Random, ctx: DeskIdleContext): List<DeskCatAct> = buildList {
+        add(DeskCatAct(computer, DeskCatPose.TYPE, random.nextLong(5_000, 7_001), DeskCatFace.FOCUSED, facingLeft = true, trick = DeskCatTrick.RESEARCH))
+        add(DeskCatAct(computer, DeskCatPose.SIT, 4_500, DeskCatFace.HAPPY, facingLeft = true, trick = DeskCatTrick.KEYBOARD))
+        add(DeskCatAct(pen, DeskCatPose.BAT, 1_600, DeskCatFace.PLAYFUL, facingLeft = false, trick = DeskCatTrick.PEN))
+        add(DeskCatAct(lamp, DeskCatPose.BAT, 1_200, DeskCatFace.CURIOUS, facingLeft = false, trick = DeskCatTrick.LAMP))
+        add(DeskCatAct(box, DeskCatPose.HIDE, random.nextLong(5_000, 8_001), DeskCatFace.PLAYFUL, facingLeft = true, trick = DeskCatTrick.BOX))
+        if (ctx.night) add(DeskCatAct(lamp, DeskCatPose.BAT, 1_200, DeskCatFace.PLAYFUL, facingLeft = false, trick = DeskCatTrick.MOTH))
+    }
+
+    /** Acts that work in any room: zoomies, chasing its tail, a toy mouse. */
+    fun anywhereTricks(random: Random, room: DeskRoom): List<DeskCatAct> {
+        val x = (room.left + 40f + random.nextFloat() * (room.right - room.left - 190f)).coerceIn(room.left + 20f, room.right - 130f)
+        val floor = DeskCatSpot(x, FLOOR)
+        return listOf(
+            DeskCatAct(floor, DeskCatPose.WALK, 1_000, DeskCatFace.PLAYFUL, trick = DeskCatTrick.ZOOMIES),
+            DeskCatAct(floor, DeskCatPose.SIT, 1_000, DeskCatFace.PLAYFUL, trick = DeskCatTrick.TAIL),
+            DeskCatAct(floor, DeskCatPose.SNIFF, 1_000, DeskCatFace.CURIOUS, trick = DeskCatTrick.MOUSE),
+        )
+    }
+
     /**
      * Whole-apartment idle acting. [roomChance] is how often the cat heads to a different room
      * (higher on the folded cover screen, where it wanders back and forth between rooms).
      */
     fun apartmentIdle(random: Random, previous: DeskCatPose, current: DeskRoom, hasMail: Boolean, hasGoal: Boolean,
                       musicPlaying: Boolean, videoPlaying: Boolean, roomChance: Float,
-                      layout: DeskLayout = DeskLayout.STANDARD): DeskCatAct {
+                      layout: DeskLayout = DeskLayout.STANDARD, ctx: DeskIdleContext = DeskIdleContext()): DeskCatAct {
         val sp = spots(layout)
         val room = if (random.nextFloat() < roomChance) DeskRoom.entries.filter { it != current }.random(random) else current
         val acts: List<DeskCatAct> = when (room) {
-            DeskRoom.OFFICE -> return idle(random, previous, hasMail, hasGoal)
+            DeskRoom.OFFICE -> if (random.nextFloat() < .45f) officeTricks(random, ctx) + anywhereTricks(random, room)
+                else return idle(random, previous, hasMail, hasGoal)
             DeskRoom.LIVING -> buildList {
                 add(DeskCatAct(sp.couch, DeskCatPose.SLEEP, random.nextLong(6_000, 10_001), DeskCatFace.ASLEEP))
                 add(DeskCatAct(sp.livingTower, DeskCatPose.PERCH, random.nextLong(3_600, 6_001), DeskCatFace.HAPPY))
@@ -140,6 +197,12 @@ internal object DeskCatBehavior {
                 add(DeskCatAct(sp.bookshelf, DeskCatPose.READ, random.nextLong(4_000, 6_001), DeskCatFace.FOCUSED))
                 if (videoPlaying) add(DeskCatAct(sp.couch, DeskCatPose.WATCH, 6_000, DeskCatFace.CURIOUS, facingLeft = false))
                 if (musicPlaying) add(DeskCatAct(sp.stereo, DeskCatPose.BOB, 6_000, DeskCatFace.PURR, facingLeft = false))
+                // Reading on the couch, the yarn, the dangling toy, a belly roll on the rug.
+                add(DeskCatAct(sp.couch, DeskCatPose.READ, random.nextLong(5_000, 7_001), DeskCatFace.FOCUSED, facingLeft = false))
+                add(DeskCatAct(sp.yarn, DeskCatPose.BAT, 1_200, DeskCatFace.PLAYFUL, facingLeft = false, trick = DeskCatTrick.YARN))
+                add(DeskCatAct(sp.towerStep, DeskCatPose.BAT, 1_200, DeskCatFace.PLAYFUL, facingLeft = false, trick = DeskCatTrick.TOY))
+                add(DeskCatAct(sp.rug, DeskCatPose.ROLL, random.nextLong(3_500, 5_001), DeskCatFace.LOVE, trick = DeskCatTrick.ROLL))
+                addAll(anywhereTricks(random, room))
             }
             DeskRoom.BEDROOM -> listOf(
                 DeskCatAct(sp.bed, DeskCatPose.SLEEP, random.nextLong(7_000, 12_001), DeskCatFace.ASLEEP),
@@ -148,9 +211,15 @@ internal object DeskCatBehavior {
                 DeskCatAct(litter, DeskCatPose.DIG, 3_000, DeskCatFace.FOCUSED),
                 DeskCatAct(arcade, DeskCatPose.GAME, random.nextLong(4_000, 6_001), DeskCatFace.PLAYFUL, facingLeft = true),
                 DeskCatAct(DeskCatSpot(640f, FLOOR), DeskCatPose.STRETCH, 2_600, DeskCatFace.YAWN),
-            )
+                // Kneading the bed before a nap, watching a bird on the sill, a sunbeam nap.
+                DeskCatAct(sp.bed, DeskCatPose.KNEAD, 3_000, DeskCatFace.PURR, trick = DeskCatTrick.KNEAD),
+                DeskCatAct(windowPerch, DeskCatPose.PERCH, random.nextLong(5_000, 7_001), DeskCatFace.CURIOUS, trick = DeskCatTrick.BIRD),
+            ) + listOfNotNull(ctx.sunbeamX?.takeUnless { ctx.night }?.let {
+                DeskCatAct(DeskCatSpot((it - 55f).coerceIn(430f, 700f), FLOOR), DeskCatPose.SLEEP, random.nextLong(8_000, 12_001), DeskCatFace.ASLEEP)
+            }) + anywhereTricks(random, room)
         }
-        return acts.filter { it.pose != previous }.ifEmpty { acts }.random(random)
+        // Don't repeat the last pose; tricks are always welcome.
+        return acts.filter { it.trick != DeskCatTrick.NONE || it.pose != previous }.ifEmpty { acts }.random(random)
     }
 
     /** The face a pose settles into when the act gives none. */
@@ -163,6 +232,9 @@ internal object DeskCatBehavior {
         DeskCatPose.BOB, DeskCatPose.GROOM -> DeskCatFace.PURR
         DeskCatPose.GAME, DeskCatPose.SCRATCH -> DeskCatFace.PLAYFUL
         DeskCatPose.LOAF -> DeskCatFace.SLEEPY
+        DeskCatPose.BAT, DeskCatPose.HIDE -> DeskCatFace.PLAYFUL
+        DeskCatPose.KNEAD -> DeskCatFace.PURR
+        DeskCatPose.ROLL -> DeskCatFace.LOVE
         else -> DeskCatFace.NEUTRAL
     }
 
@@ -191,5 +263,9 @@ internal object DeskCatBehavior {
         DeskCatPose.SCRATCH -> "scratching the post"
         DeskCatPose.SIT -> "sitting"
         DeskCatPose.LOAF -> "lying down"
+        DeskCatPose.BAT -> "batting at something"
+        DeskCatPose.KNEAD -> "kneading"
+        DeskCatPose.ROLL -> "rolling on its back"
+        DeskCatPose.HIDE -> "hiding in a box"
     }
 }

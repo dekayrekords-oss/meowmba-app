@@ -26,6 +26,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.roundToInt
 
 /** Meow's Desk mode (AppTheme.DESK): the office scene bound to the same data as Meow Flow. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -103,7 +104,7 @@ internal fun DeskRoute(vm: CompanionViewModel, state: CompanionState, paused: Bo
     var northStarOpen by remember { mutableStateOf(false) }
     DeskWorkspace(DeskState.from(snap, facts, tasks, room), tasks, modifier, paused = paused, roomActions = roomActions,
         roomTrips = DeskRoomTrips.of(state.features.deskRoomTrips), onRoomTrips = { vm.setDeskRoomTrips(it.key) },
-        picture = picture,
+        picture = picture, deskScale = state.features.deskScale, onDeskScale = vm::setDeskScale,
         fpsTarget = state.avatarFpsTarget, interactive = interactive,
         catActivity = catActivity, catReply = catReply, onAsk = vm::onUserTextSubmitted,
         onMenu = vm::openTiles, onSettings = vm::toggleSettings, onWork = { vm.openTaskHistory() },
@@ -279,22 +280,24 @@ internal fun DeskWorkspace(desk: DeskState, tasks: List<Intention>, modifier: Mo
     /** Null hides the cat's routine sheet (long-press on the cat). */
     onRoomTrips: ((DeskRoomTrips) -> Unit)? = null,
     /** The user's photo in the living-room frame; null shows the painting. */
-    picture: androidx.compose.ui.graphics.ImageBitmap? = null) {
+    picture: androidx.compose.ui.graphics.ImageBitmap? = null,
+    /** Room size in percent ([DeskScale]); the slider lives in Meow's sheet (long-press the cat). */
+    deskScale: Int = DeskScale.DEFAULT,
+    onDeskScale: ((Int) -> Unit)? = null) {
     var selected by rememberSaveable { mutableStateOf<DeskObject?>(null) }
     var asking by rememberSaveable { mutableStateOf(false) }
     var question by rememberSaveable { mutableStateOf("") }
     var routine by rememberSaveable { mutableStateOf(false) }
     BoxWithConstraints(modifier.fillMaxSize()) {
-        // Only a short (landscape phone) screen puts Menu · Flow · Settings down the side; the
-        // unfolded panorama keeps it along the bottom instead of floating over the living room.
-        val wide = maxHeight < 480.dp
+        // Landscape puts Menu · Flow · Settings along the top (beside Ask Meow), so the rooms can fill
+        // the rest of the screen edge to edge; portrait keeps it along the bottom.
+        val landscape = maxWidth > maxHeight
         val insets = WindowInsets.safeDrawing.asPaddingValues()
         DeskHabitat(desk, Modifier.fillMaxSize(), thermalStatus = thermalStatus,
-            topInset = insets.calculateTopPadding() + 8.dp,
+            topInset = insets.calculateTopPadding() + if (interactive && landscape) 60.dp else 8.dp,
             // Portrait: leave room for the Menu · Flow · Settings row under the desk.
-            bottomInset = insets.calculateBottomPadding() + if (interactive && !wide) 56.dp else 8.dp,
-            // Landscape: keep the rooms clear of the Menu · Flow · Settings column on the left.
-            startInset = if (interactive && wide) insets.calculateLeftPadding(androidx.compose.ui.unit.LayoutDirection.Ltr) + 104.dp else 0.dp,
+            bottomInset = insets.calculateBottomPadding() + if (interactive && !landscape) 56.dp else 8.dp,
+            userScale = deskScale / 100f,
             fpsTarget = fpsTarget, reduceMotion = paused,
             activity = catActivity, reply = catReply,
             interactive = interactive, wanderEveryMs = if (fpsTarget <= 15) 28_000 else 14_000,
@@ -312,12 +315,12 @@ internal fun DeskWorkspace(desk: DeskState, tasks: List<Intention>, modifier: Mo
                 }
             })
         if (interactive && onAsk != null) FilledTonalButton(onClick = { asking = true },
-            modifier = Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(12.dp).testTag("desk_ask")) {
+            modifier = Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(if (landscape) 6.dp else 12.dp).testTag("desk_ask")) {
             Text("Ask Meow")
         }
         if (interactive) dock?.invoke()
-        if (interactive) DeskNavigation(if (wide) Modifier.align(Alignment.CenterStart).safeDrawingPadding()
-            else Modifier.align(Alignment.BottomCenter).safeDrawingPadding(), vertical = wide,
+        if (interactive) DeskNavigation(if (landscape) Modifier.align(Alignment.TopStart).safeDrawingPadding().padding(end = 150.dp).testTag("desk_nav_top")
+            else Modifier.align(Alignment.BottomCenter).safeDrawingPadding(), vertical = false,
             onMenu = onMenu, onFlow = onFlow, onSettings = onSettings,
             micOn = micOn, onMicToggle = onMicToggle, onAttach = onAttach)
     }
@@ -342,6 +345,15 @@ internal fun DeskWorkspace(desk: DeskState, tasks: List<Intention>, modifier: Mo
                     RadioButton(selected = option == roomTrips, onClick = null)
                     Text(option.label, Modifier.padding(start = 12.dp), style = MaterialTheme.typography.bodyLarge)
                 }
+            }
+            if (onDeskScale != null) {
+                Text("Room size", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 16.dp))
+                Text("$deskScale% · bigger zooms in, and the view follows Meow", style = MaterialTheme.typography.bodyMedium, color = Color(0xFFBED0CD))
+                Slider(deskScale.toFloat(), { onDeskScale(((it / 10f).roundToInt() * 10).coerceIn(DeskScale.MIN, DeskScale.MAX)) },
+                    valueRange = DeskScale.MIN.toFloat()..DeskScale.MAX.toFloat(), steps = (DeskScale.MAX - DeskScale.MIN) / 10 - 1,
+                    modifier = Modifier.fillMaxWidth().testTag("desk_scale"))
+                TextButton(onClick = { onDeskScale(DeskScale.DEFAULT) }, enabled = deskScale != DeskScale.DEFAULT,
+                    modifier = Modifier.testTag("desk_scale_reset")) { Text("Fit the screen", color = Color(0xFFF4EEDB)) }
             }
             TextButton(onClick = { routine = false }, modifier = Modifier.align(Alignment.End)) { Text("Done", color = Color(0xFFF4EEDB)) }
         }
