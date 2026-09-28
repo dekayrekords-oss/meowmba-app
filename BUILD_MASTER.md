@@ -3,7 +3,7 @@
 Updated 2026-09-26. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
 This supersedes historical build-location/version instructions in other documents.
 
-- September28 **186 / 1.5.20 built by Claude** at the owner's explicit request (install pending: Fold not connected):
+- September28 **186 / 1.5.20 built and installed by Claude** at the owner's explicit request. Installed on Fold R5GL75XFCXD 07:58:22 MST over 185, firstInstallTime retained, PID alive, crash buffer unchanged:
   Desk landscape fill with the menu on top, a room-size slider, the moving room (time-of-day sky, weather, rare plane/UFO,
   blinking cursor, sticky note, lamp at night, arcade game) and the cat's habits; plus seven fixes found recording the
   Android demo videos. Branch `feature/desk-apartment` (`c2c5f04` + version bump); 3,148 tests, 0 failures/errors/skips;
