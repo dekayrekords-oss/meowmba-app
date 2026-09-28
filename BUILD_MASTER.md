@@ -3,6 +3,11 @@
 Updated 2026-09-26. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
 This supersedes historical build-location/version instructions in other documents.
 
+- September28 **187 / 1.5.21 built and installed by Claude** at the owner's request: measured rain outranks a dry
+  weather code (`8caa4df`). Installed on Fold 09:18:11 MST over 186, PID alive, crash buffer unchanged; weather now reads
+  DRIZZLE where it read CLOUDY. Receipt: `/Users/prog/Meowmba-Releases/rain187-20260928/README.md`.
+  **Integrator: merge `feature/desk-apartment` before building 188.** **187 consumed; next 188.**
+
 - September28 **186 / 1.5.20 built and installed by Claude** at the owner's explicit request. Installed on Fold R5GL75XFCXD 07:58:22 MST over 185, firstInstallTime retained, PID alive, crash buffer unchanged:
   Desk landscape fill with the menu on top, a room-size slider, the moving room (time-of-day sky, weather, rare plane/UFO,
   blinking cursor, sticky note, lamp at night, arcade game) and the cat's habits; plus seven fixes found recording the
