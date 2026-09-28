@@ -3578,6 +3578,7 @@ class CompanionViewModel(
         }.getOrNull() }
     }
     val flowRuntime: com.example.meowmba.core.flow.FlowRuntime? get() = flowRuntimeLazy.value
+
     private val _flowCommentRequest = MutableStateFlow<String?>(null)
     val flowCommentRequest = _flowCommentRequest.asStateFlow()
 
@@ -6051,7 +6052,7 @@ class CompanionViewModel(
             if (result.exceptionOrNull() is kotlinx.coroutines.CancellationException) throw result.exceptionOrNull()!!
             _uiState.value = _uiState.value.copy(
                 voicePackReady = result.isSuccess,
-                voicePackLabel = result.fold({ "Whisper ready" }, { it.message ?: "Whisper download failed" }),
+                voicePackLabel = result.fold({ "Whisper ready" }, { com.example.meowmba.core.audio.VoicePackIssue.label(it) }),
                 voicePackProgress = null,
             )
             refreshAsrBackendState()
@@ -6061,6 +6062,9 @@ class CompanionViewModel(
     }
 
     fun repairStreamingAsrModel() { asrDownloadFailed = false; requestAsrModel() }
+
+    /** Hides the voice-model notice on the home screen (after a failure; a retry shows it again). */
+    fun dismissVoicePackNotice() { _uiState.value = _uiState.value.copy(voicePackLabel = null) }
 
     fun refreshLocalModelLibrary() { refreshLoadedModels() }
 
@@ -7026,6 +7030,10 @@ class CompanionViewModel(
         // so re-open the capture instead. Bounded so a dead window still ends via the
         // follow-up timeout.
         fuLog("onListeningError code=$code followUp=$isFollowUpListen state=${_uiState.value.interactionState}")
+        if (VoicePolicy.isStaleListenError(_uiState.value.interactionState)) {
+            fuLog("onListeningError ignored: a turn is already in progress")
+            return
+        }
         if (isFollowUpListen && isFollowUpKeepAliveError(code) &&
             transientListenRetries < MAX_FOLLOW_UP_SILENCE_RETRIES &&
             _uiState.value.interactionState == InteractionState.LISTENING
@@ -10860,7 +10868,7 @@ class CompanionViewModel(
                 refreshAsrBackendState()
                 _uiState.value = _uiState.value.copy(
                     voicePackProgress = null,
-                    voicePackLabel = (asrInstall.exceptionOrNull() ?: whisperInstall.exceptionOrNull())?.message,
+                    voicePackLabel = com.example.meowmba.core.audio.VoicePackIssue.label(asrInstall.exceptionOrNull() ?: whisperInstall.exceptionOrNull()),
                 )
                 if (shouldAlwaysOnMic()) updateVoiceListeningMode()
             }
@@ -10890,8 +10898,8 @@ class CompanionViewModel(
             _uiState.value = _uiState.value.copy(
                 voicePackReady = result.isSuccess && store.isReady(),
                 voicePackProgress = null,
-                voicePackLabel = (result.exceptionOrNull() ?: asrInstall.exceptionOrNull()
-                    ?: whisperInstall.exceptionOrNull())?.message,
+                voicePackLabel = com.example.meowmba.core.audio.VoicePackIssue.label(result.exceptionOrNull() ?: asrInstall.exceptionOrNull()
+                    ?: whisperInstall.exceptionOrNull()),
             )
             attachWakeEngine()
             attachAsrEngine()

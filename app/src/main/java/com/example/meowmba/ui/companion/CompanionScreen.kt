@@ -46,6 +46,7 @@ import androidx.compose.material.icons.filled.VideocamOff
 import androidx.compose.material.icons.filled.Sync
 import com.example.meowmba.ui.theme.AlertDialog
 import androidx.compose.material3.*
+import androidx.compose.ui.platform.testTag
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -372,7 +373,7 @@ fun CompanionScreen(
                             )
                         }
                         Text(
-                            text = uiState.captionText ?: "",
+                            text = ReplyMarkdown.annotated(uiState.captionText ?: ""),
                             color = Color.White,
                             style = MaterialTheme.typography.bodyLarge.copy(
                                 fontSize = 18.sp,
@@ -552,7 +553,9 @@ fun CompanionScreen(
 
         }
 
-        if (!uiState.voicePackReady || !uiState.voicePackLabel.isNullOrBlank()) {
+        // Only while a download runs, or to report how it ended. A failed download used to leave
+        // this card up forever, falling back to a false "Getting voice models…".
+        if (uiState.showVoicePackNotice()) {
             Surface(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -567,6 +570,8 @@ fun CompanionScreen(
                         color = MaterialTheme.colorScheme.onSurface,
                         fontSize = 14.sp,
                     )
+                    if (uiState.voicePackProgress == null) TextButton(onClick = viewModel::dismissVoicePackNotice,
+                        modifier = Modifier.align(Alignment.End).testTag("voice_pack_hide")) { Text("Hide") }
                     val p = uiState.voicePackProgress
                     if (p != null) {
                         Spacer(Modifier.height(8.dp))

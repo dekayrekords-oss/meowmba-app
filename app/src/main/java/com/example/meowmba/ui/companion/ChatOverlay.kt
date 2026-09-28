@@ -197,7 +197,8 @@ fun ChatOverlay(
                     if (callActive) Text("Voice conversation active · tap the phone to end", style = MaterialTheme.typography.labelMedium)
                     recognitionIssue?.let { Text(it, style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error, maxLines = 3) }
-                    if (listening || !listenPartial.isNullOrBlank()) Text(
+                    val shownReply = liveReply?.takeIf { it.isNotBlank() } ?: messages.lastOrNull { it.isAssistantReply }?.text
+                    if (showListenLine(listening, listenPartial, shownReply)) Text(
                         listenPartial?.takeIf { it.isNotBlank() } ?: "Listening… Tap the mic to finish.",
                         maxLines = 2, style = MaterialTheme.typography.bodySmall)
                     val completions = remember(draft, completionApps) { OpenAppCompletion.suggest(draft, completionApps) }
@@ -261,9 +262,19 @@ fun ChatMessage(sender: String, message: String, isCompanion: Boolean, onDelete:
 }
 
 /** Sources stay readable/selectable; a browser is opened only when the user taps a HTTPS link. */
-internal fun chatSourceLinks(text: String): androidx.compose.ui.text.AnnotatedString =
+/**
+ * The small line under the reply: the live transcript while listening, or what you said while
+ * Meow thinks. Never the reply itself again (the caption carries the reply once it's spoken).
+ */
+internal fun showListenLine(listening: Boolean, partial: String?, reply: String?): Boolean =
+    listening || (!partial.isNullOrBlank() && partial.trim() != reply?.trim())
+
+internal fun chatSourceLinks(raw: String): androidx.compose.ui.text.AnnotatedString =
     androidx.compose.ui.text.buildAnnotatedString {
-        append(text)
+        // Replies often carry Markdown; show it formatted, and find links in the shown text.
+        val formatted = ReplyMarkdown.annotated(raw)
+        val text = formatted.text
+        append(formatted)
         Regex("https://[^\\s<>]+", RegexOption.IGNORE_CASE).findAll(text).forEach { match ->
             val url = match.value.trimEnd('.', ',', ';', '!', '?', ')', ']')
             if (com.example.meowmba.core.shopping.DealEvidence.safeHost(url) != null) {

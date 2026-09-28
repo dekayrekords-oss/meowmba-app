@@ -859,3 +859,6 @@ data class CompanionFeatures(
     val carCameraActiveId: String = "front_driver",
     val carDashcamRtspUrl: String = "",
 )
+
+/** The home screen's voice-model card: while downloading, or to report the result until hidden. */
+internal fun CompanionState.showVoicePackNotice(): Boolean = voicePackProgress != null || !voicePackLabel.isNullOrBlank()
