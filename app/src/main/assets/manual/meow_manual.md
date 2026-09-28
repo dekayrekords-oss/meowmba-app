@@ -79,3 +79,12 @@ manually. A browser preview is never proof that a Facebook post was published.
 
 Completed previews stay in place. Meow stops after completion, a failed model
 request or its action limit. Ask for another change to continue.
+
+
+## Saved memories
+
+Open **Memory** to search what Meow has saved, including older records. Choose **Correct** to replace a saved fact; the original chat stays unchanged. Choose **Pin** to keep a memory during automatic cleanup, or **Unpin** to return it to your normal retention setting. You can still delete a pinned memory. Pins do not make every answer repeat that memory.
+
+Correction dates and source message IDs help you inspect a record. Export makes a JSON copy with correction and pin information. Use **Backup & updates** for an encrypted backup before changing devices. Deleting a saved memory does not erase the original conversation or older backup files.
+
+Recall remains local to the app's memory store and uses the model you selected for your conversation. This update does not add server memory synchronization or download another model.

@@ -16,6 +16,24 @@ push; never assume a remote is private from its name. Public website updates
 may describe features without including Android source. Record changes and
 Meow passdowns locally; a local commit is not a public push.
 
+## Private GitHub synchronization — owner approved, 2026-09-28
+
+The owner authorizes syncing Android source and project documentation to the private
+repository `dekayrekords-oss/meowmba-app`. Verify its visibility is still private
+before pushing. Whenever you push a work branch to the Meow server (`lan`, or
+`origin` when it points to `meow:/home/claude/git/meowmba-app.git`), also push that
+same branch to the `github` remote. Report a failed sync; do not imply it succeeded.
+Use ordinary pushes, preserve remote history, and do not force-push or overwrite
+`main` without specific owner authorization. Do not upload secrets, user data,
+signing keys, model downloads, or local build artifacts.
+
+Copy task-relevant plans kept outside the repository into `docs/` before syncing,
+and keep their implementation/validation status accurate. The shared integration
+branch is `feature/meow-flow-core`; consult `BUILD_MASTER.md` for build state.
+Build 187 is work in progress, not an installed release. Fetch the relevant remote
+branch before starting work and reconcile it with local changes. The historical
+remote names and September 3 sync state below do not override current remotes.
+
 ## Active appearance revision and agent assignments
 
 For the current user-requested animation/chat/orb work, read `docs/IMMERSIVE_COMPANION_PLAN.md` and `docs/AGENT_PLAN.md`. They supersede the older orb-ribbon direction, not the security rules or unrelated roadmap below.

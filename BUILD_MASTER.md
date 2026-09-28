@@ -1,7 +1,13 @@
 # Meowmba shared build authority
 
-Updated 2026-09-26. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
+Updated 2026-09-28. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
 This supersedes historical build-location/version instructions in other documents.
+
+- September28 **187 / 1.5.21 allocated by Codex** for native long-term memory integration.
+  Includes Claude's apartment branch through `8caa4df` (186 plus weather fix), merged without
+  conflicts. Adds archive recall, explicit correction/pin controls and additive Room15.
+  Validation/build in progress; NOT installed or published. Details: `docs/LONG_TERM_MEMORY_2026-09-28.md`;
+  Os receipt: `work/memory-integration/IMPLEMENTATION.md`. **187 reserved; next188.**
 
 - September28 **186 / 1.5.20 built and installed by Claude** at the owner's explicit request. Installed on Fold R5GL75XFCXD 07:58:22 MST over 185, firstInstallTime retained, PID alive, crash buffer unchanged:
   Desk landscape fill with the menu on top, a room-size slider, the moving room (time-of-day sky, weather, rare plane/UFO,
