@@ -135,8 +135,8 @@ class ScenicBackgroundUiTest {
 
         val listeners = ArgumentCaptor.forClass(PowerManager.OnThermalStatusChangedListener::class.java)
         verify(power, times(5)).addThermalStatusListener(any(Executor::class.java), listeners.capture())
-        transition { listeners.allValues.forEach { it.onThermalStatusChanged(PowerManager.THERMAL_STATUS_SEVERE) } }
-        assertFrozenFor(2400, "OS severe thermal protection")
+        transition { listeners.allValues.forEach { it.onThermalStatusChanged(PowerManager.THERMAL_STATUS_CRITICAL) } }
+        assertFrozenFor(2400, "OS critical thermal protection")
         val hot = render()
         transition { listeners.allValues.forEach { it.onThermalStatusChanged(PowerManager.THERMAL_STATUS_NONE) } }
         compose.mainClock.advanceTimeBy(1200)

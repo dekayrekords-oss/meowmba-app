@@ -66,8 +66,11 @@ interface FlowDao {
     @Query("UPDATE flow_intentions SET status = :status, snoozedUntil = :snoozedUntil, updatedAt = :now WHERE id = :id")
     suspend fun setStatus(id: String, status: String, snoozedUntil: Long?, now: Long)
 
-    @Query("UPDATE flow_intentions SET status = 'DONE', updatedAt = :now WHERE id IN (:ids) AND status != 'DROPPED'")
+    @Query("UPDATE flow_intentions SET status = 'DONE', updatedAt = :now WHERE id IN (:ids) AND status NOT IN ('DROPPED', 'IGNORED')")
     suspend fun closeAll(ids: List<String>, now: Long)
+
+    @Query("SELECT * FROM flow_intentions WHERE status = 'IGNORED' ORDER BY updatedAt DESC LIMIT 200")
+    suspend fun ignoredIntentions(): List<FlowIntentionEntity>
 
     @Insert
     suspend fun insertOutcome(outcome: FlowOutcomeEntity)
@@ -122,6 +125,7 @@ class RoomIntentionStore(
     override suspend fun find(id: String): Intention? = dao.findIntention(id)?.let(FlowEntityMapper::fromEntity)
     override suspend fun setStatus(id: String, status: IntentionStatus, snoozedUntil: Long?) = dao.setStatus(id, status.name, snoozedUntil, clock())
     override suspend fun closeSatisfied(ids: Collection<String>) = dao.closeAll(ids.toList(), clock())
+    override suspend fun ignored(): List<Intention> = dao.ignoredIntentions().map(FlowEntityMapper::fromEntity)
 }
 
 /** Bounded durable feedback, kept off the main thread by Room's suspend DAO. */

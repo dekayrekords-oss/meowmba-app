@@ -22,7 +22,7 @@ class SharedFramePhaseTest {
             fps = listOf(15, 30, 45, 60).random(random),
             thermal = listOf(
                 PowerManager.THERMAL_STATUS_NONE, PowerManager.THERMAL_STATUS_NONE,
-                PowerManager.THERMAL_STATUS_LIGHT, PowerManager.THERMAL_STATUS_MODERATE,
+                PowerManager.THERMAL_STATUS_LIGHT, PowerManager.THERMAL_STATUS_MODERATE, PowerManager.THERMAL_STATUS_SEVERE,
             ).random(random),
         )
     }
@@ -142,7 +142,7 @@ class SharedFramePhaseTest {
 
     @Test fun `sleeping between frames admits exactly the vsyncs polling admits`() {
         val thermals = listOf(
-            PowerManager.THERMAL_STATUS_NONE, PowerManager.THERMAL_STATUS_LIGHT, PowerManager.THERMAL_STATUS_MODERATE,
+            PowerManager.THERMAL_STATUS_NONE, PowerManager.THERMAL_STATUS_LIGHT, PowerManager.THERMAL_STATUS_MODERATE, PowerManager.THERMAL_STATUS_SEVERE,
         )
         for (period in listOf(vsync120, vsync60, 11_111_111L)) for (active in listOf(true, false))
             for (fps in listOf(15, 24, 30, 45, 60)) for (thermal in thermals) {

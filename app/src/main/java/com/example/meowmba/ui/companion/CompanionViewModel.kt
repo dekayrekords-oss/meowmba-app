@@ -2953,14 +2953,14 @@ class CompanionViewModel(
                 floatArrayOf(motionMag.coerceIn(0f, 1f))))
         }
         // Behavioral caution still tracks MODERATE+; the on-screen reflex chip
-        // only mentions heat at SEVERE+ so LIGHT/MODERATE flicker never looks like overheating.
+        // only mentions heat once decorative work stops (THERMAL_STOP_AT), so flicker never looks like overheating.
         val thermalStatus = try {
             ThermalGovernor.currentStatus()
         } catch (_: Throwable) {
             android.os.PowerManager.THERMAL_STATUS_NONE
         }
         val thermalCaution = thermalStatus >= android.os.PowerManager.THERMAL_STATUS_MODERATE
-        val thermalChip = thermalStatus >= android.os.PowerManager.THERMAL_STATUS_SEVERE
+        val thermalChip = thermalStatus >= THERMAL_STOP_AT
         val speaking = state.interactionState == InteractionState.SPEAKING || _mouthEnergy.value > 0.02f
         val resting = (state.interactionState == InteractionState.IDLE ||
             state.interactionState == InteractionState.MUTED ||

@@ -22,6 +22,8 @@ interface IntentionStore {
     /** Close every open intention a confirmed change satisfied (catalogue #295, #600). */
     suspend fun closeSatisfied(ids: Collection<String>)
     fun open(now: Long): List<Intention> = intentions.value.filter { it.isOpenAt(now) }
+    /** Everything the user chose to ignore, newest first. */
+    suspend fun ignored(): List<Intention> = intentions.value.filter { it.status == IntentionStatus.IGNORED }
 }
 
 class InMemoryIntentionStore(initial: List<Intention> = emptyList()) : IntentionStore {
@@ -37,7 +39,7 @@ class InMemoryIntentionStore(initial: List<Intention> = emptyList()) : Intention
     }
 
     override suspend fun closeSatisfied(ids: Collection<String>) = state.update { list ->
-        list.map { if (it.id in ids && it.status != IntentionStatus.DROPPED) it.copy(status = IntentionStatus.DONE) else it }
+        list.map { if (it.id in ids && it.status != IntentionStatus.DROPPED && it.status != IntentionStatus.IGNORED) it.copy(status = IntentionStatus.DONE) else it }
     }
 }
 

@@ -111,10 +111,10 @@ class CompanionSceneBackgroundPauseTest {
         val resumed = render()
         assertFalse("resumed clock advances after its baseline frame", frozen.sameAs(resumed))
 
-        // Exercise the real policy's severe-heat stop as well as explicit pause.
+        // Exercise the real policy's critical-heat stop as well as explicit pause.
         val listener = ArgumentCaptor.forClass(PowerManager.OnThermalStatusChangedListener::class.java)
         verify(power).addThermalStatusListener(any(Executor::class.java), listener.capture())
-        transition { listener.value.onThermalStatusChanged(PowerManager.THERMAL_STATUS_SEVERE) }
+        transition { listener.value.onThermalStatusChanged(PowerManager.THERMAL_STATUS_CRITICAL) }
         val hot = render()
         compose.mainClock.advanceTimeBy(2000)
         val hotStill = render()

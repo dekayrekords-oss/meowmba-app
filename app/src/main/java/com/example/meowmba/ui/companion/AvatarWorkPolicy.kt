@@ -13,27 +13,39 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.delay
 
-/** How long Android thermal must stay at MODERATE+ before we show a user-facing warning. */
+/** How long Android thermal must stay at [THERMAL_EASE_AT]+ before we show a user-facing warning. */
 internal const val THERMAL_UI_HOLD_MS = 10_000L
 
 /**
- * User-visible thermal messaging. Work throttling may still kick in at MODERATE
- * immediately; this ladder is only for banners/chips so brief spikes and LIGHT
+ * First Android thermal status where decorative motion eases and the "Cooling animations" notice
+ * may show. Raised one step (was MODERATE) so ordinary warm-phone use is not throttled or nagged.
+ */
+internal const val THERMAL_EASE_AT = PowerManager.THERMAL_STATUS_SEVERE
+
+/**
+ * First status where decorative work stops and the notice says the phone is hot. Raised one step
+ * (was SEVERE). Camera and microphone protection stays with ThermalGovernor and is not changed here.
+ */
+internal const val THERMAL_STOP_AT = PowerManager.THERMAL_STATUS_CRITICAL
+
+/**
+ * User-visible thermal messaging. Work throttling may still kick in at [THERMAL_EASE_AT]
+ * immediately; this ladder is only for banners/chips so brief spikes and anything cooler
  * never look like "overheating".
  */
 internal enum class ThermalUiWarning {
-    /** NONE / LIGHT, or MODERATE that has not held long enough. */
+    /** Below [THERMAL_EASE_AT], or a spike that has not held long enough. */
     NONE,
-    /** Sustained MODERATE — mild copy only. */
+    /** Sustained [THERMAL_EASE_AT] — mild copy only. */
     MILD,
-    /** Sustained SEVERE+ — stronger but still not "overheating". */
+    /** Sustained [THERMAL_STOP_AT]+ — stronger but still not "overheating". */
     HOT,
 }
 
 /**
  * Pure decision for UI warnings. Escalation onto [ThermalUiWarning.MILD]/[ThermalUiWarning.HOT]
- * waits [THERMAL_UI_HOLD_MS] of continuous MODERATE+; once showing, severity
- * tracks the live status until it drops below MODERATE (clears immediately).
+ * waits [THERMAL_UI_HOLD_MS] of continuous [THERMAL_EASE_AT]+; once showing, severity
+ * tracks the live status until it drops below [THERMAL_EASE_AT] (clears immediately).
  *
  * @return warning level and the elevated-since timestamp to persist (0 when cool).
  */
@@ -44,7 +56,7 @@ internal fun resolveThermalUiWarning(
     previouslyShowing: Boolean,
     holdMs: Long = THERMAL_UI_HOLD_MS,
 ): Pair<ThermalUiWarning, Long> {
-    if (thermalStatus < PowerManager.THERMAL_STATUS_MODERATE) {
+    if (thermalStatus < THERMAL_EASE_AT) {
         return ThermalUiWarning.NONE to 0L
     }
     val since = if (elevatedSinceMs == 0L) nowMs else elevatedSinceMs
@@ -52,7 +64,7 @@ internal fun resolveThermalUiWarning(
     if (!heldLongEnough) {
         return ThermalUiWarning.NONE to since
     }
-    val level = if (thermalStatus >= PowerManager.THERMAL_STATUS_SEVERE) {
+    val level = if (thermalStatus >= THERMAL_STOP_AT) {
         ThermalUiWarning.HOT
     } else {
         ThermalUiWarning.MILD
@@ -67,11 +79,15 @@ internal fun thermalUiBannerText(warning: ThermalUiWarning): String? = when (war
 }
 
 internal fun allowAvatarWork(started: Boolean, interactive: Boolean, thermalStatus: Int): Boolean =
-    started && interactive && thermalStatus < PowerManager.THERMAL_STATUS_SEVERE
+    started && interactive && thermalStatus < THERMAL_STOP_AT
+
+/** The notice stays hidden while the user has swiped away this level; a worse level shows again. */
+internal fun thermalBannerVisible(warning: ThermalUiWarning, dismissed: ThermalUiWarning?): Boolean =
+    warning != ThermalUiWarning.NONE && warning != dismissed
 
 /** Stop decorative work when invisible or thermally throttled. Uses Android's
  * thermal severity rather than inventing a battery-temperature threshold.
- * MODERATE is now a sparse-cadence tier; SEVERE still stops decorative work. */
+ * [THERMAL_EASE_AT] is a sparse-cadence tier; [THERMAL_STOP_AT] stops decorative work. */
 @Composable
 internal fun rememberAvatarWorkAllowed(): Boolean = rememberAvatarWorkStatus().allowed
 
@@ -129,7 +145,7 @@ internal fun rememberAvatarWorkStatus(): AvatarWorkStatus {
             )
             elevatedSinceMs = since
             warning = next
-            if (thermal < PowerManager.THERMAL_STATUS_MODERATE || next != ThermalUiWarning.NONE) {
+            if (thermal < THERMAL_EASE_AT || next != ThermalUiWarning.NONE) {
                 break
             }
             val wait = (THERMAL_UI_HOLD_MS - (now - since)).coerceAtLeast(50L)

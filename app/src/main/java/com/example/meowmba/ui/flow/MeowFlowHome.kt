@@ -127,6 +127,8 @@ fun MeowFlowHome(
     onAttach: (() -> Unit)? = null,
     northStar: (@Composable () -> Unit)? = null,
     onComment: (FlowItem) -> Unit = {},
+    /** "Ignore": never show this again. Null hides the link (previews, older callers). */
+    onIgnore: ((FlowItem) -> Unit)? = null,
 ) {
     val hour = java.time.Instant.ofEpochMilli(snapshot.at.takeIf { it > 0 } ?: System.currentTimeMillis())
         .atZone(java.time.ZoneId.systemDefault()).hour
@@ -175,7 +177,7 @@ fun MeowFlowHome(
                 }
                 northStar?.invoke()
                 snapshot.main?.let { main ->
-                    key(main.intentionId) { MainThought(main, pushed, anchors, reduceMotion, onPrimary, onLater, onComment) }
+                    key(main.intentionId) { MainThought(main, pushed, anchors, reduceMotion, onPrimary, onLater, onComment, onIgnore) }
                 }
                 if (snapshot.main == null && snapshot.more.isEmpty()) {
                     BasicText("Nothing needs you right now.", Modifier.padding(top = 30.dp).testTag("flow_empty"),
@@ -187,7 +189,7 @@ fun MeowFlowHome(
                 // Keep a gap even when the screen is short (cover display) and the spacer collapses.
                 Spacer(Modifier.height(20.dp))
                 if (snapshot.more.isNotEmpty()) {
-                    FlowList(snapshot.more, snapshot.evening, pushed, anchors, reduceMotion, onPrimary, onLater, onComment)
+                    FlowList(snapshot.more, snapshot.evening, pushed, anchors, reduceMotion, onPrimary, onLater, onComment, onIgnore)
                 }
             }
 
@@ -333,6 +335,7 @@ internal fun kindLabel(item: FlowItem, evening: Boolean = false): String = when 
 private fun MainThought(
     item: FlowItem, compact: Boolean, anchors: MutableMap<String, LayoutCoordinates>, reduceMotion: Boolean,
     onPrimary: (FlowItem) -> Unit, onLater: (FlowItem) -> Unit, onComment: (FlowItem) -> Unit,
+    onIgnore: ((FlowItem) -> Unit)? = null,
 ) {
     val c = LocalFlowColors.current
     Column(Modifier.padding(top = if (compact) 18.dp else 30.dp).enterAnimation(0, reduceMotion).testTag("flow_main")) {
@@ -351,6 +354,7 @@ private fun MainThought(
             FlowButton(item.primary.label, c.ink, c.paper) { onPrimary(item) }
             item.secondary?.let { FlowLink(it.label, c.ink) { onLater(item) } }
             FlowLink("Comment", c.ink) { onComment(item) }
+            onIgnore?.let { ignore -> FlowLink("Ignore", c.ink2) { ignore(item) } }
         }
     }
 }
@@ -382,6 +386,7 @@ internal fun FlowLink(label: String, color: Color, onClick: () -> Unit) {
 private fun FlowList(
     items: List<FlowItem>, evening: Boolean, compact: Boolean, anchors: MutableMap<String, LayoutCoordinates>,
     reduceMotion: Boolean, onPrimary: (FlowItem) -> Unit, onLater: (FlowItem) -> Unit, onComment: (FlowItem) -> Unit,
+    onIgnore: ((FlowItem) -> Unit)? = null,
 ) {
     val c = LocalFlowColors.current
     Column(Modifier.fillMaxWidth().testTag("flow_more")) {
@@ -426,6 +431,7 @@ private fun FlowList(
                             FlowLink(item.primary.label, c.ink) { onPrimary(item) }
                             FlowLink("Later", c.ink) { onLater(item) }
                             FlowLink("Comment", c.ink) { onComment(item) }
+                            onIgnore?.let { ignore -> FlowLink("Ignore", c.ink2) { ignore(item) } }
                         }
                     }
                 }

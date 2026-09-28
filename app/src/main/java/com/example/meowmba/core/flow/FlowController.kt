@@ -52,11 +52,19 @@ class FlowController(
     private val state = MutableStateFlow(FlowSnapshot.EMPTY)
     val snapshot: StateFlow<FlowSnapshot> = state.asStateFlow()
 
+    /** One model pass at a time. Held for the whole (possibly slow) assessment. */
     private val mutex = Mutex()
+    /** Guards only the fast decide-and-publish step, so a tap never waits behind a model pass. */
+    private val publishLock = Mutex()
     private var jobs: List<Job> = emptyList()
     private var pending: Job? = null
-    private var lastSituation: Situation? = null
-    private var lastAssessments: List<Assessment> = emptyList()
+    @Volatile private var lastSituation: Situation? = null
+    @Volatile private var lastAssessments: List<Assessment> = emptyList()
+    /**
+     * Items the user just answered, kept out of every snapshot until the store has caught up. Without
+     * this a model pass that began before the tap publishes the old list and the card comes back.
+     */
+    private val answered = HashMap<String, Long>()
     private var lastInterruptId: String? = null
     /** Interruptions already answered/passed, with the time they stay suppressed until. */
     private val suppressedUntil = HashMap<String, Long>()
@@ -105,17 +113,19 @@ class FlowController(
         publish(situation, open)
     }
 
-    /** Settings changed: same judgments, new policy result. No model call. */
-    suspend fun reapplyPolicy() = mutex.withLock {
-        val situation = lastSituation ?: return@withLock
+    /** Settings changed: same judgments, new policy result. No model call, and never queued behind one. */
+    suspend fun reapplyPolicy() {
+        val situation = lastSituation ?: return
         publish(situation.copy(now = clock()), store.open(clock()))
     }
 
-    private suspend fun publish(situation: Situation, open: List<Intention>) {
+    private suspend fun publish(situation: Situation, open: List<Intention>) = publishLock.withLock {
         val now = situation.now
         suppressedUntil.entries.removeAll { it.value <= now }
+        answered.entries.removeAll { it.value <= now }
+        val visible = if (answered.isEmpty()) open else open.filter { it.id !in answered }
         val result = policy.decide(
-            situation, open, lastAssessments, settings.value, ledgerStore.load(),
+            situation, visible, lastAssessments, settings.value, ledgerStore.load(),
             activeInterrupt = lastInterruptId, suppressed = suppressedUntil.keys.toSet(),
         )
         ledgerStore.save(result.ledger)
@@ -138,6 +148,7 @@ class FlowController(
         outcomes.record(OutcomeRecord(intentionId, clock(), Outcome.ACTED, engine = engineUsed))
         if (completes) store.setStatus(intentionId, IntentionStatus.DONE)
         dismissInterruptIf(intentionId)
+        if (completes) hideNow(intentionId)
     }
 
     /** "Later" / "Not today": snooze without losing the intention. */
@@ -145,6 +156,34 @@ class FlowController(
         outcomes.record(OutcomeRecord(intentionId, clock(), Outcome.SNOOZED, engine = engineUsed))
         store.setStatus(intentionId, IntentionStatus.SNOOZED, clock() + forMs)
         dismissInterruptIf(intentionId)
+        hideNow(intentionId)
+    }
+
+    /** "Ignore": never show this again. Nothing re-adds it; [restoreIgnored] is the only way back. */
+    suspend fun onIgnore(intentionId: String) {
+        outcomes.record(OutcomeRecord(intentionId, clock(), Outcome.DISMISSED, engine = engineUsed))
+        store.setStatus(intentionId, IntentionStatus.IGNORED)
+        dismissInterruptIf(intentionId)
+        hideNow(intentionId)
+    }
+
+    /** Bring back everything that was ignored. Returns how many. */
+    suspend fun restoreIgnored(): Int {
+        val back = store.ignored()
+        back.forEach { store.setStatus(it.id, IntentionStatus.OPEN) }
+        // Restoring right after ignoring must not be hidden by the short "just answered" hold.
+        publishLock.withLock { back.forEach { answered.remove(it.id) } }
+        if (back.isNotEmpty()) schedule(immediate = true)
+        return back.size
+    }
+
+    /**
+     * The card disappears now: re-decide from the judgments already held (no model call, no wait
+     * behind a slow pass) and keep the item out of any snapshot a pass already in flight publishes.
+     */
+    private suspend fun hideNow(intentionId: String) {
+        publishLock.withLock { answered[intentionId] = clock() + ANSWERED_HOLD_MS }
+        reapplyPolicy()
     }
 
     /** The chance passed without an answer (e.g. the store is behind the user). */
@@ -163,6 +202,8 @@ class FlowController(
     companion object {
         const val DEBOUNCE_MS = 2_000L
         const val SNOOZE_MS = 60 * 60 * 1000L
+        /** Long enough for the store's own change feed to catch up with a status write. */
+        const val ANSWERED_HOLD_MS = 2 * 60 * 1000L
         /** After an interruption is answered or passes, don't interrupt for it again for this long. */
         const val SUPPRESS_MS = 6 * 60 * 60 * 1000L
     }

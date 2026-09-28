@@ -7,7 +7,12 @@ This supersedes historical build-location/version instructions in other document
   Codex's `feature/meow-flow-core` (indexed long-term recall, memory correction/pin controls, additive Room15)
   plus Claude's `feature/desk-apartment` through `21f6367`, plus Flow fixes: the Later button, an Ignore button that
   stops a Flow item coming back, a swipe-away "cooling animations" notice and a higher thermal limit.
-  NOT built, NOT installed, NOT published; Codex remains build owner. **188 reserved; next 189.**
+  Later now clears the card at once (it used to wait behind a debounced model pass, so on a phone with a slow
+  Laya pass it looked dead; an in-flight pass could also bring the card back). Ignore is a new `IGNORED`
+  status: nothing re-adds it (managed sync, package notices and message re-posts all leave it alone) and
+  Settings has "Bring back N ignored items". Thermal: notice/easing start at SEVERE (was MODERATE), decorative
+  work stops at CRITICAL (was SEVERE); camera/mic protection in `ThermalGovernor` is unchanged. No Room version
+  change. NOT built, NOT installed, NOT published; Codex remains build owner. **188 reserved; next 189.**
 
 - September28 **187 / 1.5.21 built and installed by Claude** at the owner's request: measured rain outranks a dry
   weather code (`8caa4df`). Installed on Fold 09:18:11 MST over 186, PID alive, crash buffer unchanged; weather now reads

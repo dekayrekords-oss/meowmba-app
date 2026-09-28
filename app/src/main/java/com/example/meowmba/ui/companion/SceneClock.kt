@@ -27,8 +27,8 @@ internal class SceneClock {
  * [interacting] = a clip is performing or a face is being tracked. Ambient
  * scenes (weather, backgrounds) pass false: their cycles are seconds long and
  * use the idle cadence (~half of Avatar FPS target). Active paths admit the
- * user Avatar FPS target when cool (default ~30); LIGHT thermal halves FPS;
- * AvatarWorkPolicy still stops work at THERMAL_STATUS_MODERATE+.
+ * user Avatar FPS target when cool (default ~30); MODERATE halves FPS and THERMAL_EASE_AT quarters it;
+ * AvatarWorkPolicy stops work at THERMAL_STOP_AT+.
  */
 @Composable
 internal fun rememberSceneClock(paused: Boolean, interacting: Boolean = true): SceneClock {

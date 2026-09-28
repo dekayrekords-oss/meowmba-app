@@ -1130,14 +1130,20 @@ fun CompanionScreen(
         // card rendered underneath the open conversation sheet, so a task
         // waiting on approval was invisible and silently timed out.
         // Tool approval card: a risky action is blocked until you decide
-        // Thermal banner: NONE/LIGHT never warn; MODERATE needs hold (AvatarWorkPolicy);
-        // copy is mild at MODERATE and only stronger at SEVERE+.
+        // Thermal banner: below THERMAL_EASE_AT never warns; that level needs a hold (AvatarWorkPolicy);
+        // copy is mild there and only stronger at THERMAL_STOP_AT+. Swipe it away; a worse level shows again.
+        var dismissedThermal by remember { mutableStateOf<ThermalUiWarning?>(null) }
+        if (avatarWorkStatus.warning == ThermalUiWarning.NONE && dismissedThermal != null) dismissedThermal = null
         thermalUiBannerText(avatarWorkStatus.warning)?.takeIf {
-            faceModeActive(uiState.copy(isChatExpanded = false))
+            thermalBannerVisible(avatarWorkStatus.warning, dismissedThermal) &&
+                faceModeActive(uiState.copy(isChatExpanded = false))
         }?.let { banner ->
-            Surface(Modifier.align(Alignment.TopCenter).safeDrawingPadding().padding(16.dp),
-                shape = MaterialTheme.shapes.medium) {
-                Text(banner, modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.bodySmall)
+            val level = avatarWorkStatus.warning
+            SwipeAway(onDismiss = { dismissedThermal = level },
+                modifier = Modifier.align(Alignment.TopCenter).safeDrawingPadding().padding(16.dp).testTag("thermal_banner")) {
+                Surface(shape = MaterialTheme.shapes.medium) {
+                    Text(banner, modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.bodySmall)
+                }
             }
         }
         // Above chat and settings, but below approvals and onboarding.

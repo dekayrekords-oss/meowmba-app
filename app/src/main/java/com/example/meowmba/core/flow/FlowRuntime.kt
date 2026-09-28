@@ -180,7 +180,9 @@ class FlowRuntime(
                 // Package updates from texts/emails/carrier apps (any sender, including short codes).
                 e.delivery?.let { d ->
                     val item = com.example.meowmba.core.flow.sources.DeliveryNotices.toIntention(d, e.sender, e.appLabel, e.at)
-                    val old = store.intentions.value.firstOrNull { it.id == item.id }
+                    val old = store.find(item.id)
+                    // An ignored package stays ignored, whatever stage it reaches.
+                    if (old?.status == IntentionStatus.IGNORED) return
                     // One item per package moves forward (shipped → arriving → delivered).
                     if (old == null || old.facts["stage"] != item.facts["stage"]) store.upsert(item)
                     publish(Evidence(EvidenceType.NOTIFICATION, e.at, "pkg", item.text, mapOf("stage" to d.stage.name)))
@@ -213,6 +215,9 @@ class FlowRuntime(
 
     suspend fun onPrimary(intentionId: String) { controller.onPrimary(intentionId); delivery.resolved(intentionId) }
     suspend fun onLater(intentionId: String) { controller.onLater(intentionId); delivery.resolved(intentionId) }
+    suspend fun onIgnore(intentionId: String) { controller.onIgnore(intentionId); delivery.resolved(intentionId) }
+    suspend fun ignoredCount(): Int = store.ignored().size
+    suspend fun restoreIgnored(): Int = controller.restoreIgnored()
 }
 
 /** Persists today's interruption count and last time across restarts. */

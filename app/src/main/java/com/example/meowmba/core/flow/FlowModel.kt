@@ -23,7 +23,8 @@ enum class Channel { SPEAK_AND_SHOW, SHOW_ONLY, NOTIFY, SPEAK_ONLY, HOLD }
 /** Copy must never present LIKELY or UNKNOWN facts as confirmed (owner decision D12). */
 enum class Certainty { CONFIRMED, LIKELY, UNKNOWN }
 
-enum class IntentionStatus { OPEN, SNOOZED, DONE, DROPPED }
+/** [IGNORED]: the user said "never show this again". Nothing re-adds it; only "Bring back" reopens it. */
+enum class IntentionStatus { OPEN, SNOOZED, DONE, DROPPED, IGNORED }
 
 enum class Activity { STILL, WALKING, DRIVING, PASSENGER, UNKNOWN }
 

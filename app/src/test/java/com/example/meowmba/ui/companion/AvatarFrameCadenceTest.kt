@@ -71,25 +71,35 @@ class AvatarFrameCadenceTest {
         assertTrue(c.admit(intervalNs * 2, fpsTarget = 42))
     }
 
-    @Test fun `LIGHT thermal halves effective active fps`() {
+    @Test fun `LIGHT thermal no longer slows the avatar`() {
         val c = AvatarFrameCadence()
         var admitted = 0
         for (i in 0 until 120) {
-            if (c.admit(
-                    i * 8_333_334L,
-                    fpsTarget = 60,
-                    thermalStatus = PowerManager.THERMAL_STATUS_LIGHT,
-                )
-            ) admitted++
+            if (c.admit(i * 8_333_334L, fpsTarget = 60, thermalStatus = PowerManager.THERMAL_STATUS_LIGHT)) admitted++
+        }
+        assertEquals(60, admitted)
+    }
+
+    @Test fun `MODERATE thermal halves effective active fps`() {
+        val c = AvatarFrameCadence()
+        var admitted = 0
+        for (i in 0 until 120) {
+            if (c.admit(i * 8_333_334L, fpsTarget = 60, thermalStatus = PowerManager.THERMAL_STATUS_MODERATE)) admitted++
         }
         assertEquals(30, admitted)
     }
 
-    @Test fun `MODERATE thermal keeps a sparse motion cadence`() {
+    @Test fun `SEVERE thermal keeps a sparse motion cadence`() {
         val c = AvatarFrameCadence()
-        assertTrue(c.admit(0L, fpsTarget = 60, thermalStatus = PowerManager.THERMAL_STATUS_MODERATE))
-        assertFalse(c.admit(60_000_000L, fpsTarget = 60, thermalStatus = PowerManager.THERMAL_STATUS_MODERATE))
-        assertTrue(c.admit(67_000_000L, fpsTarget = 60, thermalStatus = PowerManager.THERMAL_STATUS_MODERATE))
+        assertTrue(c.admit(0L, fpsTarget = 60, thermalStatus = PowerManager.THERMAL_STATUS_SEVERE))
+        assertFalse(c.admit(60_000_000L, fpsTarget = 60, thermalStatus = PowerManager.THERMAL_STATUS_SEVERE))
+        assertTrue(c.admit(67_000_000L, fpsTarget = 60, thermalStatus = PowerManager.THERMAL_STATUS_SEVERE))
+    }
+
+    @Test fun `CRITICAL thermal stops motion`() {
+        val c = AvatarFrameCadence()
+        assertFalse(c.admit(0L, fpsTarget = 60, thermalStatus = PowerManager.THERMAL_STATUS_CRITICAL))
+        assertFalse(c.admit(1_000_000_000L, fpsTarget = 60, thermalStatus = PowerManager.THERMAL_STATUS_EMERGENCY))
     }
 
     @Test fun `starting a clip admits again instead of waiting out the idle interval`() {

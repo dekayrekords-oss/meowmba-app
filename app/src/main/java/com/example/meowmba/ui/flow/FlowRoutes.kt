@@ -158,6 +158,13 @@ internal fun FlowHomeRoute(vm: CompanionViewModel, state: CompanionState, paused
         scope.launch { runCatching { vm.syncFlowAppData() }; flow.controller.schedule(immediate = true) }
     }
     val requestPermission: (String) -> Unit = { p -> permission.launch(p) }
+    var ignoredCount by remember { mutableIntStateOf(0) }
+    // The Settings sheet offers "Bring back" while anything is ignored; count when it opens.
+    LaunchedEffect(adjust) { if (adjust) ignoredCount = runCatching { flow.ignoredCount() }.getOrDefault(0) }
+    suspend fun ignoreItem(item: FlowItem) {
+        flow.onIgnore(item.intentionId)
+        android.widget.Toast.makeText(context, "Ignored. Bring it back from Settings.", android.widget.Toast.LENGTH_SHORT).show()
+    }
 
     MeowFlowHome(snapshot, settings,
         DateTimeFormatter.ofPattern("EEE d MMM · h:mm a").format(
@@ -167,6 +174,7 @@ internal fun FlowHomeRoute(vm: CompanionViewModel, state: CompanionState, paused
         onPrimary = { if (it.intentionId in guidedSetupIds) accessSetup = true
             else scope.launch { handleFlowPrimary(vm, context, flow, it.intentionId, requestPermission) } },
         onLater = { scope.launch { flow.onLater(it.intentionId) } },
+        onIgnore = { item -> scope.launch { ignoreItem(item) } },
         onComment = openComment,
         onInterruptAccept = { if (it.item.intentionId in guidedSetupIds) accessSetup = true
             else scope.launch { handleFlowPrimary(vm, context, flow, it.item.intentionId, requestPermission) } },
@@ -203,7 +211,16 @@ internal fun FlowHomeRoute(vm: CompanionViewModel, state: CompanionState, paused
             deskRoomTrips = state.features.deskRoomTrips, onDeskRoomTrips = vm::setDeskRoomTrips,
             deskScale = state.features.deskScale, onDeskScale = vm::setDeskScale,
             onNorthStars = { adjust = false; northStarOpen = true },
-            onAccessSetup = { adjust = false; accessSetup = true })
+            onAccessSetup = { adjust = false; accessSetup = true },
+            ignoredCount = ignoredCount,
+            onRestoreIgnored = {
+                scope.launch {
+                    val n = flow.restoreIgnored()
+                    ignoredCount = 0
+                    android.widget.Toast.makeText(context,
+                        if (n == 1) "Brought back 1 item." else "Brought back $n items.", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            })
     }
     if (northStarOpen && stars != null) ModalBottomSheet(onDismissRequest = { northStarOpen = false },
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -226,7 +243,8 @@ internal fun FlowHomeRoute(vm: CompanionViewModel, state: CompanionState, paused
                 else scope.launch { handleFlowPrimary(vm, context, flow, item.intentionId, requestPermission) } },
             onLater = { item -> scope.launch { flow.onLater(item.intentionId) } },
             onClose = { attention = false },
-            onComment = { attention = false; openComment(it) })
+            onComment = { attention = false; openComment(it) },
+            onIgnore = { item -> scope.launch { ignoreItem(item) } })
     }
     commentItem?.let { original ->
         ModalBottomSheet(onDismissRequest = { if (!commentBusy) commentItem = null },
@@ -357,7 +375,8 @@ internal fun needsAttention(s: FlowSnapshot): List<FlowItem> =
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun AttentionSheet(items: List<FlowItem>, c: FlowColors, onPrimary: (FlowItem) -> Unit,
-                            onLater: (FlowItem) -> Unit, onClose: () -> Unit, onComment: (FlowItem) -> Unit = {}) {
+                            onLater: (FlowItem) -> Unit, onClose: () -> Unit, onComment: (FlowItem) -> Unit = {},
+                            onIgnore: ((FlowItem) -> Unit)? = null) {
     CompositionLocalProvider(LocalFlowColors provides c) {
         Column(Modifier.fillMaxWidth().background(c.paper)
             .drawBehind { drawLine(c.ink, Offset(0f, 0f), Offset(size.width, 0f), 1.5.dp.toPx()) }
@@ -381,6 +400,7 @@ internal fun AttentionSheet(items: List<FlowItem>, c: FlowColors, onPrimary: (Fl
                         FlowButton(item.primary.label, c.ink, c.paper) { onPrimary(item) }
                         FlowLink("Later", c.ink) { onLater(item) }
                         FlowLink("Comment", c.ink) { onComment(item) }
+                        onIgnore?.let { ignore -> FlowLink("Ignore", c.ink2) { ignore(item) } }
                     }
                 }
             }

@@ -78,6 +78,9 @@ fun FlowAdjustSheet(
     onDeskScale: (Int) -> Unit = {},
     onNorthStars: (() -> Unit)? = null,
     onAccessSetup: (() -> Unit)? = null,
+    /** How many Flow items were ignored; 0 hides the row. */
+    ignoredCount: Int = 0,
+    onRestoreIgnored: () -> Unit = {},
 ) {
     val colors = FlowColors.from(FlowThemes.palette(settings.theme, night, settings.accent))
     CompositionLocalProvider(LocalFlowColors provides colors) {
@@ -107,6 +110,13 @@ fun FlowAdjustSheet(
             onAccessSetup?.let { open ->
                 Group("App & tool access", "Guided calendar changes, Gmail, notifications and on-screen tools.") {
                     FlowLink("Connect apps & tools", c.ink, open)
+                }
+            }
+
+            if (ignoredCount > 0) Group("Ignored", "Items you told Meow to stop showing.") {
+                Box(Modifier.padding(top = 10.dp)) {
+                    FlowLink(if (ignoredCount == 1) "Bring back 1 ignored item" else "Bring back $ignoredCount ignored items",
+                        c.ink, onRestoreIgnored)
                 }
             }
 

@@ -2,6 +2,7 @@
 package com.example.meowmba.ui.desk
 
 import android.os.PowerManager
+import com.example.meowmba.ui.companion.THERMAL_EASE_AT
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -124,7 +125,7 @@ fun DeskHabitat(
     val roomTripsNow by rememberUpdatedState(roomTrips)
     val lifecycle by androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle.currentStateFlow.collectAsState()
     val visible = lifecycle.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)
-    val animate = !reduceMotion && thermalStatus < PowerManager.THERMAL_STATUS_MODERATE
+    val animate = !reduceMotion && thermalStatus < THERMAL_EASE_AT
     var petting by remember { mutableIntStateOf(0) }
     /** A room the user asked to look at; the camera shows it until the cat gets there. */
     var lookRoom by remember { mutableStateOf<DeskRoom?>(null) }
@@ -136,7 +137,7 @@ fun DeskHabitat(
     var toldIdea by remember { mutableStateOf(false) }
     // The room's own slow life (clouds, cursor, sticky note, TV game, the rare plane) at a low
     // frame rate, only while the Desk is on screen and the phone is cool.
-    val ambientOn = !reduceMotion && visible && thermalStatus < PowerManager.THERMAL_STATUS_LIGHT
+    val ambientOn = !reduceMotion && visible && thermalStatus < PowerManager.THERMAL_STATUS_MODERATE
     LaunchedEffect(ambientOn) {
         if (!ambientOn) return@LaunchedEffect
         var last = withFrameNanos { it }
@@ -183,7 +184,7 @@ fun DeskHabitat(
             }
         }
         // Low-power resting life (breathing, ears, tail, glances) only when the phone is cool.
-        val lively = animate && thermalStatus < PowerManager.THERMAL_STATUS_LIGHT
+        val lively = animate && thermalStatus < PowerManager.THERMAL_STATUS_MODERATE
         suspend fun ease(ms: Long, step: (Float) -> Unit) = if (animate) frames(ms, step) else step(1f)
         /** Crouch before a jump (or to stand up), 0 → [depth]. */
         suspend fun crouch(depth: Float, ms: Long) { val from = cat.squash; ease(ms) { t -> cat.squash = from + (depth - from) * easeInOut(t) } }
