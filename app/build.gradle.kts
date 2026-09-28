@@ -93,8 +93,8 @@ android {
         // 85 > 84 so the affect/valence + pet wiring installs as a genuine
         // in-place upgrade, and so it is distinguishable on-device from 84 (which
         // has the drives but not the reply affect or the touch sense).
-        versionCode = 187
-        versionName = "1.5.21"
+        versionCode = 188
+        versionName = "1.5.22"
 
         buildConfigField("boolean", "HAS_MWDAT_SDK", hasMwdat.toString())
         manifestPlaceholders["mwdat_application_id"] = mwdatApplicationId

@@ -3,11 +3,17 @@
 Updated 2026-09-28. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
 This supersedes historical build-location/version instructions in other documents.
 
-- September28 **187 / 1.5.21 allocated by Codex** for native long-term memory integration.
-  Includes Claude's apartment branch through `8caa4df` (186 plus weather fix), merged without
-  conflicts. Adds archive recall, explicit correction/pin controls and additive Room15.
-  Validation/build in progress; NOT installed or published. Details: `docs/LONG_TERM_MEMORY_2026-09-28.md`;
-  Os receipt: `work/memory-integration/IMPLEMENTATION.md`. **187 reserved; next188.**
+- September28 **188 / 1.5.22 reserved for the integrated build** (branch `feature/flow-fixes-20260928`, Claude):
+  Codex's `feature/meow-flow-core` (indexed long-term recall, memory correction/pin controls, additive Room15)
+  plus Claude's `feature/desk-apartment` through `21f6367`, plus Flow fixes: the Later button, an Ignore button that
+  stops a Flow item coming back, a swipe-away "cooling animations" notice and a higher thermal limit.
+  NOT built, NOT installed, NOT published; Codex remains build owner. **188 reserved; next 189.**
+
+- September28 **187 / 1.5.21 built and installed by Claude** at the owner's request: measured rain outranks a dry
+  weather code (`8caa4df`). Installed on Fold 09:18:11 MST over 186, PID alive, crash buffer unchanged; weather now reads
+  DRIZZLE where it read CLOUDY. Receipt: `/Users/prog/Meowmba-Releases/rain187-20260928/README.md`.
+  The device therefore already has versionCode 187 (apartment + rain, NO memory integration). Codex's earlier 187
+  allocation for the memory integration was never installed and moves to 188 above. **187 consumed.**
 
 - September28 **186 / 1.5.20 built and installed by Claude** at the owner's explicit request. Installed on Fold R5GL75XFCXD 07:58:22 MST over 185, firstInstallTime retained, PID alive, crash buffer unchanged:
   Desk landscape fill with the menu on top, a room-size slider, the moving room (time-of-day sky, weather, rare plane/UFO,
