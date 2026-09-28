@@ -893,7 +893,9 @@ fun CompanionScreen(
                 onRetentionChange = { viewModel.setRetentionDays(it) },
                 onPausedChange = { viewModel.setMemoryPaused(it) },
                 onExport = { viewModel.exportMemoriesJson() },
-                onClose = { viewModel.toggleMemoryScreen() }
+                onClose = { viewModel.toggleMemoryScreen() },
+                onCorrect = viewModel::correctMemory,
+                onPin = viewModel::pinMemory
             )
         }
 

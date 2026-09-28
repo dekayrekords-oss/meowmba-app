@@ -103,9 +103,10 @@ class UserDataBackupStore internal constructor(
         try {
             val sourceVersion = root.getInt("databaseVersion")
             val targetVersion = db.version
-            val compatibleAdditiveImport = sourceVersion in 12..14 && targetVersion in sourceVersion..14
+            val compatibleAdditiveImport = sourceVersion in 12..15 && targetVersion in sourceVersion..15
             require(sourceVersion == targetVersion || compatibleAdditiveImport) { "Backup database version is not compatible" }
             val excludedForCompatibility = buildSet {
+                if (sourceVersion < 15 && targetVersion >= 15) add("memory_policies")
                 if (sourceVersion < 13 && targetVersion >= 13) addAll(setOf("north_stars", "north_star_links"))
                 if (sourceVersion < 14 && targetVersion >= 14) add("companion_tasks")
             }

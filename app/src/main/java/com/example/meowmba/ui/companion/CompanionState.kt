@@ -488,6 +488,7 @@ data class CompanionState(
     val agenticPendingApprovalTitle: String? = null,
     val features: CompanionFeatures = CompanionFeatures(),
 ) {
+    val memoryPolicies get() = features.memoryPolicies
     val showTaskHistory get() = features.showTaskHistory
     val selectedWorkTaskId get() = features.selectedWorkTaskId
     val archivedWorkTask get() = features.archivedWorkTask
@@ -799,6 +800,7 @@ fun nextDriveReaction(
 
 /** Separate feature state keeps JVM constructor/copy signatures below the 255-slot limit. */
 data class CompanionFeatures(
+    val memoryPolicies: Map<Long, com.example.meowmba.core.database.MemoryPolicyEntity> = emptyMap(),
     val showTaskHistory: Boolean = false,
     val selectedWorkTaskId: String? = null,
     val archivedWorkTask: com.example.meowmba.core.agent.runtime.AgentTask? = null,

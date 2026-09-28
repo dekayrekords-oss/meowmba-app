@@ -162,6 +162,20 @@ class UserDataBackupStoreTest {
         }
     }
 
+    @Test fun schema14ImportPreservesMemoryPoliciesIn15() {
+        db.close()
+        db = newDatabase(14).writableDatabase
+        db.execSQL("INSERT INTO records VALUES ('old','saved memory',7,NULL,NULL)")
+        val source = temp("schema14-memory-source"); store().snapshot(source)
+        db.close()
+        db = newDatabase(15).writableDatabase
+        db.execSQL("CREATE TABLE memory_policies (memoryId INTEGER PRIMARY KEY NOT NULL, pinned INTEGER NOT NULL)")
+        db.execSQL("INSERT INTO memory_policies VALUES (42,1)")
+        assertTrue(store().restore(source).complete)
+        assertEquals("saved memory", db.query("SELECT value FROM records WHERE id='old'").use { it.moveToFirst(); it.getString(0) })
+        assertEquals(1, db.query("SELECT pinned FROM memory_policies WHERE memoryId=42").use { it.moveToFirst(); it.getInt(0) })
+    }
+
     @Test fun unsupportedSchemaVersionIsRejectedBeforeAnyRestore() {
         db.execSQL("INSERT INTO records VALUES ('old','from backup',7,NULL,NULL)")
         val source = temp("bad-version-source"); store().snapshot(source)

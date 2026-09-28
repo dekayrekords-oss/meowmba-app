@@ -1717,6 +1717,11 @@ class CompanionViewModel(
 
         // Memory list for the Memory screen
         viewModelScope.launch {
+            memoryRepository?.policies?.collect { policies ->
+                _uiState.value = _uiState.value.copy(features = _uiState.value.features.copy(memoryPolicies = policies.associateBy { it.memoryId }))
+            }
+        }
+        viewModelScope.launch {
             memoryRepository?.allMemories?.collect { memories ->
                 _uiState.value = _uiState.value.copy(allMemories = memories)
             }
@@ -4502,7 +4507,8 @@ class CompanionViewModel(
             val userMessageId = memoryRepository?.addMessage(MessageRole.USER, text, replyConversationId, lastSpeakerName)
             if (epoch != responseEpoch || replyConversationId != conversationId()) return@launch
             val onCall = _uiState.value.callMode
-            val recalled = if (onCall) emptyList() else recallMemories(text)
+            val recalled = if (onCall) kotlinx.coroutines.withTimeoutOrNull(250L) { recallMemories(text) }.orEmpty() else recallMemories(text)
+            if (epoch != responseEpoch || replyConversationId != conversationId()) return@launch
             if (recalled.isNotEmpty()) {
                 _uiState.value = _uiState.value.copy(
                     recalledMemories = recalled.map {
@@ -8318,21 +8324,21 @@ class CompanionViewModel(
                 content = content,
                 type = MemoryType.SEMANTIC,
                 importance = ImportanceLevel.HIGH,
-                tags = listOf("explicit")
+                tags = listOf("explicit"),
+                sourceMessageId = if (conversationId() != 0L) memoryRepository.getRecentMessages(1, conversationId()).lastOrNull()?.id else null
             )
             speak("Got it — I'll remember that.")
         }
     }
 
-    /** Embedding recall over the recent memory pool, honoring the pause flag. */
+    /** Bounded ranking over full-archive indexed candidates, honoring the pause flag. */
     private suspend fun recallMemories(text: String): List<RecallResult> {
         val repo = memoryRepository ?: return emptyList()
         if (_uiState.value.memoryPaused) return emptyList()
-        // 200 cosine-rank + embedding on the turn path: ran on Main and hitched
-        // every reply while the DB grew. CPU work on Default, DB on IO.
+        val recallConversationId = conversationId()
+        // Keep ranking off Main and indexed database access on IO.
         return withContext(kotlinx.coroutines.Dispatchers.Default) {
-            val candidates = withContext(ioDispatcher) { repo.getRecentMemories(200) }
-                ?: return@withContext emptyList()
+            val candidates = withContext(ioDispatcher) { repo.recallCandidates(text, recallConversationId) }
             if (candidates.isEmpty()) return@withContext emptyList()
             val queryEmbedding = embedder.getEmbedding(text)
             RecallEngine.rank(queryEmbedding, text, candidates)
@@ -13452,9 +13458,23 @@ class CompanionViewModel(
         }
     }
 
+    fun correctMemory(id: Long, text: String) {
+        viewModelScope.launch(ioDispatcher) {
+            memoryRepository?.correctMemory(id, text)
+            withContext(kotlinx.coroutines.Dispatchers.Main) {
+                _uiState.value = _uiState.value.copy(memorySearchResults = null, recalledMemories = emptyList())
+            }
+        }
+    }
+
+    fun pinMemory(id: Long, pinned: Boolean) {
+        viewModelScope.launch(ioDispatcher) { memoryRepository?.pinMemory(id, pinned) }
+    }
+
     fun deleteMemory(id: Long) {
         viewModelScope.launch {
             memoryRepository?.deleteMemoryById(id)
+            _uiState.value = _uiState.value.copy(memorySearchResults = null, recalledMemories = emptyList())
         }
     }
 
@@ -13491,7 +13511,16 @@ class CompanionViewModel(
     }
 
     /** JSON export of the memory store (user owns their data). */
-    fun exportMemoriesJson(): String = MemoryExporter.toJson(_uiState.value.allMemories)
+    fun exportMemoriesJson(): String {
+        val state = _uiState.value
+        val root = org.json.JSONObject(MemoryExporter.toJson(state.allMemories))
+        val policies = org.json.JSONArray()
+        state.memoryPolicies.values.forEach { p -> policies.put(org.json.JSONObject()
+            .put("memoryId", p.memoryId).put("pinned", p.pinned)
+            .put("revision", p.revision).put("correctedAt", p.correctedAt)) }
+        root.put("version", 2).put("policies", policies)
+        return root.toString(2)
+    }
 
     /** Test-safe lifecycle log: android.util.Log is not mocked in JVM unit tests. */
     /** Stop talking and ignore any in-flight model stream. Never job.cancel(). */

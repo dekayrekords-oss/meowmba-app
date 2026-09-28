@@ -59,7 +59,7 @@ class FlowIntegrationRegressionTest {
             db.version = 10
         }
         val database = Room.databaseBuilder(context, MeowmbaDatabase::class.java, name)
-            .addMigrations(MeowmbaDatabase.MIGRATION_10_11, MeowmbaDatabase.MIGRATION_11_12, MeowmbaDatabase.MIGRATION_12_13, MeowmbaDatabase.MIGRATION_13_14).allowMainThreadQueries().build()
+            .addMigrations(MeowmbaDatabase.MIGRATION_10_11, MeowmbaDatabase.MIGRATION_11_12, MeowmbaDatabase.MIGRATION_12_13, MeowmbaDatabase.MIGRATION_13_14, MeowmbaDatabase.MIGRATION_14_15).allowMainThreadQueries().build()
         try {
             database.openHelper.writableDatabase.query("SELECT content FROM messages WHERE id=1").use {
                 assertTrue(it.moveToFirst()); assertEquals("preserve this", it.getString(0))

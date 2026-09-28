@@ -45,7 +45,7 @@ class TaskHistoryRoomTest {
         val context = RuntimeEnvironment.getApplication()
         val name = "task-history-migration-test"; context.deleteDatabase(name)
         fun open() = Room.databaseBuilder(context, MeowmbaDatabase::class.java, name)
-            .addMigrations(MeowmbaDatabase.MIGRATION_13_14).allowMainThreadQueries().build()
+            .addMigrations(MeowmbaDatabase.MIGRATION_13_14, MeowmbaDatabase.MIGRATION_14_15).allowMainThreadQueries().build()
         val before = open()
         before.northStarDao().save(NorthStar("keep", "Europe", "Music", "Someday", "[]", 1, 1))
         before.openHelper.writableDatabase.execSQL("DROP TABLE companion_tasks")

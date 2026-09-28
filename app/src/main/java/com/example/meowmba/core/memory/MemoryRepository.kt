@@ -21,6 +21,21 @@ class MemoryRepository(
 ) {
     val allMessages: Flow<List<MessageEntity>> = messageDao.getAllMessages()
     val allMemories: Flow<List<MemoryEntity>> = memoryDao.getAllMemories()
+    val policies = memoryDao.policies()
+
+    suspend fun recallCandidates(query: String, conversationId: Long): List<MemoryEntity> {
+        val indexed = MemoryQuery.queries(query).flatMap { memoryDao.recallMatches(it, conversationId, 80) }
+        return (indexed + memoryDao.recallRecent(conversationId, 40)).distinctBy { it.id }
+    }
+
+    suspend fun correctMemory(id: Long, text: String): Boolean {
+        val value = text.trim()
+        require(value.isNotEmpty() && value.length <= 20000) { "Use 1–20,000 characters" }
+        return memoryDao.correct(id, value, VectorCodec.encode(embedder.getEmbedding(value)), System.currentTimeMillis())
+    }
+
+    suspend fun pinMemory(id: Long, pinned: Boolean) = memoryDao.pin(id, pinned)
+
 
     suspend fun addMessage(
         role: MessageRole,
@@ -80,9 +95,8 @@ class MemoryRepository(
     }
 
     suspend fun searchMemories(query: String): List<MemoryEntity> {
-        val sanitized = query.trim().replace("\"", " ")
-        if (sanitized.isBlank()) return emptyList()
-        return memoryDao.searchMemories("\"$sanitized\"")
+        val expression = MemoryQuery.queries(query).lastOrNull() ?: return emptyList()
+        return memoryDao.searchMemories(expression)
     }
 
     /** Auto-checkpoint of a finished conversation turn (episodic memory). */
