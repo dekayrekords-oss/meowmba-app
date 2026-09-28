@@ -26,6 +26,22 @@ enum class WeatherCondition(val label: String, val emoji: String) {
          * Codes per the WMO 4677 table Open-Meteo documents. Anything unrecognised becomes
          * [UNKNOWN] rather than silently pretending to be clear.
          */
+        /**
+         * Measured precipitation outranks a dry weather code: rain or snow falling now shows as
+         * rain, drizzle or snow even when the code says clear, cloudy or foggy. A wet code
+         * (drizzle, rain, snow, storm) is kept as it is. Found 2026-09-28: it was raining, and
+         * Meow said "cloudy".
+         */
+        fun withPrecipitation(code: WeatherCondition, rainMm: Double, snowCm: Double, totalMm: Double): WeatherCondition {
+            if (code !in setOf(CLEAR, PARTLY_CLOUDY, CLOUDY, FOG, UNKNOWN)) return code
+            return when {
+                snowCm >= 0.1 -> SNOW
+                maxOf(rainMm, totalMm) >= 0.5 -> RAIN
+                maxOf(rainMm, totalMm) >= 0.1 -> DRIZZLE
+                else -> code
+            }
+        }
+
         fun fromWmoCode(code: Int): WeatherCondition = when (code) {
             0 -> CLEAR
             1, 2 -> PARTLY_CLOUDY
