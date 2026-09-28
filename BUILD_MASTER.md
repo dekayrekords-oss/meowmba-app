@@ -3,6 +3,13 @@
 Updated 2026-09-28. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
 This supersedes historical build-location/version instructions in other documents.
 
+- September28 **189 / 1.5.23 Computer setup fixes** (branch `feature/flow-fixes-20260928`, Claude, on top of 188):
+  Setup computer now recognises Termux's "RunCommandService requires allow-external-apps" refusal (was "code -1")
+  and offers "1. Copy Termux fix & open Termux" (one-line command setting `allow-external-apps=true` in
+  `~/.termux/termux.properties` + `termux-reload-settings`); Check installation and Check phone again show a
+  visible result; show/hide eye on the phone setup and Linux-server password fields. Built (daily, MWDAT +
+  verified-jni flags) and installed on the Fold R5GL75XFCXD on 2026-09-28 at the owner's request; NOT published.
+  **189 consumed; next 190.**
 - September28 **188 / 1.5.22 reserved for the integrated build** (branch `feature/flow-fixes-20260928`, Claude):
   Codex's `feature/meow-flow-core` (indexed long-term recall, memory correction/pin controls, additive Room15)
   plus Claude's `feature/desk-apartment` through `21f6367`, plus Flow fixes: the Later button, an Ignore button that
@@ -12,7 +19,7 @@ This supersedes historical build-location/version instructions in other document
   status: nothing re-adds it (managed sync, package notices and message re-posts all leave it alone) and
   Settings has "Bring back N ignored items". Thermal: notice/easing start at SEVERE (was MODERATE), decorative
   work stops at CRITICAL (was SEVERE); camera/mic protection in `ThermalGovernor` is unchanged. No Room version
-  change. Built (daily, MWDAT + verified-jni flags) and installed on the Fold R5GL75XFCXD on 2026-09-28 at the owner's request; NOT published. Codex remains build owner. **188 consumed; next 189.**
+  change. Built (daily, MWDAT + verified-jni flags) and installed on the Fold R5GL75XFCXD on 2026-09-28 at the owner's request; NOT published. Codex remains build owner. **188 consumed.**
 
 - September28 **187 / 1.5.21 built and installed by Claude** at the owner's request: measured rain outranks a dry
   weather code (`8caa4df`). Installed on Fold 09:18:11 MST over 186, PID alive, crash buffer unchanged; weather now reads
