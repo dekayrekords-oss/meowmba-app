@@ -127,7 +127,8 @@ class IntentionCapture(
             Pattern("buy", Regex("""(?i)\bneed to (?:buy|get|pick up)\s+(.+)""")) { "Buy $it" },
             Pattern("return", Regex("""(?i)\b(?:return|send back)\s+(?:the\s+)?(.+)""")) { "Return the $it" },
             Pattern("call", Regex("""(?i)\b(?:call|phone|ring)\s+(.+)""")) { "Call $it" },
-            Pattern("reply", Regex("""(?i)\b(?:reply to|text|email|message)\s+(.+)""")) { "Reply to $it" },
+            // "text Sam back tonight" → "Reply to Sam tonight" (not "Reply to Sam back tonight").
+            Pattern("reply", Regex("""(?i)\b(?:reply to|text|email|message)\s+(.+)""")) { "Reply to " + it.replace(Regex("""(?i)\s+back\b"""), "") },
             Pattern("pick_up", Regex("""(?i)\bpick up\s+(.+)""")) { "Pick up $it" },
             Pattern("other", Regex("""(?i)\bremind me to\s+(.+)""")) { it },
             Pattern("other", Regex("""(?i)\bdon't let me forget (?:to\s+)?(.+)""")) { it },

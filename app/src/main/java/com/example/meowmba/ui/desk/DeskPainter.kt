@@ -52,18 +52,18 @@ internal object DeskPainter {
      * scene, so convert back through density/fontScale to avoid scaling text twice.
      */
     internal fun DrawScope.text(m: TextMeasurer, s: String, x: Float, baseline: Float, size: Float, color: Color,
-                               family: FontFamily = hand, weight: FontWeight? = null, center: Boolean = false) {
+                               family: FontFamily = hand, weight: FontWeight? = null, center: Boolean = false, rightAlign: Boolean = false) {
         val sp = (size / (density * fontScale)).sp
         val layout = m.measure(s, TextStyle(fontFamily = family, fontSize = sp, color = color, fontWeight = weight))
-        val left = if (center) x - layout.size.width / 2f else x
+        val left = if (center) x - layout.size.width / 2f else if (rightAlign) x - layout.size.width else x
         drawText(layout, topLeft = Offset(left, baseline - layout.firstBaseline))
     }
 
     // ---- static room --------------------------------------------------------------------------
 
-    fun DrawScope.drawRoom() {
+    fun DrawScope.drawRoom(layout: DeskLayout = DeskLayout.STANDARD) {
         // Walls and floors of all three rooms (and their extension past the edges), then the office.
-        with(DeskApartment) { drawShell() }
+        with(DeskApartment) { drawShell(layout) }
         // Wall clock face
         drawCircle(PAPER, 36f, Offset(72f, 112f)); drawCircle(INK, 36f, Offset(72f, 112f), style = Stroke(3f))
         drawCircle(Color(0xFFD5CDB4), 30f, Offset(72f, 112f), style = Stroke(1.5f))
@@ -110,37 +110,34 @@ internal object DeskPainter {
         rrect(Color(0x599FC7C4), 286f, 548f, 44f, 52f, 10f, 2.5f)
         rrect(Color(0xFF6E8C8A), 284f, 540f, 48f, 10f, 3f, 2.5f)
         // (Letter tray is drawn in drawObjects, on top of its envelopes.)
-        // Wall lamp: a swing arm from a bracket under the window, the shade over the desk.
-        rrect(Color(0xFF5E7A76), 374f, 318f, 16f, 26f, 3f, 2f)
-        val arm = Path().apply { moveTo(382f, 331f); lineTo(360f, 384f); lineTo(334f, 436f) }
-        drawPath(arm, INK, style = stroked(INK, 7f)); drawPath(arm, Color(0xFF5E7A76), style = stroked(INK, 3.5f))
-        drawCircle(Color(0xFF5E7A76), 4f, Offset(360f, 384f)); drawCircle(INK, 4f, Offset(360f, 384f), style = Stroke(2f))
-        val shade = Path().apply { moveTo(302f, 468f); quadraticTo(318f, 430f, 354f, 440f); lineTo(352f, 450f); lineTo(310f, 472f); close() }
-        drawPath(shade, Color(0xFFC6EB78)); drawPath(shade, INK, style = Stroke(2.5f, join = StrokeJoin.Round))
-        drawOval(Color(0xFFFFF3C4), Offset(318f, 458f), Size(18f, 8f)); drawOval(INK, Offset(318f, 458f), Size(18f, 8f), style = Stroke(1.5f))
+        // (The swing-arm wall lamp moves, so DeskAmbientPainter draws it.)
+        drawOfficeBox()
         // The other two rooms' furniture
-        with(DeskApartment) { drawLivingRoom(); drawBedroom() }
+        with(DeskApartment) { drawLivingRoom(layout); drawBedroom(layout) }
     }
 
     // ---- data-driven objects -------------------------------------------------------------------
 
-    fun DrawScope.drawObjects(s: DeskState, m: TextMeasurer) {
-        // Lamp glow (idea queued) — behind everything else on the desk
-        if (s.lampOn) {
-            val glow = Path().apply { moveTo(306f, 470f); lineTo(214f, 598f); lineTo(360f, 598f); lineTo(346f, 452f); close() }
-            drawPath(glow, Brush.radialGradient(listOf(Color(0x73FFD98A), Color(0x00FFD98A)), Offset(326f, 464f), 150f))
-        }
-        // Window: sky, moon/sun, hills, frame, sill, handwritten weather
-        drawRoundRect(Brush.verticalGradient(
-            if (s.night) listOf(Color(0xFF0D2130), Color(0xFF2A4E61)) else listOf(Color(0xFF6FA7C4), Color(0xFFBFDCE6)), 66f, 242f),
-            Offset(238f, 66f), Size(148f, 176f), CornerRadius(6f))
+    fun DrawScope.drawObjects(s: DeskState, m: TextMeasurer, layout: DeskLayout = DeskLayout.STANDARD,
+                              picture: androidx.compose.ui.graphics.ImageBitmap? = null) {
+        // Window: the sky for this time of day and weather, the sun or moon where it is now, hills.
+        // Clouds, weather and the frame are drawn by DeskAmbientPainter (they move).
+        val (skyTop, skyBottom) = DeskSky.colors(s)
+        drawRoundRect(Brush.verticalGradient(listOf(skyTop, skyBottom), 66f, 242f), Offset(238f, 66f), Size(148f, 176f), CornerRadius(6f))
+        val body = DeskSky.bodyIn(s)
         if (s.night) {
-            drawCircle(Color(0xFFE9EFD9), 15f, Offset(344f, 104f)); drawCircle(INK, 15f, Offset(344f, 104f), style = Stroke(2f))
-            drawCircle(Color(0xFF1A3547), 13f, Offset(351f, 99f))
+            // One crescent moon (the bedroom window shows clouds instead), crossing the sky overnight.
+            val moon = Path().apply {
+                op(Path().apply { addOval(androidx.compose.ui.geometry.Rect(body, 15f)) },
+                    Path().apply { addOval(androidx.compose.ui.geometry.Rect(body + Offset(7f, -5f), 13f)) }, androidx.compose.ui.graphics.PathOperation.Difference)
+            }
+            drawPath(moon, Color(0xFFE9EFD9)); drawPath(moon, INK, style = Stroke(2f, join = StrokeJoin.Round))
             listOf(Triple(268f, 96f, 1.6f), Triple(300f, 120f, 1.2f), Triple(276f, 150f, 1.4f), Triple(364f, 160f, 1.2f))
                 .forEach { (cx, cy, r) -> drawCircle(Color(0xFFE9EFD9), r, Offset(cx, cy)) }
         } else {
-            drawCircle(Color(0xFFFFE27A), 14f, Offset(344f, 104f)); drawCircle(INK, 14f, Offset(344f, 104f), style = Stroke(2f))
+            // The sun rises in the morning, is high at noon and sets (warmer) in the evening.
+            val low = body.y > 140f
+            drawCircle(if (low) Color(0xFFFFB86A) else Color(0xFFFFE27A), 14f, body); drawCircle(INK, 14f, body, style = Stroke(2f))
         }
         val hills = Path().apply {
             moveTo(246f, 214f); relativeQuadraticTo(18f, -26f, 44f, -8f); relativeQuadraticTo(14f, -16f, 34f, -4f)
@@ -185,18 +182,14 @@ internal object DeskPainter {
             drawCircle(Color(0xFFC6EB78), 4f, Offset(169f, 296f)); drawCircle(INK, 4f, Offset(169f, 296f), style = Stroke(1.8f))
         }
 
-        // Monitor text: the screen is bigger now, so nothing covers it (static cursor: no blink loop, for heat)
+        // Monitor text: the screen is bigger now, so nothing covers it
         s.monitorLines.forEachIndexed { i, l ->
             text(m, l.text.take(22), 44f, 444f + i * 18f, 11f, if (l.highlight) Color(0xFFC6EB78) else Color(0xFF8FB0AC), family = mono)
         }
-        drawRect(Color(0xFFC6EB78), Offset(44f, 444f + s.monitorLines.size * 18f - 8f), Size(7f, 11f))
+        // (The blinking cursor is drawn by DeskAmbientPainter.)
         text(m, "GATEWAY 2000", 150f, 596f, 6.5f, Color(0xFF6B6250), family = FontFamily.SansSerif, weight = FontWeight.Bold, center = true)
 
-        // Sticky note: next calendar item, stuck to the wall beside the monitor (it no longer hides the screen)
-        rotate(5f, Offset(234f, 446f)) {
-            drawRect(Color(0xFFFFE27A), Offset(206f, 418f), Size(58f, 56f)); drawRect(INK, Offset(206f, 418f), Size(58f, 56f), style = Stroke(2.5f))
-            s.sticky.ifEmpty { listOf("Next up", "Tap for tasks") }.forEachIndexed { i, l -> text(m, l.take(9), 211f, 437f + i * 15f, if (i == 0) 15f else 12.5f, INK) }
-        }
+        // (The sticky note flaps now and then, so DeskAmbientPainter draws it.)
 
         // Jar: coins + handwritten note (empty jar when nothing is due)
         s.jarNote?.let { note ->
@@ -221,7 +214,7 @@ internal object DeskPainter {
             text(m, if (s.trayCount > 9) "9+" else s.trayCount.toString(), 398f, 539f, 13f, Color(0xFF601410),
                 family = FontFamily.SansSerif, weight = FontWeight.Black, center = true)
         }
-        with(DeskApartment) { drawLivingRoomObjects(s, m); drawBedroomObjects(s, m) }
+        with(DeskApartment) { drawLivingRoomObjects(s, m, layout, picture); drawBedroomObjects(s, m) }
     }
 
     private fun DrawScope.envelope(x: Float, y: Float, fill: Color) {
@@ -243,7 +236,15 @@ internal object DeskPainter {
      * [face] is the expression, independent of the [pose].
      */
     fun DrawScope.drawCat(x: Float, y: Float, walking: Boolean, walkFrame: Int, blink: Float, tail: Float, gaze: Float, facingLeft: Boolean,
-                          pose: DeskCatPose = DeskCatPose.REST, phase: Float = 0f, face: DeskCatFace = DeskCatBehavior.defaultFace(pose)) {
+                          pose: DeskCatPose = DeskCatPose.REST, phase: Float = 0f, face: DeskCatFace = DeskCatBehavior.defaultFace(pose),
+                          /** Continuous walk-cycle angle (radians); legs, bob and head follow it. Negative = use [walkFrame]. */
+                          gait: Float = -1f,
+                          /** Breathing, −1…1: the chest rises and falls. */
+                          breath: Float = 0f,
+                          /** 0…1 flick of the right ear (a sound, a thought). */
+                          ear: Float = 0f,
+                          /** 0…1 crouch before a jump / landing squash; negative = stretch in the air. */
+                          squash: Float = 0f) {
         val k = 110f / 60f
         // Stable support keeps the writing cat grounded while it reaches the board.
         if (pose == DeskCatPose.WRITE) {
@@ -266,10 +267,14 @@ internal object DeskPainter {
             translate(x, y)
             scale(k, k, Offset.Zero)
             if (facingLeft) scale(-1f, 1f, Offset(30f, 25f))
+            // Squash (crouch/landing) widens and lowers the whole cat around its paws; stretch does the opposite.
+            if (squash != 0f) scale(1f + .10f * squash, 1f - .16f * squash, Offset(30f, 46f))
         }) {
             val pulse = sin(phase)
-            if (pose == DeskCatPose.SLEEP) { curledCat(face, phase, tail); return@withTransform }
-            drawOval(Color(0x73050D10), Offset(13f, 44.4f), Size(34f, 5.2f))
+            if (pose == DeskCatPose.SLEEP) { curledCat(face, phase, tail, breath); return@withTransform }
+            if (pose == DeskCatPose.LOAF) { loafCat(face, blink, gaze, breath, ear, tail); return@withTransform }
+            if (pose == DeskCatPose.ROLL) { rollCat(face, blink, phase, tail, breath); return@withTransform }
+            drawOval(Color(0x73050D10), Offset(13f + 3f * squash, 44.4f), Size(34f - 6f * squash, 5.2f))
             // Up on the hind legs against the post: the whole cat leans back from its hind paws.
             withTransform({ if (pose == DeskCatPose.SCRATCH) rotate(-38f + pulse * 3f, Offset(22f, 45f)) }) {
                 val sitting = pose in SITTING
@@ -282,12 +287,14 @@ internal object DeskPainter {
                     val t = Path().apply { moveTo(16f, 31f); cubicTo(7.5f, 30f, 4.5f, 20.5f, 9.5f, 13f) }
                     drawPath(t, CAT_LINE, style = Stroke(5.6f, cap = StrokeCap.Round)); drawPath(t, CAT_BODY, style = Stroke(3.8f, cap = StrokeCap.Round))
                 }
-                val swing = if (walking) (if (walkFrame == 1) 22f else -22f) else 0f
+                val cycle = gait >= 0f && walking
+                val swing = when { cycle -> sin(gait) * 26f; walking -> if (walkFrame == 1) 22f else -22f; else -> 0f }
                 if (sitting) {
                     // Haunches instead of hind legs.
                     drawOval(CAT_BODY, Offset(14f, 33f), Size(20f, 13f)); drawOval(CAT_LINE, Offset(14f, 33f), Size(20f, 13f), style = Stroke(1.3f))
                 } else { leg(20.5f, 36f, 44.5f, swing); leg(25.5f, 37f, 45f, -swing) }
                 val bob = when {
+                    cycle -> -kotlin.math.abs(cos(gait)) * 1.3f
                     walking && walkFrame == 1 -> -1.2f
                     pose == DeskCatPose.SNIFF -> pulse * 1.5f
                     pose == DeskCatPose.BOB -> -kotlin.math.abs(pulse) * 2.2f
@@ -297,6 +304,7 @@ internal object DeskPainter {
                 withTransform({
                     translate(0f, bob)
                     if (pose == DeskCatPose.STRETCH) scale(1f + .12f * (pulse + 1f), .92f - .05f * pulse, Offset(20f, 44f))
+                    if (breath != 0f) scale(1f + .012f * breath, 1f + .028f * breath, Offset(28f, 42f))
                 }) {
                     if (sitting) {
                         // Upright chest for sitting poses.
@@ -306,16 +314,18 @@ internal object DeskPainter {
                     }
                     val bothPawsBusy = pose in BUSY_PAWS
                     if (!bothPawsBusy) leg(33.5f, 37.5f, 45f, -swing)
-                    if (!bothPawsBusy && pose != DeskCatPose.GROOM && pose != DeskCatPose.WRITE) leg(38.5f, 36.5f, 44.6f, swing)
+                    if (!bothPawsBusy && pose != DeskCatPose.GROOM && pose != DeskCatPose.WRITE && pose != DeskCatPose.BAT) leg(38.5f, 36.5f, 44.6f, swing)
                     // Eating lowers the head into the bowl; watching tips it up at the TV; curious tilts it.
                     withTransform({
+                        // The head stays steadier than the body while walking, like a real cat's.
+                        if (cycle) translate(0f, kotlin.math.abs(cos(gait)) * .8f)
                         when {
                             pose == DeskCatPose.EAT -> { translate(3f, 9f); rotate(22f, Offset(40.5f, 21.5f)) }
                             pose == DeskCatPose.WATCH || pose == DeskCatPose.PERCH && face != DeskCatFace.HAPPY -> rotate(-10f, Offset(40.5f, 30f))
                             face == DeskCatFace.CURIOUS -> rotate(11f + pulse * 1.5f, Offset(40.5f, 30f))
                             face == DeskCatFace.SLEEPY -> translate(0f, 1.2f)
                         }
-                    }) { head(face, blink, gaze, pulse, phase) }
+                    }) { head(face, blink, gaze, pulse, phase, ear) }
                     poseExtras(pose, pulse, phase)
                 }
             }
@@ -323,11 +333,13 @@ internal object DeskPainter {
         }
     }
 
-    private val SITTING = setOf(DeskCatPose.PERCH, DeskCatPose.WATCH, DeskCatPose.GAME, DeskCatPose.BOB, DeskCatPose.READ, DeskCatPose.LISTEN, DeskCatPose.TALK)
-    private val BUSY_PAWS = setOf(DeskCatPose.TYPE, DeskCatPose.LETTER, DeskCatPose.STRETCH, DeskCatPose.GAME, DeskCatPose.READ, DeskCatPose.SCRATCH, DeskCatPose.DIG)
+    private val SITTING = setOf(DeskCatPose.PERCH, DeskCatPose.WATCH, DeskCatPose.GAME, DeskCatPose.BOB, DeskCatPose.READ, DeskCatPose.LISTEN, DeskCatPose.TALK, DeskCatPose.SIT,
+        DeskCatPose.BAT, DeskCatPose.HIDE)
+    private val BUSY_PAWS = setOf(DeskCatPose.TYPE, DeskCatPose.LETTER, DeskCatPose.STRETCH, DeskCatPose.GAME, DeskCatPose.READ, DeskCatPose.SCRATCH, DeskCatPose.DIG,
+        DeskCatPose.KNEAD)
 
     /** Ears, head, eyes and mouth for one expression. */
-    private fun DrawScope.head(face: DeskCatFace, blink: Float, gaze: Float, pulse: Float, phase: Float) {
+    private fun DrawScope.head(face: DeskCatFace, blink: Float, gaze: Float, pulse: Float, phase: Float, ear: Float = 0f) {
         // Ears: flattened when annoyed, pricked when surprised, soft when sleepy.
         val earTurn = when (face) { DeskCatFace.ANNOYED -> 28f; DeskCatFace.SLEEPY, DeskCatFace.ASLEEP -> 12f; DeskCatFace.SURPRISED -> -6f; else -> 0f }
         val lift = if (face == DeskCatFace.SURPRISED) -1.4f else 0f
@@ -335,7 +347,7 @@ internal object DeskPainter {
             ear(31.6f, 13.6f, 33.3f, 3.6f, 38.8f, 10.3f); tri(Color(0xFF2C4A52), 33.5f, 11.4f, 34.4f, 6.4f, 37.1f, 9.9f)
         }
         // Curious: one ear swivels on its own.
-        val rightTurn = earTurn + if (face == DeskCatFace.CURIOUS) -8f + pulse * 4f else 0f
+        val rightTurn = earTurn + (if (face == DeskCatFace.CURIOUS) -8f + pulse * 4f else 0f) + ear * 22f
         withTransform({ translate(0f, lift); rotate(rightTurn, Offset(46f, 12f)) }) {
             ear(42.2f, 10f, 47.9f, 4f, 49.4f, 14.2f); tri(Color(0xFF2C4A52), 43.8f, 10.2f, 47.1f, 6.8f, 47.8f, 12.1f)
         }
@@ -427,6 +439,18 @@ internal object DeskPainter {
     private fun DrawScope.poseExtras(pose: DeskCatPose, pulse: Float, phase: Float) {
         val w = Color(0xB3BED0CD)
         when (pose) {
+            DeskCatPose.BAT -> {
+                // One paw up and swiping.
+                val tipX = 48f + 6f * pulse; val tipY = 20f - 4f * pulse
+                line(CAT_LINE, 38f, 33f, tipX, tipY, 5.4f); line(CAT_BODY, 38f, 33f, tipX, tipY, 3.6f)
+                drawOval(CAT_LINE, Offset(tipX - 2.4f, tipY - 2.2f), Size(4.8f, 4.2f)); drawCircle(PINK, .9f, Offset(tipX + .6f, tipY))
+            }
+            DeskCatPose.KNEAD -> {
+                // Front paws press in turn.
+                val left = 3f * maxOf(0f, pulse); val right = 3f * maxOf(0f, -pulse)
+                line(CAT_LINE, 33f, 36f, 45f, 45f - left, 5.4f); line(CAT_BODY, 33f, 36f, 45f, 45f - left, 3.6f)
+                line(CAT_LINE, 38f, 35f, 51f, 45f - right, 5.4f); line(CAT_BODY, 38f, 35f, 51f, 45f - right, 3.6f)
+            }
             DeskCatPose.GROOM -> {
                 val pawY = 25f + 4f * pulse
                 line(CAT_LINE, 38f, 36f, 43f, pawY, 5.4f); line(CAT_BODY, 38f, 36f, 43f, pawY, 3.6f)
@@ -493,7 +517,7 @@ internal object DeskPainter {
                 line(CAT_LINE, 36f, 32f, 50f, 22f + a, 5f); line(CAT_BODY, 36f, 32f, 50f, 22f + a, 3.4f)
                 line(CAT_LINE, 38f, 34f, 52f, 28f - a, 5f); line(CAT_BODY, 38f, 34f, 52f, 28f - a, 3.4f)
             }
-            DeskCatPose.PERCH, DeskCatPose.WATCH -> { leg(33.5f, 37.5f, 45f, 0f); leg(37.5f, 37f, 45f, 0f) }
+            DeskCatPose.PERCH, DeskCatPose.WATCH, DeskCatPose.SIT -> { leg(33.5f, 37.5f, 45f, 0f); leg(37.5f, 37f, 45f, 0f) }
             else -> Unit
         }
     }
@@ -503,8 +527,8 @@ internal object DeskPainter {
     }
 
     /** Curled up asleep: a round loaf with the tail wrapped around, breathing slowly. */
-    private fun DrawScope.curledCat(face: DeskCatFace, phase: Float, tail: Float) {
-        val breathe = 1f + sin(phase * .5f) * .03f
+    private fun DrawScope.curledCat(face: DeskCatFace, phase: Float, tail: Float, breath: Float = 0f) {
+        val breathe = 1f + (if (breath != 0f) breath else sin(phase * .5f)) * .035f
         drawOval(Color(0x73050D10), Offset(10f, 44.4f), Size(40f, 5.2f))
         withTransform({ scale(1f, breathe, Offset(30f, 46f)) }) {
             drawOval(CAT_BODY, Offset(12f, 30f), Size(36f, 16f)); drawOval(CAT_LINE, Offset(12f, 30f), Size(36f, 16f), style = Stroke(1.3f))
@@ -515,6 +539,36 @@ internal object DeskPainter {
             drawOval(CAT_BODY, Offset(34f, 42f), Size(9f, 4f)); drawOval(CAT_LINE, Offset(34f, 42f), Size(9f, 4f), style = Stroke(.9f))
         }
         faceExtras(face, phase)
+    }
+
+    /** Lying in a loaf: paws tucked under a rounded body, head up, tail wrapped along the side. */
+    /** On its back with its paws in the air, head upside down on the floor: a belly-rub invitation. */
+    private fun DrawScope.rollCat(face: DeskCatFace, blink: Float, phase: Float, tail: Float, breath: Float) {
+        val wiggle = sin(phase * 2f)
+        drawOval(Color(0x73050D10), Offset(8f, 44.4f), Size(44f, 5.2f))
+        val t = Path().apply { moveTo(14f, 40f); cubicTo(6f, 43f + wiggle, 4f, 38f, 3f + tail * .1f, 33f) }
+        drawPath(t, CAT_LINE, style = Stroke(5.6f, cap = StrokeCap.Round)); drawPath(t, CAT_BODY, style = Stroke(3.8f, cap = StrokeCap.Round))
+        for ((lx, side) in listOf(18f to 1f, 23f to -1f, 32f to 1f, 37f to -1f)) {
+            val tipX = lx + side * 2.5f * wiggle; val tipY = 25f + kotlin.math.abs(wiggle) * 1.5f
+            line(CAT_LINE, lx, 37f, tipX, tipY, 5.4f); line(CAT_BODY, lx, 37f, tipX, tipY, 3.6f)
+            drawCircle(PINK, 1f, Offset(tipX, tipY - .4f))
+        }
+        withTransform({ scale(1f + .015f * breath, 1f + .03f * breath, Offset(28f, 40f)) }) {
+            drawOval(CAT_BODY, Offset(11f, 33f), Size(34f, 12f)); drawOval(CAT_LINE, Offset(11f, 33f), Size(34f, 12f), style = Stroke(1.3f))
+            drawOval(CAT_PALE.copy(alpha = .3f), Offset(16f, 34.5f), Size(22f, 5f))           // belly fluff
+        }
+        withTransform({ translate(6f, 14f); rotate(160f, Offset(40.5f, 21.5f)) }) { head(face, blink, 0f, 0f, phase) }
+    }
+
+    private fun DrawScope.loafCat(face: DeskCatFace, blink: Float, gaze: Float, breath: Float, ear: Float, tail: Float) {
+        drawOval(Color(0x73050D10), Offset(11f, 44.4f), Size(38f, 5.2f))
+        withTransform({ scale(1f + .012f * breath, 1f + .03f * breath, Offset(28f, 46f)) }) {
+            val t = Path().apply { moveTo(14f, 42f); cubicTo(8f, 45f, 14f, 48f, 30f + tail * .2f, 47f) }
+            drawPath(t, CAT_LINE, style = Stroke(5.2f, cap = StrokeCap.Round)); drawPath(t, CAT_BODY, style = Stroke(3.5f, cap = StrokeCap.Round))
+            drawOval(CAT_BODY, Offset(13f, 32f), Size(32f, 14f)); drawOval(CAT_LINE, Offset(13f, 32f), Size(32f, 14f), style = Stroke(1.3f))
+            drawOval(CAT_BODY, Offset(36f, 42f), Size(8f, 4f)); drawOval(CAT_LINE, Offset(36f, 42f), Size(8f, 4f), style = Stroke(.9f))
+        }
+        withTransform({ translate(-1f, 9f) }) { head(face, blink, gaze, 0f, 0f, ear) }
     }
 
     private fun DrawScope.leg(x: Float, top: Float, bottom: Float, swing: Float) = rotate(swing, Offset(x, top)) {

@@ -8,7 +8,10 @@ object SpeechText {
     fun clean(raw: String): String {
         val withoutKeycaps = raw.replace(Regex("[#*0-9]\\uFE0F?\\u20E3"), "")
             .replace(Regex("[+-]?\\d{1,3}°\\s*\\d{1,2}['′]\\s*\\d{1,2}(?:\\.\\d+)?[\"″]\\s*[NSEW]", RegexOption.IGNORE_CASE), "your current location")
-        val located = coordinates.replace(withoutKeycaps) { m ->
+        // Markdown from cloud replies (**bold**, `code`, # headings) is formatting, not words.
+        val withoutMarkdown = withoutKeycaps.replace(Regex("""\*\*|__|`"""), "")
+            .replace(Regex("""(?m)^\s{0,3}#{1,6}\s+"""), "")
+        val located = coordinates.replace(withoutMarkdown) { m ->
             val lat = m.groupValues[1].toDoubleOrNull()
             val lon = m.groupValues[2].toDoubleOrNull()
             if (lat != null && lon != null && lat in -90.0..90.0 && lon in -180.0..180.0)

@@ -1473,7 +1473,9 @@ class CompanionViewModel(
                 speechMode = SpeechMode.fromKey(storage.getPreference(SpeechMode.PREF)),
                 idleAvatar = IdleAvatar.keyOf(storage.getPreference(IdleAvatar.PREF_MODE)),
                 idleAvatarMinutes = storage.getPreference(IdleAvatar.PREF_MINUTES)?.toIntOrNull()?.takeIf { it in IdleAvatar.MINUTES }
-                    ?: IdleAvatar.DEFAULT_MINUTES))
+                    ?: IdleAvatar.DEFAULT_MINUTES,
+                deskRoomTrips = com.example.meowmba.ui.desk.DeskRoomTrips.of(storage.getPreference(com.example.meowmba.ui.desk.DeskRoomTrips.PREF)).key,
+                deskScale = com.example.meowmba.ui.desk.DeskScale.of(storage.getPreference(com.example.meowmba.ui.desk.DeskScale.PREF))))
             storage.getPreference(KEY_OWNER_SPEAKER)?.trim()?.takeIf { it.isNotEmpty() }?.let { owner ->
                 lastSpeakerName = owner
             }
@@ -3581,6 +3583,7 @@ class CompanionViewModel(
         }.getOrNull() }
     }
     val flowRuntime: com.example.meowmba.core.flow.FlowRuntime? get() = flowRuntimeLazy.value
+
     private val _flowCommentRequest = MutableStateFlow<String?>(null)
     val flowCommentRequest = _flowCommentRequest.asStateFlow()
 
@@ -6055,7 +6058,7 @@ class CompanionViewModel(
             if (result.exceptionOrNull() is kotlinx.coroutines.CancellationException) throw result.exceptionOrNull()!!
             _uiState.value = _uiState.value.copy(
                 voicePackReady = result.isSuccess,
-                voicePackLabel = result.fold({ "Whisper ready" }, { it.message ?: "Whisper download failed" }),
+                voicePackLabel = result.fold({ "Whisper ready" }, { com.example.meowmba.core.audio.VoicePackIssue.label(it) }),
                 voicePackProgress = null,
             )
             refreshAsrBackendState()
@@ -6065,6 +6068,9 @@ class CompanionViewModel(
     }
 
     fun repairStreamingAsrModel() { asrDownloadFailed = false; requestAsrModel() }
+
+    /** Hides the voice-model notice on the home screen (after a failure; a retry shows it again). */
+    fun dismissVoicePackNotice() { _uiState.value = _uiState.value.copy(voicePackLabel = null) }
 
     fun refreshLocalModelLibrary() { refreshLoadedModels() }
 
@@ -7030,6 +7036,10 @@ class CompanionViewModel(
         // so re-open the capture instead. Bounded so a dead window still ends via the
         // follow-up timeout.
         fuLog("onListeningError code=$code followUp=$isFollowUpListen state=${_uiState.value.interactionState}")
+        if (VoicePolicy.isStaleListenError(_uiState.value.interactionState)) {
+            fuLog("onListeningError ignored: a turn is already in progress")
+            return
+        }
         if (isFollowUpListen && isFollowUpKeepAliveError(code) &&
             transientListenRetries < MAX_FOLLOW_UP_SILENCE_RETRIES &&
             _uiState.value.interactionState == InteractionState.LISTENING
@@ -8625,6 +8635,19 @@ class CompanionViewModel(
         secureStorage?.savePreference(IdleAvatar.PREF_MODE, k)
         secureStorage?.savePreference(IdleAvatar.PREF_MINUTES, m.toString())
         _uiState.value = _uiState.value.copy(features = _uiState.value.features.copy(idleAvatar = k, idleAvatarMinutes = m))
+    }
+
+    /** Desk cat: how often it wanders to another room while idle. */
+    fun setDeskRoomTrips(key: String) {
+        val k = com.example.meowmba.ui.desk.DeskRoomTrips.of(key).key
+        secureStorage?.savePreference(com.example.meowmba.ui.desk.DeskRoomTrips.PREF, k)
+        _uiState.value = _uiState.value.copy(features = _uiState.value.features.copy(deskRoomTrips = k))
+    }
+
+    fun setDeskScale(percent: Int) {
+        val p = percent.coerceIn(com.example.meowmba.ui.desk.DeskScale.MIN, com.example.meowmba.ui.desk.DeskScale.MAX)
+        secureStorage?.savePreference(com.example.meowmba.ui.desk.DeskScale.PREF, p.toString())
+        _uiState.value = _uiState.value.copy(features = _uiState.value.features.copy(deskScale = p))
     }
 
     private fun noteUserTurn(voice: Boolean) { lastUserTurnAt = System.currentTimeMillis(); lastUserTurnVoice = voice }
@@ -10851,7 +10874,7 @@ class CompanionViewModel(
                 refreshAsrBackendState()
                 _uiState.value = _uiState.value.copy(
                     voicePackProgress = null,
-                    voicePackLabel = (asrInstall.exceptionOrNull() ?: whisperInstall.exceptionOrNull())?.message,
+                    voicePackLabel = com.example.meowmba.core.audio.VoicePackIssue.label(asrInstall.exceptionOrNull() ?: whisperInstall.exceptionOrNull()),
                 )
                 if (shouldAlwaysOnMic()) updateVoiceListeningMode()
             }
@@ -10881,8 +10904,8 @@ class CompanionViewModel(
             _uiState.value = _uiState.value.copy(
                 voicePackReady = result.isSuccess && store.isReady(),
                 voicePackProgress = null,
-                voicePackLabel = (result.exceptionOrNull() ?: asrInstall.exceptionOrNull()
-                    ?: whisperInstall.exceptionOrNull())?.message,
+                voicePackLabel = com.example.meowmba.core.audio.VoicePackIssue.label(result.exceptionOrNull() ?: asrInstall.exceptionOrNull()
+                    ?: whisperInstall.exceptionOrNull()),
             )
             attachWakeEngine()
             attachAsrEngine()

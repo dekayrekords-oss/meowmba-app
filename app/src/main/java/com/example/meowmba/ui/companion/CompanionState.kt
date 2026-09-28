@@ -814,6 +814,10 @@ data class CompanionFeatures(
     val idleAvatar: String = IdleAvatar.DEFAULT_KEY,
     /** Minutes without a touch before the idle avatar shows. */
     val idleAvatarMinutes: Int = IdleAvatar.DEFAULT_MINUTES,
+    /** Desk cat: how often it visits other rooms while idle ([com.example.meowmba.ui.desk.DeskRoomTrips] key). */
+    val deskRoomTrips: String = com.example.meowmba.ui.desk.DeskRoomTrips.DEFAULT.key,
+    /** Desk room size in percent of the size that fits the screen ([com.example.meowmba.ui.desk.DeskScale]). */
+    val deskScale: Int = com.example.meowmba.ui.desk.DeskScale.DEFAULT,
     /** Monotonic completed current-conversation reply event for Desk. */
     val deskReplySequence: Long = 0L,
     val deskReplyText: String? = null,
@@ -857,3 +861,6 @@ data class CompanionFeatures(
     val carCameraActiveId: String = "front_driver",
     val carDashcamRtspUrl: String = "",
 )
+
+/** The home screen's voice-model card: while downloading, or to report the result until hidden. */
+internal fun CompanionState.showVoicePackNotice(): Boolean = voicePackProgress != null || !voicePackLabel.isNullOrBlank()

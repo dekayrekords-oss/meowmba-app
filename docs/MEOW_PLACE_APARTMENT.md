@@ -73,3 +73,124 @@ The apartment keeps the Desk's three-layer design:
   4. Development Studio projects appear on the monitor after a session.
   5. The console opens MAME4droid, or its Play page if it isn't installed.
   6. A manual drive ("drive mode on") shows the avatar, and turning it off returns to the Desk.
+
+## Update 2026-09-26: a livelier cat, a room-trips setting, a readable stereo
+
+These changes are on branch `feature/desk-apartment`, based on Codex's 184 (`d2313da`).
+
+- **Motion:**
+  - A continuous walk cycle with diagonal leg pairs, driven by distance travelled so the paws don't slide. A gentle start and stop, a stroll nearby and a trot across rooms. The body bobs while the head stays steadier. Turning around is a short shuffle instead of an instant mirror.
+  - Jumps have anticipation (a crouch), a stretched arc and a landing squash. The cat stands up with a stretch before leaving a sit or a loaf.
+- **Resting life** (`rest()` in `DeskHabitat.kt`):
+  - The cat breathes, twitches an ear, flicks its tail, glances around and holds the look, blinks, and passes through small moods.
+  - After about 5 s it sits (new pose `SIT`), and after about 18 s it may lie down (new pose `LOAF`).
+  - This runs at most 12 fps through `AvatarFrameCadence`. At thermal LIGHT or above, or with reduced motion, it falls back to the old still rests with blinks.
+- **Setting:** "Desk cat visits other rooms": Never, Rarely, Sometimes (default) or Often (`DeskRoomTrips`, preference `desk_room_trips`, `CompanionFeatures.deskRoomTrips`). Set it in Flow → Adjust → When idle, or long-press the cat on the Desk for "Meow's routine". This replaces the old fixed 30% (open) / 55% (folded) chance.
+- **Stereo:**
+  - A wider rack (82 units) between slim tower speakers.
+  - A 74×44 display shows ▶ PLAYING / ❚❚ PAUSED, the app name, the song (13 characters) and the artist, with level meters.
+- **Tests:** `DeskCatLifeTest.kt` covers the setting mapping, that "Never" stays in the room, that the gait, breathing, crouch, sit and loaf all change the drawing, and that a long-press opens the routine sheet.
+
+## Update 2026-09-26 (evening): living room, one moon, landscape rooms
+
+Owner request: only one moon (office window); clouds in the bedroom window; a wider stereo and TV
+so what's playing is readable; the cat tower behind the couch with more levels; a customisable
+picture; and, in landscape only, a wider bookshelf, a much bigger TV and a longer bed.
+
+- **One moon.** The office window has one crescent moon (drawn as a real crescent, no ghost outline).
+  The bedroom window shows clouds day and night, with no sun or moon, so the unfolded view never
+  shows two.
+- **Living room, left to right:** the bookshelf with the picture above it, then the couch with the
+  tower behind it, then the stereo with the TV on the wall above.
+  - **Tower:** two sisal posts, five levels, a cubby and a toy. The cat climbs and leaves it via
+    the middle platform (`RoomSpots.towerStep`).
+  - **Stereo:** now 176 units wide; its receiver display is 120 × 60. Titles are fitted by
+    measuring, not by character count.
+  - **TV:** the text scales with the set.
+  - Geometry lives in one place, `DeskLayout.living` (`LivingPlan`). The painter, the tap frames
+    (`DeskObject.frame(layout)`) and the cat spots (`DeskCatBehavior.spots(layout)`) all read it.
+- **Picture (`DeskObject.PICTURE`).**
+  - Tapping it opens a panel with "Choose a photo" (Android photo picker, no permission needed)
+    and "Back to the painting".
+  - `DeskPicture` keeps a JPEG copy of at most 720 px in `filesDir/desk/`. The original photo is
+    never touched or uploaded.
+- **Landscape (`DeskLayout.LANDSCAPE`).** Chosen when the screen is wider than it is tall. It adds
+  a 180-unit wing on each side; the office and doorways don't move.
+  - Bookshelf 156 wide (was 80).
+  - TV 316 × 186 (about 2× the area).
+  - Stereo 280 wide.
+  - Bed 264 long (was 140), plus a nightstand and lamp.
+  - The rooms are laid out clear of the side navigation (`startInset`). Portrait and the unfolded
+    portrait screen keep `STANDARD`.
+- **Tests:** `DeskLivingRoomTest.kt` covers bounds, overlap, sizes, tower climbing, the picture
+  panel, and renders (`apartment-landscape-night`, `apartment-open-night`,
+  `apartment-cover-living`, `apartment-cover-bedroom-day`).
+
+## Update 2026-09-27: landscape fill, room size, a room that moves, a cat with habits
+
+Owner request:
+- In landscape: the bookshelf touches the edge of the phone, the menu moves to the top, and the rooms fill the screen completely.
+- A room-size slider.
+- A blinking cursor.
+- Clouds that move with the real time of day.
+- A very rare plane, and a UFO as an easter egg.
+- A sticky note that flaps now and then.
+- A lamp that is on at night and that the cat bats.
+- A game on the old TV.
+- More personality: reading, games, "searching the web for ideas", mice, zoomies, yarn, and ten more habits.
+
+### Layout and size
+
+- **Landscape** (any wide screen that's wider than tall):
+  - `DeskWorkspace` puts `DeskNavigation` in a top row beside Ask Meow (`desk_nav_top`); there is no side column any more.
+  - `DeskHabitat` picks `DeskLayout.fitting(wing)` so that, at full height, the scene is exactly as wide as the screen. `DeskLayout` is now continuous: the furniture interpolates between the standard and full-landscape plans (`LivingPlan.lerp`).
+  - The bookshelf is flush with the outer wall (`shelfX = layout.left`). The bed runs to the right wall, or to the nightstand once `wing >= 162`.
+  - On screens narrower than the standard apartment, the rooms fit the width.
+- **Room size:**
+  - `DeskScale` is a percentage, 60–200, stored in preference `desk_scale` as `CompanionFeatures.deskScale`.
+  - It is set from the slider in Meow's routine sheet (long-press the cat), with a "Fit the screen" reset, and from Flow → Adjust.
+  - When the scene is larger than the screen, a `graphicsLayer` translation follows the cat, clamped to the edges; it never recomposes. The room-step buttons appear.
+
+### The room's own motion (`DeskAmbient.kt`)
+
+This is a separate canvas layer between the objects and the cat. It runs at `DeskAmbient.FPS = 8`, only while the Desk is visible, motion isn't reduced and the thermal status is below LIGHT; otherwise it holds still.
+
+- **Sky** (`DeskSky`):
+  - Colours follow the time: dawn, morning, day, golden hour, sunset, dusk and night.
+  - They are dulled by the weather parsed from the weather line.
+  - The sun and moon cross the office window through the day and night.
+  - A sunbeam falls on the bedroom floor on clear days and moves with the hour.
+- **Windows:**
+  - Clouds drift, with rain, snow, fog or storm flashes to match the weather.
+  - A plane crosses about every 25 minutes of viewing time (`PLANE_EVERY_MIN`), with contrails by day and blinking lights at night.
+  - One flight in 30 is a UFO with a tractor beam.
+  - **Easter egg:** long-press either window to call in the UFO.
+  - A bird lands on the bedroom sill when the cat goes to watch.
+- **Office and bedroom:**
+  - The cursor blinks.
+  - The monitor shows a browser while the cat "researches" (an animation only: nothing is searched or sent) and fills with f's when it sits on the keyboard.
+  - The sticky note lifts every 25–70 s.
+  - The lamp is on at night. By day it glows with a spark when Flow has ideas queued (the old meaning). It swings when batted, and a moth circles it at night.
+  - The dangling toy on the living-room tower swings.
+  - The old TV plays a little invaders game: attract mode, or a score while the cat plays.
+
+### Cat habits
+
+These are `DeskCatTrick`s, choreographed in `DeskHabitat.trick()`:
+
+- The owner's list: research at the computer, reading on the couch, the arcade, chasing a wind-up toy mouse, zoomies, and batting a ball of yarn that rolls and unravels.
+- Ten more:
+  - knocks the pen off the desk (it's tidied up once the cat leaves the office);
+  - sits on the keyboard;
+  - chases its tail;
+  - naps in the sunbeam;
+  - watches and chatters at a bird;
+  - kneads the bed, then naps;
+  - hides in the cardboard box;
+  - rolls on its back for a belly rub (petting then gets its own line);
+  - bats the dangling tower toy;
+  - swats the moth at night.
+- New poses: `BAT`, `KNEAD`, `ROLL` and `HIDE`.
+- After researching, the cat mentions queued ideas once ("They're by the lamp"), and only when Flow really has some.
+
+Tests: `DeskLifeTest.kt` (sky, weather, fill, tricks, scale, renders `desk-ambient-*`, `desk-cat-bat/knead/roll/hide`, `desk-landscape-fill`, `desk-scale-160`).

@@ -38,6 +38,8 @@ object NorthStarPolicy {
 
     fun match(star: NorthStar, e: StarEvidence): StarMatch? {
         if (e.text.isBlank() || e.at < star.createdAt - DAY) return null
+        // "My dream is to play in Europe with my band" created this goal; it isn't evidence for it.
+        if (capture(e.text)?.equals(star.title, ignoreCase = true) == true) return null
         val shared = terms(star.title + " " + star.ingredients().joinToString(" ") { it.text }).intersect(terms(e.text))
         val phrase = star.ingredients().map { it.text.trim() }.firstOrNull { it.length >= 8 && e.text.contains(it, ignoreCase = true) }
         if (shared.size < 2 && phrase == null) return null

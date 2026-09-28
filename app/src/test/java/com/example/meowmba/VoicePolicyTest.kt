@@ -109,4 +109,12 @@ class VoicePolicyTest {
             ),
         )
     }
+
+    @Test
+    fun `a listen timing out while Meow answers does not cut the reply off`() {
+        assertTrue(VoicePolicy.isStaleListenError(com.example.meowmba.ui.companion.InteractionState.SPEAKING))
+        assertTrue(VoicePolicy.isStaleListenError(com.example.meowmba.ui.companion.InteractionState.THINKING))
+        assertFalse(VoicePolicy.isStaleListenError(com.example.meowmba.ui.companion.InteractionState.LISTENING))
+        assertFalse(VoicePolicy.isStaleListenError(com.example.meowmba.ui.companion.InteractionState.IDLE))
+    }
 }

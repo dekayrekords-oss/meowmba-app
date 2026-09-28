@@ -92,6 +92,13 @@ object VoicePolicy {
      * same open-mic loop just re-wedges AiAi / Google and keeps AudioRecord
      * away from the keyword spotter and the mic button.
      */
+    /**
+     * A listen that fails after a turn has started (Meow thinking or answering) is stale: resetting
+     * then cuts the reply off mid-sentence. Found recording the Android demo, 2026-09-27.
+     */
+    fun isStaleListenError(state: InteractionState): Boolean =
+        state == InteractionState.THINKING || state == InteractionState.SPEAKING
+
     fun isContentionError(code: Int): Boolean = when (code) {
         SpeechRecognizer.ERROR_RECOGNIZER_BUSY,
         SpeechRecognizer.ERROR_CLIENT,

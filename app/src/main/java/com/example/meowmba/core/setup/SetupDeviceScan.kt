@@ -33,7 +33,7 @@ data class SetupDeviceProfile(val ramGb: Double, val freeBytes: Long, val cores:
         else -> "Phone Computer setup is available on demand. Larger jobs can still heat the phone."
     }
     val summary: String get() = "${tier.label} profile recommends ${recommendedFps} FPS animations" +
-        (if (tier == DeviceTier.LIGHT) ", simpler avatar and still background recommended." else ".") +
+        (if (tier == DeviceTier.LIGHT) ", a simpler avatar and a still background." else ".") +
         "\n" + computerReason
     fun recommendedModel(): LocalModelOption? {
         if (!supportsLocal) return null

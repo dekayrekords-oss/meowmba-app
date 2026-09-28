@@ -147,7 +147,7 @@ class WeatherRepository(private val context: Context) {
         append("?latitude=").append(lat)
         append("&longitude=").append(lon)
         append("&current=temperature_2m,relative_humidity_2m,apparent_temperature,")
-        append("weather_code,wind_speed_10m,is_day")
+        append("weather_code,wind_speed_10m,is_day,precipitation,rain,showers,snowfall")
         append("&daily=temperature_2m_max,temperature_2m_min")
         append("&temperature_unit=fahrenheit&wind_speed_unit=mph")
         // timezone=auto matters: the daily high/low must be for the USER's day, not UTC's.
@@ -170,7 +170,13 @@ class WeatherRepository(private val context: Context) {
         val low = firstOf("temperature_2m_min")
 
         WeatherNow(
-            condition = WeatherCondition.fromWmoCode(cur.optInt("weather_code", -1)),
+            // The weather code is a model forecast; the current precipitation is closer to what's
+            // falling now (the code often says "overcast" during light rain).
+            condition = WeatherCondition.withPrecipitation(
+                WeatherCondition.fromWmoCode(cur.optInt("weather_code", -1)),
+                rainMm = cur.optDouble("rain", 0.0).orZero() + cur.optDouble("showers", 0.0).orZero(),
+                snowCm = cur.optDouble("snowfall", 0.0).orZero(),
+                totalMm = cur.optDouble("precipitation", 0.0).orZero()),
             temperatureF = Math.round(temp).toInt(),
             feelsLikeF = Math.round(
                 cur.optDouble("apparent_temperature", temp).takeIf { !it.isNaN() } ?: temp
@@ -189,6 +195,8 @@ class WeatherRepository(private val context: Context) {
             null
         }
     }
+
+    private fun Double.orZero() = if (isNaN()) 0.0 else this
 
     private companion object {
         const val TAG = "Weather"
