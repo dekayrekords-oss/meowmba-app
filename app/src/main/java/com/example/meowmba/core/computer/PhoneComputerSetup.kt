@@ -17,7 +17,24 @@ import java.util.concurrent.atomic.AtomicInteger
 /** Fixed provisioning only. No AI-supplied commands and no sandbox-shell fallback. */
 object PhoneComputerSetup {
     const val PERMISSION = "com.termux.permission.RUN_COMMAND"
+    /** Result code the receiver reports when Termux refused the command for allow-external-apps. */
+    internal const val EXIT_EXTERNAL_APPS_DISABLED = -2
+
+    /**
+     * Paste into a Termux prompt (not inside Ubuntu). Termux has no settings screen for this:
+     * it is a line in ~/.termux/termux.properties, applied by termux-reload-settings.
+     */
+    const val ALLOW_EXTERNAL_APPS_COMMAND =
+        "mkdir -p ~/.termux && f=~/.termux/termux.properties && touch \"\$f\" && " +
+            "sed -i '/^[[:space:]]*#*[[:space:]]*allow-external-apps/d' \"\$f\" && " +
+            "echo 'allow-external-apps=true' >> \"\$f\" && termux-reload-settings && echo 'Meow: external apps allowed'"
+
+    /** True when Termux's error text says external apps are not allowed; the text itself is never kept. */
+    internal fun isExternalAppsError(errmsg: String?): Boolean =
+        errmsg != null && errmsg.contains("allow-external-apps", ignoreCase = true)
     class PermissionRequired : IllegalStateException("Allow Meow to run commands in Termux, then retry setup.")
+    /** Termux refused RUN_COMMAND because `allow-external-apps` is not true in ~/.termux/termux.properties. */
+    class ExternalAppsRequired : IllegalStateException("Termux is blocking commands from other apps. Turn on allow-external-apps in Termux, then retry setup.")
     class GuidedSetupRequired : IllegalStateException("This Termux edition needs guided setup. Use Copy setup & open Termux; there is no command permission to grant.")
     private val lock = Mutex()
     private val ids = AtomicInteger(1000)
@@ -99,6 +116,7 @@ object PhoneComputerSetup {
             }
             check(context.startService(intent) != null) { "Open Termux once, then retry setup." }
             val exit = withTimeout(20 * 60_000L) { result.await() }
+            if (exit == EXIT_EXTERNAL_APPS_DISABLED) throw ExternalAppsRequired()
             check(exit == 0) {
                 when (exit) {
                     21 -> "Setup is already running in Termux. Wait for it to finish, then retry."
@@ -126,7 +144,12 @@ object PhoneComputerSetup {
 class PhoneComputerSetupResult : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val result = intent.getBundleExtra("result") ?: return
-        val exit = if (result.getInt("err", -1) != -1) -1 else result.getInt("exitCode", -1)
+        val failed = result.getInt("err", -1) != -1
+        val exit = when {
+            failed && PhoneComputerSetup.isExternalAppsError(result.getString("errmsg")) -> PhoneComputerSetup.EXIT_EXTERNAL_APPS_DISABLED
+            failed -> -1
+            else -> result.getInt("exitCode", -1)
+        }
         PhoneComputerSetup.results[intent.getIntExtra("execution_id", -1)]?.complete(exit)
         // Never log result strings: third-party errors can contain command/stdin details.
     }

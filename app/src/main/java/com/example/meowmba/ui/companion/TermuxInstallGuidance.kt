@@ -7,6 +7,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.example.meowmba.core.computer.TermuxComputerLinks
 import com.example.meowmba.core.computer.TermuxSetupSupport
@@ -31,6 +32,7 @@ internal fun rememberTermuxSetupSupport(): State<TermuxSetupSupport> {
 internal fun TermuxInstallGuidance(support: TermuxSetupSupport, onRefresh: () -> Unit) {
     val context = LocalContext.current
     var error by remember { mutableStateOf<String?>(null) }
+    var checks by remember { mutableIntStateOf(0) }
     fun open(url: String) {
         runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
             .onFailure { error = "Could not open the download page. Choose a browser and retry." }
@@ -51,7 +53,19 @@ internal fun TermuxInstallGuidance(support: TermuxSetupSupport, onRefresh: () ->
             Text(if (support == TermuxSetupSupport.GUIDED) "Continue to guided setup. No command-permission prompt is needed for this edition."
                 else "Continue to setup and approve Termux command access when asked. Installing Termux alone does not mean Ubuntu or OpenCode is connected.")
         }
-        OutlinedButton(onClick = onRefresh) { Text("Check installation") }
+        OutlinedButton(onClick = { onRefresh(); checks++ }, modifier = Modifier.testTag("termux_check_installation")) { Text("Check installation") }
+        // Checking used to redraw the same screen, so a missing Termux looked like a dead button.
+        if (checks > 0) Text(termuxCheckResult(support, checks), color = if (support == TermuxSetupSupport.MISSING)
+            MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary, modifier = Modifier.testTag("termux_check_result"))
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+    }
+}
+
+internal fun termuxCheckResult(support: TermuxSetupSupport, checks: Int): String {
+    val again = if (checks > 1) " (checked again)" else ""
+    return when (support) {
+        TermuxSetupSupport.MISSING -> "Termux not found$again. Install it, open it once, then check again."
+        TermuxSetupSupport.AUTOMATIC -> "Termux found$again. Tap Continue."
+        TermuxSetupSupport.GUIDED -> "Termux found$again (guided setup edition). Tap Continue."
     }
 }

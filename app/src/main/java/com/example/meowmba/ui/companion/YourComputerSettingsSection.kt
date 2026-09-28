@@ -9,6 +9,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -57,6 +58,7 @@ internal fun YourComputerSettingsSection(
     var authMode by rememberSaveable { mutableStateOf("password") }
     var advanced by rememberSaveable { mutableStateOf(false) }
     var secret by remember { mutableStateOf("") }
+    var showSecret by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf<String?>(null) }
     val busy = status == ComputerSetupStatus.Checking || status == ComputerSetupStatus.Installing
     val validPort = port.toIntOrNull()?.let { it in 1..65535 } == true
@@ -115,7 +117,11 @@ internal fun YourComputerSettingsSection(
                 Text("Try your Computer",style=MaterialTheme.typography.titleLarge)
                 Text("Open Terminal to check the connection and start working. Installing Termux alone does not confirm that Linux is ready.")
                 Button(onClick=onOpenTerminal,modifier=Modifier.fillMaxWidth()) { Text("Open phone Terminal") }
-                OutlinedButton(onClick=onRefreshPhone,modifier=Modifier.fillMaxWidth()) { Text("Check phone again") }
+                var phoneChecks by remember { mutableIntStateOf(0) }
+                OutlinedButton(onClick={onRefreshPhone();phoneChecks++},modifier=Modifier.fillMaxWidth().testTag("computer_check_phone")) { Text("Check phone again") }
+                // A re-check that finds the same state must still visibly answer.
+                if(phoneChecks>0) Text("Checked ${java.text.DateFormat.getTimeInstance(java.text.DateFormat.MEDIUM).format(java.util.Date())}${if(phoneChecks>1) " (again)" else ""}:",
+                    style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.primary,modifier=Modifier.testTag("computer_check_phone_time"))
                 Text(phoneProbeSummary,style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                 OpenCodeLocalConnectionCard()
             }
@@ -149,7 +155,9 @@ internal fun YourComputerSettingsSection(
                     }
                 }
                 OutlinedTextField(secret,{secret=it},label={Text(if(type==ConnectionProfileType.HTTPS_RUNTIME) "Access token" else if(authMode=="key") "Private key" else "Password")},
-                    visualTransformation=PasswordVisualTransformation(),singleLine=authMode!="key",maxLines=5,modifier=Modifier.fillMaxWidth())
+                    visualTransformation=if(showSecret) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon={ PasswordVisibilityToggle(showSecret) { showSecret=!showSecret } },
+                    singleLine=authMode!="key",maxLines=5,modifier=Modifier.fillMaxWidth())
                 Text("Leave blank to reuse a saved credential. New credentials are stored encrypted when you save or test.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                 TextButton(onClick={advanced=!advanced}) { Text(if(advanced) "Hide saved credential options" else "Saved credential options") }
                 if(advanced) OutlinedTextField(credentialRef,{credentialRef=it.filter { c->c.isLetterOrDigit()||c=='_'||c=='-' }},label={Text("Saved credential name")},singleLine=true,modifier=Modifier.fillMaxWidth())
