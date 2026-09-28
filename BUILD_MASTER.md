@@ -12,7 +12,7 @@ This supersedes historical build-location/version instructions in other document
   status: nothing re-adds it (managed sync, package notices and message re-posts all leave it alone) and
   Settings has "Bring back N ignored items". Thermal: notice/easing start at SEVERE (was MODERATE), decorative
   work stops at CRITICAL (was SEVERE); camera/mic protection in `ThermalGovernor` is unchanged. No Room version
-  change. NOT built, NOT installed, NOT published; Codex remains build owner. **188 reserved; next 189.**
+  change. Built (daily, MWDAT + verified-jni flags) and installed on the Fold R5GL75XFCXD on 2026-09-28 at the owner's request; NOT published. Codex remains build owner. **188 consumed; next 189.**
 
 - September28 **187 / 1.5.21 built and installed by Claude** at the owner's request: measured rain outranks a dry
   weather code (`8caa4df`). Installed on Fold 09:18:11 MST over 186, PID alive, crash buffer unchanged; weather now reads
