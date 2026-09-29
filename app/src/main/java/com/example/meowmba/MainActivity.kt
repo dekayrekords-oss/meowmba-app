@@ -311,7 +311,7 @@ class MainActivity : ComponentActivity() {
                         uiState.showWeatherScreen || uiState.showNavScreen ||
                         uiState.showProjectsScreen || uiState.showToolsScreen ||
                         uiState.showAppDrawer || uiState.showBrowser ||
-                        (uiState.appTheme == com.example.meowmba.ui.companion.AppTheme.FLOW && uiState.flowReturnTheme != null)
+                        (uiState.appTheme == com.example.meowmba.ui.companion.AppTheme.FLOW && uiState.features.flowReturnTheme != null)
                 ) {
                     when {
                         wizardVisible -> {

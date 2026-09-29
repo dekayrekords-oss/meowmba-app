@@ -11974,7 +11974,7 @@ class CompanionViewModel(
 
     fun setAppTheme(theme: AppTheme) {
         driveThemeReturn = null // the user's own choice wins over the drive switch
-        _uiState.value = _uiState.value.copy(appTheme = theme, flowReturnTheme = null)
+        _uiState.value = _uiState.value.let { it.copy(appTheme = theme, features = it.features.copy(flowReturnTheme = null)) }
         secureStorage?.savePreference("app_theme", theme.key)
         syncMotionSense()
     }
@@ -11983,14 +11983,14 @@ class CompanionViewModel(
     fun openFlow() {
         val current = _uiState.value.appTheme
         if (current == AppTheme.FLOW) return
-        _uiState.value = _uiState.value.copy(appTheme = AppTheme.FLOW, flowReturnTheme = current)
+        _uiState.value = _uiState.value.let { it.copy(appTheme = AppTheme.FLOW, features = it.features.copy(flowReturnTheme = current)) }
         syncMotionSense()
     }
 
     /** Back from a Flow visit. */
     fun closeFlow() {
-        val back = _uiState.value.flowReturnTheme ?: return
-        _uiState.value = _uiState.value.copy(appTheme = back, flowReturnTheme = null)
+        val back = _uiState.value.features.flowReturnTheme ?: return
+        _uiState.value = _uiState.value.let { it.copy(appTheme = back, features = it.features.copy(flowReturnTheme = null)) }
         syncMotionSense()
     }
 

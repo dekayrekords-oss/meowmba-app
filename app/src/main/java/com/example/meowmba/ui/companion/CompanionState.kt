@@ -144,8 +144,6 @@ data class CompanionState(
     /** Temporary costume from an explicit performance; never persisted over the user's choice. */
     val performanceAnimal: AvatarAnimal? = null,
     val appTheme: AppTheme = AppTheme.COMPANION,
-    /** Set while Flow is a visit (swipe, menu, Desk): Back returns here instead of leaving the app. */
-    val flowReturnTheme: AppTheme? = null,
     val appearanceMode: AppearanceMode = AppearanceMode.DARK,
     val avatarFeatureColor: Long = 0xFFE8D5B9L,
     /** Godot face eye color (opaque ARGB). Default mint green. */
@@ -802,6 +800,8 @@ fun nextDriveReaction(
 
 /** Separate feature state keeps JVM constructor/copy signatures below the 255-slot limit. */
 data class CompanionFeatures(
+    /** Set while Flow is a visit (swipe, menu, Desk): Back returns here instead of leaving the app. */
+    val flowReturnTheme: AppTheme? = null,
     val memoryPolicies: Map<Long, com.example.meowmba.core.database.MemoryPolicyEntity> = emptyMap(),
     val showTaskHistory: Boolean = false,
     val selectedWorkTaskId: String? = null,
