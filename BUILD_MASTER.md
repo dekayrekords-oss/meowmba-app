@@ -3,13 +3,20 @@
 Updated 2026-09-28. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
 This supersedes historical build-location/version instructions in other documents.
 
+- September29 **190 / 1.5.24 phone Computer + voice fixes** (branch `feature/flow-fixes-20260928`, Claude, on top of 189):
+  setup-phone.sh apostrophe that broke every OpenCode server start since preview148 ("code 1"); setup after a
+  reboot (startForegroundService fallback) and first-request retry; Tasks & approvals shows readable full diffs and
+  Allow works for large edits; VoiceTurnGate stops clicks/reactions/overheard talk reaching the LLM; Development
+  Studio session survives Back/navigation; Back from a Flow visit returns home; saved HTML results render in-app;
+  labelled checkboxes toggle from their label. Built (daily, MWDAT + verified-jni flags) and installed on the Fold
+  R5GL75XFCXD on 2026-09-29 at the owner's request; NOT published. **190 consumed; next 191.**
 - September28 **189 / 1.5.23 Computer setup fixes** (branch `feature/flow-fixes-20260928`, Claude, on top of 188):
   Setup computer now recognises Termux's "RunCommandService requires allow-external-apps" refusal (was "code -1")
   and offers "1. Copy Termux fix & open Termux" (one-line command setting `allow-external-apps=true` in
   `~/.termux/termux.properties` + `termux-reload-settings`); Check installation and Check phone again show a
   visible result; show/hide eye on the phone setup and Linux-server password fields. Built (daily, MWDAT +
   verified-jni flags) and installed on the Fold R5GL75XFCXD on 2026-09-28 at the owner's request; NOT published.
-  **189 consumed; next 190.**
+  **189 consumed.**
 - September28 **188 / 1.5.22 reserved for the integrated build** (branch `feature/flow-fixes-20260928`, Claude):
   Codex's `feature/meow-flow-core` (indexed long-term recall, memory correction/pin controls, additive Room15)
   plus Claude's `feature/desk-apartment` through `21f6367`, plus Flow fixes: the Later button, an Ignore button that
