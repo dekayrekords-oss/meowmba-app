@@ -6232,7 +6232,7 @@ class CompanionViewModel(
             _uiState.value = _uiState.value.copy(interactionState = InteractionState.IDLE)
         }
         fuLog("always-on recovering partial \"$utterance\"")
-        processUserSpeech(utterance)
+        processUserSpeech(utterance, passive = true)
         return true
     }
 
@@ -6462,7 +6462,7 @@ class CompanionViewModel(
                         }
                         return@startListening
                     }
-                    processUserSpeech(text, finalTranscript = true)
+                    processUserSpeech(text, finalTranscript = true, passive = true)
                 },
                 onError = { code ->
                     if (!alwaysOnActive || generation != alwaysOnGeneration || alwaysOnCaptureEngine !== engine) return@startListening
@@ -7126,7 +7126,8 @@ class CompanionViewModel(
         }
     }
 
-    private fun processUserSpeech(raw: String, fromVoice: Boolean = true, finalTranscript: Boolean = false) {
+    /** [passive]: heard by always-on listening, not after a wake phrase, tap or Meow's own question. */
+    private fun processUserSpeech(raw: String, fromVoice: Boolean = true, finalTranscript: Boolean = false, passive: Boolean = false) {
         if (fromVoice && selfVoiceFilter.isOwnVoice(raw, filterShortNoise = false)) {
             if (_uiState.value.interactionState == InteractionState.LISTENING) resetState()
             return
@@ -7157,6 +7158,24 @@ class CompanionViewModel(
             fuLog("processUserSpeech rejected empty/non-speech text")
             if (fromVoice && _uiState.value.interactionState == InteractionState.LISTENING) resetState()
             return
+        }
+        if (fromVoice) {
+            // Clicks, "Oh no", "Great" and overheard fragments must not cost a model call.
+            val now = System.currentTimeMillis()
+            val sinceMeow = now - lastSpokeFinishedAtMs
+            val decision = com.example.meowmba.core.audio.VoiceTurnGate.decide(
+                normalizedRaw,
+                // A wake phrase or mic tap already addressed Meow; follow-up turns are judged below.
+                addressed = matcher.match(raw) != null || (!passive && !isFollowUpListen),
+                inConversation = isFollowUpListen || sinceMeow in 0..VOICE_CONVERSATION_WINDOW_MS ||
+                    now - lastUserTurnAt in 0..VOICE_CONVERSATION_WINDOW_MS,
+                meowAskedQuestion = sinceMeow in 0..60_000L && lastAssistantText?.trim()?.endsWith("?") == true,
+            )
+            if (decision != com.example.meowmba.core.audio.VoiceTurnGate.Decision.ACCEPT) {
+                fuLog("processUserSpeech ignored voice ($decision)")
+                if (_uiState.value.interactionState == InteractionState.LISTENING) resetState()
+                return
+            }
         }
         if (fromVoice && com.example.meowmba.core.audio.VoiceIntentGuard.needsClarification(normalizedRaw)) {
             // Background ambiguity is not a reason to interrupt with the same question.
@@ -8591,6 +8610,8 @@ class CompanionViewModel(
     /** How much Meow speaks aloud (Flow › Adjust › "Meow speaks"). Default IMPORTANT: proactive, quiet unless it matters. */
     internal val speechMode: SpeechMode get() = _uiState.value.features.speechMode
     @Volatile private var lastUserTurnAt = 0L
+    /** After Meow speaks or you take a turn, plain follow-ups need no wake phrase for this long. */
+    private val VOICE_CONVERSATION_WINDOW_MS = 30_000L
     @Volatile private var lastUserTurnVoice = false
     @Volatile private var quietUntilAddressed = secureStorage?.getBooleanPreference("quiet_until_addressed", false) ?: false
 

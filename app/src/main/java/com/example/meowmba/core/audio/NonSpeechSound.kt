@@ -8,7 +8,10 @@ object NonSpeechSound {
     private val human = Regex("\\b(?:sigh(?:s|ing)?|cough(?:s|ing)?|laugh(?:s|ing|ter)?|chuckl(?:e|es|ing)|sneez(?:e|es|ing)|sniffl(?:e|es|ing)|gasp(?:s|ing)?|sob(?:s|bing)?|cry(?:ing)?|groan(?:s|ing)?|hiccup(?:s|ing)?|breathing|snoring|muffled speaking)\\b", RegexOption.IGNORE_CASE)
 
     fun parse(raw: String): Observation? {
+        // A transcript cut off mid-tag ends with a dangling "(" or "(click": still only tags.
         val text = raw.trim().trimEnd('.', ',', '!', '?').trim()
+            .replace(Regex("\\s*[\\[(][^\\[\\]()]{0,40}$"), "").trim()
+            .ifEmpty { raw.trim() }
         val parts = bracket.findAll(text).toList()
         if (parts.isEmpty() || bracket.replace(text, "").isNotBlank()) return null
         val labels = parts.map { it.groupValues[1].trim().lowercase() }
