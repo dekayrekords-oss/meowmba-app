@@ -1,5 +1,7 @@
 package com.example.meowmba.ui.companion
 
+import com.example.meowmba.ui.theme.CheckRow
+
 import com.example.meowmba.ui.theme.Button
 import com.example.meowmba.ui.theme.OutlinedButton
 
@@ -35,8 +37,8 @@ import java.io.File
         OutlinedTextField(name, { name = it.take(80) }, enabled = !busy, label = { Text("Service name") })
         OutlinedTextField(url, { url = it }, enabled = !busy, label = { Text("HTTPS MCP endpoint") })
         OutlinedTextField(token, { token = it }, enabled = !busy, label = { Text("Access token (if required)") }, visualTransformation = PasswordVisualTransformation())
-        Row { Checkbox(localHttp, { localHttp = it }, enabled = !busy); Text("Allow unencrypted HTTP to my local-network server. Its token and data may be visible on the network.", style = MaterialTheme.typography.bodySmall) }
-        Row { Checkbox(consent, { consent = it }, enabled = !busy); Text("Contact this endpoint to verify the connection and discover its tools. Do not run any tools yet.", style = MaterialTheme.typography.bodySmall) }
+        CheckRow(localHttp, { localHttp = it }, enabled = !busy) { Text("Allow unencrypted HTTP to my local-network server. Its token and data may be visible on the network.", style = MaterialTheme.typography.bodySmall) }
+        CheckRow(consent, { consent = it }, enabled = !busy) { Text("Contact this endpoint to verify the connection and discover its tools. Do not run any tools yet.", style = MaterialTheme.typography.bodySmall) }
         Button(enabled = !busy && consent && name.isNotBlank() && url.isNotBlank(), onClick = {
             val endpoint = url.trim(); val suppliedToken = token.trim(); val label = name.trim(); val allowHttp = localHttp
             busy = true

@@ -174,7 +174,7 @@ fun CompanionScreen(
                     }
                 }
                 .homeSwipes(onUp = viewModel::toggleAppDrawer, onDown = viewModel::openTiles,
-                    onLeft = viewModel::openChat, onRight = { viewModel.setAppTheme(AppTheme.FLOW) })) {
+                    onLeft = viewModel::openChat, onRight = viewModel::openFlow)) {
                 if (uiState.appTheme == AppTheme.FLOW) com.example.meowmba.ui.flow.FlowHomeRoute(viewModel, uiState, animationsPaused)
                 else com.example.meowmba.ui.flow.DeskRoute(viewModel, uiState, animationsPaused || idle, Modifier.fillMaxSize())
                 if (idle) {
@@ -186,7 +186,7 @@ fun CompanionScreen(
                         },
                         snapshot = snap,
                         onWake = wake,
-                        onFlow = { wake(); viewModel.setAppTheme(AppTheme.FLOW) },
+                        onFlow = { wake(); viewModel.openFlow() },
                         onChat = { wake(); viewModel.openChat() },
                         onApps = { wake(); viewModel.toggleAppDrawer() },
                         onMenu = { wake(); viewModel.openTiles() },
@@ -1222,7 +1222,7 @@ internal fun AvatarMotionHost(
             onSwipeDown = { if (interactive) viewModel.openTiles() },
             // Owner (2026-09-23): left-to-right opens Flow, right-to-left opens chat, everywhere.
             onSwipeLeft = { if (interactive) viewModel.openChat() },
-            onSwipeRight = { if (interactive) viewModel.setAppTheme(AppTheme.FLOW) },
+            onSwipeRight = { if (interactive) viewModel.openFlow() },
             paused = paused,
             timings = viewModel.interactionTimings,
             displayRefreshRate = view.display?.refreshRate,

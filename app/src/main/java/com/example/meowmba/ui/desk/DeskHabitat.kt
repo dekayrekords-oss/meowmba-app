@@ -749,7 +749,7 @@ internal fun describe(o: DeskObject, s: DeskState): String = when (o) {
     DeskObject.MONEY -> s.jarNote?.let { "Jar: $it" } ?: "Jar: nothing due"
     DeskObject.TODAY -> if (s.sticky.isEmpty()) "Sticky note: nothing next" else "Sticky note: next up ${s.sticky.joinToString(" ")}"
     DeskObject.PROJECT -> if (s.projectTitle.isBlank()) "Corkboard: no project pinned" else "Corkboard: ${s.projectTitle}, ${s.projectStatus}"
-    DeskObject.BUILD -> if (s.monitorLines.isEmpty()) "Monitor: nothing running" else "Monitor: " + s.monitorLines.joinToString(", ") { it.text }
+    DeskObject.BUILD -> if (s.monitorLines.isEmpty()) "Monitor: nothing running" else "Monitor: " + s.monitorLines.map { it.text.trimStart('>', ' ', '$').trim() }.filter { it.isNotEmpty() }.joinToString(", ")
     DeskObject.IDEA -> if (s.lampOn) "Lamp: Meow has an idea for you" else if (s.night) "Lamp: on for the night" else "Lamp: off"
     DeskObject.WINDOW -> "Window: " + (s.weatherLine ?: "weather")
     DeskObject.CLOCK -> "Clock: open alarms and timers"

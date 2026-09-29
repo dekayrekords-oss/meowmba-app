@@ -506,3 +506,6 @@ if __name__ == '__main__':
     except (OSError, ValueError) as error:
         print('Development Studio unavailable:', str(error))
         raise SystemExit(1)
+    finally:
+        # Meow's page watches for this line to know the session ended.
+        print('[Meow Development Studio ended]', flush=True)

@@ -108,9 +108,9 @@ internal fun DeskRoute(vm: CompanionViewModel, state: CompanionState, paused: Bo
         fpsTarget = state.avatarFpsTarget, interactive = interactive,
         catActivity = catActivity, catReply = catReply, onAsk = vm::onUserTextSubmitted,
         onMenu = vm::openTiles, onSettings = vm::toggleSettings, onWork = { vm.openTaskHistory() },
-        onFlow = { vm.setAppTheme(AppTheme.FLOW) }, onProjects = vm::toggleProjectsScreen,
+        onFlow = vm::openFlow, onProjects = vm::toggleProjectsScreen,
         onWeather = vm::toggleWeatherScreen, onConnections = vm::toggleConnectorsScreen, onNotes = vm::toggleVaultScreen,
-        onTaskDone = { id -> scope.launch { handleFlowPrimary(vm, context, flow, id) { _ -> vm.setAppTheme(AppTheme.FLOW) } } },
+        onTaskDone = { id -> scope.launch { handleFlowPrimary(vm, context, flow, id) { _ -> vm.openFlow() } } },
         onTaskLater = { id -> scope.launch { flow.onLater(id) } },
         micOn = state.isMicEnabled, onMicToggle = { vm.setMicEnabled(!state.isMicEnabled) },
         onAttach = { attach = true },
@@ -128,7 +128,7 @@ internal fun DeskRoute(vm: CompanionViewModel, state: CompanionState, paused: Bo
             if (id.startsWith("task:")) { northStarOpen = false; vm.openTaskHistory(id.removePrefix("task:")) }
             else if (tasks.any { it.id == id }) {
                 northStarOpen = false
-                scope.launch { handleFlowPrimary(vm, context, flow, id) { _ -> vm.setAppTheme(AppTheme.FLOW) } }
+                scope.launch { handleFlowPrimary(vm, context, flow, id) { _ -> vm.openFlow() } }
             } else android.widget.Toast.makeText(context, "That item is no longer active.", android.widget.Toast.LENGTH_SHORT).show()
         })
     }

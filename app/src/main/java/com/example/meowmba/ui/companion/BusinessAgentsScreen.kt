@@ -1,5 +1,7 @@
 package com.example.meowmba.ui.companion
 
+import com.example.meowmba.ui.theme.CheckRow
+
 import com.example.meowmba.ui.theme.Button
 import com.example.meowmba.ui.theme.OutlinedButton
 import com.example.meowmba.ui.theme.Card
@@ -108,12 +110,9 @@ internal fun BusinessAgentsScreen(onOpenFiles: (() -> Unit)? = null, onOpenBugRe
                     if (connection.tools.any { it.readOnlyHint }) TextButton(onClick = { readSetup = !readSetup }) { Text("Scheduled read permissions") }
                     if (readSetup) {
                         Text("Only enable automatic reads for a service you trust, preferably with a read-only token. These tools are labeled read-only by the server. All other service calls require approval.", style = MaterialTheme.typography.bodySmall)
-                        connection.tools.filter { it.readOnlyHint }.forEach { spec -> Row {
-                            Checkbox(spec.name in connection.automaticReadTools, { granted -> change { runtime.store.change { state -> state.copy(connections = state.connections.map { old ->
+                        connection.tools.filter { it.readOnlyHint }.forEach { spec -> CheckRow(spec.name in connection.automaticReadTools, { granted -> change { runtime.store.change { state -> state.copy(connections = state.connections.map { old ->
                                 if (old.id == connection.id) old.copy(automaticReadTools = if (granted) old.automaticReadTools + spec.name else old.automaticReadTools - spec.name) else old
-                            }) } } })
-                            Text("Allow automatic ${spec.name}", style = MaterialTheme.typography.bodySmall)
-                        } }
+                            }) } } }) { Text("Allow automatic ${spec.name}", style = MaterialTheme.typography.bodySmall) } }
                     }
                 } }
             }
@@ -186,17 +185,17 @@ internal fun AgentEditor(existing: BusinessAgent?, team: List<BusinessAgent>, to
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(name, { name = it.take(80) }, label = { Text("Name") })
             OutlinedTextField(instructions, { instructions = it.take(8000) }, label = { Text("Role and instructions") }, minLines = 3)
-            Row { Checkbox(cloud, { cloud = it }); Text("Use OpenRouter instead of the local model") }
+            CheckRow(cloud, { cloud = it }) { Text("Use OpenRouter instead of the local model") }
             if (cloud) {
-                Row { Checkbox(consent, { consent = it }); Text("Allow this agent's instructions and tool results to be sent to OpenRouter. Usage charges may apply.") }
+                CheckRow(consent, { consent = it }) { Text("Allow this agent's instructions and tool results to be sent to OpenRouter. Usage charges may apply.") }
                 OutlinedTextField(model, { model = it }, label = { Text("Model ID (blank uses Settings)") })
             }
             Text("Allowed tools")
-            toolIds.forEach { id -> Row { Checkbox(id in tools, { tools = if (it) tools + id else tools - id }); Text(id) } }
+            toolIds.forEach { id -> CheckRow(id in tools, { tools = if (it) tools + id else tools - id }) { Text(id) } }
             Text("Required proof before completing a job")
-            tools.forEach { id -> Row { Checkbox(id in completionTools, { completionTools = if (it) completionTools + id else completionTools - id }); Text("Successful $id") } }
+            tools.forEach { id -> CheckRow(id in completionTools, { completionTools = if (it) completionTools + id else completionTools - id }) { Text("Successful $id") } }
             Text("Can delegate to")
-            team.filter { it.id != existing?.id }.forEach { agent -> Row { Checkbox(agent.id in delegates, { delegates = if (it) delegates + agent.id else delegates - agent.id }); Text(agent.name) } }
+            team.filter { it.id != existing?.id }.forEach { agent -> CheckRow(agent.id in delegates, { delegates = if (it) delegates + agent.id else delegates - agent.id }) { Text(agent.name) } }
             OutlinedTextField(interval, { interval = it }, label = { Text("Repeat minutes (0 = manual, minimum 15)") })
             if ((minutes ?: 0) > 0) OutlinedTextField(scheduledGoal, { scheduledGoal = it.take(8000) }, label = { Text("Scheduled goal") })
             if (tools.size > 16 || delegates.size > 8) Text("Use at most 16 tools and 8 delegates. Split larger teams into specialists.", color = MaterialTheme.colorScheme.error)
@@ -224,7 +223,7 @@ private fun BusinessCloudSetup() {
     var consent by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
-    Row { Checkbox(consent, { consent = it }, enabled = !busy); Text("Allow two synthetic planning tests through OpenRouter. Your key is encrypted on this phone; model usage charges may apply.") }
+    CheckRow(consent, { consent = it }, enabled = !busy) { Text("Allow two synthetic planning tests through OpenRouter. Your key is encrypted on this phone; model usage charges may apply.") }
     TextButton(onClick = {
         runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://openrouter.ai/keys"))) }
             .onFailure { status = "Open a browser and visit openrouter.ai/keys" }

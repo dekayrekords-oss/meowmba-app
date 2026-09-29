@@ -1,5 +1,7 @@
 package com.example.meowmba.ui.companion
 
+import com.example.meowmba.ui.theme.CheckRow
+
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -31,10 +33,7 @@ internal fun ReferencePhotoControls(state: CompanionState, viewModel: CompanionV
             Box(Modifier.fillMaxWidth().height(130.dp)) {
                 AppBackground(BackgroundSelection(BackgroundKind.IMAGE, uri, 0), null)
             }
-            Row {
-                Checkbox(consent, { consent = it }, enabled = !data.referencePhotoBusy)
-                Text("Allow my configured vision provider to analyze this photo. If it is a cloud provider, the photo will be sent there.", style = MaterialTheme.typography.bodySmall)
-            }
+            CheckRow(consent, { consent = it }, enabled = !data.referencePhotoBusy) { Text("Allow my configured vision provider to analyze this photo. If it is a cloud provider, the photo will be sent there.", style = MaterialTheme.typography.bodySmall) }
             Row {
                 TextButton(onClick = viewModel::analyzeCreationReference, enabled = consent && !data.referencePhotoBusy) { Text("Analyze reference") }
                 TextButton(onClick = { viewModel.setCreationReference(null) }) { Text("Remove") }

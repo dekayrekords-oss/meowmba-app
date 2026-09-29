@@ -310,7 +310,8 @@ class MainActivity : ComponentActivity() {
                         uiState.showAgentsScreen || uiState.showBackgroundScreen ||
                         uiState.showWeatherScreen || uiState.showNavScreen ||
                         uiState.showProjectsScreen || uiState.showToolsScreen ||
-                        uiState.showAppDrawer || uiState.showBrowser
+                        uiState.showAppDrawer || uiState.showBrowser ||
+                        (uiState.appTheme == com.example.meowmba.ui.companion.AppTheme.FLOW && uiState.flowReturnTheme != null)
                 ) {
                     when {
                         wizardVisible -> {
@@ -334,6 +335,7 @@ class MainActivity : ComponentActivity() {
                         uiState.showNavScreen -> viewModel.toggleNavScreen()
                         uiState.isChatExpanded -> viewModel.toggleChat()
                         uiState.showTiles -> viewModel.onAvatarZoneClick(com.example.meowmba.ui.companion.AvatarZone.BACKGROUND)
+                        else -> viewModel.closeFlow()
                     }
                 }
 

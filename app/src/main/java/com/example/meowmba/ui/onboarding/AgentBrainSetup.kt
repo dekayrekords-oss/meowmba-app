@@ -1,5 +1,7 @@
 package com.example.meowmba.ui.onboarding
 
+import com.example.meowmba.ui.theme.CheckRow
+
 import com.example.meowmba.ui.theme.Button
 import com.example.meowmba.ui.theme.OutlinedButton
 import com.example.meowmba.ui.theme.Card
@@ -116,10 +118,7 @@ internal fun AgentBrainSetup(onContinue: () -> Unit, modelOverride: BrainSetupMo
         Text("Recommended for stronger reasoning and multi-app tasks. Your OpenRouter API key is separate from a ChatGPT or other AI subscription.")
         Button(onClick = { open("https://openrouter.ai/settings/keys") }, modifier = Modifier.fillMaxWidth()) { Text("Get an OpenRouter API key ↗") }
         Text("1. Tap the button above and sign in or create an account.\n2. Choose Create Key, name it Meow, and copy the full secret key.\n3. Return here, allow cloud use below, paste the key, then tap Save key & connect OpenRouter.", style = MaterialTheme.typography.bodySmall)
-        Row {
-            Checkbox(state.consent, model::setConsent, enabled = !state.cloudBusy)
-            Text("I allow OpenRouter to process my requests and synthetic setup tests. Conversations and approved task context leave the phone. Free models have limits; paid models can incur charges.", style = MaterialTheme.typography.bodySmall)
-        }
+        CheckRow(state.consent, model::setConsent, enabled = !state.cloudBusy) { Text("I allow OpenRouter to process my requests and synthetic setup tests. Conversations and approved task context leave the phone. Free models have limits; paid models can incur charges.", style = MaterialTheme.typography.bodySmall) }
         if (state.consent) {
             if (state.saved.keyPresent) Text("API key saved securely on this phone. Leave the field empty to reuse it.", color = MaterialTheme.colorScheme.primary)
             OutlinedTextField(state.key, model::setKey, enabled = !state.cloudBusy,
@@ -133,7 +132,7 @@ internal fun AgentBrainSetup(onContinue: () -> Unit, modelOverride: BrainSetupMo
             var showOptions by remember { mutableStateOf(false) }
             TextButton(onClick = { showOptions = !showOptions; if (showOptions && state.models.isEmpty()) model.loadModels() }, enabled = !state.cloudBusy) { Text(if (showOptions) "Hide model options" else "Choose a different model (optional)") }
             if (showOptions) {
-                Row { Checkbox(state.allowPaid, model::setPaid, enabled = !state.cloudBusy); Text("Show paid models (charges may apply)") }
+                CheckRow(state.allowPaid, model::setPaid, enabled = !state.cloudBusy) { Text("Show paid models (charges may apply)") }
                 var expanded by remember { mutableStateOf(false) }
                 Box {
                     OutlinedButton(onClick = { expanded = true }, enabled = !state.cloudBusy) { Text(state.selected.ifBlank { "Automatic · free models only" }) }

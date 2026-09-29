@@ -1,5 +1,7 @@
 package com.example.meowmba.ui.companion
 
+import com.example.meowmba.ui.theme.CheckRow
+
 import com.example.meowmba.ui.theme.Button
 import com.example.meowmba.ui.theme.OutlinedButton
 import com.example.meowmba.ui.theme.Card
@@ -99,10 +101,7 @@ internal fun CloudProviderSettings(
         TextButton(onClick = { advanced = !advanced }) { Text(if (advanced) "Hide advanced endpoint" else "Advanced endpoint") }
         if (advanced || custom) ProviderEndpointField(endpoint, { endpoint = it; note = "" }, if (custom) "$label base URL (required)" else "$label base URL (optional)",
             if (custom) "Required HTTPS base URL. This server receives your key and requests. A trailing /v1 is accepted." else "Leave blank for the official service. A custom server receives your key and requests.")
-        Row {
-            Checkbox(consent, { consent = it }, enabled = !busy)
-            Text("Use $label for my requests. Approved conversation/task context leaves the phone; the selected model may incur charges.", style = MaterialTheme.typography.bodySmall)
-        }
+        CheckRow(consent, { consent = it }, enabled = !busy) { Text("Use $label for my requests. Approved conversation/task context leaves the phone; the selected model may incur charges.", style = MaterialTheme.typography.bodySmall) }
         Button(onClick = {
             val savedKey = key.trim(); val savedModel = model.trim(); val savedEndpoint = endpoint.trim().trimEnd('/')
             busy = true; note = "Saving…"

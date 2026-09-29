@@ -1,5 +1,7 @@
 package com.example.meowmba.ui.companion
 
+import com.example.meowmba.ui.theme.CheckRow
+
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
@@ -132,10 +134,7 @@ fun BackupUpdatesPanel() {
         else {
             Text("${manager.label(other.packageName)} is also installed. Its data is separate. Open it, save a current encrypted backup, then restore that backup here. If it has no backup option, keep it installed until it receives one.")
             OutlinedButton(onClick = { context.packageManager.getLaunchIntentForPackage(other.packageName)?.let(context::startActivity) }, enabled = !busy) { Text("Open other edition") }
-            Row {
-                Checkbox(checked = confirmed, onCheckedChange = { confirmed = it }, enabled = !busy)
-                Text("I have checked that my keys and data work here, saved anything excluded from the backup, and made no new changes in the old edition.", modifier = Modifier.weight(1f))
-            }
+            CheckRow(confirmed, { confirmed = it }, enabled = !busy) { Text("I have checked that my keys and data work here, saved anything excluded from the backup, and made no new changes in the old edition.", modifier = Modifier.weight(1f)) }
             if (cleanupProblem != null) Text(cleanupProblem, style = MaterialTheme.typography.bodySmall)
             OutlinedButton(onClick = { runAction("Removal is blocked because the imported backup could not be verified. Keep the other edition and restore a fresh backup first.") {
                 val intent = withContext(Dispatchers.IO) { manager.prepareCleanup(confirmed) }

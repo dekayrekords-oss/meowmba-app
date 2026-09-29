@@ -3590,7 +3590,7 @@ class CompanionViewModel(
     /** Opens a composer only. Even a forged external intent can never submit a comment. */
     fun openFlowComment(id: String) {
         if (id.isBlank() || id.length > 300) return
-        setAppTheme(AppTheme.FLOW)
+        openFlow()
         _flowCommentRequest.value = id
     }
     fun consumeFlowCommentRequest(id: String) { _flowCommentRequest.compareAndSet(id, null) }
@@ -4320,7 +4320,7 @@ class CompanionViewModel(
     fun openTool(name: String) {
         when (name) {
             "Settings" -> toggleSettings()
-            "Flow" -> setAppTheme(AppTheme.FLOW)
+            "Flow" -> openFlow()
             "Desk" -> setAppTheme(AppTheme.DESK)
             "Show avatar" -> {
                 _uiState.update { it.atAvatarHome() }
@@ -11974,8 +11974,23 @@ class CompanionViewModel(
 
     fun setAppTheme(theme: AppTheme) {
         driveThemeReturn = null // the user's own choice wins over the drive switch
-        _uiState.value = _uiState.value.copy(appTheme = theme)
+        _uiState.value = _uiState.value.copy(appTheme = theme, flowReturnTheme = null)
         secureStorage?.savePreference("app_theme", theme.key)
+        syncMotionSense()
+    }
+
+    /** Visit Flow from another home surface without making it the saved home. */
+    fun openFlow() {
+        val current = _uiState.value.appTheme
+        if (current == AppTheme.FLOW) return
+        _uiState.value = _uiState.value.copy(appTheme = AppTheme.FLOW, flowReturnTheme = current)
+        syncMotionSense()
+    }
+
+    /** Back from a Flow visit. */
+    fun closeFlow() {
+        val back = _uiState.value.flowReturnTheme ?: return
+        _uiState.value = _uiState.value.copy(appTheme = back, flowReturnTheme = null)
         syncMotionSense()
     }
 
