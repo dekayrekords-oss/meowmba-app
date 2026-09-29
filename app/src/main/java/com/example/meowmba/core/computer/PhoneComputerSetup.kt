@@ -114,7 +114,12 @@ object PhoneComputerSetup {
                 putExtra("com.termux.RUN_COMMAND_BACKGROUND_CUSTOM_LOG_LEVEL", "0")
                 putExtra("com.termux.RUN_COMMAND_PENDING_INTENT", callback)
             }
-            check(context.startService(intent) != null) { "Open Termux once, then retry setup." }
+            // After a reboot Termux is not running, and Android refuses a plain startService to an
+            // idle app ("Not allowed to start service"). Termux documents startForegroundService
+            // for this; its RunCommandService promotes itself to the foreground.
+            val started = try { context.startService(intent) }
+                catch (_: IllegalStateException) { context.startForegroundService(intent) }
+            check(started != null) { "Open Termux once, then retry setup." }
             val exit = withTimeout(20 * 60_000L) { result.await() }
             if (exit == EXIT_EXTERNAL_APPS_DISABLED) throw ExternalAppsRequired()
             check(exit == 0) {
@@ -129,7 +134,8 @@ object PhoneComputerSetup {
             repeat(30) {
                 if (version == null) {
                     try { version = OpenCodeLocalConnection.verify(password, address) }
-                    catch (_: java.net.ConnectException) { kotlinx.coroutines.delay(2_000) }
+                    // A just-started server can accept and then stall or drop the first request.
+                    catch (_: java.io.IOException) { kotlinx.coroutines.delay(2_000) }
                 }
             }
             checkNotNull(version) { "OpenCode did not become ready. Retry to check its connection." }

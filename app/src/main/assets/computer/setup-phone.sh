@@ -68,7 +68,7 @@ export OPENCODE_SERVER_PASSWORD
 export OPENCODE_SERVER_USERNAME=opencode
 export PATH="$HOME/.opencode/bin:$PATH"
 cd "$HOME/MeowProjects"
-# Headless phone worker: use OpenCode's supported on-demand ripgrep backend.
+# Headless phone worker: use the supported OpenCode on-demand ripgrep backend.
 # Avoid a persistent native search index/watcher inside PRoot while no task runs.
 # File glob/grep tools remain available; no model, task or permission is disabled.
 # Verified against packages/core/src/filesystem/search.ts in OpenCode v1.18.31.

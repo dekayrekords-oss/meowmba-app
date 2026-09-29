@@ -9,6 +9,7 @@ import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -145,12 +146,22 @@ internal fun OpenCodeComputerPanel(onOpenFiles: () -> Unit = {}) {
             snap.permissions.forEach { request ->
                 Card {
                     Column(Modifier.padding(12.dp)) {
-                        Text("Approval required: ${request["permission"]?.jsonPrimitive?.content}")
-                        SelectionContainer { Text(request["patterns"].toString().take(4_000)) }
-                        SelectionContainer { Text(request["metadata"].toString().take(8_000)) }
+                        val card = remember(request) { ApprovalCard.from(request) }
+                        Text("Approval required: ${card.permission}", style = MaterialTheme.typography.titleSmall)
+                        card.targets.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
+                        // Whole change, readable and height-capped so Deny/Allow stay reachable.
+                        // It used to show raw JSON cut at 8,000 characters and silently disable
+                        // Allow for anything larger, so a normal file write could never be approved.
+                        SelectionContainer {
+                            Text(card.detail, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.fillMaxWidth().heightIn(max = 280.dp).verticalScroll(rememberScrollState())
+                                    .testTag("approval_detail"))
+                        }
+                        if (card.lines > 12) Text("${card.lines} lines — scroll the box to review all of it.", style = MaterialTheme.typography.labelSmall)
                         Row {
                             TextButton(onClick = { action { it.approve(session, request["id"]!!.jsonPrimitive.content, false) } }, enabled = !busy) { Text("Deny") }
-                            TextButton(onClick = { action { it.approve(session, request["id"]!!.jsonPrimitive.content, true) } }, enabled = !busy && request["metadata"].toString().length <= 8_000 && request["patterns"].toString().length <= 4_000) { Text("Allow once") }
+                            TextButton(onClick = { action { it.approve(session, request["id"]!!.jsonPrimitive.content, true) } }, enabled = !busy) { Text("Allow once") }
                         }
                     }
                 }
