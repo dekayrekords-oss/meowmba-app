@@ -26,6 +26,9 @@ import java.util.concurrent.atomic.AtomicReference
  * (system confirm sheet). Apps open the uninstall prompt. Messages open Messages.
  */
 object PhoneCleanup {
+    val mediaLibraryEnabled: Boolean get() = com.example.meowmba.BuildConfig.PHONE_MEDIA_LIBRARY_ENABLED
+    const val pickerGuidance = "Choose photos, videos or files in Files, or connect a folder. " +
+        "Import the items you want Meow to organize, then use Clean up library. Originals are unchanged."
 
     data class Item(
         val kind: String,
@@ -56,6 +59,7 @@ object PhoneCleanup {
     fun clearPending() = lastPlan.set(null)
 
     fun hasMediaPermission(context: Context): Boolean {
+        if (!mediaLibraryEnabled) return false
         val perms = mediaPermissions()
         return perms.any {
             ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
@@ -63,6 +67,7 @@ object PhoneCleanup {
     }
 
     fun mediaPermissions(): Array<String> = buildList {
+        if (!mediaLibraryEnabled) return@buildList
         add(android.Manifest.permission.READ_MEDIA_IMAGES)
         add(android.Manifest.permission.READ_MEDIA_VIDEO)
         add(android.Manifest.permission.READ_MEDIA_AUDIO)
@@ -77,7 +82,8 @@ object PhoneCleanup {
         val want = kind.lowercase()
         val mediaOk = hasMediaPermission(context)
         if (!mediaOk && want in setOf("all", "photos", "videos", "music", "documents", "files")) {
-            notes += "Need photo/file access to scan media. Allow it and ask again."
+            notes += if (mediaLibraryEnabled) "Need photo/file access to scan media. Allow it and ask again."
+                else pickerGuidance
         }
         if (mediaOk) {
             if (want in setOf("all", "photos")) items += scanImages(context)
@@ -100,7 +106,8 @@ object PhoneCleanup {
             return "Nothing obvious to clean in ${plan.kind}."
         }
         val head = if (plan.items.isEmpty()) {
-            "Looked through ${plan.kind}."
+            if (!mediaLibraryEnabled && plan.kind in setOf("photos", "videos", "music", "documents", "files"))
+                "Choose the files you want to review." else "Looked through ${plan.kind}."
         } else {
             "Found ${plan.items.size} thing${if (plan.items.size == 1) "" else "s"} " +
                 "(${DrawerCatalog.formatSize(plan.bytes)}) worth a look."

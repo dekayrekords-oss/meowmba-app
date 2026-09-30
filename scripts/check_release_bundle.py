@@ -63,6 +63,13 @@ def main():
     libraries = []
     with zipfile.ZipFile(args.bundle) as archive:
         names = archive.namelist()
+        # Android stores literal permission names in the protobuf manifest. This
+        # conservative guard also catches a transitive AAR reintroducing them.
+        manifest = archive.read("base/manifest/AndroidManifest.xml")
+        forbidden_media_permissions = ["android.permission." + permission for permission in (
+            "READ_MEDIA_IMAGES", "READ_MEDIA_VIDEO", "READ_MEDIA_AUDIO", "READ_MEDIA_VISUAL_USER_SELECTED")]
+        result["forbidden_media_permissions"] = [permission for permission in forbidden_media_permissions
+            if permission.encode() in manifest]
         required = {f"base/lib/arm64-v8a/{name}" for name in (
             "libsherpa-onnx-jni.so", "libonnxruntime.so", "libneedle_jni_bridge.so", "libsd_jni_bridge.so",
             "libmeow_cpu_features.so")}
@@ -101,6 +108,7 @@ def main():
         lib["passes_16kb_alignment"] for lib in libraries)
     print(json.dumps(result, indent=2))
     return 0 if (result["all_native_libraries_16kb_aligned"] and
+                 not result["forbidden_media_permissions"] and
                  not result["missing_image_jni_exports"] and
                  not result["missing_cpu_probe_jni_exports"] and
                  not result["missing_required_native_libraries"]) else 1

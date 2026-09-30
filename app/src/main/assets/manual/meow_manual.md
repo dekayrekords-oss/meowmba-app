@@ -47,6 +47,10 @@ When Meow detects a drive, the full avatar takes over the screen. When the drive
 
 In Flow, tap **Adjust → North Stars**, or tap the North Star line below the date. Add a long-term goal, why it matters, and the steps that make it possible. Meow connects relevant Flow items and recent context to your goals. A connection means "this may matter"; it is not proof that you accomplished something.
 
+## Location context
+
+Location-aware Flow reminders are optional. Meow explains how location is used before asking Android for access. Start with **Only while using the app** if that is what you prefer. To remember places while Meow is closed, choose **Open Android settings → Permissions → Location → Allow all the time**, then return to Meow. You can keep the narrower access or turn it off at any time. Location history stays in the phone's journal; selected cloud AI may receive relevant location context when answering your requests.
+
 ## Scan a QR code
 
 Say or type **"Scan a QR code"**. The rear camera opens visibly. Meow reports what the code contains, and never opens a decoded link on its own.
@@ -61,14 +65,22 @@ Tapping a message's action opens that conversation through the messaging app's o
 
 ## Privacy
 
-Meow's memory of your day and Flow's decisions stay on your phone. Cloud AI is optional and off until you turn it on. Meow never sends, buys or acts on your behalf without your yes.
+Meow's saved memories and Flow records are stored on your phone. When you choose a cloud AI, your requests and relevant context go to that provider. Speech, images and other tools can use their own selected providers. Connected SDKs may handle device identifiers, diagnostics and usage information. Check the privacy policy for details. Meow never sends a message, buys something or publishes a post on your behalf without your approval.
+
+## Projects and files
+
+Use **Projects** to keep a longer piece of work together, and **Memory** to find, correct or pin facts you want Meow to retain. **Development Studio** keeps a working session while you move between screens. The desk's computer opens your projects and Computer tools; connecting a computer or setting up the phone workspace is optional.
+
+Open **Files** to browse saved results. Tap **+ → Import photos or videos** to choose media through Android's picker, or **+ → Import files** for documents and other files. Only the files you choose are copied into Meow's library. **Connect phone folder** grants access to the folder you select for read-only browsing; import a file to organize its copy with AI.
+
+In the Google Play edition, **Choose phone files** uses these pickers instead of scanning your whole media library. **Clean up library** proposes duplicate, empty or large files for review. Nothing is selected automatically. Moving a library copy to Trash can be undone; permanent deletion requires confirmation. Originals on your phone are unchanged.
 
 ## Facebook posts
 
 Say “Make a Facebook post for my page about …”. Meow opens Facebook and asks
 which Page/profile to use from the destinations visible in its account switcher.
 Choose a destination, or use **More pages** to scroll its list. **Cancel** stops
-without posting. Facebook must be signed in and Meow Accessibility enabled.
+without posting. This assisted in-app Facebook workflow requires the private preview edition, a signed-in Facebook app and Meow Accessibility enabled. The Google Play edition does not include Accessibility control: create a draft with Meow, open Facebook, choose your destination and paste the draft yourself.
 
 Meow prepares the draft in Facebook. Review the account, audience and text before
 posting. Preparing a draft does not publish it. If Facebook does not expose the

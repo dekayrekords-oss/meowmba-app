@@ -281,9 +281,9 @@ class MainActivity : ComponentActivity() {
 
                 androidx.compose.runtime.LaunchedEffect(uiState.mediaPermissionRequested) {
                     if (uiState.mediaPermissionRequested) {
-                        mediaPermissionLauncher.launch(
-                            com.example.meowmba.core.cleanup.PhoneCleanup.mediaPermissions(),
-                        )
+                        val permissions = com.example.meowmba.core.cleanup.PhoneCleanup.mediaPermissions()
+                        if (permissions.isNotEmpty()) mediaPermissionLauncher.launch(permissions)
+                        else viewModel.onMediaPermissionResult(false)
                     }
                 }
 

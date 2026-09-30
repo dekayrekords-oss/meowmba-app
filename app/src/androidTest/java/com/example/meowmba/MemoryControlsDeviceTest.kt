@@ -1,25 +1,18 @@
 package com.example.meowmba
 
-import androidx.activity.ComponentActivity
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.junit4.createComposeRule
 import com.example.meowmba.core.database.MemoryEntity
 import com.example.meowmba.ui.companion.CompanionState
 import com.example.meowmba.ui.companion.MemoryScreen
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
-import org.robolectric.annotation.GraphicsMode
 
-@RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35], qualifiers = "w412dp-h915dp")
-@GraphicsMode(GraphicsMode.Mode.NATIVE)
-class MemoryControlsUiTest {
-    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+/** Real dialog/IME path: Robolectric's native-graphics idle loop stalls after this dialog opens. */
+class MemoryControlsDeviceTest {
+    @get:Rule val compose = createComposeRule()
     @Test fun correctionAndPinRequireTheVisibleUserChoice() {
         var corrected: Pair<Long, String>? = null
         var pinned: Pair<Long, Boolean>? = null

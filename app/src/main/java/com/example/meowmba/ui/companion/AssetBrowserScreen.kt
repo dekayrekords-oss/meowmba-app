@@ -67,6 +67,13 @@ fun AssetBrowserScreen(askAi: suspend (String) -> String, onProjects: () -> Unit
     val chosen = state.entries.filter { it.path in selected }
     val importFolder = if (path.isNotBlank()) path else when (category) { "Photos" -> "photos"; "Videos" -> "videos"; "Audio" -> "audio"; "Documents" -> "documents"; else -> "imports" }
     val importPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris -> if (uris.isNotEmpty()) vm.importFiles(uris, importFolder) }
+    val mediaPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(20)) { uris ->
+        if (uris.isNotEmpty()) {
+            vm.importFiles(uris, importFolder)
+            vm.setOrganizeScope(FilesOrganizeScope.LOCAL)
+        }
+    }
+    fun chooseMedia() = mediaPicker.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
     val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> uri?.let(vm::linkFolder) }
     val exportPicker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
         val item = exportItem; if (uri != null && item != null) vm.export(item, uri); exportItem = null
@@ -107,6 +114,7 @@ fun AssetBrowserScreen(askAi: suspend (String) -> String, onProjects: () -> Unit
                     IconButton(onClick = { addMenu = true }, enabled = !state.busy) { Icon(Icons.Default.Add, "Add files or folder") }
                     DropdownMenu(expanded = addMenu, onDismissRequest = { addMenu = false }) {
                         DropdownMenuItem(text = { Text("Import files") }, onClick = { addMenu = false; importPicker.launch(arrayOf("*/*")) })
+                        DropdownMenuItem(text = { Text("Import photos or videos") }, onClick = { addMenu = false; chooseMedia() })
                         DropdownMenuItem(text = { Text("New folder") }, onClick = { addMenu = false; edit = "folder"; editValue = "" })
                         DropdownMenuItem(text = { Text("Connect phone folder") }, onClick = { addMenu = false; folderPicker.launch(null) })
                         DropdownMenuItem(text = { Text("Refresh") }, onClick = { addMenu = false; vm.refresh() })
@@ -129,7 +137,7 @@ fun AssetBrowserScreen(askAi: suspend (String) -> String, onProjects: () -> Unit
                     selected = state.organizeScope == FilesOrganizeScope.PHONE,
                     onClick = { vm.setOrganizeScope(FilesOrganizeScope.PHONE) },
                     enabled = !state.busy,
-                    label = { Text("All files on phone") },
+                    label = { Text(if (com.example.meowmba.core.cleanup.PhoneCleanup.mediaLibraryEnabled) "All files on phone" else "Choose phone files") },
                     leadingIcon = if (state.organizeScope == FilesOrganizeScope.PHONE) {{ Icon(Icons.Default.PhoneAndroid, null, Modifier.size(18.dp)) }} else null,
                 )
             }
@@ -137,7 +145,9 @@ fun AssetBrowserScreen(askAi: suspend (String) -> String, onProjects: () -> Unit
                 if (state.organizeScope == FilesOrganizeScope.LOCAL)
                     "Clean up & AI organize apply to your Meow library (app-private)."
                 else
-                    "Clean up scans phone media via MediaStore. Connect folders for read-only browsing; import to organize with AI.",
+                    if (com.example.meowmba.core.cleanup.PhoneCleanup.mediaLibraryEnabled)
+                        "Clean up scans phone media via MediaStore. Connect folders for read-only browsing; import to organize with AI."
+                    else "Choose photos, videos or files, or connect a folder. Import copies to organize with AI; originals stay unchanged.",
                 Modifier.padding(horizontal = 16.dp),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -145,7 +155,11 @@ fun AssetBrowserScreen(askAi: suspend (String) -> String, onProjects: () -> Unit
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 AssistChip(onClick = { aiMode = false }, enabled = !state.busy && query.isNotBlank() && state.organizeScope == FilesOrganizeScope.LOCAL, label = { Text("AI search") }, leadingIcon = { Icon(Icons.Default.AutoAwesome, null, Modifier.size(18.dp)) })
                 AssistChip(onClick = { aiMode = true }, enabled = !state.busy && state.organizeScope == FilesOrganizeScope.LOCAL, label = { Text("AI organize") })
-                AssistChip(onClick = vm::cleanup, enabled = !state.busy, label = { Text(if (state.organizeScope == FilesOrganizeScope.LOCAL) "Clean up library" else "Clean up phone") }, leadingIcon = { Icon(Icons.Default.CleaningServices, null, Modifier.size(18.dp)) })
+                AssistChip(onClick = {
+                    if (state.organizeScope == FilesOrganizeScope.PHONE && !com.example.meowmba.core.cleanup.PhoneCleanup.mediaLibraryEnabled) chooseMedia()
+                    else vm.cleanup()
+                }, enabled = !state.busy, label = { Text(if (state.organizeScope == FilesOrganizeScope.LOCAL) "Clean up library"
+                    else if (com.example.meowmba.core.cleanup.PhoneCleanup.mediaLibraryEnabled) "Clean up phone" else "Choose photos or videos") }, leadingIcon = { Icon(Icons.Default.CleaningServices, null, Modifier.size(18.dp)) })
             }
             if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             state.message?.let { Text(it, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -177,7 +191,9 @@ fun AssetBrowserScreen(askAi: suspend (String) -> String, onProjects: () -> Unit
                             )
                             if (state.organizeScope == FilesOrganizeScope.PHONE) {
                                 Text(
-                                    "Browse connected folders or run Clean up phone for MediaStore suggestions.",
+                                    if (com.example.meowmba.core.cleanup.PhoneCleanup.mediaLibraryEnabled)
+                                        "Browse connected folders or run Clean up phone for MediaStore suggestions."
+                                    else "Browse a connected folder or choose files to import into your Meow library.",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )

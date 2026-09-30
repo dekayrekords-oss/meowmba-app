@@ -154,10 +154,18 @@ internal fun FlowHomeRoute(vm: CompanionViewModel, state: CompanionState, paused
         } else android.widget.Toast.makeText(context, "That Flow is no longer active. Nothing was changed.", android.widget.Toast.LENGTH_LONG).show()
         vm.consumeFlowCommentRequest(id)
     }
-    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+    var locationConsent by remember { mutableStateOf<String?>(null) }
+    val refreshAccess: () -> Unit = {
+        com.example.meowmba.core.context.live.ContextSensing.start(context)
         scope.launch { runCatching { vm.syncFlowAppData() }; flow.controller.schedule(immediate = true) }
     }
-    val requestPermission: (String) -> Unit = { p -> permission.launch(p) }
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { refreshAccess() }
+    val locationSettings = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { refreshAccess() }
+    val requestPermission: (String) -> Unit = { p ->
+        if (p == android.Manifest.permission.ACCESS_FINE_LOCATION || p == android.Manifest.permission.ACCESS_COARSE_LOCATION ||
+            p == android.Manifest.permission.ACCESS_BACKGROUND_LOCATION) locationConsent = p
+        else permission.launch(p)
+    }
     var ignoredCount by remember { mutableIntStateOf(0) }
     // The Settings sheet offers "Bring back" while anything is ignored; count when it opens.
     LaunchedEffect(adjust) { if (adjust) ignoredCount = runCatching { flow.ignoredCount() }.getOrDefault(0) }
@@ -197,6 +205,32 @@ internal fun FlowHomeRoute(vm: CompanionViewModel, state: CompanionState, paused
 
     val flowColors = FlowColors.from(FlowThemes.palette(settings.theme, snapshot.evening, settings.accent))
     val paper = flowColors.paper
+    locationConsent?.let { requested ->
+        val background = requested == android.Manifest.permission.ACCESS_BACKGROUND_LOCATION
+        AlertDialog(
+            onDismissRequest = { locationConsent = null },
+            modifier = Modifier.testTag("flow_location_disclosure"),
+            title = { Text(if (background) "Location while Meow is closed" else "Location for Flow") },
+            text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Meow Assistant uses location to remember places and provide location-aware Flow reminders. " +
+                    "If you choose Allow all the time, it collects location even when the app is closed or not in use.")
+                Text("Location history is saved on this phone. If you use cloud AI, relevant location context may be " +
+                    "included in requests to your selected provider. This is optional; you can skip it and revoke access in Android settings.")
+                if (background) Text("In Android settings, open Permissions → Location → Allow all the time, then return to Meow. " +
+                    "Keeping Only while using the app is also fine.")
+            } },
+            confirmButton = { TextButton(onClick = {
+                locationConsent = null
+                if (background) {
+                    // Android 11+ does not grant background location through RequestPermission.
+                    runCatching { locationSettings.launch(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        android.net.Uri.parse("package:${context.packageName}"))) }
+                        .onFailure { android.widget.Toast.makeText(context, "Open Android Settings → Apps → Meow → Permissions → Location.", android.widget.Toast.LENGTH_LONG).show() }
+                } else permission.launch(requested)
+            }) { Text(if (background) "Open Android settings" else "Continue") } },
+            dismissButton = { TextButton(onClick = { locationConsent = null }) { Text("Not now") } },
+        )
+    }
     // Six-app side dock, movable; drawn over the page.
     HomeDock(vm, DockStyle.flow(flowColors))
     if (adjust) ModalBottomSheet(onDismissRequest = { adjust = false }, dragHandle = null,

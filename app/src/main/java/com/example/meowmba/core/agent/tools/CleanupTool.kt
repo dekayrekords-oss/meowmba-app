@@ -18,11 +18,14 @@ class PhoneCleanupTool(
     private val currentApps: () -> List<DrawerApp>,
     private val saveFolders: (List<DrawerFolder>) -> Unit,
     private val requestMediaPermission: () -> Unit,
+    private val openFiles: () -> Unit = {},
 ) : Tool {
     override val definition = ToolDefinition(
         id = "phone.cleanup",
         displayName = "Clean up the phone",
-        description = "Scan or tidy photos, screenshots, videos, music, downloads, " +
+        description = (if (PhoneCleanup.mediaLibraryEnabled) "Scan or tidy photos, screenshots, videos, music, downloads, "
+            else "Open Files to choose photos, videos, music or documents for import and local-library cleanup. " +
+                "Does not scan or delete the phone's whole media library. Also organize or review ") +
             "unused apps, and messages. Args: kind = all|photos|videos|music|" +
             "documents|files|messages|apps, action = scan|organize|tidy. " +
             "Scanning opens all suggested files in a compatible file browser for review. " +
@@ -37,6 +40,10 @@ class PhoneCleanupTool(
     override suspend fun execute(args: Map<String, String>): ToolResult = withContext(Dispatchers.IO) {
         val kind = (args["kind"] ?: "all").lowercase()
         val action = (args["action"] ?: "scan").lowercase()
+        if (!PhoneCleanup.mediaLibraryEnabled && needsMedia(kind) && kind != "all") {
+            openFiles()
+            return@withContext ToolResult.Success("Opened Files. " + PhoneCleanup.pickerGuidance)
+        }
         when (action) {
             "organize" -> organize(kind)
             "tidy" -> tidy(kind)
@@ -45,7 +52,7 @@ class PhoneCleanupTool(
     }
 
     private fun scan(kind: String): ToolResult {
-        if (needsMedia(kind) && !PhoneCleanup.hasMediaPermission(context)) {
+        if (PhoneCleanup.mediaLibraryEnabled && needsMedia(kind) && !PhoneCleanup.hasMediaPermission(context)) {
             requestMediaPermission()
             return ToolResult.Failure(
                 "I need access to photos and files to clean those. Allow it, then ask again.",
@@ -84,7 +91,10 @@ class PhoneCleanupTool(
                 bits += "Say \"clean them\" to delete the junk with a confirm sheet."
             }
             "all" -> {
-                if (PhoneCleanup.hasMediaPermission(context)) {
+                if (!PhoneCleanup.mediaLibraryEnabled) {
+                    openFiles()
+                    bits += PhoneCleanup.pickerGuidance
+                } else if (PhoneCleanup.hasMediaPermission(context)) {
                     bits += PhoneCleanup.format(PhoneCleanup.scan(context, "all"))
                 } else {
                     requestMediaPermission()

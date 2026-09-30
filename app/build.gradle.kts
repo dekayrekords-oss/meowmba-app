@@ -93,8 +93,8 @@ android {
         // 85 > 84 so the affect/valence + pet wiring installs as a genuine
         // in-place upgrade, and so it is distinguishable on-device from 84 (which
         // has the drives but not the reply affect or the touch sense).
-        versionCode = 190
-        versionName = "1.5.24"
+        versionCode = 191
+        versionName = "1.5.25"
 
         buildConfigField("boolean", "HAS_MWDAT_SDK", hasMwdat.toString())
         manifestPlaceholders["mwdat_application_id"] = mwdatApplicationId
@@ -155,11 +155,13 @@ android {
     buildTypes {
         debug {
             buildConfigField("boolean", "PHONE_AUTOMATION_ENABLED", "true")
+            buildConfigField("boolean", "PHONE_MEDIA_LIBRARY_ENABLED", "true")
         }
         release {
             // Play excludes autonomous Accessibility-based phone control.
             // The release manifest removes the service as a second boundary.
             buildConfigField("boolean", "PHONE_AUTOMATION_ENABLED", "false")
+            buildConfigField("boolean", "PHONE_MEDIA_LIBRARY_ENABLED", "false")
             // Shrink + obfuscate for Play. JNI / Room / MediaPipe kept via
             // src/main/keepRules/rules.keep.
             isMinifyEnabled = true
@@ -185,6 +187,7 @@ android {
             signingConfig = signingConfigs.getByName("debug")
             matchingFallbacks += listOf("release")
             buildConfigField("boolean", "PHONE_AUTOMATION_ENABLED", "true")
+            buildConfigField("boolean", "PHONE_MEDIA_LIBRARY_ENABLED", "true")
         }
     }
     compileOptions {
@@ -213,7 +216,7 @@ android {
     testOptions.unitTests.isIncludeAndroidResources = true
 
     // MediaPipe / LiteRT AARs ship every ABI. We only ship arm64 (the Fold).
-    // Without this the Play APK is ~390 MB and over the 200 MB cap.
+    // This avoids packaging unused ABIs and reduces the Play download size.
     packaging {
         jniLibs {
             // Uncompressed + 16 KB zip-aligned — Play rejects 4 KB-only ELF
@@ -237,6 +240,10 @@ android {
 }
 
 androidComponents {
+    beforeVariants(selector().withBuildType("release")) { variant ->
+        // Exercise the actual Play feature boundaries, not only the debug defaults.
+        (variant as com.android.build.api.variant.HasUnitTestBuilder).enableUnitTest = true
+    }
     onVariants(selector().withBuildType("daily")) { variant ->
         variant.applicationId.set("com.example.meowmba")
     }
@@ -256,6 +263,12 @@ ksp {
 // IdleAnimationDirector would spin forever there, so keep it off for the
 // whole test task. IdleBehaviorTest re-enables it explicitly.
 tasks.withType<Test>().configureEach {
+    if (name == "testReleaseUnitTest") {
+        // Compose's test activity belongs to debugImplementation and must not
+        // ship in Play. Run the full UI/regression suite on debug and these
+        // permission-boundary tests against the actual release BuildConfig.
+        filter { includeTestsMatching("com.example.meowmba.PlayMediaAccessTest") }
+    }
     systemProperty("meowmba.idleAnimations", "false")
     if (providers.gradleProperty("testProgress").orNull == "true") testLogging.events("started", "failed", "skipped")
 

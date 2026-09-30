@@ -134,7 +134,9 @@ class AssetBrowserViewModel(application: Application) : AndroidViewModel(applica
                 phoneCleanupNotes = if (scope == FilesOrganizeScope.PHONE) it.phoneCleanupNotes else emptyList(),
                 message = when (scope) {
                     FilesOrganizeScope.LOCAL -> "Local library — app-private workspace only."
-                    FilesOrganizeScope.PHONE -> "Phone files — MediaStore + connected folders (read-only until imported)."
+                    FilesOrganizeScope.PHONE -> if (PhoneCleanup.mediaLibraryEnabled)
+                        "Phone files — MediaStore + connected folders (read-only until imported)."
+                        else "Choose phone files or connect a folder. Only imported copies can be organized with AI."
                 },
             )
         }
@@ -155,6 +157,12 @@ class AssetBrowserViewModel(application: Application) : AndroidViewModel(applica
                 }
             }
             FilesOrganizeScope.PHONE -> {
+                if (!PhoneCleanup.mediaLibraryEnabled) {
+                    _state.update { it.copy(cleanup = null, phoneCleanup = emptyList(),
+                        phoneCleanupNotes = listOf(PhoneCleanup.pickerGuidance), mediaPermissionNeeded = false,
+                        message = PhoneCleanup.pickerGuidance) }
+                    return@job
+                }
                 val mediaOk = PhoneCleanup.hasMediaPermission(context)
                 if (!mediaOk) {
                     _state.update {

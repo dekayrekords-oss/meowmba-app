@@ -2041,6 +2041,10 @@ class CompanionViewModel(
                     requestMediaPermission = {
                         _uiState.value = _uiState.value.copy(mediaPermissionRequested = true)
                     },
+                    openFiles = {
+                        _uiState.value = _uiState.value.withPanelsClosed().copy(showAssetBrowser = true,
+                            assetBrowserInitialPath = "")
+                    },
                 ),
             )
             // Phase F3: opt-in UI automation (off until enabled by the user).
