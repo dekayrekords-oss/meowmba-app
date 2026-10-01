@@ -1,0 +1,25 @@
+MEOW ASSISTANT — OCTOBER 3 UPLOAD PREPARATION
+
+Earliest requested upload time: October3,2026 after15:09UTC /08:09Arizona. This is key activation, not a promised public launch.
+
+Before upload (requires fresh explicit approval):
+- Verify Play now displays the replacement upload certificate SHA25601:B0:88:88:54:AA:D8:9E:C5:35:43:08:30:28:C5:FB:22:3F:F6:40:C3:33:CE:0D:BA:60:DC:96:B8:BC:FE:AE, and pending reset no longer blocks uploads.
+- Select the verified192 /1.5.26 bundle with corrected wording. Preserve signed191 archive; do not accidentally select unsigned/QA/debug copies.
+- Confirm package com.meow.meowmba, version192 above currentConsole152, checksum/signature, packaged permissions/runtimes and final device download size.
+- Approve replacing production152 draft and all affected active testing bundles; Console currently names152 as broad-media policy blocker. Check old internal2 too if Console flags it.
+- Complete truthful background-location evidence or explicitly decide on a separate foreground-only candidate. Current192 retains background permission; draft is not approval evidence.
+- Reconcile192 listing/screenshots/release notes, pending Data safety (13 actioned declarations currently, Data safety ready to send), privacy policy/reviewer access and172 countries.
+
+Before review submission (requires approval):
+- Inspect all automated checks after upload. Do not use Proceed anyway for known permission issues.
+- Confirm requested declarations and review-demo URL. Current Console's empty Need attention applies to already-uploaded bundles, not unseen192.
+- Confirm publication timing preference. Managed publishing currentlyOFF; submitted approved production rollout normally publishes automatically. If a manual launch hold is desired, verify eligibility and obtain approval before changing the setting.
+- Approve submission separately from file upload. Production access does not equal approval of192.
+
+After review:
+- Approval may take hours, several days, or longer. Do not promise public availability on October3.
+- Verify approved version and actual public availability/countries separately before launch ads say available now.
+
+Controls not changed by preparation: Play releases/declarations/listing/settings, signing credentials, account permissions, real phone app/data and source privacy. No upload, submission or publication is authorized yet.
+
+Sources: Google Play https://support.google.com/googleplay/android-developer/answer/9859654?hl=en and https://support.google.com/googleplay/android-developer/answer/9799150?hl=en; signed-inConsole inspectedOctober1.

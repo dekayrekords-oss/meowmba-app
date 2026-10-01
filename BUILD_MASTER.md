@@ -1,7 +1,9 @@
 # Meowmba shared build authority
 
-Updated 2026-09-30. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
+Updated 2026-10-01. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
 This supersedes historical build-location/version instructions in other documents.
+
+- October1 **192 /1.5.26 allocated for truthful Play location wording**, branch release/play-192-20261001, based on191/5c6bd7c. Optional context sensing and permissions unchanged; disclosure/setup/manual remove unsupported reminder/named-place claims and clarify local storage versus selected cloud-AI sharing. Isolated checkout; clean bundle build,3204debug cases,4release cases,lint and signing/package verification passed. No policy approval; location demo remains pending. Signed191 remains immutable. No upload, submission, phone installation or credential changes. **Next193.**
 
 - September30 **191 / 1.5.25 Play candidate validated by Codex** (branch `release/play-191-20260930`, based on installed190 / `608d15a`): Play media pickers/permission boundaries, accurate cleanup/manual and optional Flow location disclosure. 3,204 regression cases (0 failures,9 skips),4 release permission tests, native152-to191 migration/photo-import checks and1 native memory-dialog test passed; lint/native package checks passed. Candidate is UNSIGNED with the upload key, not uploaded to Play or installed on the Fold. Production remains blocked after Google rejected152 broad photo permissions; existing signing configuration is on unreachable Meow. Receipt: `docs/store/PLAY_RELEASE_191_PREPARATION.md`. **191 allocated; next192.**
 

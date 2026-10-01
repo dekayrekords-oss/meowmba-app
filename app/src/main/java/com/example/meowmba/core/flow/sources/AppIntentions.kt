@@ -87,7 +87,7 @@ object AppIntentions {
         if (!access.activity) add(setup(SETUP_ACTIVITY, "Let Meow know when you're driving or walking",
             "allow physical activity. Android tells Meow when you start driving, walking or stop, using almost no battery", now))
         if (!access.locationAlways) add(setup(SETUP_LOCATION, "Let Meow know where you are, even when it's closed",
-            "choose \"Allow all the time\" for location. Meow learns your places and remembers where you were. It stays on this phone", now))
+            "choose \"Allow all the time\" for location. Location samples are stored in this phone's context journal. Relevant location context may be sent to your selected cloud AI provider", now))
     }
 
     /** A message notification from a person becomes "Reply to <sender>" until the notification is cleared. */

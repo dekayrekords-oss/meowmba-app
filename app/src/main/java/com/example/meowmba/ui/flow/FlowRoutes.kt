@@ -212,7 +212,7 @@ internal fun FlowHomeRoute(vm: CompanionViewModel, state: CompanionState, paused
             modifier = Modifier.testTag("flow_location_disclosure"),
             title = { Text(if (background) "Location while Meow is closed" else "Location for Flow") },
             text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Meow Assistant uses location to remember places and provide location-aware Flow reminders. " +
+                Text("Meow Assistant uses location to add location context to its on-device journal and your conversations. " +
                     "If you choose Allow all the time, it collects location even when the app is closed or not in use.")
                 Text("Location history is saved on this phone. If you use cloud AI, relevant location context may be " +
                     "included in requests to your selected provider. This is optional; you can skip it and revoke access in Android settings.")

@@ -4,7 +4,7 @@ Status: prepared locally; no background-location declaration has been submitted.
 
 ## Feature and disclosure
 
-Optional location context supports Flow and the local context journal: remembering places, showing relevant context, and helping with place-aware reminders. It is not required to use chat, projects, files, or Development Studio. The implementation uses balanced-power fused location with batched PendingIntent updates. Background access lets that context update while Meow is closed. Android permissions remain the enforcement boundary.
+Optional location context supports Flow and the local context journal: recording location samples, stamping activity and conversation events with available location, and including relevant location context in conversations. It is not required to use chat, projects, files, or Development Studio. The implementation uses balanced-power fused location with batched PendingIntent updates. Background access lets that context update while Meow is closed. Android permissions remain the enforcement boundary.
 
 The release presents a prominent disclosure before the Flow location request. It says that location is collected while the app is closed if the user chooses Allow all the time, that history is kept on this phone, and that relevant context can be sent to a selected cloud AI provider. Not now declines. Foreground permission is requested first; background permission is a separate visit to Android settings. Returning refreshes the actual permission state.
 
@@ -32,7 +32,7 @@ This describes the implementation, not an approved justification. Google evaluat
 
 ## Review-video shot list
 
-Aim for about 30 seconds of readable Android footage. Use synthetic locations on an owned QA device, the exact release code and a reviewer-accessible video link. Retain the uncut capture separately; cuts must not imply an update that did not occur.
+Aim for about 30 seconds of readable Android footage. Use synthetic locations on an owned QA device, the exact release code and a reviewer-accessible video link. Do not claim named-place learning, geofence reminders, or background delivery until observed. Retain the uncut capture separately; cuts must not imply an update that did not occur.
 
 | Shot | What the reviewer should see |
 | --- | --- |
@@ -47,3 +47,5 @@ Suggested narration: “Flow can use location context when I enable it. Meow exp
 Record a separate decline/revoke check: **Not now** causes no permission request; keeping foreground-only access does not grant background access; revoking location prevents further updates. Confirm chat, files and projects remain usable. Do not present these unrecorded checks as passed.
 
 Guidance checked 30 September 2026: [Google Play background-location declaration and video requirements](https://support.google.com/googleplay/android-developer/answer/9799150?hl=en). Copy the draft into the actual form only after the uploaded bundle, observed feature and requested fields agree.
+
+October 1 correction: draft wording now reflects implemented journal/context behavior. Candidate192 removes unsupported reminder and learned-place claims from its disclosure, setup card and manual. Candidate191 remains immutable and still contains the older wording. No declaration has been submitted.

@@ -49,7 +49,7 @@ In Flow, tap **Adjust → North Stars**, or tap the North Star line below the da
 
 ## Location context
 
-Location-aware Flow reminders are optional. Meow explains how location is used before asking Android for access. Start with **Only while using the app** if that is what you prefer. To remember places while Meow is closed, choose **Open Android settings → Permissions → Location → Allow all the time**, then return to Meow. You can keep the narrower access or turn it off at any time. Location history stays in the phone's journal; selected cloud AI may receive relevant location context when answering your requests.
+Location context for the journal and conversations is optional. Meow explains how location is used before asking Android for access. Start with **Only while using the app** if that is what you prefer. To allow location context to update while Meow is closed, choose **Open Android settings → Permissions → Location → Allow all the time**, then return to Meow. You can keep the narrower access or turn it off at any time. Location history stays in the phone's journal; selected cloud AI may receive relevant location context when answering your requests.
 
 ## Scan a QR code
 
