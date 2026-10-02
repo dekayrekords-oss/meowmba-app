@@ -142,5 +142,5 @@ app window (including split-screen). Full lint/broad regression were not repeate
 195 installed in place over 194 on the connected Samsung Fold. The preview certificate
 matches, original first-install time is retained, MainActivity launch succeeds and the
 PID survives the startup check without a new process crash. Physical ring acceptance
-and Android Accessibility opt-in remain pending. Receipt and evidence are in the chat
+remains pending; Android settings now show Ring Controls enabled. Receipt and evidence are in the chat
 workspace `work/ring-195/`.
