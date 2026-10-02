@@ -8,8 +8,10 @@ This supersedes historical build-location/version instructions in other document
   under the crosshair, with a delayed touch fallback after removing the overlay.
   Local debug service diagnostics expose control state/input events, no screen text.
   Signed full-SDK debug build and 19 focused cases pass. Certificate and all 161
-  protected runtime entries match installed 198. Installation/physical ring
-  acceptance pending. **199 allocated; next 200.**
+  protected runtime entries match installed 198. Installed in place on the Fold;
+  original installation retained, launch/PID stable, no new process crash. Ring
+  reconnect/visible target and subsequent 30-second idle sleep observed in local
+  service diagnostics. Physical single-tap selection pending. **199 allocated; next 200.**
 
 - October 2 **198 / 1.5.32 allocated for ring controls sleep mode**,
   branch `codex/r08-ring`, based on installed 197. Enabled by default, 30-second idle

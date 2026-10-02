@@ -220,4 +220,8 @@ focused checks pass, including nested-control selection, label/parent handling, 
 actions, hidden/disabled/outside controls, overlay removal delay, cancellation and active-app
 changes. Signed full-SDK debug APK builds; all 161 protected runtime entries and certificate
 match the actual installed 198 APK. Full lint/broad regression were not repeated.
-Installation and physical single-tap acceptance pending. Evidence: chat `work/ring-199/`.
+Installed in place on the Fold, retaining the original first-install time and settings.
+Launch succeeds and PID remains stable with no new process crash. Local service diagnostics
+confirm BLE reconnection and a visible crosshair, followed by idle sleep 30 seconds after
+configuration. No physical ring tap arrived during the startup check; single-tap acceptance
+remains pending. Evidence: chat `work/ring-199/`.
