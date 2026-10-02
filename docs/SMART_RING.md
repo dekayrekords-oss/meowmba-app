@@ -139,4 +139,8 @@ and click-preset interaction on a native 320dp UI, plus previous sensor/protocol
 All 161 protected runtime entries match the APK pulled from the phone's installed 194.
 Clicks also check the app at the target point, and scrolling stays inside the focused
 app window (including split-screen). Full lint/broad regression were not repeated.
-Physical ring acceptance and installation pending.
+195 installed in place over 194 on the connected Samsung Fold. The preview certificate
+matches, original first-install time is retained, MainActivity launch succeeds and the
+PID survives the startup check without a new process crash. Physical ring acceptance
+and Android Accessibility opt-in remain pending. Receipt and evidence are in the chat
+workspace `work/ring-195/`.

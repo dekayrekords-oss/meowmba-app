@@ -7,7 +7,9 @@ This supersedes historical build-location/version instructions in other document
   branch `codex/r08-ring`, based on installed 194. Separate Allow all apps opt-in,
   movable visible crosshair and click action, scroll/click mapping preset. Signed full-SDK
   debug APK and 12 focused protocol/policy/overlay/native UI cases pass. All 161 protected
-  runtime entries match the phone's installed 194. Installation and physical test pending.
+  runtime entries match the phone's installed 194; signing certificate matches. Installed
+  in place over 194 on the Fold, first-install time retained, launch/PID stable with no
+  new app crash. Accessibility opt-in/physical acceptance pending. No source publication.
   **195 allocated; next 196.**
 
 - October 2 **194 / 1.5.28 allocated for interactive ring tester**, branch `codex/r08-ring`,
