@@ -66,3 +66,15 @@ installed 190 exactly. The changed manual matches the release-192 source. Two
 R8-generated ART profiles present in daily 190 are absent in the debug variant;
 this artifact is a signed **debug test APK**, not a validated shrunk daily or
 Play release. Source is committed locally; no installation or upload occurred.
+
+
+## Phone installation — October 2, 2026
+
+At the owner's request after connecting the Samsung, signed debug build 193 was
+installed with `adb install -r` over 190 on SM_F971U / R5GL75XFCXD. The installed
+certificate matches; protected runtimes were checked against the APK pulled
+from this phone. Android's original first-install time remains unchanged.
+Meowmba is the resumed activity, its process remains alive through a 20-second
+check, and no new app crash is recorded. Pairing, Accessibility opt-in and
+physical ring-gesture verification remain pending. Installation evidence and
+the updated receipt are in the chat workspace `work/ring-193/install-evidence`.

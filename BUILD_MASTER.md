@@ -10,7 +10,10 @@ This supersedes historical build-location/version instructions in other document
   Full suite: 3,208 cases, 1 avatar timing failure, 4 skips; that class passes in isolation.
   Full lint was stopped after a prolonged run. All 160 protected native/model/other runtime
   entries match installed 190; the manual matches release 192; debug omits generated ART profiles.
-  Hardware acceptance pending; no phone connected. No installation or Play upload. **Next 194.**
+  October 2: signed debug 193 installed in place over 190 on SM_F971U / R5GL75XFCXD.
+  Certificate and protected runtimes verified against the phone APK; original first-install
+  time retained. Foreground MainActivity and stable process confirmed, no new app crashes.
+  Ring pairing/gesture acceptance still pending. No Play upload. **193 consumed; next 194.**
 
 - October1 **192 /1.5.26 allocated for truthful Play location wording**, branch release/play-192-20261001, based on191/5c6bd7c. Optional context sensing and permissions unchanged; disclosure/setup/manual remove unsupported reminder/named-place claims and clarify local storage versus selected cloud-AI sharing. Isolated checkout; clean bundle build,3204debug cases,4release cases,lint and signing/package verification passed. No policy approval; location demo remains pending. Signed191 remains immutable. No upload, submission, phone installation or credential changes. **Next193.**
 
