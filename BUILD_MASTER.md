@@ -8,7 +8,7 @@ This supersedes historical build-location/version instructions in other document
   battery, steps, heart rate, oxygen, temperature, HRV and stress tests. Signed SDK debug build
   and 9 focused protocol/native UI checks pass. All 161 protected runtime entries match
   installed 193; certificate matches. Installed in place over 193 on the connected Fold;
-  original first-install time retained, MainActivity/PID stable, no new app crash.
+  original first-install time retained, MainActivity launches, PID stable, no new app crash.
   Accessibility opt-in and physical ring gestures/sensor acceptance remain pending.
   **194 allocated; next 195.**
 
