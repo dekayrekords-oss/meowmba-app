@@ -124,7 +124,9 @@ Next/Previous scroll, single tap clicks the visible crosshair, double tap goes
 Back and triple tap opens ring settings. One tap + Next/Previous moves the target
 right/left; two taps + Next/Previous moves it down/up. The target can also be dragged
 with a finger. Center click target resets its position. Gestures unavailable on this
-firmware cannot control the pointer; verification is still required.
+firmware cannot control the pointer. Cursor movement accepts either a verified combo
+or its individually verified tap/swipe inputs; clicks and other actions require
+their exact gesture to be verified.
 
 The target uses an Accessibility overlay, removed before injecting the tap or
 swipe so input reaches the foreground app. Global app scope is a separate saved
@@ -158,3 +160,20 @@ All 161 protected runtime entries and the signing certificate match installed 19
 196 installed in place on the Fold, with original first-install time retained,
 successful launch and stable PID/no new process crash. Physical ring acceptance
 remains pending. Receipt/evidence: chat workspace `work/ring-196/`.
+
+
+## Left movement verification fix — build 197
+
+Read-only inspection of the phone's ring preferences showed 1 tap + Next was verified,
+but 1 tap + Previous was not. Single tap and Previous were already verified, and
+left was correctly mapped to POINTER_LEFT. The exact-combo gate blocked that movement.
+
+Cursor movement now accepts individually verified component inputs as well as an exact
+verified combo. One-tap combinations need Single tap + direction; two-tap combinations
+also need Double tap. This does not mark unseen combinations verified. Click, Back and
+other actions retain their exact-gesture check; input-device binding, app scope, pause,
+lock-screen, testing and visible-target checks are unchanged. Blocked gesture logs now
+explain the missing verification or target option. Signed full-SDK debug build and nine
+focused cases pass, including the exact missing-left-combo state and unchanged click,
+pause, app-scope and target gates. All 161 protected runtime entries match the APK
+pulled from installed 196. Installation pending; physical acceptance awaits ring input.

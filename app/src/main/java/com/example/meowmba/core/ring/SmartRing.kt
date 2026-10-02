@@ -80,9 +80,10 @@ fun ringPacket(operation: Int): ByteArray = ByteArray(16).also {
 
 /** Rechecked at dispatch, including after a delayed tap sequence. */
 fun ringActionFor(state: RingState, gesture: String, packageName: String?): RingAction {
-    if (!state.connected || state.paused || state.testing || gesture !in state.verifiedGestures ||
+    if (!state.connected || state.paused || state.testing ||
         !ringAppAllowed(state, packageName)) return RingAction.NONE
     val action = state.mappings[gesture] ?: RingAction.NONE
+    if (!ringGestureReady(state, gesture, action)) return RingAction.NONE
     if (!state.showTarget && action in ringPointerActions) return RingAction.NONE
     return if (!state.reverse) action else when (action) {
         RingAction.SCROLL_DOWN -> RingAction.SCROLL_UP
@@ -111,8 +112,22 @@ data class RingPoint(val x: Float = .5f, val y: Float = .5f) {
     }
 }
 
-val ringPointerActions = setOf(RingAction.CLICK, RingAction.POINTER_UP, RingAction.POINTER_DOWN,
-    RingAction.POINTER_LEFT, RingAction.POINTER_RIGHT)
+val ringMovementActions = setOf(RingAction.POINTER_UP, RingAction.POINTER_DOWN, RingAction.POINTER_LEFT, RingAction.POINTER_RIGHT)
+val ringPointerActions = ringMovementActions + RingAction.CLICK
+
+/** Cursor movement can compose individually verified inputs; clicks still require the exact gesture. */
+fun ringGestureReady(state: RingState, gesture: String, action: RingAction): Boolean {
+    if (gesture in state.verifiedGestures) return true
+    if (action !in ringMovementActions) return false
+    val inputs = when (gesture) {
+        "1 tap + Next" -> setOf("Single tap", "Next")
+        "1 tap + Previous" -> setOf("Single tap", "Previous")
+        "2 taps + Next" -> setOf("Single tap", "Double tap", "Next")
+        "2 taps + Previous" -> setOf("Single tap", "Double tap", "Previous")
+        else -> return false
+    }
+    return state.verifiedGestures.containsAll(inputs)
+}
 
 /** Update the original complete cursor preset once; preserve manually customized combinations. */
 fun ringMigrateCursorAxes(mappings: Map<String, RingAction>): Map<String, RingAction> {

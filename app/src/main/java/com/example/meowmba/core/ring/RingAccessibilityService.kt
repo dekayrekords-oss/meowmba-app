@@ -162,7 +162,15 @@ class RingAccessibilityService : AccessibilityService() {
         if (!ringAppAllowed(state, target)) return
         val action = ringActionFor(state, gesture, target)
         when (action) {
-            RingAction.NONE -> ring.log("$gesture: no action")
+            RingAction.NONE -> {
+                val mapped = state.mappings[gesture] ?: RingAction.NONE
+                ring.log(when {
+                    mapped == RingAction.NONE -> "$gesture: no action mapped"
+                    !ringGestureReady(state, gesture, mapped) -> "$gesture: blocked; confirm this gesture in Gesture tester"
+                    mapped in ringPointerActions && !state.showTarget -> "$gesture: blocked; Show click target is off"
+                    else -> "$gesture: no action"
+                })
+            }
             RingAction.BACK -> ring.log(if (performGlobalAction(GLOBAL_ACTION_BACK)) "$gesture: Back" else "Back unavailable")
             RingAction.CONTROLS -> {
                 startActivity(Intent(this, SmartRingActivity::class.java).putExtra("open_smart_ring", true)

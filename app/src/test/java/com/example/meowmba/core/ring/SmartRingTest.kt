@@ -59,4 +59,23 @@ class SmartRingTest {
         assertEquals(.97f, edge.x, .0001f); assertEquals(.97f, edge.y, .0001f)
     }
 
+    @Test fun leftCursorMovementComposesVerifiedTapAndPreviousWithoutWeakeningClickGates() {
+        // Reproduce the phone: right combo verified, left combo missing, all its inputs verified.
+        val ready = RingState(connected = true, paused = false, allApps = true,
+            mappings = ringScrollClickMappings(),
+            verifiedGestures = setOf("Single tap", "Double tap", "Next", "Previous", "1 tap + Next"))
+        assertEquals(RingAction.POINTER_RIGHT, ringActionFor(ready, "1 tap + Next", "org.mozilla.firefox"))
+        assertEquals(RingAction.POINTER_LEFT, ringActionFor(ready, "1 tap + Previous", "org.mozilla.firefox"))
+        assertEquals(RingAction.POINTER_UP, ringActionFor(ready, "2 taps + Previous", "org.mozilla.firefox"))
+        assertEquals(RingAction.NONE, ringActionFor(ready.copy(verifiedGestures = ready.verifiedGestures - "Previous"), "1 tap + Previous", "org.mozilla.firefox"))
+        assertEquals(RingAction.NONE, ringActionFor(ready.copy(verifiedGestures = ready.verifiedGestures - "Single tap"), "1 tap + Previous", "org.mozilla.firefox"))
+        assertEquals(RingAction.NONE, ringActionFor(ready.copy(verifiedGestures = ready.verifiedGestures - "Double tap"), "2 taps + Previous", "org.mozilla.firefox"))
+        assertEquals(RingAction.NONE, ringActionFor(ready.copy(mappings = ready.mappings + ("1 tap + Previous" to RingAction.CLICK)), "1 tap + Previous", "org.mozilla.firefox"))
+        assertEquals(RingAction.NONE, ringActionFor(ready.copy(paused = true), "1 tap + Previous", "org.mozilla.firefox"))
+        assertEquals(RingAction.NONE, ringActionFor(ready.copy(testing = true), "1 tap + Previous", "org.mozilla.firefox"))
+        assertEquals(RingAction.NONE, ringActionFor(ready.copy(connected = false), "1 tap + Previous", "org.mozilla.firefox"))
+        assertEquals(RingAction.NONE, ringActionFor(ready.copy(allApps = false), "1 tap + Previous", "org.mozilla.firefox"))
+        assertEquals(RingAction.NONE, ringActionFor(ready.copy(showTarget = false), "1 tap + Previous", "org.mozilla.firefox"))
+    }
+
 }

@@ -44,7 +44,7 @@ internal fun SmartRingScene(onBack: () -> Unit) {
         Text("Use the tester to confirm Next, Previous and tap events before unpausing. Media keys from devices named R08 are recognized. Other keyboards and headphones are ignored.", style = MaterialTheme.typography.bodySmall)
         if (state.inputDevice.isNotEmpty()) Text("Verified input device: ${state.inputDevice}")
         Text("Verified gestures: ${state.verifiedGestures.joinToString().ifEmpty { "none yet" }}", style = MaterialTheme.typography.bodySmall)
-        Text("Only gestures confirmed in the tester can run actions.", style = MaterialTheme.typography.bodySmall)
+        Text("Clicks and other actions require their gesture to be confirmed. Cursor movement can also combine verified taps and swipes.", style = MaterialTheme.typography.bodySmall)
         OutlinedButton(onClick = driver::resetVerification) { Text("Reset gesture verification") }
         HorizontalDivider(Modifier.padding(vertical = 12.dp))
         Text("Scroll and click in other apps", style = MaterialTheme.typography.titleMedium)
@@ -54,7 +54,7 @@ internal fun SmartRingScene(onBack: () -> Unit) {
         OutlinedButton(onClick = { ringScrollClickMappings().forEach(driver::setMapping) }) { Text("Use scroll & click controls") }
         RingToggle("Show click target", state.showTarget, driver::setShowTarget)
         OutlinedButton(onClick = driver::centerTarget) { Text("Center click target") }
-        Text("Swipes scroll. Single tap clicks the crosshair. One tap + swipe moves it left/right; two taps + swipe moves it up/down. You can also drag the crosshair with your finger. Confirm these gestures in the tester, turn the tester off, then turn Pause ring controls off.", style = MaterialTheme.typography.bodySmall)
+        Text("Swipes scroll. Single tap clicks the crosshair. One tap + swipe moves it left/right; two taps + swipe moves it up/down. You can also drag the crosshair with your finger. Confirm taps and both swipe directions in the tester, turn the tester off, then turn Pause ring controls off.", style = MaterialTheme.typography.bodySmall)
         Text("Keep Show click target on to enable clicks and target movement. Android or an app may restrict injected touch gestures.", style = MaterialTheme.typography.bodySmall)
         RingToggle("Reverse scroll direction", state.reverse, driver::setReverse)
         Text("Scroll distance: ${(state.distance * 100).toInt()}% of the screen")

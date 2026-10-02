@@ -3,6 +3,15 @@
 Updated 2026-10-02. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
 This supersedes historical build-location/version instructions in other documents.
 
+- October 2 **197 / 1.5.31 allocated for blocked left cursor movement**,
+  branch `codex/r08-ring`, based on installed 196. Phone's left combo was unverified,
+  though Single tap and Previous were verified. Cursor movement now composes verified
+  component inputs; clicks/Back retain exact-gesture verification. Signed full-SDK debug
+  build and 9 focused regression/policy/overlay/native UI cases pass, including the
+  phone's verified-input state. All 161 protected runtime entries match installed 196.
+  Installation pending.
+  **197 allocated; next 198.**
+
 - October 2 **196 / 1.5.30 allocated for ring cursor axes correction**,
   branch `codex/r08-ring`, based on installed 195. One tap + swipe moves left/right;
   two taps + swipe moves up/down. Original preset migrates once; custom mappings retained.
