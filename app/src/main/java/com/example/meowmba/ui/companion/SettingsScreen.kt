@@ -1834,7 +1834,7 @@ private val SETTINGS_CATEGORIES = listOf(
     SettingsCategory("AI & models", "LLM settings, agent routing and downloads", Icons.Default.Psychology),
     SettingsCategory("Images", "AI Horde, Cloudflare and on-phone images", Icons.Default.Image),
     SettingsCategory("Music & video", "Media-generation services", Icons.Default.Movie),
-    SettingsCategory("Smart Ring", "R08 pairing, gesture testing and scrolling", Icons.Default.Link),
+    SettingsCategory("Smart Ring", "R08 gestures, live sensor tests and scrolling", Icons.Default.Link),
     SettingsCategory("Phone & device", "App control, access and device behavior", Icons.Default.PhoneAndroid),
     SettingsCategory("Appearance", "Dark/light mode, themes and avatars", Icons.Default.Palette),
     SettingsCategory("Neural / Lumen", "Avatar reactions, neural brain and sensitivity", Icons.Default.Bolt),

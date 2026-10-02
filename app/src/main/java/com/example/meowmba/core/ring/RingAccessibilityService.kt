@@ -27,7 +27,7 @@ class RingAccessibilityService : AccessibilityService() {
     private val finishTap = Runnable {
         val count = tapCount; val target = tapPackage
         tapCount = 0; tapPackage = null; tapDevice = -1
-        val gesture = when (count) { 1 -> "Single tap"; 2 -> "Double tap"; else -> "Triple tap" }
+        val gesture = when (count) { 1 -> "Single tap"; 2 -> "Double tap"; 3 -> "Triple tap"; else -> "Quadruple tap" }
         if (target == foregroundPackage()) perform(gesture)
         else ring.log("Ignored tap: active app changed")
     }
@@ -53,7 +53,11 @@ class RingAccessibilityService : AccessibilityService() {
     private fun unlocked() = getSystemService(PowerManager::class.java).isInteractive && !getSystemService(KeyguardManager::class.java).isKeyguardLocked
     override fun onKeyEvent(event: KeyEvent): Boolean {
         val identity = event.deviceId to event.keyCode
-        if (event.action == KeyEvent.ACTION_UP) return consumed.remove(identity)
+        if (event.action == KeyEvent.ACTION_UP) {
+            val handled = consumed.remove(identity)
+            if (handled) ring.recordPress(event.keyCode, false, KeyEvent.keyCodeToString(event.keyCode))
+            return handled
+        }
         val device = event.device ?: return false
         if (!device.name.contains("R08", ignoreCase = true)) return false
         val gesture = when (event.keyCode) {
@@ -78,6 +82,7 @@ class RingAccessibilityService : AccessibilityService() {
         val down = Triple(event.deviceId, event.keyCode, event.downTime)
         if (lastKeyDown == down) return true
         lastKeyDown = down
+        ring.recordPress(event.keyCode, true, KeyEvent.keyCodeToString(event.keyCode))
         if (gesture == null) {
             ring.log("Unmapped input · ${KeyEvent.keyCodeToString(event.keyCode)} · ${device.name}")
             return true
@@ -91,11 +96,16 @@ class RingAccessibilityService : AccessibilityService() {
             if (tapPackage != target || tapDevice != event.deviceId) cancelPending()
             tapPackage = target; tapDevice = event.deviceId; tapCount++
             main.removeCallbacks(finishTap)
-            if (tapCount >= 3) finishTap.run() else main.postDelayed(finishTap, 400)
-        } else { cancelPending(); perform(gesture) }
+            if (tapCount >= 4) finishTap.run() else main.postDelayed(finishTap, 450)
+        } else {
+            val combo = if (gesture in listOf("Next", "Previous") && tapCount in 1..2 && tapPackage == target && tapDevice == event.deviceId)
+                "$tapCount ${if (tapCount == 1) "tap" else "taps"} + $gesture" else gesture
+            cancelPending(); perform(combo)
+        }
         return true
     }
     private fun perform(gesture: String) {
+        ring.recordGesture(gesture)
         val state = ring.state.value
         if (state.testing) { ring.verifyGesture(gesture); return }
         if (state.paused || !state.connected || !unlocked()) return

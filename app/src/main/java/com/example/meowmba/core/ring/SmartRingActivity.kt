@@ -23,7 +23,7 @@ class SmartRingActivity : ComponentActivity() {
         ring.permissionRequest = { permission.launch(ring.permissions()) }
     }
     override fun onPause() {
-        ring.setTesting(false)
+        ring.setTesting(false); ring.stopSensorTest()
         ring.permissionRequest = null
         super.onPause()
     }

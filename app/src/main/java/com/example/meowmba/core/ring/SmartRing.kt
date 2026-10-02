@@ -28,11 +28,19 @@ data class RingState(
     val allowlist: String = "com.example.meowmba",
     val mappings: Map<String, RingAction> = defaultRingMappings(),
     val events: List<String> = emptyList(),
+    val pressedKeys: Set<Int> = emptySet(),
+    val lastInput: String = "Waiting for ring input",
+    val inputSequence: Long = 0,
+    val gestureCounts: Map<String, Int> = emptyMap(),
+    val sensors: Map<RingSensor, RingReading> = RingSensor.entries.associateWith { RingReading() },
+    val activeSensor: RingSensor? = null,
 )
 fun defaultRingMappings() = mapOf(
     "Next" to RingAction.SCROLL_DOWN, "Previous" to RingAction.SCROLL_UP,
     "Single tap" to RingAction.NONE, "Double tap" to RingAction.BACK,
-    "Triple tap" to RingAction.CONTROLS,
+    "Triple tap" to RingAction.CONTROLS, "Quadruple tap" to RingAction.NONE,
+    "1 tap + Next" to RingAction.NONE, "1 tap + Previous" to RingAction.NONE,
+    "2 taps + Next" to RingAction.NONE, "2 taps + Previous" to RingAction.NONE,
 )
 interface SmartRingDriver {
     val state: StateFlow<RingState>
@@ -48,6 +56,9 @@ interface SmartRingDriver {
     fun setDistance(value: Float)
     fun setAllowlist(value: String)
     fun setMapping(gesture: String, action: RingAction)
+    fun testSensor(sensor: RingSensor)
+    fun stopSensorTest()
+    fun clearTestResults()
     fun exportDiagnostics()
 }
 /** Only explicit package IDs are accepted; an empty list enables no apps. */

@@ -17,7 +17,7 @@ internal fun SmartRingScene(onBack: () -> Unit) {
     val driver = remember(context) { AndroidSmartRing.get(context) }
     RingSettingsPage("Smart Ring", onBack) {
         val state by driver.state.collectAsState()
-        DisposableEffect(driver) { onDispose { driver.setTesting(false) } }
+        DisposableEffect(driver) { onDispose { driver.setTesting(false); driver.stopSensorTest() } }
         Text("R08 / QRing", style = MaterialTheme.typography.titleMedium)
         Text(state.status)
         if (state.selectedName.isNotEmpty()) Text("Selected: ${state.selectedName}")
@@ -38,6 +38,7 @@ internal fun SmartRingScene(onBack: () -> Unit) {
         OutlinedButton(onClick = driver::openAccessibility) { Text("Open Accessibility settings") }
         RingToggle("Pause ring controls", state.paused, driver::setPaused)
         RingToggle("Gesture tester (consume inputs without actions)", state.testing, driver::setTesting)
+        RingTestPanel(state, driver::testSensor, driver::stopSensorTest, driver::clearTestResults)
         Text("Use the tester to confirm Next, Previous and tap events before unpausing. Media keys from devices named R08 are recognized. Other keyboards and headphones are ignored.", style = MaterialTheme.typography.bodySmall)
         if (state.inputDevice.isNotEmpty()) Text("Verified input device: ${state.inputDevice}")
         Text("Verified gestures: ${state.verifiedGestures.joinToString().ifEmpty { "none yet" }}", style = MaterialTheme.typography.bodySmall)

@@ -78,3 +78,32 @@ Meowmba is the resumed activity, its process remains alive through a 20-second
 check, and no new app crash is recorded. Pairing, Accessibility opt-in and
 physical ring-gesture verification remain pending. Installation evidence and
 the updated receipt are in the chat workspace `work/ring-193/install-evidence`.
+
+
+## Interactive tester — build 194
+
+Settings → Smart Ring → Gesture tester shows a pulsing ring, physical key press/release,
+last recognized gesture and per-session counts. Tiles preview the indicator without sending
+commands or granting gesture verification. The recognizer includes up to four taps and
+one/two taps followed by Next/Previous; each needs physical verification on this firmware.
+
+Sensor tests query battery and today's ring-reported steps, plus on-demand heart rate,
+oxygen saturation, temperature, HRV and stress estimates. Wear the ring and keep still;
+HRV allows 80 seconds. One test runs at a time. The GATT owner serializes start/stop writes,
+checks 16-byte packet checksums/types and errors, requests the final stop reading when a
+measurement expires, and cancels on leaving the screen. Missing replies remain unverified.
+Firmware support is confirmed only by actual replies; no simulated reading is displayed.
+
+Sensor readings are session-only, remain local and are excluded from diagnostic sharing.
+Disconnect marks old values as from the previous connection. Sleep/health history, continuous
+sampling and raw optical/accelerometer streams are not implemented in this tester. The wire
+format is independently implemented from documented R08 protocol fields:
+https://github.com/Anezium/R08-Access-Bridge/tree/main/ring-health
+
+194 validation: signed full-SDK debug APK (1.5.28/code 194) builds. Nine focused
+checks pass: three existing action/protocol gates, four sensor decoder/session cases,
+and two native 320dp UI tests (preview, real-reading state, disconnected controls, setup
+and allowlist). Synthetic UI readings are test fixtures, not hardware evidence.
+All 161 protected lib/assets entries match the actual installed 193 APK, and the
+preview signing certificate matches. This is a debug test build; full lint/broad
+suite were not repeated. Physical ring acceptance and installation pending.

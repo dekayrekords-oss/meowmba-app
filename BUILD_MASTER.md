@@ -3,6 +3,13 @@
 Updated 2026-10-02. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
 This supersedes historical build-location/version instructions in other documents.
 
+- October 2 **194 / 1.5.28 allocated for interactive ring tester**, branch `codex/r08-ring`,
+  based on installed 193. Live press/release visualization, gesture counts and local on-demand
+  battery, steps, heart rate, oxygen, temperature, HRV and stress tests. Signed SDK debug build
+  and 9 focused protocol/native UI checks pass. All 161 protected runtime entries match
+  installed 193; certificate matches. Physical ring tests and installation pending.
+  **194 allocated; next 195.**
+
 - October 2 **193 / 1.5.27 allocated for R08 ring integration**, branch `codex/r08-ring`,
   based on 192 / `4f579ba`. Settings → Smart Ring, bonded BLE media-key configuration,
   gesture tester, local accessibility scrolling, mappings, pause and explicit app allowlist.

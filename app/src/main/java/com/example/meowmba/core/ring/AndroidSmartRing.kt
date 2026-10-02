@@ -40,6 +40,26 @@ class AndroidSmartRing private constructor(private val context: Context) : Smart
     private var gatt: BluetoothGatt? = null
     private var write: BluetoothGattCharacteristic? = null
     private var commandIndex = 0
+    private val sensorWriteTimeout = Runnable { fail("Sensor Bluetooth write timed out. Reconnect the ring.") }
+    private val sensorSession = RingSensorSession(
+        send = { bytes ->
+            val client = gatt
+            val characteristic = write
+            val accepted = client != null && characteristic != null && hasPermissions() && runCatching {
+                val type = if (characteristic.properties and BluetoothGattCharacteristic.PROPERTY_WRITE != 0)
+                    BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT else BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
+                if (Build.VERSION.SDK_INT >= 33) client.writeCharacteristic(characteristic, bytes, type) == BluetoothStatusCodes.SUCCESS
+                else { characteristic.value = bytes; characteristic.writeType = type; client.writeCharacteristic(characteristic) }
+            }.getOrDefault(false)
+            if (accepted) main.postDelayed(sensorWriteTimeout, 8_000)
+            accepted
+        },
+        schedule = { delay, action ->
+            val task = Runnable { action() }; main.postDelayed(task, delay)
+            val cancel: () -> Unit = { main.removeCallbacks(task) }; cancel
+        },
+        publish = { active, readings -> state.value = state.value.copy(activeSensor = active, sensors = readings) },
+    )
     private var selected: BluetoothDevice? = null
     private var bondReceiver: BroadcastReceiver? = null
     private var pendingScan = false
@@ -60,6 +80,17 @@ class AndroidSmartRing private constructor(private val context: Context) : Smart
         prefs.edit().putString("input_descriptor", descriptor).putString("input_name", name).apply()
         state.value = state.value.copy(inputDevice = name)
         return true
+    }
+    fun recordPress(key: Int, down: Boolean, label: String) {
+        val current = state.value
+        state.value = current.copy(pressedKeys = if (down) current.pressedKeys + key else current.pressedKeys - key,
+            lastInput = "${if (down) "Pressed" else "Released"}: $label", inputSequence = current.inputSequence + 1)
+        log("${if (down) "Press" else "Release"}: $label")
+    }
+    fun recordGesture(gesture: String) {
+        val current = state.value
+        state.value = current.copy(lastInput = gesture, inputSequence = current.inputSequence + 1,
+            gestureCounts = current.gestureCounts + (gesture to ((current.gestureCounts[gesture] ?: 0) + 1)))
     }
     fun verifyGesture(gesture: String) {
         val verified = state.value.verifiedGestures + gesture
@@ -157,7 +188,8 @@ class AndroidSmartRing private constructor(private val context: Context) : Smart
                 if (!client.discoverServices()) fail("Service discovery could not start")
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED || status != BluetoothGatt.GATT_SUCCESS) {
                 main.removeCallbacks(timeout); client.close(); gatt = null; write = null
-                state.value = state.value.copy(connected = false)
+                main.removeCallbacks(sensorWriteTimeout); sensorSession.disconnected()
+                state.value = state.value.copy(connected = false, pressedKeys = emptySet())
                 if (wantedConnection && hasPermissions() && retries++ < 3) {
                     message("Ring disconnected ($status); reconnecting"); main.postDelayed(retry, 3000)
                 } else { wantedConnection = false; message("Disconnected ($status). Wake the ring and reconnect.") }
@@ -185,14 +217,25 @@ class AndroidSmartRing private constructor(private val context: Context) : Smart
         } }
         override fun onCharacteristicWrite(client: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) { main.post {
             if (client !== gatt || characteristic.uuid != WRITE) return@post
+            if (state.value.connected) {
+                main.removeCallbacks(sensorWriteTimeout)
+                sensorSession.onWrite(status == BluetoothGatt.GATT_SUCCESS)
+                if (status != BluetoothGatt.GATT_SUCCESS) fail("Sensor Bluetooth write failed ($status). Reconnect the ring.")
+                return@post
+            }
             if (status != BluetoothGatt.GATT_SUCCESS) { fail("Ring configuration failed ($status)"); return@post }
             commandIndex++
             // Small gap prevents overwhelming older R08 firmware; only one GATT write is outstanding.
             main.postDelayed({ if (client === gatt) sendCommand() }, 180)
         } }
         override fun onCharacteristicChanged(client: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray) {
-            if (value.firstOrNull() != 0x3b.toByte()) return
-            val bytes = value.copyOf(); main.post { if (client === gatt) log("BLE ${characteristic.uuid}: ${bytes.take(16).joinToString(" ") { "%02x".format(it) }}") }
+            if (characteristic.uuid != NOTIFY) return
+            val bytes = value.copyOf()
+            main.post {
+                if (client !== gatt) return@post
+                if (bytes.firstOrNull() == 0x3b.toByte()) log("Ring control acknowledgement")
+                else sensorSession.receive(bytes)
+            }
         }
         @Deprecated("Legacy callback")
         override fun onCharacteristicChanged(client: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
@@ -218,12 +261,22 @@ class AndroidSmartRing private constructor(private val context: Context) : Smart
         else log("Configure media-key mode: step ${commandIndex + 1}/3")
     }
     private fun fail(reason: String) { disconnect(); message(reason) }
+    override fun testSensor(sensor: RingSensor) {
+        if (state.value.connected && hasPermissions()) sensorSession.start(sensor)
+        else message("Connect the ring before testing sensors")
+    }
+    override fun stopSensorTest() = sensorSession.stop()
+    override fun clearTestResults() {
+        sensorSession.clear()
+        state.value = state.value.copy(gestureCounts = emptyMap(), lastInput = "Waiting for ring input", events = emptyList())
+    }
     override fun disconnect() {
+        main.removeCallbacks(sensorWriteTimeout); sensorSession.disconnected()
         wantedConnection = false; main.removeCallbacks(retry); main.removeCallbacks(timeout); main.removeCallbacks(stopScan)
         scanner?.let { runCatching { it.stopScan(scanCallback) } }; scanner = null
         clearBondReceiver(); val old = gatt; gatt = null; write = null
         old?.let { runCatching { it.disconnect(); it.close() } }
-        state.value = state.value.copy(scanning = false, connected = false, testing = false, status = "Disconnected")
+        state.value = state.value.copy(scanning = false, connected = false, testing = false, pressedKeys = emptySet(), status = "Disconnected")
         RingAccessibilityService.instance?.cancelPending()
     }
     fun restoreConnection() {
@@ -246,7 +299,7 @@ class AndroidSmartRing private constructor(private val context: Context) : Smart
         RingAccessibilityService.instance?.cancelPending()
     }
     override fun setPaused(value: Boolean) { prefs.edit().putBoolean("paused", value).apply(); state.value = state.value.copy(paused = value); RingAccessibilityService.instance?.cancelPending() }
-    override fun setTesting(value: Boolean) { state.value = state.value.copy(testing = value); RingAccessibilityService.instance?.cancelPending() }
+    override fun setTesting(value: Boolean) { state.value = state.value.copy(testing = value, pressedKeys = emptySet()); RingAccessibilityService.instance?.cancelPending() }
     override fun setReverse(value: Boolean) { prefs.edit().putBoolean("reverse", value).apply(); state.value = state.value.copy(reverse = value) }
     override fun setDistance(value: Float) { val distance = value.coerceIn(.15f, .65f); prefs.edit().putFloat("distance", distance).apply(); state.value = state.value.copy(distance = distance) }
     override fun setAllowlist(value: String) { prefs.edit().putString("allowlist", value).apply(); state.value = state.value.copy(allowlist = value); RingAccessibilityService.instance?.cancelPending() }
