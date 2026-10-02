@@ -3,13 +3,21 @@ package com.example.meowmba.core.ring
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.content.Intent
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.IntentFilter
+import android.os.Build
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.collect
 import android.graphics.Path
+import android.graphics.Rect
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.app.KeyguardManager
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityWindowInfo
 import com.example.meowmba.core.ring.SmartRingActivity
 
 /** Filters R08 input only. No screen text is collected or transmitted. */
@@ -17,6 +25,15 @@ class RingAccessibilityService : AccessibilityService() {
     companion object { var instance: RingAccessibilityService? = null; private set }
     private lateinit var ring: AndroidSmartRing
     private val main = Handler(Looper.getMainLooper())
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private lateinit var clickTarget: RingClickTarget
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == Intent.ACTION_SCREEN_OFF) { cancelPending(); clickTarget.hide() }
+            else refreshTarget()
+        }
+    }
+    private var screenReceiverRegistered = false
     private var tapCount = 0
     private var tapPackage: String? = null
     private var tapDevice = -1
@@ -33,18 +50,50 @@ class RingAccessibilityService : AccessibilityService() {
     }
     override fun onServiceConnected() {
         instance = this; ring = AndroidSmartRing.get(this)
+        clickTarget = RingClickTarget(this)
+        if (Build.VERSION.SDK_INT >= 33) registerReceiver(screenReceiver,
+            IntentFilter().apply { addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_USER_PRESENT) }, Context.RECEIVER_NOT_EXPORTED)
+        else { @Suppress("DEPRECATION") registerReceiver(screenReceiver,
+            IntentFilter().apply { addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_USER_PRESENT) }) }
+        screenReceiverRegistered = true
+        scope.launch { ring.state.collect { refreshTarget() } }
         SmartRing.driver = ring; ring.accessibilityConnected(true); ring.restoreConnection()
     }
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) { }
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) { refreshTarget() }
+    private fun refreshTarget() {
+        if (!::ring.isInitialized || !::clickTarget.isInitialized) return
+        val state = ring.state.value
+        if (state.connected && !state.paused && !state.testing && !gestureBusy && state.showTarget &&
+            state.mappings.values.any { it in ringPointerActions } && unlocked() && ringAppAllowed(state, foregroundPackage())) clickTarget.show()
+        else clickTarget.hide()
+    }
+    fun centerTarget() { if (::clickTarget.isInitialized) { clickTarget.center(); refreshTarget() } }
     override fun onInterrupt() = cancelPending()
     override fun onDestroy() {
         cancelPending(); consumed.clear(); instance = null
+        scope.cancel()
+        if (::clickTarget.isInitialized) clickTarget.hide()
+        if (screenReceiverRegistered) unregisterReceiver(screenReceiver)
         if (::ring.isInitialized) { ring.accessibilityConnected(false); ring.disconnect() }
         super.onDestroy()
     }
     fun cancelPending() { main.removeCallbacks(finishTap); tapCount = 0; tapPackage = null; tapDevice = -1 }
+    private fun foregroundBounds(): Rect? {
+        val appWindow = windows.firstOrNull { it.type == AccessibilityWindowInfo.TYPE_APPLICATION && it.isFocused } ?: return null
+        return Rect().also { appWindow.getBoundsInScreen(it) }.takeUnless { it.isEmpty }
+    }
+    private fun packageAt(x: Float, y: Float): String? {
+        val appWindow = windows.firstOrNull {
+            it.type == AccessibilityWindowInfo.TYPE_APPLICATION && Rect().also(it::getBoundsInScreen).contains(x.toInt(), y.toInt())
+        } ?: return null
+        val root = appWindow.root ?: return null
+        return try { root.packageName?.toString() } finally { @Suppress("DEPRECATION") root.recycle() }
+    }
     private fun foregroundPackage(): String? {
-        val root = rootInActiveWindow ?: return null
+        // A touched crosshair must never masquerade as Meowmba's foreground app.
+        val appWindow = windows.firstOrNull { it.type == AccessibilityWindowInfo.TYPE_APPLICATION && it.isFocused }
+            ?: return null
+        val root = appWindow.root ?: return null
         return try { root.packageName?.toString() } finally {
             @Suppress("DEPRECATION")
             root.recycle()
@@ -71,7 +120,7 @@ class RingAccessibilityService : AccessibilityService() {
         val target = foregroundPackage()
         // The tester binds a single Android input descriptor to the selected ring.
         if (!state.connected || !unlocked()) { cancelPending(); return false }
-        if (!state.testing && (state.paused || target !in ringAllowedPackages(state.allowlist))) { cancelPending(); return false }
+        if (!state.testing && (state.paused || !ringAppAllowed(state, target))) { cancelPending(); return false }
         if (state.testing) {
             if (!ring.verifyInput(device.descriptor, device.name)) return false
         } else if (ring.verifiedDescriptor.isEmpty() || ring.verifiedDescriptor != device.descriptor) return false
@@ -110,7 +159,7 @@ class RingAccessibilityService : AccessibilityService() {
         if (state.testing) { ring.verifyGesture(gesture); return }
         if (state.paused || !state.connected || !unlocked()) return
         val target = foregroundPackage() ?: return
-        if (target !in ringAllowedPackages(state.allowlist)) return
+        if (!ringAppAllowed(state, target)) return
         val action = ringActionFor(state, gesture, target)
         when (action) {
             RingAction.NONE -> ring.log("$gesture: no action")
@@ -121,24 +170,40 @@ class RingAccessibilityService : AccessibilityService() {
                 ring.log("Opened ring controls")
             }
             RingAction.SCROLL_DOWN, RingAction.SCROLL_UP -> scroll(action, state.distance)
+            RingAction.CLICK -> {
+                refreshTarget()
+                if (!clickTarget.visible || clickTarget.dragging) { ring.log("Click needs the visible target; finish dragging first"); return }
+                val (x, y) = clickTarget.coordinates()
+                if (!ringAppAllowed(state, packageAt(x, y))) { ring.log("Move target inside an allowed app before clicking"); return }
+                inject(Path().apply { moveTo(x, y) }, 60, "Click")
+            }
+            RingAction.POINTER_UP, RingAction.POINTER_DOWN, RingAction.POINTER_LEFT, RingAction.POINTER_RIGHT -> {
+                refreshTarget()
+                if (clickTarget.visible && !clickTarget.dragging) { clickTarget.move(action); ring.log(action.label) }
+                else ring.log("Target movement unavailable")
+            }
         }
     }
     private fun scroll(action: RingAction, distance: Float) {
         if (gestureBusy) { ring.log("Scroll still in progress"); return }
-        val metrics = resources.displayMetrics
-        val half = metrics.heightPixels * distance / 2
-        val center = metrics.heightPixels * .5f
+        val bounds = foregroundBounds() ?: return
+        val half = bounds.height() * distance / 2
+        val center = bounds.exactCenterY()
         val down = action == RingAction.SCROLL_DOWN
         val path = Path().apply {
-            moveTo(metrics.widthPixels * .5f, center + if (down) half else -half)
-            lineTo(metrics.widthPixels * .5f, center + if (down) -half else half)
+            moveTo(bounds.exactCenterX(), center + if (down) half else -half)
+            lineTo(bounds.exactCenterX(), center + if (down) -half else half)
         }
-        gestureBusy = true
-        val accepted = dispatchGesture(GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0, 250)).build(),
+        inject(path, 250, action.label)
+    }
+    private fun inject(path: Path, duration: Long, label: String) {
+        if (gestureBusy || clickTarget.dragging) { ring.log("Touch gesture still in progress"); return }
+        gestureBusy = true; clickTarget.hide()
+        val accepted = dispatchGesture(GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0, duration)).build(),
             object : GestureResultCallback() {
-                override fun onCompleted(gesture: GestureDescription?) { gestureBusy = false; ring.log("${action.label}: gesture completed") }
-                override fun onCancelled(gesture: GestureDescription?) { gestureBusy = false; ring.log("Scroll cancelled") }
+                override fun onCompleted(gesture: GestureDescription?) { gestureBusy = false; ring.log("$label: gesture completed"); refreshTarget() }
+                override fun onCancelled(gesture: GestureDescription?) { gestureBusy = false; ring.log("$label cancelled"); refreshTarget() }
             }, main)
-        if (!accepted) { gestureBusy = false; ring.log("Scroll could not be dispatched") }
+        if (!accepted) { gestureBusy = false; ring.log("$label could not be dispatched"); refreshTarget() }
     }
 }

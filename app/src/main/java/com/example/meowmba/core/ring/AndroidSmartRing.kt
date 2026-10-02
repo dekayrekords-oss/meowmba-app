@@ -27,6 +27,7 @@ class AndroidSmartRing private constructor(private val context: Context) : Smart
     override val state = MutableStateFlow(RingState(
         paused = prefs.getBoolean("paused", true), reverse = prefs.getBoolean("reverse", false),
         distance = prefs.getFloat("distance", .35f).coerceIn(.15f, .65f),
+        allApps = prefs.getBoolean("all_apps", false), showTarget = prefs.getBoolean("show_target", true),
         allowlist = prefs.getString("allowlist", context.packageName) ?: context.packageName,
         verifiedGestures = prefs.getStringSet("verified_gestures", emptySet())?.toSet() ?: emptySet(),
         inputDevice = prefs.getString("input_name", "") ?: "",
@@ -302,6 +303,14 @@ class AndroidSmartRing private constructor(private val context: Context) : Smart
     override fun setTesting(value: Boolean) { state.value = state.value.copy(testing = value, pressedKeys = emptySet()); RingAccessibilityService.instance?.cancelPending() }
     override fun setReverse(value: Boolean) { prefs.edit().putBoolean("reverse", value).apply(); state.value = state.value.copy(reverse = value) }
     override fun setDistance(value: Float) { val distance = value.coerceIn(.15f, .65f); prefs.edit().putFloat("distance", distance).apply(); state.value = state.value.copy(distance = distance) }
+    override fun setAllApps(value: Boolean) {
+        prefs.edit().putBoolean("all_apps", value).apply(); state.value = state.value.copy(allApps = value)
+        RingAccessibilityService.instance?.cancelPending()
+    }
+    override fun setShowTarget(value: Boolean) {
+        prefs.edit().putBoolean("show_target", value).apply(); state.value = state.value.copy(showTarget = value)
+    }
+    override fun centerTarget() { RingAccessibilityService.instance?.centerTarget() }
     override fun setAllowlist(value: String) { prefs.edit().putString("allowlist", value).apply(); state.value = state.value.copy(allowlist = value); RingAccessibilityService.instance?.cancelPending() }
     override fun setMapping(gesture: String, action: RingAction) { prefs.edit().putString("map_$gesture", action.name).apply(); state.value = state.value.copy(mappings = state.value.mappings + (gesture to action)); RingAccessibilityService.instance?.cancelPending() }
     fun allowedAppChoices(): List<Pair<String, String>> {

@@ -3,6 +3,13 @@
 Updated 2026-10-02. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
 This supersedes historical build-location/version instructions in other documents.
 
+- October 2 **195 / 1.5.29 allocated for ring scrolling and clicking across apps**,
+  branch `codex/r08-ring`, based on installed 194. Separate Allow all apps opt-in,
+  movable visible crosshair and click action, scroll/click mapping preset. Signed full-SDK
+  debug APK and 12 focused protocol/policy/overlay/native UI cases pass. All 161 protected
+  runtime entries match the phone's installed 194. Installation and physical test pending.
+  **195 allocated; next 196.**
+
 - October 2 **194 / 1.5.28 allocated for interactive ring tester**, branch `codex/r08-ring`,
   based on installed 193. Live press/release visualization, gesture counts and local on-demand
   battery, steps, heart rate, oxygen, temperature, HRV and stress tests. Signed SDK debug build

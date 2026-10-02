@@ -68,6 +68,26 @@ class SmartRingUiTest {
         rule.onNodeWithText("Pause ring controls").performScrollTo().assertIsDisplayed()
         rule.onAllNodes(isToggleable())[0].assertIsOn()
         rule.onNodeWithText("Reset gesture verification").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Allow all apps").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithContentDescription("Allow all apps").performScrollTo().assertIsOff().performClick().assertIsOn()
+        org.junit.Assert.assertTrue(AndroidSmartRing.get(rule.activity).state.value.allApps)
+        rule.onNodeWithText("Use scroll & click controls").performScrollTo().performClick()
+        rule.onNodeWithText("Single tap: Click target").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Show click target").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Center click target").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Scroll and click in other apps").performScrollTo()
+        rule.waitForIdle()
+        rule.runOnIdle {
+            val view = rule.activity.window.decorView
+            val bitmap = android.graphics.Bitmap.createBitmap(view.width, view.height, android.graphics.Bitmap.Config.ARGB_8888)
+            view.draw(android.graphics.Canvas(bitmap))
+            val file = java.io.File("build/reports/smart-ring/click-controls-320.png")
+            file.parentFile?.mkdirs()
+            file.outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+            bitmap.recycle()
+        }
+        rule.onNodeWithText("Allow all apps").performScrollTo()
+        rule.onNodeWithContentDescription("Allow all apps").performScrollTo().performClick().assertIsOff()
         rule.onNodeWithText("Choose allowed apps").performScrollTo().performClick()
         rule.onNodeWithText("Allowed apps").assertIsDisplayed()
         rule.onNodeWithText("Done").performClick()

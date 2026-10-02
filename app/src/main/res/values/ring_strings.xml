@@ -1,4 +1,4 @@
 <resources>
     <string name="ring_accessibility_label">Meowmba Ring Controls</string>
-    <string name="ring_accessibility_description">Receive R08 ring keys and perform local scrolling or Back in apps you allow. Screen contents are not recorded. Controls start paused; test your gestures in Meowmba first.</string>
+    <string name="ring_accessibility_description">Receive R08 ring keys and perform local scrolling, target clicks or Back in selected apps, or across apps when Allow all apps is enabled. Screen contents are not recorded. Controls start paused; test your gestures in Meowmba first.</string>
 </resources>

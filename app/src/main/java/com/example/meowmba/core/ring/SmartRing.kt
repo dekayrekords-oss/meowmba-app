@@ -10,7 +10,9 @@ object SmartRing {
 }
 data class RingDevice(val address: String, val name: String)
 enum class RingAction(val label: String) {
-    NONE("No action"), SCROLL_DOWN("Scroll down"), SCROLL_UP("Scroll up"), BACK("Go back"), CONTROLS("Open ring controls")
+    NONE("No action"), SCROLL_DOWN("Scroll down"), SCROLL_UP("Scroll up"), BACK("Go back"), CONTROLS("Open ring controls"),
+    CLICK("Click target"), POINTER_UP("Move target up"), POINTER_DOWN("Move target down"),
+    POINTER_LEFT("Move target left"), POINTER_RIGHT("Move target right")
 }
 data class RingState(
     val status: String = "Not connected",
@@ -25,6 +27,8 @@ data class RingState(
     val inputDevice: String = "",
     val reverse: Boolean = false,
     val distance: Float = 0.35f,
+    val allApps: Boolean = false,
+    val showTarget: Boolean = true,
     val allowlist: String = "com.example.meowmba",
     val mappings: Map<String, RingAction> = defaultRingMappings(),
     val events: List<String> = emptyList(),
@@ -54,6 +58,9 @@ interface SmartRingDriver {
     fun setTesting(value: Boolean)
     fun setReverse(value: Boolean)
     fun setDistance(value: Float)
+    fun setAllApps(value: Boolean)
+    fun setShowTarget(value: Boolean)
+    fun centerTarget()
     fun setAllowlist(value: String)
     fun setMapping(gesture: String, action: RingAction)
     fun testSensor(sensor: RingSensor)
@@ -74,11 +81,35 @@ fun ringPacket(operation: Int): ByteArray = ByteArray(16).also {
 /** Rechecked at dispatch, including after a delayed tap sequence. */
 fun ringActionFor(state: RingState, gesture: String, packageName: String?): RingAction {
     if (!state.connected || state.paused || state.testing || gesture !in state.verifiedGestures ||
-        packageName !in ringAllowedPackages(state.allowlist)) return RingAction.NONE
+        !ringAppAllowed(state, packageName)) return RingAction.NONE
     val action = state.mappings[gesture] ?: RingAction.NONE
+    if (!state.showTarget && action in ringPointerActions) return RingAction.NONE
     return if (!state.reverse) action else when (action) {
         RingAction.SCROLL_DOWN -> RingAction.SCROLL_UP
         RingAction.SCROLL_UP -> RingAction.SCROLL_DOWN
         else -> action
     }
 }
+
+/** Global scope is a separate opt-in; missing foreground identity still disables input. */
+fun ringAppAllowed(state: RingState, packageName: String?): Boolean =
+    !packageName.isNullOrBlank() && (state.allApps || packageName in ringAllowedPackages(state.allowlist))
+
+fun ringScrollClickMappings() = defaultRingMappings() + mapOf(
+    "Single tap" to RingAction.CLICK,
+    "1 tap + Next" to RingAction.POINTER_DOWN, "1 tap + Previous" to RingAction.POINTER_UP,
+    "2 taps + Next" to RingAction.POINTER_RIGHT, "2 taps + Previous" to RingAction.POINTER_LEFT,
+)
+
+data class RingPoint(val x: Float = .5f, val y: Float = .5f) {
+    fun move(action: RingAction): RingPoint = when (action) {
+        RingAction.POINTER_UP -> copy(y = (y - .08f).coerceAtLeast(.03f))
+        RingAction.POINTER_DOWN -> copy(y = (y + .08f).coerceAtMost(.97f))
+        RingAction.POINTER_LEFT -> copy(x = (x - .08f).coerceAtLeast(.03f))
+        RingAction.POINTER_RIGHT -> copy(x = (x + .08f).coerceAtMost(.97f))
+        else -> this
+    }
+}
+
+val ringPointerActions = setOf(RingAction.CLICK, RingAction.POINTER_UP, RingAction.POINTER_DOWN,
+    RingAction.POINTER_LEFT, RingAction.POINTER_RIGHT)

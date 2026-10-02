@@ -111,3 +111,32 @@ original first-install time was retained; MainActivity starts, PID remains stabl
 through the startup check and no new process crash is recorded. Accessibility
 is still off; physical gesture and sensor acceptance remain pending. Evidence:
 chat workspace `work/ring-194/receipt.json` and `install-evidence/`.
+
+
+## Scroll and click across apps — build 195
+
+Enable Android Accessibility → Meowmba Ring Controls, connect the ring, then
+open Settings → Smart Ring. Turn on **Allow all apps** and choose **Use scroll &
+click controls**. Verify each physical gesture in Gesture tester; turn tester off
+and unpause controls. Leave **Show click target** on.
+
+Next/Previous scroll, single tap clicks the visible crosshair, double tap goes
+Back and triple tap opens ring settings. One tap + Next/Previous moves the target
+down/up; two taps + Next/Previous moves it right/left. The target can also be dragged
+with a finger. Center click target resets its position. Gestures unavailable on this
+firmware cannot control the pointer; verification is still required.
+
+The target uses an Accessibility overlay, removed before injecting the tap or
+swipe so input reaches the foreground app. Global app scope is a separate saved
+opt-in; turning it off restores the explicit app list. Click and target movement
+require the visible target option. Controls remain disabled when paused, testing,
+disconnected, locked or missing foreground identity. The service reads the active
+package only and records no screen text. Android/app touch restrictions still apply.
+
+195 validation: full-SDK signed debug build and 12 focused cases pass, covering
+scope/verification gates, pointer movement/bounds and overlay removal, all-apps toggle
+and click-preset interaction on a native 320dp UI, plus previous sensor/protocol checks.
+All 161 protected runtime entries match the APK pulled from the phone's installed 194.
+Clicks also check the app at the target point, and scrolling stays inside the focused
+app window (including split-screen). Full lint/broad regression were not repeated.
+Physical ring acceptance and installation pending.

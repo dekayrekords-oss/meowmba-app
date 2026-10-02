@@ -26,4 +26,30 @@ class SmartRingTest {
         assertEquals(RingAction.SCROLL_UP, ringActionFor(ready.copy(reverse = true), "Next", "com.example.meowmba"))
         assertEquals(RingAction.BACK, ringActionFor(ready.copy(reverse = true), "Double tap", "com.example.meowmba"))
     }
+    @Test fun allAppsStillRequiresForegroundAndVerifiedInput() {
+        val global = RingState(allApps = true, connected = true, paused = false, allowlist = "",
+            verifiedGestures = setOf("Next", "Single tap"), mappings = ringScrollClickMappings())
+        assertEquals(RingAction.SCROLL_DOWN, ringActionFor(global, "Next", "com.android.settings"))
+        assertEquals(RingAction.CLICK, ringActionFor(global, "Single tap", "org.mozilla.firefox"))
+        assertEquals(RingAction.NONE, ringActionFor(global, "Next", null))
+        assertEquals(RingAction.NONE, ringActionFor(global, "Next", ""))
+        assertEquals(RingAction.NONE, ringActionFor(global.copy(paused = true), "Next", "com.android.settings"))
+        assertEquals(RingAction.NONE, ringActionFor(global.copy(testing = true), "Single tap", "org.mozilla.firefox"))
+        assertEquals(RingAction.NONE, ringActionFor(global.copy(verifiedGestures = emptySet()), "Single tap", "org.mozilla.firefox"))
+        assertEquals(RingAction.NONE, ringActionFor(global.copy(allApps = false), "Next", "com.android.settings"))
+        assertEquals(RingAction.NONE, ringActionFor(global.copy(showTarget = false), "Single tap", "org.mozilla.firefox"))
+    }
+    @Test fun targetMovesInBothAxesAndStaysOnScreen() {
+        val p = RingPoint()
+        assertTrue(p.move(RingAction.POINTER_UP).y < p.y)
+        assertTrue(p.move(RingAction.POINTER_DOWN).y > p.y)
+        assertTrue(p.move(RingAction.POINTER_LEFT).x < p.x)
+        assertTrue(p.move(RingAction.POINTER_RIGHT).x > p.x)
+        var edge = p
+        repeat(100) { edge = edge.move(RingAction.POINTER_LEFT).move(RingAction.POINTER_UP) }
+        assertEquals(.03f, edge.x, .0001f); assertEquals(.03f, edge.y, .0001f)
+        repeat(100) { edge = edge.move(RingAction.POINTER_RIGHT).move(RingAction.POINTER_DOWN) }
+        assertEquals(.97f, edge.x, .0001f); assertEquals(.97f, edge.y, .0001f)
+    }
+
 }

@@ -8,6 +8,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
 import com.example.meowmba.core.ring.*
 
@@ -44,6 +46,16 @@ internal fun SmartRingScene(onBack: () -> Unit) {
         Text("Verified gestures: ${state.verifiedGestures.joinToString().ifEmpty { "none yet" }}", style = MaterialTheme.typography.bodySmall)
         Text("Only gestures confirmed in the tester can run actions.", style = MaterialTheme.typography.bodySmall)
         OutlinedButton(onClick = driver::resetVerification) { Text("Reset gesture verification") }
+        HorizontalDivider(Modifier.padding(vertical = 12.dp))
+        Text("Scroll and click in other apps", style = MaterialTheme.typography.titleMedium)
+        RingToggle("Allow all apps", state.allApps, driver::setAllApps)
+        Text(if (state.allApps) "Ring controls can act in any foreground app while the phone is unlocked."
+            else "Ring controls are limited to the apps selected below.", style = MaterialTheme.typography.bodySmall)
+        OutlinedButton(onClick = { ringScrollClickMappings().forEach(driver::setMapping) }) { Text("Use scroll & click controls") }
+        RingToggle("Show click target", state.showTarget, driver::setShowTarget)
+        OutlinedButton(onClick = driver::centerTarget) { Text("Center click target") }
+        Text("Swipes scroll. Single tap clicks the crosshair. One tap + swipe moves it up/down; two taps + swipe moves it left/right. You can also drag the crosshair with your finger. Confirm these gestures in the tester, turn the tester off, then turn Pause ring controls off.", style = MaterialTheme.typography.bodySmall)
+        Text("Keep Show click target on to enable clicks and target movement. Android or an app may restrict injected touch gestures.", style = MaterialTheme.typography.bodySmall)
         RingToggle("Reverse scroll direction", state.reverse, driver::setReverse)
         Text("Scroll distance: ${(state.distance * 100).toInt()}% of the screen")
         Slider(value = state.distance, onValueChange = driver::setDistance, valueRange = 0.15f..0.65f)
@@ -79,7 +91,7 @@ internal fun SmartRingScene(onBack: () -> Unit) {
         }
         OutlinedTextField(value = state.allowlist, onValueChange = driver::setAllowlist,
             label = { Text("Allowed app package IDs") }, modifier = Modifier.fillMaxWidth(),
-            supportingText = { Text("Choose apps above, or enter package IDs separated by commas or new lines. Empty disables all actions.") })
+            supportingText = { Text("Choose apps above, or enter package IDs separated by commas or new lines. Empty disables actions when Allow all apps is off.") })
         HorizontalDivider(Modifier.padding(vertical = 12.dp))
         Text("Live gesture log", style = MaterialTheme.typography.titleMedium)
         if (state.events.isEmpty()) Text("No input yet. Enable the tester and swipe or tap your ring.")
@@ -92,7 +104,7 @@ internal fun SmartRingScene(onBack: () -> Unit) {
 private fun RingToggle(label: String, value: Boolean, change: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(label, modifier = Modifier.weight(1f).padding(top = 12.dp))
-        Switch(checked = value, onCheckedChange = change)
+        Switch(checked = value, onCheckedChange = change, modifier = Modifier.semantics { contentDescription = label })
     }
 }
 
