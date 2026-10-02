@@ -1,7 +1,16 @@
 # Meowmba shared build authority
 
-Updated 2026-10-01. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
+Updated 2026-10-02. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
 This supersedes historical build-location/version instructions in other documents.
+
+- October 2 **193 / 1.5.27 allocated for R08 ring integration**, branch `codex/r08-ring`,
+  based on 192 / `4f579ba`. Settings → Smart Ring, bonded BLE media-key configuration,
+  gesture tester, local accessibility scrolling, mappings, pause and explicit app allowlist.
+  Signed debug APK builds with MWDAT; 4 ring checks and 24 avatar integration cases pass.
+  Full suite: 3,208 cases, 1 avatar timing failure, 4 skips; that class passes in isolation.
+  Full lint was stopped after a prolonged run. All 160 protected native/model/other runtime
+  entries match installed 190; the manual matches release 192; debug omits generated ART profiles.
+  Hardware acceptance pending; no phone connected. No installation or Play upload. **Next 194.**
 
 - October1 **192 /1.5.26 allocated for truthful Play location wording**, branch release/play-192-20261001, based on191/5c6bd7c. Optional context sensing and permissions unchanged; disclosure/setup/manual remove unsupported reminder/named-place claims and clarify local storage versus selected cloud-AI sharing. Isolated checkout; clean bundle build,3204debug cases,4release cases,lint and signing/package verification passed. No policy approval; location demo remains pending. Signed191 remains immutable. No upload, submission, phone installation or credential changes. **Next193.**
 
