@@ -3,6 +3,13 @@
 Updated 2026-10-02. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
 This supersedes historical build-location/version instructions in other documents.
 
+- October 2 **196 / 1.5.30 allocated for ring cursor axes correction**,
+  branch `codex/r08-ring`, based on installed 195. One tap + swipe moves left/right;
+  two taps + swipe moves up/down. Original preset migrates once; custom mappings retained.
+  Signed full-SDK debug build and 7 focused policy/migration/native UI cases pass.
+  Runtime assets and signing are checked against installed 195 before upgrade.
+  Installation pending. **196 allocated; next 197.**
+
 - October 2 **195 / 1.5.29 allocated for ring scrolling and clicking across apps**,
   branch `codex/r08-ring`, based on installed 194. Separate Allow all apps opt-in,
   movable visible crosshair and click action, scroll/click mapping preset. Signed full-SDK

@@ -35,6 +35,17 @@ class AndroidSmartRing private constructor(private val context: Context) : Smart
             RingAction.entries.find { it.name == prefs.getString("map_$key", "") } ?: default
         },
     ))
+    init {
+        if (prefs.getInt("cursor_axes_revision", 0) < 1) {
+            val migrated = ringMigrateCursorAxes(state.value.mappings)
+            val edit = prefs.edit().putInt("cursor_axes_revision", 1)
+            if (migrated != state.value.mappings) {
+                state.value = state.value.copy(mappings = migrated)
+                migrated.forEach { (gesture, action) -> edit.putString("map_$gesture", action.name) }
+            }
+            edit.apply()
+        }
+    }
     private val main = Handler(Looper.getMainLooper())
     private val adapter get() = context.getSystemService(BluetoothManager::class.java)?.adapter
     private var scanner: BluetoothLeScanner? = null

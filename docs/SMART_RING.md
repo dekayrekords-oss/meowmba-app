@@ -122,7 +122,7 @@ and unpause controls. Leave **Show click target** on.
 
 Next/Previous scroll, single tap clicks the visible crosshair, double tap goes
 Back and triple tap opens ring settings. One tap + Next/Previous moves the target
-down/up; two taps + Next/Previous moves it right/left. The target can also be dragged
+right/left; two taps + Next/Previous moves it down/up. The target can also be dragged
 with a finger. Center click target resets its position. Gestures unavailable on this
 firmware cannot control the pointer; verification is still required.
 
@@ -144,3 +144,14 @@ matches, original first-install time is retained, MainActivity launch succeeds a
 PID survives the startup check without a new process crash. Physical ring acceptance
 remains pending; Android settings now show Ring Controls enabled. Receipt and evidence are in the chat
 workspace `work/ring-195/`.
+
+
+## Cursor axes correction — build 196
+
+One tap + Next/Previous now moves the cursor right/left. Two taps + Next/Previous
+moves it down/up. The preset and instructions agree. Existing users of the original
+complete four-combination preset receive the corrected axes once on upgrade;
+customized combinations are preserved. Reapply Use scroll & click controls for
+the new preset if needed. Signed full-SDK debug APK builds; seven focused cases
+pass, including migration preserving customized mappings and native preset labels.
+Protected runtime entries match installed 195. Installation pending.

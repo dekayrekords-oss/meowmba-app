@@ -97,8 +97,8 @@ fun ringAppAllowed(state: RingState, packageName: String?): Boolean =
 
 fun ringScrollClickMappings() = defaultRingMappings() + mapOf(
     "Single tap" to RingAction.CLICK,
-    "1 tap + Next" to RingAction.POINTER_DOWN, "1 tap + Previous" to RingAction.POINTER_UP,
-    "2 taps + Next" to RingAction.POINTER_RIGHT, "2 taps + Previous" to RingAction.POINTER_LEFT,
+    "1 tap + Next" to RingAction.POINTER_RIGHT, "1 tap + Previous" to RingAction.POINTER_LEFT,
+    "2 taps + Next" to RingAction.POINTER_DOWN, "2 taps + Previous" to RingAction.POINTER_UP,
 )
 
 data class RingPoint(val x: Float = .5f, val y: Float = .5f) {
@@ -113,3 +113,11 @@ data class RingPoint(val x: Float = .5f, val y: Float = .5f) {
 
 val ringPointerActions = setOf(RingAction.CLICK, RingAction.POINTER_UP, RingAction.POINTER_DOWN,
     RingAction.POINTER_LEFT, RingAction.POINTER_RIGHT)
+
+/** Update the original complete cursor preset once; preserve manually customized combinations. */
+fun ringMigrateCursorAxes(mappings: Map<String, RingAction>): Map<String, RingAction> {
+    val original = mapOf("1 tap + Next" to RingAction.POINTER_DOWN, "1 tap + Previous" to RingAction.POINTER_UP,
+        "2 taps + Next" to RingAction.POINTER_RIGHT, "2 taps + Previous" to RingAction.POINTER_LEFT)
+    return if (original.all { (gesture, action) -> mappings[gesture] == action })
+        mappings + ringScrollClickMappings().filterKeys { it in original } else mappings
+}

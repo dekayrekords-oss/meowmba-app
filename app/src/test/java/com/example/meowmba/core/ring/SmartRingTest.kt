@@ -40,6 +40,13 @@ class SmartRingTest {
         assertEquals(RingAction.NONE, ringActionFor(global.copy(showTarget = false), "Single tap", "org.mozilla.firefox"))
     }
     @Test fun targetMovesInBothAxesAndStaysOnScreen() {
+        val old = ringScrollClickMappings() + mapOf("1 tap + Next" to RingAction.POINTER_DOWN,
+            "1 tap + Previous" to RingAction.POINTER_UP, "2 taps + Next" to RingAction.POINTER_RIGHT,
+            "2 taps + Previous" to RingAction.POINTER_LEFT)
+        assertEquals(ringScrollClickMappings(), ringMigrateCursorAxes(old))
+        val custom = old + ("1 tap + Previous" to RingAction.BACK)
+        assertEquals(custom, ringMigrateCursorAxes(custom))
+        assertEquals(ringScrollClickMappings(), ringMigrateCursorAxes(ringScrollClickMappings()))
         val p = RingPoint()
         assertTrue(p.move(RingAction.POINTER_UP).y < p.y)
         assertTrue(p.move(RingAction.POINTER_DOWN).y > p.y)
