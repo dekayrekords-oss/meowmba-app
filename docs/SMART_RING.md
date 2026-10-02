@@ -202,3 +202,22 @@ repeated. Installed in place on the Fold with original first-install time retain
 launch succeeds and PID survives the 35-second check with no new process crash.
 Physical idle/double-tap wake acceptance remains pending. Receipt/evidence:
 chat workspace `work/ring-198/`.
+
+## Single-tap selection — build 199
+
+Phone preferences confirm Single tap is verified and mapped to CLICK. The original
+failure has not been reproduced independently; sleep state at the failed tap is unknown.
+Selection now activates the deepest visible enabled clickable control under the crosshair
+using Android ACTION_CLICK. Non-clickable labels use their clickable parent. A rejected
+action falls back to touch without trying a different ancestor. For custom views without
+an accessible control, the crosshair is removed and touch injection waits 100 ms for
+Android's input-window update; it rechecks pause/testing/sleep/lock/app state before
+delivery. Pending touches cancel with pending ring input. Wake remains double-tap only.
+
+The debug service dump includes local ring state and recent input/action events, without
+screen text or sensor values, so subsequent hardware reports can be diagnosed. Nineteen
+focused checks pass, including nested-control selection, label/parent handling, rejected
+actions, hidden/disabled/outside controls, overlay removal delay, cancellation and active-app
+changes. Signed full-SDK debug APK builds; all 161 protected runtime entries and certificate
+match the actual installed 198 APK. Full lint/broad regression were not repeated.
+Installation and physical single-tap acceptance pending. Evidence: chat `work/ring-199/`.

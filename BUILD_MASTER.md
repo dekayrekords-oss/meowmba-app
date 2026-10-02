@@ -3,6 +3,14 @@
 Updated 2026-10-02. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
 This supersedes historical build-location/version instructions in other documents.
 
+- October 2 **199 / 1.5.33 allocated for ring single-tap selection**,
+  branch `codex/r08-ring`, based on installed 198. Selects the accessible control
+  under the crosshair, with a delayed touch fallback after removing the overlay.
+  Local debug service diagnostics expose control state/input events, no screen text.
+  Signed full-SDK debug build and 19 focused cases pass. Certificate and all 161
+  protected runtime entries match installed 198. Installation/physical ring
+  acceptance pending. **199 allocated; next 200.**
+
 - October 2 **198 / 1.5.32 allocated for ring controls sleep mode**,
   branch `codex/r08-ring`, based on installed 197. Enabled by default, 30-second idle
   timeout adjustable 5–300 seconds; hides target/ignores actions until double-tap wake.

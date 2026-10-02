@@ -18,6 +18,9 @@ import android.app.KeyguardManager
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityWindowInfo
+import com.example.meowmba.BuildConfig
+import java.io.FileDescriptor
+import java.io.PrintWriter
 import com.example.meowmba.core.ring.SmartRingActivity
 
 /** Filters R08 input only. No screen text is collected or transmitted. */
@@ -38,6 +41,7 @@ class RingAccessibilityService : AccessibilityService() {
     private var tapPackage: String? = null
     private var tapDevice = -1
     private var gestureBusy = false
+    private var pendingTouch: Runnable? = null
     private var lastKeyDown: Triple<Int, Int, Long>? = null
     private var lastTapTime = 0L
     private val consumed = mutableSetOf<Pair<Int, Int>>()
@@ -78,7 +82,11 @@ class RingAccessibilityService : AccessibilityService() {
         if (::ring.isInitialized) { ring.accessibilityConnected(false); ring.disconnect() }
         super.onDestroy()
     }
-    fun cancelPending() { main.removeCallbacks(finishTap); tapCount = 0; tapPackage = null; tapDevice = -1 }
+    fun cancelPending() {
+        main.removeCallbacks(finishTap); tapCount = 0; tapPackage = null; tapDevice = -1
+        pendingTouch?.let { main.removeCallbacks(it); gestureBusy = false }
+        pendingTouch = null
+    }
     private fun foregroundBounds(): Rect? {
         val appWindow = windows.firstOrNull { it.type == AccessibilityWindowInfo.TYPE_APPLICATION && it.isFocused } ?: return null
         return Rect().also { appWindow.getBoundsInScreen(it) }.takeUnless { it.isEmpty }
@@ -89,6 +97,15 @@ class RingAccessibilityService : AccessibilityService() {
         } ?: return null
         val root = appWindow.root ?: return null
         return try { root.packageName?.toString() } finally { @Suppress("DEPRECATION") root.recycle() }
+    }
+    private fun clickNodeAt(x: Float, y: Float): Boolean {
+        val appWindow = windows.firstOrNull {
+            it.type == AccessibilityWindowInfo.TYPE_APPLICATION && Rect().also(it::getBoundsInScreen).contains(x.toInt(), y.toInt())
+        } ?: return false
+        val root = appWindow.root ?: return false
+        return try {
+            ringAppAllowed(ring.state.value, root.packageName?.toString()) && ringClickNodeAt(root, x, y)
+        } finally { @Suppress("DEPRECATION") root.recycle() }
     }
     private fun foregroundPackage(): String? {
         // A touched crosshair must never masquerade as Meowmba's foreground app.
@@ -185,7 +202,9 @@ class RingAccessibilityService : AccessibilityService() {
                 if (!clickTarget.visible || clickTarget.dragging) { ring.log("Click needs the visible target; finish dragging first"); return }
                 val (x, y) = clickTarget.coordinates()
                 if (!ringAppAllowed(state, packageAt(x, y))) { ring.log("Move target inside an allowed app before clicking"); return }
-                inject(Path().apply { moveTo(x, y) }, 60, "Click")
+                if (gestureBusy) { ring.log("Touch gesture still in progress"); return }
+                if (clickNodeAt(x, y)) ring.log("Click: control selected")
+                else inject(Path().apply { moveTo(x, y) }, 80, "Click")
             }
             RingAction.POINTER_UP, RingAction.POINTER_DOWN, RingAction.POINTER_LEFT, RingAction.POINTER_RIGHT -> {
                 refreshTarget()
@@ -208,12 +227,34 @@ class RingAccessibilityService : AccessibilityService() {
     }
     private fun inject(path: Path, duration: Long, label: String) {
         if (gestureBusy || clickTarget.dragging) { ring.log("Touch gesture still in progress"); return }
+        val target = foregroundPackage()
         gestureBusy = true; clickTarget.hide()
-        val accepted = dispatchGesture(GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0, duration)).build(),
+        // Window removal and input-window updates are asynchronous on the phone. Allow the
+        // crosshair's touchable window to disappear before injecting at its former position.
+        val touch = Runnable {
+            pendingTouch = null
+            val state = ring.state.value
+            ring.checkSleepDeadline()
+            if (!state.connected || state.paused || state.testing || ring.state.value.sleeping || !unlocked() ||
+                foregroundPackage() != target || !ringAppAllowed(state, target)) {
+                gestureBusy = false; ring.log("$label cancelled: controls or active app changed"); refreshTarget()
+                return@Runnable
+            }
+            val accepted = dispatchGesture(GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0, duration)).build(),
             object : GestureResultCallback() {
                 override fun onCompleted(gesture: GestureDescription?) { gestureBusy = false; ring.log("$label: gesture completed"); refreshTarget() }
                 override fun onCancelled(gesture: GestureDescription?) { gestureBusy = false; ring.log("$label cancelled"); refreshTarget() }
             }, main)
-        if (!accepted) { gestureBusy = false; ring.log("$label could not be dispatched"); refreshTarget() }
+            if (!accepted) { gestureBusy = false; ring.log("$label could not be dispatched"); refreshTarget() }
+        }
+        pendingTouch = touch; main.postDelayed(touch, 100)
+    }
+    override fun dump(fd: FileDescriptor, writer: PrintWriter, args: Array<out String>?) {
+        super.dump(fd, writer, args)
+        if (!BuildConfig.DEBUG || !::ring.isInitialized) return
+        val state = ring.state.value
+        writer.println("Ring controls: connected=${state.connected} paused=${state.paused} testing=${state.testing} sleeping=${state.sleeping}")
+        writer.println("Target: visible=${::clickTarget.isInitialized && clickTarget.visible} busy=$gestureBusy; tapCount=$tapCount")
+        state.events.take(30).forEach(writer::println)
     }
 }
