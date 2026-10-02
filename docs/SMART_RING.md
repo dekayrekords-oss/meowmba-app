@@ -106,4 +106,8 @@ and two native 320dp UI tests (preview, real-reading state, disconnected control
 and allowlist). Synthetic UI readings are test fixtures, not hardware evidence.
 All 161 protected lib/assets entries match the actual installed 193 APK, and the
 preview signing certificate matches. This is a debug test build; full lint/broad
-suite were not repeated. Physical ring acceptance and installation pending.
+suite were not repeated. 194 installed in place over 193 on SM_F971U / R5GL75XFCXD on October 2. Android's
+original first-install time was retained; MainActivity starts, PID remains stable
+through the startup check and no new process crash is recorded. Accessibility
+is still off; physical gesture and sensor acceptance remain pending. Evidence:
+chat workspace `work/ring-194/receipt.json` and `install-evidence/`.

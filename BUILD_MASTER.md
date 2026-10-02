@@ -7,7 +7,9 @@ This supersedes historical build-location/version instructions in other document
   based on installed 193. Live press/release visualization, gesture counts and local on-demand
   battery, steps, heart rate, oxygen, temperature, HRV and stress tests. Signed SDK debug build
   and 9 focused protocol/native UI checks pass. All 161 protected runtime entries match
-  installed 193; certificate matches. Physical ring tests and installation pending.
+  installed 193; certificate matches. Installed in place over 193 on the connected Fold;
+  original first-install time retained, MainActivity/PID stable, no new app crash.
+  Accessibility opt-in and physical ring gestures/sensor acceptance remain pending.
   **194 allocated; next 195.**
 
 - October 2 **193 / 1.5.27 allocated for R08 ring integration**, branch `codex/r08-ring`,
