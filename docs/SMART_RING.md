@@ -154,4 +154,7 @@ complete four-combination preset receive the corrected axes once on upgrade;
 customized combinations are preserved. Reapply Use scroll & click controls for
 the new preset if needed. Signed full-SDK debug APK builds; seven focused cases
 pass, including migration preserving customized mappings and native preset labels.
-Protected runtime entries match installed 195. Installation pending.
+All 161 protected runtime entries and the signing certificate match installed 195.
+196 installed in place on the Fold, with original first-install time retained,
+successful launch and stable PID/no new process crash. Physical ring acceptance
+remains pending. Receipt/evidence: chat workspace `work/ring-196/`.

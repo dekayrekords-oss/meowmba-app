@@ -8,7 +8,9 @@ This supersedes historical build-location/version instructions in other document
   two taps + swipe moves up/down. Original preset migrates once; custom mappings retained.
   Signed full-SDK debug build and 7 focused policy/migration/native UI cases pass.
   Runtime assets and signing are checked against installed 195 before upgrade.
-  Installation pending. **196 allocated; next 197.**
+  Installed in place over 195 on the Fold; certificate/161 runtime entries match,
+  original installation retained, launch/PID stable with no new app crash.
+  Physical ring acceptance pending. **196 consumed; next 197.**
 
 - October 2 **195 / 1.5.29 allocated for ring scrolling and clicking across apps**,
   branch `codex/r08-ring`, based on installed 194. Separate Allow all apps opt-in,
