@@ -176,4 +176,6 @@ lock-screen, testing and visible-target checks are unchanged. Blocked gesture lo
 explain the missing verification or target option. Signed full-SDK debug build and nine
 focused cases pass, including the exact missing-left-combo state and unchanged click,
 pause, app-scope and target gates. All 161 protected runtime entries match the APK
-pulled from installed 196. Installation pending; physical acceptance awaits ring input.
+pulled from installed 196, and the preview certificate matches. Installed in place
+on the Fold; first-install time preserved, launch/PID stable, no new process crash.
+Physical left-gesture retest pending. Receipt/evidence: chat workspace `work/ring-197/`.

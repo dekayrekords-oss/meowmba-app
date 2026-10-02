@@ -8,8 +8,9 @@ This supersedes historical build-location/version instructions in other document
   though Single tap and Previous were verified. Cursor movement now composes verified
   component inputs; clicks/Back retain exact-gesture verification. Signed full-SDK debug
   build and 9 focused regression/policy/overlay/native UI cases pass, including the
-  phone's verified-input state. All 161 protected runtime entries match installed 196.
-  Installation pending.
+  phone's verified-input state. All 161 protected runtime entries/certificate match installed 196.
+  Installed in place on the Fold; original installation retained, launch/PID stable
+  and no new app crash. Physical left-gesture retest pending.
   **197 allocated; next 198.**
 
 - October 2 **196 / 1.5.30 allocated for ring cursor axes correction**,
