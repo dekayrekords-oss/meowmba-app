@@ -3,6 +3,15 @@
 Updated 2026-10-02. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
 This supersedes historical build-location/version instructions in other documents.
 
+- October 2 **198 / 1.5.32 allocated for ring controls sleep mode**,
+  branch `codex/r08-ring`, based on installed 197. Enabled by default, 30-second idle
+  timeout adjustable 5–300 seconds; hides target/ignores actions until double-tap wake.
+  Wake tap is consumed. Local standby keeps the BLE link. Signed full-SDK debug build
+  and 14 focused idle/policy/overlay/native UI cases pass. Timeout setting/30-second
+  default visually checked at 320dp. All 161 protected runtime entries match installed 197.
+  Installation pending.
+  **198 allocated; next 199.**
+
 - October 2 **197 / 1.5.31 allocated for blocked left cursor movement**,
   branch `codex/r08-ring`, based on installed 196. Phone's left combo was unverified,
   though Single tap and Previous were verified. Cursor movement now composes verified

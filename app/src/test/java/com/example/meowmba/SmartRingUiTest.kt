@@ -67,6 +67,24 @@ class SmartRingUiTest {
         }
         rule.onNodeWithText("Pause ring controls").performScrollTo().assertIsDisplayed()
         rule.onAllNodes(isToggleable())[0].assertIsOn()
+        rule.onNodeWithText("Sleep after: 30 seconds").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithContentDescription("Sleep after inactivity").assertIsOn()
+        rule.onNodeWithContentDescription("Idle sleep timeout").performScrollTo()
+            .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress) { it(60f) }
+        rule.onNodeWithText("Sleep after: 60 seconds").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithContentDescription("Idle sleep timeout").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress) { it(30f) }
+        rule.onNodeWithText("Sleep now").performScrollTo().assertIsNotEnabled()
+        rule.onNodeWithText("Sleep mode").performScrollTo()
+        rule.waitForIdle()
+        rule.runOnIdle {
+            val view = rule.activity.window.decorView
+            val bitmap = android.graphics.Bitmap.createBitmap(view.width, view.height, android.graphics.Bitmap.Config.ARGB_8888)
+            view.draw(android.graphics.Canvas(bitmap))
+            val file = java.io.File("build/reports/smart-ring/sleep-controls-320.png")
+            file.parentFile?.mkdirs()
+            file.outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+            bitmap.recycle()
+        }
         rule.onNodeWithText("Reset gesture verification").performScrollTo().assertIsDisplayed()
         rule.onNodeWithText("Allow all apps").performScrollTo().assertIsDisplayed()
         rule.onNodeWithContentDescription("Allow all apps").performScrollTo().assertIsOff().performClick().assertIsOn()

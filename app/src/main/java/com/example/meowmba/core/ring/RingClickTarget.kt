@@ -11,7 +11,7 @@ import android.view.View
 import android.view.WindowManager
 
 /** Small Accessibility overlay; removed before injected touches so the app receives them. */
-internal class RingClickTarget(context: Context) {
+internal class RingClickTarget(context: Context, private val onActivity: () -> Unit = {}) {
     private val windows = context.getSystemService(WindowManager::class.java)
     private val side = (48 * context.resources.displayMetrics.density).toInt()
     var point = RingPoint(); private set
@@ -43,6 +43,7 @@ internal class RingClickTarget(context: Context) {
     init {
         var startX = 0f; var startY = 0f; var start = point
         view.setOnTouchListener { _, event ->
+            onActivity()
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> { dragging = true; startX = event.rawX; startY = event.rawY; start = point }
                 MotionEvent.ACTION_MOVE -> {

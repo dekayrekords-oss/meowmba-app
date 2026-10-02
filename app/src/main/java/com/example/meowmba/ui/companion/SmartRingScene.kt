@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import com.example.meowmba.core.ring.*
 
 @Composable
@@ -40,6 +41,16 @@ internal fun SmartRingScene(onBack: () -> Unit) {
         OutlinedButton(onClick = driver::openAccessibility) { Text("Open Accessibility settings") }
         RingToggle("Pause ring controls", state.paused, driver::setPaused)
         RingToggle("Gesture tester (consume inputs without actions)", state.testing, driver::setTesting)
+        Text("Sleep mode", style = MaterialTheme.typography.titleMedium)
+        RingToggle("Sleep after inactivity", state.sleepEnabled, driver::setSleepEnabled)
+        Text(if (state.sleeping) "Ring controls asleep · double tap to wake" else if (ringSleepEligible(state)) "Ring controls awake" else "Sleep timer inactive")
+        Text("Sleep after: ${state.sleepAfterSeconds} seconds")
+        Slider(value = state.sleepAfterSeconds.toFloat(), enabled = state.sleepEnabled,
+            onValueChange = { driver.setSleepAfterSeconds((it / 5).roundToInt().coerceAtLeast(1) * 5) },
+            valueRange = 5f..300f, steps = 58, modifier = Modifier.semantics { contentDescription = "Idle sleep timeout" })
+        Text("Sleep hides the cursor and ignores ring actions until a double tap. Ring input or dragging the cursor restarts the timer. The wake tap does not click or go Back.", style = MaterialTheme.typography.bodySmall)
+        OutlinedButton(onClick = if (state.sleeping) driver::wakeControls else driver::sleepNow,
+            enabled = ringSleepEligible(state)) { Text(if (state.sleeping) "Wake controls" else "Sleep now") }
         RingTestPanel(state, driver::testSensor, driver::stopSensorTest, driver::clearTestResults)
         Text("Use the tester to confirm Next, Previous and tap events before unpausing. Media keys from devices named R08 are recognized. Other keyboards and headphones are ignored.", style = MaterialTheme.typography.bodySmall)
         if (state.inputDevice.isNotEmpty()) Text("Verified input device: ${state.inputDevice}")

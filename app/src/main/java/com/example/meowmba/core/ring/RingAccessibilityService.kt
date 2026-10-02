@@ -50,7 +50,7 @@ class RingAccessibilityService : AccessibilityService() {
     }
     override fun onServiceConnected() {
         instance = this; ring = AndroidSmartRing.get(this)
-        clickTarget = RingClickTarget(this)
+        clickTarget = RingClickTarget(this, ring::controlsActivity)
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(screenReceiver,
             IntentFilter().apply { addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_USER_PRESENT) }, Context.RECEIVER_NOT_EXPORTED)
         else { @Suppress("DEPRECATION") registerReceiver(screenReceiver,
@@ -62,12 +62,13 @@ class RingAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) { refreshTarget() }
     private fun refreshTarget() {
         if (!::ring.isInitialized || !::clickTarget.isInitialized) return
+        ring.checkSleepDeadline()
         val state = ring.state.value
-        if (state.connected && !state.paused && !state.testing && !gestureBusy && state.showTarget &&
+        if (state.connected && !state.paused && !state.testing && !state.sleeping && !gestureBusy && state.showTarget &&
             state.mappings.values.any { it in ringPointerActions } && unlocked() && ringAppAllowed(state, foregroundPackage())) clickTarget.show()
         else clickTarget.hide()
     }
-    fun centerTarget() { if (::clickTarget.isInitialized) { clickTarget.center(); refreshTarget() } }
+    fun centerTarget() { if (::clickTarget.isInitialized) { ring.controlsActivity(); clickTarget.center(); refreshTarget() } }
     override fun onInterrupt() = cancelPending()
     override fun onDestroy() {
         cancelPending(); consumed.clear(); instance = null
@@ -157,6 +158,7 @@ class RingAccessibilityService : AccessibilityService() {
         ring.recordGesture(gesture)
         val state = ring.state.value
         if (state.testing) { ring.verifyGesture(gesture); return }
+        if (ring.consumeSleepingGesture(gesture)) return
         if (state.paused || !state.connected || !unlocked()) return
         val target = foregroundPackage() ?: return
         if (!ringAppAllowed(state, target)) return

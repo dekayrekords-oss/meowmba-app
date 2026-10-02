@@ -23,6 +23,9 @@ data class RingState(
     val accessibility: Boolean = false,
     val paused: Boolean = true,
     val testing: Boolean = false,
+    val sleepEnabled: Boolean = true,
+    val sleepAfterSeconds: Int = 30,
+    val sleeping: Boolean = false,
     val verifiedGestures: Set<String> = emptySet(),
     val inputDevice: String = "",
     val reverse: Boolean = false,
@@ -53,6 +56,10 @@ interface SmartRingDriver {
     fun disconnect()
     fun openAccessibility()
     fun openBluetooth()
+    fun setSleepEnabled(value: Boolean)
+    fun setSleepAfterSeconds(value: Int)
+    fun sleepNow()
+    fun wakeControls()
     fun setPaused(value: Boolean)
     fun resetVerification()
     fun setTesting(value: Boolean)
@@ -80,7 +87,7 @@ fun ringPacket(operation: Int): ByteArray = ByteArray(16).also {
 
 /** Rechecked at dispatch, including after a delayed tap sequence. */
 fun ringActionFor(state: RingState, gesture: String, packageName: String?): RingAction {
-    if (!state.connected || state.paused || state.testing ||
+    if (!state.connected || state.paused || state.testing || state.sleeping ||
         !ringAppAllowed(state, packageName)) return RingAction.NONE
     val action = state.mappings[gesture] ?: RingAction.NONE
     if (!ringGestureReady(state, gesture, action)) return RingAction.NONE
@@ -136,3 +143,6 @@ fun ringMigrateCursorAxes(mappings: Map<String, RingAction>): Map<String, RingAc
     return if (original.all { (gesture, action) -> mappings[gesture] == action })
         mappings + ringScrollClickMappings().filterKeys { it in original } else mappings
 }
+
+fun ringSleepEligible(state: RingState) = state.sleepEnabled && state.connected && state.accessibility &&
+    !state.paused && !state.testing

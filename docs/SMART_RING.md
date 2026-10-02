@@ -179,3 +179,23 @@ pause, app-scope and target gates. All 161 protected runtime entries match the A
 pulled from installed 196, and the preview certificate matches. Installed in place
 on the Fold; first-install time preserved, launch/PID stable, no new process crash.
 Physical left-gesture retest pending. Receipt/evidence: chat workspace `work/ring-197/`.
+
+
+## Idle sleep — build 198
+
+Sleep mode is enabled by default with a 30-second idle timeout. Settings → Smart Ring
+allows disabling it or choosing 5–300 seconds, plus Sleep now / Wake controls buttons.
+Ring input or dragging the crosshair restarts the timer. When asleep, the crosshair
+hides and inputs are consumed without scrolling/clicking. Double tap wakes controls
+and is consumed without also performing Back or a click. The timer then restarts.
+
+This is local control standby: Bluetooth remains connected so a ring wake can arrive;
+it does not command hardware power-off or lock/wake the phone's display. Automatic
+sleep runs only with connected, enabled Accessibility controls, unpaused and outside
+the gesture tester. Disconnect/pause/testing/disabled sleep clear standby and stop its
+timer. Sensor queries remain independent. Fourteen focused checks pass, including
+30-second expiry, activity resets, settings changes, delayed Handler deadlines,
+consumed double-tap wake, policy gates and native 320dp timeout-setting interaction.
+Signed full-SDK debug APK builds; all 161 protected runtime entries match the installed
+197 APK. Full lint/broad regression were not repeated. Installation/physical acceptance
+pending.

@@ -8,7 +8,8 @@ import android.content.*
 import android.content.pm.PackageManager
 import android.os.*
 import android.provider.Settings
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.*
 import java.util.UUID
 
 /** One process-wide GATT owner. All Bluetooth callbacks are serialized on the main thread. */
@@ -25,6 +26,8 @@ class AndroidSmartRing private constructor(private val context: Context) : Smart
     }
     private val prefs = context.getSharedPreferences("smart_ring", Context.MODE_PRIVATE)
     override val state = MutableStateFlow(RingState(
+        sleepEnabled = prefs.getBoolean("sleep_enabled", true),
+        sleepAfterSeconds = prefs.getInt("sleep_after_seconds", 30).coerceIn(5, 300),
         paused = prefs.getBoolean("paused", true), reverse = prefs.getBoolean("reverse", false),
         distance = prefs.getFloat("distance", .35f).coerceIn(.15f, .65f),
         allApps = prefs.getBoolean("all_apps", false), showTarget = prefs.getBoolean("show_target", true),
@@ -47,6 +50,38 @@ class AndroidSmartRing private constructor(private val context: Context) : Smart
         }
     }
     private val main = Handler(Looper.getMainLooper())
+    private val idleSleep = RingIdleSleep(
+        now = SystemClock::elapsedRealtime,
+        schedule = { delay, action ->
+            val task = Runnable { action() }; main.postDelayed(task, delay)
+            val cancel: () -> Unit = { main.removeCallbacks(task) }; cancel
+        },
+        publish = { asleep ->
+            state.value = state.value.copy(sleeping = asleep, pressedKeys = emptySet())
+            RingAccessibilityService.instance?.cancelPending()
+            log(if (asleep) "Ring controls asleep; double tap to wake" else "Ring controls awake")
+        },
+    )
+    private val sleepMonitor = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate).launch {
+        state.map { ringSleepEligible(it) to it.sleepAfterSeconds }.distinctUntilChanged()
+            .collect { (enabled, seconds) -> idleSleep.configure(enabled, seconds) }
+    }
+    fun checkSleepDeadline() = idleSleep.checkIdle()
+    fun controlsActivity() = idleSleep.activity()
+    fun consumeSleepingGesture(gesture: String): Boolean {
+        val consumed = idleSleep.consumeSleepingGesture(gesture)
+        if (consumed) log(if (state.value.sleeping) "$gesture: ignored while asleep" else "Double tap: wake only")
+        return consumed
+    }
+    override fun setSleepEnabled(value: Boolean) {
+        prefs.edit().putBoolean("sleep_enabled", value).apply(); state.value = state.value.copy(sleepEnabled = value)
+    }
+    override fun setSleepAfterSeconds(value: Int) {
+        val seconds = value.coerceIn(5, 300)
+        prefs.edit().putInt("sleep_after_seconds", seconds).apply(); state.value = state.value.copy(sleepAfterSeconds = seconds)
+    }
+    override fun sleepNow() = idleSleep.sleepNow()
+    override fun wakeControls() = idleSleep.wake()
     private val adapter get() = context.getSystemService(BluetoothManager::class.java)?.adapter
     private var scanner: BluetoothLeScanner? = null
     private var gatt: BluetoothGatt? = null
@@ -94,6 +129,7 @@ class AndroidSmartRing private constructor(private val context: Context) : Smart
         return true
     }
     fun recordPress(key: Int, down: Boolean, label: String) {
+        controlsActivity()
         val current = state.value
         state.value = current.copy(pressedKeys = if (down) current.pressedKeys + key else current.pressedKeys - key,
             lastInput = "${if (down) "Pressed" else "Released"}: $label", inputSequence = current.inputSequence + 1)
