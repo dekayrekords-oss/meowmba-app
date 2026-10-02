@@ -8,8 +8,9 @@ This supersedes historical build-location/version instructions in other document
   timeout adjustable 5–300 seconds; hides target/ignores actions until double-tap wake.
   Wake tap is consumed. Local standby keeps the BLE link. Signed full-SDK debug build
   and 14 focused idle/policy/overlay/native UI cases pass. Timeout setting/30-second
-  default visually checked at 320dp. All 161 protected runtime entries match installed 197.
-  Installation pending.
+  default visually checked at 320dp. All 161 protected runtime entries/certificate match installed 197.
+  Installed in place on the Fold, original installation retained; launch/PID stable
+  beyond 35 seconds with no new app crash. Physical double-tap wake acceptance pending.
   **198 allocated; next 199.**
 
 - October 2 **197 / 1.5.31 allocated for blocked left cursor movement**,

@@ -197,5 +197,8 @@ timer. Sensor queries remain independent. Fourteen focused checks pass, includin
 30-second expiry, activity resets, settings changes, delayed Handler deadlines,
 consumed double-tap wake, policy gates and native 320dp timeout-setting interaction.
 Signed full-SDK debug APK builds; all 161 protected runtime entries match the installed
-197 APK. Full lint/broad regression were not repeated. Installation/physical acceptance
-pending.
+197 APK, and the preview certificate matches. Full lint/broad regression were not
+repeated. Installed in place on the Fold with original first-install time retained;
+launch succeeds and PID survives the 35-second check with no new process crash.
+Physical idle/double-tap wake acceptance remains pending. Receipt/evidence:
+chat workspace `work/ring-198/`.
