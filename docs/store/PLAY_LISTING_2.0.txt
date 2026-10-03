@@ -13,7 +13,7 @@ KEEP WORK IN CONTEXT
 Use Flow to bring relevant work together, set North Stars and track next steps. Correct or pin saved facts and revisit saved work. Development Studio and Computer features connect supported workspaces and tools; review action requests and inspect returned results. Connections require separate setup, compatible endpoints and supported tools. Availability depends on your setup.
 
 CONNECT A SMART RING
-Scan for a compatible R08/QRing Bluetooth ring, connect or reconnect, and request on-demand battery and step readings. Explore supported heart rate, oxygen, temperature, HRV and stress sensor tests. Availability and results depend on the ring, firmware, fit and contact; wellness estimates are experimental. Readings stay on your phone. Ring setup includes connection status, disconnect controls and access to Android Bluetooth settings.
+Scan for a compatible R08/QRing Bluetooth ring, connect or reconnect, and request on-demand battery and step readings. Explore supported heart rate, oxygen, temperature, HRV and stress sensor tests. Availability and results depend on the ring, firmware, fit and contact; wellness estimates are experimental. Readings stay on your phone. Ring setup includes connection status, disconnect controls and access to Android Bluetooth settings. Meow Assistant is not a medical device and does not diagnose, treat, cure or prevent medical conditions. Seek advice about medical care from a qualified healthcare professional.
 
 CHOOSE WHAT TO IMPORT
 Select photos or videos through Android's picker, or select documents through the system file picker. Supported imports become local copies; your originals stay unchanged. Find saved results and supported previews in Files.

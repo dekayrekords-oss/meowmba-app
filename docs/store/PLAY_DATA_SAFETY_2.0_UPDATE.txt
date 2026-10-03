@@ -1,0 +1,9 @@
+Meow Assistant 2.0 / 201 — Data safety update, 2026-10-03
+
+Added Fitness info for optional Flow physical-activity context that may be included in selected cloud-AI requests.
+Collected: Yes. Shared: Yes. Ephemeral: No. Optional: Yes.
+Collection and sharing purposes: App functionality; Personalisation.
+Smart-ring sensor readings remain in local memory and are not automatically included in cloud requests or shared diagnostics. Existing provider, location, content and SDK declarations remain in place.
+Saved in Play Console, ready for review with production 201.
+
+Primary reference: https://support.google.com/googleplay/android-developer/answer/10787469
