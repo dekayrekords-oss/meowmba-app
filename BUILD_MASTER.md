@@ -3,7 +3,7 @@
 Updated 2026-10-03. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
 This supersedes historical build-location/version instructions in other documents.
 
-- October 3 **200 / 1.5.34 allocated for Play policy remediation and phone testing**, branch `release/play-200-20261003`, based on installed199 / `ab84e38`. Validation in progress. No upload, submission, publication or phone install. **200 reserved; next201.**
+- October 3 **200 / 1.5.34 allocated for Play policy remediation and phone testing**, branch `release/play-200-20261003`, based on installed199 / `ab84e38`. Signed private APK installed in place over199 on Fold R5GL75XFCXD; version, original installation date, foreground launch and live process verified, no startup AndroidRuntime error. Matching certificate/16KB ZIP alignment and all161 protected runtime entries pass. 3235 debug cases (0 failures,17 skips) and12 actual-release boundary cases pass. Unsigned AAB/bundletool,88 native library16KB alignment and required JNI checks pass; release lint passes (0 errors,219 warnings/12 hints), existing upload key folder inaccessible. Public variant removes broad media/background location and both Accessibility services. No remote source push, Play upload, submission or publication. **200 consumed; next201.**
 
 - October 2 **199 / 1.5.33 allocated for ring single-tap selection**,
   branch `codex/r08-ring`, based on installed 198. Selects the accessible control
