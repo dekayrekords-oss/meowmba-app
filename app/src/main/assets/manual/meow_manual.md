@@ -49,7 +49,9 @@ In Flow, tap **Adjust → North Stars**, or tap the North Star line below the da
 
 ## Location context
 
-Location context for the journal and conversations is optional. Meow explains how location is used before asking Android for access. Start with **Only while using the app** if that is what you prefer. To allow location context to update while Meow is closed, choose **Open Android settings → Permissions → Location → Allow all the time**, then return to Meow. You can keep the narrower access or turn it off at any time. Location history stays in the phone's journal; selected cloud AI may receive relevant location context when answering your requests.
+Location context for the journal and conversations is optional. Meow explains how location is used before asking Android for access. The Google Play edition uses location only while Meow is visible and stops receiving location when you leave it. Choose **Only while using the app**, or decline. The private phone edition can also use background location if you separately choose **Open Android settings → Permissions → Location → Allow all the time**. You can turn access off at any time. Location history stays in the phone's journal; selected cloud AI may receive relevant location context when answering your requests.
+
+Cross-app Smart Ring controls and the gesture tester are available in the private phone edition. The Google Play edition supports ring Bluetooth connection and on-demand, on-phone sensor readings; it does not offer Accessibility control.
 
 ## Scan a QR code
 

@@ -16,7 +16,8 @@ import com.example.meowmba.core.ring.*
 import kotlinx.coroutines.delay
 
 @Composable
-internal fun RingTestPanel(state: RingState, test: (RingSensor) -> Unit, stop: () -> Unit, clear: () -> Unit) {
+internal fun RingTestPanel(state: RingState, test: (RingSensor) -> Unit, stop: () -> Unit, clear: () -> Unit,
+                          showInput: Boolean = true) {
     var preview by remember { mutableStateOf<String?>(null) }
     var flash by remember { mutableStateOf(false) }
     LaunchedEffect(state.inputSequence) {
@@ -29,6 +30,7 @@ internal fun RingTestPanel(state: RingState, test: (RingSensor) -> Unit, stop: (
     val label = preview?.let { "Preview: $it" } ?: state.lastInput
     Card(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (showInput) {
             Text("Live ring tester", style = MaterialTheme.typography.titleMedium)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Canvas(Modifier.size(84.dp).semantics { contentDescription = "Ring input indicator: $label" }) {
@@ -73,6 +75,7 @@ internal fun RingTestPanel(state: RingState, test: (RingSensor) -> Unit, stop: (
             Text("Tiles are previews. Only physical ring input confirms a gesture; firmware may combine or omit events.",
                 style = MaterialTheme.typography.bodySmall)
             HorizontalDivider()
+            }
             Text("Sensor tests", style = MaterialTheme.typography.titleMedium)
             Text("Wear the ring snugly and keep still. HRV can take 80 seconds. Readings stay on this phone and are excluded from the shared log.",
                 style = MaterialTheme.typography.bodySmall)

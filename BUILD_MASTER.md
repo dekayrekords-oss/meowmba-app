@@ -1,7 +1,9 @@
 # Meowmba shared build authority
 
-Updated 2026-10-02. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
+Updated 2026-10-03. Read this first: Codex, Grok, Claude, OpenCode and human contributors.
 This supersedes historical build-location/version instructions in other documents.
+
+- October 3 **200 / 1.5.34 allocated for Play policy remediation and phone testing**, branch `release/play-200-20261003`, based on installed199 / `ab84e38`. Validation in progress. No upload, submission, publication or phone install. **200 reserved; next201.**
 
 - October 2 **199 / 1.5.33 allocated for ring single-tap selection**,
   branch `codex/r08-ring`, based on installed 198. Selects the accessible control

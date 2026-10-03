@@ -3667,7 +3667,7 @@ class CompanionViewModel(
             calendar = calendarOk,
             calendarWrite = ctx.checkSelfPermission(android.Manifest.permission.WRITE_CALENDAR) == android.content.pm.PackageManager.PERMISSION_GRANTED,
             activity = sensing.canSenseActivity(ctx),
-            locationAlways = sensing.canLocateInBackground(ctx),
+            locationAlways = if (com.example.meowmba.BuildConfig.BACKGROUND_LOCATION_ENABLED) sensing.canLocateInBackground(ctx) else sensing.canLocate(ctx),
         )
         // A permission granted since the last check: start that sensing now (registration is idempotent).
         val granted = (if (access.activity) 1 else 0) or (if (sensing.canLocate(ctx)) 2 else 0) or (if (access.locationAlways) 4 else 0)

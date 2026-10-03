@@ -338,7 +338,10 @@ class AndroidSmartRing private constructor(private val context: Context) : Smart
     }
     fun accessibilityConnected(value: Boolean) { state.value = state.value.copy(accessibility = value) }
     private fun launch(intent: Intent) { runCatching { context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.onFailure { message("Could not open settings: ${it.message}") } }
-    override fun openAccessibility() = launch(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+    override fun openAccessibility() {
+        if (com.example.meowmba.BuildConfig.PHONE_AUTOMATION_ENABLED) launch(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        else message("Cross-app ring controls are unavailable in this edition.")
+    }
     override fun openBluetooth() = launch(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
     override fun resetVerification() {
         verifiedDescriptor = ""

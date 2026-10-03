@@ -5,8 +5,10 @@
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" tools:node="remove" />
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" tools:node="remove" />
     <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" tools:node="remove" />
     <application>
         <!-- Play distribution does not expose autonomous Accessibility control. -->
         <service android:name=".core.access.MeowAccessibilityService" tools:node="remove" />
+        <service android:name=".core.ring.RingAccessibilityService" tools:node="remove" />
     </application>
 </manifest>

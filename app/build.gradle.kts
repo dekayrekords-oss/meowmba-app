@@ -93,8 +93,8 @@ android {
         // 85 > 84 so the affect/valence + pet wiring installs as a genuine
         // in-place upgrade, and so it is distinguishable on-device from 84 (which
         // has the drives but not the reply affect or the touch sense).
-        versionCode = 199
-        versionName = "1.5.33"
+        versionCode = 200
+        versionName = "1.5.34"
 
         buildConfigField("boolean", "HAS_MWDAT_SDK", hasMwdat.toString())
         manifestPlaceholders["mwdat_application_id"] = mwdatApplicationId
@@ -154,10 +154,12 @@ android {
 
     buildTypes {
         debug {
+            buildConfigField("boolean", "BACKGROUND_LOCATION_ENABLED", "true")
             buildConfigField("boolean", "PHONE_AUTOMATION_ENABLED", "true")
             buildConfigField("boolean", "PHONE_MEDIA_LIBRARY_ENABLED", "true")
         }
         release {
+            buildConfigField("boolean", "BACKGROUND_LOCATION_ENABLED", "false")
             // Play excludes autonomous Accessibility-based phone control.
             // The release manifest removes the service as a second boundary.
             buildConfigField("boolean", "PHONE_AUTOMATION_ENABLED", "false")
@@ -188,6 +190,7 @@ android {
             matchingFallbacks += listOf("release")
             buildConfigField("boolean", "PHONE_AUTOMATION_ENABLED", "true")
             buildConfigField("boolean", "PHONE_MEDIA_LIBRARY_ENABLED", "true")
+            buildConfigField("boolean", "BACKGROUND_LOCATION_ENABLED", "true")
         }
     }
     compileOptions {
@@ -267,7 +270,10 @@ tasks.withType<Test>().configureEach {
         // Compose's test activity belongs to debugImplementation and must not
         // ship in Play. Run the full UI/regression suite on debug and these
         // permission-boundary tests against the actual release BuildConfig.
-        filter { includeTestsMatching("com.example.meowmba.PlayMediaAccessTest") }
+        filter {
+            includeTestsMatching("com.example.meowmba.PlayMediaAccessTest")
+            includeTestsMatching("com.example.meowmba.PlayLocationAccessTest")
+        }
     }
     systemProperty("meowmba.idleAnimations", "false")
     if (providers.gradleProperty("testProgress").orNull == "true") testLogging.events("started", "failed", "skipped")

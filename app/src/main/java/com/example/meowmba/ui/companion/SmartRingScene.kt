@@ -35,6 +35,11 @@ internal fun SmartRingScene(onBack: () -> Unit) {
             }
         }
         OutlinedButton(onClick = driver::openBluetooth) { Text("Bluetooth settings") }
+        if (!com.example.meowmba.BuildConfig.PHONE_AUTOMATION_ENABLED) {
+            Text("Cross-app ring controls and the gesture tester are unavailable in this edition. Bluetooth connection and on-demand sensor readings stay on this phone.")
+            RingTestPanel(state, driver::testSensor, driver::stopSensorTest, driver::clearTestResults, showInput = false)
+            return@RingSettingsPage
+        }
         HorizontalDivider(Modifier.padding(vertical = 12.dp))
         Text(if (state.accessibility) "Accessibility service connected" else "Accessibility service is off")
         Text("Enable Meowmba Ring Controls to receive ring keys and scroll in allowed apps. Input and screen actions stay on this phone. Meowmba does not record screen contents.", style = MaterialTheme.typography.bodySmall)

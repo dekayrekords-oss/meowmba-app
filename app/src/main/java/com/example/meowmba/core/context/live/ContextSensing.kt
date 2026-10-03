@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
+import com.example.meowmba.BuildConfig
 import com.example.meowmba.core.database.MeowmbaDatabase
 import com.example.meowmba.core.flow.Activity
 import com.google.android.gms.location.ActivityRecognition
@@ -39,6 +40,20 @@ object ContextSensing {
     const val ACTION_LOCATION = "com.example.meowmba.context.LOCATION"
     const val STILL_INTERVAL_MS = 10 * 60_000L
     const val VEHICLE_INTERVAL_MS = 60_000L
+    @Volatile private var appVisible = false
+
+    /** Public location delivery stops with the visible activity, including delayed batches. */
+    fun setAppVisible(ctx: Context, visible: Boolean) {
+        appVisible = visible
+        if (BuildConfig.BACKGROUND_LOCATION_ENABLED) return
+        if (visible) start(ctx)
+        else runCatching {
+            LocationServices.getFusedLocationProviderClient(ctx).removeLocationUpdates(pending(ctx, ACTION_LOCATION))
+        }
+    }
+
+    fun canReceiveLocation(ctx: Context): Boolean = canLocate(ctx) &&
+        (BuildConfig.BACKGROUND_LOCATION_ENABLED || appVisible)
 
     fun canSenseActivity(ctx: Context): Boolean = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
         ctx.checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION) == PackageManager.PERMISSION_GRANTED
@@ -47,7 +62,7 @@ object ContextSensing {
         ctx.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
             ctx.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
 
-    fun canLocateInBackground(ctx: Context): Boolean = canLocate(ctx) &&
+    fun canLocateInBackground(ctx: Context): Boolean = BuildConfig.BACKGROUND_LOCATION_ENABLED && canLocate(ctx) &&
         ctx.checkSelfPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION) == PackageManager.PERMISSION_GRANTED
 
     /** Idempotent: re-registering replaces the same PendingIntents. Call on app start, boot, grant. */
@@ -73,7 +88,7 @@ object ContextSensing {
 
     @SuppressLint("MissingPermission")
     internal fun requestLocation(ctx: Context, inVehicle: Boolean) {
-        if (!canLocate(ctx)) return
+        if (!canReceiveLocation(ctx)) return
         val interval = if (inVehicle) VEHICLE_INTERVAL_MS else STILL_INTERVAL_MS
         val req = LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, interval)
             .setMinUpdateIntervalMillis(interval / 2)
@@ -137,7 +152,7 @@ class ContextReceiver : BroadcastReceiver() {
                         if ((before == com.example.meowmba.core.flow.Activity.DRIVING) != (nowActivity == com.example.meowmba.core.flow.Activity.DRIVING))
                             ContextSensing.requestLocation(app, nowActivity == com.example.meowmba.core.flow.Activity.DRIVING)
                     }
-                    ContextSensing.ACTION_LOCATION -> LocationResult.extractResult(intent)?.locations?.forEach { l ->
+                    ContextSensing.ACTION_LOCATION -> if (ContextSensing.canReceiveLocation(app)) LocationResult.extractResult(intent)?.locations?.forEach { l ->
                         LiveContext.setFix(l.latitude, l.longitude, l.accuracy, if (l.hasSpeed()) l.speed else null, l.time)
                         dao.insertSample(LocationSampleEntity(at = l.time, lat = l.latitude, lon = l.longitude,
                             accuracyM = l.accuracy, activity = LiveContext.now.value.activity.name))

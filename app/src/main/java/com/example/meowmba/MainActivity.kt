@@ -448,6 +448,16 @@ class MainActivity : ComponentActivity() {
         return super.dispatchTouchEvent(ev)
     }
 
+    override fun onStart() {
+        super.onStart()
+        com.example.meowmba.core.context.live.ContextSensing.setAppVisible(this, true)
+    }
+
+    override fun onStop() {
+        com.example.meowmba.core.context.live.ContextSensing.setAppVisible(this, false)
+        super.onStop()
+    }
+
     override fun onResume() {
         super.onResume()
         // If a background hand-off was scheduled by a transient pause, it is now

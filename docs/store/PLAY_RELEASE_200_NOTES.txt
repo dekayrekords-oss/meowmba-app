@@ -1,0 +1,6 @@
+<en-US>
+Use Android’s photo and document pickers to import selected files.
+Optional Flow location now works only while Meow is visible in the Play edition.
+Includes updated Desk rooms, memory correction/pinning, Computer and voice fixes.
+Ring Bluetooth connection and on-demand readings are available; cross-app ring controls remain in the private phone edition.
+</en-US>

@@ -73,7 +73,8 @@ internal suspend fun handleFlowPrimary(vm: CompanionViewModel, context: Context,
         id == AppIntentions.SETUP_ACTIVITY -> requestPermission(android.Manifest.permission.ACTIVITY_RECOGNITION)
         // Android asks for location while in use first; "all the time" is a second, separate step.
         id == AppIntentions.SETUP_LOCATION -> requestPermission(
-            if (com.example.meowmba.core.context.live.ContextSensing.canLocate(context)) android.Manifest.permission.ACCESS_BACKGROUND_LOCATION
+            if (com.example.meowmba.BuildConfig.BACKGROUND_LOCATION_ENABLED &&
+                com.example.meowmba.core.context.live.ContextSensing.canLocate(context)) android.Manifest.permission.ACCESS_BACKGROUND_LOCATION
             else android.Manifest.permission.ACCESS_FINE_LOCATION)
         id.startsWith(AppIntentions.PROJECT) ->
             item?.facts?.get("project_id")?.toLongOrNull()?.let(vm::openProject) ?: vm.toggleProjectsScreen()
@@ -213,7 +214,9 @@ internal fun FlowHomeRoute(vm: CompanionViewModel, state: CompanionState, paused
             title = { Text(if (background) "Location while Meow is closed" else "Location for Flow") },
             text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Meow Assistant uses location to add location context to its on-device journal and your conversations. " +
-                    "If you choose Allow all the time, it collects location even when the app is closed or not in use.")
+                    if (com.example.meowmba.BuildConfig.BACKGROUND_LOCATION_ENABLED)
+                        "If you choose Allow all the time, it collects location even when the app is closed or not in use."
+                    else "This edition uses location only while Meow is visible. It stops receiving location when you leave the app.")
                 Text("Location history is saved on this phone. If you use cloud AI, relevant location context may be " +
                     "included in requests to your selected provider. This is optional; you can skip it and revoke access in Android settings.")
                 if (background) Text("In Android settings, open Permissions → Location → Allow all the time, then return to Meow. " +

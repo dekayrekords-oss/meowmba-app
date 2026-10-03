@@ -86,8 +86,12 @@ object AppIntentions {
             "turn on usage access so Meow can tell when work starts and ends. Only app names are used", now))
         if (!access.activity) add(setup(SETUP_ACTIVITY, "Let Meow know when you're driving or walking",
             "allow physical activity. Android tells Meow when you start driving, walking or stop, using almost no battery", now))
-        if (!access.locationAlways) add(setup(SETUP_LOCATION, "Let Meow know where you are, even when it's closed",
-            "choose \"Allow all the time\" for location. Location samples are stored in this phone's context journal. Relevant location context may be sent to your selected cloud AI provider", now))
+        if (!access.locationAlways) add(setup(SETUP_LOCATION,
+            if (com.example.meowmba.BuildConfig.BACKGROUND_LOCATION_ENABLED) "Let Meow know where you are, even when it's closed"
+            else "Add location context while using Meow",
+            (if (com.example.meowmba.BuildConfig.BACKGROUND_LOCATION_ENABLED) "choose \"Allow all the time\" for location. "
+            else "choose \"Only while using the app\" for optional location. ") +
+                "Location samples are stored in this phone's context journal. Relevant location context may be sent to your selected cloud AI provider", now))
     }
 
     /** A message notification from a person becomes "Reply to <sender>" until the notification is cleared. */

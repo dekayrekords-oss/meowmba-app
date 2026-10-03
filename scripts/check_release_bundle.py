@@ -70,6 +70,10 @@ def main():
             "READ_MEDIA_IMAGES", "READ_MEDIA_VIDEO", "READ_MEDIA_AUDIO", "READ_MEDIA_VISUAL_USER_SELECTED")]
         result["forbidden_media_permissions"] = [permission for permission in forbidden_media_permissions
             if permission.encode() in manifest]
+        result["forbidden_background_location"] = b"android.permission.ACCESS_BACKGROUND_LOCATION" in manifest
+        result["forbidden_accessibility_services"] = [name for name in (
+            ".core.access.MeowAccessibilityService", ".core.ring.RingAccessibilityService")
+            if name.encode() in manifest]
         required = {f"base/lib/arm64-v8a/{name}" for name in (
             "libsherpa-onnx-jni.so", "libonnxruntime.so", "libneedle_jni_bridge.so", "libsd_jni_bridge.so",
             "libmeow_cpu_features.so")}
@@ -109,6 +113,8 @@ def main():
     print(json.dumps(result, indent=2))
     return 0 if (result["all_native_libraries_16kb_aligned"] and
                  not result["forbidden_media_permissions"] and
+                 not result["forbidden_background_location"] and
+                 not result["forbidden_accessibility_services"] and
                  not result["missing_image_jni_exports"] and
                  not result["missing_cpu_probe_jni_exports"] and
                  not result["missing_required_native_libraries"]) else 1
