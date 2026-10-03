@@ -1,131 +1,89 @@
-MEOW ASSISTANT 2.0 — EXPANDED LAUNCH FILM
-Target: 5:00 maximum, 1920 x 1080 landscape, 30 fps.
-Status: production script and shot plan; not a rendered film.
-Target app revision: working build 202. Build 201 is already submitted; the new idle behavior is not in that submitted bundle.
-Main character: approved charcoal cat with lime eyes, glowing green circuit whiskers, mint collar and round power tag.
-Visual continuity: full-body transformations into each distinct species; preserve eyes, circuit accents and overall rendering style.
-Source footage: real app recordings, with the animated cat's actions matched to actual Desk actions.
-Narrator: an original professional British baritone with warm theatrical comic delivery. A Matt Berry performance requires an authorized recording; do not synthesize an imitation.
+MEOW ASSISTANT 2.0 — FIVE-MINUTE STORYBOARD AND FILM PLAN
+Revised October 3, 2026: stronger ring and hands-free driving/Desk emphasis.
+Planned length: 5:00 maximum. Landscape finished film, 1920 x 1080, 30 fps.
+Status: illustrated storyboard and script. No finished film or narration has been rendered.
 
-CURRENT FEATURE BOUNDARIES
-- Camera recognition replaces QR scanning in clip 2. No QR segment remains.
-- Flow is the everyday interface demonstrated while out and about. Desk is the interface selected for focused desk work.
-- DriveAvatarPolicy automatically shows the full avatar when a drive is detected, and restores Flow/Desk when the drive ends. Show driving setup and permissions first; detection is not guaranteed at the instant someone enters a car.
-- Idle defaults to Flow after inactivity in the next build. Lumen/Orb are explicit settings options; Off retains the current page. Existing explicit choices remain. Idle Desk visits Flow without changing the saved home.
-- Wireless-charger avatar behavior exists as an opt-in configuration; Android detects wireless power, not a named magnetic dock. Keep this separate from the default idle view. Show a configured charger only after a real device test.
-- TV scene: explicitly select Orb, then use a compatible phone/TV screen-mirroring mechanism. No app-specific Chromecast receiver was found in the source; do not fabricate a Cast button. Live mirroring, microphone input, reply audio and echo handling require device acceptance.
-- Physical robot control is disabled in this build: RobotBaseControlPolicy.CONTROL_AVAILABLE=false. Moving around the desk belongs in a clearly labeled future-concept segment, not a released-feature demonstration. No app-controlled robot movement or motor test is authorized by this video task.
-- Computer assistance requires a configured phone/computer workspace. Robot movement and computer assistance are separate capabilities.
-- The public Play build offers Bluetooth ring connection and on-demand readings. Cross-app ring gestures belong to the private phone edition and are excluded. Wellness readings are experimental, hardware-dependent, and nonmedical.
-- Custom avatar creation uses the selected AI configuration to create/save an animated native form; film art must be matched to the actual generated in-app result.
-- All 16 built-in appearances are introduced. Custom forms have no exhaustive fixed inventory.
-- Higgsfield currently reports 50 credits and a free plan. Earlier image and video submissions were rejected for plan entitlement. No new generation job was submitted during this update.
-- Google Play release was last verified in review. Confirm live availability before choosing an “available now” ending.
+STORYBOARD PAGES
+Page 1: Meow-2.0-storyboard-1-ring-and-voice.png — scenes 01–06.
+Page 2: Meow-2.0-storyboard-2-ring-and-voice.png — scenes 07–12.
+Read left to right, then top to bottom. Board images are concept art; final screen inserts use real app recordings.
+Both boards were made with built-in image generation. The complete prompt set is Meow-2.0-storyboard-prompts.txt.
 
-00:00–00:12 — CLIP 1: MEET MEOW
-Picture: the approved cat springs onto a cozy desk, stretches, and looks directly at camera. Match cut to actual Desk cat landing or moving. Show app title and 2.0.
-Narration:
-“Meet Meow Assistant. A companion for your everyday life, your ideas, and the things you want to make. One familiar character, with rather a lot of possibilities.”
+CREATIVE THREAD
+The approved charcoal cat with lime eyes, glowing green circuit whiskers, mint collar and power tag guides the film. It jumps, investigates, organizes and tinkers; match cuts connect these actions to the actual app. Transformations replace the whole body with the raccoon, bunny, dragon or other form. Preserve the familiar identity across forms.
+The same fictional adult with dark wavy hair and a forest-teal sweater appears throughout. Ring close-ups recur at the camera, car and Desk, with the main ring section at 03:50.
+Driving, Desk voice use and the ring/hands-free section have 35 seconds each: 105 seconds of the five-minute plan. Keep the phone mounted during voice demonstrations. Setup and on-demand reading requests remain visibly separate from voice interaction.
+Narrator: original professional British baritone with warm theatrical delivery, or an authorized Matt Berry recording. No synthesized imitation. User and Orb dialogue use original voices.
 
-00:12–00:42 — CLIP 2: RECOGNIZE A CAMERA PHOTO
-Picture: user photographs a familiar household object, such as a desk lamp. Actual app: plus button, Take a photo, accept the camera capture, attach it, ask “What is this, and what can I use it for?” Show the real image-aware response using the configured model. Cat peers curiously at the object and reacts to the answer. Keep the captured photo visible so the audience understands the input.
-Narration:
-“Start with something right in front of you. Take a photo, hand it to Meow, and ask a question. It can help interpret what is in the picture using your chosen image-aware model. You decide what to share. A fresh photograph becomes the starting point for a useful conversation.”
-Capture requirement: verify a real camera attachment and real recognition result. Do not fabricate an answer or imply perfect object identification.
+01 — MEET MEOW | 00:00–00:10
+Picture: full cat jumps onto the cozy desk. Match cut to the actual Desk cat, then the Meow Assistant 2.0 title. Show the real app within the opening ten seconds.
+Narration: “Meet Meow Assistant. A familiar companion for everyday life, your ideas, and the things you want to make.”
 
-00:42–01:40 — CLIP 3: FOLLOW THE DAY THROUGH FLOW
-Picture: same user outside with phone. Actual Flow overview, one main item, additional items, question, comment or correction. Add a North Star: “Make my own weekly planner,” a reason, and two manageable steps. Link or inspect a relevant project. Walk through the next action clearly rather than scrolling too quickly.
-Then parked-car setup: enable configured driving mode, use a real detected-drive state to show avatar takeover. After driving ends, show return to the previous home. Idle phone: keep Flow visible; if starting from Desk, show it opening Flow after the selected inactivity interval. Briefly open settings to show Lumen/Orb as optional choices.
-Narration:
-“On an ordinary day, Flow is where you begin. It gathers the things that deserve your attention, gives them context, and helps you decide what comes next. Open an item, ask about it, or correct what Meow has understood.
-For a longer ambition, add a North Star: what you want, why it matters, and the steps that could move it forward. Relevant context can connect to that goal without pretending the work is already done.
-With driving mode configured, a detected drive brings the full avatar forward. When the drive ends, your previous home returns. When the phone is idle, Flow comes first. If you prefer an idle companion, choose Lumen or Orb in settings. Your choice remains yours.”
-Capture requirement: foreground-only location behavior in Play; show permission-dependent setup without suggesting constant background tracking. Do not film interaction by an actively driving user.
+02 — CAMERA PHOTO | 00:10–00:35
+Picture: ring visible on the adult's camera-holding hand. Photograph a desk lamp, accept the actual capture, attach it, and ask “What is this?” Show the configured image-aware model's real response. Cat peers at the lamp and reacts. No QR scanning. The ring is an accessory here, not the camera shutter control.
+Narration: “Take a photo of something in front of you and ask Meow about it. Your chosen image-aware model can help interpret the picture, turning a photograph into the start of a useful conversation.”
 
-01:40–02:15 — CLIP 4: YOUR DESK
-Picture: user returns to desk and selects Desk. Real three-room app overview; slowly identify computer, corkboard, sticky note, letter tray, clock and drawers. Animated cat taps or jumps toward each corresponding object; actual Desk cat or object action matches it. Brief living-room stereo/TV and bedroom glimpse.
-Narration:
-“When you settle down to work, open the Desk. The computer leads to your projects and Development Studio. The corkboard keeps a goal in sight, the sticky note points to what is next, and the letter tray holds people waiting on you. Open alarms from the clock, or your favorite tools from the drawers.
-There are three rooms to explore, with weather and time outside the windows, connected media when you grant access, and a small cat with a surprisingly busy routine.”
+03 — FLOW THROUGH THE DAY | 00:35–01:10
+Picture: user walks outside with Flow on the phone. Show one main item, its context and next action; ask a question or correct it. Add the North Star “Make my own weekly planner,” its reason and two manageable steps. The cat bounds alongside as guide.
+Narration: “Flow brings the next useful things into view. Open an item, ask about it, or correct what Meow has understood. For a longer ambition, add a North Star: what you want, why it matters, and steps toward it. Relevant context can connect to that goal as you go.”
 
-02:15–03:00 — CLIP 5: MAKE SOMETHING IN DEVELOPMENT STUDIO
-Picture: cat becomes the full raccoon and tinkers playfully; cut to real Development Studio. Open/create a project, show workspace connection if needed, and enter the demo prompt below. Keep the prompt readable. Show actual work output, open the generated page or preview, request one small change, and show the changed result. Move away and back to demonstrate the persistent session.
-Demo prompt:
-“Build a simple weekly planner page with seven days, a task checklist, and a clear completed-task count. Make it readable on a phone. Save the files in this project.”
-Follow-up:
-“Add a button to clear completed tasks.”
-Narration:
-“Now let us make something. Open Development Studio and start a project. Connect your chosen workspace, describe the result you want, and watch the real session progress.
-Here, we are making a small weekly planner: seven days, a task checklist, and a count of what is complete. Open the result, check it, and ask for a change. Add a button to clear finished tasks, then inspect what changed.
-The working session stays with you as you move between screens. Meow can assist in a configured computer environment, while you review the work it produces.”
-Capture requirement: real successful generation, real saved files and real preview. If setup fails, do not replace it with a fabricated successful app interface.
+04 — HANDS-FREE DRIVING AND CONTEXT | 01:10–01:45
+Picture: configure voice/wake phrase and driving mode while parked. Show the ring-wearing hand on the wheel and the phone fixed in its mount. After a real drive-detected state is verified, the full avatar appears. The user asks aloud, with no phone touching. Show listening, actual response audio and the conversation follow-up. Then show an explicitly configured wireless charger bringing up the avatar; finish with everyday idle Flow and return after driving ends.
+User example: “Hey Meow, what's next?” Adapt the reply to the actual demo context.
+Narration: “With voice mode configured, leave Meow in its mount and ask aloud. When driving is detected, the full avatar comes forward. A configured wireless-charging option can also bring it into view. When the drive ends, your previous home returns. For everyday idle use, Flow comes first.”
+Capture: parked setup; no manual phone interaction during driving. Actual voice round trip, drive cue and charger behavior must work on the filmed device. Android detects wireless power, not a named physical dock. Public location context runs while the app is visible.
 
-03:00–03:31 — CLIP 6: MAKE A PURPLE DRAGON
-Picture: cat returns, user asks exactly “Make a purple dragon.” Show actual avatar creation controls, selected AI configuration if applicable, generation/progress, successful saved form, full native form and motion, then reuse/select the saved form. Cinematic cat transforms completely into a cute purple dragon: purple body, wings, horns, tail, paws; lime eyes and green circuit accents retain identity. Cinematic dragon art is a stylized film adaptation of the generated app result.
-Narration:
-“And your companion can become something new. Ask, ‘Make a purple dragon.’ With your chosen AI set up, Meow designs a new animated form and saves a successful result for you to reuse.
-Watch the whole character change: body, wings, paws and tail. The appearance changes, while the same companion and conversation remain. Then bring back your familiar cat whenever you like.”
-Capture requirement: do not claim the avatar changed before successful validation/application. Keep a readable view of the actual native dragon.
+05 — HANDS-FREE AT YOUR DESK | 01:45–02:20
+Picture: user works at the computer, ring visible on a working hand. Phone stays on its stand with Desk as the main interface and a compact voice indicator/reply. Ask “Hey Meow, plan my afternoon.” Show the actual spoken response while the user continues typing or writing. Match cat gestures to native Desk actions. Cut through the computer, corkboard, sticky note, letter tray, clock and drawers; briefly reveal the living room and bedroom.
+Narration: “At your Desk, your hands can stay with the work. Ask Meow by voice while the phone stays in its stand. The computer leads to projects, the corkboard keeps a goal in sight, and the sticky note points to what is next. There are three rooms to explore, with your tools close by.”
+Capture: enabled voice mode, microphone permission, working speech output and real Desk route. Use actual replies. Computer assistance requires its separately configured workspace.
 
-03:31–04:04 — CLIP 7: INTRODUCE THE WHOLE CAST
-Picture: quick, clean introductions, every name shown and every full body visible. Use the approved two boards as design references; obtain separate animation references as needed. Cat is the recurring host, not replaced as the film's main character.
-Exact order:
-Eyes only; Cat; Dog; Squirrel; Raccoon; Australian shepherd; Owl; Duck; Bunny; Pig; Alien; Robot; Panda; Fruit fly; Clippy; The Wizard.
-Narration:
-“Meet the built-in cast. Original Lumen, in its eyes-only form. Our mischievous cat. An enthusiastic dog, a busy squirrel, a curious raccoon, and a focused Australian shepherd.
-A thoughtful owl, a cheerful duck, an inventive bunny, and a welcoming pig.
-An inquisitive alien, a methodical robot, a gentle panda, and a tiny fruit fly.
-Then Clippy, the helpful organizer, and the Wizard, the imaginative storyteller.
-Different appearances, with one continuing companion. And custom creations can add a form of your own.”
-Capture requirement: the film concepts are not substitutes for real footage of the actual in-app forms. Include native avatar cutaways.
+06 — DEVELOPMENT STUDIO | 02:20–02:55
+Picture: full raccoon transformation. Open a real project and configured workspace. Submit the prompt, show real progress, open the saved result and request one change. Return to the session after moving screens. Condense real generation time visibly if needed.
+Demo prompt: “Build a simple weekly planner page with seven days, a task checklist, and a clear completed-task count. Make it readable on a phone. Save the files in this project.”
+Follow-up: “Add a button to clear completed tasks.”
+Narration: “Now make something in Development Studio. Start a project, connect your chosen workspace, and describe a weekly planner. Watch the real session progress, open the result, then ask for a clear-completed button. Inspect the change and return to the same session as you move between screens.”
+Capture: actual successful saved files and preview, not an invented successful interface. No unverified dedicated Studio dictation control is shown.
 
-04:04–04:24 — CLIP 8: EVERYDAY TOOLS, MEMORY AND RING
-Picture: concise real-app montage: chat and voice; selected photo/file import; memory search, correction and pin; calendar/alarms, directions or weather; on-demand compatible ring connection and battery/steps. Each display holds long enough to read. Small “Experimental wellness readings • Not medical” label if wellness sensors are shown.
-Narration:
-“Talk, type, import a file, or find and correct a saved memory. Use everyday tools and your selected AI providers. Compatible Bluetooth rings offer on-demand readings such as battery and steps. Wellness readings depend on the hardware and remain experimental, not medical.”
-Capture requirement: no cross-app ring control in the public Play film; no invented health readings.
+07 — MAKE A PURPLE DRAGON | 02:55–03:20
+Picture: return to the cat and ask exactly “Make a purple dragon.” Show real avatar creation, successful validation/save, the native form moving and reuse of the saved form. Cinematic transformation replaces the entire body: purple torso, wings, horns, paws and tail, retaining lime eyes/circuit accents/collar/tag. Match the film dragon to the successful native result.
+Narration: “Ask, ‘Make a purple dragon.’ With your chosen AI configured, Meow can create and save a new animated form. The whole appearance changes, while the same companion and conversation continue.”
+Capture: a successful in-app result is required before representing the generated form as a working feature. The storyboard dragon is concept art.
 
-04:24–04:41 — CLIP 9: ORB ON THE TV
-Picture: same fictional user in the living room. Start on Flow; explicitly select Orb, then open the phone's actual compatible screen-mirroring controls. TV displays the same cyan-to-violet particle Orb as the phone. Match the app's parameter-particle motion: labeled foreground particles peel away, spring down toward the reply line with short fading trails, and visually gather around the response as it appears. The sphere retains its volume and pulses to actual reply audio. Use the updated response-phase keyframe and real native Orb footage after device verification. Original refined British assistant voice, calm and helpful; no actor imitation or franchise branding.
-Within the 17-second window: 0–3 seconds, explicit selection and mirrored Orb; 3–6, user question/listening; 6–9, thinking with labeled particles pulling free; 9–14, particles converge below and the actual reply appears/speaks; 14–17, trails fade and the sphere settles. The motif labels include attn.q, memory, plan and route. This is the app's visual language, not a claim to expose live model weights or hidden reasoning.
-Narration:
-“Choose Orb, then mirror your phone to a compatible television.”
-User dialogue:
-“What should I focus on next?”
-Orb dialogue, using the actual demo project state:
-“Your weekly planner is waiting. Shall we continue?”
-End: gently transition back to Flow. Orb appears because the user chose it, never because of default inactivity.
-Capture requirement: actual TV/phone compatibility and live voice round trip must be verified. Until then the generated still is labeled SCENE CONCEPT; it is not proof of a working TV feature.
+08 — MEET THE WHOLE CAST | 03:20–03:50
+Picture: cat hosts named introductions and native avatar cutaways. Each species has its full distinct body; eyes-only Lumen remains eyes-only. Give the bunny a complete-body transformation. All sixteen forms appear on storyboard page 2, including the fruit fly.
+Order: Eyes-only Lumen, Cat, Dog, Squirrel, Raccoon, Australian shepherd, Owl, Duck, Bunny, Pig, Alien, Robot, Panda, Fruit fly, Clippy, Wizard.
+Narration: “Meet Lumen's built-in cast: eyes only, cat, dog, squirrel, raccoon, Australian shepherd, owl, duck, bunny and pig. Then alien, robot, panda, fruit fly, Clippy and the Wizard. Sixteen appearances, one continuing companion, with custom creations to add forms of your own.”
+Capture: actual native forms supplement the cinematic characters. Do not crop transformations to just faces.
 
-04:41–04:53 — CLIP 10: FUTURE DESK ROBOT CONCEPT
-Picture: prominently and continuously labeled “ROBOT CONCEPT — PHYSICAL MOVEMENT NOT AVAILABLE IN THIS BUILD.” Fictional adult user and generic phone-mounted tracked robot use the saved concept image as scene reference. Lumen eyes and circuit whiskers on phone. Concept animation may depict rolling in a clear desk area. Intercut actual configured Computer assistance with its own label, avoiding a causal claim that robot motion controls the computer.
-Narration:
-“A future desk concept gives Lumen a mobile body. Physical movement is disabled in this build. Computer assistance uses your separately configured workspace.”
-Production rule: actual robot testing or enabling motors is outside this film task. Replace generic base with confirmed hardware design if supplied.
+09 — RING + HANDS-FREE | 03:50–04:25
+Picture: foreground ring macro, then actual Smart Ring setup/connection status. Pair a compatible Bluetooth ring and request on-demand battery and step readings. Show the actual returned data on the phone. The physical ring is represented without an invented display. Use sequential inserts of the same device, not a requirement for two phones. Then return to voice at the Desk, hands occupied, and a mounted car voice cutaway. Pairing/readings and voice conversation are distinct capabilities; there is no causal ring-gesture-to-app cut in this public release film.
+Suggested split: 0–6 seconds ring and connection; 6–16 actual on-demand readings; 16–25 Desk voice; 25–32 mounted car voice; 32–35 return to Flow and the cat.
+Narration: “Connect your compatible Bluetooth ring and request battery or step readings when you need them. See the connection and the returned information on your phone. Then keep Meow in place and continue by voice—at your Desk or in the car—with your hands staying with the task.”
+Supporting montage: talk/type, file import, memory search/correction/pin, calendar or alarms, weather or directions. Keep real UI readable; do not rush every tool into a single shot.
+Play scope: ring connection and on-demand readings are supported. Accessibility scrolling, clicking and cursor gestures belong to the private phone edition and are excluded from this default Play cut. They may be shown only in a separate clearly labeled private-phone treatment if requested. No ring control of a car or desktop is claimed. Wellness sensors, if added, require the experimental/nonmedical label and real hardware results.
 
-04:53–05:00 — CLIP 11: CLOSE
-Picture: main cat settles on the real Desk; brief montage of Flow, Studio and avatar. Meow Assistant 2.0 title.
-Narration:
-“Plan with Flow. Make something in Studio. Settle into the Desk. Meet Meow Assistant.”
-Ending: use neutral title until live Play status is confirmed; no unverified “download now.”
+10 — ORB ON THE TV | 04:25–04:40
+Picture: explicitly choose Orb, then use the phone's actual compatible screen-mirroring mechanism. The same Orb appears on phone and TV. Labeled particles peel away, spring down with fading trails and gather toward the forming reply beneath the sphere. The Orb retains its volume and pulses with speech, then settles. This matches the app's visual parameter motifs; it does not expose live model weights or hidden reasoning.
+Narration: “Choose Orb, then mirror your phone to a compatible television.”
+User: “What should I focus on next?”
+Example Orb reply: “Your weekly planner is waiting. Shall we continue?” Use actual demo context and recorded words.
+Capture: verify mirroring and the voice round trip. There is no app-specific Cast receiver/button in the source. Orb is selected deliberately, rather than appearing from default inactivity.
 
-ASSET REGISTER
-Approved main cat: Meow-cat-character-v1.png
-Raccoon: Meow-raccoon-character-v1.png
-Bunny: Meow-bunny-character-v1.png
-Cast boards: Meow-Lumen-all-forms-board-1.png and Meow-Lumen-all-forms-board-2.png
-User/robot concept: Meow-user-and-desk-robot-concept.png
-TV/Orb initial scene concept: Meow-TV-Orb-scene-concept.png
-TV/Orb response-phase concept: Meow-TV-Orb-response-concept-v2.png (selected animation reference)
-Purple dragon: still needs an actual successful in-app demonstration and matching cinematic character art.
-App recordings: capture working version 2.0/code202 after validation for photo recognition, Flow, Desk, Studio, avatar creation, all native forms, ring and settings. Earlier Desk/Lumen clips are reference material until checked against current visuals. Confirm the Play build includes the changed idle behavior before advertising it.
+11 — FUTURE DESK ROBOT | 04:40–04:52
+Picture: generic tracked base with the phone mounted horizontally as Lumen. Same adult at his computer. Concept animation may show gentle imagined desk movement. Keep “FUTURE CONCEPT” and “Physical movement unavailable” continuously visible. Computer assistance is shown separately through its configured workspace.
+Narration: “A future desk concept gives Lumen a mobile body. Physical movement is unavailable in this build. Computer assistance uses your separately configured workspace.”
+Production: robot motor control remains disabled. No actual actuation test is part of this storyboard task.
 
-FINAL VERIFICATION BEFORE DELIVERY
-Measure final film <=300 seconds and ensure no QR segment remains.
-Verify every named form appears and the purple dragon is a complete-body transformation.
-Check real-app claims against demonstrated output and public Play availability.
-Show Flow as the default idle view, with Orb selected explicitly before the TV conversation. Verify actual mirroring and audio on supported hardware.
-Keep the future robot label legible for its full segment.
-Use an original narrator or an authorized actor recording.
-Review readable text, scene rhythm, matching action cuts, sound mix, and final release wording.
-Deliver a finished video only after footage, audio and motion assets are actually assembled and rendered; never report this script as the film.
+12 — CLOSE | 04:52–05:00
+Picture: return to the full cat curled on the actual Desk. Flow, Desk and Studio montage, then neutral Meow Assistant 2.0 title.
+Narration: “Plan with Flow. Make something in Studio. Settle into the Desk. Meet Meow Assistant.”
+Use an availability CTA only after the Play release is verified live.
+
+PRODUCTION STATE AND ASSETS
+- Target app revision: working code 202 / 2.0. Its idle change passes 12 focused SDK-free debug checks and lint; full-SDK phone assembly still needs external MWDAT configuration. No 202 APK/AAB has been built or uploaded.
+- Submitted Play build 201 does not contain the new Flow idle default. Its last verified status was in review, not confirmed live. Capture and advertise the changed default only after the applicable build includes it.
+- Two final storyboard PNGs and their prompt set are saved beside this plan. Approved separate cat/raccoon/bunny art, two cast sheets, user/robot concept and TV Orb response v2 remain available.
+- Screens in these illustrated boards are placeholders. Record actual configured app behavior and successful output, with readable interface text, before assembling the film.
+- Earlier chosen Higgsfield generation attempts were refused for plan entitlement. Latest account check: free plan, 50 credits. No successful new Higgsfield video generation job is being reported.
+- Measure the finished edit and voice takes before delivery; this is a planned 300-second timeline, not a measured finished film. Preserve the complete cast, whole-body transformations, no-QR camera scene, Flow idle default, hands-free emphasis and future-robot labeling.
