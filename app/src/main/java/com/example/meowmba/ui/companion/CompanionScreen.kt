@@ -23,8 +23,6 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import com.example.meowmba.ui.flow.homeSwipes
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.offset
@@ -148,49 +146,33 @@ fun CompanionScreen(
                     Modifier.fillMaxSize(), interactive = false)
             }
         } else if (uiState.appTheme == AppTheme.FLOW || uiState.appTheme == AppTheme.DESK) {
-            // Idle avatar (owner, 2026-09-23): after N minutes without a touch, Lumen or the Orb covers
-            // the page until the next touch; Flow keeps running underneath and new items cross the screen.
-            var lastTouch by remember { mutableLongStateOf(System.currentTimeMillis()) }
-            var idle by remember { mutableStateOf(false) }
+            // Idle defaults to Flow; an avatar overlay is an explicit setting.
             val idleKey = uiState.features.idleAvatar
             val idleMinutes = uiState.features.idleAvatarMinutes
             val overlayOpen = uiState.isChatExpanded || uiState.showTiles || uiState.showAppDrawer || uiState.showSettings || uiState.showBrowser
-            LaunchedEffect(idleKey, idleMinutes, overlayOpen, idle, animationsPaused) {
-                if (idleKey == "off" || idle || overlayOpen || animationsPaused) return@LaunchedEffect
-                while (true) {
-                    val wait = lastTouch + idleMinutes * 60_000L - System.currentTimeMillis()
-                    if (wait <= 0) { idle = true; break }
-                    kotlinx.coroutines.delay(wait)
-                }
-            }
-            if (overlayOpen && idle) idle = false
-            val wake = { idle = false; lastTouch = System.currentTimeMillis() }
-            // Home swipes: up apps, down menu, left-to-right Flow, right-to-left chat.
-            Box(Modifier.fillMaxSize()
-                .pointerInput(Unit) {
-                    awaitEachGesture {
-                        awaitFirstDown(requireUnconsumed = false, pass = androidx.compose.ui.input.pointer.PointerEventPass.Initial)
-                        lastTouch = System.currentTimeMillis()
+            IdleHomeTimer(theme = uiState.appTheme, mode = idleKey, minutes = idleMinutes,
+                blocked = overlayOpen, paused = animationsPaused, onFlow = viewModel::openFlow) { idle, wake ->
+                // Home swipes: up apps, down menu, left-to-right Flow, right-to-left chat.
+                Box(Modifier.fillMaxSize()
+                    .homeSwipes(onUp = viewModel::toggleAppDrawer, onDown = viewModel::openTiles,
+                        onLeft = viewModel::openChat, onRight = viewModel::openFlow)) {
+                    if (uiState.appTheme == AppTheme.FLOW) com.example.meowmba.ui.flow.FlowHomeRoute(viewModel, uiState, animationsPaused)
+                    else com.example.meowmba.ui.flow.DeskRoute(viewModel, uiState, animationsPaused || idle, Modifier.fillMaxSize())
+                    if (idle) {
+                        val snap = viewModel.flowRuntime?.snapshot?.collectAsState()?.value
+                        IdleAvatarLayer(
+                            avatar = {
+                                AvatarMotionHost(viewModel, uiState.copy(avatarStyle = IdleAvatar.styleOf(idleKey)), animationsPaused,
+                                    Modifier.fillMaxSize(), interactive = false)
+                            },
+                            snapshot = snap,
+                            onWake = wake,
+                            onFlow = { wake(); viewModel.openFlow() },
+                            onChat = { wake(); viewModel.openChat() },
+                            onApps = { wake(); viewModel.toggleAppDrawer() },
+                            onMenu = { wake(); viewModel.openTiles() },
+                        )
                     }
-                }
-                .homeSwipes(onUp = viewModel::toggleAppDrawer, onDown = viewModel::openTiles,
-                    onLeft = viewModel::openChat, onRight = viewModel::openFlow)) {
-                if (uiState.appTheme == AppTheme.FLOW) com.example.meowmba.ui.flow.FlowHomeRoute(viewModel, uiState, animationsPaused)
-                else com.example.meowmba.ui.flow.DeskRoute(viewModel, uiState, animationsPaused || idle, Modifier.fillMaxSize())
-                if (idle) {
-                    val snap = viewModel.flowRuntime?.snapshot?.collectAsState()?.value
-                    IdleAvatarLayer(
-                        avatar = {
-                            AvatarMotionHost(viewModel, uiState.copy(avatarStyle = IdleAvatar.styleOf(idleKey)), animationsPaused,
-                                Modifier.fillMaxSize(), interactive = false)
-                        },
-                        snapshot = snap,
-                        onWake = wake,
-                        onFlow = { wake(); viewModel.openFlow() },
-                        onChat = { wake(); viewModel.openChat() },
-                        onApps = { wake(); viewModel.toggleAppDrawer() },
-                        onMenu = { wake(); viewModel.openTiles() },
-                    )
                 }
             }
         } else if (uiState.appTheme == AppTheme.PROFESSIONAL) {

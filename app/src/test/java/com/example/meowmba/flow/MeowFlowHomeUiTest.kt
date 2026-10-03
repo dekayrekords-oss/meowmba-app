@@ -2,6 +2,14 @@ package com.example.meowmba.flow
 
 import android.graphics.Bitmap
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -127,5 +135,26 @@ class MeowFlowHomeUiTest {
         assertEquals(Urgency.URGENT, latest.minUrgency)
         rule.onNodeWithText("30m").performClick()
         assertEquals(30, latest.minGapMinutes)
+    }
+
+    @Test
+    @Config(qualifiers = "w320dp-h800dp-xxhdpi")
+    fun idleChoicesFitSmallScreenWithLargeTextAndAllowOrb() {
+        var choice by mutableStateOf(com.example.meowmba.ui.companion.IdleAvatar.DEFAULT_KEY)
+        rule.setContent {
+            val density = LocalDensity.current.density
+            CompositionLocalProvider(LocalDensity provides Density(density, fontScale = 2f)) {
+                FlowAdjustSheet(FlowSettings(), "Not learned yet", night = false,
+                    onChange = {}, onDone = {}, idleAvatar = choice,
+                    onIdleAvatar = { key, _ -> choice = key })
+            }
+        }
+        rule.onNodeWithTag("idle_view_choices").performScrollTo()
+        rule.onNodeWithText("Flow").assertIsSelected().assertIsDisplayed()
+        listOf("Lumen", "Orb", "Off").forEach { rule.onNodeWithText(it).assertIsDisplayed() }
+        shoot("flow-idle-202-small-large-text")
+        rule.onNodeWithText("Orb").performClick()
+        rule.onNodeWithText("Orb").assertIsSelected()
+        assertEquals("orb", choice)
     }
 }

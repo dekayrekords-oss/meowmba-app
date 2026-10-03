@@ -812,9 +812,9 @@ data class CompanionFeatures(
     val showCozmoScreen: Boolean = false,
     /** How much Meow speaks aloud (see [SpeechMode]); grouped here to keep CompanionState under the JVM slot limit. */
     val speechMode: SpeechMode = SpeechMode.IMPORTANT,
-    /** Flow/Desk idle avatar: "lumen", "orb" or "off" (see [IdleAvatar]). */
+    /** Idle view: "flow" by default; optional "lumen", "orb" or "off" (see [IdleAvatar]). */
     val idleAvatar: String = IdleAvatar.DEFAULT_KEY,
-    /** Minutes without a touch before the idle avatar shows. */
+    /** Minutes without a touch before the selected idle view opens. */
     val idleAvatarMinutes: Int = IdleAvatar.DEFAULT_MINUTES,
     /** Desk cat: how often it visits other rooms while idle ([com.example.meowmba.ui.desk.DeskRoomTrips] key). */
     val deskRoomTrips: String = com.example.meowmba.ui.desk.DeskRoomTrips.DEFAULT.key,

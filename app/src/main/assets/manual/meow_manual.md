@@ -43,6 +43,10 @@ The stereo, TV and bookshelf need Android's notification access for Meow, which 
 
 When Meow detects a drive, the full avatar takes over the screen. When the drive ends, you're back in Flow or the Desk.
 
+## When idle
+
+Flow is the default idle view. After the selected time without a touch, the Desk opens Flow without changing your saved home; Back returns to the Desk. In **Flow → Adjust → When idle**, choose **Lumen** or **Orb** if you want an idle avatar instead, or **Off** to keep the current page. These optional avatars show new Flow items as a ribbon; tap to return to the page. Existing explicit idle choices are retained.
+
 ## North Stars
 
 In Flow, tap **Adjust → North Stars**, or tap the North Star line below the date. Add a long-term goal, why it matters, and the steps that make it possible. Meow connects relevant Flow items and recent context to your goals. A connection means "this may matter"; it is not proof that you accomplished something.

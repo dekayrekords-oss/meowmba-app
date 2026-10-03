@@ -67,7 +67,7 @@ fun FlowAdjustSheet(
     /** App-wide voice level; null hides the control (previews/tests). */
     speechMode: com.example.meowmba.ui.companion.SpeechMode? = null,
     onSpeechMode: (com.example.meowmba.ui.companion.SpeechMode) -> Unit = {},
-    /** Idle avatar key ("lumen"/"orb"/"off") and minutes; null hides the group. */
+    /** Idle view key ("flow"/"lumen"/"orb"/"off") and minutes; null hides the group. */
     idleAvatar: String? = null,
     idleMinutes: Int = com.example.meowmba.ui.companion.IdleAvatar.DEFAULT_MINUTES,
     onIdleAvatar: (key: String, minutes: Int) -> Unit = { _, _ -> },
@@ -195,9 +195,12 @@ fun FlowAdjustSheet(
                 }
             }
 
-            if (idleAvatar != null) Group("When idle", "After a while without a touch, Meow rests as an avatar. New things cross the screen; tap to come back.") {
-                SettingRow("Show", null) {
-                    Segmented(com.example.meowmba.ui.companion.IdleAvatar.MODES, idleAvatar) { onIdleAvatar(it, idleMinutes) }
+            if (idleAvatar != null) Group("When idle", "Flow is the default view after inactivity. Choose Lumen or Orb for an avatar, or Off to keep the current page.") {
+                FlowRow(Modifier.fillMaxWidth().padding(top = 12.dp).testTag("idle_view_choices"),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    com.example.meowmba.ui.companion.IdleAvatar.MODES.forEach { option ->
+                        Segmented(listOf(option), idleAvatar) { onIdleAvatar(it, idleMinutes) }
+                    }
                 }
                 if (idleAvatar != "off") SettingRow("After", "Minutes without a touch") {
                     Segmented(com.example.meowmba.ui.companion.IdleAvatar.MINUTES.map { it to "${it}m" }, idleMinutes) { onIdleAvatar(idleAvatar, it) }

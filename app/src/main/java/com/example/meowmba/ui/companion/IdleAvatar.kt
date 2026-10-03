@@ -7,6 +7,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
@@ -14,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -30,17 +33,16 @@ import com.example.meowmba.ui.flow.homeSwipes
 import kotlin.math.roundToInt
 
 /**
- * Owner (2026-09-23): "if the phone is idle it will switch to an avatar, the default being Lumen or
- * Orb. When something comes in, a flow will cross the screen." Flow/Desk stay composed underneath
- * (Flow keeps noticing); the avatar only covers them until the next touch.
+ * Idle defaults to Flow (owner, 2026-10-03). Lumen and Orb remain explicit options;
+ * their overlays keep Flow/Desk underneath and show new Flow items as a ribbon.
  */
 object IdleAvatar {
     const val PREF_MODE = "idle_avatar"
     const val PREF_MINUTES = "idle_avatar_minutes"
-    const val DEFAULT_KEY = "lumen"
+    const val DEFAULT_KEY = "flow"
     const val DEFAULT_MINUTES = 2
     val MINUTES = listOf(1, 2, 5, 10)
-    val MODES = listOf("lumen" to "Lumen", "orb" to "Orb", "off" to "Off")
+    val MODES = listOf("flow" to "Flow", "lumen" to "Lumen", "orb" to "Orb", "off" to "Off")
 
     fun keyOf(stored: String?) = MODES.firstOrNull { it.first == stored }?.first ?: DEFAULT_KEY
     fun styleOf(key: String): AvatarStyle = if (key == "orb") AvatarStyle.SIGNAL else AvatarStyle.LUMEN
@@ -50,6 +52,40 @@ object IdleAvatar {
         (listOfNotNull(snap.interrupt?.item, snap.main) + snap.more)
             .distinctBy { it.intentionId }
             .filter { it.intentionId !in seen && !it.intentionId.startsWith("setup-") }
+}
+
+/** Idle navigation never saves over the selected home, or interrupts an open tool or driving avatar. */
+@Composable
+internal fun IdleHomeTimer(
+    theme: AppTheme,
+    mode: String = IdleAvatar.DEFAULT_KEY,
+    minutes: Int = IdleAvatar.DEFAULT_MINUTES,
+    blocked: Boolean = false,
+    paused: Boolean = false,
+    onFlow: () -> Unit,
+    content: @Composable (idleAvatar: Boolean, wake: () -> Unit) -> Unit,
+) {
+    val key = IdleAvatar.keyOf(mode)
+    var touches by remember(theme, key, minutes) { mutableLongStateOf(0L) }
+    var idle by remember(theme, key, minutes) { mutableStateOf(false) }
+    val wake: () -> Unit = { idle = false; touches++ }
+    LaunchedEffect(blocked, paused) { if (blocked || paused) idle = false }
+    LaunchedEffect(theme, key, minutes, touches, blocked, paused, idle) {
+        val home = theme == AppTheme.FLOW || theme == AppTheme.DESK
+        if (!home || key == "off" || idle || blocked || paused || (key == "flow" && theme == AppTheme.FLOW))
+            return@LaunchedEffect
+        kotlinx.coroutines.delay(minutes.coerceAtLeast(1) * 60_000L)
+        if (key == "flow") onFlow() else idle = true
+    }
+    Box(Modifier.fillMaxSize().pointerInput(theme, key, minutes) {
+        awaitEachGesture {
+            awaitFirstDown(requireUnconsumed = false, pass = androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+            // Keep an opted-in avatar through pointer-up so its click/swipe action can complete.
+            touches++
+        }
+    }) {
+        content(idle && !blocked && !paused, wake)
+    }
 }
 
 /**
