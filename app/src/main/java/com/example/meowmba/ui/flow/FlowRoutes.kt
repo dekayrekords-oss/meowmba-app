@@ -75,6 +75,9 @@ internal suspend fun handleFlowPrimary(vm: CompanionViewModel, context: Context,
         id == AppIntentions.SETUP_LOCATION -> requestPermission(
             if (com.example.meowmba.BuildConfig.BACKGROUND_LOCATION_ENABLED &&
                 com.example.meowmba.core.context.live.ContextSensing.canLocate(context)) android.Manifest.permission.ACCESS_BACKGROUND_LOCATION
+            // Android 12+ requires coarse and fine together for precise access.
+            // Public context uses balanced accuracy, so approximate access is sufficient.
+            else if (!com.example.meowmba.BuildConfig.BACKGROUND_LOCATION_ENABLED) android.Manifest.permission.ACCESS_COARSE_LOCATION
             else android.Manifest.permission.ACCESS_FINE_LOCATION)
         id.startsWith(AppIntentions.PROJECT) ->
             item?.facts?.get("project_id")?.toLongOrNull()?.let(vm::openProject) ?: vm.toggleProjectsScreen()

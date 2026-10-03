@@ -36,6 +36,16 @@ class PlayLocationAccessTest {
         assertFalse(ContextSensing.canReceiveLocation(context))
     }
 
+    @Test fun `approximate access works only while Meow is visible`() {
+        Shadows.shadowOf(context).denyPermissions(Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+        Shadows.shadowOf(context).grantPermissions(Manifest.permission.ACCESS_COARSE_LOCATION)
+        ContextSensing.setAppVisible(context, true)
+        assertTrue(ContextSensing.canReceiveLocation(context))
+        ContextSensing.setAppVisible(context, false)
+        assertFalse(ContextSensing.canReceiveLocation(context))
+    }
+
     @Test fun `foreground visibility cannot replace location consent`() {
         Shadows.shadowOf(context).denyPermissions(Manifest.permission.ACCESS_COARSE_LOCATION,
             Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_BACKGROUND_LOCATION)
