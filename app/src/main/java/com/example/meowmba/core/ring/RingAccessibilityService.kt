@@ -53,6 +53,7 @@ class RingAccessibilityService : AccessibilityService() {
         else ring.log("Ignored tap: active app changed")
     }
     override fun onServiceConnected() {
+        if (!BuildConfig.RING_CONTROLS_ENABLED) { disableSelf(); return }
         instance = this; ring = AndroidSmartRing.get(this)
         clickTarget = RingClickTarget(this, ring::controlsActivity)
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(screenReceiver,
@@ -68,7 +69,7 @@ class RingAccessibilityService : AccessibilityService() {
         if (!::ring.isInitialized || !::clickTarget.isInitialized) return
         ring.checkSleepDeadline()
         val state = ring.state.value
-        if (state.connected && !state.paused && !state.testing && !state.sleeping && !gestureBusy && state.showTarget &&
+        if (state.controlsConsent && state.connected && !state.paused && !state.testing && !state.sleeping && !gestureBusy && state.showTarget &&
             state.mappings.values.any { it in ringPointerActions } && unlocked() && ringAppAllowed(state, foregroundPackage())) clickTarget.show()
         else clickTarget.hide()
     }
@@ -135,9 +136,9 @@ class RingAccessibilityService : AccessibilityService() {
             else -> null
         }
         val state = ring.state.value
-        val target = foregroundPackage()
         // The tester binds a single Android input descriptor to the selected ring.
-        if (!state.connected || !unlocked()) { cancelPending(); return false }
+        if (!state.controlsConsent || !state.connected || !unlocked()) { cancelPending(); return false }
+        val target = foregroundPackage()
         if (!state.testing && (state.paused || !ringAppAllowed(state, target))) { cancelPending(); return false }
         if (state.testing) {
             if (!ring.verifyInput(device.descriptor, device.name)) return false
@@ -172,8 +173,9 @@ class RingAccessibilityService : AccessibilityService() {
         return true
     }
     private fun perform(gesture: String) {
-        ring.recordGesture(gesture)
         val state = ring.state.value
+        if (!state.controlsConsent) return
+        ring.recordGesture(gesture)
         if (state.testing) { ring.verifyGesture(gesture); return }
         if (ring.consumeSleepingGesture(gesture)) return
         if (state.paused || !state.connected || !unlocked()) return
@@ -235,7 +237,7 @@ class RingAccessibilityService : AccessibilityService() {
             pendingTouch = null
             val state = ring.state.value
             ring.checkSleepDeadline()
-            if (!state.connected || state.paused || state.testing || ring.state.value.sleeping || !unlocked() ||
+            if (!state.controlsConsent || !state.connected || state.paused || state.testing || ring.state.value.sleeping || !unlocked() ||
                 foregroundPackage() != target || !ringAppAllowed(state, target)) {
                 gestureBusy = false; ring.log("$label cancelled: controls or active app changed"); refreshTarget()
                 return@Runnable

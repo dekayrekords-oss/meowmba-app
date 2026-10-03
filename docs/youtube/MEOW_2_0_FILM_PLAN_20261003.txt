@@ -1,18 +1,18 @@
 MEOW ASSISTANT 2.0 — FIVE-MINUTE STORYBOARD AND FILM PLAN
-Revised October 3, 2026: stronger ring and hands-free driving/Desk emphasis.
+Revised October 3, 2026: ring scrolling, cursor movement and clicking are required features of the upcoming Play build.
 Planned length: 5:00 maximum. Landscape finished film, 1920 x 1080, 30 fps.
 Status: illustrated storyboard and script. No finished film or narration has been rendered.
 
 STORYBOARD PAGES
-Page 1: Meow-2.0-storyboard-1-ring-and-voice.png — scenes 01–06.
-Page 2: Meow-2.0-storyboard-2-ring-and-voice.png — scenes 07–12.
+Page 1: Meow-2.0-storyboard-1-ring-controls.png — scenes 01–06.
+Page 2: Meow-2.0-storyboard-2-ring-controls.png — scenes 07–12.
 Read left to right, then top to bottom. Board images are concept art; final screen inserts use real app recordings.
-Both boards were made with built-in image generation. The complete prompt set is Meow-2.0-storyboard-prompts.txt.
+Both boards were revised with built-in image generation. The current prompt set is Meow-2.0-ring-control-storyboard-prompts.txt; earlier base prompts remain in Meow-2.0-storyboard-prompts.txt.
 
 CREATIVE THREAD
 The approved charcoal cat with lime eyes, glowing green circuit whiskers, mint collar and power tag guides the film. It jumps, investigates, organizes and tinkers; match cuts connect these actions to the actual app. Transformations replace the whole body with the raccoon, bunny, dragon or other form. Preserve the familiar identity across forms.
 The same fictional adult with dark wavy hair and a forest-teal sweater appears throughout. Ring close-ups recur at the camera, car and Desk, with the main ring section at 03:50.
-Driving, Desk voice use and the ring/hands-free section have 35 seconds each: 105 seconds of the five-minute plan. Keep the phone mounted during voice demonstrations. Setup and on-demand reading requests remain visibly separate from voice interaction.
+Driving/context, Desk and the ring-control section have 35 seconds each: 105 seconds of the five-minute plan. Here hands-free means controlling the phone with the ring without touching the phone: swipe to scroll, aim the click target with configured tap/swipe combinations, then tap to click. Voice is an additional feature. Keep gestures, the resulting phone action and the cat's matching performance in the same shot or a clear match cut. Setup, ring readings and voice are distinct capabilities.
 Narrator: original professional British baritone with warm theatrical delivery, or an authorized Matt Berry recording. No synthesized imitation. User and Orb dialogue use original voices.
 
 01 — MEET MEOW | 00:00–00:10
@@ -27,16 +27,15 @@ Narration: “Take a photo of something in front of you and ask Meow about it. Y
 Picture: user walks outside with Flow on the phone. Show one main item, its context and next action; ask a question or correct it. Add the North Star “Make my own weekly planner,” its reason and two manageable steps. The cat bounds alongside as guide.
 Narration: “Flow brings the next useful things into view. Open an item, ask about it, or correct what Meow has understood. For a longer ambition, add a North Star: what you want, why it matters, and steps toward it. Relevant context can connect to that goal as you go.”
 
-04 — HANDS-FREE DRIVING AND CONTEXT | 01:10–01:45
-Picture: configure voice/wake phrase and driving mode while parked. Show the ring-wearing hand on the wheel and the phone fixed in its mount. After a real drive-detected state is verified, the full avatar appears. The user asks aloud, with no phone touching. Show listening, actual response audio and the conversation follow-up. Then show an explicitly configured wireless charger bringing up the avatar; finish with everyday idle Flow and return after driving ends.
-User example: “Hey Meow, what's next?” Adapt the reply to the actual demo context.
-Narration: “With voice mode configured, leave Meow in its mount and ask aloud. When driving is detected, the full avatar comes forward. A configured wireless-charging option can also bring it into view. When the drive ends, your previous home returns. For everyday idle use, Flow comes first.”
-Capture: parked setup; no manual phone interaction during driving. Actual voice round trip, drive cue and charger behavior must work on the filmed device. Android detects wireless power, not a named physical dock. Public location context runs while the app is visible.
+04 — RING, DRIVING AND CONTEXT | 01:10–01:45
+Picture: set up and demonstrate ring controls while parked, with the phone secured in its car mount. Macro thumb swipe on the ring; match cut to a real phone list scrolling. Aim the click target with a verified configured ring combination; single tap selects the item at the target. The cat swipes cards and taps a matching item. Also show the full avatar after a real driving cue, an explicitly configured wireless charger bringing up the avatar in a separate desk insert, then everyday idle Flow and return after driving ends. The mounted phone, wireless-charger phone and idle phone are separate sequential shots of the same device.
+Narration: “Leave your phone in its mount. With your ring configured, swipe to scroll, move the target and tap to select, without touching the screen. When driving is detected, the full avatar comes forward. A wireless-charging option can also bring it into view. For everyday idle use, Flow comes first.”
+Capture: gestures filmed while parked. Consent, Android service enablement, connected ring, verified inputs, allowed app and unpaused controls are required. Record the actual gesture-to-action result; no fabricated successful response. Android detects wireless power, not a named physical dock. Public location context runs while the app is visible. The ring controls the phone, not vehicle systems.
 
-05 — HANDS-FREE AT YOUR DESK | 01:45–02:20
-Picture: user works at the computer, ring visible on a working hand. Phone stays on its stand with Desk as the main interface and a compact voice indicator/reply. Ask “Hey Meow, plan my afternoon.” Show the actual spoken response while the user continues typing or writing. Match cat gestures to native Desk actions. Cut through the computer, corkboard, sticky note, letter tray, clock and drawers; briefly reveal the living room and bedroom.
-Narration: “At your Desk, your hands can stay with the work. Ask Meow by voice while the phone stays in its stand. The computer leads to projects, the corkboard keeps a goal in sight, and the sticky note points to what is next. There are three rooms to explore, with your tools close by.”
-Capture: enabled voice mode, microphone permission, working speech output and real Desk route. Use actual replies. Computer assistance requires its separately configured workspace.
+05 — RING AT YOUR DESK | 01:45–02:20
+Picture: phone stays on its stand with Desk as the main interface. Show the index-finger ring and thumb swipe, the click target moving to a Desk object, and the single tap opening that object. Within its opened list, swipe to scroll and select a real task. The cat paws through note cards, then taps the chosen card; cut periodically to the native Desk companion matching the performance. Continue through the computer, corkboard, sticky note, letter tray, clock and drawers; briefly reveal the living room and bedroom. Voice may provide one short supplementary exchange with a compact indicator while Desk remains visible.
+Narration: “At your Desk, use the ring to move through Meow while your phone stays in its stand. Swipe to scroll, aim, and tap to choose. The computer leads to projects, the corkboard keeps a goal in sight, and the sticky note points to what is next. Your companion follows the action, with three rooms to explore.”
+Capture: real Desk route and physical ring acceptance. If voice is included, verify microphone permission and the actual round trip. Computer assistance uses a separately configured workspace; do not depict the ring directly controlling a PC mouse or robot.
 
 06 — DEVELOPMENT STUDIO | 02:20–02:55
 Picture: full raccoon transformation. Open a real project and configured workspace. Submit the prompt, show real progress, open the saved result and request one change. Return to the session after moving screens. Condense real generation time visibly if needed.
@@ -56,12 +55,12 @@ Order: Eyes-only Lumen, Cat, Dog, Squirrel, Raccoon, Australian shepherd, Owl, D
 Narration: “Meet Lumen's built-in cast: eyes only, cat, dog, squirrel, raccoon, Australian shepherd, owl, duck, bunny and pig. Then alien, robot, panda, fruit fly, Clippy and the Wizard. Sixteen appearances, one continuing companion, with custom creations to add forms of your own.”
 Capture: actual native forms supplement the cinematic characters. Do not crop transformations to just faces.
 
-09 — RING + HANDS-FREE | 03:50–04:25
-Picture: foreground ring macro, then actual Smart Ring setup/connection status. Pair a compatible Bluetooth ring and request on-demand battery and step readings. Show the actual returned data on the phone. The physical ring is represented without an invented display. Use sequential inserts of the same device, not a requirement for two phones. Then return to voice at the Desk, hands occupied, and a mounted car voice cutaway. Pairing/readings and voice conversation are distinct capabilities; there is no causal ring-gesture-to-app cut in this public release film.
-Suggested split: 0–6 seconds ring and connection; 6–16 actual on-demand readings; 16–25 Desk voice; 25–32 mounted car voice; 32–35 return to Flow and the cat.
-Narration: “Connect your compatible Bluetooth ring and request battery or step readings when you need them. See the connection and the returned information on your phone. Then keep Meow in place and continue by voice—at your Desk or in the car—with your hands staying with the task.”
+09 — RING SCROLL + CLICK | 03:50–04:25
+Picture: ring macro with the thumb swiping and tapping the black ring. Show actual pairing, the separate Accessibility disclosure/consent and a short gesture-verification insert. Apply the scroll/click preset, choose allowed apps and unpause. The connected phone stays on its stand: scroll a Flow list, aim the click target at a real item, then single tap to open it. Show cursor motion from verified combinations. Match the cat sorting and tapping notes to native app responses. Finish with on-demand battery/step readings actually returned by the ring. Use sequential inserts of the same device; no invented ring display or sensor numbers.
+Suggested split: 0–7 seconds ring, consent and setup; 7–16 physical swipe with actual scrolling; 16–25 target motion and single-tap selection; 25–30 pause/sleep and consumed double-tap wake; 30–35 returned readings and cat/Flow match cut.
+Narration: “The ring puts scrolling and selection at your fingertip. Connect it, review the controls and verify your gestures. Swipe to scroll. Move the target, then tap to choose—without touching your phone. You decide where it can act, and you can pause or put the controls to sleep. Battery and step readings are available on demand.”
 Supporting montage: talk/type, file import, memory search/correction/pin, calendar or alarms, weather or directions. Keep real UI readable; do not rush every tool into a single shot.
-Play scope: ring connection and on-demand readings are supported. Accessibility scrolling, clicking and cursor gestures belong to the private phone edition and are excluded from this default Play cut. They may be shown only in a separate clearly labeled private-phone treatment if requested. No ring control of a car or desktop is claimed. Wellness sensors, if added, require the experimental/nonmedical label and real hardware results.
+Play scope: the owner requires ring scrolling, clicking and cursor movement in the regular Play build. Candidate 202 now includes the separate ring service and controls flag, while autonomous phone Accessibility remains excluded. This is source preparation, not a published feature: full-SDK build, real ring acceptance, declaration/reviewer video, privacy/listing publication and Google approval remain release gates. Submitted build 201 does not include the controls. Use 202 or its verified successor for final app capture; no private-edition badge. No ring control of a car or desktop is claimed. Wellness sensors require experimental/nonmedical labeling and actual hardware results.
 
 10 — ORB ON THE TV | 04:25–04:40
 Picture: explicitly choose Orb, then use the phone's actual compatible screen-mirroring mechanism. The same Orb appears on phone and TV. Labeled particles peel away, spring down with fading trails and gather toward the forming reply beneath the sphere. The Orb retains its volume and pulses with speech, then settles. This matches the app's visual parameter motifs; it does not expose live model weights or hidden reasoning.
@@ -81,8 +80,8 @@ Narration: “Plan with Flow. Make something in Studio. Settle into the Desk. Me
 Use an availability CTA only after the Play release is verified live.
 
 PRODUCTION STATE AND ASSETS
-- Target app revision: working code 202 / 2.0. Its idle change passes 12 focused SDK-free debug checks and lint; full-SDK phone assembly still needs external MWDAT configuration. No 202 APK/AAB has been built or uploaded.
-- Submitted Play build 201 does not contain the new Flow idle default. Its last verified status was in review, not confirmed live. Capture and advertise the changed default only after the applicable build includes it.
+- Target app revision: working code 202 / 2.0, including Flow idle and user-operated ring controls. The earlier idle change passes 12 focused SDK-free checks; the ring revision passes 24 focused ring and 16 public-configuration checks. Refreshed lint has zero errors, 231 warnings and 12 hints. Full-SDK phone assembly still needs external MWDAT configuration. No 202 APK/AAB has been built or uploaded. Details: Meow-202-ring-release-status.txt.
+- Submitted Play build 201 contains neither the new Flow idle default nor ring scroll/click controls. Its last verified status was in review, not confirmed live. Final capture and availability claims require the applicable build and release verification.
 - Two final storyboard PNGs and their prompt set are saved beside this plan. Approved separate cat/raccoon/bunny art, two cast sheets, user/robot concept and TV Orb response v2 remain available.
 - Screens in these illustrated boards are placeholders. Record actual configured app behavior and successful output, with readable interface text, before assembling the film.
 - Earlier chosen Higgsfield generation attempts were refused for plan entitlement. Latest account check: free plan, 50 credits. No successful new Higgsfield video generation job is being reported.

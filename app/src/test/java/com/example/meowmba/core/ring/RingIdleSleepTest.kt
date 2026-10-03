@@ -60,8 +60,9 @@ class RingIdleSleepTest {
         h.advance(90_000); assertFalse(h.sleep.sleeping)
         h.sleep.configure(true, 5); val stale = h.timers.last().action
         h.sleep.configure(false, 5); h.advance(5_000); stale(); assertFalse(h.sleep.sleeping)
-        val ready = RingState(connected = true, accessibility = true, paused = false)
+        val ready = RingState(controlsConsent = true, connected = true, accessibility = true, paused = false)
         assertTrue(ringSleepEligible(ready)); assertTrue(ringSleepEligible(ready.copy(sleeping = true)))
+        assertFalse(ringSleepEligible(ready.copy(controlsConsent = false)))
         assertFalse(ringSleepEligible(ready.copy(testing = true)))
         assertFalse(ringSleepEligible(ready.copy(paused = true)))
         assertFalse(ringSleepEligible(ready.copy(connected = false)))

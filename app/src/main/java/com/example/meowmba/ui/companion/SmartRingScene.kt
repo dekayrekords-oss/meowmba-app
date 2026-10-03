@@ -18,8 +18,12 @@ import com.example.meowmba.core.ring.*
 internal fun SmartRingScene(onBack: () -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val driver = remember(context) { AndroidSmartRing.get(context) }
+    var disclosure by remember { mutableStateOf(false) }
     RingSettingsPage("Smart Ring", onBack) {
         val state by driver.state.collectAsState()
+        LaunchedEffect(state.connected) {
+            if (state.connected && !state.controlsConsent && com.example.meowmba.BuildConfig.RING_CONTROLS_ENABLED) disclosure = true
+        }
         DisposableEffect(driver) { onDispose { driver.setTesting(false); driver.stopSensorTest() } }
         Text("R08 / QRing", style = MaterialTheme.typography.titleMedium)
         Text(state.status)
@@ -35,17 +39,18 @@ internal fun SmartRingScene(onBack: () -> Unit) {
             }
         }
         OutlinedButton(onClick = driver::openBluetooth) { Text("Bluetooth settings") }
-        if (!com.example.meowmba.BuildConfig.PHONE_AUTOMATION_ENABLED) {
+        if (!com.example.meowmba.BuildConfig.RING_CONTROLS_ENABLED) {
             Text("Cross-app ring controls and the gesture tester are unavailable in this edition. Bluetooth connection and on-demand sensor readings stay on this phone.")
             RingTestPanel(state, driver::testSensor, driver::stopSensorTest, driver::clearTestResults, showInput = false)
             return@RingSettingsPage
         }
         HorizontalDivider(Modifier.padding(vertical = 12.dp))
         Text(if (state.accessibility) "Accessibility service connected" else "Accessibility service is off")
-        Text("Enable Meowmba Ring Controls to receive ring keys and scroll in allowed apps. Input and screen actions stay on this phone. Meowmba does not record screen contents.", style = MaterialTheme.typography.bodySmall)
-        OutlinedButton(onClick = driver::openAccessibility) { Text("Open Accessibility settings") }
-        RingToggle("Pause ring controls", state.paused, driver::setPaused)
-        RingToggle("Gesture tester (consume inputs without actions)", state.testing, driver::setTesting)
+        Text("Use your ring to scroll, move the click target and select controls without touching the phone. Review the Accessibility disclosure before enabling these controls.", style = MaterialTheme.typography.bodySmall)
+        OutlinedButton(onClick = { if (state.controlsConsent) driver.openAccessibility() else disclosure = true }) { Text("Open Accessibility settings") }
+        if (state.controlsConsent) OutlinedButton(onClick = { driver.setControlsConsent(false) }) { Text("Withdraw ring controls consent") }
+        RingToggle("Pause ring controls", state.paused, driver::setPaused, enabled = state.controlsConsent)
+        RingToggle("Gesture tester (consume inputs without actions)", state.testing, driver::setTesting, enabled = state.controlsConsent)
         Text("Sleep mode", style = MaterialTheme.typography.titleMedium)
         RingToggle("Sleep after inactivity", state.sleepEnabled, driver::setSleepEnabled)
         Text(if (state.sleeping) "Ring controls asleep · double tap to wake" else if (ringSleepEligible(state)) "Ring controls awake" else "Sleep timer inactive")
@@ -115,12 +120,23 @@ internal fun SmartRingScene(onBack: () -> Unit) {
         OutlinedButton(onClick = driver::exportDiagnostics) { Text("Share diagnostic log") }
         Text("Diagnostics include Meowmba's connection and input events. They are not a firmware backup or QRing traffic capture. Firmware flashing is not included.", style = MaterialTheme.typography.bodySmall)
     }
+    if (disclosure) AlertDialog(onDismissRequest = { disclosure = false },
+        title = { Text("Enable ring controls") },
+        text = { Column(Modifier.verticalScroll(rememberScrollState())) {
+            Text("Meow uses Android's AccessibilityService API to receive your ring's key events and access the active app's package, window bounds and control structure. This lets your configured ring gestures scroll, move the click target, click a control or go Back in allowed apps.")
+            Spacer(Modifier.height(12.dp))
+            Text("The ring service processes this information on your phone. It does not record screen text or send screen contents or ring input to AI providers. Actions happen only from your verified ring gestures while the phone is unlocked. Controls start paused. You choose the allowed apps; Allow all apps is optional.")
+            Spacer(Modifier.height(12.dp))
+            Text("You can decline, pause controls, withdraw consent here or turn off Meowmba Ring Controls in Android Accessibility settings.")
+        } },
+        confirmButton = { TextButton(onClick = { driver.setControlsConsent(true); disclosure = false; driver.openAccessibility() }) { Text("Agree and continue") } },
+        dismissButton = { TextButton(onClick = { disclosure = false }) { Text("Not now") } })
 }
 @Composable
-private fun RingToggle(label: String, value: Boolean, change: (Boolean) -> Unit) {
+private fun RingToggle(label: String, value: Boolean, change: (Boolean) -> Unit, enabled: Boolean = true) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(label, modifier = Modifier.weight(1f).padding(top = 12.dp))
-        Switch(checked = value, onCheckedChange = change, modifier = Modifier.semantics { contentDescription = label })
+        Switch(checked = value, onCheckedChange = change, enabled = enabled, modifier = Modifier.semantics { contentDescription = label })
     }
 }
 

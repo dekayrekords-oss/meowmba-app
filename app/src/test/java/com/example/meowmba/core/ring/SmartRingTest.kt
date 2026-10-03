@@ -14,8 +14,9 @@ class SmartRingTest {
         assertEquals(setOf("com.example.meowmba", "org.mozilla.firefox"), ringAllowedPackages("com.example.meowmba,\norg.mozilla.firefox com.example.meowmba"))
     }
     @Test fun controlsRequireConnectionUnpausedVerifiedGestureAndAllowedApp() {
-        val ready = RingState(connected = true, paused = false, verifiedGestures = setOf("Next", "Double tap"))
+        val ready = RingState(controlsConsent = true, connected = true, paused = false, verifiedGestures = setOf("Next", "Double tap"))
         assertEquals(RingAction.SCROLL_DOWN, ringActionFor(ready, "Next", "com.example.meowmba"))
+        assertEquals(RingAction.NONE, ringActionFor(ready.copy(controlsConsent = false), "Next", "com.example.meowmba"))
         assertEquals(RingAction.NONE, ringActionFor(ready.copy(paused = true), "Next", "com.example.meowmba"))
         assertEquals(RingAction.NONE, ringActionFor(ready.copy(connected = false), "Next", "com.example.meowmba"))
         assertEquals(RingAction.NONE, ringActionFor(ready.copy(testing = true), "Next", "com.example.meowmba"))
@@ -27,10 +28,11 @@ class SmartRingTest {
         assertEquals(RingAction.BACK, ringActionFor(ready.copy(reverse = true), "Double tap", "com.example.meowmba"))
     }
     @Test fun allAppsStillRequiresForegroundAndVerifiedInput() {
-        val global = RingState(allApps = true, connected = true, paused = false, allowlist = "",
+        val global = RingState(controlsConsent = true, allApps = true, connected = true, paused = false, allowlist = "",
             verifiedGestures = setOf("Next", "Single tap"), mappings = ringScrollClickMappings())
         assertEquals(RingAction.SCROLL_DOWN, ringActionFor(global, "Next", "com.android.settings"))
         assertEquals(RingAction.CLICK, ringActionFor(global, "Single tap", "org.mozilla.firefox"))
+        assertEquals(RingAction.NONE, ringActionFor(global.copy(controlsConsent = false), "Single tap", "org.mozilla.firefox"))
         assertEquals(RingAction.NONE, ringActionFor(global, "Next", null))
         assertEquals(RingAction.NONE, ringActionFor(global, "Next", ""))
         assertEquals(RingAction.NONE, ringActionFor(global.copy(paused = true), "Next", "com.android.settings"))
@@ -61,7 +63,7 @@ class SmartRingTest {
 
     @Test fun leftCursorMovementComposesVerifiedTapAndPreviousWithoutWeakeningClickGates() {
         // Reproduce the phone: right combo verified, left combo missing, all its inputs verified.
-        val ready = RingState(connected = true, paused = false, allApps = true,
+        val ready = RingState(controlsConsent = true, connected = true, paused = false, allApps = true,
             mappings = ringScrollClickMappings(),
             verifiedGestures = setOf("Single tap", "Double tap", "Next", "Previous", "1 tap + Next"))
         assertEquals(RingAction.POINTER_RIGHT, ringActionFor(ready, "1 tap + Next", "org.mozilla.firefox"))

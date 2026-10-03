@@ -22,6 +22,37 @@ import org.robolectric.annotation.GraphicsMode
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class SmartRingUiTest {
     @get:Rule val rule = createAndroidComposeRule<androidx.activity.ComponentActivity>()
+    @Test fun disclosureRequiresAgreementAndWithdrawalStopsControls() {
+        val driver = AndroidSmartRing.get(rule.activity)
+        driver.setControlsConsent(false)
+        rule.setContent { MeowmbaTheme { SmartRingScene(onBack = {}) } }
+        rule.onNodeWithContentDescription("Pause ring controls").performScrollTo().assertIsNotEnabled()
+        rule.onNodeWithText("Open Accessibility settings").performScrollTo().performClick()
+        rule.onNodeWithText("Enable ring controls").assertIsDisplayed()
+        rule.waitForIdle()
+        rule.runOnIdle {
+            val view = org.robolectric.shadows.ShadowDialog.getLatestDialog().window!!.decorView
+            val disclosureImage = android.graphics.Bitmap.createBitmap(view.width, view.height, android.graphics.Bitmap.Config.ARGB_8888)
+            view.draw(android.graphics.Canvas(disclosureImage))
+            val file = java.io.File("build/reports/smart-ring/disclosure-320.png")
+            file.parentFile?.mkdirs()
+            file.outputStream().use { disclosureImage.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+            disclosureImage.recycle()
+        }
+        rule.onNodeWithText("Not now").performClick()
+        org.junit.Assert.assertFalse(driver.state.value.controlsConsent)
+        driver.setPaused(false); driver.setTesting(true)
+        org.junit.Assert.assertTrue(driver.state.value.paused)
+        org.junit.Assert.assertFalse(driver.state.value.testing)
+        rule.onNodeWithText("Open Accessibility settings").performScrollTo().performClick()
+        rule.onNodeWithText("Agree and continue").performClick()
+        org.junit.Assert.assertTrue(driver.state.value.controlsConsent)
+        org.junit.Assert.assertEquals(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS,
+            org.robolectric.Shadows.shadowOf(org.robolectric.RuntimeEnvironment.getApplication()).nextStartedActivity.action)
+        rule.onNodeWithText("Withdraw ring controls consent").performScrollTo().performClick()
+        org.junit.Assert.assertFalse(driver.state.value.controlsConsent)
+        org.junit.Assert.assertTrue(driver.state.value.paused)
+    }
     @Test fun testerPreviewsDoNotSendCommandsAndSensorsShowRealAvailability() {
         var requests = 0
         val state = RingState(testing = true, lastInput = "Double tap", gestureCounts = mapOf("Double tap" to 2),
@@ -65,6 +96,8 @@ class SmartRingUiTest {
             file.outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
             bitmap.recycle()
         }
+        rule.onNodeWithText("Open Accessibility settings").performScrollTo().performClick()
+        rule.onNodeWithText("Agree and continue").performClick()
         rule.onNodeWithText("Pause ring controls").performScrollTo().assertIsDisplayed()
         rule.onAllNodes(isToggleable())[0].assertIsOn()
         rule.onNodeWithText("Sleep after: 30 seconds").performScrollTo().assertIsDisplayed()

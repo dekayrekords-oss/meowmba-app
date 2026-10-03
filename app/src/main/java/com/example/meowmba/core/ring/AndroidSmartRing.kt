@@ -26,9 +26,10 @@ class AndroidSmartRing private constructor(private val context: Context) : Smart
     }
     private val prefs = context.getSharedPreferences("smart_ring", Context.MODE_PRIVATE)
     override val state = MutableStateFlow(RingState(
+        controlsConsent = prefs.getBoolean("controls_consent_v1", false),
         sleepEnabled = prefs.getBoolean("sleep_enabled", true),
         sleepAfterSeconds = prefs.getInt("sleep_after_seconds", 30).coerceIn(5, 300),
-        paused = prefs.getBoolean("paused", true), reverse = prefs.getBoolean("reverse", false),
+        paused = !prefs.getBoolean("controls_consent_v1", false) || prefs.getBoolean("paused", true), reverse = prefs.getBoolean("reverse", false),
         distance = prefs.getFloat("distance", .35f).coerceIn(.15f, .65f),
         allApps = prefs.getBoolean("all_apps", false), showTarget = prefs.getBoolean("show_target", true),
         allowlist = prefs.getString("allowlist", context.packageName) ?: context.packageName,
@@ -339,8 +340,14 @@ class AndroidSmartRing private constructor(private val context: Context) : Smart
     fun accessibilityConnected(value: Boolean) { state.value = state.value.copy(accessibility = value) }
     private fun launch(intent: Intent) { runCatching { context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.onFailure { message("Could not open settings: ${it.message}") } }
     override fun openAccessibility() {
-        if (com.example.meowmba.BuildConfig.PHONE_AUTOMATION_ENABLED) launch(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        if (com.example.meowmba.BuildConfig.RING_CONTROLS_ENABLED && state.value.controlsConsent) launch(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        else if (!state.value.controlsConsent) message("Review and accept the ring controls disclosure first.")
         else message("Cross-app ring controls are unavailable in this edition.")
+    }
+    override fun setControlsConsent(value: Boolean) {
+        prefs.edit().putBoolean("controls_consent_v1", value).putBoolean("paused", true).apply()
+        state.value = state.value.copy(controlsConsent = value, paused = true, testing = false, pressedKeys = emptySet())
+        RingAccessibilityService.instance?.cancelPending()
     }
     override fun openBluetooth() = launch(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
     override fun resetVerification() {
@@ -349,8 +356,8 @@ class AndroidSmartRing private constructor(private val context: Context) : Smart
         state.value = state.value.copy(paused = true, testing = false, inputDevice = "", verifiedGestures = emptySet())
         RingAccessibilityService.instance?.cancelPending()
     }
-    override fun setPaused(value: Boolean) { prefs.edit().putBoolean("paused", value).apply(); state.value = state.value.copy(paused = value); RingAccessibilityService.instance?.cancelPending() }
-    override fun setTesting(value: Boolean) { state.value = state.value.copy(testing = value, pressedKeys = emptySet()); RingAccessibilityService.instance?.cancelPending() }
+    override fun setPaused(value: Boolean) { val paused = value || !state.value.controlsConsent; prefs.edit().putBoolean("paused", paused).apply(); state.value = state.value.copy(paused = paused); RingAccessibilityService.instance?.cancelPending() }
+    override fun setTesting(value: Boolean) { state.value = state.value.copy(testing = value && state.value.controlsConsent, pressedKeys = emptySet()); RingAccessibilityService.instance?.cancelPending() }
     override fun setReverse(value: Boolean) { prefs.edit().putBoolean("reverse", value).apply(); state.value = state.value.copy(reverse = value) }
     override fun setDistance(value: Float) { val distance = value.coerceIn(.15f, .65f); prefs.edit().putFloat("distance", distance).apply(); state.value = state.value.copy(distance = distance) }
     override fun setAllApps(value: Boolean) {

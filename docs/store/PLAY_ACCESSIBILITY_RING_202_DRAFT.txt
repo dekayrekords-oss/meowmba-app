@@ -1,0 +1,52 @@
+Meow Assistant 2.0 / candidate 202 — ring Accessibility declaration draft
+2026-10-03. Local preparation only; not saved or approved in Play Console.
+
+Purpose: App functionality. This general assistant is NOT declared an accessibility tool.
+Service: com.example.meowmba.core.ring.RingAccessibilityService
+isAccessibilityTool: false.
+The autonomous MeowAccessibilityService remains excluded from the public manifest.
+
+Core feature:
+A user pairs a compatible R08/QRing ring, agrees to the separate in-app disclosure,
+enables Meowmba Ring Controls in Android, verifies physical ring input, chooses an
+app allowlist and unpauses. Configured, deterministic gestures scroll, move the
+click target, click the control under that target or go Back. The phone must be
+unlocked. No AI model initiates, plans or executes ring screen actions.
+The optional scroll/click preset maps swipes to scrolling, single tap to click,
+one tap plus swipe to horizontal target movement and two taps plus swipe to
+vertical movement. Sleeping controls consume double tap as wake only.
+
+Data accessed:
+Ring key events; active foreground package; application-window bounds; control
+structure and enabled/clickable/visible state required to find the click target.
+The service does not read or record screen text or send screen contents or ring
+input to AI providers. Information is processed locally. Users may explicitly
+share a connection/gesture diagnostic log through Android's share chooser.
+Proposed collection/sharing answer for this service: No. Active-app/control
+information is processed locally. The diagnostic export is a specific user-
+initiated share action with an expected destination chosen in Android, rather
+than automatic collection or sharing. This interpretation relies on Google's
+on-device processing and user-initiated sharing exclusions; other app/SDK data
+declarations remain unchanged. Recheck if diagnostic delivery changes.
+
+Disclosure:
+Shown automatically after a ring connection when consent is absent, and before
+Open Accessibility settings. The disclosure explains access, purpose, local use,
+allowed apps and withdrawal. Agree and continue is required; Not now/dismissal
+does not consent. Consent withdrawal pauses, ends testing and cancels pending
+ring touches. An already enabled Android service cannot act before app consent.
+
+Evidence video still required:
+Record opening the candidate app, pairing, the complete disclosure and affirmative
+consent, Android service enablement, physical gesture verification, unpausing,
+real scroll, target movement and click, app allowlist, pause/withdrawal and sleep
+wake. Use real supported hardware; do not submit storyboard animation as proof.
+Host the short reviewer video at an accessible URL and complete the Play form.
+Update the public privacy policy and listing alongside this candidate.
+
+Current Google Play reference:
+https://support.google.com/googleplay/android-developer/answer/10964491?hl=en
+Permits narrow deterministic user-defined actions; requires separate disclosure,
+affirmative consent, declaration and Google approval for non-accessibility tools.
+Data safety exclusions:
+https://support.google.com/googleplay/android-developer/answer/10787469?hl=en

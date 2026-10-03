@@ -71,9 +71,12 @@ def main():
         result["forbidden_media_permissions"] = [permission for permission in forbidden_media_permissions
             if permission.encode() in manifest]
         result["forbidden_background_location"] = b"android.permission.ACCESS_BACKGROUND_LOCATION" in manifest
+        # Physical, consented ring gestures are included; autonomous phone
+        # Accessibility remains forbidden in the public bundle.
         result["forbidden_accessibility_services"] = [name for name in (
-            ".core.access.MeowAccessibilityService", ".core.ring.RingAccessibilityService")
+            ".core.access.MeowAccessibilityService",)
             if name.encode() in manifest]
+        result["ring_controls_service_present"] = b".core.ring.RingAccessibilityService" in manifest
         required = {f"base/lib/arm64-v8a/{name}" for name in (
             "libsherpa-onnx-jni.so", "libonnxruntime.so", "libneedle_jni_bridge.so", "libsd_jni_bridge.so",
             "libmeow_cpu_features.so")}
@@ -115,6 +118,7 @@ def main():
                  not result["forbidden_media_permissions"] and
                  not result["forbidden_background_location"] and
                  not result["forbidden_accessibility_services"] and
+                 result["ring_controls_service_present"] and
                  not result["missing_image_jni_exports"] and
                  not result["missing_cpu_probe_jni_exports"] and
                  not result["missing_required_native_libraries"]) else 1

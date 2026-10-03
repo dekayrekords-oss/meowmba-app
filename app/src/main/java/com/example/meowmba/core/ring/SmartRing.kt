@@ -15,6 +15,7 @@ enum class RingAction(val label: String) {
     POINTER_LEFT("Move target left"), POINTER_RIGHT("Move target right")
 }
 data class RingState(
+    val controlsConsent: Boolean = false,
     val status: String = "Not connected",
     val devices: List<RingDevice> = emptyList(),
     val scanning: Boolean = false,
@@ -55,6 +56,7 @@ interface SmartRingDriver {
     fun connect(address: String)
     fun disconnect()
     fun openAccessibility()
+    fun setControlsConsent(value: Boolean)
     fun openBluetooth()
     fun setSleepEnabled(value: Boolean)
     fun setSleepAfterSeconds(value: Int)
@@ -87,7 +89,7 @@ fun ringPacket(operation: Int): ByteArray = ByteArray(16).also {
 
 /** Rechecked at dispatch, including after a delayed tap sequence. */
 fun ringActionFor(state: RingState, gesture: String, packageName: String?): RingAction {
-    if (!state.connected || state.paused || state.testing || state.sleeping ||
+    if (!state.controlsConsent || !state.connected || state.paused || state.testing || state.sleeping ||
         !ringAppAllowed(state, packageName)) return RingAction.NONE
     val action = state.mappings[gesture] ?: RingAction.NONE
     if (!ringGestureReady(state, gesture, action)) return RingAction.NONE
@@ -144,5 +146,5 @@ fun ringMigrateCursorAxes(mappings: Map<String, RingAction>): Map<String, RingAc
         mappings + ringScrollClickMappings().filterKeys { it in original } else mappings
 }
 
-fun ringSleepEligible(state: RingState) = state.sleepEnabled && state.connected && state.accessibility &&
+fun ringSleepEligible(state: RingState) = state.controlsConsent && state.sleepEnabled && state.connected && state.accessibility &&
     !state.paused && !state.testing

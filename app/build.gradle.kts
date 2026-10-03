@@ -156,6 +156,7 @@ android {
         debug {
             buildConfigField("boolean", "BACKGROUND_LOCATION_ENABLED", "true")
             buildConfigField("boolean", "PHONE_AUTOMATION_ENABLED", "true")
+            buildConfigField("boolean", "RING_CONTROLS_ENABLED", "true")
             buildConfigField("boolean", "PHONE_MEDIA_LIBRARY_ENABLED", "true")
         }
         release {
@@ -163,6 +164,8 @@ android {
             // Play excludes autonomous Accessibility-based phone control.
             // The release manifest removes the service as a second boundary.
             buildConfigField("boolean", "PHONE_AUTOMATION_ENABLED", "false")
+            // Explicit physical ring input is separate from autonomous phone tools.
+            buildConfigField("boolean", "RING_CONTROLS_ENABLED", "true")
             buildConfigField("boolean", "PHONE_MEDIA_LIBRARY_ENABLED", "false")
             // Shrink + obfuscate for Play. JNI / Room / MediaPipe kept via
             // src/main/keepRules/rules.keep.
@@ -273,6 +276,7 @@ tasks.withType<Test>().configureEach {
         filter {
             includeTestsMatching("com.example.meowmba.PlayMediaAccessTest")
             includeTestsMatching("com.example.meowmba.PlayLocationAccessTest")
+            includeTestsMatching("com.example.meowmba.PlayRingControlsTest")
         }
     }
     systemProperty("meowmba.idleAnimations", "false")

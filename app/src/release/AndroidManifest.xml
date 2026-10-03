@@ -9,6 +9,6 @@
     <application>
         <!-- Play distribution does not expose autonomous Accessibility control. -->
         <service android:name=".core.access.MeowAccessibilityService" tools:node="remove" />
-        <service android:name=".core.ring.RingAccessibilityService" tools:node="remove" />
+        <!-- User-operated ring gestures use their own opt-in service. -->
     </application>
 </manifest>
