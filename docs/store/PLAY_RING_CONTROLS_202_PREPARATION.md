@@ -1,7 +1,7 @@
 # Ring controls in the Play release — candidate 202 / 2.0
 
 The owner requires phone-touch-free ring scrolling and clicking in the regular
-Play edition. This expands the existing, unbuilt 202 allocation on
+Play edition. This expands the existing 202 allocation on
 `feature/flow-idle-default-20261003`; the next code remains 203.
 
 ## Implementation
@@ -65,8 +65,7 @@ Python compilation and Git whitespace checks pass. Evidence:
 The current listing draft includes ring scrolling, aiming and clicking, with
 72-character short and 3909-character full descriptions. The privacy HTML and
 `PLAY_ACCESSIBILITY_RING_202_DRAFT.txt` describe the separate local ring service.
-The declaration/reviewer video and updated listing/privacy have not been
-published or approved. No false disability-tool designation is used.
+The listing changes are saved as a Play draft. The privacy page is published and verified. The Accessibility declaration/reviewer recording is unfinished and unapproved. No false disability-tool designation is used.
 
 Google's current guidance permits narrow deterministic user-defined actions and
 requires disclosure, consent, a declaration and approval for non-accessibility
@@ -83,13 +82,29 @@ labeled future robot remain. Screen inserts require real app recordings and
 hardware acceptance. Storyboards were edited with built-in image generation;
 the finished Higgsfield film and narration remain unrendered.
 
+## Full-SDK artifacts and phone update
+
+Existing verified registration and package credentials were reused in memory,
+without writing a credential file or skipping release gates. The minified
+202 / 2.0 bundle includes Meta SDK 0.8.0, all 88 aligned native libraries and
+required JNI exports. Bundletool validates it. Sixteen actual full-SDK public
+configuration checks pass, zero failures/errors/skips. Signing preserves every
+payload entry; embedded certificate matches the existing Play upload key and
+JAR signature verification succeeds. Evidence: `../production202/` receipts.
+
+The full-SDK preview APK is installed in place over verified build 200. Its
+certificate and 16 KB ZIP alignment pass. All 160 runtime entries remain
+unchanged; only the reviewed manual adds the default Flow idle instructions.
+The original installation date is retained. At 75 seconds the app has the same
+live PID and an unchanged crash buffer. The ring is connected, paused, with no
+visible target; consent has not been accepted. Physical gesture acceptance is
+still required. The signed 202 bundle is published to internal testing and available to testers. Production 201 remains in review; 152 is superseded and explicitly Not published. No public production download is live.
+
 ## Remaining release work
 
-Full-SDK build still needs the external MWDAT credential/registration file.
-The existing LAN build host remains unreachable (read-only SSH retry timed out).
-No authorized Android device is connected. Real scroll, cursor and single-tap
-click acceptance, a reviewer video, signed/minified artifact verification and
-Play Accessibility approval remain required. Preserve Meta glasses and all
-protected runtime assets. No 202 APK/AAB exists; nothing was installed, uploaded
-or submitted. Build 201 was submitted without these ring controls; its last
-verified status was in review. Android source has not been pushed remotely.
+Real scroll, horizontal/vertical cursor and single-tap click acceptance, a
+reviewer recording, the Accessibility declaration and Play approval remain
+required before production submission. The ring privacy HTML is published at the existing public URL and its live
+bytes exactly match the reviewed 202 policy.
+Build 201 was submitted without these controls; its last verified status is in
+review. Build 202 is not submitted to production. No remote Android source push.
