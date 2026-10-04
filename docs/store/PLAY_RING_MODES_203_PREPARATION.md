@@ -33,19 +33,34 @@ checks: **36 passed, zero failures/errors/skips**. Tests cover physical R08 key
 delivery during the overlay delay, queued-swipe cancellation, scroll-pane selection,
 photo-only controls and rejected-shutter isolation, mode/request persistence,
 revised consent, expiring single-use requests and small-phone mode/editor UI.
-Native UI screenshots were inspected. Lint is still running on this frozen source.
-The earlier renamed-label/capture-infrastructure issues are resolved without
-weakening behavior assertions; screenshots use the existing native View draw route.
+Native UI screenshots were inspected. Final lint completed on this frozen source: zero errors, 234 warnings.
 
 The 203 phone APK is signed with the installed key and passes 16 KB ZIP alignment.
 The actual installed 202 baseline was pulled and its bytes match the validated
 202 APK. All 160 native/model/other runtime entries are unchanged. The only asset
-change is the reviewed manual, byte-identical to tracked source. No 203 phone
-installation or Play bundle/upload yet. 203 listing changes are saved in Play as
-an unsent draft; privacy and declaration drafts are prepared. 201 is still in
+change is the reviewed manual, byte-identical to tracked source. At the owner’s explicit
+request, 203 installed in place over 202 and launched successfully; the original
+September 23 installation date and app data were retained. Lint finished after
+installation. The phone then disconnected, so a longer post-install stability check
+and physical ring acceptance are unavailable. All 16 actual public-release
+configuration tests pass, bringing the verified total to 52. The full-SDK minified
+Play bundle is assembled, signed with the matching upload certificate and validated
+by bundletool. All 88 native libraries pass 16 KB alignment/JNI checks. Compared
+with signed public 202, all 160 runtime entries are unchanged and only the reviewed
+manual differs. Signing preserved all 758 unsigned payload entries. The permitted
+unsigned inspection stage was followed by verified upload-key signing; the final
+upload is signed. Google accepted 203 / 2.0 and published it to the existing internal testers,
+release “2.0 (203) – Ring modes and scroll fix”, updated October 3 at 18:00.
+The track explicitly says Available to internal testers. No 203 production
+submission. The source commit 3a0f0d6 is pushed to the verified private
+GitHub repository. 203 listing changes are saved in Play as an unsent draft; the
+public privacy HTML is published and byte-for-byte verified. The declaration
+is still a draft. 201 is still in
 production review; 152 superseded / Not published. No live public production
 download is verified.
 Physical ring acceptance, real reviewer recording, declaration and Google approval
-remain required. 203 listing/privacy/declaration drafts are prepared, not published.
+remain required. Listing/declaration submission is pending; privacy is published.
 Manual change is intentional and must be checked against the signed phone baseline;
 native/model payloads and signing identity must remain unchanged.
+
+Internal release: https://play.google.com/console/u/0/developers/5214154317103934390/app/4972949930318434862/tracks/4701352764658866051/releases/4/details
