@@ -47,8 +47,7 @@ class RingAccessibilityService : AccessibilityService() {
     private data class ScrollRequest(val gesture: String, val action: RingAction, val target: String, val expiresAt: Long)
     private val scrollQueue = ArrayDeque<ScrollRequest>()
     private var pendingTouch: Runnable? = null
-    private var lastKeyDown: Triple<Int, Int, Long>? = null
-    private var lastTapTime = 0L
+    private val heldKeyDowns = mutableMapOf<Pair<Int, Int>, Long>()
     private val consumed = mutableSetOf<Pair<Int, Int>>()
     private val finishTap = Runnable {
         val count = tapCount; val target = tapPackage
@@ -81,7 +80,7 @@ class RingAccessibilityService : AccessibilityService() {
     fun centerTarget() { if (::clickTarget.isInitialized) { ring.controlsActivity(); clickTarget.center(); refreshTarget() } }
     override fun onInterrupt() = cancelPending()
     override fun onDestroy() {
-        cancelPending(); consumed.clear(); instance = null
+        cancelPending(); consumed.clear(); heldKeyDowns.clear(); instance = null
         scope.cancel()
         if (::clickTarget.isInitialized) clickTarget.hide()
         if (screenReceiverRegistered) unregisterReceiver(screenReceiver)
@@ -130,22 +129,24 @@ class RingAccessibilityService : AccessibilityService() {
         }
     }
     private fun unlocked() = getSystemService(PowerManager::class.java).isInteractive && !getSystemService(KeyguardManager::class.java).isKeyguardLocked
+    private fun keyGesture(code: Int) = when (code) {
+        KeyEvent.KEYCODE_MEDIA_NEXT -> "Next"
+        KeyEvent.KEYCODE_MEDIA_PREVIOUS -> "Previous"
+        KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PAUSE -> "Tap"
+        KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE -> "Double tap"
+        else -> null
+    }
     override fun onKeyEvent(event: KeyEvent): Boolean {
         val identity = event.deviceId to event.keyCode
         if (event.action == KeyEvent.ACTION_UP) {
             val handled = consumed.remove(identity)
+            heldKeyDowns.remove(identity)
             if (handled) ring.recordPress(event.keyCode, false, KeyEvent.keyCodeToString(event.keyCode))
             return handled
         }
         val device = event.device ?: return false
         if (!device.name.contains("R08", ignoreCase = true)) return false
-        val gesture = when (event.keyCode) {
-            KeyEvent.KEYCODE_MEDIA_NEXT -> "Next"
-            KeyEvent.KEYCODE_MEDIA_PREVIOUS -> "Previous"
-            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PAUSE -> "Tap"
-            KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE -> "Double tap"
-            else -> null
-        }
+        val gesture = keyGesture(event.keyCode)
         val state = ring.state.value
         // The tester binds a single Android input descriptor to the selected ring.
         if (!state.controlsConsent || !state.connected || !unlocked()) { cancelPending(); return false }
@@ -158,18 +159,19 @@ class RingAccessibilityService : AccessibilityService() {
         if (gesture == null && !state.testing) return false
         consumed.add(identity)
         if (event.repeatCount > 0) return true
-        val down = Triple(event.deviceId, event.keyCode, event.downTime)
-        if (lastKeyDown == down) return true
-        lastKeyDown = down
+        // Debounce a held press, not elapsed time between presses. Fast released
+        // taps and drivers reusing downTime must still form a double tap.
+        if (heldKeyDowns[identity] == event.downTime) return true
+        val heldAlias = gesture != null && heldKeyDowns.keys.any {
+            it.first == event.deviceId && it.second != event.keyCode && keyGesture(it.second) == gesture
+        }
+        heldKeyDowns[identity] = event.downTime
         ring.recordPress(event.keyCode, true, KeyEvent.keyCodeToString(event.keyCode))
         if (gesture == null) {
             ring.log("Unmapped input · ${KeyEvent.keyCodeToString(event.keyCode)} · ${device.name}")
             return true
         }
-        if (gesture == "Tap") {
-            if (event.eventTime - lastTapTime in 0..75 && lastTapTime != 0L) return true
-            lastTapTime = event.eventTime
-        }
+        if (heldAlias) return true
         ring.log("$gesture · ${KeyEvent.keyCodeToString(event.keyCode)} · ${device.name} · app=${target ?: "unknown"}")
         if (gesture == "Tap") {
             if (tapPackage != target || tapDevice != event.deviceId) cancelTapSequence()
