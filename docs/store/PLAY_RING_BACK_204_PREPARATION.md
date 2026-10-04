@@ -16,17 +16,32 @@ double tap as wake only; the next double tap can perform the configured Back.
 The Media preset still maps double tap to Stop; Navigation/Photo map it to Back.
 Custom bindings remain user-controlled. Existing 203 consent and settings remain.
 
-45 focused ring/UI cases pass, including nine service-level Back cases using
-Robolectric's real service/Handler instance and platform action capture. The
-phone APK is assembled with the full Meta SDK and matches the installed signing
-identity. 16 KB ZIP alignment passes; all 161 protected runtime entries match
-verified phone 203 without exceptions. Phone disconnected; 204 not installed yet.
-16 actual public-release boundary cases pass; additional Back service cases
-will run with an explicit test-filter addition (the normal release suite includes
-only the three Play boundary classes). Final lint and signed bundle remain underway.
-No 204 Play upload or production submission. 203 remains available to internal
-testers; 201 remains in production review. Real hardware retest/reviewer recording
-remain pending. Listing/privacy/declaration purposes are unchanged from 203.
+45 focused ring/UI cases and 25 actual public-release cases pass (70 total,
+zero failures/errors/skips), including nine service-level Back cases in both
+configurations using the real Robolectric service/Handler and platform action
+capture. Final debug lint passes: zero errors/fatal issues, 234 warnings.
+
+204 was installed in place on the owner's Samsung Fold with the full Meta SDK,
+matching preview certificate, retained original first-install date and app data.
+The app launched and retained the same PID with no new crash-buffer entries after
+101 seconds. 16 KB ZIP alignment passes; all 161 protected phone runtime entries
+match the actual installed 203 baseline. A read-only settings check found consent
+accepted, controls unpaused, Navigation selected and Double tap mapped to Back,
+but Double tap was not verified. Live service diagnostics show the ring connected,
+not paused/testing, and currently asleep. Owner must use Gesture tester to physically
+register Double tap, stop testing and unpause. Physical Back acceptance remains
+pending; it is not inferred from automated cases or automatically marked verified.
+
+The full-SDK, minified Play bundle is signed with the existing matching upload
+certificate. Bundletool, signature verification, all 88 native 16 KB/JNI checks
+and all 758 unchanged payload entries pass. All 161 protected public runtime
+entries are unchanged from signed 203. Source is frozen at 3eee3f36ad16c146275a1f9e0d8e60e626788c8a.
+Signed 204 is **Available to internal testers**, verified on the Play track as
+“2.0 (204) – Double-tap Back fix”, released October 3 19:30 (Console display).
+Release details: https://play.google.com/console/u/0/developers/5214154317103934390/app/4972949930318434862/tracks/4701352764658866051/releases/5/details
+No 204 production submission. A fresh production check still shows 201 In review;
+there is no confirmed public production download. Real reviewer recording remains
+pending. Listing/privacy/declaration purposes are unchanged from 203.
 
 Integration branch fetched from private GitHub; no missing commits. LAN origin
 remains unreachable (SSH connection timed out). Android
