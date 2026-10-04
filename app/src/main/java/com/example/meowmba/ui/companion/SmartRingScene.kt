@@ -46,11 +46,13 @@ internal fun SmartRingScene(onBack: () -> Unit) {
         }
         HorizontalDivider(Modifier.padding(vertical = 12.dp))
         Text(if (state.accessibility) "Accessibility service connected" else "Accessibility service is off")
-        Text("Use your ring to scroll, move the click target and select controls without touching the phone. Review the Accessibility disclosure before enabling these controls.", style = MaterialTheme.typography.bodySmall)
+        Text("Use your ring for media, navigation, photos or custom Meow requests. Review the Accessibility disclosure before enabling these controls.", style = MaterialTheme.typography.bodySmall)
         OutlinedButton(onClick = { if (state.controlsConsent) driver.openAccessibility() else disclosure = true }) { Text("Open Accessibility settings") }
         if (state.controlsConsent) OutlinedButton(onClick = { driver.setControlsConsent(false) }) { Text("Withdraw ring controls consent") }
         RingToggle("Pause ring controls", state.paused, driver::setPaused, enabled = state.controlsConsent)
         RingToggle("Gesture tester (consume inputs without actions)", state.testing, driver::setTesting, enabled = state.controlsConsent)
+        RingModeSettings(state, driver)
+        Text("Pausing stops Meow's remapped actions. The ring's native Android media keys may still operate outside Meow.", style = MaterialTheme.typography.bodySmall)
         Text("Sleep mode", style = MaterialTheme.typography.titleMedium)
         RingToggle("Sleep after inactivity", state.sleepEnabled, driver::setSleepEnabled)
         Text(if (state.sleeping) "Ring controls asleep · double tap to wake" else if (ringSleepEligible(state)) "Ring controls awake" else "Sleep timer inactive")
@@ -68,30 +70,18 @@ internal fun SmartRingScene(onBack: () -> Unit) {
         Text("Clicks and other actions require their gesture to be confirmed. Cursor movement can also combine verified taps and swipes.", style = MaterialTheme.typography.bodySmall)
         OutlinedButton(onClick = driver::resetVerification) { Text("Reset gesture verification") }
         HorizontalDivider(Modifier.padding(vertical = 12.dp))
-        Text("Scroll and click in other apps", style = MaterialTheme.typography.titleMedium)
+        Text("Allowed foreground apps", style = MaterialTheme.typography.titleMedium)
         RingToggle("Allow all apps", state.allApps, driver::setAllApps)
         Text(if (state.allApps) "Ring controls can act in any foreground app while the phone is unlocked."
             else "Ring controls are limited to the apps selected below.", style = MaterialTheme.typography.bodySmall)
-        OutlinedButton(onClick = { ringScrollClickMappings().forEach(driver::setMapping) }) { Text("Use scroll & click controls") }
+        OutlinedButton(onClick = { driver.setMode(RingMode.NAVIGATION) }) { Text("Use scroll & click controls") }
         RingToggle("Show click target", state.showTarget, driver::setShowTarget)
         OutlinedButton(onClick = driver::centerTarget) { Text("Center click target") }
         Text("Swipes scroll. Single tap clicks the crosshair. One tap + swipe moves it left/right; two taps + swipe moves it up/down. You can also drag the crosshair with your finger. Confirm taps and both swipe directions in the tester, turn the tester off, then turn Pause ring controls off.", style = MaterialTheme.typography.bodySmall)
         Text("Keep Show click target on to enable clicks and target movement. Android or an app may restrict injected touch gestures.", style = MaterialTheme.typography.bodySmall)
         RingToggle("Reverse scroll direction", state.reverse, driver::setReverse)
-        Text("Scroll distance: ${(state.distance * 100).toInt()}% of the screen")
+        Text("Fallback swipe distance: ${(state.distance * 100).toInt()}% of the scroll area")
         Slider(value = state.distance, onValueChange = driver::setDistance, valueRange = 0.15f..0.65f)
-        Text("Gesture actions", style = MaterialTheme.typography.titleMedium)
-        state.mappings.forEach { (gesture, action) ->
-            var expanded by remember(gesture) { mutableStateOf(false) }
-            Box {
-                OutlinedButton(onClick = { expanded = true }) { Text("$gesture: ${action.label}") }
-                DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                    RingAction.entries.forEach { choice ->
-                        DropdownMenuItem(text = { Text(choice.label) }, onClick = { driver.setMapping(gesture, choice); expanded = false })
-                    }
-                }
-            }
-        }
         var choices by remember { mutableStateOf<List<Pair<String, String>>?>(null) }
         OutlinedButton(onClick = { choices = driver.allowedAppChoices() }) { Text("Choose allowed apps") }
         choices?.let { apps ->
@@ -123,9 +113,9 @@ internal fun SmartRingScene(onBack: () -> Unit) {
     if (disclosure) AlertDialog(onDismissRequest = { disclosure = false },
         title = { Text("Enable ring controls") },
         text = { Column(Modifier.verticalScroll(rememberScrollState())) {
-            Text("Meow uses Android's AccessibilityService API to receive your ring's key events and access the active app's package, window bounds and control structure. This lets your configured ring gestures scroll, move the click target, click a control or go Back in allowed apps.")
+            Text("Meow uses Android's AccessibilityService API to receive your ring's key events and access the active app's package, window bounds and control structure, including photo-shutter labels. Your configured gestures can scroll, move/click the target, navigate, control media/volume, open a chosen app or camera, take a photo in a compatible camera, or submit a saved Meow request in allowed apps.")
             Spacer(Modifier.height(12.dp))
-            Text("The ring service processes this information on your phone. It does not record screen text or send screen contents or ring input to AI providers. Actions happen only from your verified ring gestures while the phone is unlocked. Controls start paused. You choose the allowed apps; Allow all apps is optional.")
+            Text("The ring service processes app controls locally. It does not record screen contents or send screen contents or raw ring input to AI providers. You can explicitly share local connection and gesture logs with a destination you choose. If you choose Ask Meow, your saved request is submitted like a typed chat message and may go to your selected AI provider. Normal task permissions and approvals still apply. Requests are stored privately on this phone; avoid saving secrets. Actions require verified ring gestures and an unlocked phone. Controls start paused. You choose allowed apps; Allow all apps is optional.")
             Spacer(Modifier.height(12.dp))
             Text("You can decline, pause controls, withdraw consent here or turn off Meowmba Ring Controls in Android Accessibility settings.")
         } },

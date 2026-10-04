@@ -26,10 +26,10 @@ class AndroidSmartRing private constructor(private val context: Context) : Smart
     }
     private val prefs = context.getSharedPreferences("smart_ring", Context.MODE_PRIVATE)
     override val state = MutableStateFlow(RingState(
-        controlsConsent = prefs.getBoolean("controls_consent_v1", false),
+        controlsConsent = prefs.getBoolean("controls_consent_v2", false),
         sleepEnabled = prefs.getBoolean("sleep_enabled", true),
         sleepAfterSeconds = prefs.getInt("sleep_after_seconds", 30).coerceIn(5, 300),
-        paused = !prefs.getBoolean("controls_consent_v1", false) || prefs.getBoolean("paused", true), reverse = prefs.getBoolean("reverse", false),
+        paused = !prefs.getBoolean("controls_consent_v2", false) || prefs.getBoolean("paused", true), reverse = prefs.getBoolean("reverse", false),
         distance = prefs.getFloat("distance", .35f).coerceIn(.15f, .65f),
         allApps = prefs.getBoolean("all_apps", false), showTarget = prefs.getBoolean("show_target", true),
         allowlist = prefs.getString("allowlist", context.packageName) ?: context.packageName,
@@ -38,6 +38,8 @@ class AndroidSmartRing private constructor(private val context: Context) : Smart
         mappings = defaultRingMappings().mapValues { (key, default) ->
             RingAction.entries.find { it.name == prefs.getString("map_$key", "") } ?: default
         },
+        customApps = defaultRingMappings().keys.associateWith { prefs.getString("app_$it", "").orEmpty() },
+        customCommands = defaultRingMappings().keys.associateWith { prefs.getString("command_$it", "").orEmpty() },
     ))
     init {
         if (prefs.getInt("cursor_axes_revision", 0) < 1) {
@@ -49,6 +51,10 @@ class AndroidSmartRing private constructor(private val context: Context) : Smart
             }
             edit.apply()
         }
+        val savedMode = RingMode.entries.find { it.name == prefs.getString("mode", "") }
+        state.value = state.value.copy(mode = savedMode ?: RingMode.entries.firstOrNull {
+            it != RingMode.CUSTOM && state.value.mappings == ringModeMappings(it)
+        } ?: RingMode.CUSTOM)
     }
     private val main = Handler(Looper.getMainLooper())
     private val idleSleep = RingIdleSleep(
@@ -345,7 +351,7 @@ class AndroidSmartRing private constructor(private val context: Context) : Smart
         else message("Cross-app ring controls are unavailable in this edition.")
     }
     override fun setControlsConsent(value: Boolean) {
-        prefs.edit().putBoolean("controls_consent_v1", value).putBoolean("paused", true).apply()
+        prefs.edit().putBoolean("controls_consent_v2", value).putBoolean("paused", true).apply()
         state.value = state.value.copy(controlsConsent = value, paused = true, testing = false, pressedKeys = emptySet())
         RingAccessibilityService.instance?.cancelPending()
     }
@@ -369,7 +375,41 @@ class AndroidSmartRing private constructor(private val context: Context) : Smart
     }
     override fun centerTarget() { RingAccessibilityService.instance?.centerTarget() }
     override fun setAllowlist(value: String) { prefs.edit().putString("allowlist", value).apply(); state.value = state.value.copy(allowlist = value); RingAccessibilityService.instance?.cancelPending() }
-    override fun setMapping(gesture: String, action: RingAction) { prefs.edit().putString("map_$gesture", action.name).apply(); state.value = state.value.copy(mappings = state.value.mappings + (gesture to action)); RingAccessibilityService.instance?.cancelPending() }
+    override fun setMode(mode: RingMode) {
+        val current = state.value
+        val edit = prefs.edit().putString("mode", mode.name).putBoolean("paused", true)
+        if (current.mode == RingMode.CUSTOM) current.mappings.forEach { (gesture, action) -> edit.putString("custom_map_$gesture", action.name) }
+        val mappings = if (mode == RingMode.CUSTOM) defaultRingMappings().mapValues { (gesture, fallback) ->
+            val name = if (current.mode == RingMode.CUSTOM) current.mappings[gesture]?.name else prefs.getString("custom_map_$gesture", null)
+            RingAction.entries.find { it.name == name } ?: fallback
+        } else ringModeMappings(mode)
+        mappings.forEach { (gesture, action) -> edit.putString("map_$gesture", action.name) }
+        edit.apply()
+        state.value = current.copy(mode = mode, mappings = mappings, paused = true, testing = false, pressedKeys = emptySet())
+        SmartRing.commands.clear(); RingAccessibilityService.instance?.cancelPending()
+    }
+    override fun setMapping(gesture: String, action: RingAction) {
+        if (gesture !in defaultRingMappings()) return
+        val mappings = state.value.mappings + (gesture to action)
+        val edit = prefs.edit().putString("mode", RingMode.CUSTOM.name).putBoolean("paused", true)
+        mappings.forEach { (key, value) -> edit.putString("map_$key", value.name).putString("custom_map_$key", value.name) }
+        edit.apply()
+        state.value = state.value.copy(mode = RingMode.CUSTOM, mappings = mappings, paused = true, testing = false)
+        SmartRing.commands.clear(); RingAccessibilityService.instance?.cancelPending()
+    }
+    override fun setCustomApp(gesture: String, packageName: String) {
+        if (gesture !in defaultRingMappings() || allowedAppChoices().none { it.first == packageName }) return
+        prefs.edit().putString("app_$gesture", packageName).apply()
+        state.value = state.value.copy(customApps = state.value.customApps + (gesture to packageName))
+        setMapping(gesture, RingAction.OPEN_APP)
+    }
+    override fun setCustomCommand(gesture: String, text: String) {
+        if (gesture !in defaultRingMappings() || text.trim().length > 2_000) { message("Keep Meow requests within 2,000 characters"); return }
+        val trimmed = text.trim()
+        prefs.edit().putString("command_$gesture", trimmed).apply()
+        state.value = state.value.copy(customCommands = state.value.customCommands + (gesture to trimmed))
+        setMapping(gesture, RingAction.MEOW_COMMAND)
+    }
     fun allowedAppChoices(): List<Pair<String, String>> {
         val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
         return runCatching {

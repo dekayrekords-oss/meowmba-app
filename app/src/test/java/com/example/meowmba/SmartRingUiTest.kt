@@ -9,6 +9,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import com.example.meowmba.ui.companion.RingModeSettings
 import com.example.meowmba.ui.theme.MeowmbaTheme
 import org.junit.Rule
 import org.junit.Test
@@ -22,6 +26,37 @@ import org.robolectric.annotation.GraphicsMode
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class SmartRingUiTest {
     @get:Rule val rule = createAndroidComposeRule<androidx.activity.ComponentActivity>()
+    @Test fun modePickerAndSavedMeowRequestWorkOnSmallPhone() {
+        val driver = AndroidSmartRing.get(rule.activity)
+        driver.setCustomCommand("Single tap", "Show my next task")
+        rule.setContent { MeowmbaTheme {
+            val state by driver.state.collectAsState()
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+                RingModeSettings(state, driver)
+            }
+        } }
+        rule.onNodeWithText("Edit Meow request for Single tap").performScrollTo().performClick()
+        rule.onNodeWithText("Saved request").performTextReplacement("Open my project planner")
+        rule.onNodeWithText("Save and pause").performClick()
+        rule.runOnIdle { org.junit.Assert.assertEquals("Open my project planner", driver.state.value.customCommands["Single tap"]); org.junit.Assert.assertTrue(driver.state.value.paused) }
+        rule.onNodeWithText("Mode: Custom commands").performScrollTo().performClick()
+        rule.onNodeWithText("Media control").assertIsDisplayed()
+        rule.onNodeWithText("Scrolling and navigation").assertIsDisplayed()
+        rule.onNodeWithText("Photo taking").assertIsDisplayed()
+        rule.waitForIdle()
+        rule.onNodeWithText("Photo taking").performClick()
+        rule.waitForIdle()
+        rule.runOnIdle {
+            val view = rule.activity.window.decorView
+            val image = android.graphics.Bitmap.createBitmap(view.width, view.height, android.graphics.Bitmap.Config.ARGB_8888)
+            view.draw(android.graphics.Canvas(image))
+            val file = java.io.File("build/reports/smart-ring/modes-320.png"); file.parentFile?.mkdirs()
+            file.outputStream().use { image.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }; image.recycle()
+        }
+        rule.onNodeWithText("Mode: Photo taking").performClick()
+        rule.onNodeWithText("Custom commands", useUnmergedTree = true).performClick()
+        rule.runOnIdle { org.junit.Assert.assertEquals(RingAction.MEOW_COMMAND, driver.state.value.mappings["Single tap"]) }
+    }
     @Test fun disclosureRequiresAgreementAndWithdrawalStopsControls() {
         val driver = AndroidSmartRing.get(rule.activity)
         driver.setControlsConsent(false)
@@ -129,7 +164,7 @@ class SmartRingUiTest {
         rule.onNodeWithText("2 taps + Next: Move target down").performScrollTo().assertIsDisplayed()
         rule.onNodeWithText("Show click target").performScrollTo().assertIsDisplayed()
         rule.onNodeWithText("Center click target").performScrollTo().assertIsDisplayed()
-        rule.onNodeWithText("Scroll and click in other apps").performScrollTo()
+        rule.onNodeWithText("Allowed foreground apps").performScrollTo()
         rule.waitForIdle()
         rule.runOnIdle {
             val view = rule.activity.window.decorView

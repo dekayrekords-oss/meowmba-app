@@ -191,6 +191,22 @@ class MainActivity : ComponentActivity() {
                     pendingFlowComment?.let { id -> pendingFlowComment = null; viewModel.openFlowComment(id) }
                 }
                 val uiState by viewModel.uiState.collectAsState()
+                androidx.compose.runtime.LaunchedEffect(viewModel) {
+                    com.example.meowmba.core.ring.SmartRing.commands.pending.collect { request ->
+                        if (request != null) {
+                            val driver = com.example.meowmba.core.ring.SmartRing.driver
+                            val power = getSystemService(android.os.PowerManager::class.java)
+                            val keyguard = getSystemService(android.app.KeyguardManager::class.java)
+                            if (driver != null && power.isInteractive && !keyguard.isKeyguardLocked) {
+                                com.example.meowmba.core.ring.SmartRing.commands.take(request, driver.state.value,
+                                    android.os.SystemClock.elapsedRealtime())?.let { text ->
+                                    viewModel.openChat()
+                                    viewModel.onUserTextSubmitted(text)
+                                }
+                            } else com.example.meowmba.core.ring.SmartRing.commands.clear()
+                        }
+                    }
+                }
                 val qrRequested by viewModel.qrScannerRequested.collectAsState()
                 androidx.compose.runtime.LaunchedEffect(qrRequested) {
                     if (qrRequested) {

@@ -7,12 +7,22 @@ import kotlinx.coroutines.flow.StateFlow
 object SmartRing {
     var driver: SmartRingDriver? = null
     val openRequested = MutableStateFlow(false)
+    internal val commands = RingCommandMailbox()
 }
 data class RingDevice(val address: String, val name: String)
 enum class RingAction(val label: String) {
     NONE("No action"), SCROLL_DOWN("Scroll down"), SCROLL_UP("Scroll up"), BACK("Go back"), CONTROLS("Open ring controls"),
     CLICK("Click target"), POINTER_UP("Move target up"), POINTER_DOWN("Move target down"),
-    POINTER_LEFT("Move target left"), POINTER_RIGHT("Move target right")
+    POINTER_LEFT("Move target left"), POINTER_RIGHT("Move target right"),
+    MEDIA_PLAY_PAUSE("Play / pause media"), MEDIA_NEXT("Next track"), MEDIA_PREVIOUS("Previous track"), MEDIA_STOP("Stop media"),
+    VOLUME_UP("Volume up"), VOLUME_DOWN("Volume down"), HOME("Go Home"), RECENTS("Recent apps"),
+    OPEN_CAMERA("Open camera"), CAMERA_SHUTTER("Take photo"), OPEN_APP("Open an app"), MEOW_COMMAND("Ask Meow")
+}
+enum class RingMode(val label: String, val help: String) {
+    MEDIA("Media control", "Swipe for next/previous track. Single tap plays or pauses; double tap stops. Tap + swipe changes music volume."),
+    NAVIGATION("Scrolling and navigation", "Swipe to scroll the active area. Single tap clicks the target. Tap + swipe moves left/right; two taps + swipe moves down/up. Double tap goes Back."),
+    CAMERA("Photo taking", "Single tap takes a photo in a compatible allowed camera app. Next opens the camera; double tap goes Back. Choose an allowed camera app and confirm its shutter works first."),
+    CUSTOM("Custom commands", "Choose an action, app shortcut or saved Meow request for each verified gesture. Meow requests follow the normal task and approval controls.")
 }
 data class RingState(
     val controlsConsent: Boolean = false,
@@ -35,6 +45,9 @@ data class RingState(
     val showTarget: Boolean = true,
     val allowlist: String = "com.example.meowmba",
     val mappings: Map<String, RingAction> = defaultRingMappings(),
+    val mode: RingMode = RingMode.CUSTOM,
+    val customApps: Map<String, String> = emptyMap(),
+    val customCommands: Map<String, String> = emptyMap(),
     val events: List<String> = emptyList(),
     val pressedKeys: Set<Int> = emptySet(),
     val lastInput: String = "Waiting for ring input",
@@ -72,6 +85,9 @@ interface SmartRingDriver {
     fun centerTarget()
     fun setAllowlist(value: String)
     fun setMapping(gesture: String, action: RingAction)
+    fun setMode(mode: RingMode)
+    fun setCustomApp(gesture: String, packageName: String)
+    fun setCustomCommand(gesture: String, text: String)
     fun testSensor(sensor: RingSensor)
     fun stopSensorTest()
     fun clearTestResults()
@@ -110,6 +126,41 @@ fun ringScrollClickMappings() = defaultRingMappings() + mapOf(
     "1 tap + Next" to RingAction.POINTER_RIGHT, "1 tap + Previous" to RingAction.POINTER_LEFT,
     "2 taps + Next" to RingAction.POINTER_DOWN, "2 taps + Previous" to RingAction.POINTER_UP,
 )
+
+fun ringModeMappings(mode: RingMode): Map<String, RingAction> = when (mode) {
+    RingMode.NAVIGATION -> ringScrollClickMappings()
+    RingMode.MEDIA -> defaultRingMappings().mapValues { RingAction.NONE } + mapOf(
+        "Next" to RingAction.MEDIA_NEXT, "Previous" to RingAction.MEDIA_PREVIOUS,
+        "Single tap" to RingAction.MEDIA_PLAY_PAUSE, "Double tap" to RingAction.MEDIA_STOP,
+        "Triple tap" to RingAction.CONTROLS, "1 tap + Next" to RingAction.VOLUME_UP, "1 tap + Previous" to RingAction.VOLUME_DOWN)
+    RingMode.CAMERA -> defaultRingMappings().mapValues { RingAction.NONE } + mapOf(
+        "Next" to RingAction.OPEN_CAMERA, "Single tap" to RingAction.CAMERA_SHUTTER,
+        "Double tap" to RingAction.BACK, "Triple tap" to RingAction.CONTROLS)
+    RingMode.CUSTOM -> defaultRingMappings()
+}
+
+/** In-process delivery only: exported Activity intents cannot submit a ring request. */
+internal class RingCommandMailbox {
+    data class Request(val gesture: String, val text: String, val expiresAt: Long)
+    val pending = MutableStateFlow<Request?>(null)
+    fun offer(gesture: String, state: RingState, now: Long): Boolean {
+        val text = state.customCommands[gesture]?.trim().orEmpty()
+        if (text.isEmpty() || text.length > 2_000 || state.mappings[gesture] != RingAction.MEOW_COMMAND) return false
+        if (pending.value?.let { it.expiresAt > now } == true) return false
+        pending.value = Request(gesture, text, now + 10_000)
+        return true
+    }
+    fun take(request: Request, state: RingState, now: Long): String? {
+        if (pending.value !== request) return null
+        pending.value = null
+        return request.text.takeIf { now < request.expiresAt && state.controlsConsent && state.connected &&
+            !state.paused && !state.testing && !state.sleeping &&
+            state.mappings[request.gesture] == RingAction.MEOW_COMMAND &&
+            state.customCommands[request.gesture]?.trim() == request.text &&
+            ringGestureReady(state, request.gesture, RingAction.MEOW_COMMAND) }
+    }
+    fun clear() { pending.value = null }
+}
 
 data class RingPoint(val x: Float = .5f, val y: Float = .5f) {
     fun move(action: RingAction): RingPoint = when (action) {
