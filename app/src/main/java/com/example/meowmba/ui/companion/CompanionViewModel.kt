@@ -8947,15 +8947,20 @@ class CompanionViewModel(
      * build has no home server: the "Network" lane only works if the user
      * configured an endpoint themselves, otherwise meow says honestly that
      * it can't see. OpenAI → cloud vision, on-device → DeviceVisionProvider
-     * using Google Play Services ML Kit (image labeling + text recognition).
+     * using bundled ML Kit (image labeling + text recognition).
      */
     internal fun visionProviderFor(): com.example.meowmba.core.vision.VisionProvider? {
         val selected = _uiState.value.selectedModel
         return when {
             selected.contains("Omni") && preferredChatRouteId() == "openai" ->
                 lanVisionOrNull() ?: openAiVisionOrNull()
-            selected.contains("Network") || selected.contains("OpenRouter") ||
-                selected.contains("Omni") ->
+                    ?: com.example.meowmba.core.vision.DeviceVisionProvider()
+            // OmniRoute can use a local chat model with no cloud key. Its vision
+            // specialist must still work; the router itself is not a vision API.
+            selected.contains("Omni") ->
+                lanVisionOrNull() ?: openRouterVisionOrNull()
+                    ?: com.example.meowmba.core.vision.DeviceVisionProvider()
+            selected.contains("Network") || selected.contains("OpenRouter") ->
                 lanVisionOrNull() ?: openRouterVisionOrNull()
             selected.contains("Cloud") -> openAiVisionOrNull()
             else -> lanVisionOrNull() ?: openRouterVisionOrNull()

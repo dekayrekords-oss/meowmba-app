@@ -50,6 +50,20 @@ class CameraPrivacyViewModelTest {
         ttsManager = VoicePipelineTest.FakeSpeechSynthesizer(), ioDispatcher = dispatcher,
     ).also { models += it }
 
+    @Test fun omniRouterHasOnDeviceVisionWithoutCloudCredentials() = runTest(dispatcher) {
+        val vm = model(camera())
+        vm.onModelSelected(com.example.meowmba.ui.companion.MODEL_OMNIROUTE)
+        assertTrue(vm.visionProviderFor() is com.example.meowmba.core.vision.DeviceVisionProvider)
+    }
+
+    @Test fun explicitCloudVisionDoesNotSilentlySwitchProviders() = runTest(dispatcher) {
+        val vm = model(camera())
+        vm.onModelSelected("OpenAI (Cloud)")
+        assertNull(vm.visionProviderFor())
+        vm.onModelSelected("OpenRouter (Cloud)")
+        assertNull(vm.visionProviderFor())
+    }
+
     @Test fun explicitEnableDoesNotOpenPictureInPicture() = runTest(dispatcher) {
         val camera = camera()
         val vm = model(camera)
