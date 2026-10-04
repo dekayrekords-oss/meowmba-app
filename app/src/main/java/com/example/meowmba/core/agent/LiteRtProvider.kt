@@ -15,6 +15,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.catch
 import java.io.File
 
 class LiteRtProvider(
@@ -23,31 +25,38 @@ class LiteRtProvider(
 ) : ModelProvider {
     override val name: String = "LiteRT (On-device)"
     private val modelKey = "litert:${File(modelPath).absolutePath}"
+    private val cpuKey = "$modelKey:cpu"
 
-    private fun buildEngine(): Engine {
+    private class LoadedEngine(val engine: Engine, val gpu: Boolean) : AutoCloseable {
+        override fun close() = engine.close()
+    }
+
+    private fun buildEngine(cpuOnly: Boolean = false): LoadedEngine {
         // Keep the existing GPU-first, CPU-fallback policy and all native thread
         // settings. The shared lease prevents a warm-up racing a generation.
         android.util.Log.i("LiteRt", "loading on-device brain: $modelPath")
-        fun initialized(backend: Backend): Engine {
+        fun initialized(backend: Backend, gpu: Boolean): LoadedEngine {
             val candidate = Engine(EngineConfig(modelPath = modelPath, backend = backend, cacheDir = context.cacheDir.path))
-            try { candidate.initialize(); return candidate }
+            try { candidate.initialize(); return LoadedEngine(candidate, gpu) }
             catch (error: Exception) {
                 if (candidate.isInitialized()) runCatching { candidate.close() }
                 throw error
             }
         }
-        return try { initialized(Backend.GPU()) }
+        if (cpuOnly) return initialized(Backend.CPU(), false)
+        return try { initialized(Backend.GPU(), true) }
         catch (cancelled: CancellationException) { throw cancelled }
-        catch (_: Exception) { initialized(Backend.CPU()) }
+        catch (_: Exception) { initialized(Backend.CPU(), false) }
     }
 
-    val isLoaded: Boolean get() = LocalInferenceRuntime.models.isLoaded(modelKey)
+    private fun residentKey(): String = if (LocalInferenceRuntime.models.isLoaded(cpuKey)) cpuKey else modelKey
+    val isLoaded: Boolean get() = LocalInferenceRuntime.models.isLoaded(modelKey) || LocalInferenceRuntime.models.isLoaded(cpuKey)
 
     /** Uses shared completion time, so rebuilding a wrapper cannot fake ten minutes of idleness. */
-    fun idleMs(nowMs: Long = System.currentTimeMillis()): Long = LocalInferenceRuntime.models.idleMs(modelKey, nowMs)
+    fun idleMs(nowMs: Long = System.currentTimeMillis()): Long = LocalInferenceRuntime.models.idleMs(residentKey(), nowMs)
 
     /** Existing synchronous API for worker callers; UI uses LocalInferenceRuntime.releaseIdle. */
-    fun release(): Boolean = runCatching { LocalInferenceRuntime.models.releaseIfIdle(modelKey) }.getOrDefault(false)
+    fun release(): Boolean = runCatching { LocalInferenceRuntime.models.releaseIfIdle(residentKey()) }.getOrDefault(false)
 
     fun memoryAllowsWarmUp(minFreeMb: Long = 1_500L): Boolean {
         val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return true
@@ -59,7 +68,8 @@ class LiteRtProvider(
     /** Explicit preloading only. Runs off Main under the same lease as real inference. */
     fun warmUp() {
         if (!memoryAllowsWarmUp()) return
-        LocalInferenceRuntime.warmUp(modelKey, ::buildEngine)
+        val key = residentKey()
+        LocalInferenceRuntime.warmUp(key) { buildEngine(cpuOnly = key == cpuKey) }
     }
 
     override fun generateStreaming(prompt: String): Flow<ModelResponse> = stream(prompt, limitSentences = true)
@@ -86,8 +96,12 @@ class LiteRtProvider(
             enableResponseFormat = jsonSchema != null,
             thinkingConfig = if (limitSentences) null else com.google.ai.edge.litertlm.ThinkingConfig(enableThinking = false),
         )
-        try {
-            LocalInferenceRuntime.models.withModel(modelKey, ::buildEngine) { engine ->
+        var gpuUsed = false
+        fun attempt(cpuOnly: Boolean): Flow<ModelResponse> = flow {
+            val key = if (cpuOnly) cpuKey else residentKey()
+            LocalInferenceRuntime.models.withModel(key, { buildEngine(cpuOnly = key == cpuKey) }) { loaded ->
+                gpuUsed = loaded.gpu
+                val engine = loaded.engine
                 val accumulated = ModelTextAccumulator()
                 var fullText = ""
                 try {
@@ -125,8 +139,21 @@ class LiteRtProvider(
                     emit(ModelResponse.Complete(trimToSentenceBoundary(fullText)))
                 }
             }
-        } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) { emit(ModelResponse.Error(error.message ?: "LiteRT inference error")) }
+        }
+        emitAll(LocalBackendRetry.stream(
+            primary = { attempt(cpuOnly = false) },
+            gpuUsed = { gpuUsed },
+            cpu = {
+                android.util.Log.w("LiteRt", "GPU tensor buffer failed before response; retrying the same local model on CPU")
+                attempt(cpuOnly = true)
+            },
+        ))
+    }.catch { error ->
+        // Flow.catch excludes downstream collector failures; a stopped consumer
+        // must not become a new error emission or start another native attempt.
+        if (error is CancellationException) throw error
+        if (error is Exception) emit(ModelResponse.Error(error.message ?: "LiteRT inference error"))
+        else throw error
     }.flowOn(LocalInferenceRuntime.dispatcher)
 
     private class ReplyCapException : RuntimeException()
