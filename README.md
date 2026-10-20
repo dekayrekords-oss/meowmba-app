@@ -8,7 +8,7 @@ A living AI workspace for Android. Meet your companion, keep useful ideas, and b
 
 **Current Play release: 2.0.14 (229)** · Published October 14, 2026 · Android 12 or later
 
-[![Meow Desk interface preview with a companion and project workspace](https://www.dekayrecords.com/files/theme/meow-project-desk.png)](https://www.dekayrecords.com/meow-assistant.html)
+<a href="https://www.dekayrecords.com/meow-assistant.html"><img src="https://www.dekayrecords.com/files/theme/meow-project-desk.png" alt="Meow Desk interface preview with a companion and project workspace" width="220"></a>
 
 *Desk interface preview. Explore the app's companion, rooms, and workspace.*
 
