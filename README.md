@@ -63,7 +63,11 @@ No Meow account is required for core local chat. Model downloads and optional fe
 
 ## For developers
 
-This repository contains an earlier Android implementation. Its source and historical build notes are **not a reproducible source package for Play release 2.0.14**. Use Google Play for the current public app.
+The default branch includes the newest development source currently pushed to this repository: **2.0 / build 206**, synchronized from [`c68ccaf`](https://github.com/dekayrekords-oss/meowmba-app/commit/c68ccaf54b84add159644a712e40530eaf5ce494) on October 22, 2026. This brings the Computer/OpenCode, opt-in phone automation, Flow, Desk, memory, ring, and runtime work into `main` while preserving the Play edition overview above.
+
+This source synchronization is **not a new APK build**. Downloadable APKs have their own version and source commit. The repository source and historical build notes are **not a reproducible source package for Play release 2.0.14 (229)**. Use Google Play for the current public app.
+
+Before building a preview, read [BUILD_MASTER.md](BUILD_MASTER.md) for the required external runtime assets and existing signing configuration. The [build 206 validation receipt](docs/LITERT_RUNTIME_FALLBACK_206.md) records the completed checks and remaining native-inference and physical-device acceptance work. Computer and phone actions require their normal setup, permissions, compatible model or worker, and approvals.
 
 The [historical developer notes](docs/HISTORICAL_DEVELOPER_NOTES.md) preserve the previous README, including experimental server, desktop, and integration work. Those notes are not a feature list for the Play edition.
 
