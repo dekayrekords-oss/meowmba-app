@@ -709,8 +709,20 @@ private fun MetaGlassesCard(viewModel: CompanionViewModel) {
     val connected by gc.isConnected.collectAsState()
     val streaming by gc.isStreaming.collectAsState()
     val status by gc.status.collectAsState()
+    val bridge = viewModel.metaGlassesMeowBridge
+    val bridgeOn by bridge.enabled.collectAsState()
+    val defaultHost by bridge.defaultSshHost.collectAsState()
+    var hostDraft by remember(defaultHost) { mutableStateOf(defaultHost) }
     val hasSdk = remember { gc.hasSdk() }
     val activity = LocalContext.current as? android.app.Activity
+    val bridgeStatus = remember(hasSdk, connected, bridgeOn, defaultHost) {
+        com.example.meowmba.core.glasses.MetaGlassesMeowBridge.statusLine(
+            hasSdk = hasSdk,
+            glassesConnected = connected,
+            bridgeEnabled = bridgeOn,
+            defaultHost = defaultHost,
+        )
+    }
 
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -745,6 +757,7 @@ private fun MetaGlassesCard(viewModel: CompanionViewModel) {
             }
             Spacer(Modifier.height(6.dp))
             Text(status, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+            Text(bridgeStatus, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
             Spacer(Modifier.height(12.dp))
             Row {
                 if (activity != null) {
@@ -759,12 +772,50 @@ private fun MetaGlassesCard(viewModel: CompanionViewModel) {
                     Text("Disconnect", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                 }
             }
+            Spacer(Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Meow bridge",
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = 13.sp,
+                    modifier = Modifier.weight(1f),
+                )
+                Switch(
+                    checked = bridgeOn,
+                    onCheckedChange = { viewModel.setMetaGlassesBridgeEnabled(it) },
+                )
+            }
+            Text(
+                "When on, glasses mic / chat commands route into the same Meow tools as in-app chat " +
+                    "(including ssh.meow, opencode.run, server.shell). " +
+                    "Say “Hey Meow”, not “Hey Meta” — Meta’s wake word stays Meta’s assistant.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 11.sp,
+            )
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = hostDraft,
+                onValueChange = { hostDraft = it },
+                label = { Text("Default meow SSH host") },
+                placeholder = { Text("meow") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            TextButton(
+                onClick = {
+                    viewModel.setMetaGlassesDefaultSshHost(hostDraft)
+                    hostDraft = viewModel.metaGlassesMeowBridge.defaultSshHost.value
+                },
+            ) {
+                Text("Save SSH host", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
+            }
             if (!hasSdk) {
                 Spacer(Modifier.height(6.dp))
                 Text(
                     "Glasses camera support is not included in this installation. " +
                         "It requires an app update, not an API key in Settings. " +
-                        "You can still select the paired Bluetooth microphone on the Voice Recognition page; availability depends on your phone and connection.",
+                        "You can still select Meta glasses mic on Voice Recognition; " +
+                        "availability depends on Bluetooth SCO. See docs/META_GLASSES_MEOW_BRIDGE.md.",
                     color = Color(0xFFD29922),
                     fontSize = 11.sp,
                 )
