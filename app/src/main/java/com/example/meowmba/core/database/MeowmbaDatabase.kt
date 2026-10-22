@@ -9,20 +9,53 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [MessageEntity::class, MemoryEntity::class, MemoryFtsEntity::class, MessageFtsEntity::class, AuditEntryEntity::class, RoutineEntity::class, ProjectEntity::class, CharacterEntity::class],
-    version = 9,
+    entities = [MemoryPolicyEntity::class, MessageEntity::class, MemoryEntity::class, MemoryFtsEntity::class, MessageFtsEntity::class, AuditEntryEntity::class, RoutineEntity::class, ProjectEntity::class, CharacterEntity::class, AgenticGoalEntity::class, AgenticEventEntity::class, ConnectionProfileEntity::class, com.example.meowmba.core.flow.db.FlowIntentionEntity::class, com.example.meowmba.core.flow.db.FlowOutcomeEntity::class, com.example.meowmba.core.context.live.LifeEventEntity::class, com.example.meowmba.core.context.live.LocationSampleEntity::class, com.example.meowmba.core.northstar.NorthStar::class, com.example.meowmba.core.northstar.NorthStarLink::class, com.example.meowmba.core.agent.runtime.CompanionTaskRecord::class],
+    version = 15,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
 abstract class MeowmbaDatabase : RoomDatabase() {
+    abstract fun companionTaskDao(): com.example.meowmba.core.agent.runtime.CompanionTaskDao
+    abstract fun northStarDao(): com.example.meowmba.core.northstar.NorthStarDao
+    abstract fun flowDao(): com.example.meowmba.core.flow.db.FlowDao
+    abstract fun lifeJournalDao(): com.example.meowmba.core.context.live.LifeJournalDao
     abstract fun messageDao(): MessageDao
     abstract fun memoryDao(): MemoryDao
     abstract fun auditDao(): AuditDao
     abstract fun routineDao(): RoutineDao
     abstract fun projectDao(): ProjectDao
     abstract fun characterDao(): CharacterDao
+    abstract fun agenticGoalDao(): AgenticGoalDao
+    abstract fun agenticEventDao(): AgenticEventDao
+    abstract fun connectionProfileDao(): ConnectionProfileDao
 
     companion object {
+        val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(db: SupportSQLiteDatabase) { db.execSQL(MEMORY_POLICY_MIGRATION) }
+        }
+
+        val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) { db.execSQL(com.example.meowmba.core.agent.runtime.TASK_HISTORY_MIGRATION) }
+        }
+
+        val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                com.example.meowmba.core.northstar.MIGRATION_12_13_STATEMENTS.forEach(db::execSQL)
+            }
+        }
+        /** The context journal and location samples (docs/MEOW_CONTEXT_PLAN.md). */
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                com.example.meowmba.core.context.live.MIGRATION_11_12_STATEMENTS.forEach(db::execSQL)
+            }
+        }
+
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                com.example.meowmba.core.flow.db.MIGRATION_10_11_STATEMENTS.forEach(db::execSQL)
+            }
+        }
+
         /**
          * Adds the recall columns to `memories`, preserving every saved memory.
          *
@@ -115,6 +148,39 @@ abstract class MeowmbaDatabase : RoomDatabase() {
             }
         }
 
+
+        /** Agentic goals / events / connection profiles. Additive. */
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `agentic_goals` (" +
+                        "`id` TEXT NOT NULL, `title` TEXT NOT NULL, `status` TEXT NOT NULL, " +
+                        "`maxSteps` INTEGER NOT NULL, `maxToolCalls` INTEGER NOT NULL, " +
+                        "`maxSshExecs` INTEGER NOT NULL, `stepsUsed` INTEGER NOT NULL, " +
+                        "`toolCallsUsed` INTEGER NOT NULL, `sshExecsUsed` INTEGER NOT NULL, " +
+                        "`approvalGranted` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, " +
+                        "`updatedAt` INTEGER NOT NULL, PRIMARY KEY(`id`))"
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `agentic_events` (" +
+                        "`id` TEXT NOT NULL, `goalId` TEXT NOT NULL, `taskId` TEXT, " +
+                        "`type` TEXT NOT NULL, `detail` TEXT NOT NULL, `timestamp` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`id`))"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_agentic_events_goalId` ON `agentic_events` (`goalId`)"
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `agentic_connection_profiles` (" +
+                        "`id` TEXT NOT NULL, `displayName` TEXT NOT NULL, `type` TEXT NOT NULL, " +
+                        "`host` TEXT NOT NULL, `port` INTEGER NOT NULL, `username` TEXT NOT NULL, " +
+                        "`credentialRef` TEXT NOT NULL, `hostKeyFingerprint` TEXT, " +
+                        "`workspaceRoot` TEXT, `pinHostKeyOnFirstConnect` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`id`))"
+                )
+            }
+        }
+
         /** Studio character bibles. Additive — nothing to carry over. */
         val MIGRATION_8_9 = object : Migration(8, 9) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -138,7 +204,7 @@ abstract class MeowmbaDatabase : RoomDatabase() {
                 )
                     .addMigrations(
                         MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
-                        MIGRATION_7_8, MIGRATION_8_9,
+                        MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15,
                     )
                     // No fallbackToDestructiveMigration. It was silently
                     // dropping every table for anyone upgrading from v2 or v3,

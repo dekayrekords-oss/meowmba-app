@@ -51,6 +51,7 @@ data class AnimFrame(
 data class CustomAnimationSpec(
     val name: String,
     val frames: List<AnimFrame>,
+    val props: List<InventedProp> = emptyList(),
 ) {
     val durationMs: Int get() = frames.last().atMs
 }
@@ -532,7 +533,7 @@ object CustomAnimations {
         } else {
             frames
         }
-        return CustomAnimationSpec(name, stretched) to notes
+        return CustomAnimationSpec(name, stretched, InventedScenes.parse(root, stretched.last().atMs)) to notes
     }
 
     private fun parseFrame(index: Int, f: JSONObject, notes: MutableList<String>): AnimFrame {
@@ -643,7 +644,9 @@ object CustomAnimations {
             f.sparkle?.let { o.put("sparkle", it.toDouble()) }
             frames.put(o)
         }
-        return JSONObject().put("name", spec.name).put("frames", frames).toString()
+        return JSONObject().put("name", spec.name).put("frames", frames).apply {
+            if (spec.props.isNotEmpty()) put("props", InventedScenes.toJson(spec.props))
+        }.toString()
     }
 
     /**
@@ -675,22 +678,40 @@ object CustomAnimations {
     }
 
     /** Interpolates one nullable numeric field across the frames that set it. */
-    private fun lerp(frames: List<AnimFrame>, t: Float, pick: (AnimFrame) -> Float?): Float? {
-        val keyed = frames.mapNotNull { f -> pick(f)?.let { f.atMs to it } }
-        if (keyed.isEmpty()) return null
-        val after = keyed.firstOrNull { it.first >= t } ?: return keyed.last().second
-        val before = keyed.lastOrNull { it.first <= t } ?: return after.second
-        if (after.first == before.first) return before.second
-        val u = (t - before.first) / (after.first - before.first)
+    private inline fun lerp(frames: List<AnimFrame>, t: Float, pick: (AnimFrame) -> Float?): Float? {
+        // Preserve the old first-after/last-before rules (including duplicate
+        // timestamps), without allocating lists, pairs and callbacks per field.
+        var last: Float? = null
+        var before: Float? = null
+        var after: Float? = null
+        var beforeTime = 0
+        var afterTime = 0
+        for (i in frames.indices) {
+            val frame = frames[i]
+            val value = pick(frame) ?: continue
+            last = value
+            if (after == null && frame.atMs >= t) { after = value; afterTime = frame.atMs }
+            if (frame.atMs <= t) { before = value; beforeTime = frame.atMs }
+        }
+        val end = after ?: return last
+        val start = before ?: return end
+        if (afterTime == beforeTime) return start
+        val u = (t - beforeTime) / (afterTime - beforeTime)
         val eased = u * u * (3f - 2f * u) // smoothstep: gentle in and out
-        return before.second + (after.second - before.second) * eased
+        return start + (end - start) * eased
     }
 
     /** Steps one nullable discrete field: the most recent keyframe's value wins. */
-    private fun <T> step(frames: List<AnimFrame>, t: Float, pick: (AnimFrame) -> T?): T? {
-        val keyed = frames.mapNotNull { f -> pick(f)?.let { f.atMs to it } }
-        if (keyed.isEmpty()) return null
-        return (keyed.lastOrNull { it.first <= t } ?: keyed.first()).second
+    private inline fun <T> step(frames: List<AnimFrame>, t: Float, pick: (AnimFrame) -> T?): T? {
+        var first: T? = null
+        var before: T? = null
+        for (i in frames.indices) {
+            val frame = frames[i]
+            val value = pick(frame) ?: continue
+            if (first == null) first = value
+            if (frame.atMs <= t) before = value
+        }
+        return before ?: first
     }
 
     /** Applies a sampled frame over a base pose; null fields keep the base value. */

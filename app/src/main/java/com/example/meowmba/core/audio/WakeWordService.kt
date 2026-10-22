@@ -87,6 +87,7 @@ class WakeWordService : Service() {
         @Volatile private var stopDuringStartPending = false
 
         fun start(context: Context) {
+            if (!microphoneEnabled(context)) { stop(context); return }
             // A fresh start supersedes any stop deferred by a background ->
             // foreground -> background bounce in the same frame.
             stopDuringStartPending = false
@@ -108,6 +109,7 @@ class WakeWordService : Service() {
          * Skip the wake phrase and capture the user's reply directly.
          */
         fun startFollowUp(context: Context) {
+            if (!microphoneEnabled(context)) { stop(context); return }
             stopDuringStartPending = false
             startPending = true
             runCatching {
@@ -133,6 +135,11 @@ class WakeWordService : Service() {
             }
             context.stopService(Intent(context, WakeWordService::class.java))
         }
+
+        /** A service entry point cannot depend on a live ViewModel's privacy state. */
+        private fun microphoneEnabled(context: Context): Boolean = runCatching {
+            MicrophonePrivacy.isEnabled(SecureStorageManager(context))
+        }.getOrDefault(false)
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -148,6 +155,10 @@ class WakeWordService : Service() {
     /** Engine init job, so onDestroy can cancel a start that is still in flight. */
     private var engineInitJob: kotlinx.coroutines.Job? = null
     @Volatile private var micHeld = false
+    @Volatile private var destroyed = false
+    @Volatile private var privacyStopped = false
+    /** Serialize publication/start with teardown, never the expensive engine construction. */
+    private val engineLock = Any()
 
     override fun onCreate() {
         super.onCreate()
@@ -177,6 +188,7 @@ class WakeWordService : Service() {
             stopSelf()
             return
         }
+        if (!ensureMicrophoneEnabled()) return
         startEngineAsync()
     }
 
@@ -196,7 +208,7 @@ class WakeWordService : Service() {
      */
     private fun startEngineAsync() {
         engineInitJob = scope.launch(kotlinx.coroutines.Dispatchers.Default) {
-            val ok = runCatching { startEngine() }.getOrDefault(false)
+            val ok = runCatching { startEngine() }.onFailure { stopSelf() }.getOrDefault(false)
             android.util.Log.i("WakeWordService", "engine init finished ok=$ok")
             // A follow-up hand-off can be requested before the engine exists;
             // arm it now that init has landed (or failed).
@@ -218,10 +230,6 @@ class WakeWordService : Service() {
             return START_NOT_STICKY
         }
 
-        if (intent?.getStringExtra(EXTRA_MODE) == MODE_FOLLOW_UP) {
-            followUpPending = true
-            android.util.Log.i("WakeWordService", "follow-up hand-off requested")
-        }
         // Second chance at the promise onCreate may have failed to keep. Giving
         // up here is the graceful path; leaving it unkept is the fatal one.
         if (!isForeground && !promoteToForeground()) {
@@ -235,6 +243,15 @@ class WakeWordService : Service() {
             stopDuringStartPending = false
             stopSelf()
             return START_NOT_STICKY
+        }
+        if (!ensureMicrophoneEnabled()) return START_NOT_STICKY
+        // onCreate can return before storage initialization (foreground denial,
+        // stop/start race, or storage failure). Check privacy/readiness BEFORE
+        // reading settings; Android still calls onStartCommand in those cases.
+        if (intent?.getStringExtra(EXTRA_MODE) == MODE_FOLLOW_UP &&
+            !secureStorage.getBooleanPreference("quiet_until_addressed", false)) {
+            followUpPending = true
+            android.util.Log.i("WakeWordService", "follow-up hand-off requested")
         }
         // The engine builds asynchronously (see startEngineAsync); a follow-up
         // requested before it exists is armed when the init lands.
@@ -282,69 +299,106 @@ class WakeWordService : Service() {
 
     /** Builds the wake engine. Call off the main thread. Returns true if it started. */
     private fun startEngine(): Boolean {
-        // Exclusive with the in-app wake loop. Without this both drove sessions at once
-        // and the platform answered with a steady stream of ERROR_RECOGNIZER_BUSY.
-        if (!MicOwner.acquire(MicOwner.SERVICE)) {
-            android.util.Log.i(
-                "WakeWordService",
-                "in-app wake loop owns the mic; not starting a second one"
+        if (!ensureMicrophoneEnabled()) return false
+        val speech = SpeechService(this)
+        val voice = TextToSpeechManager(this)
+        var built: WakeWordEngineFactory.Result? = null
+        var published = false
+        try {
+            // Build off-thread without holding the teardown lock. A kill/resume
+            // during native initialization must not publish or start a late engine.
+            built = WakeWordEngineFactory.create(
+                context = this, scope = scope, companionName = companionName(),
+                matcher = WakePhraseMatcher(companionName()), speechEngine = speech,
             )
-            stopSelf()
-            return false
+            val candidate = built ?: run { stopSelf(); return false }
+            candidate.engine.onWake = { command -> handleWake(command) }
+            candidate.kws?.onFatalError = { reason ->
+                android.util.Log.w("WakeWordService", "wake engine stopped: $reason")
+                stopSelf()
+            }
+            synchronized(engineLock) {
+                // Check the persisted choice again after potentially slow construction.
+                if (microphoneCaptureAllowed() && MicOwner.acquire(MicOwner.SERVICE)) {
+                    micHeld = true
+                    speechService = speech
+                    tts = voice
+                    wakeEngine = candidate.engine
+                    engineStarted = true
+                    published = true
+                    candidate.engine.start()
+                }
+            }
+            if (!published) { stopSelf(); return false }
+            android.util.Log.i("WakeWordService", "engine started; mic owned by service")
+            return true
+        } finally {
+            if (!published) {
+                // A never-started recognizer wrapper must NOT stop the shared
+                // recognizer; the foreground app may already own a new session.
+                built?.kws?.release()
+                speech.destroy()
+                voice.shutdown()
+            }
         }
-        micHeld = true
-        speechService = SpeechService(this)
-        tts = TextToSpeechManager(this)
-        // Same factory the in-app loop uses, so background listening gets the keyword
-        // spotter too rather than silently falling back to the recognizer loop.
-        val built = WakeWordEngineFactory.create(
-            context = this,
-            scope = scope,
-            companionName = companionName(),
-            matcher = WakePhraseMatcher(companionName()),
-            speechEngine = speechService,
-        )
-        if (built == null) {
-            android.util.Log.w("WakeWordService", "no wake engine could be built; stopping")
-            MicOwner.release(MicOwner.SERVICE)
-            micHeld = false
-            stopSelf()
-            return false
-        }
-        wakeEngine = built.engine.apply { onWake = { command -> handleWake(command) } }
-        built.kws?.onFatalError = { reason ->
-            // Losing the mic here means the service cannot do its one job.
-            android.util.Log.w("WakeWordService", "wake engine stopped: $reason")
-            MicOwner.release(MicOwner.SERVICE)
-            stopSelf()
-        }
-        wakeEngine?.start()
-        engineStarted = true
-        android.util.Log.i("WakeWordService", "engine started; mic owned by service")
-        return true
     }
 
     override fun onDestroy() {
+        destroyed = true
         serviceForeground = false
         engineInitJob?.cancel()
         engineInitJob = null
-        if (micHeld) {
-            MicOwner.release(MicOwner.SERVICE)
-            micHeld = false
-        }
-        wakeEngine?.stop()
-        // These are lateinit and are only assigned by startEngine(), which is
-        // skipped when the service stops early. Touching them unguarded would
-        // turn a handled failure into an UninitializedPropertyAccessException.
-        if (engineStarted) {
-            speechService.destroy()
-            tts.shutdown()
+        synchronized(engineLock) {
+            followUpPending = false
+            capturingCommand = false
+            engineStarted = false
+            // Only stop shared capture while this service still owns its slot.
+            // A privacy stop may already have released it to the foreground app.
+            if (micHeld) {
+                wakeEngine?.stop()
+                if (::speechService.isInitialized) speechService.stopListening()
+                MicOwner.release(MicOwner.SERVICE)
+                micHeld = false
+            }
+            if (::speechService.isInitialized) speechService.destroy()
+            if (::tts.isInitialized) tts.shutdown()
         }
         scope.cancel()
         super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    private fun microphoneCaptureAllowed(): Boolean = !destroyed && !privacyStopped &&
+        ::secureStorage.isInitialized && runCatching {
+            MicrophonePrivacy.isEnabled(secureStorage)
+        }.getOrDefault(false)
+
+    /** Fail closed, without changing the user's separate wake or speaker preferences. */
+    private fun ensureMicrophoneEnabled(): Boolean {
+        if (microphoneCaptureAllowed()) return true
+        synchronized(engineLock) {
+            privacyStopped = true
+            followUpPending = false
+            capturingCommand = false
+            if (micHeld) {
+                wakeEngine?.stop()
+                if (::speechService.isInitialized) speechService.stopListening()
+                MicOwner.release(MicOwner.SERVICE)
+                micHeld = false
+            }
+        }
+        stopSelf()
+        return false
+    }
+
+    /** Every wake restart checks privacy, including delayed/error-driven retries. */
+    private fun rearmWakeEngine() {
+        if (!ensureMicrophoneEnabled()) return
+        synchronized(engineLock) {
+            if (microphoneCaptureAllowed() && micHeld) wakeEngine?.start()
+        }
+    }
 
     // ── Follow-up hand-off ──────────────────────────────────────────────────
 
@@ -354,6 +408,8 @@ class WakeWordService : Service() {
      * reply right now and deliver it like any wake command.
      */
     private fun maybeStartFollowUpCapture() {
+        if (!ensureMicrophoneEnabled()) return
+        if (secureStorage.getBooleanPreference("quiet_until_addressed", false)) { followUpPending = false; return }
         if (!followUpPending || !engineStarted || capturingCommand) {
             android.util.Log.i(
                 "WakeWordService",
@@ -379,9 +435,11 @@ class WakeWordService : Service() {
     }
 
     private fun startFollowUpListen() {
+        if (!ensureMicrophoneEnabled() || !capturingCommand || !engineStarted) return
         android.util.Log.i("WakeWordService", "follow-up listen: session starting")
         speechService.startListening(
             onResult = { captured ->
+                if (!ensureMicrophoneEnabled()) return@startListening
                 android.util.Log.i("WakeWordService", "follow-up captured: \"$captured\"")
                 if (captured.isBlank()) {
                     // Quiet window ended empty; open one more before falling
@@ -394,7 +452,7 @@ class WakeWordService : Service() {
                         }
                     } else {
                         capturingCommand = false
-                        wakeEngine?.start()
+                        rearmWakeEngine()
                     }
                     return@startListening
                 }
@@ -406,6 +464,7 @@ class WakeWordService : Service() {
                 acknowledgeAndDeliver(captured, launchNow = true)
             },
             onError = { code ->
+                if (!ensureMicrophoneEnabled()) return@startListening
                 android.util.Log.w("WakeWordService", "follow-up listen error code=$code retry=$followUpRetries")
                 // Error 11 and friends are service hiccups; retry silently a
                 // couple of times before falling back to the wake loop.
@@ -433,7 +492,7 @@ class WakeWordService : Service() {
                     }
                 } else {
                     capturingCommand = false
-                    wakeEngine?.start()
+                    rearmWakeEngine()
                 }
             }
         )
@@ -453,6 +512,8 @@ class WakeWordService : Service() {
     // ── Wake handling ───────────────────────────────────────────────────────
 
     private fun handleWake(command: String?) {
+        if (::secureStorage.isInitialized) secureStorage.saveBooleanPreference("quiet_until_addressed", false)
+        if (!ensureMicrophoneEnabled()) return
         if (command != null) {
             acknowledgeAndDeliver(command)
         } else if (!capturingCommand) {
@@ -460,22 +521,34 @@ class WakeWordService : Service() {
             tts.speak("Yes?")
             speechService.startListening(
                 onResult = { captured ->
+                    if (!ensureMicrophoneEnabled()) return@startListening
                     capturingCommand = false
                     if (captured.isBlank()) {
-                        wakeEngine?.start()
+                        rearmWakeEngine()
                         return@startListening
                     }
                     acknowledgeAndDeliver(captured)
                 },
                 onError = {
+                    if (!ensureMicrophoneEnabled()) return@startListening
                     capturingCommand = false
-                    wakeEngine?.start()
+                    rearmWakeEngine()
                 }
             )
         }
     }
 
     private fun acknowledgeAndDeliver(command: String, launchNow: Boolean = false) {
+        if (!ensureMicrophoneEnabled()) return
+        if (NonSpeechSound.parse(command) != null) { rearmWakeEngine(); return }
+        if (com.example.meowmba.ui.companion.SpeechInterruptionPolicy.isQuietRequest(command)) {
+            secureStorage.saveBooleanPreference("quiet_until_addressed", true)
+            followUpPending = false
+            capturingCommand = false
+            tts.stop()
+            rearmWakeEngine()
+            return
+        }
         wakeEngine?.stop()
         if (launchNow) {
             deliverToApp(command)
@@ -487,7 +560,7 @@ class WakeWordService : Service() {
             }
             notifyCommand(command)
         }
-        wakeEngine?.start()
+        rearmWakeEngine()
     }
 
     // ── Instant commands (no app surfacing needed) ──────────────────────────
@@ -565,11 +638,14 @@ class WakeWordService : Service() {
     /** Runs a tool in the service scope and speaks its outcome. */
     private fun runInstant(block: suspend () -> ToolResult) {
         scope.launch {
+            if (!ensureMicrophoneEnabled()) return@launch
             val result = try {
                 block()
             } catch (e: Exception) {
                 ToolResult.Failure(e.message ?: "Something went wrong.")
             }
+            // The user may have said "be quiet" while the tool was running.
+            if (secureStorage.getBooleanPreference("quiet_until_addressed", false)) return@launch
             when (result) {
                 is ToolResult.Success -> tts.speak(result.output)
                 is ToolResult.Failure -> tts.speak(result.error)
@@ -605,6 +681,7 @@ class WakeWordService : Service() {
      * service and reclaims the mic, ending the background session cleanly.
      */
     private fun deliverToApp(command: String) {
+        if (!ensureMicrophoneEnabled()) return
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or
                 Intent.FLAG_ACTIVITY_SINGLE_TOP or
@@ -653,6 +730,7 @@ class WakeWordService : Service() {
     }
 
     private fun notifyCommand(command: String) {
+        if (!ensureMicrophoneEnabled()) return
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra(EXTRA_WAKE_COMMAND, command)

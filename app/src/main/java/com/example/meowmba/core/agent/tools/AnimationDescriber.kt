@@ -18,6 +18,40 @@ object AnimationDescriber {
     )
 
     private val patterns: Map<String, Pattern> = mapOf(
+        "squirrel" to Pattern(
+            weight = 1.35f, durationMs = 3800,
+            frames = listOf(
+                AnimFrame(atMs = 0, eyeOpen = 1f, headTiltDeg = 0f, tailWag = 0f),
+                AnimFrame(atMs = 600, eyeOpen = 1.18f, pupilSize = 0.62f, headTiltDeg = -8f, earPerk = 1.3f),
+                AnimFrame(atMs = 1300, headTiltDeg = -5f, bodyBounce = 0.08f, tailWag = 0.65f),
+                AnimFrame(atMs = 1950, headTiltDeg = 7f, bodyBounce = 0f, tailWag = -0.25f),
+                AnimFrame(atMs = 2700, eyeOpen = 0.80f, mouth = MouthMode.HAPPY, headTiltDeg = 3f, tailWag = 0.15f),
+                AnimFrame(atMs = 3800, eyeOpen = 1f, pupilSize = 0.5f, headTiltDeg = 0f, earPerk = 1f, tailWag = 0f, mouth = MouthMode.IDLE),
+            ),
+        ),
+        "raccoon" to Pattern(
+            weight = 1.35f, durationMs = 4100,
+            frames = listOf(
+                AnimFrame(atMs = 0, eyeOpen = 1f, headTiltDeg = 0f, tailWag = 0f),
+                AnimFrame(atMs = 750, eyeOpen = 0.84f, headTiltDeg = 9f, pupilSize = 0.58f, earPerk = 1.2f),
+                AnimFrame(atMs = 1650, eyeOpen = 1.15f, headTiltDeg = -6f, tailWag = -0.35f),
+                AnimFrame(atMs = 2450, eyeOpen = 0.82f, headTiltDeg = -3f, mouth = MouthMode.HAPPY, tailWag = 0.3f),
+                AnimFrame(atMs = 3300, eyeOpen = 0.18f, headTiltDeg = 2f, tailWag = 0f),
+                AnimFrame(atMs = 4100, eyeOpen = 1f, headTiltDeg = 0f, pupilSize = 0.5f, earPerk = 1f, mouth = MouthMode.IDLE),
+            ),
+        ),
+        "cat" to Pattern(
+            weight = 1.35f, durationMs = 5000,
+            frames = listOf(
+                AnimFrame(atMs = 0, eyeOpen = 1f, pupilSize = 0.5f, headTiltDeg = 0f),
+                AnimFrame(atMs = 850, eyeOpen = 1.1f, pupilSize = 0.65f, headTiltDeg = -10f, earPerk = 1.3f),
+                AnimFrame(atMs = 1700, eyeOpen = 0.5f, headTiltDeg = -7f, mouth = MouthMode.HAPPY),
+                AnimFrame(atMs = 2400, eyeOpen = 0.12f, bodyBounce = 0.08f),
+                AnimFrame(atMs = 3100, eyeOpen = 0.86f, headTiltDeg = 5f, bodyBounce = 0f),
+                AnimFrame(atMs = 4150, eyeOpen = 0.4f, headTiltDeg = 2f),
+                AnimFrame(atMs = 5000, eyeOpen = 1f, headTiltDeg = 0f, pupilSize = 0.5f, mouth = MouthMode.IDLE),
+            ),
+        ),
         "stretch" to Pattern(
             weight = 1.0f,
             durationMs = 2200,
@@ -435,6 +469,7 @@ object AnimationDescriber {
         "playful" to "excited",
         // Dog: the cat playing at being a dog.
         "puppy" to "dog",
+        "kitten" to "cat",
         "pant" to "dog",
         "panting" to "dog",
         "woof" to "dog",

@@ -1,0 +1,375 @@
+{
+  "build": 120,
+  "source_commit": "7b45c4fd8719e17097c700895a70e5c9381baad8",
+  "server_tests": {
+    "tests": 281,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "suites": [
+      {
+        "name": "com.example.meowmba.AgentViewModelTest",
+        "tests": 2
+      },
+      {
+        "name": "com.example.meowmba.CustomAnimationTest",
+        "tests": 23
+      },
+      {
+        "name": "com.example.meowmba.core.agentic.Computer120Test",
+        "tests": 7
+      },
+      {
+        "name": "com.example.meowmba.InventedSceneRenderTest",
+        "tests": 1
+      },
+      {
+        "name": "com.example.meowmba.OfficeHelpersTest",
+        "tests": 5
+      },
+      {
+        "name": "com.example.meowmba.OrchestratorTest",
+        "tests": 6
+      },
+      {
+        "name": "com.example.meowmba.ProjectExecutionContextTest",
+        "tests": 5
+      },
+      {
+        "name": "com.example.meowmba.LlmToolCallRouterTest",
+        "tests": 6
+      },
+      {
+        "name": "com.example.meowmba.ToolCallPromptTest",
+        "tests": 4
+      },
+      {
+        "name": "com.example.meowmba.CameraPrivacyViewModelTest",
+        "tests": 7
+      },
+      {
+        "name": "com.example.meowmba.AgentCancellationLifecycleTest",
+        "tests": 6
+      },
+      {
+        "name": "com.example.meowmba.AgentRouterTest",
+        "tests": 7
+      },
+      {
+        "name": "com.example.meowmba.neural.NeuralServerReplacementTest",
+        "tests": 1
+      },
+      {
+        "name": "com.example.meowmba.VisionManagerLifecycleTest",
+        "tests": 10
+      },
+      {
+        "name": "com.example.meowmba.FruitFlyAvatarTest",
+        "tests": 2
+      },
+      {
+        "name": "com.example.meowmba.core.agentic.ComputerP0Test",
+        "tests": 8
+      },
+      {
+        "name": "com.example.meowmba.AvatarMorphRenderTest",
+        "tests": 3
+      },
+      {
+        "name": "com.example.meowmba.ui.companion.ComputerCommandFrameTest",
+        "tests": 3
+      },
+      {
+        "name": "com.example.meowmba.GeneratedAvatarSetupUiTest",
+        "tests": 8
+      },
+      {
+        "name": "com.example.meowmba.GeneratedAvatarIntegrationTest",
+        "tests": 10
+      },
+      {
+        "name": "com.example.meowmba.AgentBrainViewModelTest",
+        "tests": 3
+      },
+      {
+        "name": "com.example.meowmba.VisionPipelineTest",
+        "tests": 19
+      },
+      {
+        "name": "com.example.meowmba.neural.MaleCnsServerManagerTest",
+        "tests": 16
+      },
+      {
+        "name": "com.example.meowmba.OfficeHelpersRenderTest",
+        "tests": 5
+      },
+      {
+        "name": "com.example.meowmba.GeneratedAvatarRenderTest",
+        "tests": 5
+      },
+      {
+        "name": "com.example.meowmba.AvatarMorphTest",
+        "tests": 7
+      },
+      {
+        "name": "com.example.meowmba.LumenNaturalMotionTest",
+        "tests": 9
+      },
+      {
+        "name": "com.example.meowmba.LumenIntegrationTest",
+        "tests": 1
+      },
+      {
+        "name": "com.example.meowmba.BrainAvatarVisibilityTest",
+        "tests": 4
+      },
+      {
+        "name": "com.example.meowmba.core.agentic.ComputerSshSessionTest",
+        "tests": 2
+      },
+      {
+        "name": "com.example.meowmba.AgentReliabilityTest",
+        "tests": 3
+      },
+      {
+        "name": "com.example.meowmba.AvatarFormInventorTest",
+        "tests": 10
+      },
+      {
+        "name": "com.example.meowmba.ToolCallParserTest",
+        "tests": 9
+      },
+      {
+        "name": "com.example.meowmba.CrossDeviceControlTest",
+        "tests": 11
+      },
+      {
+        "name": "com.example.meowmba.CommandHeuristicsTest",
+        "tests": 4
+      },
+      {
+        "name": "com.example.meowmba.GeneratedAvatarStoreTest",
+        "tests": 6
+      },
+      {
+        "name": "com.example.meowmba.AvatarFormToolTest",
+        "tests": 23
+      },
+      {
+        "name": "com.example.meowmba.GeneratedAvatarFormTest",
+        "tests": 8
+      },
+      {
+        "name": "com.example.meowmba.CompanionBrainControlsTest",
+        "tests": 12
+      }
+    ]
+  },
+  "artifacts": [
+    {
+      "file": "/home/prog/research/meowmba-build120-7b45c4f/meowmba-120.apk",
+      "bytes": 465511068,
+      "sha256": "606ea8fdfffd2f12d39220467122b299266c905281ca9e4b9a33058f8de78bf3",
+      "signer_sha256": "b7850d5fb645df9f5d12525db1b10e457b0ee7f3aa50bbf4294ff31dae3379ff",
+      "badging": "package: name='com.example.meowmba' versionCode='120' versionName='1.3.81' platformBuildVersionName='17' platformBuildVersionCode='37' compileSdkVersion='37' compileSdkVersionCodename='17'"
+    },
+    {
+      "file": "/home/prog/research/meowmba-build120-7b45c4f/tests120.apk",
+      "bytes": 2752790,
+      "sha256": "e6c81e954b0f0e61550fe0d1ea6f2f6c795baa4e1c97e29a3802285fa9650cbb",
+      "signer_sha256": "b7850d5fb645df9f5d12525db1b10e457b0ee7f3aa50bbf4294ff31dae3379ff",
+      "badging": "package: name='com.example.meowmba.test' versionCode='' versionName='' platformBuildVersionName='17' platformBuildVersionCode='37' compileSdkVersion='37' compileSdkVersionCodename='17'"
+    }
+  ],
+  "preserved_runtime_count": 53,
+  "preserved_painted_background_count": 19,
+  "new_painted_background_count": 0,
+  "preserved_entry_sha256": {
+    "lib/arm64-v8a/libandroidx.graphics.path.so": "41e9a793c43a0f4fddb19e33f346bace464f30f888ba7b9eaf96294ea115bfb6",
+    "lib/arm64-v8a/libface_detector_v2_jni.so": "d2d105239f5c723838a6bea81ee9cf828b8a56b4de4bc1f4a2556b320d758851",
+    "lib/arm64-v8a/libimage_processing_util_jni.so": "0292b063fafccf734472cbb59588e756c2dbca907c72021ba6fbf126385508a2",
+    "lib/arm64-v8a/liblitertlm_jni.so": "b38030284ede1fee809eae1f9af0d4c4bdbfc00ce55a3b16f35fe1bd6cc542b7",
+    "lib/arm64-v8a/libllm_inference_engine_jni.so": "3307ac50bb8394e9e661a637202183498b1f7ba0e25690d6c721dfa85a2dc465",
+    "lib/arm64-v8a/libmediapipe_tasks_vision_image_generator_jni.so": "4ea283434400213def0e8402a17ecddc7bb7e76f05bb69fbbe9898a7e1e55afc",
+    "lib/arm64-v8a/libmediapipe_tasks_vision_jni.so": "2f51b2ab98ca8decbf5c4a8a5c8fdadb7e8cfa2c02409d6543843e4fd353851b",
+    "lib/arm64-v8a/libneedle_jni_bridge.so": "00dca44e12ebd3bd8700bb77ac15b18e7090d6230288e119dede80d77fe14131",
+    "lib/arm64-v8a/libonnxruntime.so": "f9aefe58b331128fd33366f8c81218fe6dd5da5028a54438e5b301b23cb2f6ad",
+    "lib/arm64-v8a/libsd_jni_bridge.so": "f4eabcc3cc8ea4fba42a5b9b7067a4dc73c5267615041c3f5c770e0b12273491",
+    "lib/arm64-v8a/libsherpa-onnx-jni.so": "a79ff75fbe1c3813cc239037b458a7828298a90a5b77f5314056508eefdf72bc",
+    "lib/arm64-v8a/libsurface_util_jni.so": "a5c9d1928ea92ec7a94dff8cf666e7739cd734198b9f0ae1d4e28ea3c86516ba",
+    "lib/arm64-v8a/libxeno_native.so": "c0b36a1083803fcc7f7ade803120eb76e34eb2df07cf6af91ddbe25db400e2e2",
+    "assets/mlkit_pose/benchmark_breaking1.data": "9955b0633b8628ae79e92c89579bdd9c71103e33cb67f2af770c0bdd05ced159",
+    "assets/mlkit_pose/benchmark_breaking2.data": "f51dd81ee28331544d9a691a17b3beabefc88df063dfbf2a6d94f798e78a6719",
+    "assets/mlkit_pose/benchmark_halfbody.data": "1273cdad07b7503a1ffdb2bc074651816c4c2edce0f9b6d7b696202cbb53841e",
+    "assets/mlkit_pose/benchmark_jump.data": "3fb10c1c49cb75c19c490f79e437eb0f580c07324bb037ab6dd7ced3dfb26a6b",
+    "assets/mlkit_pose/benchmark_plant.data": "cf5f4689553e887954078b8ce78ab03e3faf7f419a72a7c846803584bb17818a",
+    "assets/mlkit_pose/bundled_allowlist.binarypb": "4c7a1397676aed4e6f302458954b47844ad9880e1f7332e126ef4185089d0777",
+    "assets/mlkit_pose/pose_landmark_detector_lite_f16_inf.tflite": "774adb54eb742c8a7f8fe39b19d0d1ae42cd776015bbdf3e57bde14c5fd8b773",
+    "assets/mlkit_pose/pose_non_tracking_graph.binarypb": "7ac5366312a31fd261c6eb0199053d19c703c1b26ea17642652ba8e1c4711e26",
+    "assets/mlkit_pose/pose_non_tracking_graph_gpu.binarypb": "fb141d07af03240cd96fbd14eec2c50f2ebb943f55b5422130a071fe42ee1a3a",
+    "assets/mlkit_pose/pose_non_tracking_graph_nnapi.binarypb": "e9170eb654516ca685007287a8181eea27856e297c5b817da3b65505fa410bbf",
+    "assets/mlkit_pose/pose_person_detector_f16.tflite": "a63c614bef30d35947f13be361820b1e4e3bec9cfeebf4d11216a18373108e85",
+    "assets/mlkit_pose/pose_tracking_graph.binarypb": "8311a681b68388d18baca2bc26cac59c63c8d07423bd7139ac7e50f23fd96cd2",
+    "assets/mlkit_pose/pose_tracking_graph_gpu.binarypb": "ca55433b7720769976db10b14245e9d459179f36779f4953377a562b13c1db89",
+    "assets/mlkit_pose/pose_tracking_graph_nnapi.binarypb": "6b54c2d5b6b137c3004a60534c9026073707b6feda90d27630ef67dd0763e941",
+    "assets/mobile_acceleration/gpu_compatibility.bin": "0ec6077c3fea40d0413eb0b934b5a40ef0983272f08dd152dadcb002bda56e06",
+    "assets/models_bundled/BCLjoy_200.emd": "f00f25644a628e738c155f493d072af143f253cbf99f08bf4829cbe5d4f4351c",
+    "assets/models_bundled/BCLlefteyeclosed_200.emd": "d31213e4f25ff8b21781e786fd89cede5917ef9b3fbe50bdf55d483af136eded",
+    "assets/models_bundled/BCLrighteyeclosed_200.emd": "63ca0bd838e51977489adadb80a0be016c5aa0b7b690fbc389a0645aaccfe4ff",
+    "assets/models_bundled/LMprec_600.emd": "0ed5c85282f940d14a5723a6c0af05f9c2abd4e930c3c4f0be5a07236d374111",
+    "assets/models_bundled/MFT_fssd_accgray.pb": "f0adb04d7b21b4d9889932a62f0eff127eedb27d2f85342a90144153ca0b81b1",
+    "assets/models_bundled/MFT_fssd_fastgray.pb": "0943425df1b350e0c58a7be668be1f942eac338c198e1a4f16859ca3e1227f45",
+    "assets/models_bundled/blazeface.tfl": "4f25cc142e96b5f21b3236d2166c2e662920681f1d23942d2510e98c8af6ecdc",
+    "assets/models_bundled/contours.tfl": "84160bc0c4a749517e62f93cb2c68ab8ff49de571f70eb6d160254ca9a0789c0",
+    "assets/models_bundled/fssd_25_8bit_gray_v2.tflite": "57dc1f2a3b9c0c5d949f21e86767d2bf319f10b09281c04005d82fef7c972fbd",
+    "assets/models_bundled/fssd_25_8bit_v2.tflite": "d8abae91b0e0af52573c38cbb0a39e34905d4a36cfe54ad59a2fe98351c7f3b4",
+    "assets/models_bundled/fssd_anchors_v2.pb": "7516ed46c04ab0fb850357b306c4c57f10af6f8ae44d6836318e7b872fc21ff6",
+    "assets/models_bundled/fssd_anchors_v5.pb": "5390cab6b491eb3274b7acaa68e3bcb623eb2c7f9fccde1c97a858befbae110a",
+    "assets/models_bundled/fssd_medium_8bit_gray_v5.tflite": "f0590874fd3a006cb7853796a5217bc8f1b712dc904ae7a680957ff284619372",
+    "assets/models_bundled/fssd_medium_8bit_v5.tflite": "ae2fa78e29441438e16104b815522660afb139ebf683e51672cadf88d6089ff8",
+    "assets/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01/decoder-epoch-12-avg-2-chunk-16-left-64.int8.onnx": "e40ff43297abe815e8898494c17e71bba2152d9d40fa3eb803f75d0f7533329a",
+    "assets/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01/encoder-epoch-12-avg-2-chunk-16-left-64.int8.onnx": "1e721676515bcd42a186979733981213c66c80db680e1cc582dfedf3be76e678",
+    "assets/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01/joiner-epoch-12-avg-2-chunk-16-left-64.int8.onnx": "eae9da0c7e1e6c6a3f4cc42d167899c388f6c6701b94cb96320e4f55df79624c",
+    "assets/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01/keywords.txt": "4f57242b51697073ccc9acddfcb3945014e5c845ac60d4b21a160c24c321f9a8",
+    "assets/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01/tokens.txt": "fd2ded4050a55d2b1578870ba8697d02371980217806b7558bd0a5cc60f3ba53",
+    "assets/sherpa-onnx-streaming-zipformer-en-2023-06-26/decoder-epoch-99-avg-1-chunk-16-left-128.int8.onnx": "780c63ee94c7cfa314211172e5d09b406c0da2beab5c40ea2f54cc95670b76a5",
+    "assets/sherpa-onnx-streaming-zipformer-en-2023-06-26/encoder-epoch-99-avg-1-chunk-16-left-128.int8.onnx": "5022b2eca5b19d1bc104fcf33e26bc32604b7df553cd2e1f62e31dc7b05e9c87",
+    "assets/sherpa-onnx-streaming-zipformer-en-2023-06-26/joiner-epoch-99-avg-1-chunk-16-left-128.int8.onnx": "abd5e30f3f16fc510605c6029dba33f10e4386bd75c5bdc30cf94076864db10d",
+    "assets/sherpa-onnx-streaming-zipformer-en-2023-06-26/tokens.txt": "49e3c2646595fd907228b3c6787069658f67b17377c60aeb8619c4551b2316fb",
+    "assets/silero_vad.onnx": "9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6",
+    "assets/speaker.onnx": "c46fad10b5f81e1aa4a60c162714208577093655076c5450f8c469e522ec54ef",
+    "assets/backgrounds/painted/beach.png": "ed71e8d5c1e9439b3bd2abbf5400852159ebb3a7118b436ca95eae1097d94bf3",
+    "assets/backgrounds/painted/bedroom.png": "5f36a6c3a6ae6489804c0d0489b1ae9b0507962419dc00e653c8e9e5a270488c",
+    "assets/backgrounds/painted/cafe.png": "76bfd723ea16047cb02721dc9a796e0c8e38557c4caf0843639c5cefbc24eb99",
+    "assets/backgrounds/painted/cartoon_diner.png": "3b41791cbace4b1733746757de52b7fb6e3894160eda0e8dd5b9e5e84d39a27d",
+    "assets/backgrounds/painted/cartoon_galley.png": "a6ea0aaca28c9c7f6f856db4623d632363f83cd7bcebf156f053a750a657cadb",
+    "assets/backgrounds/painted/cartoon_laundromat.png": "aae099eb916496845738adaf4ff1a4d2d74086c937898fc3c6b63d7280d28e03",
+    "assets/backgrounds/painted/cartoon_nook.png": "6dfdb5c9e47e493ef0fe0b82a1c6a789a8ea8767ff0b99c1d68a1b598e8c641f",
+    "assets/backgrounds/painted/cartoon_snack_lab.png": "ded5e3040e2512d632ddfe9e99aaf7807b3479549ee039d4431ee80805e4227d",
+    "assets/backgrounds/painted/greenhouse.png": "c53d71c1182e7753aa2c2f35c8fe417e1ebc6f9e454ed54aae0f850544c86794",
+    "assets/backgrounds/painted/kitchen.png": "f7c9fef71ea3eb0f30e1bb9841806b5c195e41855894a451a4804a303423c7b2",
+    "assets/backgrounds/painted/library.png": "3908d3ad1c3a03d4130d4ca5ba209e3595538671f92d53736012f4fb4e8e1fa5",
+    "assets/backgrounds/painted/observatory.png": "e381c04de1073504645a2ffdcf12838365a7113a8585cb0b0ac5ea29ad09b123",
+    "assets/backgrounds/painted/orchard.png": "8245ad954c9f6e3df9a8d03e311728ba13e75b787b9e4d52fa60b4566ccc4d31",
+    "assets/backgrounds/painted/pond.png": "dde7f030658374e13a32a81a3dd60151dcb049b0fb435d733f4577053a9b4aeb",
+    "assets/backgrounds/painted/workshop.png": "187a6d1747bdc9450ee492f60af8c55a0f24884a01ca5b7b6bff8acf652ff156"
+  },
+  "preserved_build117_artwork": [
+    {
+      "id": "cartoon_portal_arcade",
+      "prompt": "Use case: illustration-story. Create ONE finished original premium game environment painting, square 1536x1536, no UI. A sophisticated eccentric adult sci-fi television cartoon world: confident dark hand-inked contours with line-weight variation, beautifully designed wonky architecture, carefully composed cinematic depth, crisp cel shading, rich controlled colors and luminous practical lighting. Rick and Morty-ish alien-space-cartoon energy but entirely original scenery, no existing characters or logos. Much more polished and dimensional than simple geometric clipart. Visual story through a few large funny details, never clutter. A separately rendered avatar plays in the center: the middle 45% is spacious low-contrast empty air. Side and upper architecture frames it. COMPOSITING REQUIREMENT: one broad EMPTY foreground play counter extends across full width, with exactly horizontal straight REAR TOP EDGE at 72% of image height; the lower 28% shows ONLY the clean top surface continuing to image bottom, no front fascia or legs, no objects on counter. No cups, books, balls, buttons, creatures, toys or tools on the foreground surface; the game draws moving props. NO people, pets, humanoids, fly, words, text, lettering, watermark, poster or frame. Clean exportable final background asset. Scene: a spectacular little interdimensional arcade lounge inside a retro spaceship. Deep midnight teal walls, mint illuminated arch ribs, acid-lime accent against warm coral. At the upper left side a curved old arcade cabinet with a glass screen showing a tiny spiral galaxy and comically oversized joystick shaped like a rubber chicken, all far BEHIND the counter. At the right a circular lime portal set in a chunky scratched cream machine casing, showing a sleepy purple moon through it. Far high center round skylight reveals one small ringed planet, quiet starfield. Subtle exposed cabling and beveled curved wall details, no rows of machines. A warm pale sage empty counter in foreground. Strong foreground/midground/distant separation, crisp beautifully controlled soft lighting.",
+      "sourcePath": "/Users/bobrossjr/.codex/generated_images/01a0979c-e527-70a2-8488-49fd078dc68d/exec-63ce87c1-1502-4377-b905-917b82c40602.png",
+      "generator": "Built-in image_gen",
+      "width": 1254,
+      "height": 1254,
+      "assetPath": "app/src/main/assets/backgrounds/painted/cartoon_portal_arcade.png",
+      "sha256": "17e092bca456b42fd203933eafbf702d4b374a2b71340185bdbd0d514b90ca34",
+      "sourceTableAnchor": 0.6044657097288676,
+      "sourceTableAnchorPixelY": 758,
+      "sourceFocusX": 0.5
+    },
+    {
+      "id": "cartoon_moon_garden",
+      "prompt": "Use case: illustration-story. Create ONE finished original premium game environment painting, square 1536x1536, no UI. A sophisticated eccentric adult sci-fi television cartoon world: confident dark hand-inked contours with line-weight variation, beautifully designed wonky architecture, carefully composed cinematic depth, crisp cel shading, rich controlled colors and luminous practical lighting. Rick and Morty-ish alien-space-cartoon energy but entirely original scenery, no existing characters or logos. Much more polished and dimensional than simple geometric clipart. Visual story through a few large funny details, never clutter. A separately rendered avatar plays in the center: the middle 45% is spacious low-contrast empty air. Side and upper architecture frames it. COMPOSITING REQUIREMENT: one broad EMPTY foreground play counter extends across full width, with exactly horizontal straight REAR TOP EDGE at 72% of image height; the lower 28% shows ONLY the clean top surface continuing to image bottom, no front fascia or legs, no objects on counter. No cups, books, balls, buttons, creatures, toys or tools on the foreground surface; the game draws moving props. NO people, pets, humanoids, fly, words, text, lettering, watermark, poster or frame. Clean exportable final background asset. Scene: a lush witty alien moon greenhouse on a tiny orbital garden terrace. Plum night sky through an arched blue-green glass dome, distant mint ringed planet high center. Sides framed by sculptural giant turquoise curling leaves and chunky coral mushrooms with spotted caps, fine tiny dew highlights. On a HIGH back shelf at upper left stands one absurd cactus wearing a small glass astronaut helmet; on right a large drooping trumpet flower curves toward empty center air. Warm pale ochre planters and lightly worn enamel garden hardware. The middle is a calm muted sage window view, not full of foliage. Foreground empty light pistachio stone play counter. Polished professional animation background, beautiful grouped shapes and cinematic rim lighting, no realistic textures.",
+      "sourcePath": "/Users/bobrossjr/.codex/generated_images/01a0979c-e527-70a2-8488-49fd078dc68d/exec-07cdca85-4224-4b3a-b7ff-3cb1f387c043.png",
+      "generator": "Built-in image_gen",
+      "width": 1254,
+      "height": 1254,
+      "assetPath": "app/src/main/assets/backgrounds/painted/cartoon_moon_garden.png",
+      "sha256": "1c8ebefc7144ce5707ef83c7e8ee3bdee9c50dfcb2fb44f07071feced68bd1bf",
+      "sourceTableAnchor": 0.664274322169059,
+      "sourceTableAnchorPixelY": 833,
+      "sourceFocusX": 0.5
+    },
+    {
+      "id": "cartoon_alien_aquarium",
+      "prompt": "Use case: illustration-story. Create ONE finished original premium game environment painting, square 1536x1536, no UI. A sophisticated eccentric adult sci-fi television cartoon world: confident dark hand-inked contours with line-weight variation, beautifully designed wonky architecture, carefully composed cinematic depth, crisp cel shading, rich controlled colors and luminous practical lighting. Rick and Morty-ish alien-space-cartoon energy but entirely original scenery, no existing characters or logos. Much more polished and dimensional than simple geometric clipart. Visual story through a few large funny details, never clutter. A separately rendered avatar plays in the center: the middle 45% is spacious low-contrast empty air. Side and upper architecture frames it. COMPOSITING REQUIREMENT: one broad EMPTY foreground play counter extends across full width, with exactly horizontal straight REAR TOP EDGE at 72% of image height; the lower 28% shows ONLY the clean top surface continuing to image bottom, no front fascia or legs, no objects on counter. No cups, books, balls, buttons, creatures, toys or tools on the foreground surface; the game draws moving props. NO people, pets, humanoids, fly, words, text, lettering, watermark, poster or frame. Clean exportable final background asset. Scene: a jewel-like outer-space aquarium observation lounge inside an eccentric research vessel. One huge curved teal-glass tank WINDOW in back with softly layered underwater purple rock arches, chunky mint/coral sea plants restricted to sides, sparse bubbles, pale turquoise luminous water. No animals or fish. A tiny stranded toy flying saucer lies atop a high underwater rock shelf at upper left, amusingly planted with one seaweed sprig. Upper right a brass periscope tube bends into a pretzel shape beside a chunky orange pressure gauge. Sweeping indigo shell architecture, cream-and-coral pipework, spare warm deck lighting. Keep central water area beautifully calm and bright enough for a dark cartoon avatar. Empty warm pale lilac enamel play counter across foreground. Clear defined perspective and depth, thick organic cartoon contours.",
+      "sourcePath": "/Users/bobrossjr/.codex/generated_images/01a0979c-e527-70a2-8488-49fd078dc68d/exec-f95bdf05-6dbf-4a7b-80e1-9c9d09952327.png",
+      "generator": "Built-in image_gen",
+      "width": 1254,
+      "height": 1254,
+      "assetPath": "app/src/main/assets/backgrounds/painted/cartoon_alien_aquarium.png",
+      "sha256": "2a55c6c77ee1b7d62fac42bbd207758693b777f6bda75fddfb7f9279d798c172",
+      "sourceTableAnchor": 0.6004784688995215,
+      "sourceTableAnchorPixelY": 753,
+      "sourceFocusX": 0.5
+    },
+    {
+      "id": "cartoon_meteor_garage",
+      "prompt": "Use case: illustration-story. Create ONE finished original premium game environment painting, square 1536x1536, no UI. A sophisticated eccentric adult sci-fi television cartoon world: confident dark hand-inked contours with line-weight variation, beautifully designed wonky architecture, carefully composed cinematic depth, crisp cel shading, rich controlled colors and luminous practical lighting. Rick and Morty-ish alien-space-cartoon energy but entirely original scenery, no existing characters or logos. Much more polished and dimensional than simple geometric clipart. Visual story through a few large funny details, never clutter. A separately rendered avatar plays in the center: the middle 45% is spacious low-contrast empty air. Side and upper architecture frames it. COMPOSITING REQUIREMENT: one broad EMPTY foreground play counter extends across full width, with exactly horizontal straight REAR TOP EDGE at 72% of image height; the lower 28% shows ONLY the clean top surface continuing to image bottom, no front fascia or legs, no objects on counter. No cups, books, balls, buttons, creatures, toys or tools on the foreground surface; the game draws moving props. NO people, pets, humanoids, fly, words, text, lettering, watermark, poster or frame. Clean exportable final background asset. Scene: an inventive asteroid mechanic's garage in space, like a premium comedic animation background. Warm dusty lavender walls, chunky cream structural beams, subdued deep teal shadows, saturated orange and lime accents. A huge arch-shaped hangar window upper center frames a quiet distant violet asteroid belt and ringed pale-peach planet. At far LEFT behind the counter one tiny silver saucer vehicle sits on a crooked hydraulic lift wearing an absurdly huge single red sneaker instead of a landing foot. At far RIGHT a large orange rocket engine suspended on a mint articulated crane, a small daisy sprouting from its exhaust. Sparse bolts, one coiled cable and carefully designed industrial panels; no cluttered tool collections. Quiet central air. Empty pale warm-beige metal work counter in foreground. Bold ink outlines and expressive silhouette design, three-value cel shading, controlled theatrical pools of color.",
+      "sourcePath": "/Users/bobrossjr/.codex/generated_images/01a0979c-e527-70a2-8488-49fd078dc68d/exec-1097e336-5790-42f1-9edc-93ae37501231.png",
+      "generator": "Built-in image_gen",
+      "width": 1254,
+      "height": 1254,
+      "assetPath": "app/src/main/assets/backgrounds/painted/cartoon_meteor_garage.png",
+      "sha256": "4853db9cec9f75d653b507afa34a6de23d8c1adb936fd37e2c3355dd4136d3f2",
+      "sourceTableAnchor": 0.6778309409888357,
+      "sourceTableAnchorPixelY": 850,
+      "sourceFocusX": 0.5
+    }
+  ],
+  "phone_installed": true,
+  "last_verified_phone_build": 120,
+  "render_previews": [
+    "previews/forms119/creating-with-saved-forms.png",
+    "previews/forms119/saved-forms-landscape-large-text.png",
+    "previews/forms119/generation-failure-retry.png",
+    "previews/forms119/create-form-portrait.png",
+    "previews/generated-avatars/generated-forms-contact.png",
+    "previews/generated-avatars/1-landscape.png",
+    "previews/generated-avatars/2-landscape.png",
+    "previews/generated-avatars/3-landscape.png"
+  ],
+  "archive_host": "meow-nb",
+  "delta_base_build": 115,
+  "generated_forms": {
+    "max_saved": 24,
+    "max_parts": 32,
+    "requires_configured_model": true,
+    "representation": "native animated vector cartoons"
+  },
+  "live_model_generation": {
+    "success": false,
+    "note": "Not retested in Build 120; prior live model generation remains unverified."
+  },
+  "installed_production_commit": "bb59324",
+  "device_test_commit": "25ac4e0",
+  "phone_install": {
+    "device": "RFCY61NJEVM",
+    "model": "SM_F966U1",
+    "method": "adb install -r",
+    "data_cleared": false,
+    "previous_version": 112,
+    "verified_apk_sha256": "606ea8fdfffd2f12d39220467122b299266c905281ca9e4b9a33058f8de78bf3",
+    "result": "Success",
+    "post_install_dumpsys_pending": false,
+    "verified_version_code": 120,
+    "verified_version_name": "1.3.81",
+    "last_update_time_phone": "2026-09-14 10:38:35"
+  },
+  "device_acceptance": {
+    "gpu_tests_passed": 5,
+    "computer_command_completed": true,
+    "computer_assertion": "Verified persisted chat rather than temporary TTS caption",
+    "final_computer_test": "PASS: persisted successful output, nonzero exit BLOCKED, cancellation prevents late persisted result",
+    "credential_dependent_phone_tests": "not run; existing credentials were not copied",
+    "post_reconnect_gpu_tests_passed": 5,
+    "computer_nonzero_exit_verified": true,
+    "computer_cancellation_verified": true,
+    "completed_phone_tests": 6
+  },
+  "worker_tests": {
+    "tests": 5,
+    "passed": 5
+  },
+  "ssh_acceptance": {
+    "location": "Mac using compiled app SSH adapter",
+    "private_key_copied": false,
+    "real_command_passed": true,
+    "mismatched_key_rejected": true
+  },
+  "updated_utc": "2026-09-14T18:08:16.645108+00:00",
+  "phone_temperature_sample_c": 38.7,
+  "thermal_validation": "Single charging sample only; not sustained validation",
+  "final_test_apk_sha256": "fe05ac20eecc18b36c98c75c4bc450360a7b473d62e9f85f2ecbc861eeac644a"
+}

@@ -1,0 +1,148 @@
+{
+  "agents": [
+    {
+      "id": "accounts",
+      "name": "Accounts specialist",
+      "instructions": "Read orders.csv, then use files.csv_summary to calculate the exact unpaid amount. Return the total and unpaid IDs with evidence. Do not delegate or write files.",
+      "tools": [
+        "files.read",
+        "files.csv_summary"
+      ],
+      "provider": "openrouter",
+      "model": "nvidia/nemotron-3-super-120b-a12b:free",
+      "cloudConsent": true,
+      "completionTools": [
+        "files.read",
+        "files.csv_summary"
+      ]
+    },
+    {
+      "id": "stock",
+      "name": "Stock specialist",
+      "instructions": "Read stock.txt, calculate shortages relative to minimum targets, then finish with your actual findings and that evidence. Do not delegate or write files.",
+      "tools": [
+        "files.read"
+      ],
+      "provider": "openrouter",
+      "model": "nvidia/nemotron-3-super-120b-a12b:free",
+      "cloudConsent": true,
+      "completionTools": [
+        "files.read"
+      ]
+    },
+    {
+      "id": "manager",
+      "name": "Shop manager",
+      "instructions": "Delegate accounts analysis to the Accounts specialist and stock analysis to the Stock specialist, exactly once each. After BOTH return, combine their actual results in reports/team.txt. Read the saved report, then finish with evidence. Do not perform their analysis yourself or contact anyone.",
+      "tools": [
+        "files.write",
+        "files.read"
+      ],
+      "delegates": [
+        "accounts",
+        "stock"
+      ],
+      "provider": "openrouter",
+      "model": "nvidia/nemotron-3-super-120b-a12b:free",
+      "cloudConsent": true,
+      "completionTools": [
+        "files.write",
+        "files.read"
+      ]
+    }
+  ],
+  "runs": [
+    {
+      "id": "4fb8e9c4-2974-4acf-9378-39cd57301099",
+      "agentId": "manager",
+      "goal": "Prepare my shop opening report using two specialists on one task. Accounts must review orders.csv for unpaid order IDs and the exact unpaid total. Stock must review stock.txt and report what is below minimum and by how much. Combine BOTH specialists' findings into reports/team.txt and read it to verify. Do not order stock, send messages or make payments.",
+      "status": "COMPLETE",
+      "frames": [],
+      "steps": [
+        {
+          "id": "s1",
+          "agentId": "accounts",
+          "tool": "files.read",
+          "args": {
+            "path": "orders.csv"
+          },
+          "status": "SUCCEEDED",
+          "output": "File: orders.csv; characters 0..72 of 72; end of file\norder,amount,status\nA101,21.50,unpaid\nA102,40.00,paid\nA103,35.25,unpaid\n"
+        },
+        {
+          "id": "s2",
+          "agentId": "accounts",
+          "tool": "files.csv_summary",
+          "args": {
+            "path": "orders.csv",
+            "amount_column": "amount",
+            "filter_column": "status",
+            "filter_value": "unpaid"
+          },
+          "status": "SUCCEEDED",
+          "output": "Rows in file: 3\nSelected rows: 2\nSum of amount: 56.75\nFilter: status equals unpaid (case-insensitive)"
+        },
+        {
+          "id": "s3",
+          "agentId": "accounts",
+          "tool": "agent.result",
+          "args": {},
+          "status": "SUCCEEDED",
+          "output": "Agent summary: Unpaid order IDs: A101, A103; total unpaid amount: 56.75\nRecorded tool evidence:\ns1 files.read: File: orders.csv; characters 0..72 of 72; end of file\norder,amount,status\nA101,21.50,unpaid\nA102,40.00,paid\nA103,35.25,unpaid\n\ns2 files.csv_summary: Rows in file: 3\nSelected rows: 2\nSum of amount: 56.75\nFilter: status equals unpaid (case-insensitive)"
+        },
+        {
+          "id": "s4",
+          "agentId": "stock",
+          "tool": "files.read",
+          "args": {
+            "path": "stock.txt"
+          },
+          "status": "SUCCEEDED",
+          "output": "File: stock.txt; characters 0..95 of 95; end of file\nSticker rolls: 2 available; minimum target 5. Shipping boxes: 20 available; minimum target 10.\n"
+        },
+        {
+          "id": "s5",
+          "agentId": "stock",
+          "tool": "agent.result",
+          "args": {},
+          "status": "SUCCEEDED",
+          "output": "Agent summary: Sticker rolls are below minimum by 3 units. Shipping boxes meet or exceed minimum.\nRecorded tool evidence:\ns4 files.read: File: stock.txt; characters 0..95 of 95; end of file\nSticker rolls: 2 available; minimum target 5. Shipping boxes: 20 available; minimum target 10.\n"
+        },
+        {
+          "id": "s6",
+          "agentId": "manager",
+          "tool": "files.write",
+          "args": {
+            "path": "reports/team.txt",
+            "content": "Accounts: Unpaid order IDs: A101, A103; total unpaid amount: 56.75. Stock: Sticker rolls are below minimum by 3 units. Shipping boxes meet or exceed minimum."
+          },
+          "status": "SUCCEEDED",
+          "output": "Verified file: reports/team.txt\nBytes: 157\nSHA-256: bc36d14604c96482b9d70204bc91412286f6dce39a528ca51d6df8807dfdd8ab",
+          "approvalRequired": true
+        },
+        {
+          "id": "s7",
+          "agentId": "manager",
+          "tool": "files.read",
+          "args": {
+            "path": "reports/team.txt"
+          },
+          "status": "SUCCEEDED",
+          "output": "File: reports/team.txt; characters 0..157 of 157; end of file\nAccounts: Unpaid order IDs: A101, A103; total unpaid amount: 56.75. Stock: Sticker rolls are below minimum by 3 units. Shipping boxes meet or exceed minimum."
+        },
+        {
+          "id": "s8",
+          "agentId": "manager",
+          "tool": "agent.result",
+          "args": {},
+          "status": "SUCCEEDED",
+          "output": "Agent summary: Combined report: Accounts found unpaid order IDs A101, A103 with total unpaid amount 56.75. Stock found sticker rolls below minimum by 3 units; shipping boxes meet minimum.\nRecorded tool evidence:\ns1 files.read: File: orders.csv; characters 0..72 of 72; end of file\norder,amount,status\nA101,21.50,unpaid\nA102,40.00,paid\nA103,35.25,unpaid\n\ns2 files.csv_summary: Rows in file: 3\nSelected rows: 2\nSum of amount: 56.75\nFilter: status equals unpaid (case-insensitive)\ns3 agent.result: Agent summary: Unpaid order IDs: A101, A103; total unpaid amount: 56.75\nRecorded tool evidence:\ns1 files.read: File: orders.csv; characters 0..72 of 72; end of file\norder,amount,status\nA101,21.50,unpaid\nA102,40.00,paid\nA103,35.25,unpaid\n\ns2 files.csv_summary: Rows in file: 3\nSelected rows: 2\nSum of amount: 56.75\nFilter: status equals unpaid (case-insensitive)\ns4 files.read: File: stock.txt; characters 0..95 of 95; end of file\nSticker rolls: 2 available; minimum target 5. Shipping boxes: 20 available; minimum target 10.\n\ns5 agent.result: Agent summary: Sticker rolls are below minimum by 3 units. Shipping boxes meet or exceed minimum.\nRecorded tool evidence:\ns4 files.read: File: stock.txt; characters 0..95 of 95; end of file\nSticker rolls: 2 available; minimum target 5. Shipping boxes: 20 available; minimum target 10.\n\ns6 files.write: Verified file: reports/team.txt\nBytes: 157\nSHA-256: bc36d14604c96482b9d70204bc91412286f6dce39a528ca51d6df8807dfdd8ab\ns7 files.read: File: reports/team.txt; characters 0..157 of 157; end of file\nAccounts: Unpaid order IDs: A101, A103; total unpaid amount: 56.75. Stock: Sticker rolls are below minimum by 3 units. Shipping boxes meet or exceed minimum."
+        }
+      ],
+      "note": "Agent summary: Combined report: Accounts found unpaid order IDs A101, A103 with total unpaid amount 56.75. Stock found sticker rolls below minimum by 3 units; shipping boxes meet minimum.\nRecorded tool evidence:\ns1 files.read: File: orders.csv; characters 0..72 of 72; end of file\norder,amount,status\nA101,21.50,unpaid\nA102,40.00,paid\nA103,35.25,unpaid\n\ns2 files.csv_summary: Rows in file: 3\nSelected rows: 2\nSum of amount: 56.75\nFilter: status equals unpaid (case-insensitive)\ns3 agent.result: Agent summary: Unpaid order IDs: A101, A103; total unpaid amount: 56.75\nRecorded tool evidence:\ns1 files.read: File: orders.csv; characters 0..72 of 72; end of file\norder,amount,status\nA101,21.50,unpaid\nA102,40.00,paid\nA103,35.25,unpaid\n\ns2 files.csv_summary: Rows in file: 3\nSelected rows: 2\nSum of amount: 56.75\nFilter: status equals unpaid (case-insensitive)\ns4 files.read: File: stock.txt; characters 0..95 of 95; end of file\nSticker rolls: 2 available; minimum target 5. Shipping boxes: 20 available; minimum target 10.\n\ns5 agent.result: Agent summary: Sticker rolls are below minimum by 3 units. Shipping boxes meet or exceed minimum.\nRecorded tool evidence:\ns4 files.read: File: stock.txt; characters 0..95 of 95; end of file\nSticker rolls: 2 available; minimum target 5. Shipping boxes: 20 available; minimum target 10.\n\ns6 files.write: Verified file: reports/team.txt\nBytes: 157\nSHA-256: bc36d14604c96482b9d70204bc91412286f6dce39a528ca51d6df8807dfdd8ab\ns7 files.read: File: reports/team.txt; characters 0..157 of 157; end of file\nAccounts: Unpaid order IDs: A101, A103; total unpaid amount: 56.75. Stock: Sticker rolls are below minimum by 3 units. Shipping boxes meet or exceed minimum.",
+      "attempts": 10,
+      "createdAt": 1789450726620,
+      "updatedAt": 1789450830851
+    }
+  ]
+}

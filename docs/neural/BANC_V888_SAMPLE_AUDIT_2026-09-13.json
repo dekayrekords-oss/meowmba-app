@@ -1,0 +1,42 @@
+{
+  "auditVersion": 1,
+  "blankReviewTagRows": 1263,
+  "endpointStatusCounts": {
+    "fragment": 1388,
+    "identified": 32,
+    "proofread": 1106
+  },
+  "fractionRowsWithFragmentEndpoint": 0.831353919239905,
+  "interpretation": "Roster integrity and sampled anatomy only. Sampled-pair counts are not full connection weights. Blank tags are not correct/incorrect verdicts. No motor controller, physiology, precision/recall, flight accuracy or commercial embedding is validated.",
+  "largestWeakComponentNodes": 7,
+  "observedDirectedPairs": 1262,
+  "provenance": {
+    "attribution": "Bates, Phelps, Kim, Yang et al., Distributed control circuits across a brain-and-cord connectome, BANC-project (2026).",
+    "dataset": "BANC synapse prediction QC roster",
+    "datasetVersion": "v888 / synapses-v2 / sample 2026-04-21",
+    "expectedBytes": 218533,
+    "expectedRows": 1263,
+    "licenseEvidenceUrl": "https://github.com/htem/BANC-project/tree/e31a2e26b9937dca72e5ca1c1960df6454d76114#license",
+    "licenseId": "CC-BY-4.0",
+    "licenseScopeNote": "Project README states code and Dataverse data are CC BY4.0; per-archive exceptions must be checked independently. This pinned roster is analyzed outside the app checkout; no commercial data embedding.",
+    "provenanceKind": "anatomical_roster",
+    "rawDataBundled": false,
+    "reviewDate": "2026-09-13",
+    "sha256": "5f7dc5f263b562dea912c82e7d837309b663bdf9b380547429eac4015cfefc0d",
+    "sourceRevision": "e31a2e26b9937dca72e5ca1c1960df6454d76114",
+    "sourceUrl": "https://raw.githubusercontent.com/htem/BANC-project/e31a2e26b9937dca72e5ca1c1960df6454d76114/data/synapses/banc_888_v2_synapse_sample_small_2026-04-21.csv"
+  },
+  "regionRows": {
+    "central_brain": 734,
+    "optic_lobe": 79,
+    "outside": 17,
+    "ventral_nerve_cord": 433
+  },
+  "rows": 1263,
+  "rowsWithFragmentEndpoint": 1050,
+  "selfConnectionRows": 10,
+  "uniqueEndpointIds": 2472,
+  "uniqueSynapseIds": 1263,
+  "verifiedSha256": "5f7dc5f263b562dea912c82e7d837309b663bdf9b380547429eac4015cfefc0d",
+  "weakComponents": 1220
+}

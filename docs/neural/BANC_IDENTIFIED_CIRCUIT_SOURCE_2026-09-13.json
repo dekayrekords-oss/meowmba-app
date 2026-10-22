@@ -1,0 +1,52 @@
+{
+  "datasetPersistentId": "https://doi.org/10.7910/DVN/7WTH1N",
+  "versionNumber": 3,
+  "versionMinorNumber": 0,
+  "license": {
+    "name": "CC BY 4.0",
+    "uri": "http://creativecommons.org/licenses/by/4.0",
+    "iconUri": "https://licensebuttons.net/l/by/4.0/88x31.png"
+  },
+  "files": [
+    {
+      "description": "Neuron-to-neuron edgelist for the BANC connectome at materialization v888, rolled up from the v2 synapse set at `size >= 5` voxels. One row per directed pre \u2192 post pair; 11 510 975 rows \u00d7 6 columns. Carries the raw synapse count, a per-pair normalized weight (`count / post_count` = fraction of the target's total input from this source), and per-neuron pre- and post-synapse totals. Joins onto `banc_888_meta.feather` on both `pre` \u2194 `banc_888_id` and `post` \u2194 `banc_888_id`. This is the primary connectivity table used by Bates, Phelps, Kim, Yang et al., 2026, and the table from which all downstream influence parquets are derived. Autapses are excluded at build time (the paper reports they account for about 2.1 % of all connections). No global count threshold is applied \u2014 apply `count >= 5` at read time for the Codex-style connectivity threshold. The v3 counterpart (`banc_888_edgelist_simple_v3.feather`) shares the same schema but uses the v3 synapse model at the stricter `size >= 10` threshold.",
+      "label": "banc_888_edgelist_simple_v2.feather",
+      "restricted": false,
+      "directoryLabel": "compiled_data",
+      "version": 20,
+      "datasetVersionId": 735626,
+      "categories": [
+        "Data",
+        "Connectivity"
+      ],
+      "dataFile": {
+        "id": 13992792,
+        "persistentId": "",
+        "filename": "banc_888_edgelist_simple_v2.feather",
+        "contentType": "application/octet-stream",
+        "friendlyType": "Unknown",
+        "filesize": 305250378,
+        "description": "Neuron-to-neuron edgelist for the BANC connectome at materialization v888, rolled up from the v2 synapse set at `size >= 5` voxels. One row per directed pre \u2192 post pair; 11 510 975 rows \u00d7 6 columns. Carries the raw synapse count, a per-pair normalized weight (`count / post_count` = fraction of the target's total input from this source), and per-neuron pre- and post-synapse totals. Joins onto `banc_888_meta.feather` on both `pre` \u2194 `banc_888_id` and `post` \u2194 `banc_888_id`. This is the primary connectivity table used by Bates, Phelps, Kim, Yang et al., 2026, and the table from which all downstream influence parquets are derived. Autapses are excluded at build time (the paper reports they account for about 2.1 % of all connections). No global count threshold is applied \u2014 apply `count >= 5` at read time for the Codex-style connectivity threshold. The v3 counterpart (`banc_888_edgelist_simple_v3.feather`) shares the same schema but uses the v3 synapse model at the stricter `size >= 10` threshold.",
+        "categories": [
+          "Data",
+          "Connectivity"
+        ],
+        "storageIdentifier": "s3xxl://dvn-cloud-iqss:19ea045f49f-b63688129a3a",
+        "rootDataFileId": -1,
+        "md5": "394406f8a9bdf093c895f95aff4f6c49",
+        "checksum": {
+          "type": "MD5",
+          "value": "394406f8a9bdf093c895f95aff4f6c49"
+        },
+        "tabularData": false,
+        "creationDate": "2026-06-07",
+        "publicationDate": "2026-06-08",
+        "directoryLabel": "compiled_data",
+        "lastUpdateTime": "2026-07-01T12:45:04Z",
+        "fileAccessRequest": true
+      }
+    }
+  ],
+  "retrievedOn": "2026-09-13",
+  "sourceApi": "https://dataverse.harvard.edu/api/datasets/:persistentId/?persistentId=doi:10.7910/DVN/7WTH1N"
+}

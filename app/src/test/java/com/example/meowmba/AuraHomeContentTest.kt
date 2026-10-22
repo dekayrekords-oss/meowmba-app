@@ -67,17 +67,19 @@ class AuraHomeContentTest {
     }
 
     @Test
-    fun `orb core tap mutes, ring tap opens menu`() {
+    fun `entire orb toggles microphone and outside opens menu`() {
         val center = Offset(500f, 500f)
         val ring = 200f
         assertEquals(
-            AvatarZone.MOUTH,
+            AvatarZone.EAR_LEFT,
             AuraHomeContent.auraZoneAt(Offset(500f, 500f), center, ring),
         )
         assertEquals(
-            AvatarZone.BACKGROUND,
+            AvatarZone.EAR_LEFT,
             AuraHomeContent.auraZoneAt(Offset(500f, 650f), center, ring),
         )
+        assertEquals(AvatarZone.EAR_LEFT, AuraHomeContent.auraZoneAt(Offset(730f, 500f), center, ring))
+        assertEquals(AvatarZone.BACKGROUND, AuraHomeContent.auraZoneAt(Offset(731f, 500f), center, ring))
         assertEquals(
             AvatarZone.BACKGROUND,
             AuraHomeContent.auraZoneAt(Offset(50f, 50f), center, ring),

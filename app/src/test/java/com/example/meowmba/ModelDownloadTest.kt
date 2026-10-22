@@ -44,11 +44,11 @@ class ModelCatalogTest {
     }
 
     @Test
-    fun `needle 2 is an ungated downloadable native tool router`() {
-        val needle = ModelCatalog.options.first { it.id == "needle-2" }
-        assertEquals("needle2.cact", needle.fileName)
-        assertTrue(needle.downloadUrl.contains("/Cactus-Compute/needle2/resolve/"))
-        assertTrue(needle.downloadUrl.endsWith("/needle2.cact"))
+    fun `needle 3 is an ungated downloadable native tool router`() {
+        val needle = ModelCatalog.options.first { it.id == "needle-3" }
+        assertEquals("needle3.cact", needle.fileName)
+        assertTrue(needle.downloadUrl.contains("/Cactus-Compute/needle3/resolve/c1fc4d4cb32993156a880ceb8ff171b03b1f166a/"))
+        assertTrue(needle.downloadUrl.endsWith("/needle3.cact"))
         assertFalse(needle.requiresHfToken)
         assertTrue(needle.recommended)
         assertFalse(needle.runtime.canActivate)
@@ -180,7 +180,7 @@ class ModelDownloadViewModelTest {
     @Test
     fun `downloading a catalog model installs it and marks it ready`() = modelTest {
         val vm = viewModel()
-        val option = ModelCatalog.options.first { !it.requiresHfToken }
+        val option = ModelCatalog.options.first { !it.requiresHfToken && it.runtime.canActivate }
 
         vm.downloadModel(option)
         runCurrent()
@@ -227,7 +227,7 @@ class ModelDownloadViewModelTest {
     @Test
     fun `an already-downloaded model is adopted automatically at startup`() = modelTest {
         // Pre-install a catalog model before the ViewModel exists
-        val option = ModelCatalog.options.first()
+        val option = ModelCatalog.options.first { it.runtime.canActivate }
         File(modelsDir, option.fileName).writeBytes(ByteArray(64))
 
         val vm = viewModel()
@@ -238,7 +238,7 @@ class ModelDownloadViewModelTest {
     @Test
     fun `deleting an installed model returns to not-installed honestly`() = modelTest {
         val vm = viewModel()
-        val option = ModelCatalog.options.first { !it.requiresHfToken }
+        val option = ModelCatalog.options.first { !it.requiresHfToken && it.runtime.canActivate }
         vm.downloadModel(option)
         runCurrent()
         assertTrue(vm.uiState.value.loadedModels.localInstalled)

@@ -1,0 +1,23 @@
+MEOW ASSISTANT — BACKGROUND LOCATION REVIEW DRAFT, NOT SUBMITTED
+Candidate192 /1.5.26. This draft is preparation, not an approved justification.
+
+Feature: optional location context in the on-device context journal and conversations.
+App purpose: conversation, projects, files and an optional contextual Flow home. The user selects which phone connections to enable.
+
+Implemented behavior: Android fused-location PendingIntent batches update live context and save timestamped coordinates in the local journal. Activity and conversation events can be stamped with the available location; journal recall can provide relevant context in conversations, including requests to a selected cloud AI provider. Background access permits Android-delivered updates while another app is open or Meow is closed. Location is optional and revocable; core chat/projects/files/Development Studio work without it. No named-place learning, geofence reminders, immediate delivery or safety purpose is claimed.
+
+Approval evidence needed: record on exact release code a complete, readable prominent disclosure, decline path, Android foreground consent, separate background consent in Android settings, real update delivered while app is in background, then actual user-visible journal/conversation benefit. A database row alone is insufficient. Explain why this benefit requires background access and is central to the app; source code and wording cannot establish Google's approval criteria. Google may reject this optional feature as insufficiently central.
+
+QA permission choices require explicit authorization before acceptance: Android ACCESS_COARSE_LOCATION/ACCESS_FINE_LOCATION (prefer approximate unless precise data is materially needed), then ACCESS_BACKGROUND_LOCATION via Allow all the time. Use only disposable emulator and synthetic coordinates. No sensor permissions have been granted by this task.
+
+Storyboard:
+1. Flow location connection → complete disclosure. Capture Not now and verify no grant.
+2. After authorization, Continue → Android foreground choice. Show a separate choice for background access, not a combined request.
+3. After authorization, settings Permissions → Location → Allow all the time. Return and background Meow.
+4. Apply a synthetic location to emulator. Record actual elapsed wait for Android batch (default10min interval,5min minimum,20min maximum requested batching; platform may defer longer).
+5. Return and demonstrate real benefit in normal app UI/conversation. Do not fake a model reply, inject a journal row or claim a simulated receiver event proves background delivery.
+6. Revoke access and verify no further updates; chat/files/projects remain usable.
+
+Minimum missing evidence: actual platform-delivered background location and visible user benefit. Existing QA migration/picker tests do not prove this. No personal device/user participation is required if disposable QA can demonstrate it, but permission acceptance requires authorization. If no benefit can be demonstrated, decide whether to pursue the declaration or prepare a separate foreground-only candidate. Removing background access would stop optional while-closed sampling/context continuity; it would not disable the workbench. This task does not remove it.
+
+Google guidance: https://support.google.com/googleplay/android-developer/answer/9799150?hl=en

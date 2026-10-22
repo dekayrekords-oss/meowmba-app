@@ -1,5 +1,8 @@
 package com.example.meowmba.ui.companion
 
+import com.example.meowmba.ui.theme.OutlinedButton
+import com.example.meowmba.ui.theme.Surface
+
 import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -14,6 +17,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Videocam
+import com.example.meowmba.ui.theme.AlertDialog
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -46,10 +50,16 @@ fun MemoryScreen(
     onRetentionChange: (Int) -> Unit,
     onPausedChange: (Boolean) -> Unit,
     onExport: () -> String,
-    onClose: () -> Unit
+    onClose: () -> Unit,
+    onCorrect: (Long, String) -> Unit = { _, _ -> },
+    onPin: (Long, Boolean) -> Unit = { _, _ -> }
 ) {
     var query by remember { mutableStateOf("") }
     var confirmClear by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf<MemoryEntity?>(null) }
+    var correction by remember { mutableStateOf("") }
+    var pinning by remember { mutableStateOf<MemoryEntity?>(null) }
+
     var selectedTab by remember { mutableStateOf(MemoryTab.ALL) }
     val context = LocalContext.current
 
@@ -63,8 +73,23 @@ fun MemoryScreen(
             else -> pool
         }
     }
-    val displayed = if (state.memorySearchResults != null) state.memorySearchResults else filtered
+    val displayed = filtered
 
+    editing?.let { record ->
+        AlertDialog(onDismissRequest = { editing = null }, title = { Text("Correct memory") },
+            text = { Column {
+                Text("Replace this saved memory with your correction. This does not change the original conversation.")
+                OutlinedTextField(value = correction, onValueChange = { correction = it.take(20000) }, label = { Text("Corrected memory") })
+            } },
+            confirmButton = { TextButton(enabled = correction.isNotBlank(), onClick = { onCorrect(record.id, correction); editing = null }) { Text("Save correction") } },
+            dismissButton = { TextButton(onClick = { editing = null }) { Text("Cancel") } })
+    }
+    pinning?.let { record ->
+        AlertDialog(onDismissRequest = { pinning = null }, title = { Text("Keep this memory?") },
+            text = { Text("Pinned memories are kept during automatic memory cleanup. You can still delete them or unpin them at any time.") },
+            confirmButton = { TextButton(onClick = { onPin(record.id, true); pinning = null }) { Text("Pin memory") } },
+            dismissButton = { TextButton(onClick = { pinning = null }) { Text("Cancel") } })
+    }
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
             modifier = Modifier
@@ -109,7 +134,7 @@ fun MemoryScreen(
                 },
                 color = when {
                     state.mem0Linked -> MaterialTheme.colorScheme.primary
-                    state.mem0ServerUrl.isNotBlank() -> Color(0xFFD29922)
+                    state.mem0ServerUrl.isNotBlank() -> MaterialTheme.colorScheme.tertiary
                     else -> MaterialTheme.colorScheme.onSurfaceVariant
                 },
                 fontSize = 12.sp
@@ -244,7 +269,11 @@ fun MemoryScreen(
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(displayed, key = { it.id }) { memory ->
-                        MemoryCard(memory = memory, onDelete = { onDelete(memory.id) })
+                        MemoryCard(memory = memory, onDelete = { onDelete(memory.id) },
+                            pinned = state.memoryPolicies[memory.id]?.pinned == true,
+                            correctedAt = state.memoryPolicies[memory.id]?.correctedAt ?: 0L,
+                            onCorrect = { editing = memory; correction = memory.content },
+                            onPin = { if (state.memoryPolicies[memory.id]?.pinned == true) onPin(memory.id, false) else pinning = memory })
                     }
                 }
             }
@@ -276,12 +305,12 @@ private enum class MemoryTab(val label: String) {
 }
 
 @Composable
-private fun MemoryCard(memory: MemoryEntity, onDelete: () -> Unit) {
+private fun MemoryCard(memory: MemoryEntity, onDelete: () -> Unit, pinned: Boolean, correctedAt: Long, onCorrect: () -> Unit, onPin: () -> Unit) {
     val typeColor = when (memory.type) {
         MemoryType.SEMANTIC -> MaterialTheme.colorScheme.primary
         MemoryType.EPISODIC -> MaterialTheme.colorScheme.primary
-        MemoryType.PROJECT -> Color(0xFFD29922)
-        MemoryType.PREFERENCE -> Color(0xFFBC8CFF)
+        MemoryType.PROJECT -> MaterialTheme.colorScheme.tertiary
+        MemoryType.PREFERENCE -> MaterialTheme.colorScheme.secondary
     }
     val dateFormat = remember { SimpleDateFormat("MMM d, HH:mm", Locale.getDefault()) }
 
@@ -310,6 +339,12 @@ private fun MemoryCard(memory: MemoryEntity, onDelete: () -> Unit) {
                 }
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(memory.content, color = MaterialTheme.colorScheme.onSurface, fontSize = 13.sp)
+                if (correctedAt > 0) Text("Corrected by you · ${dateFormat.format(Date(correctedAt))}", fontSize = 11.sp)
+                memory.sourceMessageId?.let { Text("Conversation source #$it", fontSize = 11.sp) }
+                Row {
+                    TextButton(onClick = onCorrect) { Text("Correct") }
+                    TextButton(onClick = onPin) { Text(if (pinned) "Unpin" else "Pin") }
+                }
                 if (memory.tags.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(

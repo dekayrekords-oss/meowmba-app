@@ -10,10 +10,55 @@ import java.io.File
  *
  * Pure JVM (java.io.File), fully unit-testable.
  */
-class Workspace(val root: File) {
+class Workspace(val root: File, private val activeProjectFolder: () -> String? = { null }) {
 
     init {
         root.mkdirs()
+    }
+
+    /** Shared with Files: unique outputs, grouped under the active project when present. */
+    fun newAsset(folder: String, name: String): File = com.example.meowmba.core.files.AssetLibrary(root)
+        .newOutput(projectFolder()?.let { "$it/$folder" } ?: folder, name)
+
+    private fun projectFolder(): String? = com.example.meowmba.core.work.ProjectExecutionContext.folder(activeProjectFolder)
+
+    /**
+     * Relative reads must round-trip project-scoped writes. A full projects/…
+     * path or leading / explicitly addresses the workspace root, including a
+     * reference in another project. Otherwise prefer an existing project file,
+     * then retain access to existing shared library references at their paths.
+     */
+    fun resolveRead(relativePath: String): File? {
+        val path = relativePath.trim()
+        val folder = projectFolder()
+        if (folder != null && path.isNotBlank() && !path.startsWith('/') &&
+            !path.startsWith("projects/") && !path.contains('\\') && path.split('/').none { it == ".." }) {
+            val local = runCatching {
+                com.example.meowmba.core.files.AssetLibrary(root).resolve("$folder/$path")
+            }.getOrNull()
+            if (local?.isFile == true) return local
+        }
+        return resolve(path)
+    }
+
+    /** Preserve the Files browser's bounds and hidden/symlink exclusions. */
+    fun scanFiles(limit: Int = 5000): com.example.meowmba.core.files.AssetScan {
+        val library = com.example.meowmba.core.files.AssetLibrary(root)
+        val folder = projectFolder() ?: return library.scan(limit)
+        val dir = library.resolve(folder)
+        if (!dir.isDirectory) return com.example.meowmba.core.files.AssetScan(emptyList(), false)
+        val scan = com.example.meowmba.core.files.AssetLibrary(dir).scan(limit)
+        return scan.copy(entries = scan.entries.map { it.copy(path = "$folder/${it.path}") })
+    }
+
+    /** New text outputs live with the captured project; explicit other project paths are rejected. */
+    fun resolveWrite(relativePath: String): File? {
+        val folder = projectFolder() ?: return resolve(relativePath)
+        val path = relativePath.trim()
+        if (path.isBlank() || path.startsWith('/') || path.contains('\\') ||
+            path.split('/').any { it == ".." }) return null
+        if (path.startsWith("projects/") && !path.startsWith("$folder/")) return null
+        return resolve(if (path.startsWith("$folder/")) path else "$folder/$path")
     }
 
     /**
@@ -41,13 +86,13 @@ class Workspace(val root: File) {
 
     /** Read a text file. Null = not found / not a file / escape attempt. */
     fun read(relativePath: String): String? {
-        val file = resolve(relativePath) ?: return null
+        val file = resolveRead(relativePath) ?: return null
         return if (file.isFile) runCatching { file.readText() }.getOrNull() else null
     }
 
     /** Write a text file (creates parent directories). False = escape/failure. */
     fun write(relativePath: String, content: String): Boolean {
-        val file = resolve(relativePath) ?: return false
+        val file = resolveWrite(relativePath) ?: return false
         return runCatching {
             file.parentFile?.mkdirs()
             file.writeText(content)

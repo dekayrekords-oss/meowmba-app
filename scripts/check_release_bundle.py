@@ -28,6 +28,28 @@ def load_alignments(data):
     return alignments
 
 
+def dynamic_exports(data):
+    """Read defined, externally visible symbols from an ELF64 dynamic table."""
+    if data[:6] != b"\x7fELF\x02\x01":
+        raise ValueError("Expected a little-endian ELF64 library")
+    shoff = struct.unpack_from("<Q", data, 40)[0]
+    shentsize, shnum = struct.unpack_from("<HH", data, 58)
+    sections = [struct.unpack_from("<IIQQQQIIQQ", data, shoff + i * shentsize)
+                for i in range(shnum)]
+    exports = set()
+    for section in sections:
+        if section[1] != 11:  # SHT_DYNSYM
+            continue
+        strings = sections[section[6]]
+        string_data = data[strings[4]:strings[4] + strings[5]]
+        for offset in range(section[4], section[4] + section[5], section[9]):
+            name, info, visibility, index, _, _ = struct.unpack_from("<IBBHQQ", data, offset)
+            if index and info >> 4 in (1, 2) and visibility & 3 in (0, 3):
+                end = string_data.index(b"\0", name)
+                exports.add(string_data[name:end].decode("utf-8"))
+    return exports
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("bundle", type=Path)
@@ -41,9 +63,38 @@ def main():
     libraries = []
     with zipfile.ZipFile(args.bundle) as archive:
         names = archive.namelist()
+        # Android stores literal permission names in the protobuf manifest. This
+        # conservative guard also catches a transitive AAR reintroducing them.
+        manifest = archive.read("base/manifest/AndroidManifest.xml")
+        forbidden_media_permissions = ["android.permission." + permission for permission in (
+            "READ_MEDIA_IMAGES", "READ_MEDIA_VIDEO", "READ_MEDIA_AUDIO", "READ_MEDIA_VISUAL_USER_SELECTED")]
+        result["forbidden_media_permissions"] = [permission for permission in forbidden_media_permissions
+            if permission.encode() in manifest]
+        result["forbidden_background_location"] = b"android.permission.ACCESS_BACKGROUND_LOCATION" in manifest
+        # Physical, consented ring gestures are included; autonomous phone
+        # Accessibility remains forbidden in the public bundle.
+        result["forbidden_accessibility_services"] = [name for name in (
+            ".core.access.MeowAccessibilityService",)
+            if name.encode() in manifest]
+        result["ring_controls_service_present"] = b".core.ring.RingAccessibilityService" in manifest
         required = {f"base/lib/arm64-v8a/{name}" for name in (
-            "libsherpa-onnx-jni.so", "libonnxruntime.so", "libneedle_jni_bridge.so", "libsd_jni_bridge.so")}
+            "libsherpa-onnx-jni.so", "libonnxruntime.so", "libneedle_jni_bridge.so", "libsd_jni_bridge.so",
+            "libmeow_cpu_features.so")}
         result["missing_required_native_libraries"] = sorted(required - set(names))
+        image_library = "base/lib/arm64-v8a/libsd_jni_bridge.so"
+        # A library can be packaged and aligned yet export obsolete JNI names.
+        # Check actual dynamic exports, not strings that might exist in debug data.
+        required_image_symbols = {
+            "Java_com_example_meowmba_core_media_SDCppJniNative_" + method
+            for method in ("createContext", "generate", "freeContext")
+        }
+        image_symbols = dynamic_exports(archive.read(image_library)) if image_library in names else set()
+        result["missing_image_jni_exports"] = sorted(required_image_symbols - image_symbols)
+        cpu_library = "base/lib/arm64-v8a/libmeow_cpu_features.so"
+        cpu_symbols = dynamic_exports(archive.read(cpu_library)) if cpu_library in names else set()
+        result["missing_cpu_probe_jni_exports"] = sorted({
+            "Java_com_example_meowmba_core_agent_runtime_NativeCpuCapabilities_arm64Hwcap"
+        } - cpu_symbols)
         result["signature_entries"] = [name for name in names if
             name.upper().startswith("META-INF/") and
             name.upper().endswith((".RSA", ".DSA", ".EC", ".SF"))]
@@ -64,6 +115,12 @@ def main():
         lib["passes_16kb_alignment"] for lib in libraries)
     print(json.dumps(result, indent=2))
     return 0 if (result["all_native_libraries_16kb_aligned"] and
+                 not result["forbidden_media_permissions"] and
+                 not result["forbidden_background_location"] and
+                 not result["forbidden_accessibility_services"] and
+                 result["ring_controls_service_present"] and
+                 not result["missing_image_jni_exports"] and
+                 not result["missing_cpu_probe_jni_exports"] and
                  not result["missing_required_native_libraries"]) else 1
 
 

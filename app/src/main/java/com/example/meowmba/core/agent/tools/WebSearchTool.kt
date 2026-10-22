@@ -1,6 +1,7 @@
 package com.example.meowmba.core.agent.tools
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -42,26 +43,39 @@ class WebSearchTool(
         val query = args["query"]?.takeIf { it.isNotBlank() }
             ?: return@withContext ToolResult.Failure("Missing 'query'")
         try {
-            coroutineScope {
-                val perEngine = engines.map { engine ->
-                    async {
-                        val url = KeylessWebSearch.searchUrl(engine, query) ?: return@async emptyList<WebHit>()
-                        val html = fetchHtml(url)
-                        KeylessWebSearch.parse(engine, html)
-                    }
+            val fused = search(query)
+            if (fused.isEmpty()) {
+                ToolResult.Success("No usable results found for \"$query\" (engines returned nothing or a challenge).")
+            } else {
+                val lines = fused.take(12).mapIndexed { i, hit ->
+                    "${i + 1}. ${hit.title}\n${hit.snippet}\n${hit.url}"
                 }
-                val fused = KeylessWebSearch.fuse(perEngine.awaitAll().flatten())
-                if (fused.isEmpty()) {
-                    ToolResult.Success("No usable results found for \"$query\" (engines returned nothing or a challenge).")
-                } else {
-                    val lines = fused.take(12).mapIndexed { i, hit ->
-                        "${i + 1}. ${hit.title}\n${hit.snippet}\n${hit.url}"
-                    }
-                    ToolResult.Success("Web search results for \"$query\" (${fused.size} unique):\n\n${lines.joinToString("\n\n")}")
-                }
+                ToolResult.Success("Web search results for \"$query\" (${fused.size} unique):\n\n${lines.joinToString("\n\n")}")
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             ToolResult.Failure("Web search failed: ${e.message ?: "unknown error"}")
+        }
+    }
+
+    /** Typed evidence for callers such as shopping; no reparsing a model-facing transcript. */
+    suspend fun search(query: String): List<WebHit> = withContext(Dispatchers.IO) {
+        coroutineScope {
+            val perEngine = engines.map { engine ->
+                async {
+                    val url = KeylessWebSearch.searchUrl(engine, query) ?: return@async emptyList<WebHit>()
+                    try {
+                        KeylessWebSearch.parse(engine, fetchHtml(url))
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        // One blocked engine must not cancel the successful engines.
+                        emptyList()
+                    }
+                }
+            }
+            KeylessWebSearch.fuse(perEngine.awaitAll().flatten())
         }
     }
 
@@ -77,7 +91,7 @@ class WebSearchTool(
             conn.instanceFollowRedirects = true
             try {
                 val stream = if (conn.responseCode in 200..399) conn.inputStream else conn.errorStream
-                return stream?.bufferedReader()?.readText().orEmpty()
+                return stream?.bufferedReader()?.use { it.readText() }.orEmpty()
             } finally {
                 conn.disconnect()
             }

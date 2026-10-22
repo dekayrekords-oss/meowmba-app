@@ -13,7 +13,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
-import java.net.URL
 import java.security.SecureRandom
 import java.security.cert.CertificateException
 import java.security.cert.X509Certificate
@@ -44,7 +43,24 @@ class DesktopBridgeManager(
     private val secureStorage: SecureStorageManager,
     private val clock: () -> Long = { System.currentTimeMillis() / 1000 }
 ) {
+    private val transportFallback = BridgeTransportFallback()
+    @Volatile private var connectedHost: String? = null
+
+    fun connectionDescription(): String =
+        if (connectedHost == "127.0.0.1") "USB tunnel" else "network"
+
     data class PairedBridge(val host: String, val port: Int, val name: String, val certSha256: String)
+
+    /** Snapshot credentials never appear in UI state, diagnostics or generated toString output. */
+    internal class PairedCredentials(val bridge: PairedBridge, val secretB64: String) {
+        override fun toString(): String = "PairedCredentials(redacted)"
+    }
+
+    internal fun pairedCredentials(): PairedCredentials? = pairedBridge()?.let { bridge ->
+        secureStorage.getPreference(KEY_SECRET)?.takeIf { it.isNotBlank() }?.let {
+            PairedCredentials(bridge, it)
+        }
+    }
 
     data class BridgeStatus(
         val name: String,
@@ -52,7 +68,8 @@ class DesktopBridgeManager(
         val platform: String,
         val uptimeSeconds: Long,
         val workspaceRoots: List<String>,
-        val pairedPhone: String
+        val pairedPhone: String,
+        val logicProReadiness: String = "Logic Pro readiness not reported by this helper.",
     )
 
     data class BridgeFileEntry(val name: String, val dir: Boolean, val size: Long)
@@ -92,8 +109,7 @@ class DesktopBridgeManager(
     }
 
     /**
-     * Persist a completed pairing. Used by [UsbAutoBridgeManager] after
-     * USB auto-pair completes.
+     * Persist a completed owner-confirmed pairing.
      */
     fun savePairing(host: String, port: Int, name: String, certSha256: String, secretB64: String) {
         secureStorage.savePreference(KEY_HOST, host)
@@ -134,7 +150,19 @@ class DesktopBridgeManager(
     private suspend fun pairWith(
         host: String, port: Int, name: String, certSha256: String,
         token: String, phoneName: String
-    ): Result<String> = withContext(Dispatchers.IO) {
+    ): Result<String> = requestPairing(host, port, name, certSha256, token, phoneName).map { credentials ->
+        savePairing(credentials.bridge.host, credentials.bridge.port, credentials.bridge.name,
+            credentials.bridge.certSha256, credentials.secretB64)
+        credentials.bridge.name
+    }
+
+    /** Neural pairing is staged until a full graph probe passes; desktop prefs remain untouched. */
+    internal suspend fun pairCandidate(payload: DesktopBridgeProtocol.PairingPayload,
+        phoneName: String): Result<PairedCredentials> = requestPairing(payload.host, payload.port,
+        payload.name, payload.certSha256, payload.pairToken, phoneName)
+
+    private suspend fun requestPairing(host: String, port: Int, name: String, certSha256: String,
+        token: String, phoneName: String): Result<PairedCredentials> = withContext(Dispatchers.IO) {
         val secret = ByteArray(32).also { SecureRandom().nextBytes(it) }
         val body = buildJsonObject {
             put("token", token)
@@ -144,7 +172,10 @@ class DesktopBridgeManager(
 
         val result = runCatching {
             post(host, port, "/pair", body, certSha256, emptyMap())
-        }.getOrElse { return@withContext Result.failure(Exception("desktop unreachable: ${it.message}")) }
+        }.getOrElse {
+            if (it is kotlinx.coroutines.CancellationException) throw it
+            return@withContext Result.failure(Exception("desktop unreachable: ${it.message}"))
+        }
 
         when (result.first) {
             200 -> {
@@ -155,12 +186,8 @@ class DesktopBridgeManager(
                 if (desktopName == null) {
                     return@withContext Result.failure(Exception("desktop sent an unreadable pairing reply"))
                 }
-                secureStorage.savePreference(KEY_HOST, host)
-                secureStorage.savePreference(KEY_PORT, port.toString())
-                secureStorage.savePreference(KEY_NAME, desktopName.ifBlank { name })
-                secureStorage.savePreference(KEY_CERT, certSha256.lowercase())
-                secureStorage.savePreference(KEY_SECRET, DesktopBridgeProtocol.b64EncodeStd(secret))
-                Result.success(desktopName.ifBlank { name })
+                Result.success(PairedCredentials(PairedBridge(host, port, desktopName.ifBlank { name },
+                    certSha256.lowercase()), DesktopBridgeProtocol.b64EncodeStd(secret)))
             }
             403 -> Result.failure(Exception("pairing rejected — wrong or expired code; check the desktop"))
             409 -> Result.failure(Exception("desktop has no open pairing window — start it with --pair"))
@@ -177,6 +204,28 @@ class DesktopBridgeManager(
             ?: throw Exception("bridge sent an unreadable pong")
     }
 
+    suspend fun maleCnsStep(request: com.example.meowmba.core.neural.MaleCnsRequest): Result<com.example.meowmba.core.neural.MaleCnsSnapshot> =
+        rpc("malecns_step", request.parameters(), 10_000).mapCatching {
+            com.example.meowmba.core.neural.MaleCnsSnapshot.parse(it, request)
+        }
+
+    suspend fun maleCnsStop(session: String) {
+        rpc("malecns_stop", mapOf("session" to session), 2000)
+    }
+
+    /** The same pinned identity handles both this session's updates and its final stop. */
+    internal fun maleCnsTransport(credentials: PairedCredentials): com.example.meowmba.core.neural.MaleCnsTransport =
+        object : com.example.meowmba.core.neural.MaleCnsTransport {
+            override val description: String = credentials.bridge.name.ifBlank { credentials.bridge.host }.replace(Regex("[\\p{Cntrl}]"), " ").take(80)
+            override suspend fun step(request: com.example.meowmba.core.neural.MaleCnsRequest) =
+                rpc("malecns_step", request.parameters(), 10_000, credentials).mapCatching {
+                    com.example.meowmba.core.neural.MaleCnsSnapshot.parse(it, request)
+                }
+            override suspend fun stop(session: String) {
+                rpc("malecns_stop", mapOf("session" to session), 2_000, credentials)
+            }
+        }
+
     suspend fun status(): Result<BridgeStatus> = rpc("status").mapCatching { body ->
         val obj = Json.parseToJsonElement(body).jsonObject
         BridgeStatus(
@@ -185,11 +234,24 @@ class DesktopBridgeManager(
             platform = obj["platform"]?.jsonPrimitive?.content ?: "",
             uptimeSeconds = obj["uptime_s"]?.jsonPrimitive?.long ?: 0,
             workspaceRoots = obj["workspace_roots"]?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList(),
-            pairedPhone = obj["paired_phone"]?.jsonPrimitive?.content ?: ""
+            pairedPhone = obj["paired_phone"]?.jsonPrimitive?.content ?: "",
+            logicProReadiness = LogicProPreflight.describe(obj["logic_pro"]),
         )
     }
 
     data class BridgeScreenshot(val path: String, val bytes: Long, val pngBase64: String)
+
+    suspend fun readUi(): Result<kotlinx.serialization.json.JsonObject> = rpc("ui_snapshot").mapCatching { Json.parseToJsonElement(it).jsonObject }
+    suspend fun logicCall(method: String, params: Map<String, Any?>): Result<String> {
+        require(method in setOf("logic_inspect", "logic_edit", "logic_receipt", "logic_verify_audio", "logic_screen", "logic_act", "logic_cancel"))
+        return rpc(method, params, if (method == "logic_verify_audio") 140_000 else 40_000)
+    }
+    suspend fun uiAction(snapshotId: String, elementId: String, action: String, value: String): Result<String> =
+        rpc("ui_action", mapOf("snapshot_id" to snapshotId, "element_id" to elementId, "action" to action, "value" to value), 30_000).map { messageOf(it, "Action dispatched; read a fresh screen to verify.") }
+    suspend fun createBlenderScene(scene: String): Result<String> = runCatching {
+        val data = Json.parseToJsonElement(scene).jsonObject
+        rpc("blender_scene", mapOf("scene" to data), 200_000).getOrThrow()
+    }
 
     // ------------------------------------------------------------------
     // Control tools (Phase F1): desktop actions behind the paired bridge.
@@ -323,11 +385,13 @@ class DesktopBridgeManager(
         }
 
     /** Signed POST /rpc. Returns raw response body on HTTP 200. */
-    private suspend fun rpc(method: String, params: Map<String, Any?> = emptyMap()): Result<String> = withContext(Dispatchers.IO) {
-        val bridge = pairedBridge()
+    private suspend fun rpc(method: String, params: Map<String, Any?> = emptyMap(),
+        readTimeoutMs: Int = 15_000, credentials: PairedCredentials? = null): Result<String> = withContext(Dispatchers.IO) {
+        val pairing = credentials ?: pairedCredentials()
             ?: return@withContext Result.failure(Exception("not paired — pair a desktop bridge first"))
+        val bridge = pairing.bridge
         val secret = try {
-            DesktopBridgeProtocol.b64Decode(secureStorage.getPreference(KEY_SECRET)!!)
+            DesktopBridgeProtocol.b64Decode(pairing.secretB64)
         } catch (e: Exception) {
             return@withContext Result.failure(Exception("stored bridge secret is corrupt — unpair and re-pair"))
         }
@@ -338,6 +402,7 @@ class DesktopBridgeManager(
                     params.forEach { (k, v) ->
                         when (v) {
                             null -> put(k, JsonNull)
+                            is kotlinx.serialization.json.JsonElement -> put(k, v)
                             is String -> put(k, v)
                             is Int -> put(k, v)
                             is Long -> put(k, v)
@@ -357,9 +422,12 @@ class DesktopBridgeManager(
         val result = runCatching {
             post(
                 bridge.host, bridge.port, "/rpc", body, bridge.certSha256,
-                mapOf("X-Meowmba-Timestamp" to ts, "X-Meowmba-Signature" to signature)
+                mapOf("X-Meowmba-Timestamp" to ts, "X-Meowmba-Signature" to signature), readTimeoutMs
             )
-        }.getOrElse { return@withContext Result.failure(Exception("desktop unreachable: ${it.message}")) }
+        }.getOrElse {
+            if (it is kotlinx.coroutines.CancellationException) throw it
+            return@withContext Result.failure(Exception("desktop unreachable: ${it.message}"))
+        }
 
         when (result.first) {
             200 -> Result.success(String(result.second, Charsets.UTF_8))
@@ -381,9 +449,9 @@ class DesktopBridgeManager(
     // ------------------------------------------------------------------
 
     /** POST JSON over TLS pinned to [expectedCertSha256]; returns (status, body). */
-    private fun post(
+    private suspend fun post(
         host: String, port: Int, path: String, body: ByteArray,
-        expectedCertSha256: String, extraHeaders: Map<String, String>
+        expectedCertSha256: String, extraHeaders: Map<String, String>, readTimeoutMs: Int = 15_000
     ): Pair<Int, ByteArray> {
         val trustManager = object : X509TrustManager {
             override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) {
@@ -402,23 +470,39 @@ class DesktopBridgeManager(
         val sslContext = SSLContext.getInstance("TLS")
         sslContext.init(null, arrayOf(trustManager), null)
 
-        val conn = (URL("https://$host:$port$path").openConnection() as HttpsURLConnection).apply {
+        suspend fun connect(endpoint: String): HttpsURLConnection {
+        val conn = (DesktopBridgeProtocol.endpointUrl(endpoint, port, path).openConnection() as HttpsURLConnection).apply {
             sslSocketFactory = sslContext.socketFactory
             // Certificate is pinned by fingerprint; hostname checking adds nothing here.
             hostnameVerifier = HostnameVerifier { _, _ -> true }
-            connectTimeout = 10_000
-            readTimeout = 15_000
+            connectTimeout = if (endpoint == "127.0.0.1") 1_500 else 3_000
+            readTimeout = readTimeoutMs
             requestMethod = "POST"
             doOutput = true
+            instanceFollowRedirects = false
+            // Streaming disables HttpURLConnection's automatic POST replay.
+            setFixedLengthStreamingMode(body.size)
             setRequestProperty("Content-Type", "application/json")
             extraHeaders.forEach { (k, v) -> setRequestProperty(k, v) }
         }
+        try {
+            cancellableBridgeIo(conn::disconnect) { conn.connect() }
+            connectedHost = endpoint
+            return conn
+        } catch (e: Exception) {
+            withContext(kotlinx.coroutines.NonCancellable + Dispatchers.IO) { conn.disconnect() }
+            throw e
+        }
+        }
+        suspend fun send(conn: HttpsURLConnection): Pair<Int, ByteArray> = cancellableBridgeIo(conn::disconnect) {
         try {
             conn.outputStream.use { it.write(body) }
             val code = conn.responseCode
             val bytes = (if (code in 200..299) conn.inputStream else conn.errorStream)
                 ?.use { it.readBytes() } ?: ByteArray(0)
-            return code to bytes
+            code to bytes
+        } catch (e: java.io.IOException) {
+            throw java.io.IOException("Desktop request may have started; inspect its state before retrying. ${e.message}", e)
         } finally {
             // Disconnect on EVERY path: unreachable desktops throw from
             // write/responseCode, and the retry loops hit that constantly —
@@ -426,6 +510,12 @@ class DesktopBridgeManager(
             // repeat.
             conn.disconnect()
         }
+        }
+        // Pairing still goes only to the explicitly selected desktop. Fallback
+        // is available solely after that desktop's certificate has been pinned.
+        return if (path == "/rpc") transportFallback.execute(
+            "$host:$port:$expectedCertSha256", host, ::connect, ::send
+        ) else send(connect(host))
     }
 
     companion object {

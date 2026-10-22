@@ -1,0 +1,13 @@
+{
+  "baseline": "meowmba-1.3.82-code130-release.apk",
+  "candidate": "meowmba-1.3.82-code132-release.apk",
+  "protectedEntries": 149,
+  "missing": [],
+  "changed": [],
+  "generatedProfilesChanged": [
+    "assets/dexopt/baseline.prof",
+    "assets/dexopt/baseline.profm"
+  ],
+  "apkSha256": "5d9020a6616a6971ddea5396ed74a8929b69b43b51de460bdc977e66e2b2b34b",
+  "passed": true
+}

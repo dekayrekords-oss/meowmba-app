@@ -37,6 +37,7 @@ private class FakeSDCppNative(
 }
 
 @RunWith(RobolectricTestRunner::class)
+@org.robolectric.annotation.Config(sdk = [35])
 class SDCppImageGeneratorTest {
 
     @Test

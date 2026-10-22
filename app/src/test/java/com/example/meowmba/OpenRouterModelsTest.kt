@@ -6,6 +6,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class OpenRouterModelsTest {
+    @Test fun freeInputDoesNotImplyFreeOutputAndToolsAreExplicit() {
+        val model = OpenRouterModels.parse("""{"data":[{"id":"vendor/chat","pricing":{"prompt":"0","completion":"1"},"supported_parameters":["tools"]}]}""").single()
+        assertTrue(model.tools)
+        assertTrue(!model.free)
+    }
 
     @Test
     fun `parses chat and vision models and skips embeddings`() {

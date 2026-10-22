@@ -97,7 +97,7 @@ class DescribeAnimationTest {
     fun `animation phrases route with or without a wake word`() {
         val cases = listOf(
             "act like a dog" to "avatar.describe_animation",
-            "be a dog" to "avatar.describe_animation",
+            "be a dog" to "avatar.form",
             "make a silly face" to "avatar.describe_animation",
             "be mad" to "avatar.describe_animation",
             "lick your paw" to "avatar.animate",
@@ -115,8 +115,8 @@ class DescribeAnimationTest {
 
     @Test
     fun `a bare carrier still reaches the animation`() {
-        assertEquals("avatar.describe_animation", toolFor("yo be a dog"))
-        assertEquals("avatar.describe_animation", toolFor("okay be a dog"))
+        assertEquals("avatar.form", toolFor("yo be a dog"))
+        assertEquals("avatar.form", toolFor("okay be a dog"))
     }
 
     @Test
@@ -232,7 +232,7 @@ class DescribeAnimationTest {
         val result = tool.execute(mapOf("description" to "yawn"))
         assertTrue(result is ToolResult.Success)
         assertEquals(1, played.size)
-        assertEquals("yawn", played[0].name)
+        assertEquals(com.example.meowmba.ui.companion.AvatarPerformanceCatalog.resolve("yawn")!!.spec, played[0])
     }
 
     @Test

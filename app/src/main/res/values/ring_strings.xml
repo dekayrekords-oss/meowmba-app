@@ -1,0 +1,4 @@
+<resources>
+    <string name="ring_accessibility_label">Meowmba Ring Controls</string>
+    <string name="ring_accessibility_description">Receive verified R08 keys for media/volume, scroll/click/navigation, compatible photo shutters, app shortcuts or saved Meow requests in allowed apps. App controls are processed locally; screen contents are not recorded; screen contents and raw keys are not sent to AI providers. Saved Meow requests use normal chat providers and approvals. Controls start paused; review the disclosure and test gestures in Meow first.</string>
+</resources>

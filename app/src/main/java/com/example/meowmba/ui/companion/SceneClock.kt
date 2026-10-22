@@ -1,0 +1,63 @@
+package com.example.meowmba.ui.companion
+
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.platform.LocalContext
+import com.example.meowmba.core.config.FeatureFlags
+import com.example.meowmba.core.thermal.ThermalGovernor
+import kotlinx.coroutines.delay
+
+/** One display-rate clock, consumed in draw only. Pausing preserves the phase. */
+internal class SceneClock {
+    private var elapsedMs by mutableStateOf(0.0)
+
+    fun advance(deltaNanos: Long) {
+        elapsedMs += deltaNanos.coerceAtLeast(0L) / 1_000_000.0
+    }
+
+    fun phase(periodMs: Int): Float = ((elapsedMs % periodMs) / periodMs).toFloat()
+}
+
+/**
+ * [interacting] = a clip is performing or a face is being tracked. Ambient
+ * scenes (weather, backgrounds) pass false: their cycles are seconds long and
+ * use the idle cadence (~half of Avatar FPS target). Active paths admit the
+ * user Avatar FPS target when cool (default ~30); MODERATE halves FPS and THERMAL_EASE_AT quarters it;
+ * AvatarWorkPolicy stops work at THERMAL_STOP_AT+.
+ */
+@Composable
+internal fun rememberSceneClock(paused: Boolean, interacting: Boolean = true): SceneClock {
+    val clock = remember { SceneClock() }
+    val context = LocalContext.current
+    val fpsTarget = FeatureFlags.from(context).avatarFpsTarget
+    val active = rememberAvatarWorkAllowed() && !paused
+    val sharedPhase = LocalSharedFramePhase.current
+    LaunchedEffect(active, interacting, fpsTarget, sharedPhase) {
+        if (!active) return@LaunchedEffect
+        var previous = 0L
+        val cadence = AvatarFrameCadence(sharedPhase)
+        while (true) {
+            var admitted = false
+            withFrameNanos { now ->
+                if (!cadence.admit(
+                        now,
+                        interacting,
+                        fpsTarget = fpsTarget,
+                        thermalStatus = ThermalGovernor.currentStatus(),
+                    )
+                ) return@withFrameNanos
+                admitted = true
+                if (previous != 0L) clock.advance(now - previous)
+                previous = now
+            }
+            // The vsyncs before the next admissible frame would all be refused.
+            if (admitted) cadence.idleNanosAfterAdmit().takeIf { it > 0L }?.let { delay(it / 1_000_000L) }
+        }
+    }
+    return clock
+}

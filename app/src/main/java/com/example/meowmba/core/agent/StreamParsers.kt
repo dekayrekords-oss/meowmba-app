@@ -42,8 +42,8 @@ object StreamParsers {
      * Returns null for non-data lines (comments, blanks, malformed chunks).
      */
     fun parseOpenAISseLine(line: String): ModelResponse? {
-        if (!line.startsWith("data: ")) return null
-        val data = line.removePrefix("data: ").trim()
+        if (!line.startsWith("data:")) return null
+        val data = line.removePrefix("data:").trim()
         if (data == "[DONE]") return ModelResponse.Complete("")
         return try {
             val obj = json.parseToJsonElement(data).jsonObject

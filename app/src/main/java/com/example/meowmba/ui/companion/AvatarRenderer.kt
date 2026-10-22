@@ -1,5 +1,7 @@
 package com.example.meowmba.ui.companion
 
+import androidx.compose.ui.graphics.graphicsLayer
+
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -14,11 +16,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
+import com.example.meowmba.core.behavior.BehaviorBias
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.runtime.withFrameNanos
@@ -34,11 +38,19 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import com.example.meowmba.core.config.FeatureFlags
+import com.example.meowmba.core.thermal.ThermalGovernor
+import com.example.meowmba.core.lumen.ReflexSensoryFeed
+import com.example.meowmba.ui.companion.lumen.LumenReflexBridge
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -72,6 +84,10 @@ private val EYE_COLOR = Color(0xFFCFF9FF)
 private val PUPIL_COLOR = Color(0xFF06232B)
 private val NOSE_COLOR = Color(0xFFFFA6C9)
 private val WHISKER_COLOR = Color(0x66CFF9FF)
+
+/** Lumen owns its own ears, and the orb/classic painters never read the legacy trail. */
+internal fun needsLegacyEarFollowThrough(style: AvatarStyle, lumenOwnsPose: Boolean): Boolean =
+    !lumenOwnsPose && (style == AvatarStyle.NEO || style == AvatarStyle.PEARL)
 
 
 /**
@@ -158,7 +174,15 @@ fun AvatarRenderer(
     onSwipeDown: () -> Unit = {},
     onSwipeLeft: () -> Unit = {},
     onSwipeRight: () -> Unit = {},
+    /** Stroking the avatar. Reported outward so the drive layer feels it too. */
+    onPet: () -> Unit = {},
+    onPlay: () -> Unit = {},
+    neuralGaze: () -> Offset? = { null },
+    onHabitatAction: (HabitatAction) -> Unit = {},
+    onFly3DFrame: ((Fly3DFrame) -> Unit)? = null,
     paused: Boolean = false,
+    /** Setup-only settled anatomy. Used with paused=true; does not alter live morphs or privacy. */
+    restingPreview: Boolean = false,
     faceGazeX: Float? = null,
     faceGazeY: Float? = null,
     /**
@@ -184,10 +208,36 @@ fun AvatarRenderer(
     pointerEnabled: Boolean = true,
     /** Longitudinal force, -1..1 (+ = braking throw). Braking lurches the head. */
     motionLurch: Float = 0f,
+    /** Sample forces during drawing, without recomposing the complete avatar per sensor event. */
+    motionLeanState: State<Float>? = null,
+    motionLurchState: State<Float>? = null,
+    /** Monotonic sensor time, read during draw so a heartbeat does not recompose the face. */
+    motionObservedAtMs: State<Long>? = null,
+    motionScreenLean: State<Float>? = null,
+    displayRotation: Int = 0,
     shakeCount: Int = 0,
-    modifier: Modifier = Modifier
+    /**
+     * Continuous drives, as a function rather than a value or a StateFlow on
+     * purpose: the drives change every tick, so observing them as state would
+     * recompose the whole avatar several times a second for a handful of floats
+     * that only the draw lambda needs. Same reasoning as [mouthEnergy].
+     * Defaults to the resting bias, which is a no-op.
+     */
+    nervousBias: () -> BehaviorBias = { REST_BIAS },
+    /** Experimental BANC wing-power activity, sampled only while drawing. */
+    neuralWingPower: () -> Float = { 0f },
+    neuralFlyMotor: () -> com.example.meowmba.core.neural.FlyMotorIntent = { com.example.meowmba.core.neural.FlyMotorIntent.NONE },
+    /** Rich vision/social/speech/touch/motion feed for Lumen reflex v2 (read during draw). */
+    reflexFeed: () -> ReflexSensoryFeed = { ReflexSensoryFeed() },
+    reflexGain: Float = 1f,
+    onReflexSummary: ((String?) -> Unit)? = null,
+    modifier: Modifier = Modifier,
+    timings: com.example.meowmba.core.diagnostics.InteractionTimings? = null,
+    displayRefreshRate: Float? = null,
 ) {
-    val basePose = CatAvatarStateMachine.resolvePose(state)
+    // The HUD's held maneuver label is not an animation clock. Continuous
+    // sensor-driven inertia below owns the reaction, including its recovery.
+    val basePose = CatAvatarStateMachine.resolvePose(state.copy(driveReaction = DriveReaction.NONE))
     val haptics = LocalHapticFeedback.current
 
     // ── Invented animation overlay ─────────────────────────────────────────
@@ -199,6 +249,8 @@ fun AvatarRenderer(
     // While an overlay covers the screen the face freezes: no custom clip.
     val customAnim = if (paused) null else state.activeAnimation
     val composed = if (paused) null else state.activeComposed
+    val lumenClipTilt = remember(customAnim) { lumenPerformanceTilt(customAnim?.name) }
+    val lumenPerformance = remember(customAnim) { AvatarPerformanceCatalog.fromSpec(customAnim) }
 
     // Draw-only invalidation signal. Every per-frame producer below bumps this
     // and writes its value into a plain holder; the Canvas reads both. Because
@@ -211,19 +263,6 @@ fun AvatarRenderer(
     // animating, which is the opposite of what you want. drawEpoch (already
     // read only inside the Canvas) is what invalidates the draw pass.
     val animTHolder = remember { longArrayOf(0L) }
-    LaunchedEffect(customAnim) {
-        if (customAnim != null) {
-            var start = -1L
-            while (true) {
-                withFrameMillis { now ->
-                    if (start < 0L) start = now
-                    animTHolder[0] = now - start
-                    drawEpoch++
-                }
-                if (animTHolder[0] > customAnim.durationMs) break
-            }
-        }
-    }
 
     // Godot face / classic idle: ONE vsync-locked draw clock (not 9 infinite transitions).
     // CatMotionEngine is ONE-SHOT only for named expressions.
@@ -239,8 +278,41 @@ fun AvatarRenderer(
     var faceRadiusPx by remember { mutableStateOf(200f) }
     val useGodotFace = state.avatarStyle == AvatarStyle.NEO || state.avatarStyle == AvatarStyle.PEARL
     val useSignalOrb = state.avatarStyle == AvatarStyle.SIGNAL
+    val useLumen = state.avatarStyle.isLumen || customAnim?.props?.isNotEmpty() == true
+    val lumenRig = remember { LumenRig() }
+    val lumenPainter = remember { LumenPainter() }
+    val generatedPainter = remember { GeneratedAvatarPainter() }
+    val generatedScenePainter = remember { InventedScenePainter() }
+    val idleGenerated = state.idleMorphGeneratedId?.let { id ->
+                state.savedGeneratedForms.firstOrNull { it.id == id }
+            }
+            val generatedForm = (idleGenerated ?: state.generatedAvatarForm.takeIf { state.idleMorphAnimal == null }).takeIf { state.avatarStyle == AvatarStyle.LUMEN }
+    val touchGeneratedForm by rememberUpdatedState(generatedForm)
+    val generatedPlacement = remember { arrayOfNulls<GeneratedAvatarPlacement>(1) }
+    val fullFlyPainter = remember { FullFlyPainter() }
+    val habitatWorld = remember(state.habitatBackgroundId, state.avatarStyle, state.habitatMode) { PetHabitatWorld() }
+    val fly3DWorld = remember(state.habitatBackgroundId, state.avatarStyle, state.habitatMode) { Fly3DWorld() }
+    val lastFly3DFrame = remember(fly3DWorld) { arrayOfNulls<Fly3DFrame>(1) }
+    val avatarScale = if (state.avatarScale.isFinite()) state.avatarScale.coerceIn(.5f, 3f) else 2f
+    val avatarHitTransform = remember { arrayOf(AvatarHitTransform()) }
+    val habitatEnabled = state.habitatMode
+    val cartoonGagKind = if (habitatEnabled) CartoonGagKind.forBackground(state.habitatBackgroundId) else null
+    val cartoonGag = remember(cartoonGagKind, habitatEnabled) { cartoonGagKind?.let(::CartoonHabitatGag) }
+    val latestCartoonGag by rememberUpdatedState(cartoonGag)
+    val latestPaused by rememberUpdatedState(paused)
+    val touchFly3DFrame by rememberUpdatedState(lastFly3DFrame)
+    val lastFullFlyPose = remember { arrayOf(FullFlyPose()) }
+    val canvasSize = remember { floatArrayOf(0f, 0f) }
+    val latestHabitatAction by rememberUpdatedState(onHabitatAction)
+    val latestHabitatEnabled by rememberUpdatedState(habitatEnabled)
+    val lumenContext = LocalContext.current
+    val lumenReflexV2 = remember(lumenContext) { FeatureFlags.from(lumenContext).lumenReflexV2 }
+    val avatarFpsTarget = FeatureFlags.from(lumenContext).avatarFpsTarget
+    val lumenReflexBridge = remember { LumenReflexBridge() }
+    val lumenLastFrame = remember { arrayOf(LumenFrame()) }
+    val privacyColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
     val orbOrientation = rememberOrbOrientation(useSignalOrb && !paused)
-    // Single ambient clock (seconds). Advanced at ~60 fps and only while visible.
+    // Single ambient clock (seconds). Advanced at Avatar FPS target and only while visible.
     // Reading this in the Canvas draw lambda invalidates draw only — not a
     // full-composition thrash of 9 rememberInfiniteTransition states @ vsync.
     var clockSec by remember { mutableFloatStateOf(0f) }
@@ -249,69 +321,78 @@ fun AvatarRenderer(
     // accumulator restarted at 0.0 and every ambient cycle (breath, sway,
     // drift) teleported to its t=0 phase. The head jumped the instant you
     // dismissed chat or the drawer, with nothing on screen to explain it.
-    val clockBase = remember { doubleArrayOf(0.0) }
-    LaunchedEffect(paused) {
-        if (paused) return@LaunchedEffect
-        var lastNs = 0L
-        var lastDrawNs = 0L
-        // Advance by real elapsed time on EVERY vsync, at whatever rate the
-        // panel runs. The previous version quantised to a fixed 1/60 s step,
-        // which capped the face at 60 fps on a 120 Hz display — every pose was
-        // held for two vsyncs and the motion read as stepping, the exact
-        // artefact the fixed step was added to cure. (It was added because a
-        // Float 1f/60f threshold sat just above one 60 Hz vsync and silently
-        // ticked every other one, pinning the clock at ~30 fps. Removing the
-        // quantisation removes that whole class of bug: there is no threshold
-        // left to straddle.) Accumulation stays in Double so a long session
-        // does not lose sub-millisecond resolution; dt is capped so a resumed
-        // app cannot jump the ambient cycle forward by seconds in one frame.
+    val frameClock = remember { AvatarFrameClock() }
+    androidx.compose.runtime.DisposableEffect(timings) { onDispose { timings?.pauseFrames() } }
+    val latestAnimation by rememberUpdatedState(customAnim)
+    val latestComposed by rememberUpdatedState(composed)
+    val latestPerformanceSequence by rememberUpdatedState(state.avatarPerformanceSequence)
+    val latestFaceRadius by rememberUpdatedState(faceRadiusPx)
+    val sharedFramePhase = LocalSharedFramePhase.current
+    // Wakes the clock below out of its between-frame sleep the moment a clip or
+    // expression starts or stops, so performances begin on the next vsync as before.
+    val performanceChanged = remember { kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED) }
+    LaunchedEffect(customAnim, composed) { performanceChanged.trySend(Unit) }
+    LaunchedEffect(paused, timings, displayRefreshRate, avatarFpsTarget, sharedFramePhase) {
+        timings?.setFrameCadence(displayRefreshRate?.takeIf { it.isFinite() && it > 0f }?.let { (1_000_000_000.0 / it).toLong() })
+        if (paused) {
+            timings?.pauseFrames()
+            frameClock.pause()
+            motionEngine.stop()
+            shotHolder[0] = null
+            return@LaunchedEffect
+        }
+        var runningSequence: Long? = null
+        var runningExpression: ComposedExpression? = null
+        // The avatar keeps its own cadence; background clocks line up behind it.
+        val cadence = AvatarFrameCadence(sharedFramePhase, leader = true)
         while (true) {
+            var admitted = false
+            var admittedClip: CustomAnimationSpec? = null
+            var admittedExpression: ComposedExpression? = null
             withFrameNanos { now ->
-                if (lastNs == 0L) lastNs = now
-                val dt = ((now - lastNs) / 1_000_000_000.0).coerceIn(0.0, 0.05)
-                lastNs = now
-                clockBase[0] += dt
-                // Keep the vector face at the display refresh rate. The avatar
-                // is a performance, not a slideshow: limiting the draw pass
-                // to 30fps makes eye tracking, speech, and follow-through
-                // visibly step on 90/120Hz phones.
-                if (now - lastDrawNs >= 8_333_333L) {
-                    lastDrawNs = now
-                    clockSec = clockBase[0].toFloat()
-                    drawEpoch++
+                val clip = latestAnimation
+                val expression = latestComposed
+                // Performed clips / live expressions admit at Avatar FPS target when cool
+                // (default ~30). Idle uses half; LIGHT halves further; MODERATE+ pauses
+                // via AvatarWorkPolicy and cadence refuse.
+                val performing = clip != null || expression != null
+                if (!cadence.admit(
+                        now,
+                        performing,
+                        fpsTarget = avatarFpsTarget,
+                        thermalStatus = ThermalGovernor.currentStatus(),
+                    )
+                ) return@withFrameNanos
+                admitted = true
+                admittedClip = clip
+                admittedExpression = expression
+                timings?.framePresented(now)
+                val id = if (performing) latestPerformanceSequence else null
+                val tick = frameClock.step(now, id)
+                clockSec = tick.seconds
+                animTHolder[0] = tick.performanceMillis
+                if (id != runningSequence || expression != runningExpression) {
+                    motionEngine.stop()
+                    if (expression != null) motionEngine.play(expression)
+                    runningSequence = id
+                    runningExpression = expression
+                }
+                // The actor, custom clip and ambient face share this draw owner.
+                // Elapsed time remains continuous while redraws are capped at Avatar FPS when cool.
+                shotHolder[0] = if (expression != null)
+                    motionEngine.update(tick.dt, latestFaceRadius.coerceIn(80f, 800f)) else null
+                drawEpoch++
+            }
+            // Sleep through vsyncs the cadence would refuse. A clip starting or
+            // ending changes the interval, so it cuts the sleep short.
+            val idleNanos = if (admitted) cadence.idleNanosAfterAdmit() else 0L
+            if (idleNanos > 0L) {
+                performanceChanged.tryReceive()
+                if (latestAnimation === admittedClip && latestComposed === admittedExpression) {
+                    kotlinx.coroutines.withTimeoutOrNull(idleNanos / 1_000_000L) { performanceChanged.receive() }
                 }
             }
         }
-    }
-    LaunchedEffect(composed, paused) {
-        if (paused || composed == null) {
-            motionEngine.stop()
-            shotHolder[0] = null
-            drawEpoch++
-            return@LaunchedEffect
-        }
-        motionEngine.play(composed)
-        var last = 0L
-        while (true) {
-            var frame: MotionPose? = null
-            withFrameMillis { now ->
-                // Cap at 1/30 s, not 1/60: capping at one 60 Hz frame meant any
-                // frame that ran long advanced the clip by less time than had
-                // actually passed, so a hitch played the rest of the
-                // performance in slow motion instead of dropping a frame of it.
-                // Spring.update applies the same 1/30 guard internally.
-                val dt = if (last == 0L) 0.016f else ((now - last) / 1000f).coerceIn(0f, 1f / 30f)
-                last = now
-                frame = motionEngine.update(dt, faceRadiusPx.coerceIn(80f, 800f))
-                // Publish every vsync so one-shot keyframes move smoothly —
-                // into the holder, and invalidate DRAW only.
-                shotHolder[0] = frame
-                drawEpoch++
-            }
-            if (frame == null) break
-        }
-        shotHolder[0] = null
-        drawEpoch++
     }
 
     // NOTE: the live pose is assembled inside the draw lambda now (see
@@ -363,8 +444,8 @@ fun AvatarRenderer(
             onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST,
         )
     }
-    LaunchedEffect(paused) {
-        if (paused) return@LaunchedEffect
+    LaunchedEffect(paused, useLumen) {
+        if (paused || useLumen) return@LaunchedEffect
         val spec = CatAnimationRegistry.spec("idle.blink")
         while (true) {
             // Whichever comes first: the ambient interval, or someone asking.
@@ -384,8 +465,8 @@ fun AvatarRenderer(
 
     val earTwitchL = remember { Animatable(0f) }
     val earTwitchR = remember { Animatable(0f) }
-    LaunchedEffect(paused) {
-        if (paused) return@LaunchedEffect
+    LaunchedEffect(paused, useLumen) {
+        if (paused || useLumen) return@LaunchedEffect
         val spec = CatAnimationRegistry.spec("idle.ear_twitch")
         while (true) {
             delay(Random.nextLong(spec.minDelayMs.toLong(), spec.maxDelayMs.toLong()))
@@ -399,16 +480,24 @@ fun AvatarRenderer(
         }
     }
 
-    // Hold last face sample; never fall through to idle drift while tracking —
-    // drift is a second motion source and made the head thrash.
+    // Vision owns the bounded hold; do not add a second hold after its expiry.
     var heldFaceGaze by remember { mutableStateOf<Offset?>(null) }
     var recentlyTracking by remember { mutableStateOf(false) }
-    // Held rotation + distance, in sync with the held gaze (same 550ms hold).
+    // Rotation and distance clear alongside gaze; the visual springs settle them.
     var heldYaw by remember { mutableStateOf(0f) }
     var heldPitch by remember { mutableStateOf(0f) }
     var heldRoll by remember { mutableStateOf(0f) }
     var heldScale by remember { mutableStateOf(1f) }
-    LaunchedEffect(faceGazeX, faceGazeY, faceYawDeg, facePitchDeg, faceRollDeg, faceScale) {
+    LaunchedEffect(faceGazeX, faceGazeY, faceYawDeg, facePitchDeg, faceRollDeg, faceScale, state.isCameraEnabled) {
+        if (!state.isCameraEnabled) {
+            heldFaceGaze = null
+            recentlyTracking = false
+            heldYaw = 0f
+            heldPitch = 0f
+            heldRoll = 0f
+            heldScale = 1f
+            return@LaunchedEffect
+        }
         if (faceGazeX != null && faceGazeY != null) {
             heldFaceGaze = Offset(faceGazeX, faceGazeY)
             heldYaw = faceYawDeg ?: heldYaw
@@ -416,26 +505,26 @@ fun AvatarRenderer(
             heldRoll = faceRollDeg ?: heldRoll
             heldScale = faceScale ?: heldScale
             recentlyTracking = true
-        } else {
-            delay(550)
-            if (faceGazeX == null && faceGazeY == null) {
-                heldFaceGaze = null
-                recentlyTracking = false
-                heldYaw = 0f
-                heldPitch = 0f
-                heldRoll = 0f
-                heldScale = 1f
-            }
+            return@LaunchedEffect
         }
+        // Brief detector gaps: keep the last gaze so Lumen/classic do not snap
+        // to idle wander while ML Kit blinks. Clear after a short grace.
+        delay(450)
+        heldFaceGaze = null
+        recentlyTracking = false
+        heldYaw = 0f
+        heldPitch = 0f
+        heldRoll = 0f
+        heldScale = 1f
     }
-    val trackingNow = faceGazeX != null || heldFaceGaze != null || recentlyTracking
+    val trackingNow = state.isCameraEnabled && (faceGazeX != null || heldFaceGaze != null || recentlyTracking)
 
     // ── Idle gaze: real saccades (quick fixate → hold), not constant sine
     //    drift — a perpetual smooth wander reads as a mechanical search loop.
     val saccadeX = remember { Animatable(0f) }
     val saccadeY = remember { Animatable(0f) }
-    LaunchedEffect(paused, trackingNow) {
-        if (paused) return@LaunchedEffect
+    LaunchedEffect(paused, trackingNow, useLumen) {
+        if (paused || useLumen) return@LaunchedEffect
         if (trackingNow) {
             // Retire the idle wander, but GLIDE it out rather than snapping.
             // snapTo moved the gaze several pixels in a single frame the instant
@@ -480,13 +569,15 @@ fun AvatarRenderer(
     }
     // Idle ambient drift is applied in the draw scope from clockSec so we do
     // not recompose 60×/s just to wander the pupils.
-    val gazeTargetX = faceGazeX
+    val gazeTargetX = faceGazeX.takeIf { state.isCameraEnabled }
         ?: heldFaceGaze?.x
         ?: touchGaze?.x
+        ?: neuralGaze()?.x
         ?: 0f
-    val gazeTargetY = faceGazeY
+    val gazeTargetY = faceGazeY.takeIf { state.isCameraEnabled }
         ?: heldFaceGaze?.y
         ?: touchGaze?.y
+        ?: neuralGaze()?.y
         ?: 0f
     // FaceTrack already publishes screen-space offsets (see VisionManager), so
     // there is nothing to rotate here. The swap that used to live at this line
@@ -500,18 +591,20 @@ fun AvatarRenderer(
     // the next — short tweens restarting every publish looked like dropped frames.
     // StiffnessMedium (not MediumLow) so the head actually tracks the user's
     // motion instead of floating behind it with a visible chase delay.
+    // lumen_reflex_v2 may prefer a slightly snappier gaze spring; flag-off
+    // keeps the historical stiffness / settle times unchanged.
     val gazeSpec = if (trackingNow && chaseHard) {
         spring<Float>(
             dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = 180f,
+            stiffness = if (lumenReflexV2) 210f else 180f,
         )
     } else if (trackingNow) {
         spring<Float>(
             dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = 120f,
+            stiffness = if (lumenReflexV2) 150f else 120f,
         )
     } else {
-        tween(500)
+        tween(if (lumenReflexV2) 380 else 500)
     }
     val gazeX by animateFloatAsState(screenGazeX, gazeSpec, label = "gazeX")
     val gazeY by animateFloatAsState(screenGazeY, gazeSpec, label = "gazeY")
@@ -520,7 +613,11 @@ fun AvatarRenderer(
     // EMA + this spring is the jitter filter.
     val headFollowSpec = spring<Float>(
         dampingRatio = 0.90f,
-        stiffness = if (chaseHard) Spring.StiffnessHigh else Spring.StiffnessMedium,
+        stiffness = when {
+            chaseHard -> Spring.StiffnessHigh
+            lumenReflexV2 -> 2200f // between Medium (1500) and High; flag-off stays Medium
+            else -> Spring.StiffnessMedium
+        },
     )
     val headFollowX by animateFloatAsState(screenGazeX, headFollowSpec, label = "headFollowX")
     val headFollowY by animateFloatAsState(screenGazeY, headFollowSpec, label = "headFollowY")
@@ -539,16 +636,27 @@ fun AvatarRenderer(
     // the head makes — tracking a face, an idle weight shift, a performance.
     val earTrail = remember { Trailing(stiffness = 88f, bounce = 0.28f) }
     var earLag by remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(paused) {
-        if (paused) return@LaunchedEffect
+    val needsEarFollowThrough = needsLegacyEarFollowThrough(state.avatarStyle, useLumen)
+    LaunchedEffect(paused, needsEarFollowThrough, avatarFpsTarget, sharedFramePhase) {
+        if (paused || !needsEarFollowThrough) return@LaunchedEffect
         var last = 0L
+        val cadence = AvatarFrameCadence(sharedFramePhase)
         while (true) {
+            var admitted = false
             withFrameNanos { now ->
+                if (!cadence.admit(
+                        now,
+                        fpsTarget = avatarFpsTarget,
+                        thermalStatus = ThermalGovernor.currentStatus(),
+                    )
+                ) return@withFrameNanos
+                admitted = true
                 val dt = if (last == 0L) 0.016f
                 else ((now - last) / 1_000_000_000f).coerceIn(1e-4f, 1f / 30f)
                 last = now
                 earLag = earTrail.update(headFollowX, dt, gain = 0.32f)
             }
+            if (admitted) cadence.idleNanosAfterAdmit().takeIf { it > 0L }?.let { delay(it / 1_000_000L) }
         }
     }
 
@@ -582,74 +690,150 @@ fun AvatarRenderer(
     // spring here just keeps per-sample steps from reading as jitter. These
     // do NOT gate on face tracking — the phone moves whether or not it sees
     // a face.
-    val forceSpec = spring<Float>(
-        dampingRatio = Spring.DampingRatioNoBouncy,
-        stiffness = Spring.StiffnessMedium,
-    )
-    val leanAnim by animateFloatAsState(motionLean, forceSpec, label = "motionLean")
-    val lurchAnim by animateFloatAsState(motionLurch, forceSpec, label = "motionLurch")
-
-    // ── Petting: stroking the cat makes it purr ────────────────────────────
-    var lastPetAt by remember { mutableLongStateOf(0L) }
-    LaunchedEffect(lastPetAt) {
-        if (lastPetAt != 0L) {
-            delay(2600)
-            lastPetAt = 0L
+    val driveRig = remember { DriveVisualRig() }
+    fun currentDriveFrame(): DriveVisualFrame {
+        // The clock owns redraws. Sensor heartbeats previously invalidated the
+        // Canvas between clock ticks even though the rig returned the same pose,
+        // and could keep drawing while thermal/lifecycle policy paused animation.
+        val frameTime = clockSec
+        return androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation {
+            val relativeLean = com.example.meowmba.core.sensor.MotionMath.displayRelativeLean(
+                motionScreenLean?.value ?: 0f, displayRotation)
+            val boost = state.driving && state.driveEmotionBoost
+            val leanIn = DriveEmotionBoost.amplifyImu(motionLeanState?.value ?: motionLean, boost)
+            val lurchIn = DriveEmotionBoost.amplifyImu(motionLurchState?.value ?: motionLurch, boost)
+            val frame = driveRig.step(frameTime, android.os.SystemClock.elapsedRealtime(),
+                motionObservedAtMs?.value ?: 0L, state.driving, leanIn, lurchIn,
+                (-relativeLean * 0.35f).coerceIn(-14f, 14f))
+            if (!boost) return@withoutReadObservation frame
+            val emotionAdd = DriveEmotionBoost.emotionBraceAdd(
+                ConversationAffect.valence(state.emotion), driving = true)
+            val brace = DriveEmotionBoost.combineBrace(frame.brace, emotionAdd, state.obdExcitement)
+            frame.copy(brace = brace)
         }
     }
-    val petted = lastPetAt != 0L
+
+    // ── Petting: stroking the cat makes it purr ────────────────────────────
+    var petPulse by remember { mutableLongStateOf(0L) }
+    val petCallback by rememberUpdatedState(onPet)
+    val playCallback by rememberUpdatedState(onPlay)
+    val touchStyle by rememberUpdatedState(state.avatarStyle)
+    val touchFlyWorld by rememberUpdatedState(fly3DWorld)
+    val touchHabitatWorld by rememberUpdatedState(habitatWorld)
+    LaunchedEffect(petPulse) {
+        if (petPulse != 0L) {
+            // Reported outward, not just consumed by the local `petted` pose:
+            // being stroked is a real social event and should move the drives,
+            // not merely swap one authored pose for another.
+            petCallback()
+            delay(2600)
+            petPulse = 0L
+        }
+    }
+    val petted = petPulse != 0L
+
+    fun playCartoonGag(point: Offset, width: Float, height: Float, accessibleAction: Boolean = false): Boolean {
+        val gag = latestCartoonGag ?: return false
+        val gpuFrame = touchFly3DFrame[0].takeIf { touchStyle == AvatarStyle.FULL_FLY }
+        val avatarOwnsTap = when {
+            accessibleAction -> false // This names the toy directly; it is not an ambiguous screen tap.
+            gpuFrame != null -> cartoonFlyOwnsPoint(point, width, height, gpuFrame)
+            touchStyle == AvatarStyle.FULL_FLY -> {
+                val pose = lastFullFlyPose[0]
+                val unit = minOf(minOf(width, height) * .32f * pose.scale.coerceIn(.35f, 1.8f), minOf(width, height) * .46f)
+                val at = Offset((width * pose.x).coerceIn(unit * 1.05f, width - unit * 1.05f),
+                    (height * pose.y).coerceIn(unit * .88f, height - unit * .73f))
+                hypot(point.x - at.x, point.y - at.y) <= unit * 1.05f
+            }
+            touchStyle.isLumen -> {
+                if (touchGeneratedForm != null) generatedPlacement[0]?.owns(point) == true else {
+                    val local = avatarHitTransform[0].inverse(point)
+                    lumenZoneAt(local, width.toInt(), height.toInt(), lumenLastFrame[0]) != AvatarZone.BACKGROUND
+                }
+            }
+            else -> {
+                val transform = avatarHitTransform[0]
+                val radius = minOf(width, height) * .64f * transform.scale
+                hypot(point.x - transform.destination.x, point.y - transform.destination.y) <= radius
+            }
+        }
+        val propOwnsTap = !accessibleAction && if (gpuFrame != null) {
+            gpuFrame.props.orEmpty().any { prop ->
+                cartoonProjectHabitatPoint(prop.x, prop.y + .10f, prop.z, width, height)?.let { at ->
+                    hypot(point.x - at.x, point.y - at.y) <= maxOf(42f, minOf(width, height) * .09f)
+                } == true
+            }
+        } else touchHabitatWorld.actionAt(point.x, point.y, width, height) != null
+        if (!gag.tap(point, width, height, clockSec,
+                active = latestHabitatEnabled && !latestPaused &&
+                    ThermalGovernor.currentStatus() < android.os.PowerManager.THERMAL_STATUS_SEVERE,
+                avatarOwnsTap = avatarOwnsTap, propOwnsTap = propOwnsTap)) return false
+        // One event enters the existing care, affect and neural TOUCH pathway.
+        // Normal petting is skipped for this tap to avoid counting it twice.
+        latestHabitatAction(HabitatAction.PLAY)
+        drawEpoch++
+        return true
+    }
 
     Canvas(
         modifier = {
             val base = modifier
                 .fillMaxSize()
+                .graphicsLayer {
+                    // Reads the existing active draw clock, not a new timer. A
+                    // lost sensor feed eases the whole-stage roll back to level.
+                    // A roaming Lumen rotates about its own root. Rotating the
+                    // whole screen sends an off-center character out of bounds.
+                    rotationZ = if (state.avatarStyle == AvatarStyle.SIGNAL || state.avatarStyle.isLumen) 0f else currentDriveFrame().tilt
+                    clip = false
+                }
                 .onSizeChanged { sz ->
                     // Match draw-time fit so CatMotion scales stay consistent.
                     faceRadiusPx = fitGodotFaceRadius(sz.width.toFloat(), sz.height.toFloat())
+                    canvasSize[0] = sz.width.toFloat(); canvasSize[1] = sz.height.toFloat()
                 }
                 .semantics {
                     contentDescription =
-                        "Memba cat avatar, currently ${state.interactionState.name.lowercase()}"
+                        "${state.avatarStyle.label} avatar, currently ${state.interactionState.name.lowercase()}" +
+                            (if (state.isCameraEnabled) ", camera enabled" else ", camera off") +
+                            (if (!state.isMicEnabled) ", microphone off" else "") +
+                            (if (state.isMuted) ", speech muted" else "") +
+                            (cartoonGagKind?.let { ". ${it.description}" } ?: "")
+                    if (cartoonGagKind != null && pointerEnabled) customActions = listOf(
+                        CustomAccessibilityAction(cartoonGagKind.description) {
+                            val layout = cartoonGagLayout(canvasSize[0], canvasSize[1])
+                            layout != null && playCartoonGag(layout.center, canvasSize[0], canvasSize[1], accessibleAction = true)
+                        }
+                    )
                 }
             if (!pointerEnabled) base
             else
                 base
-                    .pointerInput(state.avatarStyle) {
+                    .pointerInput(Unit) {
                 detectTapGestures(
                     onTap = { offset ->
                         touchGaze = normalizeGaze(offset, size.width, size.height)
-                        // Aura Home has no ears/eyes: cat-face zones would map
-                        // taps to invisible features. Its own zones keep every
-                        // tap predictable (core = mute, rings = menu).
-                        val zone = if (state.avatarStyle == AvatarStyle.SIGNAL) {
-                            val w = size.width.toFloat()
-                            val h = size.height.toFloat()
-                            AuraHomeContent.auraZoneAt(
-                                tap = offset,
-                                center = Offset(w / 2f, fitGodotFaceCenterY(w, h)),
-                                ringRadius = fitGodotFaceRadius(w, h) * 0.816f,
-                            )
-                        } else {
-                            zoneAt(offset, size.width, size.height)
+                        if (playCartoonGag(offset, size.width.toFloat(), size.height.toFloat())) return@detectTapGestures
+                        petPulse += 1L
+                        if (latestHabitatEnabled) {
+                            if (touchStyle == AvatarStyle.FULL_FLY) {
+                                touchFlyWorld.tap(offset.x / size.width, offset.y / size.height)
+                                latestHabitatAction(HabitatAction.EXPLORE)
+                            } else {
+                                touchHabitatWorld.actionAt(offset.x, offset.y, size.width.toFloat(), size.height.toFloat())
+                                    ?.let { latestHabitatAction(it) }
+                            }
                         }
-                        onZoneClick(zone)
+                    },
+                    onDoubleTap = { offset ->
+                        touchGaze = normalizeGaze(offset, size.width, size.height)
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        playCallback()
                     },
                     onLongPress = { offset ->
-                        // Long-press on the dome opens settings (mirrors the
-                        // cat's forehead shortcut); elsewhere keeps petting.
-                        if (state.avatarStyle == AvatarStyle.SIGNAL) {
-                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onZoneClick(AuraHomeContent.auraLongPressZone())
-                            return@detectTapGestures
-                        }
-                        val zone = zoneAt(offset, size.width, size.height)
-                        if (zone == AvatarZone.FOREHEAD) {
-                            onZoneClick(AvatarZone.FOREHEAD)
-                        } else {
-                            // Long stroke anywhere else counts as a pet
-                            lastPetAt = System.currentTimeMillis()
-                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                        }
+                        touchGaze = normalizeGaze(offset, size.width, size.height)
+                        petPulse += 1L
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                     }
                 )
             }
@@ -669,6 +853,8 @@ fun AvatarRenderer(
                             // Long decisive horizontal swipe = launcher navigation.
                             // Shorter strokes stay petting.
                             if (totalX < 0) onSwipeLeft() else onSwipeRight()
+                        } else {
+                            petPulse += 1L
                         }
                     }
                 ) { change, dragAmount ->
@@ -676,10 +862,7 @@ fun AvatarRenderer(
                     totalX += dragAmount.x
                     totalY += dragAmount.y
                     touchGaze = normalizeGaze(change.position, size.width, size.height)
-                    // Horizontal-ish stroking on the face = petting
-                    if (abs(totalX) > abs(totalY) && abs(totalX) > 60f) {
-                        lastPetAt = System.currentTimeMillis()
-                    }
+                    // Emit one social event at stroke end; navigation never feeds learning.
                 }
             }
             }()
@@ -687,6 +870,19 @@ fun AvatarRenderer(
         // Subscribe draw pass to the single vsync-locked clock (not composition).
         val _epoch = drawEpoch
         val tSec = clockSec
+        val driveFrame = currentDriveFrame()
+        val leanAnim = driveFrame.lean
+        val lurchAnim = driveFrame.lurch
+        fun DrawScope.fixedPrivacyMarks() {
+            // Older classic/Godot modes retain their existing outer driving roll.
+            // Cancel that roll only for status marks, keeping them fixed on screen.
+            val cancelRoll = if (state.avatarStyle == AvatarStyle.SIGNAL || state.avatarStyle.isLumen) 0f else -driveFrame.tilt
+            rotate(cancelRoll, pivot = center) {
+                lumenPainter.draw(this, LumenFrame(presence = 0f), Color(state.avatarEyeColor), Color(state.avatarGlowColor),
+                    cameraOff = !state.isCameraEnabled, micOff = !state.isMicEnabled,
+                    speakerOff = state.isMuted, statusColor = privacyColor, showPrivacyMarks = false)
+            }
+        }
 
         // ── The live pose, assembled HERE rather than in composition ───────
         // Everything below reads per-frame values (shotHolder, animTHolder)
@@ -710,7 +906,9 @@ fun AvatarRenderer(
         ) else pose
         // A clip's sampler already interpolates, so honour it directly; only
         // the idle path wants the spring blend.
-        val eyeOpen = if (playingClip) pose.eyeOpen else eyeOpenAnim
+        val poseEyeOpen = if (playingClip) pose.eyeOpen else eyeOpenAnim
+        val eyeOpen = if (!state.isCameraEnabled || playingClip) poseEyeOpen
+            else (poseEyeOpen + driveFrame.brace * 0.20f).coerceAtMost(1.35f)
         val pupilSize = if (playingClip) pose.pupilSize else pupilSizeAnim
         val gazeUp = if (playingClip) pose.pupilGazeUp else gazeUpAnim
         val headTilt = if (playingClip) pose.headTiltDeg else headTiltAnim
@@ -810,14 +1008,175 @@ fun AvatarRenderer(
         // pose/clock inputs as every other style — so switching faces
         // mid-animation stays seamless. (The Aura Home card in
         // AuraHomeAvatar.kt is parked — the face runs full-screen.)
-        if (useSignalOrb) {
+        // The toy shares this clock and paints under Canvas avatars/movable props.
+        // Full-fly uses a separate GPU surface; foreground ownership is guarded above.
+        // No ambient timer is added, and Android's disabled animator setting gets a still toy.
+        cartoonGag?.draw(this, tSec, reducedMotion = !android.animation.ValueAnimator.areAnimatorsEnabled())
+        val flyPose = if (habitatEnabled && !(state.avatarStyle == AvatarStyle.FULL_FLY && onFly3DFrame != null)) {
+            val bias = nervousBias()
+            val care = state.petCare
+            val caredBias = if (care.careEnabled) bias.copy(
+                arousal = (bias.arousal * (.5f + .5f * care.energy)).coerceIn(0f, 1f),
+                restWeight = bias.restWeight + (1f - care.energy) * .5f + (1f - care.hygiene) * .15f,
+                valence = (bias.valence * .5f + (care.happiness - .5f) * .4f + (care.affection - .5f) * .3f).coerceIn(-1f, 1f),
+                followGain = (bias.followGain * (.7f + .3f * care.affection)).coerceIn(0f, 1.5f),
+                blinkRateScale = (bias.blinkRateScale * (.85f + .3f * (1f - care.hygiene))).coerceIn(.5f, 1.8f),
+            ) else bias
+            habitatWorld.step(tSec, state.habitatCommand, caredBias, w, h, state.petPlayPreference).also {
+                habitatWorld.drawProps(this, state.avatarStyle == AvatarStyle.FULL_FLY)
+            }
+        } else null
+        if (useLumen) {
+            val progress = if (customAnim != null) animTHolder[0].toFloat() / customAnim.durationMs.coerceAtLeast(1) else 0f
+            val isCat = state.avatarStyle == AvatarStyle.LUMEN_CAT
+            val neuralLook = neuralGaze()
+            val lumenGazeX = faceGazeX.takeIf { state.isCameraEnabled } ?: heldFaceGaze?.x ?: touchGaze?.x ?: neuralLook?.x
+            val lumenGazeY = faceGazeY.takeIf { state.isCameraEnabled } ?: heldFaceGaze?.y ?: touchGaze?.y ?: neuralLook?.y
+            val composedLumenInput = lumenInventedSceneInput(lumenPerformanceInput(LumenInput(
+                gazeX = lumenGazeX, gazeY = lumenGazeY,
+                // Touch is a local gaze target, not camera capture permission.
+                cameraEnabled = state.isCameraEnabled || touchGaze != null || neuralLook != null,
+                emotion = state.emotion, interaction = state.interactionState,
+                animal = if (generatedForm != null) AvatarAnimal.NONE else
+                    state.performanceAnimal ?: state.idleMorphAnimal
+                    ?: if (isCat) AvatarAnimal.CAT else state.avatarAnimal,
+                openness = effectivePose.eyeOpen, pupil = if (playingClip) effectivePose.pupilSize else .5f,
+                tilt = if (playingClip) effectivePose.headTiltDeg else 0f,
+                bounce = if (playingClip) effectivePose.bodyBounce else 0f,
+                lean = leanAnim, lurch = lurchAnim,
+                driveWeight = driveFrame.driving, brace = driveFrame.brace,
+                screenRoll = driveFrame.tilt,
+                happy = if (playingClip) effectivePose.mouth == MouthMode.HAPPY else effectivePose.happyEyes,
+                speaking = if (state.interactionState == InteractionState.SPEAKING) mouthEnergy?.value ?: 0f else 0f,
+                performing = playingClip,
+                affection = petted, emotionPreview = state.emotionPreview,
+                expressionPlan = state.expressionPlan,
+                lowerLid = shotHolder[0]?.lowerLid ?: 0f,
+                earAsymmetry = (shotHolder[0]?.earSplitDeg ?: 0f) * .22f,
+                performanceLean = if (playingClip) effectivePose.leanX else 0f,
+                performanceJaw = shotHolder[0]?.jawOpen ?: if (playingClip && effectivePose.mouth == MouthMode.SPEAKING) .65f else 0f,
+                gazeUp = if (playingClip) effectivePose.pupilGazeUp else 0f,
+                earPerk = if (playingClip) effectivePose.earPerk else 1f,
+                earDroop = if (playingClip) effectivePose.earDroopDeg else 0f,
+                lidTilt = shotHolder[0]?.eyeTiltDeg ?: lumenClipTilt,
+                whiskerFlutter = effectivePose.whiskerFlutter,
+                tailWag = effectivePose.tailWag,
+                bias = nervousBias(),
+                wingDrive = neuralWingPower(),
+            ), lumenPerformance, progress), customAnim, animTHolder[0].toFloat())
+            val gatedLumenInput = if (lumenReflexV2) {
+                val modulated = lumenReflexBridge.modulate(
+                    composedLumenInput,
+                    tSec,
+                    feed = reflexFeed(),
+                    gain = reflexGain,
+                )
+                onReflexSummary?.invoke(lumenReflexBridge.summaryLabel())
+                modulated
+            } else composedLumenInput
+            val frame = if (paused && restingPreview) restingAvatarFrame(state.avatarStyle, state.avatarAnimal)
+                else lumenRig.step(tSec, gatedLumenInput)
+            lumenLastFrame[0] = frame
+            if (generatedForm != null) {
+                val placement = generatedAvatarPlacement(w, h, frame, avatarScale, flyPose)
+                generatedPlacement[0] = placement
+                generatedPainter.draw(this, generatedForm, frame, tSec, placement.center, placement.unit)
+                state.equippedProp?.let { generatedPainter.drawProp(this, it, frame, tSec, placement.center, placement.unit) }
+                if (customAnim != null) generatedScenePainter.draw(this, customAnim,
+                    animTHolder[0].toFloat(), placement.center, placement.unit)
+                // Model-authored shapes cannot cover or impersonate privacy state.
+                lumenPainter.draw(this, frame.copy(presence = 0f), Color(state.avatarEyeColor), Color(state.avatarGlowColor),
+                    cameraOff = !state.isCameraEnabled, micOff = !state.isMicEnabled,
+                    speakerOff = state.isMuted, statusColor = privacyColor, showPrivacyMarks = false)
+                return@Canvas
+            }
+            if (state.avatarStyle == AvatarStyle.FULL_FLY && onFly3DFrame != null) {
+                // A complete immutable frame equality gate permits paused appearance changes
+                // while still breaking TextureView's draw/swap/invalidate feedback loop.
+                val bias = nervousBias()
+                val care = state.petCare
+                val adjusted = if (care.careEnabled) bias.copy(
+                    arousal = bias.arousal * (.5f + .5f * care.energy),
+                    valence = (bias.valence * .5f + (care.happiness - .5f) * .3f + (care.affection - .5f) * .3f).coerceIn(-1f, 1f),
+                ) else bias
+                val world = if (habitatEnabled) fly3DWorld.step(tSec, state.habitatCommand, adjusted,
+                    state.petPlayPreference, state.habitatBackgroundId, neuralWingPower(), neuralFlyMotor()) else null
+                val p = world?.pose
+                val radians = (kotlin.math.PI / 180.0).toFloat()
+                val published = Fly3DFrame(timeSeconds = world?.elapsed ?: tSec,
+                    x=p?.x ?: 0f,y=p?.y ?: 2.1f,z=p?.z ?: 0f,
+                    yaw=(p?.yaw ?: (frame.headX * 12f))*radians,
+                    pitch=(p?.pitch ?: (frame.headY * 12f))*radians,roll=(p?.roll ?: frame.roll)*radians,
+                    flight=p?.flight ?: .15f,walkPhase=p?.walkPhase ?: if (playingClip) tSec * 5f else 0f,
+                    gazeX=frame.gazeX,gazeY=frame.gazeY,
+                    wingPhase=p?.wingPhase, leftBlink=(1f-frame.leftOpen).coerceIn(0f,1f),
+                    rightBlink=(1f-frame.rightOpen).coerceIn(0f,1f), smile=frame.smile, concern=frame.concern,
+                    antennaLift=frame.earLift, antennaLag=frame.earLag,
+                    grooming=p?.grooming ?: 0f,
+                    blink=(1f-(frame.leftOpen+frame.rightOpen)*.5f).coerceIn(0f,1f),mouth=frame.mouthOpen,
+                    reach=p?.reach ?: 0f,holding=p?.holding,backgroundId=state.habitatBackgroundId,props=world?.props,
+                    handX=p?.handX,handY=p?.handY,handZ=p?.handZ,
+                    avatarScale=avatarScale,stageMode=!habitatEnabled,active=!paused)
+                if (lastFly3DFrame[0] != published) {
+                    lastFly3DFrame[0] = published
+                    onFly3DFrame(published)
+                }
+                lumenPainter.draw(this, frame.copy(presence=0f), Color(state.avatarEyeColor), Color(state.avatarGlowColor),
+                    cameraOff=!state.isCameraEnabled,micOff=!state.isMicEnabled,speakerOff=state.isMuted,statusColor=privacyColor, showPrivacyMarks = false)
+                return@Canvas
+            }
+            if (state.avatarStyle == AvatarStyle.FULL_FLY) {
+                val fullPose = (flyPose ?: FullFlyPose(scale = 1.8f)).let { it.copy(scale = it.scale * avatarScale * if (habitatEnabled) HABITAT_AVATAR_MAGNIFICATION else 1f) }
+                lastFullFlyPose[0] = fullPose
+                fullFlyPainter.draw(this, frame, fullPose)
+                // Shared renderer keeps privacy marks fixed; hide only its face.
+                lumenPainter.draw(this, frame.copy(presence = 0f), Color(state.avatarEyeColor), Color(state.avatarGlowColor),
+                    cameraOff = !state.isCameraEnabled, micOff = !state.isMicEnabled,
+                    speakerOff = state.isMuted, statusColor = privacyColor, showPrivacyMarks = false)
+                return@Canvas
+            }
+            if (flyPose != null) {
+                val original = lumenCenter(w, h, frame)
+                val destination = Offset(flyPose.x * w, flyPose.y * h)
+                avatarHitTransform[0] = AvatarHitTransform(original, destination, habitatFaceScale(avatarScale))
+                translate(destination.x - original.x, destination.y - original.y) {
+                    scale(habitatFaceScale(avatarScale), habitatFaceScale(avatarScale), original) {
+                        lumenPainter.draw(this, frame, Color(state.avatarEyeColor), Color(state.avatarGlowColor),
+                            featureColor = Color(state.avatarFeatureColor), performance = lumenPerformance,
+                            progress = progress, inventedScene = customAnim, inventedTimeMs = animTHolder[0].toFloat(), showPrivacyMarks = false)
+                    }
+                }
+                state.equippedProp?.let { generatedPainter.drawProp(this, it, frame, tSec,
+                    destination, lumenUnit(w, h, frame) * habitatFaceScale(avatarScale)) }
+                lumenPainter.draw(this, frame.copy(presence = 0f), Color(state.avatarEyeColor), Color(state.avatarGlowColor),
+                    cameraOff = !state.isCameraEnabled, micOff = !state.isMicEnabled,
+                    speakerOff = state.isMuted, statusColor = privacyColor, showPrivacyMarks = false)
+            } else {
+                val center = lumenCenter(w, h, frame)
+                avatarHitTransform[0] = AvatarHitTransform(center, center, avatarScale)
+                scale(avatarScale, avatarScale, center) {
+                    lumenPainter.draw(this, frame, Color(state.avatarEyeColor), Color(state.avatarGlowColor),
+                        featureColor = Color(state.avatarFeatureColor), performance = lumenPerformance,
+                        progress = progress, inventedScene = customAnim, inventedTimeMs = animTHolder[0].toFloat(), showPrivacyMarks = false)
+                }
+                state.equippedProp?.let { generatedPainter.drawProp(this, it, frame, tSec,
+                    center, lumenUnit(w, h, frame) * avatarScale) }
+                lumenPainter.draw(this, frame.copy(presence = 0f), Color(state.avatarEyeColor), Color(state.avatarGlowColor),
+                    cameraOff = !state.isCameraEnabled, micOff = !state.isMicEnabled,
+                    speakerOff = state.isMuted, statusColor = privacyColor, showPrivacyMarks = false)
+            }
+            return@Canvas
+        } else if (useSignalOrb) {
             val R = ambR
             val faceCy = fitGodotFaceCenterY(w, h)
-            val center = Offset(
+            val center = flyPose?.let { Offset(it.x * w, it.y * h) } ?: Offset(
                 w / 2f + ambient.offX + leanAnim * R * 0.22f,
                 faceCy + ambient.offY + lurchAnim * R * 0.12f,
             )
             val orbSpeaking = effectivePose.mouth == MouthMode.SPEAKING
+            val sceneScale = if (flyPose != null) habitatFaceScale(avatarScale) else avatarScale
+            avatarHitTransform[0] = AvatarHitTransform(center, center, sceneScale)
+            scale(sceneScale, sceneScale, center) {
             particleSim.draw(
                 scope = this,
                 measurer = textMeasurer,
@@ -825,18 +1184,20 @@ fun AvatarRenderer(
                 domeRadius = R * 0.816f,
                 viewRotation = orbOrientation.value,
                 shakeCount = shakeCount,
-                forceLean = leanAnim,
-                forceLurch = lurchAnim,
+                forceLean = (leanAnim + (touchGaze?.x ?: 0f) * 0.35f).coerceIn(-1f, 1f),
+                forceLurch = (lurchAnim + (touchGaze?.y ?: 0f) * 0.35f).coerceIn(-1f, 1f),
                 thinking = state.interactionState == InteractionState.THINKING,
                 level = mouthEnergy?.value ?: if (
                     orbSpeaking ||
                     state.interactionState == InteractionState.LISTENING
                 ) talk else 0f,
                 clockSec = tSec,
-                ringColor = Color(effectivePose.glowColorHex),
+                ringColor = if (petted) Color(0xFFFFB9DF) else Color(effectivePose.glowColorHex),
                 alpha = faceAlpha * if (effectivePose.dimmed) 0.55f else 1f,
                 offline = state.interactionState == InteractionState.OFFLINE,
             )
+            }
+            fixedPrivacyMarks()
             // The classic cat layers below must not paint over the orb.
             return@Canvas
         // ── Godot Cat Assistant face (exact look + CatMotion) ───────────────
@@ -908,7 +1269,7 @@ fun AvatarRenderer(
                 earPitchDeg = (earPerk - 1f) * 36f +
                     (if (listening) voice * 8f else 0f) +
                     earLag * 14f +
-                    earBreath * 1.4f,
+                    earBreath * 1.4f - driveFrame.brace * 8f,
                 earSplayDeg = 10f + earDroop * 0.35f + earBreath * 0.8f,
                 // Follow-through: the ears trail the skull and overshoot when
                 // it stops, on top of their own ambient twitch.
@@ -969,7 +1330,7 @@ fun AvatarRenderer(
                 )
             } ?: restingPose
             // Anchor at screen center band; pose offsets carry the whole face.
-            val center = Offset(
+            val center = flyPose?.let { Offset(it.x * w, it.y * h) } ?: Offset(
                 w / 2f + gPose.offsetX + effectivePose.leanX * R * 0.02f,
                 faceCy + gPose.offsetY,
             )
@@ -980,6 +1341,9 @@ fun AvatarRenderer(
             // an impact or the breath's compression, lengthens and narrows on
             // the rise, conserving the silhouette's area either way.
             val (squashX, squashY) = squashStretch(gPose.squash.coerceIn(-0.3f, 0.3f))
+            val sceneScale = if (flyPose != null) habitatFaceScale(avatarScale) else avatarScale
+            avatarHitTransform[0] = AvatarHitTransform(center, center, sceneScale)
+            scale(sceneScale, sceneScale, center) {
             rotate(gPose.headTiltDeg, pivot = center) {
                 scale(scaleX = squashX, scaleY = squashY, pivot = center) {
                 drawGodotCatFace(
@@ -1005,10 +1369,17 @@ fun AvatarRenderer(
                 )
                 }
             }
+            }
+            fixedPrivacyMarks()
             return@Canvas
         }
 
-
+        val classicCenter = Offset(cx, cy)
+        val classicDestination = flyPose?.let { Offset(it.x * w, it.y * h) } ?: classicCenter
+        val classicScale = if (flyPose != null) habitatFaceScale(avatarScale) else avatarScale
+        avatarHitTransform[0] = AvatarHitTransform(classicCenter, classicDestination, classicScale)
+        translate(classicDestination.x - classicCenter.x, classicDestination.y - classicCenter.y) {
+        scale(classicScale, classicScale, classicCenter) {
         // ── LAYER -1: Tail (behind the face, wags during animations) ────────
         // Tail is ALWAYS drawn: at rest it sways gently via tailSway, during
         // clips the keyframed wag drives it. Invisible-at-rest is why the user
@@ -1176,7 +1547,15 @@ fun AvatarRenderer(
                 drawCircle(color = sparkleColor, radius = radius, center = Offset(sx, sy))
             }
         }
+        }
+        }
+        fixedPrivacyMarks()
     }
+}
+
+/** Same affine transform as the inner avatar draw; scenery and status marks never use it. */
+internal data class AvatarHitTransform(val origin: Offset = Offset.Zero, val destination: Offset = Offset.Zero, val scale: Float = 1f) {
+    fun inverse(point: Offset): Offset = origin + (point - destination) / scale.coerceAtLeast(.001f)
 }
 
 // ── Geometry helpers shared by drawing and hit-testing ──────────────────────
@@ -1198,6 +1577,54 @@ private fun normalizeGaze(offset: Offset, w: Int, h: Int): Offset {
  * Map a tap position to an avatar privacy/interaction zone using the exact
  * same geometry the face is drawn with, so zones always line up with pixels.
  */
+internal fun lumenZoneAt(offset: Offset, w: Int, h: Int, frame: LumenFrame = LumenFrame()): AvatarZone {
+    val unit = lumenUnit(w.toFloat(), h.toFloat(), frame)
+    val center = lumenCenter(w.toFloat(), h.toFloat(), frame)
+    val raw = offset - center
+    val stretch = lumenStretch(frame)
+    val delta = Offset(raw.x * stretch, raw.y / stretch)
+    val angle = -lumenRoll(frame) * Math.PI.toFloat() / 180f
+    val point = Offset(delta.x * kotlin.math.cos(angle) - delta.y * kotlin.math.sin(angle),
+        delta.x * kotlin.math.sin(angle) + delta.y * kotlin.math.cos(angle))
+    val eyeShape = lumenEyeShape(frame.form)
+    // Generous hit targets: Lumen eyes are small glass lenses, and camera-off
+    // privacy makes them look even smaller. Missing an eye used to open tiles
+    // (BACKGROUND) so face tracking looked "broken" when the user tapped near
+    // an eye to turn the camera on.
+    for (side in intArrayOf(-1, 1)) {
+        val local = Offset((point.x - side * unit * .213f) / (1f + side * frame.headX * .1f),
+            point.y - abs(frame.headX) * side * unit * .009f)
+        val eyeAngle = -lumenEyeTilt(side, frame, eyeShape) * Math.PI.toFloat() / 180f
+        val eyePoint = Offset(local.x * kotlin.math.cos(eyeAngle) - local.y * kotlin.math.sin(eyeAngle),
+            local.x * kotlin.math.sin(eyeAngle) + local.y * kotlin.math.cos(eyeAngle))
+        val x = eyePoint.x / (unit * .28f * eyeShape.width.coerceAtLeast(0.75f))
+        val y = eyePoint.y / (unit * .32f * eyeShape.height.coerceAtLeast(0.75f))
+        if (x * x + y * y <= 1f) return if (side < 0) AvatarZone.EYE_LEFT else AvatarZone.EYE_RIGHT
+    }
+    // Ears sit above the lenses — mic privacy toggle (classic parity).
+    for (side in intArrayOf(-1, 1)) {
+        val ear = Offset(side * unit * .30f, -unit * .34f)
+        val dx = (point.x - ear.x) / (unit * .20f)
+        val dy = (point.y - ear.y) / (unit * .22f)
+        if (dx * dx + dy * dy <= 1f) return if (side < 0) AvatarZone.EAR_LEFT else AvatarZone.EAR_RIGHT
+    }
+    // Mouth / forehead so mute + settings are reachable without opening tiles.
+    if (abs(point.x) < unit * .14f && abs(point.y - unit * .22f) < unit * .10f) {
+        return AvatarZone.MOUTH
+    }
+    if (abs(point.x) < unit * .16f && abs(point.y + unit * .28f) < unit * .12f) {
+        return AvatarZone.FOREHEAD
+    }
+    // The helper's wire/beard and hat belong to the avatar too. Using the
+    // same inverse root keeps a toy behind them from stealing its pet gesture.
+    val helper = (frame.form.clippy + frame.form.wizard).coerceIn(0f, 1f)
+    if (helper > .05f && abs(point.x) < unit * .48f && point.y in (unit * .14f)..(unit * .51f))
+        return AvatarZone.FOREHEAD
+    if (frame.form.wizard > .05f && abs(point.x) < unit * .40f && point.y in (-unit * .58f)..(-unit * .25f))
+        return AvatarZone.FOREHEAD
+    return AvatarZone.BACKGROUND
+}
+
 private fun zoneAt(offset: Offset, w: Int, h: Int): AvatarZone {
     val s = min(w.toFloat(), h.toFloat())
     val (cx, cy) = faceCenter(w.toFloat(), h.toFloat())

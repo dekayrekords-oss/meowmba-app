@@ -1,5 +1,8 @@
 package com.example.meowmba.ui.companion
 
+import com.example.meowmba.ui.theme.Button
+import com.example.meowmba.ui.theme.Surface
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -37,6 +40,7 @@ fun AgentsScreen(
     state: CompanionState,
     onCancelTask: (String) -> Unit,
     onSelectAgent: (String?) -> Unit = {},
+    onOpenWork: (() -> Unit)? = null,
     onClose: () -> Unit
 ) {
     // One agent selected: show what that agent has actually done instead of the roster.
@@ -73,7 +77,10 @@ fun AgentsScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            onOpenWork?.let { open -> OutlinedButton(onClick = open) { Text("Meow’s work · saved results") } }
+
             // ── Agent roster ────────────────────────────────────────────────
+            BusinessAgentsLauncher()
             SectionTitle("Agents")
             Body("Tap an agent for its tools and task history. Tools ready means installed, not that accounts, permissions or hardware have been verified.")
             Spacer(modifier = Modifier.height(8.dp))
@@ -150,7 +157,7 @@ private fun AgentCard(
     val (label, color) = when {
         !agent.available -> "UNAVAILABLE" to MaterialTheme.colorScheme.error
         installed == 0 -> "NO TOOLS" to MaterialTheme.colorScheme.error
-        installed < agent.allowedTools.size -> "PARTIAL" to Color(0xFFD29922)
+        installed < agent.allowedTools.size -> "PARTIAL" to MaterialTheme.colorScheme.tertiary
         else -> "TOOLS READY" to MaterialTheme.colorScheme.primary
     }
     Surface(
@@ -204,9 +211,9 @@ private fun TaskCard(task: AgentTask, onCancel: () -> Unit) {
     val (label, color) = when (task.status) {
         TaskStatus.QUEUED -> "QUEUED" to MaterialTheme.colorScheme.onSurfaceVariant
         TaskStatus.RUNNING -> "RUNNING" to MaterialTheme.colorScheme.primary
-        TaskStatus.WAITING_APPROVAL -> "NEEDS YOU" to Color(0xFFD29922)
-        TaskStatus.COMPLETED -> "DONE" to MaterialTheme.colorScheme.primary
-        TaskStatus.FAILED -> "FAILED" to MaterialTheme.colorScheme.error
+        TaskStatus.WAITING_APPROVAL -> "NEEDS YOU" to MaterialTheme.colorScheme.tertiary
+        TaskStatus.COMPLETED -> com.example.meowmba.core.agent.runtime.TaskHistory.label(task) to MaterialTheme.colorScheme.primary
+        TaskStatus.FAILED -> com.example.meowmba.core.agent.runtime.TaskHistory.label(task) to MaterialTheme.colorScheme.error
         TaskStatus.CANCELLED -> "CANCELLED" to MaterialTheme.colorScheme.onSurfaceVariant
     }
     Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(12.dp)) {

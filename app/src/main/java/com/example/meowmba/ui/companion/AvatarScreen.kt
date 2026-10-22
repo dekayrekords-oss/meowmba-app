@@ -18,11 +18,17 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.material3.FilterChip
+import com.example.meowmba.ui.theme.FilterChip
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -33,9 +39,13 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
+import com.example.meowmba.ui.theme.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -75,32 +85,195 @@ fun AvatarScreen(
     onSelectTheme: (AppTheme) -> Unit = {},
     appearanceMode: AppearanceMode = AppearanceMode.DARK,
     onSelectAppearance: (AppearanceMode) -> Unit = {},
+    animal: AvatarAnimal = AvatarAnimal.NONE,
+    onSelectAnimal: (AvatarAnimal) -> Unit = {},
+    expressionIntensity: ExpressionIntensity = ExpressionIntensity.NATURAL,
+    onExpressionIntensity: (ExpressionIntensity) -> Unit = {},
+    playfulness: Playfulness = Playfulness.BALANCED,
+    onPlayfulness: (Playfulness) -> Unit = {},
+    diagnostics: @Composable () -> Unit = {},
+    morphControls: @Composable () -> Unit = {},
+    homeControls: @Composable () -> Unit = {},
     preview: @Composable () -> Unit = {},
+    avatarScale: Float = 2f,
+    onAvatarScale: (Float) -> Unit = {},
+    habitatMode: Boolean = false,
+    onHabitatMode: (Boolean) -> Unit = {},
+    generatedAvatarForm: GeneratedAvatarForm? = null,
+    savedGeneratedForms: List<GeneratedAvatarForm> = emptyList(),
+    avatarFormGenerating: Boolean = false,
+    avatarFormMessage: String? = null,
+    avatarFormError: Boolean = false,
+    onGenerateForm: (String, InventReasonLevel) -> Unit = { _, _ -> },
+    onRefineForm: (String, InventReasonLevel) -> Unit = { _, _ -> },
+    onCancelGenerateForm: () -> Unit = {},
+    onSelectGeneratedForm: (String) -> Unit = {},
+    onDeleteGeneratedForm: (String) -> Unit = {},
 ) {
+    var search by rememberSaveable { mutableStateOf("") }
+    var category by rememberSaveable { mutableStateOf("New") }
+    var expanded by remember(search, category) { mutableStateOf(false) }
+    var tab by rememberSaveable { mutableStateOf("Look") }
+    var advanced by rememberSaveable { mutableStateOf(false) }
+    var feelings by rememberSaveable { mutableStateOf(false) }
+    val choices = remember(animations, search, category) { avatarAnimationChoices(animations, category, search) }
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Column(
-            modifier = Modifier
-                .safeDrawingPadding()
-                .padding(horizontal = 20.dp)
-                .verticalScroll(rememberScrollState()),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
+        Column(Modifier.safeDrawingPadding().verticalScroll(rememberScrollState()).padding(horizontal = AvatarSetupTokens.page)) {
+            Row(Modifier.fillMaxWidth().padding(top = AvatarSetupTokens.compact), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Your avatar", style = MaterialTheme.typography.headlineSmall)
+                    Text("Appearance, behavior & play", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                IconButton(onClick = onClose) { Icon(Icons.Default.Close, contentDescription = "Close avatar setup") }
+            }
+            Spacer(Modifier.height(AvatarSetupTokens.item))
+            Box(Modifier.fillMaxWidth().aspectRatio(1.7f).clip(RoundedCornerShape(AvatarSetupTokens.corner))
+                .background(MaterialTheme.colorScheme.surfaceVariant)) { preview() }
+            Text(generatedAvatarForm?.let { "Lumen · ${it.name}" }
+                ?: if (style.isLumen && style != AvatarStyle.FULL_FLY) "${style.label} · ${if (style == AvatarStyle.LUMEN_CAT) AvatarAnimal.CAT.label else animal.label}" else style.label,
+                style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = AvatarSetupTokens.item))
+            Text("Selected · changes apply immediately", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            FlowRow(Modifier.padding(top = AvatarSetupTokens.section), horizontalArrangement = Arrangement.spacedBy(AvatarSetupTokens.compact)) {
+                listOf("Look", "Space", "Behavior", "Animations").forEach { option ->
+                    FilterChip(selected = tab == option, onClick = { tab = option }, label = { Text(option) })
+                }
+            }
+            if (tab == "Space") {
+                homeControls()
+                SetupSection("Size & play space")
+                Text("Keep a large avatar on your chosen background, or let it roam a game environment.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                SetupModeChooser(habitatMode, onHabitatMode)
+                SetupSizeControl(avatarScale, onAvatarScale)
+                Text("Size applies in both modes. Use the Background card to choose a scene. On the avatar screen, open Play to interact or manage optional care.",
+                    style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 12.dp))
+            }
+            if (tab == "Look") {
+                Spacer(Modifier.height(AvatarSetupTokens.item))
+                SetupSection("Choose an avatar")
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                AvatarStyle.entries.forEach { option ->
+                    FilterChip(selected = generatedAvatarForm == null && option == style,
+                        onClick = { onSelectStyle(option) }, label = { Text(option.label) })
+                }
+            }
+            Text(style.description, style = MaterialTheme.typography.bodySmall)
+
+            if (style == AvatarStyle.LUMEN) {
+                  Text("Choose your character", style = MaterialTheme.typography.titleMedium)
+                  Text("Pick a character for Lumen, including Clippy and the classic wizard. Your choice stays saved.",
+                      style = MaterialTheme.typography.bodySmall)
+                  FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AvatarAnimal.entries.forEach { option ->
+                        val shown = if (style == AvatarStyle.LUMEN_CAT) AvatarAnimal.CAT else animal
+                        FilterChip(selected = generatedAvatarForm == null && shown == option, onClick = { onSelectAnimal(option) },
+                            label = { Text(option.label) })
+                    }
+                  }
+                val character = LumenPersonalities.forAnimal(animal)
+                Text(character.title, style = MaterialTheme.typography.titleMedium)
+                Text(character.voice, style = MaterialTheme.typography.bodySmall)
+                Text("Signature scenes: " + character.signatures.mapNotNull { AvatarPerformanceCatalog.resolve(it)?.title }.joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall)
+                if (generatedAvatarForm == null && style == AvatarStyle.LUMEN && (animal == AvatarAnimal.CLIPPY || animal == AvatarAnimal.WIZARD)) {
+                    Text(if (animal == AvatarAnimal.CLIPPY)
+                        "A springy silver paperclip with expressive eyes. Say ‘turn into Clippy’ to switch here any time."
+                    else "A starry hat, flowing beard and magic wand. Say ‘become the wizard’ to switch here any time.",
+                        style = MaterialTheme.typography.bodySmall)
+                }
+                Text("Tap or stroke the avatar to interact. Use the video button to enable or disable the camera for face following; swipe down to open the card menu.",
+                    style = MaterialTheme.typography.bodySmall)
+                TextButton(onClick = { onSelectStyle(AvatarStyle.SIGNAL) }) { Text("Turn into Jarvis orb") }
+                Spacer(Modifier.height(12.dp))
+            }
+            Spacer(modifier = Modifier.height(18.dp))
+            if (style != AvatarStyle.FULL_FLY && generatedAvatarForm == null) {
+            SetupSection("Colors")
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            CompactColorChooser(selected = eyeColor, onSelect = onSelectEyeColor, label = "Eye color")
+
+            if ((style == AvatarStyle.PEARL || style.isLumen) &&
+                !(style == AvatarStyle.LUMEN && (animal == AvatarAnimal.CLIPPY || animal == AvatarAnimal.WIZARD))) {
+                CompactColorChooser(selected = featureColor, onSelect = onSelectFeatureColor, label = "Feature color")
+            }
+
+            CompactColorChooser(selected = glowColor, onSelect = onSelectGlowColor, label = "Glow color")
+            }
+            Spacer(modifier = Modifier.height(18.dp))
+            }
+            } // Look
+            if (tab == "Behavior") {
+                morphControls()
+                SetupSection("Movement & personality")
+            Text("Expression strength", style = MaterialTheme.typography.titleMedium)
+            Text("Controls how strongly the face shows an expression.", style = MaterialTheme.typography.bodySmall)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ExpressionIntensity.entries.forEach { option ->
+                    FilterChip(selected = expressionIntensity == option, onClick = { onExpressionIntensity(option) }, label = { Text(option.label) })
+                }
+            }
+            Text("Idle playfulness", style = MaterialTheme.typography.titleMedium)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Playfulness.entries.forEach { option ->
+                    FilterChip(selected = playfulness == option, onClick = { onPlayfulness(option) }, label = { Text(option.label) })
+                }
+            }
+            Text("Quiet keeps small idle movements. Balanced and Lively add occasional scenes. Requested performances remain available.", style = MaterialTheme.typography.bodySmall)
+                if (style.isLumen && style != AvatarStyle.FULL_FLY) {
+                TextButton(onClick = { feelings = !feelings }) { Text(if (feelings) "Hide expression previews" else "Preview expressions") }
+                if (feelings) {
+                Text("Emotion rehearsal", style = MaterialTheme.typography.titleMedium)
+                Text("Watch a feeling arrive, hold and settle. Conversation and touch also bring these expressions to life.",
+                    style = MaterialTheme.typography.bodySmall)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CompanionEmotion.entries.forEach { feeling ->
+                        FilterChip(selected = false, onClick = { onPlayAnimation("emotion:${feeling.name}") },
+                            label = { Text(feeling.name.lowercase().replaceFirstChar { it.uppercase() }) })
+                    }
+                }
+                }
+                }
+            } // Behavior
+            if (tab == "Animations") {
+            Text(
+                text = "Animations",
+                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                text = "Original performances adapt to each face. Lumen adds floating props and one-eye winks. Tap one to watch, or ask ‘play Warm Hello animation’.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            OutlinedTextField(value = search, onValueChange = { search = it },
+                label = { Text("Search all animations") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                (listOf("New") + AvatarPerformanceCatalog.entries.map { it.category }.distinct() + "More").forEach { group ->
+                    FilterChip(selected = category == group && search.isBlank(), onClick = { category = group; search = "" }, label = { Text(group) })
+                }
+            }
+            TextButton(onClick = { onPlayAnimation("surprise me") }) { Text("Surprise me • a different performance") }
+
+            if (choices.isEmpty()) {
                 Text(
-                    text = "Avatar",
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
+                    text = if (animations.isEmpty()) "No animations yet." else "No matches. Try another name or category.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium,
                 )
-                IconButton(onClick = onClose) {
-                    Icon(Icons.Default.Close, contentDescription = "Close", tint = MaterialTheme.colorScheme.onSurface)
+            } else {
+                (if (expanded) choices else choices.take(12)).forEach { name ->
+                    AnimationRow(name = name, onClick = { onPlayAnimation(name) })
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+                if (choices.size > 12) TextButton(onClick = { expanded = !expanded }) {
+                    Text(if (expanded) "Show fewer" else "Show all ${choices.size} animations")
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            }
+            if (tab == "Look") {
+                SetupSection("App appearance")
             Text("App theme", style = MaterialTheme.typography.titleMedium)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 AppTheme.entries.forEach { option ->
@@ -116,91 +289,46 @@ fun AvatarScreen(
                         onClick = { onSelectAppearance(option) }, label = { Text(option.label) })
                 }
             }
-            Text("Live preview", style = MaterialTheme.typography.titleMedium)
-            Box(Modifier.fillMaxWidth().height(260.dp).clip(RoundedCornerShape(24.dp))
-                // Was hard-coded to the old dark-mode background, so the preview
-                // stayed near-black even with Light appearance selected.
-                .background(MaterialTheme.colorScheme.surfaceVariant)) { preview() }
-            Spacer(Modifier.height(18.dp))
-            Text(
-                text = "Face style",
-                color = MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-
-            AvatarStyle.entries.forEach { option ->
-                StyleRow(
-                    option = option,
-                    selected = option == style,
-                    onClick = { onSelectStyle(option) },
-                )
-                Spacer(modifier = Modifier.height(10.dp))
+            TextButton(onClick = { advanced = !advanced }, modifier = Modifier.padding(top = AvatarSetupTokens.section)) {
+                Text(if (advanced) "Hide advanced settings" else "Advanced settings")
             }
-
-            Spacer(modifier = Modifier.height(18.dp))
-            Text(
-                text = "Eye color",
-                color = MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Text(
-                text = "Iris color for Pearl and Godot.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodySmall,
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-            ColorSwatchRow(selected = eyeColor, onSelect = onSelectEyeColor)
-
-            if (style == AvatarStyle.PEARL) {
-                Spacer(Modifier.height(18.dp))
-                Text("Cat color", style = MaterialTheme.typography.titleMedium)
-                Text("Ears, eyelids, nose, mouth and whiskers.", style = MaterialTheme.typography.bodySmall)
-                Spacer(Modifier.height(10.dp))
-                ColorSwatchRow(selected = featureColor, onSelect = onSelectFeatureColor)
+            if (advanced) {
+                FlipCoverSetupCard()
+                SetupSection("Diagnostics")
+                diagnostics()
             }
-
-            Spacer(modifier = Modifier.height(18.dp))
-            Text(
-                text = "Glow color",
-                color = MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Text(
-                text = "Soft halo behind the face — shows over a transparent desk.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodySmall,
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-            ColorSwatchRow(selected = glowColor, onSelect = onSelectGlowColor)
-
-            Spacer(modifier = Modifier.height(18.dp))
-            Text(
-                text = "Animations",
-                color = MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Text(
-                text = "All styles share every animation — only the face changes. Tap one to watch it play.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodySmall,
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-
-            if (animations.isEmpty()) {
-                Text(
-                    text = "No animations yet.",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            } else {
-                animations.forEach { name ->
-                    AnimationRow(name = name, onClick = { onPlayAnimation(name) })
-                    Spacer(modifier = Modifier.height(8.dp))
-                }
             }
+            Spacer(Modifier.height(AvatarSetupTokens.section))
+        }
+    }
+}
 
-            Spacer(modifier = Modifier.height(40.dp))
+@Composable
+private fun CompactColorChooser(selected: Long, onSelect: (Long) -> Unit, label: String) {
+    var open by rememberSaveable { mutableStateOf(false) }
+    TextButton(onClick = { open = true }) {
+        Box(Modifier.size(24.dp).clip(CircleShape).background(Color(selected)))
+        Spacer(Modifier.size(8.dp))
+        Text("Choose $label")
+    }
+    if (open) androidx.compose.material3.AlertDialog(
+        onDismissRequest = { open = false },
+        title = { Text(label) },
+        text = { ColorSwatchRow(selected = selected, onSelect = { onSelect(it); open = false }, label = label) },
+        confirmButton = { TextButton(onClick = { open = false }) { Text("Done") } },
+    )
+}
+
+internal fun avatarAnimationChoices(names: List<String>, category: String, query: String): List<String> {
+    val term = query.trim().lowercase(java.util.Locale.ROOT)
+    return names.distinct().filter { name ->
+        val entry = AvatarPerformanceCatalog.resolve(name)?.takeIf { it.title == name }
+        if (term.isNotEmpty()) name.lowercase(java.util.Locale.ROOT).contains(term) ||
+            entry?.aliases?.any { it.lowercase(java.util.Locale.ROOT).contains(term) } == true
+        else when (category) {
+            "New" -> entry != null
+            "More" -> entry == null
+            else -> entry?.category == category
         }
     }
 }
@@ -221,7 +349,8 @@ private fun StyleRow(
                 color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
                 shape = RoundedCornerShape(14.dp),
             )
-            .clickable(onClick = onClick)
+            .semantics { this.selected = selected }
+            .clickable(role = Role.RadioButton, onClick = onClick)
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -271,6 +400,8 @@ private fun AnimationRow(name: String, onClick: () -> Unit) {
 @Composable
 private fun EyePreview(style: AvatarStyle, modifier: Modifier = Modifier) {
     val eyeColor = Color(0xFF3FB950)
+    val lumenPainter = remember { LumenPainter() }
+    val flyPainter = remember { FullFlyPainter() }
     Canvas(modifier = modifier) {
         val cx = size.width / 2f
         val cy = size.height / 2f
@@ -278,6 +409,10 @@ private fun EyePreview(style: AvatarStyle, modifier: Modifier = Modifier) {
         val eyeH = size.height * 0.62f
 
         when (style) {
+            AvatarStyle.FULL_FLY -> flyPainter.draw(this, LumenFrame(), FullFlyPose(scale = 1.6f))
+            AvatarStyle.LUMEN, AvatarStyle.LUMEN_CAT -> lumenPainter.draw(this,
+                LumenFrame(cat = if (style == AvatarStyle.LUMEN_CAT) 1f else 0f), Color(0xFF4DBCB7), Color(0xFF4DBCB7),
+                catFeatures = style == AvatarStyle.LUMEN_CAT, featureColor = Color(0xFFE8D5B9))
             AvatarStyle.SIGNAL -> {
                 // Jarvis Orb swatch: bright nucleus + scattered parameter dots.
                 val cyan = Color(0xFF5CE1FF)
@@ -356,20 +491,23 @@ private fun EyePreview(style: AvatarStyle, modifier: Modifier = Modifier) {
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 private fun ColorSwatchRow(
     selected: Long,
     onSelect: (Long) -> Unit,
+    label: String,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         AvatarColors.swatches.forEach { swatch ->
             val isOn = (swatch.argb and 0xFFFFFFFFL) == (selected and 0xFFFFFFFFL)
             Box(
                 modifier = Modifier
                     .size(48.dp)
-                    .semantics { contentDescription = swatch.label + if (isOn) ", selected" else "" }
+                    .semantics { contentDescription = "$label ${swatch.label}" + if (isOn) ", selected" else "" }
                     .clip(CircleShape)
                     .background(Color(swatch.argb))
                     .border(

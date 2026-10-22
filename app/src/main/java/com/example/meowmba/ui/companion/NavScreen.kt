@@ -13,10 +13,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
+import com.example.meowmba.ui.theme.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
+import com.example.meowmba.ui.theme.OutlinedButton
+import com.example.meowmba.ui.theme.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -54,6 +54,7 @@ import com.example.meowmba.core.security.SecureStorageManager
 fun NavScreen(
     secureStorage: SecureStorageManager? = null,
     state: CompanionState = CompanionState(),
+    drivingControls: @Composable () -> Unit = {},
     onClose: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -103,13 +104,15 @@ fun NavScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    "NAV",
+                    "Auto",
                     style = MaterialTheme.typography.headlineMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f),
                 )
                 TextButton(onClick = onClose) { Text("CLOSE") }
             }
+            drivingControls()
+            Text("Navigation", style = MaterialTheme.typography.titleLarge)
             Text(
                 "Offline-first. Region packs are searched before the online fallback, " +
                     "so this works with no signal.",

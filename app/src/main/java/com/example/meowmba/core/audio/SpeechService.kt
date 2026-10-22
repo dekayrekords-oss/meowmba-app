@@ -205,13 +205,14 @@ class SpeechService(context: Context) : SpeechEngine, SpeechAudioCapture {
             // gate is what makes "the loser gets no onError" true now that the
             // recognizer is no longer destroyed out from under its callbacks.
             gate.onYield()
+            InputSoundLevel.clear("system_rms")
             _isListening.value = false
             _partialResults.value = ""
         }
 
         /** Release the shared slot if this engine still holds it. */
         fun releaseSessionSlot() {
-            activeSession.compareAndSet(this, null)
+            if (activeSession.compareAndSet(this, null)) InputSoundLevel.clear("system_rms")
         }
 
          private fun buildRecognizer(): SpeechRecognizer? {
@@ -317,7 +318,11 @@ class SpeechService(context: Context) : SpeechEngine, SpeechAudioCapture {
                     if (!gate.acceptSpeechEdge()) return
                     Log.i(TAG, "speech started")
                 }
-                override fun onRmsChanged(rmsdB: Float) {}
+                override fun onRmsChanged(rmsdB: Float) {
+                    if (_isListening.value && activeSession.get() === this@SessionEngine) {
+                        InputSoundLevel.publishSystemRms(rmsdB)
+                    }
+                }
                 override fun onBufferReceived(buffer: ByteArray?) {
                     noteHeardPcm(buffer)
                 }
@@ -325,6 +330,7 @@ class SpeechService(context: Context) : SpeechEngine, SpeechAudioCapture {
                     Log.i(TAG, "<- onEndOfSpeech")
                     if (!gate.acceptSpeechEdge()) return
                     _isListening.value = false
+                    InputSoundLevel.clear("system_rms")
                     Log.i(TAG, "speech ended")
                 }
                 override fun onError(error: Int) {

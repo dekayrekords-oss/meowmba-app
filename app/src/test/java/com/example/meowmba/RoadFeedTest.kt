@@ -82,10 +82,13 @@ class RoadFeedTest {
     }
 
     @Test
-    fun `police beats a closer camera`() {
-        val hits = RoadFeed.parseWaze(wazeBody)
+    fun `nearby camera is not starved by distant police`() {
+        val hits = listOf(
+            RoadFeed.Hit(RoadAlert.Kind.CAMERA, hereLat + 0.001, hereLon, source = "OSM", id = "close"),
+            RoadFeed.Hit(RoadAlert.Kind.POLICE, hereLat + 0.02, hereLon, source = "Waze", id = "far"),
+        )
         val pick = RoadFeed.pickNearest(hits, hereLat, hereLon)!!
-        assertEquals(RoadAlert.Kind.POLICE, pick.kind)
+        assertEquals(RoadAlert.Kind.CAMERA, pick.kind)
     }
 
     @Test
@@ -93,7 +96,7 @@ class RoadFeedTest {
         val hits = RoadFeed.parseWaze(wazeBody)
         val police = hits.first { it.kind == RoadAlert.Kind.POLICE }
         val pick = RoadFeed.pickNearest(hits, hereLat, hereLon, seen = setOf(police.key()))!!
-        assertEquals(RoadAlert.Kind.CAMERA, pick.kind)
+        assertEquals(RoadAlert.Kind.HAZARD, pick.kind)
     }
 
     @Test
@@ -147,7 +150,6 @@ class RoadFeedTest {
         assertTrue(url.startsWith("https://www.waze.com/live-map/api/georss?"))
         assertTrue(url.contains("env=na"))
         assertTrue(url.contains("types=alerts,traffic"))
-        val rt = RoadFeed.wazeRtUrl(30.27, -97.74)
-        assertTrue(rt.contains("/rtserver/web/TGeoRSS"))
+
     }
 }

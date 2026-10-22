@@ -16,7 +16,8 @@ package com.example.meowmba.core.audio
  *
  * Pure Kotlin, unit-testable, no Android dependencies.
  */
-class SelfVoiceFilter {
+class SelfVoiceFilter(private val nowMs: () -> Long = { System.currentTimeMillis() }) {
+    private var finishedAtMs: Long? = null
 
     /** Full text of the utterance currently being spoken. */
     private var utterance: String = ""
@@ -26,9 +27,18 @@ class SelfVoiceFilter {
 
     /** Begin tracking a new utterance. Call when speech starts. */
     fun begin(text: String) {
+        finishedAtMs = null
         utterance = text
         spokenCharIndex = 0
     }
+
+    fun append(text: String) {
+        utterance = (utterance + " " + text).takeLast(12_000)
+        finishedAtMs = null
+    }
+
+    /** Retain the whole reply through delayed recognizer results and room echo. */
+    fun finish() { finishedAtMs = nowMs() }
 
     /** TTS word boundary callback: [start, end) char range just spoken. */
     fun onWordSpoken(start: Int, end: Int) {
@@ -37,6 +47,7 @@ class SelfVoiceFilter {
 
     /** Stop tracking (speech finished or cancelled). */
     fun clear() {
+        finishedAtMs = null
         utterance = ""
         spokenCharIndex = 0
     }
@@ -46,13 +57,19 @@ class SelfVoiceFilter {
      * own voice (true = suppress it) or a genuine user interruption
      * (false = let it through as barge-in).
      */
-    fun isOwnVoice(partial: String): Boolean {
+    fun isOwnVoice(partial: String, filterShortNoise: Boolean = true): Boolean {
+        if (finishedAtMs?.let { nowMs() - it > 8_000L } == true) return false
         val normalizedPartial = WakePhraseMatcher.normalize(partial)
 
         // Silence, mic noise, and ultra-short blips ("uh", "hm") never interrupt.
-        if (normalizedPartial.length < MIN_BARGE_IN_CHARS) return true
+        if (filterShortNoise && normalizedPartial.length < MIN_BARGE_IN_CHARS) return true
 
         val remaining = remainingSpeech()
+        // Brief confirmations such as yes/no/cancel must remain usable after
+        // a longer reply that happened to contain the same word.
+        if (!filterShortNoise && normalizedPartial.split(' ').size < 3) {
+            return remaining.isNotBlank() && normalizedPartial == remaining
+        }
         if (remaining.isBlank()) {
             // Nothing is being spoken (or tracking was reset): any real speech
             // must be the user.
@@ -74,8 +91,7 @@ class SelfVoiceFilter {
     /** Normalized companion speech from just before the playhead onwards. */
     private fun remainingSpeech(): String {
         if (utterance.isBlank()) return ""
-        val from = (spokenCharIndex - ECHO_LOOKBACK_CHARS).coerceIn(0, utterance.length)
-        return WakePhraseMatcher.normalize(utterance.substring(from))
+        return WakePhraseMatcher.normalize(utterance)
     }
 
     companion object {

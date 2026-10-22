@@ -14,6 +14,8 @@ import com.example.meowmba.core.agent.tools.ToolRegistry
 import com.example.meowmba.core.agent.tools.Workspace
 import com.example.meowmba.ui.companion.CompanionViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -170,6 +172,16 @@ class ToolCallParserTest {
 }
 
 class CommandHeuristicsTest {
+    @Test fun `mentions are not requests but explicit actions and followups remain`() {
+        listOf("Just chillin with the cats.", "jsut chillin with the cats", "I watched a video",
+            "my cat likes to dance", "I love that photo", "the files are fine", "(buzzing)").forEach {
+            assertTrue("Must stay chat: $it", !CommandHeuristics.mightBeCommand(it))
+        }
+        listOf("make a video of cats", "could you please generate a video of cats",
+            "hey can you make a file for me", "do it", "make that longer", "change it to blue", "yes").forEach {
+            assertTrue("Must remain routable: $it", CommandHeuristics.mightBeCommand(it))
+        }
+    }
 
     @Test
     fun `command-like text passes the gate`() {
@@ -267,6 +279,8 @@ class LlmToolCallRouterTest {
         val provider = FakeModelProvider("""{"tool": "file.delete", "args": {"path": "everything"}}""")
         val router = LlmToolCallRouter(provider, registry)
         assertNull(router.route("how are you feeling today"))
+        assertNull(router.route("just chillin with the cats", context = "User: make a cat video\nAssistant: Video failed"))
+        assertNull(router.route("I watched a video about cats"))
         assertEquals(0, provider.generateCalls)
     }
 
@@ -294,15 +308,18 @@ class AgentBrainViewModelTest {
 
     private val testDispatcher = UnconfinedTestDispatcher()
     private lateinit var fakeTts: VoicePipelineTest.FakeSpeechSynthesizer
+    private lateinit var androidMocks: ScopedCompanionAndroidMocks
 
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
+        androidMocks = ScopedCompanionAndroidMocks { testDispatcher.scheduler.currentTime }
         fakeTts = VoicePipelineTest.FakeSpeechSynthesizer()
     }
 
     @After
     fun tearDown() {
+        androidMocks.close()
         Dispatchers.resetMain()
     }
 
@@ -314,6 +331,7 @@ class AgentBrainViewModelTest {
             workspaceRoot = workspaceRoot,
             ioDispatcher = testDispatcher
         )
+        try {
         val provider = LlmToolCallRouterTest.FakeModelProvider(
             """{"tool": "file.write", "args": {"path": "todo.txt", "content": ""}}"""
         )
@@ -328,6 +346,7 @@ class AgentBrainViewModelTest {
         val task = vm.uiState.value.activeTasks.first()
         assertEquals("file.write", task.toolId)
         assertEquals("todo.txt", task.args["path"])
+        } finally { vm.viewModelScope.cancel() }
     }
 
     @Test
@@ -338,6 +357,7 @@ class AgentBrainViewModelTest {
             workspaceRoot = workspaceRoot,
             ioDispatcher = testDispatcher
         )
+        try {
         val provider = LlmToolCallRouterTest.FakeModelProvider(
             """{"tool": "file.write", "args": {"path": "todo.txt", "content": ""}}"""
         )
@@ -350,11 +370,13 @@ class AgentBrainViewModelTest {
         // No routing call, no task, no approval — it went down the chat path
         assertNull(vm.uiState.value.pendingApproval)
         assertTrue(vm.uiState.value.activeTasks.isEmpty())
+        } finally { vm.viewModelScope.cancel() }
     }
 
     @Test
     fun `prompt mode auto-detects hermes from the loaded local model path`() = runTest {
         val vm = CompanionViewModel(ttsManager = fakeTts)
+        try {
         assertEquals(
             com.example.meowmba.core.agent.runtime.ToolCallPromptMode.CONTRACT,
             vm.toolCallPromptMode()
@@ -367,9 +389,12 @@ class AgentBrainViewModelTest {
         )
         org.mockito.Mockito.`when`(storage.getEndpoint("local")).thenReturn("/data/local/tmp/llm/hermes3-3b.task")
         val vm2 = CompanionViewModel(ttsManager = fakeTts, secureStorage = storage)
+        try {
         assertEquals(
             com.example.meowmba.core.agent.runtime.ToolCallPromptMode.HERMES_NATIVE,
             vm2.toolCallPromptMode()
         )
+        } finally { vm2.viewModelScope.cancel() }
+        } finally { vm.viewModelScope.cancel() }
     }
 }

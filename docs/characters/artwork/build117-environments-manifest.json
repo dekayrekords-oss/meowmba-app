@@ -1,0 +1,54 @@
+[
+  {
+    "id": "cartoon_portal_arcade",
+    "prompt": "Use case: illustration-story. Create ONE finished original premium game environment painting, square 1536x1536, no UI. A sophisticated eccentric adult sci-fi television cartoon world: confident dark hand-inked contours with line-weight variation, beautifully designed wonky architecture, carefully composed cinematic depth, crisp cel shading, rich controlled colors and luminous practical lighting. Rick and Morty-ish alien-space-cartoon energy but entirely original scenery, no existing characters or logos. Much more polished and dimensional than simple geometric clipart. Visual story through a few large funny details, never clutter. A separately rendered avatar plays in the center: the middle 45% is spacious low-contrast empty air. Side and upper architecture frames it. COMPOSITING REQUIREMENT: one broad EMPTY foreground play counter extends across full width, with exactly horizontal straight REAR TOP EDGE at 72% of image height; the lower 28% shows ONLY the clean top surface continuing to image bottom, no front fascia or legs, no objects on counter. No cups, books, balls, buttons, creatures, toys or tools on the foreground surface; the game draws moving props. NO people, pets, humanoids, fly, words, text, lettering, watermark, poster or frame. Clean exportable final background asset. Scene: a spectacular little interdimensional arcade lounge inside a retro spaceship. Deep midnight teal walls, mint illuminated arch ribs, acid-lime accent against warm coral. At the upper left side a curved old arcade cabinet with a glass screen showing a tiny spiral galaxy and comically oversized joystick shaped like a rubber chicken, all far BEHIND the counter. At the right a circular lime portal set in a chunky scratched cream machine casing, showing a sleepy purple moon through it. Far high center round skylight reveals one small ringed planet, quiet starfield. Subtle exposed cabling and beveled curved wall details, no rows of machines. A warm pale sage empty counter in foreground. Strong foreground/midground/distant separation, crisp beautifully controlled soft lighting.",
+    "sourcePath": "/Users/bobrossjr/.codex/generated_images/01a0979c-e527-70a2-8488-49fd078dc68d/exec-63ce87c1-1502-4377-b905-917b82c40602.png",
+    "generator": "Built-in image_gen",
+    "width": 1254,
+    "height": 1254,
+    "assetPath": "app/src/main/assets/backgrounds/painted/cartoon_portal_arcade.png",
+    "sha256": "17e092bca456b42fd203933eafbf702d4b374a2b71340185bdbd0d514b90ca34",
+    "sourceTableAnchor": 0.6044657097288676,
+    "sourceTableAnchorPixelY": 758,
+    "sourceFocusX": 0.5
+  },
+  {
+    "id": "cartoon_moon_garden",
+    "prompt": "Use case: illustration-story. Create ONE finished original premium game environment painting, square 1536x1536, no UI. A sophisticated eccentric adult sci-fi television cartoon world: confident dark hand-inked contours with line-weight variation, beautifully designed wonky architecture, carefully composed cinematic depth, crisp cel shading, rich controlled colors and luminous practical lighting. Rick and Morty-ish alien-space-cartoon energy but entirely original scenery, no existing characters or logos. Much more polished and dimensional than simple geometric clipart. Visual story through a few large funny details, never clutter. A separately rendered avatar plays in the center: the middle 45% is spacious low-contrast empty air. Side and upper architecture frames it. COMPOSITING REQUIREMENT: one broad EMPTY foreground play counter extends across full width, with exactly horizontal straight REAR TOP EDGE at 72% of image height; the lower 28% shows ONLY the clean top surface continuing to image bottom, no front fascia or legs, no objects on counter. No cups, books, balls, buttons, creatures, toys or tools on the foreground surface; the game draws moving props. NO people, pets, humanoids, fly, words, text, lettering, watermark, poster or frame. Clean exportable final background asset. Scene: a lush witty alien moon greenhouse on a tiny orbital garden terrace. Plum night sky through an arched blue-green glass dome, distant mint ringed planet high center. Sides framed by sculptural giant turquoise curling leaves and chunky coral mushrooms with spotted caps, fine tiny dew highlights. On a HIGH back shelf at upper left stands one absurd cactus wearing a small glass astronaut helmet; on right a large drooping trumpet flower curves toward empty center air. Warm pale ochre planters and lightly worn enamel garden hardware. The middle is a calm muted sage window view, not full of foliage. Foreground empty light pistachio stone play counter. Polished professional animation background, beautiful grouped shapes and cinematic rim lighting, no realistic textures.",
+    "sourcePath": "/Users/bobrossjr/.codex/generated_images/01a0979c-e527-70a2-8488-49fd078dc68d/exec-07cdca85-4224-4b3a-b7ff-3cb1f387c043.png",
+    "generator": "Built-in image_gen",
+    "width": 1254,
+    "height": 1254,
+    "assetPath": "app/src/main/assets/backgrounds/painted/cartoon_moon_garden.png",
+    "sha256": "1c8ebefc7144ce5707ef83c7e8ee3bdee9c50dfcb2fb44f07071feced68bd1bf",
+    "sourceTableAnchor": 0.664274322169059,
+    "sourceTableAnchorPixelY": 833,
+    "sourceFocusX": 0.5
+  },
+  {
+    "id": "cartoon_alien_aquarium",
+    "prompt": "Use case: illustration-story. Create ONE finished original premium game environment painting, square 1536x1536, no UI. A sophisticated eccentric adult sci-fi television cartoon world: confident dark hand-inked contours with line-weight variation, beautifully designed wonky architecture, carefully composed cinematic depth, crisp cel shading, rich controlled colors and luminous practical lighting. Rick and Morty-ish alien-space-cartoon energy but entirely original scenery, no existing characters or logos. Much more polished and dimensional than simple geometric clipart. Visual story through a few large funny details, never clutter. A separately rendered avatar plays in the center: the middle 45% is spacious low-contrast empty air. Side and upper architecture frames it. COMPOSITING REQUIREMENT: one broad EMPTY foreground play counter extends across full width, with exactly horizontal straight REAR TOP EDGE at 72% of image height; the lower 28% shows ONLY the clean top surface continuing to image bottom, no front fascia or legs, no objects on counter. No cups, books, balls, buttons, creatures, toys or tools on the foreground surface; the game draws moving props. NO people, pets, humanoids, fly, words, text, lettering, watermark, poster or frame. Clean exportable final background asset. Scene: a jewel-like outer-space aquarium observation lounge inside an eccentric research vessel. One huge curved teal-glass tank WINDOW in back with softly layered underwater purple rock arches, chunky mint/coral sea plants restricted to sides, sparse bubbles, pale turquoise luminous water. No animals or fish. A tiny stranded toy flying saucer lies atop a high underwater rock shelf at upper left, amusingly planted with one seaweed sprig. Upper right a brass periscope tube bends into a pretzel shape beside a chunky orange pressure gauge. Sweeping indigo shell architecture, cream-and-coral pipework, spare warm deck lighting. Keep central water area beautifully calm and bright enough for a dark cartoon avatar. Empty warm pale lilac enamel play counter across foreground. Clear defined perspective and depth, thick organic cartoon contours.",
+    "sourcePath": "/Users/bobrossjr/.codex/generated_images/01a0979c-e527-70a2-8488-49fd078dc68d/exec-f95bdf05-6dbf-4a7b-80e1-9c9d09952327.png",
+    "generator": "Built-in image_gen",
+    "width": 1254,
+    "height": 1254,
+    "assetPath": "app/src/main/assets/backgrounds/painted/cartoon_alien_aquarium.png",
+    "sha256": "2a55c6c77ee1b7d62fac42bbd207758693b777f6bda75fddfb7f9279d798c172",
+    "sourceTableAnchor": 0.6004784688995215,
+    "sourceTableAnchorPixelY": 753,
+    "sourceFocusX": 0.5
+  },
+  {
+    "id": "cartoon_meteor_garage",
+    "prompt": "Use case: illustration-story. Create ONE finished original premium game environment painting, square 1536x1536, no UI. A sophisticated eccentric adult sci-fi television cartoon world: confident dark hand-inked contours with line-weight variation, beautifully designed wonky architecture, carefully composed cinematic depth, crisp cel shading, rich controlled colors and luminous practical lighting. Rick and Morty-ish alien-space-cartoon energy but entirely original scenery, no existing characters or logos. Much more polished and dimensional than simple geometric clipart. Visual story through a few large funny details, never clutter. A separately rendered avatar plays in the center: the middle 45% is spacious low-contrast empty air. Side and upper architecture frames it. COMPOSITING REQUIREMENT: one broad EMPTY foreground play counter extends across full width, with exactly horizontal straight REAR TOP EDGE at 72% of image height; the lower 28% shows ONLY the clean top surface continuing to image bottom, no front fascia or legs, no objects on counter. No cups, books, balls, buttons, creatures, toys or tools on the foreground surface; the game draws moving props. NO people, pets, humanoids, fly, words, text, lettering, watermark, poster or frame. Clean exportable final background asset. Scene: an inventive asteroid mechanic's garage in space, like a premium comedic animation background. Warm dusty lavender walls, chunky cream structural beams, subdued deep teal shadows, saturated orange and lime accents. A huge arch-shaped hangar window upper center frames a quiet distant violet asteroid belt and ringed pale-peach planet. At far LEFT behind the counter one tiny silver saucer vehicle sits on a crooked hydraulic lift wearing an absurdly huge single red sneaker instead of a landing foot. At far RIGHT a large orange rocket engine suspended on a mint articulated crane, a small daisy sprouting from its exhaust. Sparse bolts, one coiled cable and carefully designed industrial panels; no cluttered tool collections. Quiet central air. Empty pale warm-beige metal work counter in foreground. Bold ink outlines and expressive silhouette design, three-value cel shading, controlled theatrical pools of color.",
+    "sourcePath": "/Users/bobrossjr/.codex/generated_images/01a0979c-e527-70a2-8488-49fd078dc68d/exec-1097e336-5790-42f1-9edc-93ae37501231.png",
+    "generator": "Built-in image_gen",
+    "width": 1254,
+    "height": 1254,
+    "assetPath": "app/src/main/assets/backgrounds/painted/cartoon_meteor_garage.png",
+    "sha256": "4853db9cec9f75d653b507afa34a6de23d8c1adb936fd37e2c3355dd4136d3f2",
+    "sourceTableAnchor": 0.6778309409888357,
+    "sourceTableAnchorPixelY": 850,
+    "sourceFocusX": 0.5
+  }
+]

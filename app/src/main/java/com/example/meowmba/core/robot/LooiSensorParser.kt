@@ -39,6 +39,9 @@ sealed class SensorEvent {
  */
 object LooiSensorParser {
 
+    /** No captured/verified cliff layout exists yet; silence is not safe-floor evidence. */
+    const val safetyDecodingVerified: Boolean = false
+
     fun parse(raw: ByteArray): SensorEvent = SensorEvent.Unknown(raw.copyOf())
 
     /**

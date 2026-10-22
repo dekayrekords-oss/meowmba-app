@@ -1,0 +1,99 @@
+{
+  "scope": "direct body dynamics smoke; synthetic control probe; no learned policy, no sustained-flight or biological-control claim",
+  "sourceRevision": "d015e9bfe441bd90ae431bac24c55cb74bdbce26",
+  "sourceLicense": "Apache-2.0 repository LICENSE; no external trajectories or weights",
+  "python": "3.10.20",
+  "packages": {
+    "mujoco": "3.3.7",
+    "numpy": "1.26.4"
+  },
+  "assetSha256": {
+    "floor.xml": "1490751ff170d089b8882aa4972778b64bcf56f6d39b0e87029156dcf0452019",
+    "fruitfly.xml": "d14946fd0311025ecca70c8eeb5de80e1fe18700d3072be37ecbb18d33d80fd8",
+    "LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+  },
+  "wallSeconds": 1.8915825659933034,
+  "totalPhysicsSteps": 4000,
+  "models": [
+    {
+      "model": "floor.xml",
+      "syntheticWingProbe": false,
+      "wingActuators": 6,
+      "nq": 109,
+      "nv": 108,
+      "nu": 78,
+      "nbody": 68,
+      "timestepSeconds": 0.0001,
+      "gravityModelUnits": [
+        0.0,
+        0.0,
+        -981.0
+      ],
+      "densityModelUnits": 0.00128,
+      "viscosityModelUnits": 0.000185,
+      "identicalRepeatTrajectories": true,
+      "episodes": [
+        {
+          "repeat": 0,
+          "steps": 1000,
+          "simulatedSeconds": 0.10000000000000184,
+          "maxAbsQposChange": 1.287093078997401,
+          "finalMaxAbsQvel": 4.503045954578352,
+          "maximumContacts": 10,
+          "warningCounts": {},
+          "trajectorySha256": "352f682da7e05e9b19531fa7c8c5f5398f82c490fbef626aa34720ce10442564"
+        },
+        {
+          "repeat": 1,
+          "steps": 1000,
+          "simulatedSeconds": 0.10000000000000184,
+          "maxAbsQposChange": 1.287093078997401,
+          "finalMaxAbsQvel": 4.503045954578352,
+          "maximumContacts": 10,
+          "warningCounts": {},
+          "trajectorySha256": "352f682da7e05e9b19531fa7c8c5f5398f82c490fbef626aa34720ce10442564"
+        }
+      ]
+    },
+    {
+      "model": "fruitfly.xml",
+      "syntheticWingProbe": true,
+      "wingActuators": 6,
+      "nq": 109,
+      "nv": 108,
+      "nu": 78,
+      "nbody": 68,
+      "timestepSeconds": 0.0001,
+      "gravityModelUnits": [
+        0.0,
+        0.0,
+        -981.0
+      ],
+      "densityModelUnits": 0.00128,
+      "viscosityModelUnits": 0.000185,
+      "identicalRepeatTrajectories": true,
+      "episodes": [
+        {
+          "repeat": 0,
+          "steps": 1000,
+          "simulatedSeconds": 0.10000000000000184,
+          "maxAbsQposChange": 4.39278106680223,
+          "finalMaxAbsQvel": 79.27444603002205,
+          "maximumContacts": 6,
+          "warningCounts": {},
+          "trajectorySha256": "b2ffbb883187119816f02c420e46a9db1ffe53daee654e4d58b86bb7199f754c"
+        },
+        {
+          "repeat": 1,
+          "steps": 1000,
+          "simulatedSeconds": 0.10000000000000184,
+          "maxAbsQposChange": 4.39278106680223,
+          "finalMaxAbsQvel": 79.27444603002205,
+          "maximumContacts": 6,
+          "warningCounts": {},
+          "trajectorySha256": "b2ffbb883187119816f02c420e46a9db1ffe53daee654e4d58b86bb7199f754c"
+        }
+      ]
+    }
+  ]
+}

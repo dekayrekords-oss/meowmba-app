@@ -89,14 +89,35 @@ internal object InstalledApps {
         val target = core.joinToString("").ifEmpty { squash(query) }
         if (target.isEmpty()) return null
 
-        apps.firstOrNull { squash(it.label) == target }?.let { return it }
-        apps.firstOrNull { squash(it.label).startsWith(target) }?.let { return it }
-        apps.firstOrNull { squash(it.label).contains(target) }?.let { return it }
+        apps.filter { squash(it.label) == target }.let { if (it.isNotEmpty()) return it.singleOrNull() }
+        // ASR aliases only resolve to an app actually installed on this phone.
+        val alias = mapOf("factbook" to "facebook", "facebrook" to "facebook", "whatsup" to "whatsapp", "snapshat" to "snapchat", "linkedit" to "linkedin")[target]
+        if (alias != null) return apps.filter { squash(it.label) == alias }.singleOrNull()
+        if (target.length < 3) return null
+        apps.filter { squash(it.label).startsWith(target) }.let { if (it.isNotEmpty()) return it.singleOrNull() }
+        apps.filter { squash(it.label).contains(target) }.let { if (it.isNotEmpty()) return it.singleOrNull() }
         // The spoken phrase contains a label: "set my alarm in the clock" → Clock.
         apps.filter { squash(it.label).length >= 3 && target.contains(squash(it.label)) }
             .maxByOrNull { squash(it.label).length }
             ?.let { return it }
-        return apps.firstOrNull { squash(it.packageName).contains(target) }
+        apps.filter { squash(it.packageName).contains(target) }.singleOrNull()?.let { return it }
+        // Conservative spelling correction: only a clear, unique winner. Short
+        // names and close ties require clarification rather than opening a random app.
+        if (target.length !in 5..40) return null
+        val ranked = apps.map { it to distance(target, squash(it.label)) }.sortedBy { it.second }
+        val best = ranked.firstOrNull() ?: return null
+        val limit = if (target.length >= 8) 2 else 1
+        return best.first.takeIf { best.second <= limit && (ranked.getOrNull(1)?.second ?: 99) >= best.second + 2 }
+    }
+
+    private fun distance(a: String, b: String): Int {
+        var row = IntArray(b.length + 1) { it }
+        for (i in a.indices) {
+            val next = IntArray(b.length + 1); next[0] = i + 1
+            for (j in b.indices) next[j + 1] = minOf(next[j] + 1, row[j + 1] + 1, row[j] + if (a[i] == b[j]) 0 else 1)
+            row = next
+        }
+        return row[b.length]
     }
 
     private fun squash(text: String): String =
@@ -128,7 +149,7 @@ class LaunchAppTool(private val context: Context) : Tool {
 
         val match = InstalledApps.find(context, name)
             ?: return@withContext ToolResult.Failure(
-                "No installed app matches \"$name\". Ask me to list your apps to see what's there."
+                "I couldn't confidently match \"$name\" to one installed app. Please say its full name, or ask me to list your apps."
             )
 
         val launch = context.packageManager.getLaunchIntentForPackage(match.packageName)
@@ -177,20 +198,19 @@ class PlayMusicTool(private val context: Context) : Tool {
     )
 
     override suspend fun execute(args: Map<String, String>): ToolResult = withContext(Dispatchers.IO) {
-        val query = args["query"]?.takeIf { it.isNotBlank() }
+        val query = args["query"]?.trim()
             ?: return@withContext ToolResult.Failure("Missing 'query' — what should I play?")
         val appName = args["app"]?.takeIf { it.isNotBlank() }
 
-        // Resolve the target audio app. A named app is looked up among installed
-        // apps; otherwise prefer Spotify when present, and fall back to an implicit
-        // intent so the user's default music handler picks it up.
+        // A named player wins, then the active AUDIO player, then Android's default.
+        // Never send "play music" to an unrelated active video session.
+        val sessions = musicControllers(context)
         val targetPackage: String? = when {
             appName != null -> InstalledApps.find(context, appName)?.packageName
                 ?: return@withContext ToolResult.Failure(
                     "No installed app matches \"$appName\". Ask me to list your apps."
                 )
-            InstalledApps.find(context, "spotify") != null ->
-                InstalledApps.find(context, "spotify")!!.packageName
+            sessions.isNotEmpty() -> sessions.first().packageName
             else -> null
         }
 
@@ -202,8 +222,19 @@ class PlayMusicTool(private val context: Context) : Tool {
         }
         val appLabel = appName ?: targetPackage?.let { "the music app" }
         return@withContext try {
-            context.startActivity(play)
-            ToolResult.Success("Playing \"$query\"${appLabel?.let { " in $it" } ?: ""}.")
+            val controller = sessions.firstOrNull { targetPackage == null || it.packageName == targetPackage }
+            val before = controller?.playbackState?.state
+            if (query.isBlank() && controller != null) controller.transportControls.play()
+            else if (controller != null && (controller.playbackState?.actions ?: 0L) and PlaybackState.ACTION_PLAY_FROM_SEARCH != 0L)
+                controller.transportControls.playFromSearch(query, null)
+            else context.startActivity(play)
+            kotlinx.coroutines.delay(900)
+            val after = musicControllers(context).firstOrNull { targetPackage == null || it.packageName == targetPackage }
+            val began = before != PlaybackState.STATE_PLAYING && after?.playbackState?.state == PlaybackState.STATE_PLAYING
+            val requested = query.ifBlank { "music" }
+            ToolResult.Success(if (began) "Playback started${appLabel?.let { " in $it" } ?: ""}. Requested: $requested."
+                else "Sent the playback request for $requested${appLabel?.let { " to $it" } ?: " to your phone's music player"}. Playback of the request isn't confirmed yet; the player may need you to sign in or select a result.")
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e
         } catch (e: Exception) {
             ToolResult.Failure("Couldn't start playback of \"$query\": ${e.message}")
         }
@@ -363,7 +394,7 @@ class SetAlarmTool(private val context: Context) : Tool {
                     .putExtra(AlarmClock.EXTRA_SKIP_UI, true)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
-            ToolResult.Success("Alarm set for ${hour}:${minutes.toString().padStart(2, '0')}.")
+            ToolResult.Success("Requested an alarm for ${hour}:${minutes.toString().padStart(2, '0')}. Check the Clock app to confirm it was saved.", ToolOutcome.HANDOFF)
         } catch (e: Exception) {
             ToolResult.Failure("Couldn't set the alarm: ${e.message}")
         }
@@ -395,7 +426,7 @@ class SetTimerTool(private val context: Context) : Tool {
                     .putExtra(AlarmClock.EXTRA_SKIP_UI, true)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
-            ToolResult.Success("Timer started: ${seconds / 60} min ${seconds % 60} s.")
+            ToolResult.Success("Requested a timer for ${seconds / 60} min ${seconds % 60} s. Check the Clock app to confirm it started.", ToolOutcome.HANDOFF)
         } catch (e: Exception) {
             ToolResult.Failure("Couldn't start the timer: ${e.message}")
         }
@@ -590,7 +621,7 @@ class TakePhotoTool(private val context: Context) : Tool {
         val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         return@withContext try {
             context.startActivity(intent)
-            ToolResult.Success("Camera is open — say cheese.")
+            ToolResult.Success("Camera app requested. Take the photo there; no photo has been captured by Meow.", ToolOutcome.HANDOFF)
         } catch (e: Exception) {
             ToolResult.Failure("Couldn't open the camera: ${e.message}")
         }
@@ -617,7 +648,7 @@ class ComposeSmsTool(private val context: Context) : Tool {
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         return@withContext try {
             context.startActivity(intent)
-            ToolResult.Success("Opened a text to $recipient — ready when you are.")
+            ToolResult.Success("Text composer requested for $recipient. Review it and tap Send there; Meow has not sent it.", ToolOutcome.HANDOFF)
         } catch (e: Exception) {
             ToolResult.Failure("Couldn't open the messaging app: ${e.message}")
         }
@@ -642,7 +673,7 @@ class DialCallTool(private val context: Context) : Tool {
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         return@withContext try {
             context.startActivity(intent)
-            ToolResult.Success("Dialer ready for $number.")
+            ToolResult.Success("Dialer requested for $number. Start the call there.", ToolOutcome.HANDOFF)
         } catch (e: Exception) {
             ToolResult.Failure("Couldn't open the dialer: ${e.message}")
         }
@@ -666,12 +697,12 @@ class MediaControlTool(private val context: Context) : Tool {
             return@withContext ToolResult.Failure("I need play, pause, next, or previous.")
         }
         try {
-            val msm = context.getSystemService(Context.MEDIA_SESSION_SERVICE) as? MediaSessionManager
-            val sessions = msm?.getActiveSessions(null)?.toList() ?: emptyList()
+            val sessions = activeMediaControllers(context)
             val controller = sessions.firstOrNull { s ->
                 s.playbackState?.state == PlaybackState.STATE_PLAYING
             } ?: sessions.firstOrNull()
-                ?: return@withContext ToolResult.Failure("Nothing is playing right now.")
+                ?: return@withContext if (action == "play") PlayMusicTool(context).execute(mapOf("query" to ""))
+                    else ToolResult.Failure("No controllable media session. Allow notification access or open your music player first.")
             val controls = controller.transportControls
             when (action) {
                 "play" -> controls.play()
@@ -679,18 +710,34 @@ class MediaControlTool(private val context: Context) : Tool {
                 "next" -> controls.skipToNext()
                 "previous" -> controls.skipToPrevious()
             }
-            ToolResult.Success(
-                when (action) {
-                    "play" -> "Playing."
-                    "pause" -> "Paused."
-                    "next" -> "Skipped to the next track."
-                    else -> "Back to the previous track."
-                }
-            )
+            kotlinx.coroutines.delay(500)
+            val verified = when (action) {
+                "play" -> controller.playbackState?.state == PlaybackState.STATE_PLAYING
+                "pause" -> controller.playbackState?.state in setOf(PlaybackState.STATE_PAUSED, PlaybackState.STATE_STOPPED)
+                else -> false
+            }
+            ToolResult.Success(if (verified) (if (action == "play") "Playback is running." else "Playback is paused.")
+                else "Sent $action to the media player; the resulting playback change isn't confirmed yet.",
+                if (verified) ToolOutcome.VERIFIED else ToolOutcome.UNCONFIRMED)
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e
         } catch (e: Exception) {
             ToolResult.Failure("Couldn't control playback: ${e.message}")
         }
     }
+}
+
+private fun activeMediaControllers(context: Context): List<android.media.session.MediaController> = try {
+    context.getSystemService(MediaSessionManager::class.java)?.getActiveSessions(
+        android.content.ComponentName(context, com.example.meowmba.core.alerts.RoadAlertListener::class.java))
+        .orEmpty().filter { it.packageName != context.packageName }
+        .sortedByDescending { it.playbackState?.state == PlaybackState.STATE_PLAYING }
+} catch (_: SecurityException) { emptyList() }
+
+private fun musicControllers(context: Context) = activeMediaControllers(context).filter { controller ->
+    controller.packageName in setOf("com.spotify.music", "com.google.android.apps.youtube.music", "com.apple.android.music",
+        "com.amazon.mp3", "com.pandora.android", "com.aspiro.tidal", "deezer.android.app") || runCatching {
+        context.packageManager.getApplicationInfo(controller.packageName, 0).category == android.content.pm.ApplicationInfo.CATEGORY_AUDIO
+    }.getOrDefault(false)
 }
 
 /** `phone.set_brightness` — screen brightness percent; needs one-time write-settings grant. */

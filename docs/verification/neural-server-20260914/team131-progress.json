@@ -1,0 +1,69 @@
+{
+  "status": "BLOCKED",
+  "note": "Invalid controller action",
+  "agents": [
+    {
+      "name": "Accounts specialist",
+      "model": "openrouter/free"
+    },
+    {
+      "name": "Stock specialist",
+      "model": "openrouter/free"
+    },
+    {
+      "name": "Shop manager",
+      "model": "openrouter/free"
+    }
+  ],
+  "steps": [
+    {
+      "id": "s1",
+      "agentId": "accounts",
+      "tool": "files.read",
+      "status": "FAILED",
+      "args": {},
+      "output": "File not found: null. Use the exact path from the job or files.list."
+    },
+    {
+      "id": "s2",
+      "agentId": "accounts",
+      "tool": "files.read",
+      "status": "SUCCEEDED",
+      "args": {
+        "path": "orders.csv"
+      },
+      "output": "File: orders.csv; characters 0..72 of 72; end of file\norder,amount,status\nA101,21.50,unpaid\nA102,40.00,paid\nA103,35.25,unpaid\n"
+    },
+    {
+      "id": "s3",
+      "agentId": "accounts",
+      "tool": "files.csv_summary",
+      "status": "SUCCEEDED",
+      "args": {
+        "path": "orders.csv",
+        "amount_column": "amount",
+        "filter_column": "status",
+        "filter_value": "unpaid"
+      },
+      "output": "Rows in file: 3\nSelected rows: 2\nSum of amount: 56.75\nFilter: status equals unpaid (case-insensitive)"
+    },
+    {
+      "id": "s4",
+      "agentId": "accounts",
+      "tool": "agent.result",
+      "status": "SUCCEEDED",
+      "args": {},
+      "output": "Agent summary: Verified unpaid order IDs: A101 and A103. Exact unpaid total: 56.75.\nRecorded tool evidence:\ns2 files.read: File: orders.csv; characters 0..72 of 72; end of file\norder,amount,status\nA101,21.50,unpaid\nA102,40.00,paid\nA103,35.25,unpaid\n\ns3 files.csv_summary: Rows in file: 3\nSelected rows: 2\nSum of amount: 56.75\nFilter: status equals unpaid (case-insensitive)"
+    },
+    {
+      "id": "s5",
+      "agentId": "stock",
+      "tool": "files.read",
+      "status": "SUCCEEDED",
+      "args": {
+        "path": "stock.txt"
+      },
+      "output": "File: stock.txt; characters 0..95 of 95; end of file\nSticker rolls: 2 available; minimum target 5. Shipping boxes: 20 available; minimum target 10.\n"
+    }
+  ]
+}

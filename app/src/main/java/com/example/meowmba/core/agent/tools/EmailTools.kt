@@ -46,7 +46,7 @@ class EmailSendTool(private val context: Context) : Tool {
         }
         if (intent.resolveActivity(context.packageManager) != null) {
             context.startActivity(intent)
-            return ToolResult.Success("Email composer opened for $to with subject \"$subject\".")
+            return ToolResult.Success("Email composer opened for $to with subject \"$subject\". Review it and tap Send there; Meow has not sent it.", ToolOutcome.HANDOFF)
         } else {
             return ToolResult.Failure("No email app found on this device.")
         }
@@ -112,10 +112,14 @@ Subject: $subject
 $body"""
 
         return try {
-            workspace.resolve(fileName)?.let { file ->
+            val file = workspace.newAsset("documents", fileName)
+            try {
                 file.writeText(content)
-                ToolResult.Success("Draft saved as \"$fileName\" in the workspace.")
-            } ?: ToolResult.Failure("Could not write draft — path is outside the workspace.")
+            } catch (e: Exception) {
+                runCatching { file.delete() } // Only this newly reserved draft.
+                throw e
+            }
+            ToolResult.Success("Draft saved as \"${file.name}\" in the workspace.\nMEDIA_FILE:${file.absolutePath}")
         } catch (e: Exception) {
             ToolResult.Failure("Failed to save draft: ${e.message}")
         }

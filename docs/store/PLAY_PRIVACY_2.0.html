@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy policy — Meow Assistant</title>
+  <meta name="description" content="Meow Assistant privacy: local storage, optional cloud services, permissions, SDK diagnostics and deletion.">
+  <link rel="stylesheet" href="web.css">
+  <style>body{line-height:1.65}.wrap{max-width:850px}main li{margin-bottom:.65rem}h2{margin-top:2rem}a{overflow-wrap:anywhere}.updated{color:inherit;opacity:.85}main h1{font-size:clamp(2rem,5vw,3.5rem);line-height:1.1;margin-bottom:1.25rem}code{overflow-wrap:anywhere}</style>
+</head>
+<body>
+  <header class="top">
+    <a class="mark" href="./">Meow Assistant</a>
+    <nav class="links" aria-label="Site"><a href="./">Home</a><a href="./privacy.html" aria-current="page">Privacy</a></nav>
+  </header>
+  <main class="wrap">
+    <h1>Privacy policy</h1>
+    <p class="updated">Last updated 3 October 2026. This policy covers the Google Play edition of Meow Assistant 2.0, package <code>com.meow.meowmba</code>. Publisher contact: dekayrekords@gmail.com.</p>
+    <p>Meow Assistant stores your workspace on your phone and lets you connect optional AI providers, Computer workspaces and other services. You do not need a Meow account. Choosing a cloud feature can send its inputs and relevant context to the selected service. Local storage does not mean that every feature operates entirely on your phone.</p>
+
+    <h2>Data stored on your phone</h2>
+    <p>Local records include conversations, memories, notes, workspace files, settings, downloaded models and enrolled speaker profiles. Relevant conversation history, memories or files can become part of a request to a provider you configure. Credentials are stored using the app's encrypted storage and are used to authenticate with their intended service. App data is excluded from automatic Android cloud backup. Files you export or share create separate copies at the destination you choose.</p>
+
+    <h2>Optional services and data they receive</h2>
+    <ul>
+      <li><strong>Cloud conversations and connected tasks:</strong> your request and relevant history, memories, tool results or documents can be sent to your selected provider or Computer/server endpoint. This can include names, contact details, account identifiers, preferences, drafts, calendar information and app or browsing context that you supply or enable for a task.</li>
+      <li><strong>Speech:</strong> a configured cloud transcription service receives recorded speech. Cloud speech output receives the text to speak. The device's system speech service may also process recordings under its provider's policy. Choosing an on-device chat model does not by itself make a separately selected speech service local.</li>
+      <li><strong>Vision:</strong> a configured cloud vision service can receive selected images, camera frames or screen captures, with relevant instructions. On-device vision processing remains local, apart from the SDK diagnostics described below.</li>
+      <li><strong>Media generation:</strong> the selected service receives prompts and any supported reference inputs. Providers may include Cloudflare Workers AI, AI Horde or a configured image, music or video server. AI Horde community workers receive submitted prompts; anonymous use includes the dataset-sharing disclosure shown in the app. With a personal key, the app requests no dataset sharing, but workers still receive the prompt.</li>
+      <li><strong>Location, navigation, weather and search:</strong> enabled features may send a query and relevant approximate or precise location to the selected source. Directions opened in another app are also handled under that app's policy.</li>
+      <li><strong>Downloads and connections:</strong> model hosts and connected services receive requests and any authentication needed for them. Network services can receive ordinary connection information, including an IP address. Providers can include OpenAI, OpenRouter, Google Gemini, BigPickle, Hugging Face or a compatible endpoint you enter. Availability depends on your configuration.</li>
+    </ul>
+    <p>These services apply their own policies to retention, security, training and deletion. Selecting a different provider affects future requests and does not erase earlier submissions. Review the selected provider's terms before sending private content. Meow does not sell your personal data or include advertising SDKs.</p>
+
+    <h2>Included SDKs and diagnostics</h2>
+    <p>Google ML Kit and related Firebase configuration/installation components can collect device and app information, device or installation identifiers, feature events, configuration information, error codes and performance measurements for diagnostics and usage analytics. This is separate from where your AI conversations are processed. See <a href="https://developers.google.com/ml-kit/android-data-disclosure">Google's ML Kit data disclosure</a> and <a href="https://firebase.google.com/docs/android/play-data-disclosure">Firebase's data disclosure</a>.</p>
+    <p>The optional Meta wearable integration uses Meta's Device Access Toolkit. Meow sets the SDK's analytics opt-out flag. Enabled account/device registration and wearable services are still subject to <a href="https://www.meta.com/legal/privacy-policy/">Meta's privacy policy</a>; the flag does not change the separate Meta companion app's practices.</p>
+    <p>Meow's support-report action is optional. It includes app/Android version, available memory or thermal status, operating-mode switches and a limited set of process-exit codes/timestamps. It does not include your chat, recordings, credentials or raw logs. Android's share chooser lets you choose its destination. Included SDK diagnostics have separate behavior; this support-report switch does not disable them.</p>
+
+    <h2>Permissions and controls</h2>
+    <p><strong>Optional Flow location context:</strong> after the in-app disclosure and Android permission grant, Meow can record available location and time in the phone’s local context journal and use available context in conversations. The Play edition requests approximate location for Flow and receives optional Flow location only while Meow is visible; it stops when you leave Meow. Availability and precision depend on Android permissions and the location provider. You can decline or revoke access in Android Settings. If you use cloud AI, relevant location or journal context may be included in requests to your selected provider.</p>
+    <p>Microphone, camera and screen capture support features you enable. Fresh setup starts with the microphone off; skipping or denying sensor setup leaves the microphone and camera off. Location supports enabled navigation, road and nearby-place features. Calendar access supports enabled calendar tasks. Bluetooth supports optional accessories. Notification access supports enabled road alerts; notifications provide service and download status. Android photo and document pickers let you select which photos, videos and files Meow imports as local copies. Your originals stay unchanged. Optional usage access supports configured app-management features. You can change feature switches in the app and revoke permissions in Android Settings.</p>
+    <p>The Play edition does not include autonomous Accessibility control of other apps or physical robot actuation. Permissions alone do not make a cloud feature local: also check the chosen speech, chat and vision providers.</p>
+    <p><strong>Optional ring controls:</strong> after a separate in-app disclosure, your affirmative consent and Android Accessibility enablement, Meowmba Ring Controls uses Android's AccessibilityService API to receive ring key events and access the active app's package, window bounds and control structure. Your configured, verified physical gestures can scroll, move/click the target, navigate, control media and volume, open a chosen app or camera, select a compatible photo shutter, or submit a saved Meow request in allowed foreground apps while the phone is unlocked. Modes and bindings start paused after changes. Controls start paused, and Allow all apps is optional. App control structure, including photo-shutter labels, is processed locally. The ring service does not record screen contents or send screen contents or raw ring input to AI providers. Saved custom requests are stored privately on this phone. If you select Ask Meow, your configured request follows the normal typed-chat pipeline and may be sent to your selected AI provider with relevant conversation context; normal task permissions and approvals apply. Avoid saving secrets in ring requests. You can decline, pause, withdraw consent in Smart Ring or disable the service in Android Settings. A diagnostic log is shared only when you use the share action and choose a destination; it includes connection and gesture events, not screen text or sensor readings.</p>
+
+    <h2>Activity context and smart-ring readings</h2>
+    <p>With user-granted activity-recognition permission, Meow receives Android activity-transition labels such as walking, running, cycling, still and in-vehicle. These labels support Flow’s local journal and conversations; in-vehicle context can adjust update cadence for optional foreground Flow location. Activity transitions can be received while the app is not visible. Relevant activity or journal context may be included in requests to a cloud AI provider you select. You can decline or revoke activity-recognition permission in Android Settings.</p>
+    <p>A compatible R08/QRing Bluetooth ring can provide on-demand battery and step readings and experimental heart rate, oxygen, temperature, HRV and stress sensor tests. Results depend on hardware, firmware, fit and contact. Ring test results are held locally in app memory, are not automatically sent to AI providers and are excluded from shared support diagnostics. General conversation and provider rules above apply to any information you manually supply in a conversation.</p>
+    <p>Meow Assistant is not a medical device and does not diagnose, treat, cure or prevent medical conditions. Seek advice about medical care from a qualified healthcare professional.</p>
+
+    <h2>Connections and security</h2>
+    <p>Public API endpoints are required to use HTTPS by the app. SSH connections use SSH encryption. User-configured local-network endpoints can use HTTP, which is not encrypted in transit. A universal claim that every connection is encrypted would therefore be incorrect. The destination's operator controls how it stores and handles data it receives.</p>
+
+    <h2>Retention and deletion</h2>
+    <p>Delete supported local conversations and records using the app's controls. Clearing app storage or uninstalling removes its local data, credentials and downloaded assets. Preserve anything you need before doing so. Exported, shared or manually copied files must be removed separately from their destinations.</p>
+    <p>Removing local data does not delete information already sent to an AI provider, SDK operator, connected server or sharing destination. Request deletion from the relevant provider or destination administrator under its policy. Meow does not offer a single mechanism that deletes all third-party copies, and does not promise automatic deletion within a fixed period.</p>
+
+    <h2>Children</h2>
+    <p>Meow Assistant is not directed at children under 13.</p>
+
+    <h2>Contact and updates</h2>
+    <p>For privacy questions, contact <a href="mailto:dekayrekords@gmail.com">dekayrekords@gmail.com</a>, the public support address on the Google Play listing. This policy may be updated as the app changes; its date appears above.</p>
+  </main>
+  <footer class="foot">Meow Assistant · Your settings determine which services receive your requests.</footer>
+</body>
+</html>

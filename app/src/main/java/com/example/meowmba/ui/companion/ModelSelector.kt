@@ -1,5 +1,7 @@
 package com.example.meowmba.ui.companion
 
+import com.example.meowmba.ui.theme.Surface
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -27,13 +29,13 @@ fun ModelSelector(
             .fillMaxWidth()
             .fillMaxHeight(0.5f)
             .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)),
-        color = Color(0xFF121212)
+        color = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Column(modifier = Modifier.padding(24.dp)) {
             Text(
                 text = "Select Model Provider",
                 style = MaterialTheme.typography.headlineSmall,
-                color = Color.White
+                color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -63,13 +65,13 @@ fun ModelItem(name: String, isSelected: Boolean, onClick: () -> Unit) {
             .fillMaxWidth()
             .padding(vertical = 8.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(if (isSelected) Color(0xFF448AFF).copy(alpha = 0.2f) else Color.Transparent)
+            .background(if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else Color.Transparent)
             .clickable(onClick = onClick)
             .padding(16.dp)
     ) {
         RadioButton(selected = isSelected, onClick = null)
         Spacer(modifier = Modifier.width(16.dp))
-        Text(text = name, color = Color.White)
+        Text(text = name, color = MaterialTheme.colorScheme.onSurface)
     }
 }
 
@@ -103,6 +105,9 @@ val modelProviders = listOf(
     "On-device (Local)",
     "OpenRouter (Cloud)",
     "OpenAI (Cloud)",
+    "Claude (Cloud)",
+    "OpenCode Zen (Cloud)",
+    "Custom API (Cloud)",
 )
 
 fun availableModelProviders(context: android.content.Context?): List<String> = modelProviders

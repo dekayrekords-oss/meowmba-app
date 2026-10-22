@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.example.meowmba.core.nav.CurrentLocation
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,6 +25,15 @@ import java.net.URL
  * directly — no separate event bus needed.
  */
 class WeatherRepository(private val context: Context) {
+    private val preferences = context.getSharedPreferences("weather_location", Context.MODE_PRIVATE)
+        ?.let(com.example.meowmba.core.backup.BackupPreferences::protect)
+    @Volatile private var locationRevision = 0L
+    val selectedPlace: String get() = preferences?.getString("place", "").orEmpty()
+    fun setSelectedPlace(place: String) {
+        locationRevision++
+        preferences?.edit()?.putString("place", place.trim().take(160))?.apply()
+        clear()
+    }
 
     private val _latest = MutableStateFlow<WeatherNow?>(null)
     val latest: StateFlow<WeatherNow?> = _latest.asStateFlow()
@@ -36,6 +46,35 @@ class WeatherRepository(private val context: Context) {
     sealed interface Result {
         data class Ok(val weather: WeatherNow) : Result
         data class Failed(val reason: String) : Result
+    }
+
+    /** A spoken city needs no device-location grant. Never treat it as another tool request. */
+    @Suppress("DEPRECATION")
+    suspend fun fetchPlace(place: String, surface: Boolean = true): Result = withContext(Dispatchers.IO) {
+        val revision = locationRevision
+        if (place.length !in 2..160) return@withContext Result.Failed("Please give a city and state.")
+        try {
+            val matches = android.location.Geocoder(context).getFromLocationName(place, 2).orEmpty()
+            if (matches.size != 1) return@withContext Result.Failed(
+                "I couldn't identify one location for $place."
+            )
+            val match = matches.single()
+            if (!match.hasLatitude() || !match.hasLongitude())
+                return@withContext Result.Failed("That place has no coordinates.")
+            when (val result = fetch(match.latitude, match.longitude, surface = false)) {
+                is Result.Ok -> {
+                    if (revision != locationRevision) return@withContext Result.Failed("Weather location changed; refresh again.")
+                    val named = result.weather.copy(place = place)
+                    if (surface) _latest.value = named
+                    Result.Ok(named)
+                }
+                is Result.Failed -> result
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.Failed("I couldn't look up that city.")
+        }
     }
 
     /**
@@ -54,10 +93,13 @@ class WeatherRepository(private val context: Context) {
         surface: Boolean = true,
     ): Result =
         withContext(Dispatchers.IO) {
+            val revision = locationRevision
+            if (lat == null && lon == null && selectedPlace.isNotBlank())
+                return@withContext fetchPlace(selectedPlace, surface)
             val fix = if (lat != null && lon != null) {
                 CurrentLocation.Fix(lat, lon)
             } else {
-                CurrentLocation.last(context) ?: return@withContext Result.Failed(
+                CurrentLocation.fresh(context, maxAgeMs = 15 * 60_000L, maxAccuracyMeters = 10_000f) ?: return@withContext Result.Failed(
                     if (CurrentLocation.hasPermission(context)) {
                         "I don't have a location fix yet, so I can't check the weather here."
                     } else {
@@ -87,8 +129,11 @@ class WeatherRepository(private val context: Context) {
                     "weather ok: ${parsed.condition} ${parsed.temperatureF}F " +
                         if (surface) "-> card" else "-> ambient only",
                 )
+                if (revision != locationRevision) return@withContext Result.Failed("Weather location changed; refresh again.")
                 if (surface) _latest.value = parsed
                 Result.Ok(parsed)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.w(TAG, "weather fetch failed: ${e.message}")
                 Result.Failed("I couldn't reach the weather service.")
@@ -102,7 +147,7 @@ class WeatherRepository(private val context: Context) {
         append("?latitude=").append(lat)
         append("&longitude=").append(lon)
         append("&current=temperature_2m,relative_humidity_2m,apparent_temperature,")
-        append("weather_code,wind_speed_10m,is_day")
+        append("weather_code,wind_speed_10m,is_day,precipitation,rain,showers,snowfall")
         append("&daily=temperature_2m_max,temperature_2m_min")
         append("&temperature_unit=fahrenheit&wind_speed_unit=mph")
         // timezone=auto matters: the daily high/low must be for the USER's day, not UTC's.
@@ -125,7 +170,13 @@ class WeatherRepository(private val context: Context) {
         val low = firstOf("temperature_2m_min")
 
         WeatherNow(
-            condition = WeatherCondition.fromWmoCode(cur.optInt("weather_code", -1)),
+            // The weather code is a model forecast; the current precipitation is closer to what's
+            // falling now (the code often says "overcast" during light rain).
+            condition = WeatherCondition.withPrecipitation(
+                WeatherCondition.fromWmoCode(cur.optInt("weather_code", -1)),
+                rainMm = cur.optDouble("rain", 0.0).orZero() + cur.optDouble("showers", 0.0).orZero(),
+                snowCm = cur.optDouble("snowfall", 0.0).orZero(),
+                totalMm = cur.optDouble("precipitation", 0.0).orZero()),
             temperatureF = Math.round(temp).toInt(),
             feelsLikeF = Math.round(
                 cur.optDouble("apparent_temperature", temp).takeIf { !it.isNaN() } ?: temp
@@ -144,6 +195,8 @@ class WeatherRepository(private val context: Context) {
             null
         }
     }
+
+    private fun Double.orZero() = if (isNaN()) 0.0 else this
 
     private companion object {
         const val TAG = "Weather"

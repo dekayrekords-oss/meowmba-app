@@ -1,5 +1,7 @@
 package com.example.meowmba.ui.companion
 
+import androidx.compose.material3.MaterialTheme
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -67,6 +69,7 @@ fun AgentActivityPanel(
     onDismiss: () -> Unit,
     onOpenAgent: (String) -> Unit,
     modifier: Modifier = Modifier,
+    onOpenTask: ((String) -> Unit)? = null,
 ) {
     val live = tasks.filter { !it.isTerminal }
     // Terminal tasks are worth a moment on screen — vanishing the instant a job finishes
@@ -89,11 +92,11 @@ fun AgentActivityPanel(
                 .alpha((1f - kotlin.math.abs(dragged) / DISMISS_DISTANCE_PX).coerceIn(0.25f, 1f))
                 .background(
                     brush = Brush.verticalGradient(
-                        listOf(Color(0xD91B2430), Color(0xBF0D1117)),
+                        listOf(MaterialTheme.colorScheme.surfaceContainerHigh, MaterialTheme.colorScheme.surfaceContainerLow),
                     ),
                     shape = RoundedCornerShape(20.dp),
                 )
-                .border(1.dp, Color(0x33A371F7), RoundedCornerShape(20.dp))
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(20.dp))
                 .pointerInput(Unit) {
                     detectHorizontalDragGestures(
                         onDragEnd = {
@@ -117,14 +120,14 @@ fun AgentActivityPanel(
                                 "${AgentRegistry.byId(live.first().agentId)?.name ?: "Agent"} is working"
                             else -> "Agents"
                         },
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onSurface,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.weight(1f).padding(start = if (live.isEmpty()) 0.dp else 8.dp),
                     )
                     Text(
                         "swipe to hide",
-                        color = Color(0xFF6E7681),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 10.sp,
                     )
                 }
@@ -132,14 +135,14 @@ fun AgentActivityPanel(
                 Spacer(Modifier.height(8.dp))
 
                 recent.forEach { task ->
-                    TaskLine(task, onClick = { onOpenAgent(task.agentId) })
+                    TaskLine(task, onClick = { if (onOpenTask != null) onOpenTask(task.id) else onOpenAgent(task.agentId) })
                 }
 
                 if (live.isNotEmpty()) {
                     Spacer(Modifier.height(6.dp))
                     Text(
                         text = "Updates keep coming in chat if you hide this.",
-                        color = Color(0xFF6E7681),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 10.sp,
                     )
                 }
@@ -151,12 +154,17 @@ fun AgentActivityPanel(
 @Composable
 private fun TaskLine(task: AgentTask, onClick: () -> Unit) {
     val (label, colour) = when (task.status) {
-        TaskStatus.QUEUED -> "queued" to Color(0xFF8B949E)
-        TaskStatus.RUNNING -> "running" to Color(0xFF58A6FF)
-        TaskStatus.WAITING_APPROVAL -> "needs you" to Color(0xFFD29922)
-        TaskStatus.COMPLETED -> "done" to Color(0xFF3FB950)
-        TaskStatus.FAILED -> "failed" to Color(0xFFF85149)
-        TaskStatus.CANCELLED -> "stopped" to Color(0xFF8B949E)
+        TaskStatus.QUEUED -> "queued" to MaterialTheme.colorScheme.onSurfaceVariant
+        TaskStatus.RUNNING -> "running" to MaterialTheme.colorScheme.secondary
+        TaskStatus.WAITING_APPROVAL -> "needs you" to MaterialTheme.colorScheme.tertiary
+        TaskStatus.COMPLETED -> (when (task.outcome) {
+            com.example.meowmba.core.agent.tools.ToolOutcome.HANDOFF -> "your turn"
+            com.example.meowmba.core.agent.tools.ToolOutcome.VERIFIED -> "verified"
+            com.example.meowmba.core.agent.tools.ToolOutcome.UNCONFIRMED -> "check outcome"
+            else -> "result"
+        }) to MaterialTheme.colorScheme.primary
+        TaskStatus.FAILED -> (if (task.outcome == com.example.meowmba.core.agent.tools.ToolOutcome.UNCONFIRMED) "check outcome" else "failed") to MaterialTheme.colorScheme.error
+        TaskStatus.CANCELLED -> "stopped" to MaterialTheme.colorScheme.onSurfaceVariant
     }
     Row(
         modifier = Modifier
@@ -168,13 +176,13 @@ private fun TaskLine(task: AgentTask, onClick: () -> Unit) {
     ) {
         Text(
             text = AgentRegistry.byId(task.agentId)?.name ?: task.agentId,
-            color = Color(0xFFA371F7),
+            color = MaterialTheme.colorScheme.secondary,
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
         )
         Text(
             text = task.title,
-            color = Color(0xFFD8DEE6),
+            color = MaterialTheme.colorScheme.onSurface,
             fontSize = 12.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -205,7 +213,7 @@ private fun WorkingDot() {
         Modifier
             .size(8.dp)
             .alpha(pulse)
-            .background(Color(0xFF58A6FF), CircleShape),
+            .background(MaterialTheme.colorScheme.secondary, CircleShape),
     )
 }
 

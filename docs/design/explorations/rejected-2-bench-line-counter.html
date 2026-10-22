@@ -1,0 +1,377 @@
+<title>Three Work Avatars</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;800;900&family=Roboto+Mono:wght@500;700&family=Roboto+Condensed:wght@700;800&family=Patrick+Hand&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,1,0&display=block">
+<style>
+:root{color-scheme:dark;--ink:#172D34;--paper:#F6F0DF;--mute:#BED0CD;--bg:#182A32;--line:#718E91;--lime:#C6EB78;--onlime:#20351C;--aqua:#81D8CE;--amber:#FFC56F;--pink:#F2B8B5;--note:#F4EEDB}
+html,body{background:#0B1519}
+body{margin:0;color:var(--paper);font-family:Roboto,system-ui,sans-serif;padding:28px 16px 56px}
+.ms{font-family:"Material Symbols Outlined";font-size:24px;line-height:1;font-weight:normal;font-style:normal;display:inline-block;white-space:nowrap;letter-spacing:normal;text-transform:none;direction:ltr;font-feature-settings:"liga";-webkit-font-smoothing:antialiased;font-variation-settings:"FILL" 1,"wght" 400,"GRAD" 0,"opsz" 24;user-select:none}
+header{max-width:1360px;margin:0 auto 26px}
+header h1{margin:0;font-size:32px;line-height:1.1;font-weight:900;letter-spacing:-.3px}
+header p{margin:8px 0 0;color:var(--mute);font-size:15px;line-height:1.55;max-width:720px}
+.row{max-width:1360px;margin:0 auto;display:flex;flex-wrap:wrap;gap:28px;justify-content:center;align-items:flex-start}
+.col{flex:1 1 320px;max-width:432px;min-width:0}
+.holder{width:100%}
+.frame{width:432px;border-radius:44px;background:#03080A;padding:10px;box-sizing:border-box;box-shadow:0 0 0 2px #22363D,0 30px 70px rgba(0,0,0,.55);transform-origin:0 0}
+.screen{position:relative;width:412px;height:960px;border-radius:36px;overflow:hidden;background:var(--bg)}
+.cap{margin-top:16px}
+.cap h2{margin:0;font-size:21px;font-weight:900}
+.cap .who{color:var(--lime);font-size:13px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;margin-top:4px}
+.cap p{margin:8px 0 0;color:var(--mute);font-size:14px;line-height:1.55}
+.sb{position:absolute;top:0;left:0;right:0;height:40px;display:flex;justify-content:space-between;align-items:center;padding:0 26px;font-size:14px;font-weight:700;z-index:3}
+.hot{cursor:pointer}.hot:focus-visible{outline:none}
+.hot:focus-visible .ring,.hot:hover .ring{stroke:#C6EB78;stroke-width:3;stroke-dasharray:6 5}
+.ring{fill:none;stroke:transparent}
+.ctrl{position:absolute;z-index:3;box-sizing:border-box;border:2px solid var(--line);box-shadow:0 3px 0 var(--ink);display:flex;align-items:center;justify-content:center;gap:8px;color:var(--paper);font:700 14px Roboto,sans-serif;cursor:pointer}
+.ctrl:active,.btn:active{transform:translateY(2px);box-shadow:0 1px 0 var(--ink)}
+.scrim{position:absolute;inset:0;background:rgba(3,8,10,.55);opacity:0;pointer-events:none;transition:opacity .25s;z-index:6}
+.scrim.on{opacity:1;pointer-events:auto}
+.sheet{position:absolute;left:0;right:0;bottom:0;height:480px;box-sizing:border-box;background:var(--bg);border:2px solid var(--line);border-bottom:0;border-radius:24px 24px 0 0;padding:10px 20px 28px;transform:translateY(105%);transition:transform .32s cubic-bezier(.2,.8,.2,1);z-index:7;display:flex;flex-direction:column}
+.sheet.on{transform:none}
+.grab{width:36px;height:4px;border-radius:2px;background:var(--line);align-self:center;margin-bottom:10px}
+.sh{display:flex;align-items:center;gap:8px}
+.sh h3{margin:0;flex:1;font-size:22px;line-height:28px;font-weight:800}
+.sh button{width:48px;height:48px;border:0;border-radius:24px;background:none;color:var(--paper);cursor:pointer}
+.sub{color:var(--mute);font-size:14px;line-height:20px;margin:0 0 10px}
+.sbody{overflow-y:auto;flex:1;scrollbar-width:none}
+.li{display:flex;align-items:baseline;gap:12px;padding:13px 0;border-top:1px solid #33505A;font-size:15px;line-height:21px}
+.li:first-child{border-top:0}
+.li b{font-weight:700}
+.li .r{margin-left:auto;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+.li .m{color:var(--mute);font-size:13px}
+.act{display:flex;gap:10px;margin-top:14px}
+.btn{height:48px;flex:1;border-radius:12px;border:2px solid var(--line);background:var(--lime);color:var(--onlime);box-shadow:0 3px 0 var(--ink);font:800 14px Roboto,sans-serif;cursor:pointer}
+.btn.o{flex:0 0 auto;padding:0 16px;background:transparent;color:var(--lime);box-shadow:none}
+
+/* scope */
+.lcd{position:absolute;left:24px;right:24px;top:432px;height:46px;border-radius:8px;background:#0C1A14;border:2px solid var(--ink);box-shadow:inset 0 0 0 2px #22363D;display:flex;align-items:center;padding:0 14px;font:700 14px "Roboto Mono",monospace;color:#9FE870;letter-spacing:.3px;white-space:nowrap;overflow:hidden}
+.lcd span{opacity:.55;margin-left:auto;font-weight:500;font-size:12px}
+.tape{position:absolute;left:36px;right:36px;top:648px;height:124px;background:#F4EEDB;border:2px solid var(--ink);border-top:0;border-radius:0 0 6px 6px;padding:8px 12px;box-sizing:border-box;font:500 12.5px/19px "Roboto Mono",monospace;color:#23363C;overflow:hidden;-webkit-mask-image:linear-gradient(#000 70%,transparent)}
+.tape div{white-space:nowrap}
+.tape i{font-style:normal;color:#7B8C8A}
+/* split flap */
+.board{position:absolute;left:14px;right:14px;top:52px;background:#0E1A1F;border:2px solid var(--ink);border-radius:12px;padding:10px 10px 8px;box-shadow:0 3px 0 var(--ink)}
+.board .t{font:800 11px "Roboto Condensed",sans-serif;letter-spacing:1.4px;color:#8FA7A5;margin:0 0 6px 2px;display:flex;justify-content:space-between}
+.fr{display:flex;gap:2px;margin-bottom:4px}
+.fr b{position:relative;width:13.4px;height:22px;border-radius:2.5px;background:#1E2E34;color:#F4EEDB;font:700 14px/22px "Roboto Mono",monospace;text-align:center}
+.fr b::after{content:"";position:absolute;left:0;right:0;top:10.5px;height:1px;background:#0A1216}
+.fr b.a{color:var(--amber)}.fr b.p{color:var(--pink)}.fr b.l{color:var(--lime)}
+/* counter */
+.tape2{position:absolute;left:222px;top:372px;width:156px;height:396px;box-sizing:border-box;background:#FBF8EE;border-left:2px solid var(--ink);border-right:2px solid var(--ink);padding:10px 12px 0;font:500 12px/18px "Roboto Mono",monospace;color:#23363C;overflow:hidden;cursor:pointer}
+.tape2 .ln{display:flex;justify-content:space-between;animation:print .5s steps(4)}
+.tape2 hr{border:0;border-top:1.5px dashed #9AA9A6;margin:6px 0}
+.tape2 .tot{font-weight:700;font-size:14px}
+@keyframes print{from{clip-path:inset(0 0 100% 0)}to{clip-path:inset(0)}}
+@media (prefers-reduced-motion:reduce){.sheet,.scrim{transition:none}.tape2 .ln{animation:none}}
+</style>
+
+<header>
+  <h1>Three work avatars</h1>
+  <p>Each one is the whole home screen, built for a different kind of work day. Tap anything on the phones. Mic, camera and chat stay put, and there's no Care mode. Meowmba facts are real; customers, orders and money are made-up examples.</p>
+</header>
+
+<div class="row">
+  <div class="col"><div class="holder"><div class="frame"><div class="screen" id="s1"></div></div></div>
+    <div class="cap"><h2>The Bench</h2><div class="who">Engineer</div>
+    <p>The avatar is an oscilloscope. At rest, its phosphor beam draws a face. Turn a knob and the same beam traces builds, open bugs or Play testers. Tap the screen for details. A paper tape at the bottom prints each event as it happens.</p></div></div>
+
+  <div class="col"><div class="holder"><div class="frame"><div class="screen" id="s2"></div></div></div>
+    <div class="cap"><h2>The Line</h2><div class="who">Project manager</div>
+    <p>The plan is drawn as a transit map. Each workstream is a coloured line that meets the others at interchange stations. A pulsing ring marks where you are now, and a red bar marks what's blocked. The split-flap board up top shows your next three deadlines.</p></div></div>
+
+  <div class="col"><div class="holder"><div class="frame"><div class="screen" id="s3"></div></div></div>
+    <div class="cap"><h2>The Counter</h2><div class="who">Business owner</div>
+    <p>The shop counter at close of day. Orders, appointments and returns hang on a ticket rail. The till prints today's sales on a receipt tape that grows as sales come in. The bell counts calls waiting, and unpaid invoices sit on the spike.</p></div></div>
+</div>
+
+<script>
+const MS = (n, s = 24) => `<span class="ms" style="font-size:${s}px">${n}</span>`;
+const CONTROLS = `
+  <button class="ctrl" style="left:20px;top:816px;height:44px;padding:0 14px;border-radius:22px;background:#213740" aria-label="Camera off">Camera off ${MS('videocam_off', 20)}</button>
+  <button class="ctrl" style="left:170px;top:802px;width:72px;height:72px;border-radius:18px;background:#8C1D18" aria-label="Microphone off">${MS('mic_off', 30)}</button>
+  <button class="ctrl" style="left:336px;top:810px;width:56px;height:56px;border-radius:28px;background:#213740" aria-label="Open chat">${MS('chat')}</button>`;
+const SHEET = `<div class="scrim"></div><section class="sheet" aria-live="polite"><div class="grab"></div><div class="sh"><h3></h3><button aria-label="Close">${MS('close')}</button></div><p class="sub"></p><div class="sbody"></div></section>`;
+const SB = `<div class="sb"><span>3:40</span><span>${MS('signal_cellular_alt', 18)} ${MS('battery_5_bar', 18)}</span></div>`;
+
+function mount(id, scene, data) {
+  const el = document.getElementById(id);
+  el.innerHTML = SB + scene + CONTROLS + SHEET;
+  const sheet = el.querySelector('.sheet'), scrim = el.querySelector('.scrim');
+  const open = (k) => {
+    const d = data[k]; if (!d) return;
+    sheet.querySelector('h3').textContent = d.title;
+    sheet.querySelector('.sub').textContent = d.sub;
+    sheet.querySelector('.sbody').innerHTML = d.body;
+    sheet.classList.add('on'); scrim.classList.add('on');
+  };
+  const close = () => { sheet.classList.remove('on'); scrim.classList.remove('on'); };
+  sheet.querySelector('.sh button').onclick = close; scrim.onclick = close;
+  el.addEventListener('click', (e) => { const h = e.target.closest('[data-k]'); if (h && el.contains(h)) open(h.dataset.k); });
+  el.addEventListener('keydown', (e) => { const h = e.target.closest('[data-k]'); if (h && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); open(h.dataset.k); } });
+  el.querySelectorAll('[data-k]').forEach((h) => { h.setAttribute('tabindex', '0'); h.setAttribute('role', 'button'); });
+  return { el, open };
+}
+const li = (a, b = '', r = '', m = '') => `<div class="li"><b>${a}</b>${b ? `<span${m ? ' class="m"' : ''}>${b}</span>` : ''}${r ? `<span class="r">${r}</span>` : ''}</div>`;
+const act = (a, b) => `<div class="act"><button class="btn">${a}</button>${b ? `<button class="btn o">${b}</button>` : ''}</div>`;
+
+/* ───────────── 1. THE BENCH (engineer) ───────────── */
+(() => {
+  const X0 = 38, X1 = 374, Y0 = 94, Y1 = 386, CY = (Y0 + Y1) / 2, W = X1 - X0;
+  let grid = '';
+  for (let i = 1; i < 10; i++) { const x = X0 + i * W / 10; grid += `<path d="M${x} ${Y0} V${Y1}" stroke="#1F3A2C" stroke-width="${i === 5 ? 1.6 : 1}"/>`; }
+  for (let i = 1; i < 8; i++) { const y = Y0 + i * (Y1 - Y0) / 8; grid += `<path d="M${X0} ${y} H${X1}" stroke="#1F3A2C" stroke-width="${i === 4 ? 1.6 : 1}"/>`; }
+  const knob = (cx, label, k, on) => `<g class="knob hot" data-ch="${k}" style="cursor:pointer">
+      <circle cx="${cx}" cy="560" r="30" fill="#2B444C" stroke="#172D34" stroke-width="3"/>
+      <circle cx="${cx}" cy="557" r="23" fill="#35535C" stroke="#172D34" stroke-width="2"/>
+      <path class="ptr" d="M${cx} 557 v-19" stroke="${on ? '#C6EB78' : '#F4EEDB'}" stroke-width="4" stroke-linecap="round" transform="rotate(${on ? 40 : -40} ${cx} 557)"/>
+      <text x="${cx}" y="612" text-anchor="middle" font-family="Roboto Condensed" font-weight="800" font-size="12" letter-spacing="1.2" fill="${on ? '#C6EB78' : '#BED0CD'}">${label}</text>
+      <rect class="ring" x="${cx - 38}" y="522" width="76" height="100" rx="12"/></g>`;
+  const scene = `<svg viewBox="0 0 412 960" style="position:absolute;inset:0">
+    <defs><filter id="glow" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <radialGradient id="crt" cx=".5" cy=".5" r=".7"><stop offset="0" stop-color="#0F2419"/><stop offset="1" stop-color="#07130D"/></radialGradient></defs>
+    <rect width="412" height="960" fill="#182A32"/>
+    <rect x="12" y="56" width="388" height="720" rx="24" fill="#213740" stroke="#172D34" stroke-width="3"/>
+    <circle cx="30" cy="74" r="4" fill="#2B444C" stroke="#172D34" stroke-width="1.5"/><circle cx="382" cy="74" r="4" fill="#2B444C" stroke="#172D34" stroke-width="1.5"/><circle cx="30" cy="758" r="4" fill="#2B444C" stroke="#172D34" stroke-width="1.5"/><circle cx="382" cy="758" r="4" fill="#2B444C" stroke="#172D34" stroke-width="1.5"/>
+    <g data-k="scope" aria-label="Scope screen: open details">
+      <rect x="26" y="82" width="360" height="316" rx="18" fill="#101D22" stroke="#172D34" stroke-width="3"/>
+      <rect x="${X0}" y="${Y0}" width="${W}" height="${Y1 - Y0}" rx="10" fill="url(#crt)"/>
+      ${grid}
+      <text id="chlabel" x="${X0 + 10}" y="${Y0 + 20}" font-family="Roboto Mono" font-weight="700" font-size="12" fill="#6FD08A"></text>
+      <text id="chscale" x="${X1 - 10}" y="${Y1 - 10}" text-anchor="end" font-family="Roboto Mono" font-size="11" fill="#3F7A56"></text>
+      <g filter="url(#glow)"><path id="trace" fill="none" stroke="#9FF0A0" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></g>
+      <circle id="beam" r="4" fill="#E8FFE0" filter="url(#glow)"/>
+      <rect class="ring" x="22" y="78" width="368" height="324" rx="20"/>
+    </g>
+    <text x="206" y="506" text-anchor="middle" font-family="Roboto Condensed" font-weight="800" font-size="11" letter-spacing="2" fill="#718E91">CHANNEL</text>
+    ${knob(72, 'MEOW', 'face', true)}${knob(155, 'BUILD', 'build')}${knob(238, 'BUGS', 'bugs')}${knob(321, 'PLAY', 'play')}
+    <rect x="28" y="634" width="356" height="16" rx="8" fill="#0E1A1F" stroke="#172D34" stroke-width="2.5"/>
+    </svg>
+    <div class="lcd" id="lcd"></div>
+    <div class="tape" id="tape" data-k="log" aria-label="Event tape: open log"></div>`;
+
+  const data = {
+    scope: null,
+    build: { title: 'Build 155', sub: '1.3.99 · recovery/known-good-138 · 637697f', body: li('Unit tests', '', '2,742 passed') + li('Failures', '', '0') + li('Last 10 builds', '', '9 green · 1 red') + li('Red build', 'Sep 20 · theme test flake', '', 1) + li('Idle heat fix', 'on a branch, waiting for the integrator', 'ready', 1) + act('Open changes', 'Re-run') },
+    bugs: { title: 'Open bugs', sub: '7 open · down from 14 two weeks ago', body: li('P0', 'Idle frame pacing on OLED', '2 days', 1) + li('P0', 'Clock chip overlaps camera pill', '1 day', 1) + li('P1', 'Voice button hard to find (tester)', 'new', 1) + li('P2', '4 more', '', 1) + act('Triage with Meow', 'All') },
+    play: { title: 'Play testing', sub: 'Closed test · Alpha release 11', body: li('Opted-in testers', '', '12') + li('Tester days', '', '9 of 14') + li('Review', 'build 152, submitted Sep 19', 'in review', 1) + li('Production apply', 'unlocks Sep 28', '', 1) + act('Draft tester update') },
+    face: { title: 'Meow', sub: 'Engineer mode', body: `<p style="font-size:17px;line-height:26px;margin:4px 0">Everything's green. The one thing I'd look at today is the idle pacing P0: it's the last blocker I can see before production.</p>` + act('Open the P0', 'Later') },
+    log: { title: 'Event tape', sub: 'Today · newest first', body: li('14:02', 'test run · 2,742 passed', '', 1) + li('13:40', 'bug filed · clock overlap', '', 1) + li('12:15', 'commit 637697f · song recognition', '', 1) + li('11:03', 'Play · still in review', '', 1) + li('09:30', 'tester feedback · voice button', '', 1) }
+  };
+  const m = mount('s1', scene, data);
+  const $ = (s) => m.el.querySelector(s);
+  const X = (t) => X0 + t * W, Y = (v) => CY - v * (Y1 - Y0) / 2 * 0.8;
+
+  const CH = {
+    face: { label: 'CH0 MEOW', scale: 'idle', lcd: ['ALL GREEN · WATCHING', 'tap screen'],
+      path: () => { // two phosphor eyes + a small smile, drawn by one beam
+        const eye = (cx) => { let d = ''; for (let a = 0; a <= 360; a += 10) { const r = a * Math.PI / 180; d += `${a ? 'L' : 'M'}${(cx + 34 * Math.cos(r)).toFixed(1)} ${(210 + 34 * Math.sin(r)).toFixed(1)}`; } return d; };
+        return `${eye(146)} ${eye(266)} M180 304 Q206 326 232 304`; } },
+    build: { label: 'CH1 BUILD', scale: '10 builds/div', lcd: ['155 · 2742 PASS · 0 FAIL', 'tap screen'],
+      path: () => { const pass = [1, 1, 1, 0, 1, 1, 1, 1, 1, 1]; let d = `M${X0} ${CY}`;
+        pass.forEach((p, i) => { const x = X0 + i * W / 10; d += ` L${x + 10} ${CY} L${x + 14} ${Y(p ? 0.9 : -0.7)} L${x + 18} ${Y(p ? -0.25 : 0.2)} L${x + 22} ${CY}`; });
+        return d + ` L${X1} ${CY}`; } },
+    bugs: { label: 'CH2 BUGS', scale: '14 days', lcd: ['7 OPEN · 2 P0 · TREND DOWN', 'tap screen'],
+      path: () => { const v = [14, 13, 13, 12, 15, 12, 11, 10, 10, 9, 9, 8, 7, 7]; let d = '';
+        v.forEach((n, i) => { const x0 = X(i / 14), x1 = X((i + 1) / 14), y = Y((n - 8) / 8); d += `${i ? 'L' : 'M'}${x0.toFixed(1)} ${y.toFixed(1)} L${x1.toFixed(1)} ${y.toFixed(1)}`; }); return d; } },
+    play: { label: 'CH3 PLAY', scale: 'testers · day 1–14', lcd: ['12 TESTERS · DAY 9/14', 'tap screen'],
+      path: () => { const v = [2, 4, 6, 8, 9, 10, 10, 11, 12]; let d = '';
+        v.forEach((n, i) => { d += `${i ? 'L' : 'M'}${X(i / 13).toFixed(1)} ${Y((n - 7) / 7).toFixed(1)}`; });
+        return d; } }
+  };
+  data.scope = data.face;
+  let cur = 'face';
+  const trace = $('#trace'), beam = $('#beam');
+  function setCh(k) {
+    cur = k; const c = CH[k];
+    data.scope = data[k];
+    $('#chlabel').textContent = c.label; $('#chscale').textContent = c.scale;
+    $('#lcd').innerHTML = `${c.lcd[0]}<span>${c.lcd[1]}</span>`;
+    trace.setAttribute('d', c.path());
+    m.el.querySelectorAll('.knob').forEach((g) => {
+      const on = g.dataset.ch === k, p = g.querySelector('.ptr'), cx = +p.getAttribute('d').match(/M(\d+)/)[1];
+      p.setAttribute('transform', `rotate(${on ? 40 : -40} ${cx} 557)`); p.setAttribute('stroke', on ? '#C6EB78' : '#F4EEDB');
+      g.querySelector('text').setAttribute('fill', on ? '#C6EB78' : '#BED0CD');
+    });
+    sweep();
+  }
+  // beam draws the trace left to right, then holds; the face blinks
+  let t0 = 0, raf = 0;
+  function sweep() { cancelAnimationFrame(raf); t0 = performance.now(); const L = trace.getTotalLength(); trace.style.strokeDasharray = L; raf = requestAnimationFrame(function f(now) {
+    const k = Math.min(1, (now - t0) / 1600); trace.style.strokeDashoffset = L * (1 - k);
+    const pt = trace.getPointAtLength(L * k); beam.setAttribute('cx', pt.x); beam.setAttribute('cy', pt.y); beam.style.opacity = k < 1 ? 1 : 0;
+    if (k < 1) raf = requestAnimationFrame(f); }); }
+  setInterval(() => { if (cur !== 'face') return; trace.style.transition = 'transform .09s'; trace.style.transformOrigin = '206px 210px'; trace.style.transform = 'scaleY(.08)'; setTimeout(() => trace.style.transform = '', 120); }, 4200);
+  m.el.querySelectorAll('.knob').forEach((g) => { g.setAttribute('tabindex', '0'); g.setAttribute('role', 'button'); g.setAttribute('aria-label', 'Channel ' + g.dataset.ch);
+    g.addEventListener('click', (e) => { e.stopPropagation(); setCh(g.dataset.ch); });
+    g.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); setCh(g.dataset.ch); } }); });
+  setCh('face');
+
+  const lines = ['<i>14:02</i> TEST   2742 pass  0 fail', '<i>13:40</i> BUG    #88 clock overlap', '<i>12:15</i> COMMIT 637697f songs', '<i>11:03</i> PLAY   still in review', '<i>09:30</i> TESTER voice btn hard'];
+  const tape = $('#tape'); tape.innerHTML = lines.map((l) => `<div>${l}</div>`).join('');
+  const live = ['<i>15:41</i> LINT   0 warnings', '<i>15:42</i> TEST   2742 pass  0 fail', '<i>15:43</i> PLAY   still in review'];
+  let li2 = 0; setInterval(() => { tape.insertAdjacentHTML('afterbegin', `<div>${live[li2++ % live.length]}</div>`); if (tape.children.length > 8) tape.lastChild.remove(); }, 7000);
+})();
+
+/* ───────────── 2. THE LINE (project manager) ───────────── */
+(() => {
+  const C = { play: '#FFC56F', app: '#C6EB78', web: '#81D8CE', grow: '#F2B8B5' };
+  const line = (pts, c) => `<path d="M${pts.join(' L')}" fill="none" stroke="#172D34" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/><path d="M${pts.join(' L')}" fill="none" stroke="${c}" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>`;
+  const st = (x, y, k, label, side, state) => {
+    const v = side === 't' || side === 'b';
+    const tx = v ? x : side === 'l' ? x - 16 : x + 16, anchor = v ? 'middle' : side === 'l' ? 'end' : 'start';
+    const ty = side === 't' ? y - 22 : side === 'b' ? y + 26 : y;
+    const mark = state === 'done' ? `<circle cx="${x}" cy="${y}" r="7" fill="#F4EEDB" stroke="#172D34" stroke-width="3"/>`
+      : state === 'now' ? `<circle cx="${x}" cy="${y}" r="16" fill="none" stroke="#F4EEDB" stroke-width="2"><animate attributeName="r" values="10;20;10" dur="2.4s" repeatCount="indefinite"/><animate attributeName="opacity" values="1;0;1" dur="2.4s" repeatCount="indefinite"/></circle><circle cx="${x}" cy="${y}" r="9" fill="#F4EEDB" stroke="#172D34" stroke-width="3"/><circle cx="${x}" cy="${y}" r="3.5" fill="#172D34"/>`
+      : state === 'block' ? `<circle cx="${x}" cy="${y}" r="8" fill="#F4EEDB" stroke="#172D34" stroke-width="3"/><rect x="${x - 11}" y="${y - 3}" width="22" height="6" rx="2" fill="#E5484D" stroke="#172D34" stroke-width="1.5"/>`
+      : state === 'hub' ? `<rect x="${x - 13}" y="${y - 9}" width="26" height="18" rx="9" fill="#F4EEDB" stroke="#172D34" stroke-width="3"/>`
+      : `<circle cx="${x}" cy="${y}" r="7" fill="#182A32" stroke="#F4EEDB" stroke-width="3"/>`;
+    const lines = label.split('|');
+    return `<g data-k="${k}" aria-label="${label.replace('|', ' ')}">${mark}${lines.map((t, i) => `<text x="${tx}" y="${ty + 4 + (i - (lines.length - 1) / 2) * 14}" text-anchor="${anchor}" font-family="Roboto Condensed" font-weight="800" font-size="13" letter-spacing=".4" fill="${state === 'future' ? '#8FA7A5' : '#F6F0DF'}">${t}</text>`).join('')}<rect class="ring" x="${v ? x - 50 : Math.min(x, tx) - (side === 'l' ? 96 : 16)}" y="${Math.min(y, ty) - 20}" width="${v ? 100 : 118}" height="${v ? 66 : 40}" rx="10"/></g>`;
+  };
+  const scene = `<svg viewBox="0 0 412 960" style="position:absolute;inset:0">
+    <rect width="412" height="960" fill="#182A32"/>
+    <g opacity=".35" stroke="#213740" stroke-width="1">${Array.from({ length: 16 }, (_, i) => `<path d="M${i * 28} 250 V790"/>`).join('')}</g>
+    <text x="22" y="262" font-family="Roboto Condensed" font-weight="800" font-size="11" letter-spacing="1.6" fill="#718E91">MEOWMBA · MASTERPLAN · SEP 22</text>
+    ${line(['204 312', '204 420', '204 560', '144 620', '60 620', '60 704'], C.play)}
+    ${line(['372 704', '372 640', '292 560', '204 560'], C.app)}
+    ${line(['40 360', '112 360', '172 420', '204 420'], C.web)}
+    ${line(['204 312', '270 312', '330 372', '372 372'], C.grow)}
+    ${st(60, 704, 'internal', 'Internal|test', 'r', 'done')}
+    ${st(60, 640, 'closed', 'Closed test', 'r', 'done')}
+    ${st(204, 560, 'testers', 'Tester days|9 of 14', 'l', 'now')}
+    ${st(204, 420, 'apply', 'Apply for|production', 'r', 'hub')}
+    ${st(372, 704, 'b152', 'Build 152', 'l', 'done')}
+    ${st(372, 648, 'heat', 'Idle heat|fix', 'l', 'done')}
+    ${st(318, 586, 'clock', 'Clock|overlap', 'r', 'block')}
+    ${st(40, 360, 'site', 'Site live', 't', 'done')}
+    ${st(112, 360, 'shots', 'Screens', 't', 'done')}
+    ${st(204, 312, 'prod', 'PRODUCTION', 'l', 'hub')}
+    ${st(300, 342, 'post', 'Launch|post', 'l', 'future')}
+    ${st(372, 372, 'ads', 'Ads test', 'b', 'future')}
+    <g font-family="Roboto Condensed" font-weight="800" font-size="11" letter-spacing=".8">
+      <rect x="14" y="742" width="384" height="34" rx="8" fill="#10232A" stroke="#172D34" stroke-width="2"/>
+      <rect x="26" y="755" width="18" height="7" rx="3.5" fill="${C.play}"/><text x="50" y="763" fill="#BED0CD">PLAY</text>
+      <rect x="104" y="755" width="18" height="7" rx="3.5" fill="${C.app}"/><text x="128" y="763" fill="#BED0CD">APP</text>
+      <rect x="174" y="755" width="18" height="7" rx="3.5" fill="${C.web}"/><text x="198" y="763" fill="#BED0CD">WEB</text>
+      <rect x="246" y="755" width="18" height="7" rx="3.5" fill="${C.grow}"/><text x="270" y="763" fill="#BED0CD">GROWTH</text>
+      <rect x="336" y="752" width="18" height="6" rx="2" fill="#E5484D"/><text x="360" y="763" fill="#BED0CD">BLOCK</text>
+    </g></svg>
+    <div class="board" data-k="board" aria-label="Departures: next deadlines">
+      <div class="t"><span>NEXT UP</span><span>DUE</span></div>
+      <div class="fr" data-row="0"></div><div class="fr" data-row="1"></div><div class="fr" data-row="2"></div>
+      <div class="t" style="margin:6px 0 0 2px"><span id="boardnote">1 BLOCKED · 2 THIS WEEK</span><span>TAP FOR ALL</span></div>
+    </div>`;
+  const task = (t, s, rows, a) => ({ title: t, sub: s, body: rows + act(a || 'Ask Meow for a plan', 'Masterplan') });
+  const data = {
+    board: task('Deadlines', 'Masterplan · next 14 days', li('Sep 27', 'Tester day 14', '5 days', 1) + li('Sep 28', 'Apply for production', '6 days', 1) + li('Late', 'Clock overlap fix', '2 days late', 1) + li('Oct 1', 'Launch post draft', '', 1) + li('Oct 6', 'Ads test budget', '', 1), 'Move a date'),
+    testers: task('Tester days', 'PLAY line · you are here', li('Progress', '', '9 of 14 days') + li('Testers', '', '12 opted in') + li('Risk', 'tester engagement is thin on weekends', '', 1)),
+    apply: task('Apply for production', 'Interchange · PLAY, WEB, APP', li('Needs', '14 tester days', 'Sep 27', 1) + li('Needs', 'clock overlap fixed', 'blocked', 1) + li('Needs', 'store listing & screenshots', 'done', 1)),
+    clock: task('Clock overlap', 'APP line · blocked', li('Blocked by', 'needs integrator build slot', '', 1) + li('Owner', 'Codex (integrator)', '', 1) + li('Late by', '', '2 days'), 'Nudge integrator'),
+    heat: task('Idle heat fix', 'APP line · done, awaiting build', li('Result', 'shared frame phase, color cache', '', 1) + li('Tests', '', 'green')),
+    prod: task('Production', 'Terminus', li('ETA', 'if clock fix lands this week', 'Oct 1', 1) + li('Stops left', '', '2')),
+    internal: task('Internal test', 'PLAY · done', li('Finished', '', 'Sep 2')), closed: task('Closed test', 'PLAY · done', li('Started', '', 'Sep 13')),
+    b152: task('Build 152', 'APP · shipped to Play', li('Submitted', '', 'Sep 19')), site: task('Site live', 'WEB · done', li('Published', '', 'Sep 18')), shots: task('Screenshots', 'WEB · done', li('Play gallery', '', 'updated')),
+    post: task('Launch post', 'GROWTH · after production', li('Draft', 'Meow can draft it', '', 1)), ads: task('Ads test', 'GROWTH · after production', li('Budget', 'not set', '', 1))
+  };
+  const m = mount('s2', scene, data);
+  const rows = [['TESTER DAY 14', 'SEP 27', 'a'], ['APPLY PROD', 'SEP 28', 'l'], ['CLOCK FIX', 'LATE 2D', 'p']];
+  const CH = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  rows.forEach(([name, due, cls], r) => {
+    const txt = name.padEnd(14) + ' ' + due.padStart(8), row = m.el.querySelector(`[data-row="${r}"]`);
+    row.innerHTML = [...txt].map((c, i) => `<b class="${i > 14 ? cls : ''}">&nbsp;</b>`).join('');
+    [...row.children].forEach((b, i) => { const target = txt[i]; if (target === ' ') return; let n = 4 + ((i * 7 + r * 3) % 9);
+      const spin = setInterval(() => { b.textContent = n-- > 0 ? CH[(Math.random() * CH.length) | 0] : target; if (n < 0) clearInterval(spin); }, 55 + r * 10); });
+  });
+})();
+
+/* ───────────── 3. THE COUNTER (business owner) ───────────── */
+(() => {
+  const ticket = (x, rot, k, color, lines, pin) => `<g data-k="${k}" transform="rotate(${rot} ${x + 44} 92)">
+      <path d="M${x} 96 h88 v${lines.length * 20 + 44} l-8 6 l-8 -6 l-8 6 l-8 -6 l-8 6 l-8 -6 l-8 6 l-8 -6 l-8 6 l-8 -6 l-8 6 z" fill="${color}" stroke="#172D34" stroke-width="2.5" stroke-linejoin="round"/>
+      <rect x="${x + 30}" y="86" width="28" height="16" rx="3" fill="#8FA7A5" stroke="#172D34" stroke-width="2"/>
+      <text x="${x + 8}" y="122" font-family="Roboto Condensed" font-weight="800" font-size="12" letter-spacing="1" fill="${pin}">${lines[0]}</text>
+      ${lines.slice(1).map((t, i) => `<text x="${x + 8}" y="${144 + i * 20}" font-family="Patrick Hand, cursive" font-size="16" fill="#172D34">${t}</text>`).join('')}
+      <rect class="ring" x="${x - 6}" y="80" width="100" height="${lines.length * 20 + 70}" rx="10"/></g>`;
+  const scene = `<svg viewBox="0 0 412 960" style="position:absolute;inset:0">
+    <defs><linearGradient id="ctr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2F4C55"/><stop offset="1" stop-color="#23393F"/></linearGradient></defs>
+    <rect width="412" height="960" fill="#182A32"/>
+    <rect x="0" y="330" width="412" height="460" fill="url(#ctr)"/>
+    <path d="M0 330 H412" stroke="#172D34" stroke-width="3"/>
+    <rect x="-4" y="72" width="420" height="14" rx="7" fill="#9DB3B1" stroke="#172D34" stroke-width="3"/>
+    <path d="M10 79 H402" stroke="#F4EEDB" stroke-width="2" opacity=".5"/>
+    ${ticket(8, -2, 'order', '#F4EEDB', ['ORDER #1042', '2 × mug', '1 × print', 'ship today'], '#172D34')}
+    ${ticket(108, 1.5, 'appt', '#FFE27A', ['APPT 3:30', 'Dana R.', 'kitchen quote'], '#172D34')}
+    ${ticket(208, -1, 'return', '#F7C9C5', ['RETURN', 'headphones', '$129 refund'], '#8C1D18')}
+    ${ticket(308, 2.5, 'order2', '#F4EEDB', ['ORDER #1043', '1 × tote', 'pickup 5pm'], '#172D34')}
+
+    <g data-k="hours" aria-label="Sign: open until 6">
+      <path d="M58 348 L92 316 L126 348" fill="none" stroke="#172D34" stroke-width="2"/><circle cx="92" cy="316" r="3" fill="#9DB3B1" stroke="#172D34" stroke-width="1.5"/>
+      <rect x="30" y="348" width="124" height="62" rx="10" fill="#FFC56F" stroke="#172D34" stroke-width="3"/>
+      <text x="92" y="378" text-anchor="middle" font-family="Roboto" font-weight="900" font-size="22" letter-spacing="3" fill="#172D34">OPEN</text>
+      <text x="92" y="398" text-anchor="middle" font-family="Patrick Hand, cursive" font-size="15" fill="#3A2A12">till 6 today</text>
+      <rect class="ring" x="24" y="310" width="136" height="108" rx="12"/>
+    </g>
+
+    <g data-k="calls" aria-label="Bell: 2 calls waiting">
+      <ellipse cx="92" cy="540" rx="58" ry="10" fill="#10232A"/>
+      <rect x="40" y="522" width="104" height="16" rx="6" fill="#5E7A76" stroke="#172D34" stroke-width="2.5"/>
+      <path d="M52 522 Q52 468 92 466 Q132 468 132 522 Z" fill="#E7C377" stroke="#172D34" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M68 506 Q70 482 88 476" fill="none" stroke="#FFF1C9" stroke-width="4" stroke-linecap="round" opacity=".8"/>
+      <rect x="86" y="452" width="12" height="14" rx="4" fill="#5E7A76" stroke="#172D34" stroke-width="2.5"/>
+      <g id="ding" opacity="0"><path d="M42 468 l-10 -8 M40 490 h-14 M142 468 l10 -8 M144 490 h14" stroke="#FFC56F" stroke-width="3" stroke-linecap="round"/></g>
+      <circle cx="140" cy="468" r="14" fill="#F2B8B5" stroke="#172D34" stroke-width="2.5"/>
+      <text x="140" y="473" text-anchor="middle" font-family="Roboto" font-weight="900" font-size="14" fill="#601410">2</text>
+      <text x="92" y="572" text-anchor="middle" font-family="Roboto Condensed" font-weight="800" font-size="12" letter-spacing="1.2" fill="#BED0CD">CALLS WAITING</text>
+      <rect class="ring" x="28" y="440" width="136" height="142" rx="12"/>
+    </g>
+
+    <g data-k="invoices" aria-label="Spike: 3 unpaid invoices">
+      <rect x="54" y="740" width="76" height="14" rx="5" fill="#5E7A76" stroke="#172D34" stroke-width="2.5"/>
+      <path d="M92 740 V612" stroke="#172D34" stroke-width="5" stroke-linecap="round"/><path d="M92 738 V614" stroke="#C9D6D3" stroke-width="2"/>
+      <g transform="rotate(8 92 700)"><rect x="52" y="690" width="80" height="44" rx="2" fill="#F4EEDB" stroke="#172D34" stroke-width="2"/><text x="60" y="708" font-family="Patrick Hand, cursive" font-size="14" fill="#172D34">INV 311 $240</text></g>
+      <g transform="rotate(-10 92 672)"><rect x="54" y="660" width="80" height="42" rx="2" fill="#E9F3DA" stroke="#172D34" stroke-width="2"/><text x="60" y="678" font-family="Patrick Hand, cursive" font-size="14" fill="#172D34">INV 309 $860</text></g>
+      <g transform="rotate(5 92 644)"><rect x="50" y="634" width="80" height="40" rx="2" fill="#F4EEDB" stroke="#172D34" stroke-width="2"/><text x="58" y="652" font-family="Patrick Hand, cursive" font-size="14" fill="#B3261E">INV 304 late</text></g>
+      <text x="92" y="600" text-anchor="middle" font-family="Roboto Condensed" font-weight="800" font-size="12" letter-spacing="1.2" fill="#BED0CD">UNPAID · 3</text>
+      <rect class="ring" x="40" y="586" width="104" height="176" rx="12"/>
+    </g>
+
+    <g aria-hidden="true">
+      <rect x="206" y="340" width="188" height="40" rx="10" fill="#35535C" stroke="#172D34" stroke-width="3"/>
+      <rect x="218" y="366" width="164" height="8" rx="4" fill="#0E1A1F"/>
+      <circle cx="372" cy="354" r="5" fill="#C6EB78" stroke="#172D34" stroke-width="1.5"><animate attributeName="opacity" values="1;.3;1" dur="1.6s" repeatCount="indefinite"/></circle>
+      <text x="220" y="359" font-family="Roboto Condensed" font-weight="800" font-size="12" letter-spacing="1.4" fill="#BED0CD">TODAY</text>
+    </g>
+    </svg>
+    <div class="tape2" data-k="sales" aria-label="Receipt tape: today's sales" id="tape2"></div>`;
+  const data = {
+    order: { title: 'Order #1042', sub: 'Online shop · paid · example', body: li('2 × Meow mug', '', '$36.00') + li('1 × Print A3', '', '$28.00') + li('Ship by', '', 'today 5pm') + act('Print label', 'Message buyer') },
+    order2: { title: 'Order #1043', sub: 'Pickup · paid · example', body: li('1 × Tote', '', '$22.00') + li('Pickup', '', '5:00 PM') + act('Mark ready') },
+    appt: { title: 'Appointment 3:30', sub: 'Dana R. · kitchen quote · example', body: li('Where', '14 Alder St', '', 1) + li('Last contact', 'asked about oak vs. walnut', '', 1) + li('Meow prepared', 'quote draft · $4,800', '', 1) + act('Open quote', 'Reschedule') },
+    return: { title: 'Return', sub: 'Headphones · example', body: li('Refund', '', '$129.00') + li('Condition', 'unopened per customer', '', 1) + li('Policy', 'within 30 days', 'OK') + act('Approve refund', 'Ask photo') },
+    calls: { title: 'Calls waiting', sub: '2 missed · example', body: li('Supplier', 'about Friday delivery · 2:14', 'call back', 1) + li('Unknown', 'no voicemail · 1:52', '', 1) + act('Call supplier', 'Text instead') },
+    invoices: { title: 'Unpaid invoices', sub: '$1,370 outstanding · example', body: li('INV 304', '14 days late', '$270') + li('INV 309', 'due Friday', '$860') + li('INV 311', 'due in 2 weeks', '$240') + act('Send reminder for 304') },
+    hours: { title: 'Open until 6', sub: 'Business hours · example', body: li('Today', '', '9–6') + li('Away message', 'when closed, Meow answers texts', 'on', 1) + act('Close early', 'Edit hours') },
+    sales: { title: 'Today', sub: 'Tuesday · example figures', body: li('Sales', '14 orders', '$1,284.50') + li('Refunds', '', '−$129.00') + li('Net', '', '$1,155.50') + li('vs last Tuesday', '', '+12%') + li('Best seller', 'Meow mug', '', 1) + act('Weekly report', 'Taxes') }
+  };
+  const m = mount('s3', scene, data);
+  const tp = m.el.querySelector('#tape2');
+  const sales = [['#1031 mug', 18], ['#1032 print', 28], ['#1033 tote', 22], ['#1034 mug ×2', 36], ['#1035 poster', 45], ['#1036 print', 28], ['#1037 cards', 12], ['#1038 mug', 18], ['#1039 tote', 22], ['#1040 print', 28]];
+  let total = 1049.5, i = 0;
+  const fmt = (n) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2 });
+  function render() {
+    tp.innerHTML = `<div style="text-align:center;font-weight:700;letter-spacing:1px">MEOW SHOP</div><div style="text-align:center;color:#7B8C8A;font-size:11px">TUE SEP 22</div><hr>`
+      + sales.slice(-12).map(([a, b], j, arr) => `<div class="ln"${j < arr.length - 1 ? ' style="animation:none"' : ''}><span>${a}</span><span>${b.toFixed(2)}</span></div>`).join('')
+      + `<hr><div class="ln tot" style="animation:none"><span>TOTAL</span><span>${fmt(total)}</span></div><div style="color:#7B8C8A;font-size:11px;margin-top:2px">vs last Tue +12%</div>`;
+  }
+  render();
+  const incoming = [['#1041 cards', 12], ['#1042 mug+print', 64], ['#1043 tote', 22]];
+  setInterval(() => {
+    const s = incoming[i++ % incoming.length]; sales.push(s); total += s[1]; render();
+    const d = m.el.querySelector('#ding'); d.setAttribute('opacity', 1); setTimeout(() => d.setAttribute('opacity', 0), 500);
+  }, 6000);
+})();
+
+/* scale phones to their column */
+function fit() { document.querySelectorAll('.holder').forEach((h) => { const f = h.firstElementChild, s = Math.min(1, h.clientWidth / 432); f.style.transform = `scale(${s})`; h.style.height = 980 * s + 'px'; }); }
+addEventListener('resize', fit); fit();
+</script>

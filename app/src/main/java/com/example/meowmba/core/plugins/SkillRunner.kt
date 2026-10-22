@@ -8,6 +8,7 @@ import com.example.meowmba.core.agent.tools.InstalledApps
 import com.example.meowmba.core.audio.TextToSpeechManager
 import com.example.meowmba.core.notification.NotificationHelper
 import java.util.Calendar
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -26,8 +27,29 @@ import java.util.concurrent.atomic.AtomicLong
  */
 class SkillRunner(private val context: Context) {
 
+    /**
+     * One handler for every timer, and a registry so they can be cancelled.
+     *
+     * This used to build a Handler per timer around a self-rescheduling 1 Hz
+     * Runnable that nothing held a reference to, so every "set a timer"
+     * request left a permanent main-looper wakeup behind and the id allocated
+     * for it was thrown away. N requests meant N runnables ticking until each
+     * individually reached zero, with no way to stop them.
+     */
     private companion object {
         private val timers = AtomicLong(0)
+
+        /**
+         * One handler and one registry shared by every instance.
+         *
+         * [SkillRunner] is constructed per tool call (see ConnectorManager) and
+         * dropped as soon as it returns, so anything instance-scoped dies with
+         * it while the work it posted to the main looper lives on. Timers are
+         * process-lifetime state; the registry has to be too, or [cancelAll]
+         * could never reach them.
+         */
+        private val mainHandler = Handler(Looper.getMainLooper())
+        private val pending = ConcurrentHashMap<Long, Runnable>()
     }
 
     /**
@@ -68,22 +90,22 @@ class SkillRunner(private val context: Context) {
         speak("Starting a ${formatDuration(seconds)} timer now.")
         val remaining = AtomicLong(seconds * 1000L)
         val id = timers.incrementAndGet()
-        val handler = Handler(Looper.getMainLooper())
         lateinit var ticker: Runnable
         ticker = object : Runnable {
             override fun run() {
                 val left = remaining.get()
                 if (left <= 0) {
+                    pending.remove(id)
                     postChime("Timer done!", "Your ${formatDuration(seconds)} timer is finished.")
                     capMessage("Timer done — ${formatDuration(seconds)} is up.")
                     return
                 }
                 remaining.set(left - 1000)
-                handler.postDelayed(this, 1000)
+                mainHandler.postDelayed(this, 1000)
             }
         }
-        handler.postDelayed(ticker, 1000)
-        // Keep `handler` referenced so a single timer never gets GC'd mid-flight.
+        pending[id] = ticker
+        mainHandler.postDelayed(ticker, 1000)
         return "Timer set for ${formatDuration(seconds)}. I'll let you know when it's up."
     }
 
@@ -95,11 +117,27 @@ class SkillRunner(private val context: Context) {
         val whenLong = System.currentTimeMillis() + atSeconds * 1000L
         val hh = Calendar.getInstance().apply { timeInMillis = whenLong }
             .let { String.format("%02d:%02d", it.get(Calendar.HOUR_OF_DAY), it.get(Calendar.MINUTE)) }
-        Handler(Looper.getMainLooper()).postDelayed({
+        val id = timers.incrementAndGet()
+        val reminder = Runnable {
+            pending.remove(id)
             postChime("Reminder", note.ifBlank { "Time's up!" })
             speak(note.ifBlank { "Here's your reminder." })
-        }, atSeconds * 1000L)
+        }
+        pending[id] = reminder
+        mainHandler.postDelayed(reminder, atSeconds * 1000L)
         return "Reminder set for $hh: ${note.ifBlank { "your reminder" }}."
+    }
+
+    /**
+     * Cancel every outstanding timer and reminder.
+     *
+     * Call this when the runner is torn down or a session ends. Without it the
+     * main looper keeps waking once a second for timers nobody can hear any
+     * more, which is pure heat.
+     */
+    fun cancelAll() {
+        for (runnable in pending.values) mainHandler.removeCallbacks(runnable)
+        pending.clear()
     }
 
     private fun openApp(text: String): String {
@@ -151,8 +189,8 @@ class SkillRunner(private val context: Context) {
     }
 
     private fun helpfulFallback(text: String): String {
-        return "Running \"$text\" — that skill doesn't map to a built-in action yet, but I'm standing by. " +
-            "Name a skill after what it should do (timer, reminder, open an app, toast, read screen) and it'll actually work."
+        return "I couldn't run \"$text\": that skill has no supported action. Nothing was performed. " +
+            "Choose a supported timer, reminder, app-launch or screen-reading action."
     }
 
     private fun postChime(title: String, body: String) {
@@ -160,7 +198,11 @@ class SkillRunner(private val context: Context) {
     }
 
     private fun speak(text: String) {
-        runCatching { TextToSpeechManager(context).speak(text) }
+        runCatching {
+            if (com.example.meowmba.core.security.SecureStorageManager(context)
+                    .getBooleanPreference("quiet_until_addressed", false)) return
+            TextToSpeechManager(context).speak(text)
+        }
     }
 
     private fun capMessage(text: String) {

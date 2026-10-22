@@ -11,8 +11,11 @@ import io.ktor.http.isSuccess
 import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.readAvailable
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.nio.file.Files
 
 /**
  * Downloads on-device model bundles into the app's PRIVATE storage
@@ -58,9 +61,9 @@ class ModelDownloader(
     fun installedFile(option: ImageModelOption): File? =
         File(modelsDir, option.fileName).takeIf { it.isFile && it.length() > 0 }
 
-    /** Any installed catalog model (used at startup when no path is configured). */
+    /** An installed CHAT model. Needle must never reach MediaPipe at startup. */
     fun firstInstalledOption(): LocalModelOption? =
-        options.firstOrNull { installedFile(it) != null }
+        options.firstOrNull { it.runtime.canActivate && installedFile(it) != null }
 
     /**
      * Every model bundle actually present in the models dir — catalog or
@@ -74,14 +77,21 @@ class ModelDownloader(
 
     private val options get() = ModelCatalog.options
 
-    fun destinationFor(fileName: String): File = File(modelsDir, fileName)
+    fun destinationFor(fileName: String): File {
+        require(ModelDownloadPolicy.validFileName(fileName)) { "Use a simple model filename without folders or traversal." }
+        val file = File(modelsDir, fileName)
+        require(!Files.isSymbolicLink(file.toPath()) && file.canonicalFile.parentFile == modelsDir.canonicalFile) {
+            "The model destination must stay inside the app's models folder."
+        }
+        return file
+    }
 
     fun delete(option: LocalModelOption): Boolean =
-        File(modelsDir, option.fileName).delete()
+        destinationFor(option.fileName).delete()
 
     /** Delete an installed image-model catalog entry. Mirrors [delete] for [LocalModelOption]. */
     fun delete(option: ImageModelOption): Boolean =
-        File(modelsDir, option.fileName).delete()
+        destinationFor(option.fileName).delete()
 
     /**
      * Download [url] to [fileName] in the models directory.
@@ -92,18 +102,22 @@ class ModelDownloader(
         fileName: String,
         onProgress: (DownloadProgress) -> Unit
     ): File = withContext(dispatcher) {
+        val safeUrl = ModelDownloadPolicy.validateUrl(url)
         val finalFile = destinationFor(fileName)
-        val partFile = File(modelsDir, "$fileName.part")
+        val partFile = destinationFor("$fileName.part")
         if (partFile.exists()) partFile.delete()
 
-        val token = hfTokenProvider()?.takeIf { it.isNotBlank() }
+        val token = ModelDownloadPolicy.tokenForUrl(safeUrl, hfTokenProvider())
         try {
-            engine(url, partFile, token) { received, total ->
+            engine(safeUrl, partFile, token) { received, total ->
                 onProgress(DownloadProgress(received, total))
             }
             check(partFile.isFile && partFile.length() > 0) { "Download produced an empty file" }
-            if (finalFile.exists()) finalFile.delete()
-            check(partFile.renameTo(finalFile)) { "Could not finalize download" }
+            // Never delete a usable model before its replacement is committed.
+            // Both paths are on the same filesystem; rename is atomic on Android.
+            Files.move(partFile.toPath(), finalFile.toPath(),
+                java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING)
             onProgress(DownloadProgress(finalFile.length(), finalFile.length(), done = true))
             finalFile
         } catch (e: Exception) {
@@ -114,45 +128,83 @@ class ModelDownloader(
 
     companion object {
         private val client = HttpClient {
-        install(HttpTimeout) {
-            connectTimeoutMillis = 15_000
-            // Model files are large: no overall request timeout, just
-            // a stall guard on the socket.
-            requestTimeoutMillis = Long.MAX_VALUE
-            socketTimeoutMillis = 120_000
-        }
+            followRedirects = false
+            install(HttpTimeout) {
+                connectTimeoutMillis = 15_000
+                // Model files are large: no overall request timeout, just
+                // a stall guard on the socket.
+                requestTimeoutMillis = Long.MAX_VALUE
+                socketTimeoutMillis = 120_000
+            }
         }
 
-        /** Stream an HTTP(S) URL to [dest] with progress callbacks. Follows HF redirects. */
+        /**
+         * Follow at most eight redirects as fresh requests. Hugging Face serves
+         * large files from signed CDN URLs; those requests must not carry the
+         * user's Hub token. CleartextPolicy applies again to every redirect.
+         */
         suspend fun downloadWithKtor(
             url: String,
             dest: File,
             token: String?,
             onProgress: (Long, Long?) -> Unit
+        ) = downloadWithClient(client, url, dest, token, onProgress)
+
+        /** Injected client must disable automatic redirects, as the production client does. */
+        internal suspend fun downloadWithClient(
+            downloadClient: HttpClient,
+            url: String,
+            dest: File,
+            token: String?,
+            onProgress: (Long, Long?) -> Unit,
         ) {
-            client.prepareGet(url) {
-                token?.let { header(HttpHeaders.Authorization, "Bearer $it") }
-            }.execute { response ->
-                if (!response.status.isSuccess()) {
-                    val hint = if (response.status.value == 401 || response.status.value == 403) {
-                        " (license-gated: add your Hugging Face token in Settings)"
-                    } else ""
-                    throw IllegalStateException("HTTP ${response.status.value}$hint")
-                }
-                val total = response.contentLength()
-                val channel: ByteReadChannel = response.bodyAsChannel()
-                dest.outputStream().buffered().use { out ->
-                    val buffer = ByteArray(64 * 1024)
-                    var received = 0L
-                    while (!channel.isClosedForRead) {
-                        val read = channel.readAvailable(buffer, 0, buffer.size)
-                        if (read > 0) {
-                            out.write(buffer, 0, read)
-                            received += read
-                            onProgress(received, total)
+            var currentUrl = ModelDownloadPolicy.validateUrl(url)
+            // A custom server cannot obtain Hub credentials by redirecting there.
+            val hubToken = ModelDownloadPolicy.tokenForUrl(currentUrl, token)
+            repeat(9) { hop ->
+                currentCoroutineContext().ensureActive()
+                val redirect = downloadClient.prepareGet(currentUrl) {
+                    ModelDownloadPolicy.tokenForUrl(currentUrl, hubToken)?.let { header(HttpHeaders.Authorization, "Bearer $it") }
+                }.execute { response ->
+                    if (response.status.value in setOf(301, 302, 303, 307, 308)) {
+                        check(hop < 8) { "The model download redirected too many times." }
+                        val location = response.headers[HttpHeaders.Location]
+                            ?: throw IllegalStateException("The model server returned a redirect without an address.")
+                        return@execute ModelDownloadPolicy.redirectTarget(currentUrl, location)
+                    }
+                    if (!response.status.isSuccess()) {
+                        val hint = if ((response.status.value == 401 || response.status.value == 403) &&
+                            ModelDownloadPolicy.tokenForUrl(currentUrl, "origin-check") != null) {
+                            " (license-gated: add your Hugging Face token in Settings)"
+                        } else ""
+                        throw IllegalStateException("HTTP ${response.status.value}$hint")
+                    }
+                    val total = response.contentLength()
+                    check(!response.headers[HttpHeaders.ContentType].orEmpty().contains("text/html", true)) {
+                        "The download returned a web page, not a model. Check the model link or sign-in requirements."
+                    }
+                    val channel: ByteReadChannel = response.bodyAsChannel()
+                    dest.outputStream().buffered().use { out ->
+                        val buffer = ByteArray(64 * 1024)
+                        var received = 0L
+                        while (true) {
+                            currentCoroutineContext().ensureActive()
+                            val read = channel.readAvailable(buffer, 0, buffer.size)
+                            if (read < 0) break
+                            if (read > 0) {
+                                out.write(buffer, 0, read)
+                                received += read
+                                onProgress(received, total)
+                            }
+                        }
+                        check(received > 0 && (total == null || total <= 0 || received == total)) {
+                            "Model download was incomplete. Retry the download when online."
                         }
                     }
+                    null
                 }
+                if (redirect == null) return
+                currentUrl = redirect
             }
         }
     }

@@ -1,5 +1,8 @@
 # Play listing + App content (historical draft — review required)
 
+Current submitted listing: [build 152](PLAY_LISTING_152.md), September 19, 2026.
+The listing below is historical, including its app-content answers; do not reuse them.
+
 Do not submit this draft unchanged. See `RELEASE_PREP_2026-09-05.md` for the
 current package/signing gates. Reconcile the Memba app name, cloud/MCP/service
 data flows, privacy disclosures and AccessibilityService policy before using

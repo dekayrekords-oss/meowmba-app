@@ -1,5 +1,7 @@
 package com.example.meowmba.ui.companion
 
+import com.example.meowmba.ui.theme.Surface
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -17,6 +19,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Search
+import com.example.meowmba.ui.theme.AlertDialog
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -52,7 +55,7 @@ private val MUTED: Color @Composable get() = MaterialTheme.colorScheme.onSurface
 private val SURFACE: Color @Composable get() = MaterialTheme.colorScheme.surfaceVariant
 private val BORDER: Color @Composable get() = MaterialTheme.colorScheme.outlineVariant
 private val GREEN: Color @Composable get() = MaterialTheme.colorScheme.primary
-private val PURPLE = Color(0xFFD2A8FF)
+private val PURPLE: Color @Composable get() = MaterialTheme.colorScheme.secondary
 
 /**
  * Obsidian-style vault screen. Three modes:

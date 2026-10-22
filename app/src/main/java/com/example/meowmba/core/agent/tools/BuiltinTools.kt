@@ -69,27 +69,36 @@ class FileReadTool(private val workspace: Workspace) : Tool {
     override val definition = ToolDefinition(
         id = "file.read",
         displayName = "Read file",
-        description = "Read a text file from the workspace.",
+        description = "Read a text file. Relative names prefer the current project's files, then shared workspace references. A full projects/… path or leading / explicitly addresses the workspace root.",
         inputSchema = mapOf("path" to "path"),
         riskLevel = RiskLevel.SAFE
     )
 
     override suspend fun execute(args: Map<String, String>): ToolResult {
         val path = args["path"] ?: return ToolResult.Failure("Missing 'path'")
-        val content = workspace.read(path)
-        return if (content != null) {
-            ToolResult.Success(content.take(4000))
-        } else {
-            ToolResult.Failure("Cannot read '$path' (missing, unreadable, or outside the workspace)")
-        }
+        val file = workspace.resolveRead(path)?.takeIf { it.isFile }
+            ?: return ToolResult.Failure("Cannot read '$path' (missing or outside the workspace)")
+        if (com.example.meowmba.core.files.AssetLibrary.category(file.name) != "Documents")
+            return ToolResult.Failure("This is a media or archive file, not text. Open it in Files with a compatible viewer.")
+        // Imported videos/documents can be gigabytes. Never read the whole file just to return 4 KB.
+        return runCatching {
+            val buffer = CharArray(4001)
+            val count = file.bufferedReader().use { reader ->
+                var total = 0
+                while (total < buffer.size) { val n = reader.read(buffer, total, buffer.size - total); if (n < 0) break; total += n }
+                total
+            }
+            ToolResult.Success(String(buffer, 0, count.coerceAtMost(4000)) + if (count > 4000) "\n[Text preview truncated]" else "")
+        }.getOrElse { ToolResult.Failure("Could not read '$path': ${it.message}") }
     }
 }
 
-class FileWriteTool(private val workspace: Workspace) : Tool {
+class FileWriteTool(private val workspace: Workspace,
+    private val ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO) : Tool {
     override val definition = ToolDefinition(
         id = "file.write",
         displayName = "Write file",
-        description = "Create or overwrite a text file in the workspace.",
+        description = "Create or overwrite a text document in the workspace and show the saved result. Use .md, .txt or .html for documents. This tool does not encode PDF, Office, images or other binary formats; never label plain text with those extensions.",
         inputSchema = mapOf("path" to "path", "content" to "string"),
         riskLevel = RiskLevel.MODERATE,
         confirmationPolicy = ConfirmationPolicy.ALWAYS
@@ -98,11 +107,29 @@ class FileWriteTool(private val workspace: Workspace) : Tool {
     override suspend fun execute(args: Map<String, String>): ToolResult {
         val path = args["path"] ?: return ToolResult.Failure("Missing 'path'")
         val content = args["content"] ?: ""
-        return if (workspace.write(path, content)) {
-            ToolResult.Success("Wrote $path (${content.length} chars)")
+        if (java.io.File(path).extension.lowercase() in setOf("pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "png", "jpg", "jpeg", "webp", "gif", "mp4", "webm", "mp3", "wav", "zip")) {
+            return ToolResult.Failure("file.write creates text, not binary files. Use .md, .txt or .html for a readable document, or a real export/generation tool for this format. No file was written.")
+        }
+        return kotlinx.coroutines.withContext(ioDispatcher) { if (workspace.write(path, content)) {
+            val file = workspace.resolveWrite(path) ?: return@withContext ToolResult.Failure("The saved file could not be located.", ToolOutcome.UNCONFIRMED)
+            // Bounded readback avoids a second full document allocation on older phones.
+            val verified = file.bufferedReader().use { reader ->
+                val buffer = CharArray(8_192)
+                var offset = 0
+                while (true) {
+                    val count = reader.read(buffer)
+                    if (count < 0) break
+                    if (offset + count > content.length) return@use false
+                    for (index in 0 until count) if (buffer[index] != content[offset + index]) return@use false
+                    offset += count
+                }
+                offset == content.length
+            }
+            if (!verified) return@withContext ToolResult.Failure("The file write returned, but its contents could not be verified. Check the file before repeating it.", ToolOutcome.UNCONFIRMED)
+            ToolResult.Success("Wrote ${file.relativeTo(workspace.root).path} (${content.length} chars)\nMEDIA_FILE:${file.absolutePath}", ToolOutcome.VERIFIED)
         } else {
             ToolResult.Failure("Cannot write '$path' (outside the workspace)")
-        }
+        } }
     }
 }
 
@@ -130,16 +157,19 @@ class FileListTool(private val workspace: Workspace) : Tool {
     override val definition = ToolDefinition(
         id = "file.list",
         displayName = "List files",
-        description = "List everything in the workspace.",
+        description = "List a bounded preview of this project's files and folders, or the whole library when no project is active, excluding Trash and linked paths. Returns workspace-relative paths for reading. Use file.search to find other library references.",
         inputSchema = emptyMap(),
         riskLevel = RiskLevel.SAFE
     )
 
     override suspend fun execute(args: Map<String, String>): ToolResult {
-        val entries = workspace.list()
+        val scan = runCatching { workspace.scanFiles() }.getOrElse {
+            return ToolResult.Failure("Cannot list files: ${it.message}")
+        }
+        val entries = scan.entries.map { it.path + if (it.folder) "/" else "" }.sorted()
         return ToolResult.Success(
             if (entries.isEmpty()) "Workspace is empty."
-            else entries.take(50).joinToString("\n")
+            else entries.take(50).joinToString("\n") + if (scan.truncated || entries.size > 50) "\n[Partial listing; use file.search or Files]" else ""
         )
     }
 }

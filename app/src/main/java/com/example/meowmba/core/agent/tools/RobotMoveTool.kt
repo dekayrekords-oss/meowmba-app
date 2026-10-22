@@ -24,12 +24,12 @@ class RobotMoveTool(private val robotManager: RobotManager) : Tool {
 
     override val definition = ToolDefinition(
         id = "robot.move",
-        displayName = "Move the robot body",
-        description = "Move the physical LOOI robot base the companion sits on. " +
+        displayName = "Move LOOI",
+        description = "Control only the LOOI base, never Cozmo. " +
             "action is one of: forward, back, left, right, spin, stop, " +
             "look_up, look_down, look_center, nod, shake_head, wiggle, " +
             "headlight_on, headlight_off. " +
-            "Use for any request to move, turn, spin, drive, look somewhere, " +
+            "Use for requests to LOOI to move, turn, spin, drive, look somewhere, " +
             "nod, shake its head, dance, or switch the headlight on or off. " +
             "This moves real hardware — do not use it to describe a movement.",
         inputSchema = mapOf(
@@ -66,8 +66,8 @@ class RobotMoveTool(private val robotManager: RobotManager) : Tool {
             val intensity = args["intensity"]?.toFloatOrNull() ?: 1f
             val result = robotManager.perform(motion, intensity)
                 ?: return@withContext ToolResult.Failure(
-                    "No robot body is connected, so I can't ${motion.name.lowercase().replace('_', ' ')}. " +
-                        "Check the base is powered on under Settings → Robot body."
+                    "LOOI is not connected, so I can't ${motion.name.lowercase().replace('_', ' ')}. " +
+                        "Open the LOOI controls for its availability. Cozmo is a separate robot."
                 )
             ToolResult.Success(result)
         }

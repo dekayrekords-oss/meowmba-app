@@ -4,6 +4,112 @@
 > The "Recent builds" section is regenerated automatically by scripts/autobuild.sh
 > after every commit; everything else is maintained by hand at each phase.
 
+## Current status — 2026-09-17 (feat/lumen-drive-carplay-obd2 · Preview vc128)
+
+**Active branch:** `feat/lumen-drive-carplay-obd2` (from `feat/meta-glasses-meow-bridge` @ `8ac4b9d`)  
+**Packages:** Preview `com.example.meowmba` · Play `defaultConfig` versionCode **85** unchanged  
+**Flags:** `lumen_reflex_v2` / `agentic_runtime_v1` default **OFF**  
+**Build:** debug Preview vc128; prefer MWDAT-enabled when `mwdat.properties` available
+
+### This slice
+- Idle morph through **all** Lumen forms (+ optional invented forms); Settings interval
+- Drive emotion boost + driver camera on drive HUD; OBD-II ELM327 Bluetooth; vehicle awareness
+- Honest CarPlay gap documented in `docs/DRIVE_CARPLAY_OBD2.md`
+- Tools: `car.vehicle`, `car.obd`, `car.obd_connect`, `car.cameras` (+ existing car/phone media)
+
+### How Wyatt should talk
+1. Install Preview vc128; Settings → Driving → enable idle morph / drive mode / OBD as needed.
+2. While idle, Lumen should cycle characters; while driving, expect stronger face reactions + optional driver PiP.
+3. Say “connect OBD”, “engine RPM”, “what car is connected”, “pause music”, “call Mom” (dialer).
+4. Do **not** expect full Apple CarPlay radio/template ownership from this Android app.
+
+### Parent / related
+- Base tip Meta glasses Meow bridge vc127 @ `8ac4b9d`.
+
+## Previous status — 2026-09-17 (feat/meta-glasses-meow-bridge · Preview vc127 · MWDAT-enabled)
+
+**Active branch:** `feat/meta-glasses-meow-bridge` @ tip (base `7fab957`)  
+**Packages:** Preview `com.example.meowmba` · Play `defaultConfig` versionCode **85** unchanged  
+**Flags:** `lumen_reflex_v2` / `agentic_runtime_v1` default **OFF**  
+**Build:** debug Preview with `-PincludeMwdat=true` + external `mwdat.properties` (Meta Wearables DAT camera SDK)
+
+### This slice
+- **vc127 is the MWDAT-enabled Preview for glasses Setup** — ship with Meta MWDAT camera SDK so Fold Setup glasses / Connect works (not the tokenless debug stub).
+- Debug `onVariants` versionCode **127** (was 126); still signed with prog debug keystore (`b7850d5f…`).
+- Bridge + tools from vc126 unchanged: `ssh.meow`, `opencode.run`, `server.shell`; Meta glasses card.
+
+### How Wyatt should talk
+1. Install Preview vc127; pair glasses in Meta AI; Meow LLM → Setup glasses / Connect (SDK build).
+2. Bridge ON; Voice Recognition → Meta glasses mic (optional).
+3. Say **“Hey Meow …”** (or tap mic). For server work: “run opencode …”, “ssh …”, “shell on meow …”.
+4. Destructive SSH/OpenCode still need on-screen approval.
+
+### Parent / related
+- Bridge tip vc126 @ `7fab957` without MWDAT in the shipped APK path (this build enables it).
+- Base tip prop placement / vending / clock (vc125).
+
+## Previous status — 2026-09-16 (feat/meta-glasses-meow-bridge · Preview vc126)
+
+**Active branch:** `feat/meta-glasses-meow-bridge` (from `feat/prop-placement-vending-clock` @ `fda4eac`)  
+**Packages:** Preview `com.example.meowmba` · Play signing not mixed  
+**Flags:** `lumen_reflex_v2` / `agentic_runtime_v1` default **OFF**
+
+### This slice
+- **Meta ↔ Meow bridge:** glasses mic / chat → companion tools; docs honest about Hey Meta limits.
+- **Tools:** `ssh.meow`, `opencode.run`, `server.shell` on default saved SSH host (meow NetBird).
+- **UI:** LLM Meta glasses card — bridge enable + default SSH host.
+- **Doc:** `docs/META_GLASSES_MEOW_BRIDGE.md`.
+
+### How Wyatt should talk
+1. Pair glasses in Meta AI; Meow LLM → Setup glasses / Connect (SDK build).
+2. Bridge ON; Voice Recognition → Meta glasses mic (optional).
+3. Say **“Hey Meow …”** (or tap mic). For server work: “run opencode …”, “ssh …”, “shell on meow …”.
+4. Destructive SSH/OpenCode still need on-screen approval.
+
+### Parent / related
+- Base tip prop placement / vending / clock (vc125).
+- Existing `fix/meta-glasses-sdk` + MWDAT camera path unchanged.
+
+## Previous status — 2026-09-15 (feat/prop-placement-vending-clock · Preview vc125)
+
+**Active branch:** `feat/prop-placement-vending-clock` (from `fix/invent-avatar-crash-and-drawer-search` @ `7748ed3`)  
+**Packages:** Preview `com.example.meowmba` · Play signing not mixed  
+**Flags:** `lumen_reflex_v2` / `agentic_runtime_v1` default **OFF**
+
+### This slice
+- **Prop placement:** after invent/save, drag prop on current avatar (scale/rotate); persist `anchor` + `attach_scale`/`attach_rotation`; smarter wearable defaults (glasses near eyes).
+- **Vending animation generator:** new lane — prompt + selectable library props + duration/intensity; persists via `CustomAnimationStore`.
+- **Avatar workshop:** preview canvas, Generate from current avatar, selectable props → place on avatar.
+- **Background clock:** `CompanionWallClock` on every non-empty `AppBackground`; tap opens system Clock (AlarmClock + Samsung/Google fallbacks).
+
+### Parent / related
+- Tip base invent crash harden + drawer search (vc124).
+- Epic P1–P3 still in flight on other branches.
+
+## Previous status — 2026-09-15 (Epic P3 Slices E+F — Care / motion / files)
+
+**Active branch:** `feat/epic-p3-care-motion-files` (from `feat/epic-p2-vending-machine` @ `76aba32`)  
+**Packages:** Preview `com.example.meowmba` · Play signing not mixed  
+**Flags:** `lumen_reflex_v2` / `agentic_runtime_v1` default **OFF**
+
+### Slices E+F shipped
+- **Care:** Food / Energy / Mood / Affection / Hygiene meters; Feed / Play / Rest / Clean / Talk; time decay + persist; form-aware reactions; premium `PetCarePanel`.
+- **Motion:** Subtle illustrated-room parallax + shimmer; ambient wash on aurora/starfield/nebula (clock-gated).
+- **Files:** Local library vs All-phone scope; library cleanup vs MediaStore phone suggestions; AI organize remains local-only.
+
+### Epic complete (pending merge / Preview APK)
+P1 + P2 (Vending) + P3 (E+F). Preview APK may still be building on meow habitat worktree — do not disturb `/home/claude/meowmba-fly-habitat` while that job runs.
+
+### Parent / related
+- Slice D Vending on `feat/epic-p2-vending-machine`.
+- Computer P0 Fold E2E + agentic workspace file tools still queued.
+
+### Canonical hosts
+- Invent lineage / APK worktree: `/home/claude/meowmba-fly-habitat` on meow (**do not checkout/reset/gradle there during APK job**)
+- Optional compile worktree: `/home/claude/meowmba-epic-ef` (create via `git worktree add` if needed)
+- Box: `/workspace/meowmba-app`
+- Bare: `/home/prog/git/meowmba-app.git` · `/home/claude/git/meowmba-app.git` · GitHub `dekayrekords-oss/meowmba-app`
+
 ## What this app is
 MEOWMBA (`com.example.meowmba`) is an on-device cat-companion voice assistant:
 wake word ("hey meow" + variants), Silero VAD + speaker-verification gates,

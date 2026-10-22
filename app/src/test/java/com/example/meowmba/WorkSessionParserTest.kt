@@ -33,10 +33,39 @@ class WorkSessionParserTest {
     }
 
     @Test
-    fun `file scaffold create a project is not a work session`() {
-        assertNull(ProjectRequestParser.parse(n("create a project called Website")))
+    fun `create and start project both create saved work sessions`() {
+        assertEquals("Website", ProjectRequestParser.parse(n("create a project called Website"))!!.name)
+        assertEquals(ProjectKind.WEBSITE, ProjectRequestParser.parse(n("create a new website project"))!!.kind)
+        assertNull(ProjectRequestParser.parse(n("create a report for this project")))
+        assertNull(ProjectRequestParser.parse(n("scaffold a project folder")))
         assertNull(ProjectRequestParser.parse(n("what is a project")))
         assertNull(ProjectRequestParser.parse(n("open spotify")))
+    }
+
+    @Test
+    fun `the apps spoken confirmation cannot recursively create projects`() {
+        assertNull(ProjectRequestParser.parse(n("Started Website. Its plan, activity and files are together in Projects. I'm drafting a plan for you to review.")))
+        assertNull(ProjectRequestParser.parse(n("Started Project 2")))
+        assertNull(ProjectRequestParser.parse(n("Project setup couldn't finish. Any existing project record and files were kept.")))
+    }
+
+    @Test
+    fun `project bug reports negations and progress discussion are not creation requests`() {
+        listOf(
+            "it keeps starting projects until i close the app",
+            "do not start a project", "don't start a project", "stop making projects",
+            "the project won't start", "restart the app to fix projects",
+            "i already started a project", "beginning the project was difficult",
+            "tell me how to start a project", "when should we begin our project",
+            "you said start a project", "start working on this project",
+        ).forEach { assertNull(it, ProjectRequestParser.parse(n(it))) }
+    }
+
+    @Test
+    fun `polite direct new project requests still work`() {
+        listOf("let's start a project", "let us begin a codebase", "i want to create a photo project",
+            "could you please make a new website project", "new code project", "help me plan a project")
+            .forEach { assertNotNull(it, ProjectRequestParser.parse(n(it))) }
     }
 
     @Test

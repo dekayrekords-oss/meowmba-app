@@ -8,7 +8,7 @@
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_com_example_meowmba_core_media_SDCppNative_nativeCreateContext(
+Java_com_example_meowmba_core_media_SDCppJniNative_createContext(
     JNIEnv* env, jobject /* this */, jstring jModelPath, jint nThreads) {
     const char* modelPath = env->GetStringUTFChars(jModelPath, nullptr);
 
@@ -31,7 +31,7 @@ Java_com_example_meowmba_core_media_SDCppNative_nativeCreateContext(
 // Returns a jbyteArray of raw RGB bytes (width*height*channel), or null on failure.
 // Caller (Kotlin) receives width/height/channel via the int[] out-parameter.
 extern "C" JNIEXPORT jbyteArray JNICALL
-Java_com_example_meowmba_core_media_SDCppNative_nativeGenerate(
+Java_com_example_meowmba_core_media_SDCppJniNative_generate(
     JNIEnv* env, jobject /* this */, jlong ctxPtr, jstring jPrompt,
     jint width, jint height, jint steps, jlong seed, jintArray outDims) {
     if (ctxPtr == 0) {
@@ -79,7 +79,7 @@ Java_com_example_meowmba_core_media_SDCppNative_nativeGenerate(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_example_meowmba_core_media_SDCppNative_nativeFreeContext(
+Java_com_example_meowmba_core_media_SDCppJniNative_freeContext(
     JNIEnv* env, jobject /* this */, jlong ctxPtr) {
     if (ctxPtr != 0) {
         free_sd_ctx(reinterpret_cast<sd_ctx_t*>(ctxPtr));

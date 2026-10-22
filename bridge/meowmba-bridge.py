@@ -2,7 +2,8 @@
 """
 meowmba-bridge — desktop companion daemon for the Meowmba Android app (Phase 6).
 
-Single file, Python 3.9+ standard library only. No pip installs.
+Python 3.10+ standard library only; keep desktop_ui.py and blender_scene.py
+alongside this entry point. No pip installs (Blender supplies bpy itself).
 
 What it does:
   * Serves HTTPS with a locally generated self-signed certificate.
@@ -50,6 +51,8 @@ import base64
 import hashlib
 import hmac
 import json
+import ipaddress
+import re
 import os
 import secrets
 import shutil
@@ -60,16 +63,28 @@ import subprocess
 import sys
 import threading
 import time
+from desktop_ui import DesktopUI
+from desktop_capabilities import logic_pro_status
+from logic_control import LogicController
+from logic_workflow import LogicWorkflow
+from audio_verify import verify_wave
+from blender_scene import validate as validate_scene
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-VERSION = "0.6.0"
+VERSION = "0.10.0"
+from malecns_control import MaleCnsController
+_malecns = MaleCnsController()
+_desktop_ui = DesktopUI()
+_blender_lock = threading.Lock()
 CONFIG_DIR = Path.home() / ".meowmba-bridge"
 CERT_PATH = CONFIG_DIR / "cert.pem"
 KEY_PATH = CONFIG_DIR / "key.pem"
 PAIRED_PATH = CONFIG_DIR / "paired.json"
 CONFIG_PATH = CONFIG_DIR / "config.json"
 LOG_PATH = CONFIG_DIR / "bridge.log"
+_logic = LogicController(CONFIG_DIR / 'logic_receipts')
+_logic_workflow = LogicWorkflow(_logic)
 
 DEFAULT_PORT = 8765
 DISCOVERY_PORT = 8766
@@ -111,6 +126,7 @@ def _is_denied_name(name: str) -> bool:
 
 # Holds the single-use pairing token in memory only (never written to disk).
 _pair_state: dict = {}
+_pair_lock = threading.Lock()
 
 
 # --------------------------------------------------------------------------
@@ -126,6 +142,31 @@ def _lan_ip() -> str:
         return "127.0.0.1"
     finally:
         s.close()
+
+
+def _advertise_host(value: str) -> str:
+    """Owner-selected connection address, never a URL, command or automatic trust source."""
+    if not value or value != value.strip() or len(value) > 253:
+        raise argparse.ArgumentTypeError("advertise host must be a DNS name or IP address")
+    bare = value[1:-1] if value.startswith('[') and value.endswith(']') else value
+    try:
+        return str(ipaddress.ip_address(bare))
+    except ValueError:
+        labels = bare.rstrip('.').split('.')
+        if not all(re.fullmatch(r'[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?', label) for label in labels):
+            raise argparse.ArgumentTypeError("advertise host must be a DNS name or IP address")
+        return bare
+
+
+def _pairing_payload(cfg: dict, advertised_host: str | None = None) -> dict:
+    return {
+        "v": 1,
+        "host": _advertise_host(advertised_host) if advertised_host is not None else _lan_ip(),
+        "port": cfg["port"],
+        "name": cfg["name"],
+        "pair_token": _pair_state["token"],
+        "cert_sha256": _cert_fingerprint(),
+    }
 
 
 def _load_config() -> dict:
@@ -153,22 +194,22 @@ def _ensure_cert() -> None:
     try:
         subprocess.run(
             [
-                "openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes",
+                ("/usr/bin/openssl" if sys.platform == "darwin" else "openssl"), "req", "-x509", "-newkey", "rsa:2048", "-nodes",
                 "-keyout", str(KEY_PATH), "-out", str(CERT_PATH),
                 "-days", "3650", "-subj", "/CN=meowmba-bridge",
                 "-addext", f"subjectAltName=DNS:localhost,DNS:{socket.gethostname()},IP:127.0.0.1,IP:{ip}",
             ],
-            check=True, capture_output=True,
+            check=True, capture_output=True, timeout=20,
         )
-    except (OSError, subprocess.CalledProcessError) as e:
+    except (OSError, subprocess.SubprocessError) as e:
         sys.exit(f"error: failed to generate self-signed certificate with openssl: {e}")
     os.chmod(KEY_PATH, 0o600)
 
 
 def _cert_fingerprint() -> str:
     der = subprocess.run(
-        ["openssl", "x509", "-in", str(CERT_PATH), "-outform", "DER"],
-        check=True, capture_output=True,
+        [("/usr/bin/openssl" if sys.platform == "darwin" else "openssl"), "x509", "-in", str(CERT_PATH), "-outform", "DER"],
+        check=True, capture_output=True, timeout=5,
     ).stdout
     return hashlib.sha256(der).hexdigest()
 
@@ -317,11 +358,13 @@ class BridgeHandler(BaseHTTPRequestHandler):
             self._send(404, {"error": "not found"})
 
     def _handle_pair(self, data: dict) -> None:
-        # USB auto-pair: accept from 192.168.42.x without a token.
-        client_ip = self.client_address[0] if hasattr(self, "client_address") else ""
-        if data.get("usb_auto") and client_ip.startswith("192.168.42."):
-            self._do_pair(data, is_usb_auto=True)
-            return
+        # ThreadingHTTPServer may receive the same one-time code twice at once.
+        with _pair_lock:
+            self._handle_pair_locked(data)
+
+    def _handle_pair_locked(self, data: dict) -> None:
+        # A subnet is not proof of physical ownership. USB uses the same
+        # single-use pairing code as LAN, then retains that trusted pairing.
 
         token = _pair_state.get("token")
         if not token or time.time() > _pair_state.get("expires", 0):
@@ -375,6 +418,8 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 "uptime_s": int(time.time() - self.server.started_at),
                 "workspace_roots": self.server.cfg.get("workspace_roots", []),
                 "paired_phone": pairing.get("phone_name"),
+                "capabilities": {"ui": bool(self.server.cfg.get("gui_enabled")) and sys.platform == "darwin", "blender_scene": bool(self.server.cfg.get("blender_enabled"))},
+                "logic_pro": logic_pro_status(gui_enabled=bool(self.server.cfg.get("gui_enabled")), logic_enabled=bool(self.server.cfg.get("logic_enabled"))),
             })
         elif method == "list_files":
             self._rpc_list_files(data.get("params") or {})
@@ -400,10 +445,105 @@ class BridgeHandler(BaseHTTPRequestHandler):
             self._rpc_media(data.get("params") or {})
         elif method == "screenshot":
             self._rpc_screenshot(data.get("params") or {})
+        elif method in ("ui_snapshot", "ui_action"):
+            if not self.server.cfg.get("gui_enabled"):
+                self._send(403, {"error":"Desktop UI control is off. Enable gui_enabled on the desktop and grant OS Accessibility/Automation."})
+                return
+            try:
+                result = _desktop_ui.snapshot() if method == "ui_snapshot" else _desktop_ui.act(data.get("params") or {})
+                _log(f"{method}: requested by paired phone; content omitted")
+                self._send(200,result)
+            except Exception as ex:
+                self._send(409,{"error":str(ex)[:600]})
+        elif method in ("malecns_step", "malecns_stop"):
+            try:
+                params = data.get("params") or {}
+                if method == "malecns_step":
+                    result = _malecns.step(params, self.server.cfg)
+                else:
+                    import re
+                    session = params.get("session")
+                    if not isinstance(session, str) or not re.fullmatch(r"[a-f0-9-]{36}", session):
+                        raise ValueError("Invalid neural session")
+                    result = _malecns.stop(session)
+                self._send(200, result)
+            except ValueError as error:
+                self._send(400, {"error": str(error)})
+            except Exception:
+                self._send(503, {"error": "Meow neural worker unavailable; local behavior remains available"})
+        elif method == "blender_scene":
+            self._rpc_blender_scene(data.get("params") or {}, pairing)
+        elif method in ('logic_inspect', 'logic_edit', 'logic_receipt', 'logic_verify_audio', 'logic_screen', 'logic_act', 'logic_cancel'):
+            self._rpc_logic(method, data.get('params') or {})
         else:
             self._send(400, {"error": f"unknown method '{method}'"})
 
     # -- workspace file tools (P6b, read-only) --------------------------------
+
+    def _rpc_logic(self, method, params):
+        if method != 'logic_cancel' and (not self.server.cfg.get('logic_enabled') or not self.server.cfg.get('gui_enabled')):
+            self._send(403, {'error': 'Enable logic_enabled and gui_enabled in the Mac helper after choosing a working project copy.'}); return
+        protected = [CONFIG_DIR.resolve(), Path(__file__).resolve().parent,
+                     Path('/opt/homebrew/opt/libebur128/lib/libebur128.dylib').resolve(),
+                     Path('/usr/local/opt/libebur128/lib/libebur128.dylib').resolve()]
+        if any(p == Path(r) or Path(r) in p.parents for p in protected for r in self._workspace_roots()):
+            self._send(403, {'error': 'The helper and its receipts must be outside all phone-writable workspace roots.'}); return
+        try:
+            if not isinstance(params, dict): raise ValueError('Logic parameters must be an object')
+            if method == 'logic_verify_audio':
+                if set(params) != {'path'}: raise ValueError('Provide the path to a WAV bounce')
+                path, error = self._resolve_in_workspace(params['path'])
+                if error: raise ValueError(error)
+                if not str(path).lower().endswith('.wav'): raise ValueError('Export the bounce as a WAV file first')
+                result = verify_wave(path)
+            elif method == 'logic_inspect':
+                if params: raise ValueError('Logic inspection takes no parameters')
+                result = _logic.inspect()
+            elif method == 'logic_edit': result = _logic.edit(params)
+            elif method == 'logic_screen':
+                if set(params) != {'query', 'offset'}: raise ValueError('Provide query and offset')
+                result = _logic_workflow.screen(**params)
+            elif method == 'logic_act': result = _logic_workflow.act(params, self._workspace_roots())
+            elif method == 'logic_cancel':
+                if set(params) != {'operation_id'}: raise ValueError('Provide an operation_id')
+                result = _logic.cancel(params['operation_id'])
+            else:
+                if set(params) != {'operation_id'}: raise ValueError('Provide an operation_id')
+                result = _logic.receipt(params['operation_id']) or {'state': 'not_found'}
+            _log(f'{method}: paired phone; project and parameter contents omitted')
+            self._send(200, result)
+        except Exception as ex:
+            self._send(409, {'error': str(ex)[:600]})
+
+    def _rpc_blender_scene(self, params, pairing):
+        if not self.server.cfg.get("blender_enabled"):
+            self._send(403,{"error":"Blender scene creation is off. Enable blender_enabled on the desktop after choosing workspace_roots."}); return
+        try:
+            spec = validate_scene(params.get("scene"))
+        except (ValueError,TypeError) as ex:
+            self._send(400,{"error":str(ex)}); return
+        roots=self._workspace_roots()
+        if not roots or not os.path.isdir(roots[0]):
+            self._send(403,{"error":"Choose an existing desktop workspace root first"}); return
+        binary=self.server.cfg.get("blender_binary") or shutil.which("blender")
+        if not binary and sys.platform == "darwin":
+            binary="/Applications/Blender.app/Contents/MacOS/Blender"
+        if not binary or not os.path.isfile(binary):
+            self._send(503,{"error":"Blender is not installed or blender_binary is not configured"}); return
+        if not _blender_lock.acquire(blocking=False):
+            self._send(409,{"error":"A Blender job is already running; do not submit duplicates"}); return
+        try:
+            out=Path(tempfile.mkdtemp(prefix="meow-scene-",dir=roots[0]))
+            spec_file=out/"scene.json"; spec_file.write_text(json.dumps(spec))
+            adapter=Path(__file__).resolve().with_name("blender_scene.py")
+            proc=self._run_quiet([binary,"--background","--factory-startup","--disable-autoexec","--python-exit-code","1","--python",str(adapter),"--",str(spec_file),str(out)],timeout=180)
+            artifacts=[out/"scene.blend",out/"scene.glb"] + ([out/"preview.png"] if spec.get("render",True) else [])
+            if proc is None or proc.returncode or not all(f.is_file() and f.stat().st_size>0 for f in artifacts):
+                self._send(500,{"error":"Blender failed or timed out; no completion verified. Inspect the retained job directory.","directory":str(out)}); return
+            _log(f"blender_scene: {out.name} completed; {len(spec['objects'])} objects")
+            self._send(200,{"message":"Blender scene created and exported. This is a bounded primitive scene, not a production character rig.","artifacts":[{"path":str(f),"bytes":f.stat().st_size,"sha256":hashlib.sha256(f.read_bytes()).hexdigest()} for f in artifacts]})
+        finally:
+            _blender_lock.release()
 
     def _workspace_roots(self) -> list:
         roots = []
@@ -945,9 +1085,11 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Meowmba desktop bridge daemon")
     ap.add_argument("--pair", action="store_true", help="open a 10-minute pairing window")
     ap.add_argument("--auto-pair", action="store_true",
-        help="accept pairing from USB-tethered phones (192.168.42.x) without a code")
+        help="deprecated alias for --pair; an owner-confirmed code is always required")
     ap.add_argument("--unpair", action="store_true", help="forget the paired phone and exit")
     ap.add_argument("--port", type=int, default=None, help=f"listen port (default {DEFAULT_PORT})")
+    ap.add_argument("--advertise-host", type=_advertise_host,
+        help="DNS or VPN/IP address printed in the pairing payload; does not change the listener or trust policy")
     args = ap.parse_args()
 
     if args.unpair:
@@ -960,18 +1102,11 @@ def main() -> None:
         cfg["port"] = args.port
     _ensure_cert()
 
-    if args.pair:
+    if args.pair or args.auto_pair:
         _pair_state["token"] = _make_pair_code()
         _pair_state["expires"] = time.time() + PAIR_TOKEN_TTL_S
         _pair_state["attempts"] = 0
-        payload = {
-            "v": 1,
-            "host": _lan_ip(),
-            "port": cfg["port"],
-            "name": cfg["name"],
-            "pair_token": _pair_state["token"],
-            "cert_sha256": _cert_fingerprint(),
-        }
+        payload = _pairing_payload(cfg, args.advertise_host)
         blob = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode()
         print("═" * 64)
         print("  PAIRING WINDOW OPEN (10 minutes, single use)")
@@ -982,18 +1117,6 @@ def main() -> None:
         print("  pick this computer and enter the code.")
         print()
         print(f"  Manual fallback payload: {blob}")
-        print("═" * 64, flush=True)
-    elif args.auto_pair:
-        _pair_state["token"] = "AUTO_PAIR_USB"
-        _pair_state["expires"] = time.time() + 86400 * 365  # effectively permanent
-        _pair_state["attempts"] = 0
-        print("═" * 64)
-        print("  USB AUTO-PAIR ACTIVE")
-        print()
-        print("  Plug your phone in via USB tether — pairing happens")
-        print("  automatically. No code needed.")
-        print()
-        print(f"  Listening on https://0.0.0.0:{cfg['port']}")
         print("═" * 64, flush=True)
     elif not _load_pairing():
         print("warning: not paired — run with --pair to pair a phone", flush=True)
@@ -1019,6 +1142,7 @@ def main() -> None:
         pass
     finally:
         stop_broadcast.set()
+        _malecns.stop()
 
 
 if __name__ == "__main__":

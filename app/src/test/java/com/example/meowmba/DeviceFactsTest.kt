@@ -8,6 +8,15 @@ import org.junit.Test
 
 class DeviceFactsTest {
 
+    @Test fun `ordinary conversation does not receive battery telemetry`() {
+        assertFalse(PromptBuilder.requestsBatteryStatus("Tell me a story"))
+        assertTrue(PromptBuilder.requestsBatteryStatus("Is my phone charging?"))
+        assertTrue(PromptBuilder.requestsBatteryStatus("How much battery is left?"))
+        val facts = PromptBuilder.deviceFacts("Phone battery is 73% (charging).", false, "disconnected", includeBattery = false)
+        assertFalse(facts.contains("73%"))
+        assertFalse(facts.contains("charging"))
+    }
+
     @Test
     fun `facts forbid inventing a battery percent or a LOOI when none is live`() {
         val snap = BatteryReading.Snapshot(percent = 73, charging = false, saver = false)

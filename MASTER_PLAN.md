@@ -1,4 +1,180 @@
+# MASTER PLAN
+
+## Current — 2026-09-17 (feat/lumen-drive-carplay-obd2 · Preview vc128)
+
+Branch: `feat/lumen-drive-carplay-obd2` (from `feat/meta-glasses-meow-bridge` @ `8ac4b9d`). Preview package `com.example.meowmba`. Flags `lumen_reflex_v2` / `agentic_runtime_v1` remain default **OFF**. No FlyWire.
+
+### This slice
+- [x] Lumen idle morph cycles **all** authored characters (+ optional generated forms)
+- [x] Stronger drive-mode emotion / IMU reactivity
+- [x] Driver camera preview on drive card; car camera source list (USB/RTSP hooks)
+- [x] Vehicle Bluetooth / AA awareness + honest CarPlay limits
+- [x] MediaSession / dialer best-effort (not full CarPlay ownership)
+- [x] Native ELM327 Bluetooth OBD-II → Lumen cues + diagnostics panel/alerts
+- [x] Docs: `docs/DRIVE_CARPLAY_OBD2.md`
+
+See also prior tip: Meta glasses Meow bridge (vc127).
+
 # MEOWMBA MASTER PLAN
+
+## September 14 Arizona / September 15 UTC — audit repair preview128
+
+Installed preview128 over USB, preserving app data and all74 native/model/asset
+entries. Private branch `codex/repair128-voice-props-performance` includes transport
+cancellation/completion repairs, usable generated props, validated-design timeout
+recovery, disabled-runtime initialization repair, and two measured rendering/UI
+cost fixes. Full Android suite:2516 passed. Core phone acceptance:14 passed.
+
+This is a stabilization checkpoint, not completion of the broader roadmap.
+Free-route live generation, sustained power/heat, neural pairing, Computer P1 and
+full Logic/business workflows remain open. Read
+[the complete repair and acceptance record](docs/MEOW_REPAIR_128_PASS_DOWN.md)
+before building from an older checkout or treating a passing fixture as live AI.
+## September 16, 2026 — Meta glasses ↔ Meow bridge (Preview vc126)
+
+Branch: `feat/meta-glasses-meow-bridge` (from `feat/prop-placement-vending-clock` @ `fda4eac`). Preview package `com.example.meowmba`. Flags `lumen_reflex_v2` / `agentic_runtime_v1` remain default **OFF**. No FlyWire.
+
+- [x] Discovery doc: [META_GLASSES_MEOW_BRIDGE.md](docs/META_GLASSES_MEOW_BRIDGE.md) — MWDAT 0.8.0 limits, Hey Meta vs Hey Meow, SSH/OpenCode path.
+- [x] Bridge prefs + transcript normalize (`MetaGlassesMeowBridge`); route into companion tool loop.
+- [x] Tools: `ssh.meow`, `opencode.run`, `server.shell` (reuse SshHostRegistry + AgenticSshPolicy / confirmation).
+- [x] Settings UI on LLM Meta glasses card: connect status, bridge toggle, default meow SSH host.
+- [x] Preview debug `versionCode` **126**.
+- [ ] Fold E2E with physical Ray-Bans + meow SSH (device-dependent).
+- [ ] MWDAT-enabled APK (needs GitHub `read:packages` PAT + Wearables registration) — camera Setup still gated.
+
+Honest limit: “Hey Meta” stays Meta’s assistant; Meow hears glasses via Bluetooth SCO + “Hey Meow” / mic.
+
+
+## September 15, 2026 — Prop placement / vending animation / background clock (Preview vc125)
+
+Branch: `feat/prop-placement-vending-clock` (from `fix/invent-avatar-crash-and-drawer-search` @ `7748ed3`). Preview package `com.example.meowmba`. Flags `lumen_reflex_v2` / `agentic_runtime_v1` remain default **OFF**. No FlyWire.
+
+- [x] Prop-on-avatar placement editor (drag + scale/rotate); persist attach in `GeneratedPropForm`.
+- [x] Smarter default attach for wearables (glasses near eyes); user override required path after invent.
+- [x] Vending Machine animation generator lane (props list + duration/intensity + CustomAnimationStore).
+- [x] Avatar workshop preview + generate-from-current + selectable props.
+- [x] Clickable local wall clock on every companion background (`CompanionWallClock` → system Clock app).
+
+## September 15, 2026 — Epic P3 / Slices E+F: Deep care + background motion + files scope
+
+Branch: `feat/epic-p3-care-motion-files` (from `feat/epic-p2-vending-machine` @ `76aba32`). Preview package `com.example.meowmba`. Flags `lumen_reflex_v2` / `agentic_runtime_v1` remain default **OFF**. No FlyWire.
+
+### Done (Slice E — Deep play/care)
+- [x] Richer needs meters: Food, Energy, Mood, Affection, Hygiene with time-based decay (persist `pet_care_v1` v2; v1 migrates).
+- [x] Care actions with feedback: Feed, Play, Rest, Clean, Talk (+ habitat Read/Drink/Nudge/Explore); form-aware reaction lines.
+- [x] Polished `PetCarePanel` Compose UX (meters, action chips, reaction card) — still optional Care mode; pet never dies.
+- [x] Avatar bias reacts to affection/hygiene/energy/mood when care is on.
+
+### Done (Slice F — Background motion + files scope)
+- [x] Minimal ambient motion: illustrated room parallax drift + soft shimmer; aurora/starfield/nebula gentle wash (scene clock / pause / thermal respected).
+- [x] Files: **Local files** vs **All files on phone** scope chips; library cleanup vs MediaStore phone cleanup suggestions; AI organize stays library-only.
+
+### Epic status
+- [x] P1 Connections / Invent / Launcher
+- [x] P2 Vending Machine (Slice D)
+- [x] P3 Care + motion + files (E+F)
+- Epic complete pending merge + Preview APK ship (APK build may be on separate habitat worktree).
+
+### Still queued outside this epic
+- [ ] Computer agentic P1 workspace file tools (from Computer P0 notes)
+
+## September 15, 2026 — Epic P2 / Slice D: Vending Machine (props + avatar workshop)
+
+Branch: `feat/epic-p2-vending-machine` (from `feat/epic-p1-connections-invent-launcher` @ `751d508`). Preview package `com.example.meowmba`. Flags `lumen_reflex_v2` / `agentic_runtime_v1` remain default **OFF**. No FlyWire.
+
+### Done (Slice D)
+- [x] Replace Studio Memba tile with **Vending** → `VendingMachineScreen` hub.
+- [x] Avatar lanes: simple Become-anything (existing invent) + **Workshop** (structured look/parts/style/freeform → invent/refine + InventReasonLevel).
+- [x] Prop dispenser parallel to avatar invent (`PropInventor` + `GeneratedPropStore` under `filesDir/companion_props`).
+- [x] Prop library UI; OOM/timeout hardening mirrors avatar invent.
+- [x] Former Studio comics/characters kept as a vending lane (not hard-deleted).
+
+### Still queued after Slice D (historical — E+F shipped on epic-p3)
+- [x] Deep Tamagotchi care overhaul (Slice E) → `feat/epic-p3-care-motion-files`
+- [x] Background art motion (Slice F)
+- [x] Files cleanup local vs all-phone (Slice F)
+- [ ] Computer agentic P1 workspace file tools (from Computer P0 notes)
+
+## September 14, 2026 — Epic P1: Connections / Invent / Launcher
+
+Branch: `feat/epic-p1-connections-invent-launcher` (from `codex/computer-p0-build120` @ invent-OOM lineage). Preview package `com.example.meowmba`. Flags `lumen_reflex_v2` / `agentic_runtime_v1` remain default **OFF**. No FlyWire.
+
+### Done (P1)
+- [x] Connections & Memory settings UI refresh (section cards, hierarchy, spacing).
+- [x] Persist previously connected SSH servers; selectable saved list fills edit form; agentic profiles also selectable for host reuse.
+- [x] Expose **MaleCNS** as a selectable server brain on Connections when paired (substrate → `MALECNS_REMOTE`).
+- [x] Become-anything: invent prompt limit raised modestly (500 → **720**).
+- [x] Refine a worn generated avatar with additional prompts.
+- [x] Invent prompts require movable parts (head/body/arms/legs/tail or subject-equivalent) with motion tags.
+- [x] Quality/speed **reason level** (Faster / Balanced / Higher quality) wired into generate + refine.
+- [x] Launcher: most-used panel (~top 2 rows), remove / never-frequent, long-press controls, list/grid toggle.
+- [x] Drawer search: subsequence letter matching across query tokens.
+
+### Queued / out of scope for P1 (Slice D shipped on epic-p2)
+- ~~Studio → vending machine for props+avatars workshop~~ → Slice D
+- ~~Prop generation machine~~ → Slice D
+- ~~Deep Tamagotchi care overhaul~~ → Slice E
+- ~~Background art motion~~ → Slice F
+- ~~Files cleanup local vs all-phone~~ → Slice F
+- Computer agentic P1 (workspace `file_read`/`file_write`, stronger multi-step planner) — still queued from Computer P0 notes
+
+
+## September 14, 2026 — Computer P0 (preview 96) — Grok-ish reachability
+
+Goal: make Computer + agentic path day-to-day usable on Fold + host meow (same *idea* as a cloud computer agent; early maturity). Flags stay default **OFF**.
+
+- [x] Move Meow Computer HTTPS worker default off Bridge UDP **8766** → worker port **18766** (`ComputerProfileMarks`, `computer/install.sh` + assets).
+- [x] Reachability honesty: SSH ConnectionProfile is primary day-to-day; HTTPS_RUNTIME demoted with NetBird bind / `ssh -L` hints; optional `--bind` / `MEOW_COMPUTER_HOST` (default `127.0.0.1`).
+- [x] Chat auto-tick when Agentic ON: tick until DONE | BLOCKED | WAITING_APPROVAL within budgets; cancel; scrubbed truncated stdout (`AgenticAutoTick` / `tickUntilTerminal`).
+- [x] Preview debug-only `onVariants` versionCode **96**; Play `defaultConfig` stays **1.3.81 / 85**.
+- [x] Docs: [COMPUTER_P0_FOLD_CHECKLIST.md](docs/COMPUTER_P0_FOLD_CHECKLIST.md), YOUR_COMPUTER / TERMINAL_CLONE / computer README updates.
+- [x] PR: https://github.com/dekayrekords-oss/meowmba-app/pull/1 (`feat/computer-p0-reachability-autotick` → `feat/lumen-reflex-agentic`).
+- [ ] Fold E2E from checklist (Termux Computer and/or SSH meow) — not device-verified yet.
+- [ ] Reinstall/restart existing meow workers still on **8766** onto **18766**.
+- [ ] Ship Preview 96 APK to Fold apk-serve (`/home/prog/apk-serve/preview.apk`) when owner asks.
+- [ ] Merge PR #1 when owner accepts.
+- [ ] P1 next (not started): workspace file tools, stronger multi-step planner, unify web tools into agentic loop.
+
+Do **not**: custom proot/tmux forks, FlyWire, LLM-per-frame Computer drive, bump Play without owner ask, expose worker `0.0.0.0` without auth.
+
+Branch HEAD at plan write: `796b851` on `feat/computer-p0-reachability-autotick`.
+
+
+## September 7, 2026 — cross-device control preview (1.3.40, code 44)
+
+- [x] Build and install code44 on the connected SM_F966U1, retaining user data and local models.
+- [x] Real OpenRouter function-calling decisions, changed-screen rejection, indexed editable controls and hard navigation-only/draft-only limits.
+- [x] Explain local versus stronger cloud planning, Accessibility, Bluetooth and computer setup in onboarding.
+- [x] Approved `brain.select_model`, read-only `brain.models`, paired Bluetooth inventory and guided Android pairing tools.
+- [x] Desktop 0.7 source: bounded macOS accessible controls with per-step approval, single-use snapshots, retained trust and no tokenless USB pairing.
+- [x] Bounded Blender scene/export adapter; actual Blender 5.2.1 .blend/.glb/PNG smoke passed. No avatar/model added to app assets.
+- [x] 1,248 JVM/Compose tests: zero failures/errors, five conditional skips; 14 Python helper tests passed.
+- [ ] Final phone UI acceptance: after instrumentation Android marked Meow Accessibility crashed/disconnected. Owner must reconnect it before final code44 Reddit/other-app and confirmation tests.
+- [ ] Verify/select a suitable OpenRouter model. The saved `openrouter/free` route failed planning; a live-catalog-verified Gemma4 31B free option returned HTTP429. Local selection was kept; paid usage requires an owner decision.
+- [ ] Pair the user's chosen computer and enable actual OS capabilities. Mac native UI permission was denied; Meow's Linux tty session is not a working GUI adapter.
+- [ ] Physical Bluetooth device pairing/profile acceptance, arbitrary-app/native desktop controls, confirmed outgoing delivery and long-running service integrations remain unsignoffed.
+
+Evidence and next steps: [cross-device preview](docs/CROSS_DEVICE_CONTROL_2026-09-07.md).
+
+## September 7, 2026 — phone planning / onboarding / workflow upgrade (1.3.38, code 42)
+
+- [x] Preserve multi-step app goals instead of discarding instructions after the app name.
+- [x] Resolve common ASR aliases and conservative spelling errors against installed apps; refuse ambiguous matches.
+- [x] Use one index map for accessible screen controls and taps. Navigation requires task approval; social/message controls add single-use on-screen verification. Payments, deletion and permissions stay manual.
+- [x] Merge restored conversation history with live turns; keep ambiguous pronouns out of the immediate app launcher.
+- [x] Ask for clarification on strong broadcast-ad cues; keep existing garble/echo filters. This is NOT reliable speaker/TV identification.
+- [x] Local-first conversation-model download, progress and real navigation/context checks; optional consented OpenRouter catalog and verified key setup.
+- [x] Add 30 configurable workflow starters, a chief-of-staff/specialist template, and an event-keyed local reply-draft outbox. Templates are not 30 new integrations.
+- [x] Live Facebook composer and exact `meow ai test` draft verified through the normal app; nothing published. Generic all-app control is not signed off.
+- [x] Reconnect USB and install the last confirmation/compound-routing refinement (included in code44).
+- [ ] Verify native Cancel/Confirm UI and separately authorized positive delivery on the final installed build.
+- [ ] Verify positive confirmed social-action delivery separately; never mistake a dispatched tap for a published post or sent message.
+- [ ] Configure the user's actual email/signup service and explicit read permissions; verify real-event polling, pagination and cursor behavior.
+- [ ] Before unattended replies: implement a narrowly scoped policy UI (account, recipients, topics, rate/budget limits, expiry and kill switch), trusted event IDs, server-side idempotency and delivery reconciliation. Current replies are drafts or individually approved service actions, NOT autonomous auto-replies.
+- [ ] Long-horizon acceptance: overnight Android scheduling/reboot/Doze, network loss, expired credentials, revoke/stop, thermal recovery and repeated-event tests with real services. No 24/7 guarantee on a phone.
+
+Implementation and measured acceptance: [phone planning upgrade](docs/PHONE_PLANNING_2026-09-07.md).
+Earlier checkpoints below remain historical; 3D work is still paused.
 
 ## Current release checkpoint — September 5, 2026
 

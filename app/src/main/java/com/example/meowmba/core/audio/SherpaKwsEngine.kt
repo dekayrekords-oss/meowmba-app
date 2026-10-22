@@ -128,6 +128,9 @@ class SherpaKwsEngine(
         keywords = tokenised
     }
 
+    // Synchronized for the same reason as SherpaAsrEngine.start: the check and
+    // the launch must be one step, or two racing callers each start a loop.
+    @Synchronized
     override fun start() {
         // [stop] clears [running] immediately but the previous captureLoop may
         // still hold AudioRecord until the next 100ms read + finally. Starting

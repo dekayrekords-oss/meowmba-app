@@ -50,6 +50,9 @@ val mwdatClientToken = gradle.extra["mwdat.clientToken"] as String
 // that key in local.properties (gitignored); without it the default
 // per-machine debug keystore is used, as before.
 val debugKeystorePath = (localProps.getProperty("debugKeystore") ?: "").trim()
+// Preview Kotlin/UI builds may reuse unchanged JNI bridges from a verified APK.
+// This applies to debug and daily; Play release always uses the pinned sources.
+val prebuiltDebugNativeDir = providers.gradleProperty("prebuiltDebugNativeDir").orNull
 println(
     when {
         hasMwdat -> "MWDAT (Meta glasses SDK): ENABLED"
@@ -63,7 +66,7 @@ android {
 
     ndkVersion = "27.0.12077973"  // match whatever Task 1 confirmed available
 
-    externalNativeBuild {
+    if (prebuiltDebugNativeDir == null) externalNativeBuild {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
             version = "3.22.1"
@@ -80,8 +83,18 @@ android {
         // versionCode 20 (1.3.16), so an install at 20 would not register as an
         // upgrade and preserving app data would be a coin flip. 21 > 20 makes it
         // a genuine in-place upgrade that keeps the Room database and models.
-        versionCode = 27
-        versionName = "1.3.23"
+        // 81 > 80 so the accessibility-event fix installs as a genuine in-place
+        // upgrade that keeps the Room database and selected models.
+        // 82 > 81 so the adaptive driving-GPS-cadence fix installs the same way.
+        // 83 > 82 so the idle MicButton glow fix installs the same way.
+        // 84 > 83 so the continuous-drive (nervous system) behaviour installs as
+        // a genuine in-place upgrade, and so it is distinguishable on-device from
+        // the 83 thermal build when testing.
+        // 85 > 84 so the affect/valence + pet wiring installs as a genuine
+        // in-place upgrade, and so it is distinguishable on-device from 84 (which
+        // has the drives but not the reply affect or the touch sense).
+        versionCode = 206
+        versionName = "2.0"
 
         buildConfigField("boolean", "HAS_MWDAT_SDK", hasMwdat.toString())
         manifestPlaceholders["mwdat_application_id"] = mwdatApplicationId
@@ -97,8 +110,10 @@ android {
             cmake {
                 arguments += listOf(
                     "-DANDROID_PLATFORM=android-31",
-                    "-DCMAKE_C_FLAGS=-march=armv8.7a",
-                    "-DCMAKE_CXX_FLAGS=-march=armv8.7a",
+                    "-DCMAKE_C_FLAGS=-march=armv8-a",
+                    "-DCMAKE_CXX_FLAGS=-march=armv8-a",
+                    "-DGGML_NATIVE=OFF",
+                    "-DGGML_CPU_ARM_ARCH=armv8-a",
                     "-DGGML_OPENMP=OFF",
                     "-DGGML_LLAMAFILE=OFF"
                 )
@@ -128,12 +143,30 @@ android {
                 storePassword = "android"
                 keyAlias = "androiddebugkey"
                 keyPassword = "android"
+                // Samsung / Android 16 sideload: keep v1 + v2 + v3. AGP defaulted
+                // debug to v2-only which some PackageInstaller paths reject.
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
             }
         }
     }
 
     buildTypes {
+        debug {
+            buildConfigField("boolean", "BACKGROUND_LOCATION_ENABLED", "true")
+            buildConfigField("boolean", "PHONE_AUTOMATION_ENABLED", "true")
+            buildConfigField("boolean", "RING_CONTROLS_ENABLED", "true")
+            buildConfigField("boolean", "PHONE_MEDIA_LIBRARY_ENABLED", "true")
+        }
         release {
+            buildConfigField("boolean", "BACKGROUND_LOCATION_ENABLED", "false")
+            // Play excludes autonomous Accessibility-based phone control.
+            // The release manifest removes the service as a second boundary.
+            buildConfigField("boolean", "PHONE_AUTOMATION_ENABLED", "false")
+            // Explicit physical ring input is separate from autonomous phone tools.
+            buildConfigField("boolean", "RING_CONTROLS_ENABLED", "true")
+            buildConfigField("boolean", "PHONE_MEDIA_LIBRARY_ENABLED", "false")
             // Shrink + obfuscate for Play. JNI / Room / MediaPipe kept via
             // src/main/keepRules/rules.keep.
             isMinifyEnabled = true
@@ -153,6 +186,15 @@ android {
                 null
             }
         }
+        create("daily") {
+            initWith(getByName("release"))
+            isDebuggable = false
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+            buildConfigField("boolean", "PHONE_AUTOMATION_ENABLED", "true")
+            buildConfigField("boolean", "PHONE_MEDIA_LIBRARY_ENABLED", "true")
+            buildConfigField("boolean", "BACKGROUND_LOCATION_ENABLED", "true")
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -162,6 +204,10 @@ android {
     // when configured in settings.gradle.kts. verifyMwdatReleaseConfiguration
     // prevents the tokenless development variant from becoming a Play build.
     sourceSets {
+        if (prebuiltDebugNativeDir != null) {
+            getByName("debug").jniLibs.srcDir(prebuiltDebugNativeDir)
+            getByName("daily").jniLibs.srcDir(prebuiltDebugNativeDir)
+        }
         getByName("main") {
             if (hasMwdat) {
                 java.srcDir("src/mwdat/java")
@@ -176,7 +222,7 @@ android {
     testOptions.unitTests.isIncludeAndroidResources = true
 
     // MediaPipe / LiteRT AARs ship every ABI. We only ship arm64 (the Fold).
-    // Without this the Play APK is ~390 MB and over the 200 MB cap.
+    // This avoids packaging unused ABIs and reduces the Play download size.
     packaging {
         jniLibs {
             // Uncompressed + 16 KB zip-aligned — Play rejects 4 KB-only ELF
@@ -193,14 +239,25 @@ android {
                 // under Play's 200 MB install cap.
                 "**/libimagegenerator_gpu.so",
             )
+            // sherpa-onnx (jniLibs) and onnxruntime-android both ship ORT 1.27.0; keep one.
+            pickFirsts += listOf("**/libonnxruntime.so")
         }
     }
 }
 
 androidComponents {
+    beforeVariants(selector().withBuildType("release")) { variant ->
+        // Exercise the actual Play feature boundaries, not only the debug defaults.
+        (variant as com.android.build.api.variant.HasUnitTestBuilder).enableUnitTest = true
+    }
+    onVariants(selector().withBuildType("daily")) { variant ->
+        variant.applicationId.set("com.example.meowmba")
+    }
+
     onVariants(selector().withBuildType("debug")) { variant ->
         // Fold still has the old id. Release / Play stays com.meow.meowmba.
         variant.applicationId.set("com.example.meowmba")
+        // Use defaultConfig's allocated version for debug as well as daily.
     }
 }
 
@@ -212,7 +269,18 @@ ksp {
 // IdleAnimationDirector would spin forever there, so keep it off for the
 // whole test task. IdleBehaviorTest re-enables it explicitly.
 tasks.withType<Test>().configureEach {
+    if (name == "testReleaseUnitTest") {
+        // Compose's test activity belongs to debugImplementation and must not
+        // ship in Play. Run the full UI/regression suite on debug and these
+        // permission-boundary tests against the actual release BuildConfig.
+        filter {
+            includeTestsMatching("com.example.meowmba.PlayMediaAccessTest")
+            includeTestsMatching("com.example.meowmba.PlayLocationAccessTest")
+            includeTestsMatching("com.example.meowmba.PlayRingControlsTest")
+        }
+    }
     systemProperty("meowmba.idleAnimations", "false")
+    if (providers.gradleProperty("testProgress").orNull == "true") testLogging.events("started", "failed", "skipped")
 
     // The full suite died with OutOfMemoryError twice under the old defaults
     // (512m worker heap, no JVM recycling). Raising the heap alone did NOT fix
@@ -264,6 +332,8 @@ val verifyReleaseSigningConfiguration = tasks.register("verifyReleaseSigningConf
 }
 tasks.matching { it.name == "preReleaseBuild" }.configureEach {
     dependsOn(verifyReleaseSigningConfiguration)
+    val usesPrebuiltDebugNative = prebuiltDebugNativeDir != null
+    doFirst { check(!usesPrebuiltDebugNative) { "Release cannot use prebuiltDebugNativeDir. Build the pinned native sources." } }
 }
 
 // These gitignored runtimes must be restored in every fresh release checkout.
@@ -339,6 +409,7 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation("androidx.work:work-runtime-ktx:2.10.2")
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
@@ -358,11 +429,18 @@ dependencies {
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
     implementation(libs.litert.lm.android)
+    // Laya (Meow Flow decisions) on the phone. Same ONNX Runtime version (1.27.0) as the
+    // sherpa-onnx voice runtime in src/main/jniLibs, so both share one libonnxruntime.so.
+    implementation(libs.onnxruntime.android)
+    // Low-power activity recognition + fused location for Meow's always-on context.
+    implementation(libs.play.services.location)
     implementation(libs.mlkit.image.labeling)
     implementation(libs.mlkit.text.recognition)
     implementation(libs.mlkit.face.detection)
     implementation(libs.mlkit.pose.detection)
+    implementation("com.google.mlkit:barcode-scanning:17.3.0")
     implementation(libs.ktor.client.android)
+    implementation(libs.ktor.client.okhttp)
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
     testImplementation(libs.junit)

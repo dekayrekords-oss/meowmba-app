@@ -1,0 +1,6 @@
+Meow Assistant 2.0
+Flow is the default idle view; Lumen and Orb remain optional.
+Control your phone with a compatible ring: scroll, move the click target and
+click without touching the phone. Separate Accessibility consent, Android
+enablement, gesture verification and allowed-app setup are required.
+Pause, sleep and double-tap wake keep ring controls under your control.

@@ -1,5 +1,6 @@
 package com.example.meowmba
 
+import androidx.lifecycle.viewModelScope
 import com.example.meowmba.core.memory.MemoryRepository
 import com.example.meowmba.core.security.SecureStorageManager
 import com.example.meowmba.core.vision.DeviceVisionProvider
@@ -8,6 +9,7 @@ import com.example.meowmba.core.vision.OpenAIVisionProvider
 import com.example.meowmba.core.vision.VisionRouter
 import com.example.meowmba.ui.companion.CompanionViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -34,17 +36,35 @@ class VisionPipelineTest {
     private val testDispatcher = UnconfinedTestDispatcher()
     private val mockSecureStorage = mock(SecureStorageManager::class.java)
     private val mockMemoryRepository = mock(MemoryRepository::class.java)
+    private val models = mutableListOf<CompanionViewModel>()
+    private lateinit var androidMocks: ScopedCompanionAndroidMocks
+    private var priorIdleAnimations: String? = null
 
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
+        androidMocks = ScopedCompanionAndroidMocks { testDispatcher.scheduler.currentTime }
+        priorIdleAnimations = System.getProperty("meowmba.idleAnimations")
+        System.setProperty("meowmba.idleAnimations", "false")
         `when`(mockSecureStorage.context).thenReturn(mock(android.content.Context::class.java))
     }
 
     @After
     fun tearDown() {
+        models.forEach { it.viewModelScope.cancel() }
+        androidMocks.close()
         Dispatchers.resetMain()
+        if (priorIdleAnimations == null) System.clearProperty("meowmba.idleAnimations")
+        else System.setProperty("meowmba.idleAnimations", priorIdleAnimations!!)
     }
+
+    // The routing/provider under test is real. Only unrelated Android clock,
+    // logging and AgenticRuntime startup use the shared scoped JVM fixture.
+    private fun model() = CompanionViewModel(
+        secureStorage = mockSecureStorage,
+        memoryRepository = mockMemoryRepository,
+        ioDispatcher = testDispatcher,
+    ).also { models += it }
 
     // ── Router ─────────────────────────────────────────────────────────────
 
@@ -94,6 +114,15 @@ class VisionPipelineTest {
     }
 
     @Test
+    fun `qr requests are explicit one shot scans`() {
+        val q = VisionRouter.parse("scan this QR code")
+        assertNotNull(q)
+        assertTrue(q!!.isQrQuery)
+        assertTrue(q.isReadQuery)
+        assertTrue(VisionRouter.promptFor(q).contains("separately"))
+    }
+
+    @Test
     fun `read the screen triggers as read query with focus`() {
         val q = VisionRouter.parse("read the screen")
         assertEquals("screen", q?.focus)
@@ -125,7 +154,7 @@ class VisionPipelineTest {
     fun `network selection with configured vision endpoint maps to ollama vision`() = runTest {
         `when`(mockSecureStorage.getEndpoint("network_vision")).thenReturn("http://192.168.1.69:11434")
         `when`(mockSecureStorage.getModelName("network_vision")).thenReturn("gemma4:12b-it-qat")
-        val vm = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
+        val vm = model()
 
         vm.onModelSelected("OpenRouter (Cloud)")
 
@@ -137,7 +166,7 @@ class VisionPipelineTest {
     fun `network selection without a configured vision endpoint stays honest`() = runTest {
         // Standalone app: no home server and no OpenRouter key — vision reports
         // nothing rather than dialing a hardcoded LAN address.
-        val vm = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
+        val vm = model()
 
         vm.onModelSelected("OpenRouter (Cloud)")
 
@@ -148,7 +177,7 @@ class VisionPipelineTest {
     @Test
     fun `openrouter key uses a dedicated vision model for the browser`() = runTest {
         `when`(mockSecureStorage.getApiKey("openrouter")).thenReturn("sk-or-test")
-        val vm = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
+        val vm = model()
         vm.onModelSelected("OpenRouter (Cloud)")
         val provider = vm.browserVisionProvider()
         assertTrue(provider is OpenAIVisionProvider)
@@ -158,7 +187,7 @@ class VisionPipelineTest {
     @Test
     fun `openai selection maps to openai vision`() = runTest {
         `when`(mockSecureStorage.getApiKey("openai")).thenReturn("sk-test")
-        val vm = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
+        val vm = model()
 
         vm.onModelSelected("OpenAI (Cloud)")
 
@@ -166,8 +195,46 @@ class VisionPipelineTest {
     }
 
     @Test
+    fun `saved OpenAI vision model and endpoint apply to camera and browser`() = runTest {
+        `when`(mockSecureStorage.getApiKey("openai")).thenReturn("test-key")
+        `when`(mockSecureStorage.getModelName("openai_vision")).thenReturn("test-image-model")
+        `when`(mockSecureStorage.getEndpoint("openai")).thenReturn("https://vision.example.test")
+        val vm = model()
+        vm.onModelSelected("OpenAI (Cloud)")
+        listOf(vm.visionProviderFor(), vm.browserVisionProvider()).forEach { provider ->
+            assertTrue(provider is OpenAIVisionProvider)
+            assertEquals("test-image-model", provider!!.javaClass.getDeclaredField("model").apply { isAccessible = true }.get(provider))
+            assertEquals("https://vision.example.test", provider.javaClass.getDeclaredField("baseUrl").apply { isAccessible = true }.get(provider))
+        }
+    }
+
+    @Test
+    fun `OpenAI default inside OmniRoute uses the saved OpenAI vision configuration`() = runTest {
+        `when`(mockSecureStorage.getApiKey("openai")).thenReturn("test-key")
+        `when`(mockSecureStorage.getPreference("default_brain")).thenReturn("openai")
+        `when`(mockSecureStorage.getModelName("openai_vision")).thenReturn("test-image-model")
+        val vm = model()
+        vm.onModelSelected("Omniroute (Local router)")
+        val provider = vm.visionProviderFor()
+        assertEquals("OpenAI vision", provider?.name)
+        assertEquals("test-image-model", provider!!.javaClass.getDeclaredField("model").apply { isAccessible = true }.get(provider))
+    }
+
+    @Test
+    fun `OpenRouter vision uses the configured model and endpoint`() = runTest {
+        `when`(mockSecureStorage.getApiKey("openrouter")).thenReturn("test-key")
+        `when`(mockSecureStorage.getModelName("openrouter_vision")).thenReturn("test/vision")
+        `when`(mockSecureStorage.getEndpoint("openrouter")).thenReturn("https://gateway.example.test/api")
+        val vm = model()
+        vm.onModelSelected("OpenRouter (Cloud)")
+        val provider = vm.visionProviderFor()!!
+        assertEquals("test/vision", provider.javaClass.getDeclaredField("model").apply { isAccessible = true }.get(provider))
+        assertEquals("https://gateway.example.test/api", provider.javaClass.getDeclaredField("baseUrl").apply { isAccessible = true }.get(provider))
+    }
+
+    @Test
     fun `on-device selection uses device vision`() = runTest {
-        val vm = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
+        val vm = model()
 
         vm.onModelSelected("On-device (Local)")
 
@@ -177,7 +244,7 @@ class VisionPipelineTest {
     @Test
     fun `look request without camera speaks honestly`() = runTest {
         // No visionManager (tests) → honest "no camera", no crash
-        val vm = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
+        val vm = model()
         vm.onUserTextSubmitted("what do you see")
         advanceUntilIdle()
         // It answered out loud rather than hanging or crashing
@@ -186,7 +253,7 @@ class VisionPipelineTest {
 
     @Test
     fun `read request without camera also speaks honestly`() = runTest {
-        val vm = CompanionViewModel(secureStorage = mockSecureStorage, memoryRepository = mockMemoryRepository)
+        val vm = model()
         vm.onUserTextSubmitted("read this")
         advanceUntilIdle()
         assertEquals(com.example.meowmba.ui.companion.InteractionState.IDLE, vm.uiState.value.interactionState)

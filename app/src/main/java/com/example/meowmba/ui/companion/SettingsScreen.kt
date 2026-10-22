@@ -1,9 +1,21 @@
 package com.example.meowmba.ui.companion
 
+import com.example.meowmba.ui.theme.Button
+import com.example.meowmba.ui.theme.OutlinedButton
+import com.example.meowmba.ui.theme.Card
+import com.example.meowmba.ui.theme.Surface
+
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
+import androidx.activity.compose.BackHandler
+import androidx.compose.material.icons.filled.*
+import androidx.compose.ui.graphics.vector.ImageVector
+import com.example.meowmba.core.media.ImageService
+import com.example.meowmba.core.media.ImageServiceSettings
+import com.example.meowmba.core.agentic.ConnectionProfile
+import com.example.meowmba.ui.onboarding.ImageGenerationSetup
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Visibility
@@ -14,9 +26,11 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import com.example.meowmba.ui.theme.DropdownMenu
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -25,7 +39,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.meowmba.core.agent.OpenRouterModel
-import com.example.meowmba.core.agent.OpenRouterModels
 import com.example.meowmba.core.bridge.DesktopBridgeManager
 import com.example.meowmba.core.security.SecureStorageManager
 import kotlinx.coroutines.launch
@@ -37,7 +50,15 @@ import kotlinx.coroutines.launch
 @Composable
 fun SettingsScreen(
     secureStorage: SecureStorageManager,
+    onOpenComputerFiles: () -> Unit = {},
     companionName: String = "Meow",
+    maleCnsServer: MaleCnsServerUiState = MaleCnsServerUiState(),
+    onPairMaleCnsServer: (String) -> Unit = {},
+    onUsePairedComputerForMaleCns: () -> Unit = {},
+    onTestMaleCnsServer: () -> Unit = {},
+    onPairComputerForMaleCns: () -> Unit = {},
+    coverAvatarEnabled: Boolean = false,
+    onCoverAvatarChange: (Boolean) -> Unit = {},
     wakeWordEnabled: Boolean = false,
     requireWakeWordInFace: Boolean = false,
     conversationMode: Boolean = false,
@@ -47,6 +68,9 @@ fun SettingsScreen(
     watchModeEnabled: Boolean = false,
     commentaryEnabled: Boolean = false,
     roadAlertsEnabled: Boolean = false,
+    roadAlertStatus: String? = null,
+    idleScenesEnabled: Boolean = true,
+    onIdleScenesChange: (Boolean) -> Unit = {},
     agentBrainEnabled: Boolean = true,
     hermesAgentUrl: String = "",
     imageServerUrl: String = "",
@@ -67,11 +91,27 @@ fun SettingsScreen(
     robotScanning: Boolean = false,
     robotScanResults: List<Pair<String, String>> = emptyList(),
     carModeEnabled: Boolean = false,
+    idleMorphEnabled: Boolean = true,
+    idleMorphIntervalSec: Int = 55,
+    idleMorphIncludeGenerated: Boolean = true,
+    driveEmotionBoost: Boolean = true,
+    driveDriverCameraEnabled: Boolean = true,
+    obdEnabled: Boolean = false,
+    obdAdapterAddress: String = "",
+    carDashcamRtspUrl: String = "",
     avatarStyle: AvatarStyle = AvatarStyle.DEFAULT,
     onAvatarStyleChange: (AvatarStyle) -> Unit = {},
     emergencyContact: String = "",
     onCarModeChange: (Boolean) -> Unit = {},
     onEmergencyContactChange: (String) -> Unit = {},
+    onIdleMorphChange: (Boolean) -> Unit = {},
+    onIdleMorphIntervalChange: (Int) -> Unit = {},
+    onIdleMorphGeneratedChange: (Boolean) -> Unit = {},
+    onDriveEmotionBoostChange: (Boolean) -> Unit = {},
+    onDriveDriverCameraChange: (Boolean) -> Unit = {},
+    onObdEnabledChange: (Boolean) -> Unit = {},
+    onObdAdapterChange: (String) -> Unit = {},
+    onCarDashcamRtspChange: (String) -> Unit = {},
     onRobotScan: () -> Unit = {},
     onRobotBodyChange: (Boolean) -> Unit = {},
     onRobotHostChange: (String) -> Unit = {},
@@ -85,7 +125,14 @@ fun SettingsScreen(
 
     onBargeInChange: (Boolean) -> Unit = {},
     onOpenAccessibility: () -> Unit = {},
+    onShareDiagnostics: () -> Unit = {},
     onOpenSetup: () -> Unit = {},
+    onOpenVoiceModels: () -> Unit = {},
+    onOpenModels: () -> Unit = {},
+    appTheme: AppTheme = AppTheme.COMPANION,
+    appearanceMode: AppearanceMode = AppearanceMode.DARK,
+    onAppThemeChange: (AppTheme) -> Unit = {},
+    onAppearanceModeChange: (AppearanceMode) -> Unit = {},
     idleChatterEnabled: Boolean = true,
     onIdleChatterChange: (Boolean) -> Unit = {},
 
@@ -105,12 +152,94 @@ fun SettingsScreen(
     onVideoServerUrlChange: (String) -> Unit = {},
     onBackgroundListeningChange: (Boolean) -> Unit = {},
     onUsbAutoBridgeChange: ((Boolean) -> Unit)? = null,
+    neuralMode: com.example.meowmba.core.neural.NeuralMode = com.example.meowmba.core.neural.NeuralMode.SHADOW,
+    neuralSubstrate: com.example.meowmba.core.neural.NeuralSubstrate = com.example.meowmba.core.neural.NeuralSubstrate.RATE,
+    neuralTraceConsent: Boolean = false,
+    neuralDiagnostics: com.example.meowmba.core.neural.NeuralDiagnostics? = null,
+    onNeuralMode: (com.example.meowmba.core.neural.NeuralMode) -> Unit = {},
+    onNeuralSubstrate: (com.example.meowmba.core.neural.NeuralSubstrate) -> Unit = {},
+    onNeuralTrace: (Boolean) -> Unit = {},
+    onNeuralReset: () -> Unit = {},
+    onOpenBrain: () -> Unit = {},
+    initialPage: String? = null,
+    lumenReflexV2: Boolean = false,
+    onLumenReflexV2Change: (Boolean) -> Unit = {},
+    agenticRuntimeV1: Boolean = false,
+    onAgenticRuntimeV1Change: (Boolean) -> Unit = {},
+    connectionProfiles: List<ConnectionProfile> = emptyList(),
+    onSaveConnectionProfile: (ConnectionProfile) -> Unit = {},
+    onDeleteConnectionProfile: (String) -> Unit = {},
+        onSaveAgenticCredential: (String, String) -> Unit = { _, _ -> },
+    agenticGoals: List<com.example.meowmba.core.agentic.AgenticGoal> = emptyList(),
+    agenticModelConfig: com.example.meowmba.core.agentic.AgenticModelConfig.Snapshot =
+        com.example.meowmba.core.agentic.AgenticModelConfig.Snapshot(
+            baseUrl = "",
+            apiKeyRef = "",
+            modelName = com.example.meowmba.core.agentic.AgenticModelConfig.DEFAULT_MODEL,
+            configured = false,
+        ),
+    sshCapabilitySummary: String = "not probed",
+    onCreateAgenticGoal: (String) -> Unit = {},
+    onTickAgenticGoal: (String) -> Unit = {},
+    onTickOpenAgenticGoals: () -> Unit = {},
+    onApproveAgenticGoal: (String) -> Unit = {},
+    onRejectAgenticGoal: (String) -> Unit = {},
+    onRefreshAgenticTasks: () -> Unit = {},
+    onSaveAgenticModelConfig: (String, String, String, String) -> Unit = { _, _, _, _ -> },
+    lumenReflexGain: Float = 1f,
+    onLumenReflexGainChange: (Float) -> Unit = {},
+    avatarFpsTarget: Int = 30,
+    onAvatarFpsTargetChange: (Int) -> Unit = {},
+    computerPower: com.example.meowmba.core.config.ComputerPowerState =
+        com.example.meowmba.core.config.ComputerPowerState.Idle,
+    onComputerPowerChange: (com.example.meowmba.core.config.ComputerPowerState) -> Unit = {},
+    computerIdleMinutes: Int = 5,
+    onComputerIdleMinutesChange: (Int) -> Unit = {},
+
+    computerPhoneProbeSummary: String = "Checking this phone…",
+    computerPhoneReady: Boolean = false,
+    computerSetupStatus: com.example.meowmba.core.computer.ComputerSetupStatus =
+        com.example.meowmba.core.computer.ComputerSetupStatus.NotSetUp,
+    computerStatusDetail: String = "",
+    computerInstallLog: String = "",
+    computerPowerState: com.example.meowmba.core.config.ComputerPowerState =
+        com.example.meowmba.core.config.ComputerPowerState.Idle,
+    computerVncUrl: String? = null,
+    computerSavedProfile: ConnectionProfile? = null,
+    computerShowInstallPrompt: Boolean = false,
+    onComputerSaveProfile: (ConnectionProfile, String) -> Unit = { _, _ -> },
+    onComputerTestConnection: (ConnectionProfile, String) -> Unit = { _, _ -> },
+    onComputerInstall: (ConnectionProfile, String) -> Unit = { _, _ -> },
+    onComputerOpenTerminal: () -> Unit = {},
+    onComputerOpenServerTerminal: (ConnectionProfile) -> Unit = {},
+    onRefreshComputerPhone: () -> Unit = {},
+    computerVerifiedProfile: ConnectionProfile? = null,
+    onComputerOpenDesktop: (String) -> Unit = {},
+    onComputerConfirmInstallPrompt: () -> Unit = {},
+    onOpenAuto: () -> Unit = {},
     onSaved: () -> Unit = {},
     onClose: () -> Unit
 ) {
-    var openaiKey by remember { mutableStateOf(secureStorage.getApiKey("openai") ?: "") }
+    var page by rememberSaveable(initialPage) {
+        mutableStateOf(initialPage?.takeIf { requested -> SETTINGS_CATEGORIES.any { it.title == requested } })
+    }
+    if (page == "Smart Ring") {
+        val context = androidx.compose.ui.platform.LocalContext.current
+        LaunchedEffect(Unit) {
+            context.startActivity(android.content.Intent(context, com.example.meowmba.core.ring.SmartRingActivity::class.java))
+            page = null
+        }
+        return
+    }
+    var accessSetup by rememberSaveable { mutableStateOf(false) }
+    if (accessSetup) androidx.compose.ui.window.Dialog(onDismissRequest = { accessSetup = false },
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(Modifier.fillMaxWidth().fillMaxHeight(0.94f)) {
+            com.example.meowmba.ui.flow.AccessSetupGuide(onClose = { accessSetup = false })
+        }
+    }
     var opencodeKey by remember { mutableStateOf(secureStorage.getApiKey("opencode") ?: "") }
-    var defaultBrain by remember { mutableStateOf(secureStorage.getPreference("default_brain") ?: "auto") }
+    var defaultBrain by remember { mutableStateOf(secureStorage.getPreference("default_brain") ?: "openrouter") }
     var brainMenuOpen by remember { mutableStateOf(false) }
     val sshRegistry = remember { com.example.meowmba.core.ssh.SshHostRegistry(secureStorage) }
     var sshName by remember { mutableStateOf("meow-nb") }
@@ -119,55 +248,88 @@ fun SettingsScreen(
     var sshUser by remember { mutableStateOf("") }
     var sshPassword by remember { mutableStateOf("") }
     var savedServers by remember { mutableStateOf(sshRegistry.list().map { it.name }) }
-    var hfToken by remember { mutableStateOf(secureStorage.getApiKey("huggingface") ?: "") }
-    var openrouterKey by remember { mutableStateOf(secureStorage.getApiKey("openrouter") ?: "") }
-    var openrouterModel by remember { mutableStateOf(secureStorage.getModelName("openrouter") ?: "nvidia/nemotron-3-super-120b-a12b:free") }
-    var openrouterVision by remember {
-        mutableStateOf(secureStorage.getModelName("openrouter_vision") ?: "google/gemini-2.5-flash")
-    }
-    var openRouterCatalog by remember { mutableStateOf<List<OpenRouterModel>>(emptyList()) }
-    var openRouterCatalogNote by remember { mutableStateOf("Loading models…") }
-    val settingsScope = rememberCoroutineScope()
-    LaunchedEffect(Unit) {
-        OpenRouterModels.fetch(openrouterKey.ifBlank { null }).fold(
-            onSuccess = { list ->
-                openRouterCatalog = list
-                openRouterCatalogNote = "${list.size} models from OpenRouter"
-            },
-            onFailure = { openRouterCatalogNote = "Couldn't load models: ${it.message?.take(80)}" },
-        )
-    }
-    var localModelPath by remember { mutableStateOf(secureStorage.getEndpoint("local") ?: "/data/local/tmp/llm/gemma.bin") }
-    var showAdvanced by rememberSaveable { mutableStateOf(false) }
-    var openaiModel by remember { mutableStateOf(secureStorage.getModelName("openai") ?: "gpt-4o-mini") }
     var showKey by remember { mutableStateOf(false) }
-    var openaiEndpoint by remember { mutableStateOf(secureStorage.getEndpoint("openai") ?: "") }
     var opencodeEndpoint by remember { mutableStateOf(secureStorage.getEndpoint("opencode") ?: "") }
-    var openrouterEndpoint by remember { mutableStateOf(secureStorage.getEndpoint("openrouter") ?: "") }
-    var voiceSectionOpen by rememberSaveable { mutableStateOf(false) }
-    var deviceSectionOpen by rememberSaveable { mutableStateOf(false) }
-    var aiSectionOpen by rememberSaveable { mutableStateOf(false) }
-    var mediaSectionOpen by rememberSaveable { mutableStateOf(false) }
+    var imageService by remember { mutableStateOf(ImageServiceSettings.selected(secureStorage)) }
+    val scroll = rememberScrollState()
+    LaunchedEffect(page) { scroll.scrollTo(0) }
+    val saveProviders: () -> Unit = {
+        if (page == "AI & models") {
+        secureStorage.saveApiKey("opencode", opencodeKey.trim())
+        secureStorage.savePreference("default_brain", defaultBrain)
+        secureStorage.saveEndpoint("opencode", opencodeEndpoint)
+        onSaved()
+        }
+    }
+    val back = {
+        saveProviders()
+        if (page != null) page = null else onClose()
+    }
+    BackHandler(onBack = back)
+
+    if (page == COMPUTER_TOOLS_TITLE) {
+        ComputerToolsScreen(
+            onClose = { page = null },
+            onOpenComputerFiles = onOpenComputerFiles,
+            agenticRuntimeV1 = agenticRuntimeV1,
+            onAgenticRuntimeV1Change = onAgenticRuntimeV1Change,
+            connectionProfiles = connectionProfiles,
+            onSaveConnectionProfile = onSaveConnectionProfile,
+            onDeleteConnectionProfile = onDeleteConnectionProfile,
+            onSaveAgenticCredential = onSaveAgenticCredential,
+            agenticGoals = agenticGoals,
+            agenticModelConfig = agenticModelConfig,
+            sshCapabilitySummary = sshCapabilitySummary,
+            onCreateAgenticGoal = onCreateAgenticGoal,
+            onTickAgenticGoal = onTickAgenticGoal,
+            onTickOpenAgenticGoals = onTickOpenAgenticGoals,
+            onApproveAgenticGoal = onApproveAgenticGoal,
+            onRejectAgenticGoal = onRejectAgenticGoal,
+            onRefreshAgenticTasks = onRefreshAgenticTasks,
+            onSaveAgenticModelConfig = onSaveAgenticModelConfig,
+            computerPhoneProbeSummary = computerPhoneProbeSummary,
+            computerPhoneReady = computerPhoneReady,
+            computerSetupStatus = computerSetupStatus,
+            computerStatusDetail = computerStatusDetail,
+            computerInstallLog = computerInstallLog,
+            computerVncUrl = computerVncUrl,
+            computerSavedProfile = computerSavedProfile,
+            onComputerSaveProfile = onComputerSaveProfile,
+            onComputerTestConnection = onComputerTestConnection,
+            onComputerInstall = onComputerInstall,
+            onComputerOpenTerminal = onComputerOpenTerminal,
+            onComputerOpenDesktop = onComputerOpenDesktop,
+            computerPower = computerPower,
+            onComputerPowerChange = onComputerPowerChange,
+            computerIdleMinutes = computerIdleMinutes,
+            onComputerIdleMinutesChange = onComputerIdleMinutesChange,
+            onComputerOpenServerTerminal = onComputerOpenServerTerminal,
+            onRefreshComputerPhone = onRefreshComputerPhone,
+            computerVerifiedProfile = computerVerifiedProfile,
+        )
+        return
+    }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background
     ) {
+        Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding()) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = back) {
+                    Icon(Icons.Default.ArrowBack, contentDescription = if (page == null) "Close settings" else "Back to settings")
+                }
+                Text(page ?: "Settings", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+            }
         Column(
             modifier = Modifier
-                .safeDrawingPadding()
-                .padding(24.dp)
-                .verticalScroll(rememberScrollState())
+                .weight(1f)
+                .verticalScroll(scroll)
+                .padding(horizontal = 20.dp, vertical = 12.dp)
         ) {
+            if (page == null) {
             Text(
-                text = "Settings",
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Personalize Memba, connect services, and choose how it listens. Save and Close applies provider settings; API keys are stored securely as entered.",
+                text = "Everything in its place. Tap a category to open its options.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -182,20 +344,60 @@ fun SettingsScreen(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Finish setup", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                        Text("Guided setup for AI, voice and connections.", style = MaterialTheme.typography.bodySmall)
+                        Text("AI, voice, images and connections.", style = MaterialTheme.typography.bodySmall)
                     }
-                    Button(onClick = onOpenSetup) { Text("Start setup") }
+                    Button(onClick = { saveProviders(); onOpenSetup() }) { Text("Start setup") }
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
+            OutlinedButton(onClick = { accessSetup = true }, modifier = Modifier.fillMaxWidth()) {
+                Text("Connect apps & tools — guided access")
+            }
+            SETTINGS_CATEGORIES.forEach { category ->
+                SettingsCategoryCard(category) { page = category.title }
+                Spacer(Modifier.height(10.dp))
+            }
+            }
+            if (page == "Neural / Lumen") {
+                OutlinedButton(onClick = onOpenBrain, modifier = Modifier.fillMaxWidth()) {
+                    Text("Open Brain activity")
+                }
+                Text("Watch the avatar and send Pet or Feed inputs. The computer brain pauses while settings cover the avatar.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(12.dp))
+                NeuralSettingsSection(
+                    maleCnsServer = maleCnsServer,
+                    onPairMaleCnsServer = onPairMaleCnsServer,
+                    onUsePairedComputerForMaleCns = onUsePairedComputerForMaleCns,
+                    onTestMaleCnsServer = onTestMaleCnsServer,
+                    onPairComputer = onPairComputerForMaleCns,
+                    mode = neuralMode, substrate = neuralSubstrate, traceConsent = neuralTraceConsent,
+                    diagnostics = neuralDiagnostics, showNeuralCoreControls = true,
+                    onModeChanged = onNeuralMode, onSubstrateChanged = onNeuralSubstrate,
+                    onTraceConsentChanged = onNeuralTrace, onReset = onNeuralReset,
+                    lumenReflexV2 = lumenReflexV2,
+                    onLumenReflexV2Change = onLumenReflexV2Change,
+                    reflexGain = lumenReflexGain,
+                    onReflexGainChange = onLumenReflexGainChange,
+                    avatarFpsTarget = avatarFpsTarget,
+                    onAvatarFpsTargetChange = onAvatarFpsTargetChange,
+                    onOpenComputerTools = { page = COMPUTER_TOOLS_TITLE },
+                )
+            }
+            if (page == "Backup & updates") {
+                BackupUpdatesPanel()
+            }
+            if (page == "Help & feedback") {
+                BetaHelpCard()
+            Text("Support", style = MaterialTheme.typography.titleMedium)
+            Text("Share a small report with the app version, runtime health, microphone/camera modes and recent exit codes. Chats, recordings, credentials and raw logs are excluded.",
+                style = MaterialTheme.typography.bodySmall)
+            OutlinedButton(onClick = onShareDiagnostics) { Text("Share diagnostics") }
 
-            SettingsSectionHeader(
-                title = "Voice & behavior",
-                summary = if (wakeWordEnabled) "Wake phrase on · ${if (conversationMode) "conversation mode on" else "conversation mode off"}" else "Wake phrase off",
-                expanded = voiceSectionOpen,
-                onToggle = { voiceSectionOpen = !voiceSectionOpen },
-            )
-            if (voiceSectionOpen) {
+            }
+            if (page == "Voice & behavior") {
+            OutlinedButton(onClick = onOpenVoiceModels, modifier = Modifier.fillMaxWidth()) { Text("Voice recognition & voice models") }
 
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -260,10 +462,16 @@ fun SettingsScreen(
             )
             VoiceToggle(
                 label = "Road alerts",
-                description = "Uses GPS to pull nearby police, speed cameras, and hazards " +
-                    "from the live map. No Waze or Maps route needed. Asks for location.",
+                description = "Official AZ511 road work in Arizona, community reports elsewhere, and OpenStreetMap cameras. Coverage is incomplete; mobile police reports are not guaranteed. Requires location.",
                 checked = roadAlertsEnabled,
                 onCheckedChange = onRoadAlertsChange
+            )
+            if (roadAlertsEnabled) roadAlertStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+            VoiceToggle(
+                label = "Random idle scenes",
+                description = "Mix chases, reading and occasional hats with quiet gestures while the avatar is resting.",
+                checked = idleScenesEnabled,
+                onCheckedChange = onIdleScenesChange,
             )
 
             VoiceToggle(
@@ -282,46 +490,63 @@ fun SettingsScreen(
 
             VoiceToggle(
                 label = "Barge-in",
-                description = "Keep listening for 8 seconds after every reply so you can cut in without saying the wake word again.",
+                description = "Say Meow or Stop to interrupt speech, or tap the microphone. After the reply, keep listening briefly for your next turn.",
                 checked = bargeInEnabled,
                 onCheckedChange = onBargeInChange
             )
             }
 
             Spacer(modifier = Modifier.height(12.dp))
-            SettingsSectionHeader(
-                title = "Phone & device",
-                summary = if (watchModeEnabled || backgroundListeningEnabled || (robotStatus.contains("body", ignoreCase = true) && !robotStatus.contains("simulated", ignoreCase = true))) "Connected or active" else "Review device access and automation",
-                expanded = deviceSectionOpen,
-                onToggle = { deviceSectionOpen = !deviceSectionOpen },
-            )
-            if (deviceSectionOpen) {
+            if (page == "Phone & device") {
+            OutlinedButton(onClick = { accessSetup = true }) { Text("Calendar, Gmail & tool access guide") }
 
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "UI automation",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
+            VoiceToggle(
+                label = "Cover-screen avatar",
+                description = "Use your selected avatar in a compact layout when Meow is opened on a supported foldable cover display. Requires your phone's cover-app setup; does not replace its lock screen or launch automatically when folded.",
+                checked = coverAvatarEnabled,
+                onCheckedChange = onCoverAvatarChange,
             )
-            Text(
-                text = "Meow can find, tap, type and scroll on-screen when you ask. " +
-                    "It uses the system accessibility service and stays OFF until you enable it. " +
-                    "Every action asks for confirmation first.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            OutlinedButton(onClick = onOpenAccessibility) {
-                Text("Open accessibility settings")
+            FlipCoverSetupCard(showOnAllDevices = true)
+            WirelessAvatarSettings()
+
+            if (com.example.meowmba.BuildConfig.PHONE_AUTOMATION_ENABLED) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "UI automation",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = "Meow can find, tap, type and scroll on-screen when you ask. " +
+                        "It uses the system accessibility service and stays OFF until you enable it. " +
+                        "Phone tasks require approval; consequential actions keep their separate confirmation or manual handoff.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                OutlinedButton(onClick = onOpenAccessibility) {
+                    Text("Open accessibility settings")
+                }
+
+                PhoneRecipeSettings()
             }
+
 
             // ── Home screen ────────────────────────────────────────────────
             val context = LocalContext.current
-            val isDefaultHome = remember {
-                val homeIntent = Intent(Intent.ACTION_MAIN)
-                    .addCategory(Intent.CATEGORY_HOME)
-                val resolved = context.packageManager
-                    .resolveActivity(homeIntent, PackageManager.MATCH_DEFAULT_ONLY)
-                resolved?.activityInfo?.packageName == context.packageName
+            fun homeIsMeow(): Boolean {
+                val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+                val resolved = context.packageManager.resolveActivity(homeIntent, PackageManager.MATCH_DEFAULT_ONLY)
+                return resolved?.activityInfo?.packageName == context.packageName
+            }
+            // Re-checked every time the screen resumes (e.g. back from Android's chooser).
+            var isDefaultHome by remember { mutableStateOf(homeIsMeow()) }
+            val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+            DisposableEffect(lifecycle) {
+                val observer = androidx.lifecycle.LifecycleEventObserver { _, e ->
+                    if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) isDefaultHome = homeIsMeow()
+                }
+                lifecycle.addObserver(observer)
+                onDispose { lifecycle.removeObserver(observer) }
             }
             Spacer(modifier = Modifier.height(8.dp))
             Text(
@@ -340,31 +565,34 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            if (!isDefaultHome) {
-                OutlinedButton(onClick = {
-                    runCatching {
-                        context.startActivity(Intent(Settings.ACTION_HOME_SETTINGS))
-                    }
-                }) {
-                    Text("Set as home screen")
-                }
+            // Owner: always open Android's default-home chooser, whether or not Meow is the home app now
+            // (Android can drop the choice, e.g. after crashes, and the owner wants one tap to fix it).
+            OutlinedButton(onClick = {
+                val tries = listOf(
+                    Intent(Settings.ACTION_HOME_SETTINGS),
+                    Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS),
+                )
+                tries.firstOrNull { runCatching { context.startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess }
+            }, modifier = Modifier.testTag("settings_set_home")) {
+                Text(if (isDefaultHome) "Choose home screen" else "Set as home screen")
             }
 
             // Base controls appear only after a real body link exists. Setup
             // belongs in the guided wizard; an unattached phone should not be
             // confronted with hardware-specific controls.
-            val physicalBaseAttached = robotStatus.contains("body", ignoreCase = true) &&
+            val physicalBaseAttached = com.example.meowmba.core.robot.RobotBaseControlPolicy.CONTROL_AVAILABLE &&
+                robotStatus.contains("body", ignoreCase = true) &&
                 !robotStatus.contains("simulated", ignoreCase = true) &&
                 !robotStatus.contains("offline", ignoreCase = true)
             if (physicalBaseAttached) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Robot base",
+                text = "LOOI base",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
             Text(
-                text = "A physical robot base is attached. Current: " + robotStatus.replace("LOOI", "base", ignoreCase = true) + ".",
+                text = "LOOI is attached. Current: $robotStatus.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -375,7 +603,7 @@ fun SettingsScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Enable robot body", style = MaterialTheme.typography.bodyLarge)
+                    Text("Enable LOOI body", style = MaterialTheme.typography.bodyLarge)
                 }
                 Switch(checked = robotBodyEnabled, onCheckedChange = onRobotBodyChange)
             }
@@ -410,7 +638,7 @@ fun SettingsScreen(
                 if (robotScanResults.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        "Tap your robot base to use its address:",
+                        "Tap your LOOI base to use its address:",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -488,33 +716,13 @@ fun SettingsScreen(
                 }
             }
             }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    "Advanced",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.weight(1f)
-                )
-                OutlinedButton(onClick = { showAdvanced = !showAdvanced }) {
-                    Text(if (showAdvanced) "Hide" else "Show")
-                }
-            }
-            Text(
-                text = "Image/music/video generation, API keys, servers and the desktop bridge.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            if (showAdvanced) {
-            SettingsSectionHeader(
-                title = "Media & memory",
-                summary = "Image, music, video, and semantic memory services",
-                expanded = mediaSectionOpen,
-                onToggle = { mediaSectionOpen = !mediaSectionOpen },
-            )
-            if (mediaSectionOpen) {
+            if (page == "Images") {
+            ImageGenerationSetup(secureStorage, onSelected = {
+                imageService = it
+                if (it == ImageService.CUSTOM) onImageServerUrlChange(secureStorage.getPreference("image_server_url").orEmpty())
+            })
+            if (imageService == ImageService.LOCAL || imageService == ImageService.LEGACY) {
+            HorizontalDivider(Modifier.padding(vertical = 20.dp))
             // On-device image generation (stable-diffusion.cpp, native GGUF weights)
             Text("Image generation", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
             val imageOption = com.example.meowmba.core.agent.ImageModelCatalog.options.first()
@@ -522,7 +730,7 @@ fun SettingsScreen(
             Text(imageOption.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(
                 "${imageOption.approxSize} · ${imageOption.minRamGb}GB+ RAM. Runs fully on-device; " +
-                    "expect a few seconds to a minute per image depending on the phone.",
+                    "generation can take several minutes and needs substantial free memory.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -578,12 +786,13 @@ fun SettingsScreen(
                 }
             }
             Text(
-                text = "No model installed → image requests use the configured server " +
-                    "if one is set below, otherwise a simple canvas drawing.",
+                text = "A downloaded model is required for local images. If generation fails, Meow reports the error; it does not substitute a drawing.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
+            }
+            if (imageService == ImageService.LEGACY) {
             Spacer(modifier = Modifier.height(16.dp))
             SettingsTextField(
                 value = imageServerUrl,
@@ -605,7 +814,9 @@ fun SettingsScreen(
                 checked = preferServerImageGen,
                 onCheckedChange = onPreferServerImageGenChange
             )
-
+            }
+            }
+            if (page == "Music & video") {
             Spacer(modifier = Modifier.height(24.dp))
 
             // Music generation (opt-in remote server only — no on-device generator)
@@ -619,8 +830,7 @@ fun SettingsScreen(
             )
             Text(
                 text = "Your own music-generation server, e.g. " +
-                    "http://192.168.1.10:9200. Leave blank to use a simple " +
-                    "procedural tone sequence instead.",
+                    "http://192.168.1.10:9200. A working server is required; leaving this blank disables music generation.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -637,37 +847,58 @@ fun SettingsScreen(
             )
             Text(
                 text = "Your own video-generation server, e.g. " +
-                    "http://192.168.1.10:9300. Leave blank to always use the " +
-                    "animated-frames placeholder. Real generation takes several " +
-                    "minutes per clip.",
+                    "http://192.168.1.10:9300. A working server is required. Generation can take several minutes per clip.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Semantic memory (meow-mem0): share on-device facts with Meow's brain.
-            Text("Semantic memory", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-            Spacer(modifier = Modifier.height(8.dp))
-            SettingsTextField(
-                value = mem0ServerUrl,
-                onValueChange = onMem0ServerUrlChange,
-                label = { Text("Semantic memory server URL (optional)") },
-                modifier = Modifier.fillMaxWidth()
-            )
+            }
+            if (page == "Connections & memory") {
             Text(
-                text = "Meow's shared semantic memory service, e.g. " +
-                    "http://192.168.1.69:11438. New conversation facts are synced " +
-                    "here so the server-side brain can recall them. Leave blank to " +
-                    "keep memory on-device only.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                "Bridge, servers, shared memory and hosted avatar brains.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-
+            Spacer(Modifier.height(12.dp))
+            SettingsSectionCard(
+                title = "Semantic memory",
+                summary = "Optional meow-mem0 service. Leave blank to keep memory on-device only.",
+            ) {
+                SettingsTextField(
+                    value = mem0ServerUrl,
+                    onValueChange = onMem0ServerUrlChange,
+                    label = { Text("Semantic memory server URL") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    "Example: http://192.168.1.69:11438 — new conversation facts sync so a server-side brain can recall them.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(Modifier.height(12.dp))
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            if (page == "Appearance") {
+            Text("Color mode", style = MaterialTheme.typography.titleMedium)
+            AppearanceMode.entries.forEach { mode ->
+                Row(Modifier.fillMaxWidth().clickable { onAppearanceModeChange(mode) }, verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(selected = appearanceMode == mode, onClick = { onAppearanceModeChange(mode) })
+                    Text(mode.name.lowercase().replaceFirstChar { it.titlecase() })
+                }
+            }
+            Text("App theme", style = MaterialTheme.typography.titleMedium)
+            AppTheme.entries.forEach { theme ->
+                Row(Modifier.fillMaxWidth().clickable { onAppThemeChange(theme) }, verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(selected = appTheme == theme, onClick = { onAppThemeChange(theme) })
+                    Text(theme.name.lowercase().replaceFirstChar { it.titlecase() })
+                }
+            }
+            HorizontalDivider(Modifier.padding(vertical = 16.dp))
             // Avatar: which face the companion wears. The full picker (with previews
             // and the animation shelf) lives on the Avatar tile; this is the same
             // setting for anyone who looks for it here first.
@@ -699,91 +930,73 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Car assistant: knows when you're driving, tracks trips, watches for crashes.
-            Text("Car assistant", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-            Spacer(modifier = Modifier.height(8.dp))
-            VoiceToggle(
-                label = "Drive mode",
-                description = "Meow senses when you're in a car (GPS speed, your car's " +
-                    "Bluetooth, or a voice \"drive mode on\"), shows a speed/trip card, " +
-                    "and can answer \"how fast\", \"are we there yet\", or find gas and " +
-                    "food along the way. Uses GPS + accelerometer only while enabled.",
-                checked = carModeEnabled,
-                onCheckedChange = onCarModeChange
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            SettingsTextField(
-                value = emergencyContact,
-                onValueChange = onEmergencyContactChange,
-                label = { Text("Emergency contact phone (optional)") },
-                modifier = Modifier.fillMaxWidth()
-            )
-            Text(
-                text = "Used by the crash alert — say \"text mom\" after a detected " +
-                    "impact and Meow will open a text with your location ready to send.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            }
+            if (page == "Driving" || page == "Auto") {
+                Text("Driving and navigation now live together in Auto.")
+                TextButton(onClick = onOpenAuto) { Text("Open Auto") }
+            }
+            if (page == "Connections & memory") {
+            SettingsSectionCard(
+                title = "Desktop Bridge",
+                summary = "Pair once with the desktop helper. Network first; USB tunnel when the LAN cannot connect.",
+            ) {
+                DesktopBridgeSection(
+                    secureStorage,
+                    usbAutoBridgeEnabled = usbAutoBridgeEnabled,
+                    onUsbAutoBridgeChange = onUsbAutoBridgeChange,
+                    showHeading = false,
+                )
+            }
+            Spacer(Modifier.height(12.dp))
 
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Desktop Bridge (Phase 6): pair with a computer running meowmba-bridge.py
-            DesktopBridgeSection(
-                secureStorage,
-                usbAutoBridgeEnabled = usbAutoBridgeEnabled,
-                onUsbAutoBridgeChange = onUsbAutoBridgeChange
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // ── Phone Control (Accessibility) ─────────────────────────────
-            Text("Phone Control", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-            Text(
-                text = "Meow can control your phone — tap, swipe, type, and navigate any app " +
-                    "using voice commands. This requires the accessibility service to be enabled.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                val accessEnabled = remember { com.example.meowmba.core.access.MeowAccessibilityService.isEnabled() }
-                if (accessEnabled) {
-                    Text("✅ Connected", color = Color(0xFF4CAF50), style = MaterialTheme.typography.bodyLarge)
-                } else {
-                    Text("❌ Not enabled", color = Color(0xFFFF5252), style = MaterialTheme.typography.bodyLarge)
-                    Spacer(modifier = Modifier.width(12.dp))
-                    val context = LocalContext.current
-                    Button(onClick = {
-                        val intent = android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
-                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                        context.startActivity(intent)
-                    }) {
-                        Text("Enable")
+            SettingsSectionCard(
+                title = "Server brains",
+                summary = "Hosted neural brains available when a compatible server is paired.",
+            ) {
+                val maleReady = maleCnsServer.paired
+                Text(
+                    if (maleReady) "MaleCNS is paired${maleCnsServer.serverName.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()}."
+                    else "MaleCNS runs the full fly graph on Meow or another compatible server. Pair it under Neural / Lumen, then select it here.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(enabled = maleReady) { onNeuralSubstrate(com.example.meowmba.core.neural.NeuralSubstrate.MALECNS_REMOTE) }
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RadioButton(
+                        selected = neuralSubstrate == com.example.meowmba.core.neural.NeuralSubstrate.MALECNS_REMOTE,
+                        onClick = { if (maleReady) onNeuralSubstrate(com.example.meowmba.core.neural.NeuralSubstrate.MALECNS_REMOTE) },
+                        enabled = maleReady,
+                    )
+                    Column(Modifier.weight(1f)) {
+                        Text("MaleCNS · server brain", color = MaterialTheme.colorScheme.onSurface)
+                        Text(
+                            if (maleReady) "Use the paired MaleCNS graph for avatar reactions."
+                            else "Unavailable until a MaleCNS server is paired.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                if (neuralSubstrate == com.example.meowmba.core.neural.NeuralSubstrate.MALECNS_REMOTE) {
+                    TextButton(onClick = { onNeuralSubstrate(com.example.meowmba.core.neural.NeuralSubstrate.RATE) }) {
+                        Text("Switch back to local Rate brain")
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Say things like “tap on Settings”, “scroll down”, “go back”, " +
-                    "or give multi-step goals like “play Sublime on Spotify”.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // OpenAI Configuration
-            SettingsSectionHeader(
-                title = "AI providers",
-                summary = "Cloud keys, models, endpoints, and local routing",
-                expanded = aiSectionOpen,
-                onToggle = { aiSectionOpen = !aiSectionOpen },
-            )
-            if (aiSectionOpen) {
+            Spacer(Modifier.height(12.dp))
+            }
+            if (page == "AI & models") {
+            OutlinedButton(onClick = { saveProviders(); onOpenModels() }, modifier = Modifier.fillMaxWidth()) { Text("Open LLM settings") }
+            Text("OpenRouter, OpenAI and vision settings are now in their cards on the LLM page.", style = MaterialTheme.typography.bodySmall)
             VoiceToggle(
                 label = "Agent brain",
                 description = "Understands natural tool commands (\"make a file called todo.txt\") " +
-                    "using the active model. Select a local model on the Hardware page for fully " +
+                    "using the active model. Select a local model on the LLM page for fully " +
                     "offline use — a local model file must be present.",
                 checked = agentBrainEnabled,
                 onCheckedChange = onAgentBrainChange
@@ -805,40 +1018,6 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("OpenAI Cloud", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-                Spacer(modifier = Modifier.width(8.dp))
-                KeyStatusBadge(openaiKey.isNotBlank(), "OpenAI")
-            }
-            BeginnerHelp("Lets Meow talk to GPT. Create an account at platform.openai.com and paste your API key here.")
-            ApiKeyField(
-                value = openaiKey,
-                onValueChange = { openaiKey = it; secureStorage.saveApiKey("openai", it.trim()) },
-                label = "API Key",
-                show = showKey,
-                onToggleShow = { showKey = !showKey },
-            )
-            CopyKeyButton(openaiKey, "Copy OpenAI key")
-            ApiKeyLink(
-                url = "https://platform.openai.com/api-keys",
-                label = "Get an OpenAI API key",
-            )
-            ProviderEndpointField(
-                value = openaiEndpoint,
-                onValueChange = { openaiEndpoint = it },
-                label = "OpenAI base URL (optional)",
-                helper = "Leave blank for https://api.openai.com. Lets you point at a " +
-                    "self-hosted OpenAI-compatible proxy or gateway.",
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            SettingsTextField(
-                value = openaiModel,
-                onValueChange = { openaiModel = it },
-                label = { Text("Chat model (e.g. gpt-4o-mini)") },
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
 
             // BigPickle (OpenCode Zen) — free fallback brain, can be made the default.
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -882,188 +1061,157 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Hugging Face token (gated model downloads like Gemma)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Hugging Face", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-                Spacer(modifier = Modifier.width(8.dp))
-                KeyStatusBadge(hfToken.isNotBlank(), "Hugging Face")
+            Text("Local downloads, Hugging Face access and model files now live in LLM → Local.", style = MaterialTheme.typography.bodySmall)
+            OutlinedButton(onClick = onOpenModels, modifier = Modifier.fillMaxWidth()) { Text("Open LLM model settings") }
             }
-            BeginnerHelp("Only needed if you want to download gated voice/AI models from Hugging Face (e.g. Gemma). Most users can skip this.")
-            ApiKeyField(
-                value = hfToken,
-                onValueChange = { hfToken = it; secureStorage.saveApiKey("huggingface", it.trim()) },
-                label = "Token (for gated models like Gemma)",
-                show = showKey,
-                onToggleShow = { showKey = !showKey },
-            )
-            CopyKeyButton(hfToken, "Copy HF token")
-            ApiKeyLink(
-                url = "https://huggingface.co/settings/tokens",
-                label = "Get a Hugging Face token",
-            )
-            
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            // OpenRouter — the standalone cloud brain. No home server needed:
-            // one key from openrouter.ai and meow works anywhere. Free default
-            // model; any OpenRouter model id works in the field below.
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("OpenRouter (openrouter.ai)", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-                Spacer(modifier = Modifier.width(8.dp))
-                KeyStatusBadge(openrouterKey.isNotBlank(), "OpenRouter")
-            }
-            BeginnerHelp("The easiest way to give Meow a cloud brain — no server needed. Sign up at openrouter.ai and grab a free key; many models are free.")
-            ApiKeyField(
-                value = openrouterKey,
-                onValueChange = { openrouterKey = it; secureStorage.saveApiKey("openrouter", it.trim()) },
-                label = "API key",
-                show = showKey,
-                onToggleShow = { showKey = !showKey },
-            )
-            CopyKeyButton(openrouterKey, "Copy OpenRouter key")
-            ApiKeyLink(
-                url = "https://openrouter.ai/keys",
-                label = "Get an OpenRouter API key",
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            OpenRouterModelPicker(
-                label = "Chat model",
-                selectedId = openrouterModel,
-                models = openRouterCatalog,
-                onSelect = { openrouterModel = it },
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            OpenRouterModelPicker(
-                label = "Vision model",
-                selectedId = openrouterVision,
-                models = openRouterCatalog.filter { it.vision },
-                onSelect = { openrouterVision = it },
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            ProviderEndpointField(
-                value = openrouterEndpoint,
-                onValueChange = { openrouterEndpoint = it },
-                label = "OpenRouter base URL (optional)",
-                helper = "Leave blank for https://openrouter.ai/api. No /v1 suffix — it is appended automatically.",
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
+            if (page == "Connections & memory") {
+            SettingsSectionCard(
+                title = "Servers (SSH)",
+                summary = "Previously connected hosts stay saved. Tap one to edit, or add a new server. Passwords stay encrypted on this phone.",
             ) {
+                val hosts = remember(savedServers) { sshRegistry.list() }
+                if (hosts.isEmpty()) {
+                    Text("No saved servers yet.", style = MaterialTheme.typography.bodySmall)
+                } else {
+                    Text("Saved connections", style = MaterialTheme.typography.titleSmall)
+                    hosts.forEach { host ->
+                        val selected = sshName.equals(host.name, ignoreCase = true) && sshHost == host.host
+                        Surface(
+                            shape = MaterialTheme.shapes.medium,
+                            color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    sshName = host.name
+                                    sshHost = host.host
+                                    sshPort = host.port.toString()
+                                    sshUser = host.user
+                                    sshPassword = host.password
+                                },
+                        ) {
+                            Row(
+                                Modifier.fillMaxWidth().padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(host.name, style = MaterialTheme.typography.titleSmall)
+                                    Text(
+                                        "${host.user}@${host.host}:${host.port}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                TextButton(onClick = {
+                                    sshRegistry.delete(host.name)
+                                    savedServers = sshRegistry.list().map { it.name }
+                                    if (sshName.equals(host.name, ignoreCase = true)) {
+                                        sshName = ""; sshHost = ""; sshUser = ""; sshPassword = ""
+                                    }
+                                }) { Text("Remove") }
+                            }
+                        }
+                    }
+                }
                 Text(
-                    openRouterCatalogNote,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.sp,
-                    modifier = Modifier.weight(1f),
+                    if (hosts.any { it.name.equals(sshName, ignoreCase = true) }) "Edit connection" else "Add connection",
+                    style = MaterialTheme.typography.titleSmall,
                 )
-                TextButton(onClick = {
-                    openRouterCatalogNote = "Loading models…"
-                    settingsScope.launch {
-                        OpenRouterModels.fetch(openrouterKey.ifBlank { null }).fold(
-                            onSuccess = { list ->
-                                openRouterCatalog = list
-                                openRouterCatalogNote = "${list.size} models from OpenRouter"
-                            },
-                            onFailure = {
-                                openRouterCatalogNote = "Couldn't load models: ${it.message?.take(80)}"
-                            },
-                        )
+                SettingsTextField(
+                    value = sshName, onValueChange = { sshName = it },
+                    label = { Text("Server name (e.g. meow-nb)") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                SettingsTextField(
+                    value = sshHost, onValueChange = { sshHost = it },
+                    label = { Text("Host (IP or hostname)") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                SettingsTextField(
+                    value = sshPort, onValueChange = { sshPort = it },
+                    label = { Text("Port") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                SettingsTextField(
+                    value = sshUser, onValueChange = { sshUser = it },
+                    label = { Text("Username") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = sshPassword, onValueChange = { sshPassword = it },
+                    label = { Text("Password (encrypted on this phone)") },
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = {
+                            val port = sshPort.toIntOrNull() ?: 22
+                            if (sshName.isNotBlank() && sshHost.isNotBlank() && sshUser.isNotBlank()) {
+                                sshRegistry.save(
+                                    com.example.meowmba.core.ssh.SshHost(
+                                        name = sshName.trim(), host = sshHost.trim(),
+                                        port = port, user = sshUser.trim(), password = sshPassword,
+                                    ),
+                                )
+                                savedServers = sshRegistry.list().map { it.name }
+                                sshPassword = ""
+                            }
+                        },
+                    ) { Text("Save server") }
+                    TextButton(onClick = {
+                        sshName = ""; sshHost = ""; sshPort = "22"; sshUser = ""; sshPassword = ""
+                    }) { Text("Clear form") }
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+
+            if (connectionProfiles.isNotEmpty() || agenticRuntimeV1) {
+                SettingsSectionCard(
+                    title = "Agentic connection profiles",
+                    summary = "SSH targets used when task automation is enabled. Edit under Computer & task tools → Saved connections, or pick a saved profile below to reuse host details.",
+                ) {
+                    if (connectionProfiles.isEmpty()) {
+                        Text("No agentic profiles yet. Open Computer & task tools → Saved connections to add one.", style = MaterialTheme.typography.bodySmall)
+                    } else {
+                        connectionProfiles.forEach { profile ->
+                            Surface(
+                                shape = MaterialTheme.shapes.medium,
+                                color = MaterialTheme.colorScheme.surface,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        sshName = profile.displayName
+                                        sshHost = profile.host
+                                        sshPort = profile.port.toString()
+                                        sshUser = profile.username
+                                    },
+                            ) {
+                                Column(Modifier.padding(12.dp)) {
+                                    Text(profile.displayName, style = MaterialTheme.typography.titleSmall)
+                                    Text(
+                                        "${profile.username}@${profile.host}:${profile.port}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        }
                     }
-                }) { Text("Refresh") }
+                }
+                Spacer(Modifier.height(12.dp))
             }
-            
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            // SSH servers meow may manage (encrypted, allowlisted commands only)
-            Text("Servers (SSH)", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-            if (savedServers.isNotEmpty()) {
-                Text("Saved: " + savedServers.joinToString(", "), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f), fontSize = 12.sp)
             }
-            SettingsTextField(
-                value = sshName, onValueChange = { sshName = it },
-                label = { Text("Server name (how you'll refer to it, e.g. meow-nb)") },
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            SettingsTextField(
-                value = sshHost, onValueChange = { sshHost = it },
-                label = { Text("Host (IP or hostname)") },
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            SettingsTextField(
-                value = sshPort, onValueChange = { sshPort = it },
-                label = { Text("Port") },
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            SettingsTextField(
-                value = sshUser, onValueChange = { sshUser = it },
-                label = { Text("Username") },
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            SettingsTextField(
-                value = sshPassword, onValueChange = { sshPassword = it },
-                label = { Text("Password (stored encrypted on this phone only)") },
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            OutlinedButton(
-                onClick = {
-                    val port = sshPort.toIntOrNull() ?: 22
-                    if (sshName.isNotBlank() && sshHost.isNotBlank() && sshUser.isNotBlank()) {
-                        sshRegistry.save(
-                            com.example.meowmba.core.ssh.SshHost(
-                                name = sshName.trim(), host = sshHost.trim(),
-                                port = port, user = sshUser.trim(), password = sshPassword,
-                            )
-                        )
-                        savedServers = sshRegistry.list().map { it.name }
-                        sshHost = ""; sshUser = ""; sshPassword = ""
-                    }
-                },
-            ) { Text("Save server") }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Local Model Configuration
-            Text("Local Model (MediaPipe)", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-            SettingsTextField(
-                value = localModelPath,
-                onValueChange = { localModelPath = it },
-                label = { Text("Model Path on Device") },
-                modifier = Modifier.fillMaxWidth()
-            )
-            }
-
-            }
-
             Spacer(modifier = Modifier.height(40.dp))
-            
+
             Button(
                 onClick = {
-                    secureStorage.saveApiKey("openai", openaiKey)
-                    secureStorage.saveApiKey("opencode", opencodeKey)
-                    secureStorage.savePreference("default_brain", defaultBrain)
-                    secureStorage.saveApiKey("huggingface", hfToken)
-                    secureStorage.saveApiKey("openrouter", openrouterKey)
-                    secureStorage.saveModelName("openrouter", openrouterModel)
-                    secureStorage.saveModelName("openrouter_vision", openrouterVision)
-                    secureStorage.saveModelName("openai", openaiModel)
-                    secureStorage.saveEndpoint("openai", openaiEndpoint)
-                    secureStorage.saveEndpoint("opencode", opencodeEndpoint)
-                    secureStorage.saveEndpoint("openrouter", openrouterEndpoint)
-                    secureStorage.saveEndpoint("local", localModelPath)
-                    onSaved()
-                    onClose()
+                    back()
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Save and Close")
+                Text(if (page == null) "Close settings" else "Done")
             }
+        }
         }
     }
 }
@@ -1072,7 +1220,8 @@ fun SettingsScreen(
 fun DesktopBridgeSection(
     secureStorage: SecureStorageManager,
     usbAutoBridgeEnabled: Boolean = false,
-    onUsbAutoBridgeChange: ((Boolean) -> Unit)? = null
+    onUsbAutoBridgeChange: ((Boolean) -> Unit)? = null,
+    showHeading: Boolean = true,
 ) {
     val bridgeManager = remember { DesktopBridgeManager(secureStorage) }
     var paired by remember { mutableStateOf(bridgeManager.pairedBridge()) }
@@ -1082,8 +1231,12 @@ fun DesktopBridgeSection(
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    Text("Desktop Bridge", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-    Spacer(modifier = Modifier.height(4.dp))
+    if (showHeading) {
+        Text("Desktop Bridge", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+        Spacer(modifier = Modifier.height(4.dp))
+        Text("Pair once with the desktop helper's code. If the network cannot connect, Meow tries the same trusted Mac through a configured USB tunnel. Keep the helper running; USB debugging and the Mac tunnel must be enabled.", style = MaterialTheme.typography.bodySmall)
+    }
+    Text("Bridge 0.9 supports Logic workflows through its menus, track and region controls, plugin Controls view and export dialogs. Each edit has an approval and audit receipt. WAV checks include loudness and true peak when the Mac has libebur128. Enable Logic in the Mac helper and grant Accessibility. Custom controls and finished mixes still need review.", style = MaterialTheme.typography.bodySmall)
 
     val current = paired
     if (current != null) {
@@ -1101,7 +1254,7 @@ fun DesktopBridgeSection(
                     scope.launch {
                         busy = true
                         message = bridgeManager.ping().fold(
-                            onSuccess = { messageIsError = false; "Pong — desktop alive (ts $it)" },
+                            onSuccess = { messageIsError = false; "Pong — desktop alive via ${bridgeManager.connectionDescription()} (ts $it)" },
                             onFailure = { messageIsError = true; it.message ?: "ping failed" }
                         )
                         busy = false
@@ -1213,9 +1366,9 @@ fun DesktopBridgeSection(
             })
             Spacer(modifier = Modifier.width(8.dp))
             Column {
-                Text("USB Auto-Bridge", color = MaterialTheme.colorScheme.onSurface, fontSize = 13.sp)
+                Text("USB bridge discovery", color = MaterialTheme.colorScheme.onSurface, fontSize = 13.sp)
                 Text(
-                    text = if (usbAutoBridgeEnabled) "Auto-pairs when plugged into this computer via USB" else "Plug in via USB for automatic pairing",
+                    text = if (usbAutoBridgeEnabled) "Checks the trusted desktop when USB reconnects; keeps pairing on disconnect" else "Discover over USB tethering; one-time code pairing is required",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1316,7 +1469,7 @@ fun BridgeWorkspaceBrowser(bridgeManager: DesktopBridgeManager) {
             Text(
                 "No workspace roots declared on the desktop — add them to ~/.meowmba-bridge/config.json",
                 style = MaterialTheme.typography.bodySmall,
-                color = Color(0xFFD29922)
+                color = MaterialTheme.colorScheme.tertiary
             )
         }
         Text(currentPath, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontFamily = FontFamily.Monospace)
@@ -1424,7 +1577,7 @@ fun VoiceToggle(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun OpenRouterModelPicker(
+internal fun OpenRouterModelPicker(
     label: String,
     selectedId: String,
     models: List<OpenRouterModel>,
@@ -1462,9 +1615,18 @@ private fun OpenRouterModelPicker(
             ),
         )
         ExposedDropdownMenu(
-            expanded = expanded && shown.isNotEmpty(),
+            shape = MaterialTheme.shapes.medium,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            border = com.example.meowmba.ui.theme.cartoonBorder(),
+            tonalElevation = 0.dp,
+            expanded = expanded && (shown.isNotEmpty() || query.isNotBlank()),
             onDismissRequest = { expanded = false; query = "" },
         ) {
+            if (query.isNotBlank() && models.none { it.id == query.trim() }) {
+                DropdownMenuItem(text = { Text("Use model ID: ${query.trim()}") }, onClick = {
+                    onSelect(query.trim()); query = ""; expanded = false
+                })
+            }
             shown.forEach { model ->
                 DropdownMenuItem(
                     text = {
@@ -1491,12 +1653,12 @@ private fun OpenRouterModelPicker(
 @Composable
 private fun KeyStatusBadge(configured: Boolean, providerName: String) {
     Surface(
-        color = if (configured) Color(0xFF4CAF50).copy(alpha = 0.15f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f),
+        color = if (configured) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f),
         shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
     ) {
         Text(
             text = if (configured) "\u2713 Connected" else "Not set",
-            color = if (configured) Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurfaceVariant,
+            color = if (configured) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.labelSmall,
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
         )
@@ -1589,11 +1751,11 @@ fun SettingsTextField(
 
 /**
  * API-key text field that hides the secret behind dots until the user taps the
- * eye toggle. Full dot-masking while hidden (not just a password transform) so
- * the key is never glanceable on a shared screen.
+ * eye toggle. Mask visually, never replace the editable value with bullets:
+ * doing that corrupts existing keys when the user edits a masked field.
  */
 @Composable
-private fun ApiKeyField(
+internal fun ApiKeyField(
     value: String,
     onValueChange: (String) -> Unit,
     label: String,
@@ -1601,8 +1763,9 @@ private fun ApiKeyField(
     onToggleShow: () -> Unit,
 ) {
     TextField(
-        value = if (show) value else value.replace(Regex("."), "•"),
+        value = value,
         onValueChange = onValueChange,
+        visualTransformation = if (show) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
         label = { Text(label) },
         singleLine = true,
         trailingIcon = {
@@ -1627,7 +1790,7 @@ private fun ApiKeyField(
 
 /** Secondary endpoint/base-URL field with a gray helper line underneath. */
 @Composable
-private fun ProviderEndpointField(
+internal fun ProviderEndpointField(
     value: String,
     onValueChange: (String) -> Unit,
     label: String,
@@ -1647,21 +1810,47 @@ private fun ProviderEndpointField(
 }
 
 
+
+@Composable
+private fun SettingsSectionCard(title: String, summary: String, content: @Composable () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+            Text(summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            content()
+        }
+    }
+}
+
 /** Route-id → display label for the "Default brain" selector. */
 private fun brainLabel(id: String): String = BRAIN_CHOICES.firstOrNull { it.first == id }?.second ?: "Auto"
 
-/** Compact progressive-disclosure header used to keep the settings overview scannable. */
+private val SETTINGS_CATEGORIES = listOf(
+    SettingsCategory("Voice & behavior", "Wake phrase, conversation and listening", Icons.Default.Mic),
+    SettingsCategory(COMPUTER_TOOLS_TITLE, "Computer setup, tasks, connections and power", Icons.Default.Computer),
+    SettingsCategory("AI & models", "LLM settings, agent routing and downloads", Icons.Default.Psychology),
+    SettingsCategory("Images", "AI Horde, Cloudflare and on-phone images", Icons.Default.Image),
+    SettingsCategory("Music & video", "Media-generation services", Icons.Default.Movie),
+    SettingsCategory("Smart Ring", "R08 gestures, live sensor tests and scrolling", Icons.Default.Link),
+    SettingsCategory("Phone & device", "App control, access and device behavior", Icons.Default.PhoneAndroid),
+    SettingsCategory("Appearance", "Dark/light mode, themes and avatars", Icons.Default.Palette),
+    SettingsCategory("Neural / Lumen", "Avatar reactions, neural brain and sensitivity", Icons.Default.Bolt),
+    SettingsCategory("Connections & memory", "Desktop bridge, servers and shared memory", Icons.Default.Link),
+    SettingsCategory("Auto", "Driving, navigation and vehicle settings", Icons.Default.DirectionsCar),
+    SettingsCategory("Backup & updates", "Protect keys, restore data and update safely", Icons.Default.Security),
+    SettingsCategory("Help & feedback", "Beta help, testing and support", Icons.Default.HelpOutline),
+)
+
+/** Category cards navigate to a focused page, never expand a long form in the overview. */
 @Composable
-private fun SettingsSectionHeader(
-    title: String,
-    summary: String,
-    expanded: Boolean,
-    onToggle: () -> Unit,
-) {
+private fun SettingsCategoryCard(category: SettingsCategory, onOpen: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onToggle),
+            .clickable(onClick = onOpen),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
     ) {
         Row(
@@ -1670,23 +1859,26 @@ private fun SettingsSectionHeader(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Text(summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Surface(shape = MaterialTheme.shapes.small, color = MaterialTheme.colorScheme.primaryContainer) {
+                Icon(category.icon, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.padding(10.dp).size(22.dp))
             }
-            Text(
-                text = if (expanded) "Hide" else "Show",
-                color = MaterialTheme.colorScheme.primary,
-                style = MaterialTheme.typography.labelLarge,
-            )
+            Spacer(Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(category.title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+                Text(category.summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
 
 private val BRAIN_CHOICES = listOf(
     "auto" to "Auto (Omniroute)",
-    "bigpickle" to "BigPickle",
+    "bigpickle" to "OpenCode Zen",
     "openrouter" to "OpenRouter",
     "openai" to "OpenAI",
+    "anthropic" to "Claude / Anthropic",
+    "custom" to "Custom API",
     "local" to "On-device",
 )

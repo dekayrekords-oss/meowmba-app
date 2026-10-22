@@ -24,40 +24,62 @@ internal interface NeedleNative {
     fun reset()
 }
 
-internal object NeedleJniNative : NeedleNative {
-    init { System.loadLibrary("needle_jni_bridge") }
-    external override fun load(bytes: ByteArray): Int
-    external override fun initialize(systemPrompt: String, toolsJson: String): Int
-    external override fun complete(input: String, maxTokens: Int): String?
-    external override fun reset()
-}
 
 /** Tiny on-device default that proposes tool calls; policy remains in the orchestrator. */
 class NeedleAgentBrain internal constructor(
     private val modelFile: File,
-    private val native: NeedleNative = NeedleJniNative,
+    private val native: NeedleNative = defaultNeedleNative(),
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val onStatus: (NeedleStatus) -> Unit = {},
 ) : AgentBrainRouter {
-    private val lock = Mutex()
+    private val ownerToken = Any()
     private var schemaFingerprint: Int? = null
 
     override suspend fun route(text: String, registry: ToolRegistry): AgentRouter.AgentIntent? =
         withContext(dispatcher) {
-            lock.withLock {
+            if (!CommandHeuristics.mightBeCommand(text)) return@withContext null
+            try { lock.withLock {
                 val definitions = registry.definitions()
                 val schema = toolsJson(definitions)
-                if (schemaFingerprint != schema.hashCode()) {
-                    if (!modelFile.isFile || native.load(modelFile.readBytes()) != 0) return@withLock null
+                if (activeOwner !== ownerToken || schemaFingerprint != schema.hashCode()) {
+                    onStatus(NeedleStatus.LOADING)
+                    activeOwner = null
+                    if (!modelFile.isFile || native.load(modelFile.readBytes()) != 0) {
+                        onStatus(NeedleStatus.FAILED)
+                        return@withLock null
+                    }
                     // Needle returns a non-negative cached-prefix token count
                     // on success; positive is not an error.
-                    if (native.initialize(SYSTEM_PROMPT, schema) < 0) return@withLock null
+                    if (native.initialize(SYSTEM_PROMPT, schema) < 0) {
+                        onStatus(NeedleStatus.FAILED)
+                        return@withLock null
+                    }
                     schemaFingerprint = schema.hashCode()
+                    activeOwner = ownerToken
                 }
-                parse(native.complete(text, 256), registry)
+                onStatus(NeedleStatus.RUNNING)
+                try {
+                    val output = native.complete(text, 256)
+                    onStatus(if (output == null) NeedleStatus.FAILED else NeedleStatus.IDLE)
+                    parse(output, registry)
+                } catch (e: Exception) {
+                    onStatus(NeedleStatus.FAILED)
+                    throw e
+                }
+            } } catch (e: kotlinx.coroutines.CancellationException) {
+                onStatus(if (activeOwner === ownerToken) NeedleStatus.IDLE else NeedleStatus.READY)
+                throw e
+            } catch (_: Exception) {
+                onStatus(NeedleStatus.FAILED)
+                null
             }
         }
 
     companion object {
+        // The vendor API owns one process-global, non-thread-safe model. A
+        // ViewModel recreation or model update must not race another instance.
+        private val lock = Mutex()
+        private var activeOwner: Any? = null
         private const val SYSTEM_PROMPT =
             "Choose a tool only when the user clearly requests an action. Refuse ordinary conversation."
 
@@ -81,13 +103,15 @@ class NeedleAgentBrain internal constructor(
         internal fun parse(raw: String?, registry: ToolRegistry): AgentRouter.AgentIntent? {
             val root = runCatching { Json.parseToJsonElement(raw ?: return null).jsonObject }.getOrNull()
                 ?: return null
-            if (root["type"]?.jsonPrimitive?.contentOrNull != "call") return null
+            if (runCatching { root["type"]?.jsonPrimitive?.contentOrNull }.getOrNull() != "call") return null
             val call = runCatching { root["function_calls"]?.jsonArray?.firstOrNull()?.jsonObject }.getOrNull()
                 ?: return null
-            val id = call["name"]?.jsonPrimitive?.contentOrNull ?: return null
+            val id = runCatching { call["name"]?.jsonPrimitive?.contentOrNull }.getOrNull() ?: return null
             if (registry.byId(id) == null) return null
             val args = runCatching { call["arguments"]?.jsonObject }.getOrNull()
-                ?.mapValues { it.value.jsonPrimitive.contentOrNull ?: it.value.toString() } ?: emptyMap()
+                ?.mapValues { (_, value) ->
+                    (value as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull ?: value.toString()
+                } ?: emptyMap()
             val owner = AgentRegistry.ownerOf(id) ?: return null
             return AgentRouter.AgentIntent(owner.id, id, args, registry.byId(id)!!.definition.displayName)
         }

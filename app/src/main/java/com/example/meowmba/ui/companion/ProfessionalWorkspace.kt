@@ -1,5 +1,11 @@
 package com.example.meowmba.ui.companion
 
+import com.example.meowmba.ui.theme.Button
+import com.example.meowmba.ui.theme.OutlinedButton
+import com.example.meowmba.ui.theme.Card
+import com.example.meowmba.ui.theme.OutlinedCard
+import com.example.meowmba.ui.theme.FilterChip
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -88,7 +94,11 @@ internal fun ProfessionalWorkspace(
                     }
                 }
                 if (state.isNoting) {
-                    OutlinedButton(onClick = viewModel::stopNoting) { Text("Taking notes • Stop") }
+                    Column {
+                        OutlinedButton(onClick = viewModel::stopNoting) { Text("Local notes · Stop & summarize") }
+                        Text("Records while this app is visible. Stops in the background. Summary stays in Vault.",
+                            style = MaterialTheme.typography.bodySmall)
+                    }
                 }
                 Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = colors.surface)) {
                     Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -103,6 +113,16 @@ internal fun ProfessionalWorkspace(
                     }
                 }
                 Text("Projects", style = MaterialTheme.typography.titleLarge, color = colors.onSurface)
+                state.projectWork?.takeIf { it.projectId == state.activeProjectId }?.let { work ->
+                    Card(onClick = { viewModel.openProject(work.projectId) }, modifier = Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("Current project · ${work.name}", style = MaterialTheme.typography.titleMedium)
+                            Text(work.currentTasks.firstOrNull()?.let { "${it.status.name.lowercase().replace('_', ' ')}: ${it.title}" }
+                                ?: "No action running · ${work.remainingStepCount} plan steps unconfirmed")
+                            Text("${work.artifacts.count { it.available }} saved files · Open plan & activity", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
                 if (state.projects.isEmpty()) {
                     Text("No projects yet. Open Projects to get started.", color = colors.onSurfaceVariant)
                 } else {

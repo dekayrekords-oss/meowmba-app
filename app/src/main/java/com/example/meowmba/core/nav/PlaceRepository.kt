@@ -19,6 +19,23 @@ class PlaceRepository(
         val noSourceAvailable: Boolean = false,
     )
 
+    /** A store-identification lookup must not expand into a 25-mile navigation search. */
+    suspend fun nearbyShops(lat: Double, lon: Double, radiusMeters: Int = 200): Result {
+        val sources = listOfNotNull(offline, online).filter { it.isAvailable() }
+        if (sources.isEmpty()) return Result(emptyList(), null, noSourceAvailable = true)
+        for (source in sources) {
+            val hits = source.searchByCategory(listOf("commercial"), lat, lon, radiusMeters, 30)
+                .filter { place ->
+                    place.lat.isFinite() && place.lon.isFinite() &&
+                        place.lat in -90.0..90.0 && place.lon in -180.0..180.0 &&
+                        (place.category == "commercial" || place.category?.startsWith("commercial.") == true) &&
+                        haversineMeters(lat, lon, place.lat, place.lon) <= radiusMeters
+                }
+            if (hits.isNotEmpty()) return Result(hits, source.kind)
+        }
+        return Result(emptyList(), null)
+    }
+
     suspend fun find(
         request: NavRequest,
         lat: Double,

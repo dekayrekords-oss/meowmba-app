@@ -1,9 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Event delivery was typeAllMask. MeowAccessibilityService.onAccessibilityEvent() is an
+     empty stub (`= Unit`): it never read the events. Android was still delivering every
+     accessibility event from every app on the device, and flagRetrieveInteractiveWindows
+     forced a window-content retrieval for each one, all into a handler that discarded them.
+     That binder churn was the dominant sustained CPU load behind the thermal warnings.
+     The service reads the tree on demand via rootInActiveWindow, which only needs
+     canRetrieveWindowContent, so no event delivery is required. -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
-    android:accessibilityEventTypes="typeAllMask"
+    android:accessibilityEventTypes="typeWindowStateChanged"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:notificationTimeout="200"
-    android:accessibilityFlags="flagDefault|flagReportViewIds|flagRetrieveInteractiveWindows"
+    android:accessibilityFlags="flagDefault|flagReportViewIds"
     android:canPerformGestures="true"
     android:canRetrieveWindowContent="true"
     android:description="@string/meow_accessibility_description" />

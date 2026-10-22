@@ -27,12 +27,14 @@ data class MotionState(
      * tracking in a horizontal car dock where [rollDeg] saturates.
      */
     val screenLeanDeg: Float = 0f,
-    /** Continuous lateral G (car frame, + ≈ push toward the right side) — turns. */
+    /** Vehicle lateral acceleration (+ right). Visual inertia uses the opposite sign. */
     val leanG: Float = 0f,
     /** Continuous longitudinal G (car frame, + = accelerating, - = braking). */
     val surgeG: Float = 0f,
     /** True for one emission per detected shake. */
     val shaking: Boolean = false,
+    /** Sensor timestamp in elapsed-realtime milliseconds; zero means unavailable. */
+    val observedAtMs: Long = 0L,
 )
 
 /** Future robot-body hook: anything that can report the platform pose. */
@@ -62,6 +64,7 @@ class MotionSense(context: Context) : RobotPoseSource {
     private var smoothRoll = 0f
     /** Low-passed gravity vector — the orientation reference for every channel. */
     private val gravity = FloatArray(3)
+    private val linear = FloatArray(3)
     /** Last valid screen-plane tilt; held while the phone is too flat to read one. */
     private var screenLean = 0f
     private var smoothLeanG = 0f
@@ -69,17 +72,32 @@ class MotionSense(context: Context) : RobotPoseSource {
     private var gravityReady = false
     private var started = false
     private var fusedGravityActive = false
+    private var lastAccelNs = 0L
+    private var lastGravityNs = 0L
+    private var startedAtNs = 0L
 
     private val listener = object : SensorEventListener {
         override fun onSensorChanged(event: SensorEvent) {
+            if (!started || event.values.size < 3 || (0..2).any { !event.values[it].isFinite() }) return
+            val nowNs = android.os.SystemClock.elapsedRealtimeNanos()
+            if (event.timestamp < startedAtNs || event.timestamp <= 0 || event.timestamp > nowNs || nowNs - event.timestamp > 700_000_000L) return
             if (event.sensor.type == Sensor.TYPE_GRAVITY) {
+                if (event.timestamp <= lastGravityNs) return
+                val g2 = (0..2).sumOf { (event.values[it] * event.values[it]).toDouble() }
+                if (g2 !in 25.0..225.0) return
+                lastGravityNs = event.timestamp
                 event.values.copyInto(gravity, endIndex = 3)
                 gravityReady = true
                 return
             }
             if (event.sensor.type != Sensor.TYPE_ACCELEROMETER) return
-            val (x, y, z) = floatArrayOf(event.values[0], event.values[1], event.values[2])
+            if (event.timestamp <= lastAccelNs) return
+            lastAccelNs = event.timestamp
+            val x = event.values[0]
+            val y = event.values[1]
+            val z = event.values[2]
             val magnitude = sqrt(x * x + y * y + z * z)
+            if (!magnitude.isFinite()) return
             if (!gravityReady) {
                 event.values.copyInto(gravity, endIndex = 3)
                 gravityReady = true
@@ -105,7 +123,9 @@ class MotionSense(context: Context) : RobotPoseSource {
 
             // Gravity reference: slower low-pass than the display tilt, so
             // sustained orientation wins over bumps and vibration.
-            if (!fusedGravityActive) {
+            val fusedGravityFresh = fusedGravityActive && lastGravityNs > 0 &&
+                kotlin.math.abs(event.timestamp - lastGravityNs) <= 700_000_000L
+            if (!fusedGravityFresh) {
                 for (i in 0..2) gravity[i] = gravity[i] * GRAVITY_KEEP + event.values[i] * (1f - GRAVITY_KEEP)
             }
             // Screen-plane tilt holds its last value when the phone goes flat.
@@ -115,11 +135,9 @@ class MotionSense(context: Context) : RobotPoseSource {
             // the same car-plane math the driving detector uses. Turns push
             // laterally, braking pushes longitudinally — both continuous, so the
             // avatar can track the force instead of waiting for a threshold.
-            val linear = floatArrayOf(
-                x - gravity[0],
-                y - gravity[1],
-                z - gravity[2],
-            )
+            linear[0] = x - gravity[0]
+            linear[1] = y - gravity[1]
+            linear[2] = z - gravity[2]
             val car = com.example.meowmba.core.car.CarDynamics.decompose(linear, gravity)
             smoothLeanG += (car.lateralG - smoothLeanG) * FORCE_LOW_PASS
             smoothSurgeG += (car.longitudinalG - smoothSurgeG) * FORCE_LOW_PASS
@@ -130,6 +148,7 @@ class MotionSense(context: Context) : RobotPoseSource {
                 screenLeanDeg = screenLean,
                 leanG = smoothLeanG,
                 surgeG = smoothSurgeG,
+                observedAtMs = event.timestamp / 1_000_000L,
             )
         }
 
@@ -142,6 +161,9 @@ class MotionSense(context: Context) : RobotPoseSource {
         // 20 Hz catches brief shakes and turns; downstream deadbands prevent
         // unchanged samples from recomposing the avatar.
         gravityReady = false
+        startedAtNs = android.os.SystemClock.elapsedRealtimeNanos()
+        lastAccelNs = 0L
+        lastGravityNs = 0L
         started = sensorManager.registerListener(listener, accel, 50_000)
         // Prefer fused gravity so a sustained turn is not quickly absorbed
         // into an accelerometer-only gravity estimate.
@@ -154,6 +176,16 @@ class MotionSense(context: Context) : RobotPoseSource {
         sensorManager?.unregisterListener(listener)
         started = false
         fusedGravityActive = false
+        gravityReady = false
+        gravity.fill(0f)
+        smoothLeanG = 0f
+        smoothSurgeG = 0f
+        smoothPitch = 0f
+        smoothRoll = 0f
+        screenLean = 0f
+        lastAccelNs = 0L
+        lastGravityNs = 0L
+        _motion.value = MotionState()
     }
 
     companion object {

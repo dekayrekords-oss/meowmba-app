@@ -1,0 +1,11 @@
+{
+  "AZ511 work zones": {
+    "available": true,
+    "count": 0,
+    "detail": "Arizona work zones only; no police reports"
+  },
+  "OSM": {
+    "available": true,
+    "count": 0
+  }
+}

@@ -1,5 +1,8 @@
 package com.example.meowmba.ui.companion
 
+import com.example.meowmba.ui.theme.Button
+import com.example.meowmba.ui.theme.Surface
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -13,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import com.example.meowmba.ui.theme.ModalBottomSheet
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment

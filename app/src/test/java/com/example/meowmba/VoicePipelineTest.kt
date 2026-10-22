@@ -5,11 +5,14 @@ import com.example.meowmba.core.audio.SpeechSynthesizer
 import com.example.meowmba.core.audio.WakePhraseMatcher
 import com.example.meowmba.ui.companion.CompanionViewModel
 import com.example.meowmba.ui.companion.InteractionState
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -17,6 +20,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -81,6 +85,7 @@ class VoicePipelineTest {
 
     /** Fake STT: records calls, lets tests push partials/finals/errors. */
     class FakeSpeechEngine : SpeechEngine {
+        override var deliversFinalResults = false
         override val isListening: StateFlow<Boolean> = MutableStateFlow(false)
         override val partialResults = MutableStateFlow("")
         override var isAvailable = true
@@ -95,7 +100,8 @@ class VoicePipelineTest {
             lastOnError = onError
         }
 
-        override fun stopListening() { stopListeningCalls++ }
+        var onStop: (() -> Unit)? = null
+        override fun stopListening() { onStop?.invoke(); stopListeningCalls++ }
         override fun swapCallbacks(onResult: (String) -> Unit, onError: (Int) -> Unit) {
             lastOnResult = onResult; lastOnError = onError
         }
@@ -123,22 +129,78 @@ class VoicePipelineTest {
     private lateinit var fakeStt: FakeSpeechEngine
     private lateinit var fakeTts: FakeSpeechSynthesizer
     private lateinit var viewModel: CompanionViewModel
+    private fun pipelineTest(body: suspend TestScope.() -> Unit) = runTest {
+        // runTest drains the shared scheduler BEFORE JUnit @After. Close the
+        // continuously listening VM here, so its idle/watch timers cannot
+        // keep advancing virtual time forever after assertions have finished.
+        try { body() } finally { viewModel.viewModelScope.cancel() }
+    }
 
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         fakeStt = FakeSpeechEngine()
         fakeTts = FakeSpeechSynthesizer()
-        viewModel = CompanionViewModel(speechService = fakeStt, ttsManager = fakeTts)
+        // SpeechService is the legacy playback/wake lane; explicitly provide
+        // the modern capture backend too. Never enable a removed platform
+        // fallback in production just to make these tests listen.
+        viewModel = CompanionViewModel(elapsedRealtimeMs = { System.nanoTime() / 1_000_000L }, speechService = fakeStt, captureEngine = fakeStt,
+            ttsManager = fakeTts, ioDispatcher = testDispatcher)
+        // These pipeline tests type text as a stand-in for speech and check what gets voiced.
+        viewModel.setSpeechMode(com.example.meowmba.ui.companion.SpeechMode.ALWAYS)
+    }
+
+    // ---- Owner review 2026-09-23: "it talks a lot, and when it's not necessary" -------------
+
+    @Test
+    fun `typed question gets an on-screen answer and nothing is spoken`() = pipelineTest {
+        viewModel.setSpeechMode(com.example.meowmba.ui.companion.SpeechMode.REPLIES)
+        viewModel.onUserTextSubmitted("what time is it")
+        runCurrent()
+        assertTrue(fakeTts.spokenTexts.isEmpty())
+        assertTrue(viewModel.uiState.value.captionText.orEmpty().any { it.isDigit() })
+    }
+
+    @Test
+    fun `spoken question is answered aloud`() = pipelineTest {
+        viewModel.setSpeechMode(com.example.meowmba.ui.companion.SpeechMode.REPLIES)
+        viewModel.onExternalWakeCommand("what time is it")
+        assertEquals(1, fakeTts.spokenTexts.size)
     }
 
     @After
     fun tearDown() {
+        viewModel.viewModelScope.cancel()
         Dispatchers.resetMain()
     }
 
     @Test
-    fun `bare wake word listens for a command`() = runTest {
+    fun `background idle timer hands speech to main dispatcher`() = pipelineTest {
+        // UnconfinedTestDispatcher deliberately runs on the caller thread; use a
+        // queued main dispatcher to test the actual cross-dispatcher handoff.
+        Dispatchers.setMain(kotlinx.coroutines.test.StandardTestDispatcher(testScheduler))
+        val mainThread = Thread.currentThread()
+        fakeStt.onStop = { assertSame(mainThread, Thread.currentThread()) }
+        kotlinx.coroutines.withContext(Dispatchers.Default) {
+            viewModel.runIdleMoodTick { "A regression test fact." }
+        }
+        assertEquals(listOf("A regression test fact."), fakeTts.spokenTexts)
+        assertTrue(fakeStt.stopListeningCalls > 0)
+    }
+
+    @Test
+    fun `idle fact is discarded when stage becomes unavailable during generation`() = pipelineTest {
+        kotlinx.coroutines.withContext(Dispatchers.Default) {
+            viewModel.runIdleMoodTick {
+                viewModel.setAvatarPerformanceStageAllowed(false)
+                "Must not speak."
+            }
+        }
+        assertTrue(fakeTts.spokenTexts.isEmpty())
+    }
+
+    @Test
+    fun `bare wake word listens for a command`() = pipelineTest {
         viewModel.onWakeDetected(null)
         // The ack is spoken aloud first ("Yes?"), then the mic opens for the command.
         assertEquals(InteractionState.SPEAKING, viewModel.uiState.value.interactionState)
@@ -153,16 +215,25 @@ class VoicePipelineTest {
     }
 
     @Test
-    fun `wake word with command goes straight to thinking and answers`() = runTest {
+    fun `wake word clock question uses the device clock without a chat model`() = pipelineTest {
         viewModel.onWakeDetected("what time is it")
-        assertEquals(InteractionState.THINKING, viewModel.uiState.value.interactionState)
-        advanceUntilIdle() // run the mock response pipeline past its thinking delay
-        // No provider configured: the mock pipeline still answers out loud
         assertEquals(1, fakeTts.spokenTexts.size)
+        assertTrue(fakeTts.spokenTexts.single().any { it.isDigit() })
+    }
+
+    @Test fun `endpointed engines do not execute partials before corrected final`() = pipelineTest {
+        fakeStt.deliversFinalResults = true
+        viewModel.onMicClick()
+        fakeStt.simulatePartial("open files")
+        advanceTimeBy(2_000); runCurrent()
+        assertTrue(fakeTts.spokenTexts.isEmpty())
+        fakeStt.simulateResult("what time is it")
+        runCurrent()
+        assertTrue(fakeTts.spokenTexts.last().any { it.isDigit() })
     }
 
     @Test
-    fun `interrupt stops speech and starts a new listening turn`() = runTest {
+    fun `interrupt stops speech and starts a new listening turn`() = pipelineTest {
         fakeTts.onSpeechStarted?.invoke() // companion is now SPEAKING
         assertEquals(InteractionState.SPEAKING, viewModel.uiState.value.interactionState)
 
@@ -173,7 +244,7 @@ class VoicePipelineTest {
     }
 
     @Test
-    fun `mic tap during speech interrupts it`() = runTest {
+    fun `mic tap during speech interrupts it`() = pipelineTest {
         fakeTts.onSpeechStarted?.invoke()
         viewModel.onMicClick()
         assertEquals(1, fakeTts.stopCalls)
@@ -181,7 +252,7 @@ class VoicePipelineTest {
     }
 
     @Test
-    fun `conversation mode stays for a follow-up after speaking`() = runTest {
+    fun `conversation mode stays for a follow-up after speaking`() = pipelineTest {
         viewModel.setConversationMode(true)
         fakeTts.onSpeechStarted?.invoke()
         val callsBefore = fakeStt.startListeningCalls
@@ -197,14 +268,14 @@ class VoicePipelineTest {
     }
 
     @Test
-    fun `without conversation mode speech end returns to idle`() = runTest {
+    fun `without conversation mode speech end returns to idle`() = pipelineTest {
         fakeTts.onSpeechStarted?.invoke()
         fakeTts.onSpeechFinished?.invoke()
         assertEquals(InteractionState.IDLE, viewModel.uiState.value.interactionState)
     }
 
     @Test
-    fun `stop command ends the conversation politely`() = runTest {
+    fun `stop command ends the conversation politely`() = pipelineTest {
         viewModel.setConversationMode(true)
         fakeTts.onSpeechStarted?.invoke()
         fakeTts.onSpeechFinished?.invoke() // follow-up opens after the mic hand-off beat
@@ -217,7 +288,7 @@ class VoicePipelineTest {
     }
 
     @Test
-    fun `wake phrase heard during speech interrupts it`() = runTest {
+    fun `wake phrase heard during speech interrupts it`() = pipelineTest {
         viewModel.setConversationMode(true)
         fakeTts.onSpeechStarted?.invoke() // SPEAKING (+ interruption watch active)
 
@@ -228,14 +299,14 @@ class VoicePipelineTest {
     }
 
     @Test
-    fun `word boundaries pulse the mouth energy`() = runTest {
+    fun `word boundaries pulse the mouth energy`() = pipelineTest {
         assertEquals(0f, viewModel.mouthEnergy.value, 0.001f)
         fakeTts.onWordBoundary?.invoke(0, 3)
         assertEquals(1f, viewModel.mouthEnergy.value, 0.001f)
     }
 
     @Test
-    fun `renaming the companion updates state and persists safely without storage`() = runTest {
+    fun `renaming the companion updates state and persists safely without storage`() = pipelineTest {
         viewModel.renameCompanion("Whiskers")
         assertEquals("Whiskers", viewModel.uiState.value.name)
         viewModel.renameCompanion("   ") // blank names are rejected
@@ -243,7 +314,7 @@ class VoicePipelineTest {
     }
 
     @Test
-    fun `muting the mouth stops currently playing speech`() = runTest {
+    fun `muting the mouth stops currently playing speech`() = pipelineTest {
         fakeTts.onSpeechStarted?.invoke()
         viewModel.onAvatarZoneClick(com.example.meowmba.ui.companion.AvatarZone.MOUTH)
         assertEquals(1, fakeTts.stopCalls)
@@ -251,7 +322,7 @@ class VoicePipelineTest {
     }
 
     @Test
-    fun `mic privacy cut stops the wake engine and recognizer`() = runTest {
+    fun `mic privacy cut stops the wake engine and recognizer`() = pipelineTest {
         viewModel.setWakeWordEnabled(true)
         val callsBefore = fakeStt.stopListeningCalls
         viewModel.onAvatarZoneClick(com.example.meowmba.ui.companion.AvatarZone.EAR_LEFT)
@@ -260,47 +331,63 @@ class VoicePipelineTest {
     }
 
     @Test
-    fun `recognizer stays live during playback without echo interrupting`() = runTest {
+    fun `recognizer stays live during playback without echo interrupting`() = pipelineTest {
+        // Avoid the rotating greeting's "hey" variant, which is deliberately
+        // an explicit wake override. This test isolates ordinary echo.
+        com.example.meowmba.core.agent.runtime.GreetingAnswers.resetVariantCounter(2)
         // Companion answers; the SelfVoiceFilter is now tracking its utterance
         viewModel.onUserTextSubmitted("hi")
         advanceUntilIdle()
         fakeTts.onSpeechStarted?.invoke()
         assertEquals(InteractionState.SPEAKING, viewModel.uiState.value.interactionState)
         assertTrue("recognizer is live during playback", fakeStt.startListeningCalls > 0)
+        val stopsBeforeEcho = fakeTts.stopCalls
 
         // The mic hears the companion's own answer — must NOT interrupt
-        fakeStt.simulatePartial("no model is ready")
+        fakeStt.simulatePartial(fakeTts.spokenTexts.last())
         assertEquals(InteractionState.SPEAKING, viewModel.uiState.value.interactionState)
-        assertEquals(0, fakeTts.stopCalls)
+        assertEquals(stopsBeforeEcho, fakeTts.stopCalls)
     }
 
     @Test
-    fun `novel user speech barges in over the companion's voice`() = runTest {
+    fun `explicit stop interrupts the companion voice`() = pipelineTest {
         viewModel.onUserTextSubmitted("hi")
         advanceUntilIdle()
         fakeTts.onSpeechStarted?.invoke()
 
+        val stopsBeforeBargeIn = fakeTts.stopCalls
         fakeStt.simulatePartial("wait stop that")
-        assertEquals(1, fakeTts.stopCalls)
+        assertEquals(stopsBeforeBargeIn + 1, fakeTts.stopCalls)
         assertEquals(InteractionState.LISTENING, viewModel.uiState.value.interactionState)
     }
 
     @Test
-    fun `background wake command routes through the normal pipeline`() = runTest {
-        viewModel.onExternalWakeCommand("what time is it")
-        assertEquals(InteractionState.THINKING, viewModel.uiState.value.interactionState)
+    fun `own spoken wake phrase does not interrupt or create a reply`() = pipelineTest {
+        viewModel.onUserTextSubmitted("hi")
         advanceUntilIdle()
-        assertEquals(1, fakeTts.spokenTexts.size)
+        fakeTts.onSpeechStarted?.invoke()
+        val stops = fakeTts.stopCalls
+        val replies = fakeTts.spokenTexts.size
+        fakeStt.simulatePartial(fakeTts.spokenTexts.last())
+        assertEquals(stops, fakeTts.stopCalls)
+        assertEquals(replies, fakeTts.spokenTexts.size)
     }
 
     @Test
-    fun `blank background wake command is ignored`() = runTest {
+    fun `background wake command routes through the normal pipeline`() = pipelineTest {
+        viewModel.onExternalWakeCommand("what time is it")
+        assertEquals(1, fakeTts.spokenTexts.size)
+        assertTrue(fakeTts.spokenTexts.single().any { it.isDigit() })
+    }
+
+    @Test
+    fun `blank background wake command is ignored`() = pipelineTest {
         viewModel.onExternalWakeCommand("   ")
         assertEquals(InteractionState.IDLE, viewModel.uiState.value.interactionState)
     }
 
     @Test
-    fun `background listening toggle updates state`() = runTest {
+    fun `background listening toggle updates state`() = pipelineTest {
         assertEquals(false, viewModel.uiState.value.backgroundListeningEnabled)
         viewModel.setBackgroundListeningEnabled(true)
         assertEquals(true, viewModel.uiState.value.backgroundListeningEnabled)
@@ -309,7 +396,7 @@ class VoicePipelineTest {
     // ── Honest voice failures (mic tap / wake phrase "does nothing") ────────
 
     @Test
-    fun `mic tap with mic privacy off explains instead of doing nothing`() = runTest {
+    fun `mic tap with mic privacy off explains instead of doing nothing`() = pipelineTest {
         viewModel.onAvatarZoneClick(com.example.meowmba.ui.companion.AvatarZone.EAR_LEFT)
         assertFalse(viewModel.uiState.value.isMicEnabled)
         val callsBefore = fakeStt.startListeningCalls
@@ -323,7 +410,7 @@ class VoicePipelineTest {
     }
 
     @Test
-    fun `unavailable recognizer surfaces an honest caption`() = runTest {
+    fun `unavailable recognizer surfaces an honest caption`() = pipelineTest {
         fakeStt.isAvailable = false
 
         viewModel.onMicClick()
@@ -334,7 +421,7 @@ class VoicePipelineTest {
     }
 
     @Test
-    fun `permission error is surfaced, a pause keeps listening`() = runTest {
+    fun `permission error is surfaced, a pause keeps listening`() = pipelineTest {
         viewModel.onMicClick()
         assertEquals(InteractionState.LISTENING, viewModel.uiState.value.interactionState)
 
@@ -346,6 +433,7 @@ class VoicePipelineTest {
         // after about a second of quiet. The turn stays open instead of ending
         // mid-sentence (see UtteranceCapture), and the user is told nothing, because
         // nothing has gone wrong.
+        viewModel.onMicrophonePermissionResult(true)
         viewModel.onMicClick()
         fakeStt.simulateError(7) // ERROR_NO_MATCH — "nothing heard yet"
         assertEquals(InteractionState.LISTENING, viewModel.uiState.value.interactionState)
@@ -354,7 +442,7 @@ class VoicePipelineTest {
     }
 
     @Test
-    fun `wake engine stops after repeated recognizer failures`() = runTest {
+    fun `wake engine stops after repeated recognizer failures`() = pipelineTest {
         val engine = com.example.meowmba.core.audio.RecognizerWakeWordEngine(
             fakeStt, com.example.meowmba.core.audio.WakePhraseMatcher("Meow"), this
         )
@@ -379,7 +467,7 @@ class VoicePipelineTest {
     }
 
     @Test
-    fun `client error churn is tolerated, sustained client failure still stops`() = runTest {
+    fun `client error churn is tolerated, sustained client failure still stops`() = pipelineTest {
         // AIAI on the Fold 7 emits short bursts of ERROR_CLIENT (5) right after the app
         // (re)starts; the old 5-strike rule tripped inside one burst and surfaced the
         // false "the speech recognizer keeps failing on this device". CLIENT now has a
@@ -404,7 +492,7 @@ class VoicePipelineTest {
     }
 
     @Test
-    fun `wake engine keeps retrying through occasional errors`() = runTest {
+    fun `wake engine keeps retrying through occasional errors`() = pipelineTest {
         val engine = com.example.meowmba.core.audio.RecognizerWakeWordEngine(
             fakeStt, com.example.meowmba.core.audio.WakePhraseMatcher("Meow"), this
         )
@@ -424,7 +512,7 @@ class VoicePipelineTest {
     }
 
     @Test
-    fun `wake loop never gives up on routine no-speech timeouts`() = runTest {
+    fun `wake loop never gives up on routine no-speech timeouts`() = pipelineTest {
         // A quiet room means constant ERROR_SPEECH_TIMEOUT / ERROR_NO_MATCH —
         // those are the loop's normal heartbeat, not a failing recognizer.
         // (Regression: the fatal guard counted them and disabled the wake
@@ -447,7 +535,7 @@ class VoicePipelineTest {
     }
 
     @Test
-    fun `no-speech timeout resets the infrastructure error streak`() = runTest {
+    fun `no-speech timeout resets the infrastructure error streak`() = pipelineTest {
         val engine = com.example.meowmba.core.audio.RecognizerWakeWordEngine(
             fakeStt, com.example.meowmba.core.audio.WakePhraseMatcher("Meow"), this
         )

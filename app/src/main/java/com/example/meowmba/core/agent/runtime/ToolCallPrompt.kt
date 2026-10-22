@@ -38,10 +38,12 @@ object ToolCallPrompt {
         append("- Never invent tools or arguments not listed above.\n")
         // Measured on device: "animation of you licking your paw" went to
         // media.generate_video and the user got a FILE while the avatar never
-        // moved. Self-performance is avatar.animate, always.
+        // moved. Self-performance belongs to avatar tools, never media files.
         append("- Requests for the companion to perform — a trick, gesture, dance, or ")
+        append("For NEW activities needing props, use avatar.invent with a plain request; it creates on-device animation data. ")
         append("\"animate yourself/the cat/it\" — are avatar.animate, never media.* tools ")
         append("(those only make files).\n")
+        append("- Explicitly transforming or changing your avatar into any described animal, object, creature, vehicle or character uses avatar.form(animal=the complete visual description, up to 500 characters). Existing forms apply immediately; the selected AI model designs and saves other cartoon forms with live facial expressions. Preserve colors and accessories in the description. Do not substitute media tools or claim a change before the avatar.form tool succeeds. Go back to normal uses avatar.form(animal=none) to restore eyes only. Temporary act-like performances use avatar.describe_animation.\n")
         append('\n')
         // Follow-ups ("yes", "do it") are meaningless without the turn before;
         // measured on device, a bare "yes" invented a random 60ms clip.
@@ -71,6 +73,7 @@ object ToolCallPrompt {
         append("<tool_call>\n{\"arguments\": <args-dict>, \"name\": <function-name>}\n</tool_call>")
         append(" Requests for the companion to perform (trick, gesture, \"animate yourself/it\") ")
         append("are avatar.animate, never media.* tools — those only make files.")
+        append(" Explicitly transforming or changing your avatar into any described animal, object, creature, vehicle or character uses avatar.form(animal=the complete visual description, up to 500 characters). Existing forms apply immediately; the selected AI model designs and saves other cartoon forms with live facial expressions. Preserve colors and accessories. Do not substitute media tools or claim a change before avatar.form succeeds. Go back to normal uses avatar.form(animal=none) to restore eyes only. Temporary act-like performances use avatar.describe_animation.")
         append("<|im_end|>\n")
         if (!context.isNullOrBlank()) {
             append("<|im_start|>user\n").append(context).append("<|im_end|>\n")

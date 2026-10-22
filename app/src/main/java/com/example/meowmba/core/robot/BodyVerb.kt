@@ -13,8 +13,12 @@ enum class BodyProfile { DESK, FLOOR }
 /** One physical action the LOOI base can perform. */
 sealed class BodyVerb {
 
-    /** Neck pitch: -1 fully up, 0 center, +1 down. Safety-clamped in the link. */
-    data class Neck(val pitch: Float) : BodyVerb()
+    /**
+     * Neck pitch: -1 fully up, 0 center, +1 down. Safety-clamped in the gate.
+     * [profiled] identifies already-eased exclusive-session samples, never
+     * camera observations; it changes no bytes or actuator authority.
+     */
+    data class Neck(val pitch: Float, val profiled: Boolean = false) : BodyVerb()
 
     /**
      * In-place rotation for [ticks] (~20ms each) at [speedPercent].

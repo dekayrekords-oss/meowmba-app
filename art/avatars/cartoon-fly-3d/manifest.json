@@ -1,0 +1,36 @@
+{
+  "asset": "Meow original cartoon fruit fly",
+  "blenderVersion": "4.2.0",
+  "files": [
+    "cartoon-fly.blend",
+    "cartoon-fly.glb",
+    "fly_meshparts.json.gz",
+    "fly-front.png",
+    "fly-quarter.png",
+    "fly-side.png",
+    "fly-back.png",
+    "fly-flight-quarter.png"
+  ],
+  "nodes": 100,
+  "meshParts": 72,
+  "triangles": 51264,
+  "authoredAnimationClips": [
+    "blink",
+    "fly",
+    "talk",
+    "walk",
+    "wave"
+  ],
+  "verifiedGlbAnimationClips": [
+    "fly",
+    "talk",
+    "wave",
+    "blink",
+    "walk"
+  ],
+  "previewsRendered": true,
+  "previewStyle": "Native EEVEE cel-shader and inverted hull, genuine volumetric geometry",
+  "glbStyle": "Portable base-color material; host renderer supplies cel shading and outline",
+  "referencePolicy": "Original design inspired by supplied fly references; no exact video likeness asserted",
+  "distributionNote": "Uncompressed meshparts JSON is reproducible from gzip; omitted from committed artifacts."
+}

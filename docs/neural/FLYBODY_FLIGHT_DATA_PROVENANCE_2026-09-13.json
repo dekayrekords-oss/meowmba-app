@@ -1,0 +1,35 @@
+{
+  "articleId": 25309105,
+  "version": 4,
+  "doi": "10.25378/janelia.25309105.v4",
+  "license": {
+    "value": 6,
+    "name": "GPL 3.0+",
+    "url": "https://www.gnu.org/licenses/gpl-3.0.html"
+  },
+  "metadataSource": "https://api.figshare.com/v2/articles/25309105",
+  "files": [
+    {
+      "id": 44815195,
+      "name": "trained-fly-policies.zip",
+      "size": 6537720,
+      "is_link_only": false,
+      "download_url": "https://ndownloader.figshare.com/files/44815195",
+      "supplied_md5": "12934d5a1c60631a710bc2b6d297d3ce",
+      "computed_md5": "",
+      "mimetype": "application/zip"
+    },
+    {
+      "id": 51196859,
+      "name": "datasets_flight-imitation.zip",
+      "size": 12880076,
+      "is_link_only": false,
+      "download_url": "https://ndownloader.figshare.com/files/51196859",
+      "supplied_md5": "bb35ce27e07c4ffbd3d56ff6dec90905",
+      "computed_md5": "bb35ce27e07c4ffbd3d56ff6dec90905",
+      "mimetype": "application/zip"
+    }
+  ],
+  "sourceRevision": "d015e9bfe441bd90ae431bac24c55cb74bdbce26",
+  "researchOnly": true
+}

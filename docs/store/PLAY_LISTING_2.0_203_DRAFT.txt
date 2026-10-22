@@ -1,0 +1,31 @@
+App name: Meow Assistant
+Short description: AI companion with Flow, avatars, Studio and customizable smart ring controls.
+
+Meow Assistant 2.0 brings conversations, projects, memories and connected Computer tasks into an Android companion. Choose a character and supported AI model.
+
+TURN AN IDEA INTO A NEXT STEP
+Talk or type through plans and drafts. Keep conversations, projects, files and next steps together. Review content and proposed actions.
+
+YOUR COMPANION, YOUR SPACE
+Explore expressive avatars, animated environments and Desk rooms. Adjust appearance and size. With a configured generation provider, review and refine a new avatar before equipping it. Separate charges may apply.
+
+KEEP WORK IN CONTEXT
+Flow brings work together, with North Stars and next steps, and appears by default when idle. Correct or pin saved facts. Development Studio and Computer connect supported workspaces and tools; review requests and inspect results. Connections need separate setup and compatible endpoints.
+
+CONTROL YOUR PHONE WITH A SMART RING
+Choose Media control, Scrolling and navigation, Photo taking or Custom commands for a compatible R08/QRing ring. Scroll and click the target, control tracks/volume, use a compatible photo shutter, open a chosen app or submit a saved Meow request. Ring controls need a separate Accessibility disclosure, your consent, Android enablement, verified gestures and allowed apps. Mode/binding changes pause controls. App controls and photo-shutter labels are processed locally; screen contents are not recorded; screen contents and raw ring input are not sent to AI providers. Saved Meow requests use your selected provider and normal task approvals. Pause, withdraw consent or disable the service anytime.
+
+Request on-demand battery, steps and supported heart rate, oxygen, temperature, HRV and stress tests. Experimental wellness estimates depend on hardware, firmware, fit and contact. Readings stay on your phone. Meow Assistant is not a medical device and does not diagnose, treat, cure or prevent medical conditions. Seek advice about medical care from a qualified healthcare professional.
+
+CHOOSE WHAT TO IMPORT
+Import photos, videos or documents through Android's pickers. Supported imports become local copies; originals stay unchanged. Find results and previews in Files.
+
+CHOOSE HOW MEOW THINKS
+Connect a supported cloud provider, custom API or on-device model. Local models need downloads, compatible hardware and storage. Voice needs microphone permission and a supported engine; vision needs a compatible model and camera or image access. Availability depends on your device and provider. Accounts, API keys, internet and separate charges may apply.
+
+KEEP YOUR CHOICES VISIBLE
+Local history is stored on your phone. Microphone and camera have separate controls; fresh setup starts with the microphone off. Optional Flow location context adds available location to the on-device context journal and conversations. Meow explains collection before Android asks; the Play edition requests approximate location for Flow and uses available location only while Meow is visible. Optional Flow location stops when you leave Meow. You can decline or revoke access. Cloud AI and connected services may receive relevant text, audio, images, files or context, including location context, needed for the feature you use. Review the privacy policy and provider terms. Included SDKs can collect device or installation identifiers, diagnostics and usage/performance information. Optional local-network HTTP connections are not encrypted. Local deletion does not erase copies held by connected services.
+
+The Play edition includes app launching, drafting, configured Computer tools and optional user-operated ring controls. Autonomous Accessibility phone control and physical robot actuation are unavailable. Hardware integrations require compatible equipment and separate setup.
+
+Meow Assistant is in beta. AI can make mistakes; check important answers and proposed actions.

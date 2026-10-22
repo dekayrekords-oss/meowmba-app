@@ -60,7 +60,7 @@ class FindPlacesTool(
         riskLevel = RiskLevel.SAFE,
         environments = setOf(ToolEnvironment.PHONE),
         confirmationPolicy = ConfirmationPolicy.NONE,
-        timeoutMs = 15_000,
+        timeoutMs = 25_000,
     )
 
     override suspend fun execute(args: Map<String, String>): ToolResult =
@@ -70,15 +70,6 @@ class FindPlacesTool(
                     "Missing 'query' — what should I look for?"
                 )
             val limit = args["limit"]?.toIntOrNull()?.coerceIn(1, 20) ?: 5
-
-            val fix = CurrentLocation.last(context)
-                ?: return@withContext ToolResult.Failure(
-                    if (CurrentLocation.hasPermission(context)) {
-                        "No location fix yet — can't tell what's nearby."
-                    } else {
-                        "Location permission not granted, so I can't search nearby."
-                    }
-                )
 
             // Reuse the same classifier the offline path uses so "burger" searches the
             // burger categories rather than looking for a shop literally named burger.
@@ -92,6 +83,15 @@ class FindPlacesTool(
                     )
                 return@withContext ToolResult.Success(renderPlaces(listOf(saved.toPlace())))
             }
+
+            val fix = CurrentLocation.fresh(context)
+                ?: return@withContext ToolResult.Failure(
+                    if (CurrentLocation.hasPermission(context)) {
+                        "No location fix yet — can't tell what's nearby."
+                    } else {
+                        "Location permission not granted, so I can't search nearby."
+                    }
+                )
 
             val result = repository.find(request, fix.lat, fix.lon, limit = limit)
             when {
@@ -131,7 +131,7 @@ class NavigateTool(private val context: Context) : Tool {
     override suspend fun execute(args: Map<String, String>): ToolResult {
         val lat = args["lat"]?.toDoubleOrNull()
         val lon = args["lon"]?.toDoubleOrNull()
-        if (lat == null || lon == null) {
+        if (lat == null || lon == null || !lat.isFinite() || !lon.isFinite() || lat !in -90.0..90.0 || lon !in -180.0..180.0) {
             return ToolResult.Failure(
                 "Need numeric 'lat' and 'lon' — take them from a nav.find_places result."
             )
@@ -139,7 +139,7 @@ class NavigateTool(private val context: Context) : Tool {
         val name = args["name"]?.takeIf { it.isNotBlank() } ?: "Destination"
         val place = Place(name = name, lat = lat, lon = lon)
         return if (NavigationLauncher.navigateTo(context, place)) {
-            ToolResult.Success("Navigating to $name.")
+            ToolResult.Success("Opened Maps for $name. Check the maps app to start or confirm turn-by-turn navigation.")
         } else {
             ToolResult.Failure("No maps app on this phone could handle that.")
         }
@@ -166,13 +166,13 @@ class SavePlaceTool(
         riskLevel = RiskLevel.MODERATE,
         environments = setOf(ToolEnvironment.PHONE),
         confirmationPolicy = ConfirmationPolicy.NONE,
-        timeoutMs = 10_000,
+        timeoutMs = 18_000,
     )
 
     override suspend fun execute(args: Map<String, String>): ToolResult {
         val name = args["name"]?.trim()?.takeIf { it.isNotBlank() }
             ?: return ToolResult.Failure("Missing 'name' — what should I call this place?")
-        val fix = CurrentLocation.last(context)
+        val fix = CurrentLocation.fresh(context)
             ?: return ToolResult.Failure(
                 if (CurrentLocation.hasPermission(context)) "No location fix yet."
                 else "Location permission not granted."
@@ -197,7 +197,7 @@ class ListSavedPlacesTool(private val savedPlaces: SavedPlaceStore) : Tool {
     )
 
     override suspend fun execute(args: Map<String, String>): ToolResult {
-        val all = savedPlaces.places.value
+        val all = savedPlaces.all()
         return if (all.isEmpty()) {
             ToolResult.Success("No saved places yet.")
         } else {

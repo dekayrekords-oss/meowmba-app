@@ -155,6 +155,8 @@ object SpeechIntents {
     fun looksLikeDirectQuestion(normalized: String): Boolean {
         val t = stripAddress(normalized.trim())
         if (t.isEmpty()) return false
+        if (com.example.meowmba.core.agent.runtime.AvatarFormRequest.parse(t) != null) return false
+        if (com.example.meowmba.core.agent.runtime.AvatarSceneRequest.parse(t) != null) return false
         if (POLITE_ACTION.containsMatchIn(t)) return false
         // Device specialists: camera / speed. The chat brain has no sensors.
         if (isSpeedQuestion(t)) return false

@@ -37,3 +37,8 @@
 -dontwarn org.conscrypt.**
 -dontwarn org.bouncycastle.**
 -dontwarn org.openjsse.**
+
+# ONNX Runtime Java API (Laya on the phone): libonnxruntime4j_jni looks these classes and
+# members up by name (FindClass/GetMethodID), so R8 must not rename or strip them.
+# Without this build 158 aborted with "JNI DETECTED ERROR: java_class == null" in OrtSession.run.
+-keep class ai.onnxruntime.** { *; }

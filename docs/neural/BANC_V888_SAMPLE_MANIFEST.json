@@ -1,0 +1,16 @@
+{
+  "dataset": "BANC synapse prediction QC roster",
+  "datasetVersion": "v888 / synapses-v2 / sample 2026-04-21",
+  "sourceUrl": "https://raw.githubusercontent.com/htem/BANC-project/e31a2e26b9937dca72e5ca1c1960df6454d76114/data/synapses/banc_888_v2_synapse_sample_small_2026-04-21.csv",
+  "sourceRevision": "e31a2e26b9937dca72e5ca1c1960df6454d76114",
+  "sha256": "5f7dc5f263b562dea912c82e7d837309b663bdf9b380547429eac4015cfefc0d",
+  "expectedBytes": 218533,
+  "expectedRows": 1263,
+  "licenseId": "CC-BY-4.0",
+  "licenseEvidenceUrl": "https://github.com/htem/BANC-project/tree/e31a2e26b9937dca72e5ca1c1960df6454d76114#license",
+  "licenseScopeNote": "Project README states code and Dataverse data are CC BY4.0; per-archive exceptions must be checked independently. This pinned roster is analyzed outside the app checkout; no commercial data embedding.",
+  "attribution": "Bates, Phelps, Kim, Yang et al., Distributed control circuits across a brain-and-cord connectome, BANC-project (2026).",
+  "provenanceKind": "anatomical_roster",
+  "rawDataBundled": false,
+  "reviewDate": "2026-09-13"
+}

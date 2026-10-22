@@ -35,9 +35,9 @@ class PhaseFTest {
     }
 
     @Test
-    fun `ui automation uses loop-level approval (NONE per action)`() {
+    fun `standalone ui automation cannot bypass task approval`() {
         val def = UiAutomationTool().definition
         assertEquals(RiskLevel.MODERATE, def.riskLevel)
-        assertEquals(ConfirmationPolicy.NONE, def.confirmationPolicy)
+        assertEquals(ConfirmationPolicy.ALWAYS, def.confirmationPolicy)
     }
 }

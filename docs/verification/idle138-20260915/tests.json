@@ -1,0 +1,30 @@
+{
+  "full136": {
+    "suites": 366,
+    "tests": 2547,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "full137": {
+    "suites": 366,
+    "tests": 2547,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "targeted138": {
+    "suites": 7,
+    "tests": 39,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "visuals": {
+    "eyePngsByteIdentical": 10,
+    "speciesPngsByteIdentical": 17,
+    "habitatPixelComparisons": 76,
+    "baseline": "pre-137 colour cache",
+    "sampler": "differential against prior implementation"
+  }
+}

@@ -33,11 +33,11 @@ class AsrBackendTest {
     }
 
     @Test
-    fun `exactly one cloud backend exists and round-trips`() {
+    fun `cloud backends are explicitly identified and round-trip`() {
         // Audio leaving the device is a privacy-boundary fact: keep it to a
         // single, deliberately-chosen backend and make the UI badge it.
         val cloud = AsrBackend.entries.filter { it.isCloud }
-        assertEquals(listOf(AsrBackend.GEMINI_CLOUD), cloud)
+        assertEquals(listOf(AsrBackend.OPENAI_CLOUD, AsrBackend.GEMINI_CLOUD), cloud)
         assertEquals(AsrBackend.GEMINI_CLOUD, AsrBackend.fromId(AsrBackend.GEMINI_CLOUD.id))
     }
 
@@ -208,8 +208,8 @@ class AsrBackendTest {
         assertNull(GeminiAsrEngine.parseTranscript("not json at all"))
         assertNull(GeminiAsrEngine.parseTranscript("""{"choices":[]}"""))
         assertNull(GeminiAsrEngine.parseTranscript("""{"error":{"message":"no credit"}}"""))
-        assertNull(GeminiAsrEngine.parseTranscript("""{"choices":[{"message":{"content":""}}]}"""))
-        assertNull(GeminiAsrEngine.parseTranscript("""{"choices":[{"message":{"content":"   "}}]}"""))
+        assertEquals("", GeminiAsrEngine.parseTranscript("""{"choices":[{"message":{"content":""}}]}"""))
+        assertEquals("", GeminiAsrEngine.parseTranscript("""{"choices":[{"message":{"content":"   "}}]}"""))
     }
 
     // ── request shape ───────────────────────────────────────────────────
@@ -217,6 +217,7 @@ class AsrBackendTest {
     @Test
     fun `request sends the audio as an input_audio wav part`() {
         val body = GeminiAsrEngine.requestBody("google/gemini-3.6-flash", "QUJD").toString()
+        assertTrue(body.contains("\"max_tokens\":1024"))
         assertTrue(body.contains("\"model\":\"google/gemini-3.6-flash\""))
         assertTrue(body.contains("\"type\":\"input_audio\""))
         assertTrue(body.contains("\"format\":\"wav\""))

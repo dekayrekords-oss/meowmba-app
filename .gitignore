@@ -28,6 +28,8 @@ keystore.properties
 /app/src/debug/assets/sherpa-onnx-kws-*/
 /app/src/debug/assets/silero_vad.onnx
 /app/src/debug/assets/speaker.onnx
+/app/src/main/assets/sherpa-onnx-streaming-*/
+/app/src/debug/assets/sherpa-onnx-streaming-*/
 # auto-build artifacts
 build-out/
 __pycache__/

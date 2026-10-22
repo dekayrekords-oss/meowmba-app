@@ -38,12 +38,12 @@ object ModelCatalog {
 
     val options: List<LocalModelOption> = listOf(
         LocalModelOption(
-            id = "needle-2",
-            displayName = "Needle 2",
-            description = "45M-parameter structured tool router by Cactus Compute. Apache 2.0 and optimized for tiny on-device agents.",
-            approxSize = "~13.7 MB",
-            downloadUrl = "$HF/Cactus-Compute/needle2/resolve/b739205bcda01f71ebf0ba180f75a885d515ad96/needle2.cact",
-            fileName = "needle2.cact",
+            id = "needle-3",
+            displayName = "Needle 3",
+            description = "Cactus Compute's third-generation local tool router. Routes actions; it is not a conversational or vision model.",
+            approxSize = "~35.3 MB",
+            downloadUrl = "$HF/Cactus-Compute/needle3/resolve/c1fc4d4cb32993156a880ceb8ff171b03b1f166a/needle3.cact",
+            fileName = "needle3.cact",
             minRamGb = 1,
             requiresHfToken = false,
             recommended = true,
@@ -106,7 +106,9 @@ object ModelCatalog {
     )
 
     fun optionForFile(fileName: String): LocalModelOption? =
-        options.find { it.fileName == fileName }
+        options.find { it.fileName == fileName || fileName.matches(Regex(
+            Regex.escape(it.fileName.substringBeforeLast('.')) + "--[0-9a-f]{12}\\." +
+                Regex.escape(it.fileName.substringAfterLast('.')))) }
 
     /**
      * Filename safety for custom downloads: simple name only (no paths or

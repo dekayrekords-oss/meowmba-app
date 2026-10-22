@@ -25,8 +25,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlin.math.abs
-import kotlin.math.sqrt
 
 /**
  * Decides whether the user is in a car, and how hard it is moving.
@@ -114,12 +112,10 @@ class DrivingDetector(
     private var gForce = 0f
     private var lateralG = 0f
     private var longitudinalG = 0f
-    /** Smoothed gravity vector (device frame) from the raw accelerometer. */
-    private var gravity = FloatArray(3)
+    private val sensorInput = DrivingSensorInput()
     /** True when a gravity-compensated linear-acceleration sensor exists. */
     private var linearSensorAvailable = false
-    /** Whether a hard-turn/brake maneuver was active at the last publish. */
-    private var maneuverActive = false
+    private var maneuver = DrivingManeuver()
     private var lastCrashAt = 0L
     /** Start of the current window where G stayed above [Params.crashG]. */
     private var crashAboveSince = 0L
@@ -136,6 +132,8 @@ class DrivingDetector(
     private var drivingSince = 0L
     private var job: Job? = null
     private var registered = false
+    /** Interval the location stream is currently registered at, or null when off. */
+    private var locationIntervalMs: Long? = null
 
     @Volatile
     private var carModeEnabled = false
@@ -145,12 +143,12 @@ class DrivingDetector(
     private fun publish() {
         val was = _driving.value
         _driving.value = DrivingState(
-            isDriving = was.isDriving,
+            isDriving = carModeEnabled && was.isDriving,
             speedMph = lastSpeedMph,
             gForce = gForce,
             lateralG = lateralG,
             longitudinalG = longitudinalG,
-            reason = was.reason,
+            reason = if (carModeEnabled && was.isDriving) was.reason else "",
             manualOverride = manualOverride,
             carModeEnabled = carModeEnabled,
         )
@@ -168,6 +166,23 @@ class DrivingDetector(
     /** Voice/UI override: "drive mode on". Survives until turned off or app restart. */
     fun setManualDriving(on: Boolean) {
         manualOverride = on
+        if (on) {
+            carModeEnabled = true
+            belowExitSince = 0L
+            drivingSince = 0L
+            _driving.value = _driving.value.copy(
+                isDriving = true,
+                reason = "Manual",
+                manualOverride = true,
+                carModeEnabled = true,
+            )
+            start()
+        } else {
+            // Manual off is immediate. Automatic detection may resume only
+            // from fresh evidence through its existing sustain/hysteresis.
+            resetTransientState()
+            _driving.value = DrivingState(carModeEnabled = carModeEnabled)
+        }
         publish()
     }
 
@@ -183,24 +198,41 @@ class DrivingDetector(
         if (registered) return
         registered = true
         registerSensors()
-        registerLocation()
+        registerLocation(_driving.value.isDriving)
         job = scope.launch { evaluateLoop() }
     }
 
     private fun stop() {
-        if (!registered) return
+        if (registered) {
+            sensorManager?.unregisterListener(sensorListener)
+            locationManager?.removeUpdates(locationListener)
+        }
         registered = false
-        sensorManager?.unregisterListener(sensorListener)
-        locationManager?.removeUpdates(locationListener)
+        locationIntervalMs = null
         job?.cancel()
         job = null
+        manualOverride = false
+        resetTransientState()
+        linearSensorAvailable = false
+        _driving.value = DrivingState(carModeEnabled = carModeEnabled)
+    }
+
+    private fun resetTransientState() {
         speedWindow.clear()
         belowExitSince = 0L
-        gravity = FloatArray(3)
-        maneuverActive = false
+        drivingSince = 0L
+        sensorInput.reset()
+        maneuver = DrivingManeuver()
+        gForce = 0f
         lateralG = 0f
         longitudinalG = 0f
-        linearSensorAvailable = false
+        crashAboveSince = 0L
+        lastSpeedMph = 0f
+        lastLat = null
+        lastLon = null
+        lastFixAt = 0L
+        // Keep lastCrash and its debounce: mode toggling cannot dismiss or
+        // manufacture another emergency event.
     }
 
     private fun registerSensors() {
@@ -208,18 +240,38 @@ class DrivingDetector(
         // SENSOR_DELAY_NORMAL (~5Hz) is plenty for 12mph/5mph gates and the
         // crash check: GAME (~50Hz) kept two IMU streams + GPS hot and was a
         // measured hot-phone contributor. Prefer the gravity-compensated
-        // linear sensor alone when present; fall back to raw accelerometer.
-        sm.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)?.let {
-            linearSensorAvailable = true
-            sm.registerListener(sensorListener, it, SensorManager.SENSOR_DELAY_NORMAL)
-            return
+        // linear sensor when present, plus a low-rate gravity reference. Linear
+        // acceleration alone cannot identify the car plane (notably Z braking).
+        val linear = sm.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)
+        linearSensorAvailable = linear != null &&
+            sm.registerListener(sensorListener, linear, SensorManager.SENSOR_DELAY_NORMAL)
+        if (linearSensorAvailable) {
+            val gravitySensor = sm.getDefaultSensor(Sensor.TYPE_GRAVITY)
+            val gravityRegistered = gravitySensor != null &&
+                sm.registerListener(sensorListener, gravitySensor, SensorManager.SENSOR_DELAY_NORMAL)
+            if (gravityRegistered) return
         }
+        // With linear acceleration this stream estimates gravity only; without
+        // it, all three axes are gravity-compensated before magnitude/splitting.
         sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)?.let {
             sm.registerListener(sensorListener, it, SensorManager.SENSOR_DELAY_NORMAL)
         }
     }
 
-    private fun registerLocation() {
+    /**
+     * Registers the location stream at the cadence the current state actually needs.
+     *
+     * A flat 5s/10m request kept the GPS radio fixing ~12x/minute even with the
+     * phone parked and car mode merely switched on — a measured hot-phone
+     * contributor, and the evaluator was already backing off to 10s while GPS was
+     * not. Parked, this backs off to 60s/25m: 25m is far above the ~4m of
+     * stationary GPS drift (see the drift filter in [locationListener]), so a
+     * parked phone produces almost no fixes, while the *distance* criterion still
+     * fires as soon as the car has travelled 25m (~5s at the 12mph entry speed).
+     * That distance trigger is what lets the stream wake long before the 60s
+     * interval would, so entering driving is not gated on the idle interval.
+     */
+    private fun registerLocation(driving: Boolean) {
         val lm = locationManager ?: return
         val provider = if (lm.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
             LocationManager.GPS_PROVIDER
@@ -228,16 +280,32 @@ class DrivingDetector(
         } else {
             return
         }
+        val intervalMs = if (driving) LOCATION_INTERVAL_DRIVING_MS else LOCATION_INTERVAL_IDLE_MS
+        val minDistanceM = if (driving) LOCATION_MIN_DISTANCE_DRIVING_M else LOCATION_MIN_DISTANCE_IDLE_M
         try {
-            // 5s / 10m: median speed over a 12s window cannot resolve faster
-            // anyway, and 0L/0f woke the main looper on every GPS fix.
             @Suppress("MissingPermission")
-            lm.requestLocationUpdates(provider, 5_000L, 10f, locationListener, Looper.getMainLooper())
+            lm.requestLocationUpdates(
+                provider, intervalMs, minDistanceM, locationListener, Looper.getMainLooper(),
+            )
+            locationIntervalMs = intervalMs
         } catch (_: SecurityException) {
             // Permission missing — location is an empty cue, other signals carry on.
         } catch (_: IllegalArgumentException) {
             // Provider vanished between the check and the request.
         }
+    }
+
+    /**
+     * Re-registers the location stream when the cadence changes, and only then:
+     * every remove/request pair is a binder round trip to the location service.
+     */
+    private fun syncLocationCadence(driving: Boolean) {
+        val wanted = if (driving) LOCATION_INTERVAL_DRIVING_MS else LOCATION_INTERVAL_IDLE_MS
+        if (locationIntervalMs == wanted) return
+        val lm = locationManager ?: return
+        runCatching { lm.removeUpdates(locationListener) }
+        locationIntervalMs = null
+        if (registered && carModeEnabled) registerLocation(driving)
     }
 
     private suspend fun evaluateLoop() {
@@ -253,17 +321,23 @@ class DrivingDetector(
 
     private val sensorListener = object : SensorEventListener {
         override fun onSensorChanged(event: SensorEvent) {
+            if (!carModeEnabled || !registered) return
+            val nowNanos = android.os.SystemClock.elapsedRealtimeNanos()
             when (event.sensor.type) {
+                Sensor.TYPE_GRAVITY -> if (!sensorInput.updateGravity(event.values, event.timestamp, nowNanos)) {
+                    clearMotion()
+                }
                 Sensor.TYPE_ACCELEROMETER -> {
-                    // Low-pass to a gravity estimate. The first samples race to
-                    // converge; within ~half a second the orientation is usable.
-                    for (i in 0..2) gravity[i] = gravity[i] * 0.90f + event.values[i] * 0.10f
-                    if (!linearSensorAvailable) processLinear(event.values, event.timestamp)
+                    if (linearSensorAvailable) {
+                        if (!sensorInput.updateRawGravity(event.values, event.timestamp, nowNanos)) clearMotion()
+                    } else {
+                        processLinear(sensorInput.raw(event.values, event.timestamp, nowNanos))
+                    }
                 }
                 Sensor.TYPE_LINEAR_ACCELERATION ->
-                    processLinear(event.values, event.timestamp)
+                    processLinear(sensorInput.linear(event.values, event.timestamp, nowNanos))
             }
-            // No publish() for ordinary updates: the sensor fires ~20x/s and that
+            // No publish() for ordinary updates: even low-rate sensor traffic
             // would churn the state flow for no benefit. The 2s evaluator publishes.
         }
 
@@ -271,46 +345,43 @@ class DrivingDetector(
     }
 
     /** Folds one linear-acceleration sample into magnitude, car-plane split, crash. */
-    private fun processLinear(values: FloatArray, timestampNanos: Long) {
-        val x = values.getOrElse(0) { 0f }
-        val y = values.getOrElse(1) { 0f }
-        val z = if (linearSensorAvailable) {
-            values.getOrElse(2) { 0f }
-        } else {
-            // No linear sensor: subtract gravity from the raw reading ourselves.
-            values.getOrElse(2) { 0f } - gravity.getOrElse(2) { 0f }
+    internal fun processLinear(sample: DrivingSensorInput.Motion?) {
+        if (!carModeEnabled || !registered) return
+        if (sample == null) {
+            clearMotion()
+            return
         }
-        gForce = sqrt(x * x + y * y + z * z) / SensorManager.GRAVITY_EARTH
+        gForce = sample.gForce
+        lateralG = sample.accel.lateralG
+        longitudinalG = sample.accel.longitudinalG
 
-        val accel = if (linearSensorAvailable) {
-            CarDynamics.decompose(floatArrayOf(x, y, z), gravity)
-        } else {
-            CarDynamics.decompose(
-                floatArrayOf(
-                    values.getOrElse(0) { 0f } - gravity.getOrElse(0) { 0f },
-                    values.getOrElse(1) { 0f } - gravity.getOrElse(1) { 0f },
-                    z,
-                ),
-                gravity,
-            )
-        }
-        lateralG = accel.lateralG
-        longitudinalG = accel.longitudinalG
-
-        checkImpact(gForce, timestampNanos)
+        if (!sample.continuous) crashAboveSince = 0L
+        checkImpact(gForce, sample.timestampNanos)
 
         // A maneuver onset/exit must reach the UI immediately, not wait up to 2s
         // for the evaluator — that is how the cat reacts to a real turn or brake.
-        val active = abs(lateralG) >= params.hardTurnG ||
-            longitudinalG <= -params.hardBrakeG
-        if (active != maneuverActive) {
-            maneuverActive = active
+        val next = DrivingManeuver.from(lateralG, longitudinalG, params.hardTurnG, params.hardBrakeG)
+        if (next != maneuver) {
+            maneuver = next
             publish()
         }
     }
 
+    private fun clearMotion() {
+        val changed = gForce != 0f || lateralG != 0f || longitudinalG != 0f
+        sensorInput.clearMotion()
+        gForce = 0f
+        lateralG = 0f
+        longitudinalG = 0f
+        maneuver = DrivingManeuver()
+        crashAboveSince = 0L
+        if (changed) publish()
+    }
+
     private val locationListener = object : LocationListener {
         override fun onLocationChanged(location: Location) {
+            if (!carModeEnabled || !registered) return
+            if (!location.speed.isFinite() || !location.latitude.isFinite() || !location.longitude.isFinite()) return
             val now = System.currentTimeMillis()
             val mph = location.speed.coerceAtLeast(0f) * MPS_TO_MPH
 
@@ -374,6 +445,8 @@ class DrivingDetector(
     }
 
     private fun checkImpact(g: Float, timestampNanos: Long) {
+        // Handling a stationary phone is not evidence of a vehicle collision.
+        if (!_driving.value.isDriving) { crashAboveSince = 0L; return }
         val nowMs = timestampNanos / 1_000_000
         if (g < params.crashG) {
             // Impact ended (or never started) — the sustain window resets.
@@ -429,7 +502,9 @@ class DrivingDetector(
      * spike, which a bump in the road or a bus seat would set off.
      */
     private fun evaluate() {
+        if (!carModeEnabled || !registered) return
         val now = System.currentTimeMillis()
+        if (!sensorInput.motionIsFresh(android.os.SystemClock.elapsedRealtimeNanos())) clearMotion()
         trimWindow(now)
         checkBrakeCollision(android.os.SystemClock.elapsedRealtime())
 
@@ -469,6 +544,8 @@ class DrivingDetector(
             belowExitSince = 0L
         }
 
+        // Keep the GPS cadence matched to the state the evaluator just settled on.
+        syncLocationCadence(_driving.value.isDriving)
         publish()
     }
 
@@ -484,5 +561,16 @@ class DrivingDetector(
 
     companion object {
         private const val MPS_TO_MPH = 2.236936f
+
+        /**
+         * GPS cadence while driving. 5s/10m resolves the 12s median speed window
+         * without waking the main looper on every fix (0L/0f did).
+         */
+        private const val LOCATION_INTERVAL_DRIVING_MS = 5_000L
+        private const val LOCATION_MIN_DISTANCE_DRIVING_M = 10f
+
+        /** GPS cadence while parked: car mode left on must not hold the radio hot. */
+        private const val LOCATION_INTERVAL_IDLE_MS = 60_000L
+        private const val LOCATION_MIN_DISTANCE_IDLE_M = 25f
     }
 }

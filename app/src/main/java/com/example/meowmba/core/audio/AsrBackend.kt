@@ -1,7 +1,7 @@
 package com.example.meowmba.core.audio
 
 /**
- * Which speech-to-text backend the user picked on the Hardware → Voice
+ * Which speech-to-text backend the user picked on the LLM → Voice
  * Recognition page.
  *
  * Deliberately pure (no Context, no android.*): the selection matrix is a
@@ -34,7 +34,7 @@ enum class AsrBackend(
     WHISPER_LOCAL(
         id = "whisper_local",
         displayName = "Whisper (on-device)",
-        subtitle = "Local Whisper for the final text — most accurate offline, no key, no network",
+        subtitle = "Local Whisper for the final text — offline, no key, no network",
         isCloud = false,
     ),
 
@@ -55,13 +55,20 @@ enum class AsrBackend(
     /**
      * Sends the finished utterance to a cloud Gemini model via OpenRouter for
      * the FINAL transcript (the streaming zipformer keeps live partials +
-     * endpointing, sherpa still holds the mic). The most accurate recognizer,
+     * endpointing, sherpa still holds the mic). A separate cloud transcription pass,
      * at the cost of a round trip and an OpenRouter key.
      */
+    OPENAI_CLOUD(
+        id = "openai_cloud",
+        displayName = "OpenAI transcription",
+        subtitle = "GPT transcribes recorded turns — sends audio to OpenAI; API key, network and usage charges required",
+        isCloud = true,
+    ),
+
     GEMINI_CLOUD(
         id = "gemini_cloud",
         displayName = "Gemini (cloud)",
-        subtitle = "OpenRouter Gemini transcribes the final text — most accurate, needs a key + network",
+        subtitle = "OpenRouter Gemini transcribes the final text — needs a key + network",
         isCloud = true,
     );
 
@@ -86,7 +93,7 @@ enum class AsrBackend(
          * The streaming zipformer alone measurably mishears — that was the
          * "recognition is terrible" report — and a health-driven AUTO pick
          * spent most of its time wedged onto that weaker engine. Whisper is
-         * the accurate one, so it is what you get unless you deliberately
+         * the offline default, so it is what you get unless you deliberately
          * choose the glasses mic.
          *
          * Note this also migrates anyone on a removed backend: [fromId] fails
@@ -124,6 +131,7 @@ data class AsrBackendStatus(
             cloudKeyConfigured: Boolean,
             glassesConnected: Boolean = false,
             whisperReady: Boolean = false,
+            openAiKeyConfigured: Boolean = false,
         ): AsrBackendStatus = when (backend) {
             // Whisper needs BOTH: the streaming pack for live partials +
             // endpointing, and the Whisper weights for the final text.
@@ -142,12 +150,17 @@ data class AsrBackendStatus(
                 !localModelReady ->
                     AsrBackendStatus(backend, false, "Needs the on-device model for transcription")
                 !glassesConnected ->
-                    AsrBackendStatus(backend, false, "No glasses connected — connect them on the Hardware page")
+                    AsrBackendStatus(backend, false, "No glasses connected — connect them on the LLM page")
                 else -> AsrBackendStatus(backend, true)
             }
 
             // Gemini rides sherpa for capture + endpointing AND needs a cloud
             // key; missing either makes the pick a no-op, so report it upfront.
+            AsrBackend.OPENAI_CLOUD -> when {
+                !localModelReady -> AsrBackendStatus(backend, false, "Needs the on-device model for capture")
+                !openAiKeyConfigured -> AsrBackendStatus(backend, false, "Needs an OpenAI API key — add it in LLM → OpenAI")
+                else -> AsrBackendStatus(backend, true)
+            }
             AsrBackend.GEMINI_CLOUD -> when {
                 !localModelReady ->
                     AsrBackendStatus(backend, false, "Needs the on-device model for capture")
@@ -163,6 +176,7 @@ data class AsrBackendStatus(
             cloudKeyConfigured: Boolean,
             glassesConnected: Boolean = false,
             whisperReady: Boolean = false,
+            openAiKeyConfigured: Boolean = false,
         ): List<AsrBackendStatus> = AsrBackend.entries.map {
             evaluate(
                 it,
@@ -171,6 +185,7 @@ data class AsrBackendStatus(
                 cloudKeyConfigured,
                 glassesConnected,
                 whisperReady,
+                openAiKeyConfigured,
             )
         }
     }

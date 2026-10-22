@@ -16,6 +16,12 @@ object MotionMath {
      */
     const val MIN_IN_PLANE = 2f
 
+    /** Sensor axes stay in device-default orientation when the display rotates. */
+    fun displayRelativeLean(sensorLean: Float, rotationQuarterTurns: Int): Float {
+        if (!sensorLean.isFinite()) return 0f
+        return ((sensorLean + (rotationQuarterTurns.mod(4) * 90f) + 540f) % 360f) - 180f
+    }
+
     /**
      * Rotation of the phone about the screen normal, from the gravity vector's
      * in-plane projection. 0° = portrait upright, ±90° = landscape, ±180° =
@@ -28,6 +34,7 @@ object MotionMath {
      * Returns null when the phone is too flat to call an angle.
      */
     fun screenLeanDeg(gx: Float, gy: Float): Float? {
+        if (!gx.isFinite() || !gy.isFinite()) return null
         val inPlane = sqrt(gx * gx + gy * gy)
         if (inPlane < MIN_IN_PLANE) return null
         val deg = Math.toDegrees(atan2(gy.toDouble(), gx.toDouble())).toFloat() - 90f

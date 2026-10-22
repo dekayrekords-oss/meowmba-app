@@ -17,6 +17,7 @@ import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
+@org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
 class ChatOverlayUiTest {
     @get:Rule val compose = createComposeRule()
 
@@ -59,6 +60,27 @@ class ChatOverlayUiTest {
         compose.onNodeWithText("The answer starts here and continues").assertIsDisplayed()
     }
 
+    @Test fun `a saved answer survives later task status while progress remains in history`() {
+        val answer = "Store evidence and https://www.target.com/deals"
+        val live = mutableStateOf<String?>(answer)
+        val messages = mutableStateOf(emptyList<com.example.meowmba.ui.companion.ChatUiMessage>())
+        compose.setContent { MaterialTheme { Box(Modifier.fillMaxSize()) {
+            ChatOverlay(true, {}, messages = messages.value, liveReply = live.value, installedApps = emptyList())
+        } } }
+        compose.onNodeWithText(answer).assertIsDisplayed()
+        compose.runOnIdle {
+            messages.value = listOf(
+                com.example.meowmba.ui.companion.ChatUiMessage(1, "Meow", answer, true),
+                com.example.meowmba.ui.companion.ChatUiMessage(2, "Meow", "Paws finished", true, isAssistantReply = false),
+            )
+            live.value = null
+        }
+        compose.onNodeWithText(answer).assertIsDisplayed()
+        compose.onNodeWithText("Paws finished").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Show full conversation").performClick()
+        compose.onNodeWithText("Paws finished").assertIsDisplayed()
+    }
+
     @Test fun `mic transcript does not overwrite typed draft`() {
         val partial = mutableStateOf<String?>(null)
         compose.setContent { MaterialTheme { Box(Modifier.fillMaxSize()) {
@@ -68,4 +90,22 @@ class ChatOverlayUiTest {
         compose.runOnIdle { partial.value = "Different spoken words" }
         compose.onNode(hasSetTextAction()).assertTextContains("My draft")
     }
+    @Test fun `voice buttons respond and permission feedback remains visible without a transcript`() {
+        var micClicks = 0; var callClicks = 0
+        val caption = mutableStateOf<String?>("Microphone permission is off. Allow access to speak.")
+        val listening = mutableStateOf(false)
+        compose.setContent { MaterialTheme { Box(Modifier.fillMaxSize()) {
+            ChatOverlay(true, {}, listening = listening.value, listenPartial = caption.value,
+                onMicClick = { micClicks++ }, onCallClick = { callClicks++ })
+        } } }
+        compose.onNodeWithText("Microphone permission is off. Allow access to speak.").assertIsDisplayed()
+        compose.mainClock.advanceTimeBy(500)
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Speak").assertIsDisplayed().performClick()
+        compose.onNodeWithContentDescription("Start voice call").assertIsDisplayed().performClick()
+        compose.runOnIdle { org.junit.Assert.assertEquals("microphone", 1, micClicks); org.junit.Assert.assertEquals("phone", 1, callClicks) }
+        compose.runOnIdle { listening.value = true; caption.value = null }
+        compose.onNodeWithText("Listening… Tap the mic to finish.").assertIsDisplayed()
+    }
+
 }

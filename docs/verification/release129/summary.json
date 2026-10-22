@@ -1,0 +1,51 @@
+{
+  "unitTests": {
+    "tests": 2523,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "python": {
+    "computerWorker": 5,
+    "logicAdapter": 45,
+    "failures": 0
+  },
+  "phone": {
+    "noticeCleanup": "passed: 5 known test goals cancelled, audit retained",
+    "noticeRevisionPersistence": "passed",
+    "computerExecuteEditReadCancelPersist": "passed",
+    "authenticatedWorker": "passed after fixing temporary credential provisioning",
+    "gmailLaunch": "passed without inbox read",
+    "deterministicWorkflowPolicy": "passed",
+    "realBusinessScenario": {
+      "status": "PASSED",
+      "provider": "openrouter/free",
+      "elapsedMs": 69278,
+      "approvals": 1,
+      "unpaidTotal": "56.75",
+      "messagesSent": 0,
+      "recoveredFrom": "initial CSV action with missing arguments"
+    }
+  },
+  "play": {
+    "status": "Changes in review",
+    "track": "Closed testing - Alpha",
+    "versionCode": 130,
+    "rolloutPercent": 100,
+    "submittedChanges": 1,
+    "lostSupportedDevices": 0,
+    "warnings": [
+      "Increased download size"
+    ],
+    "quickChecks": "pending",
+    "googleApproval": "pending",
+    "liveForTesters": false
+  },
+  "release": {
+    "versionCode": 130,
+    "versionName": "1.3.82",
+    "signature": "verified existing upload certificate",
+    "bundletool": "passed",
+    "startup": "signed minified release installed over code85 and cold-launched in 620ms, no new process crash"
+  }
+}

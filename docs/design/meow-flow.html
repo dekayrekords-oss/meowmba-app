@@ -1,0 +1,482 @@
+<title>Meow Flow</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&family=Archivo:wght@400;500;600;700;800&display=swap">
+<style>
+:root{--paper:#F2EEE5;--ink:#1C1B19;--ink2:#56524A;--ink3:#8C877C;--rule:#D5CEBF;--acc:#C23B16;--onacc:#FFF8F0}
+html,body{background:#D9D2C3}
+body{margin:0;color:#1C1B19;font-family:Archivo,system-ui,sans-serif;padding:28px 16px 56px}
+.wrap{max-width:1000px;margin:0 auto;display:flex;flex-wrap:wrap;gap:44px;justify-content:center;align-items:flex-start}
+.holder{flex:0 0 auto;width:432px;max-width:100%}
+.frame{width:432px;border-radius:44px;background:#141312;padding:10px;box-sizing:border-box;box-shadow:0 24px 60px rgba(40,30,10,.28);transform-origin:0 0}
+.screen{position:relative;width:412px;height:960px;border-radius:36px;overflow:hidden;background:var(--paper);color:var(--ink);transition:background .9s,color .9s}
+.screen *{transition:color .9s,border-color .9s,background-color .9s}
+
+#wires{position:absolute;inset:0;pointer-events:none;z-index:1}
+#wires path{fill:none;stroke:var(--ink3);stroke-width:1}
+#wires path.hot{stroke:var(--acc);stroke-width:1.4}
+#wires circle{fill:var(--ink)}
+
+.sb{position:absolute;top:0;left:0;right:0;height:40px;display:flex;justify-content:space-between;align-items:center;padding:0 28px;font-size:14px;font-weight:700;z-index:7}
+.sb .bat{display:inline-block;width:22px;height:10px;border:1.5px solid currentColor;border-radius:3px;position:relative;vertical-align:middle}
+.sb .bat::after{content:"";position:absolute;inset:1.5px 5px 1.5px 1.5px;background:currentColor;border-radius:1px}
+
+.stream{position:absolute;left:28px;right:26px;top:52px;bottom:112px;display:flex;flex-direction:column;z-index:2;overflow-x:visible;overflow-y:clip;transition:top .45s cubic-bezier(.2,.9,.2,1)}
+/* while an interruption is open, everything underneath gets more compact */
+.stream.pushed .now{margin-top:18px}.stream.pushed .now .why,.stream.pushed .flow .d{display:none}.stream.pushed .now h1{font-size:25px;line-height:31px}.stream.pushed .acts{margin-top:14px}
+
+.dl{font-size:12px;line-height:20px;font-weight:600;letter-spacing:.9px;text-transform:uppercase;color:var(--ink2);padding-bottom:12px;border-bottom:1.5px solid var(--ink)}
+.dl .top{display:flex;justify-content:space-between}
+.dl .d{color:var(--ink)}
+.dl .adj{border:0;background:none;padding:0;color:var(--ink);font:700 12px Archivo,sans-serif;letter-spacing:.9px;text-transform:uppercase;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.dl .s{white-space:nowrap}
+.dl .s.new{color:var(--acc);box-shadow:inset 0 -2px 0 var(--acc)}
+.dl .sep{color:var(--ink3);margin:0 5px}
+/* signals stay on ONE line: shrink to 10px minimum, then ellipsize (see fitDateline) */
+.dl .sig{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.now{margin-top:30px}
+.kind{font-size:12px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--ink2)}
+.kind.urgent{color:var(--acc)}
+.now h1{font-family:"Source Serif 4",Georgia,serif;font-weight:600;font-size:31px;line-height:37px;letter-spacing:-.4px;margin:8px 0 0}
+.why{margin-top:12px;font-family:"Source Serif 4",Georgia,serif;font-style:italic;font-size:17px;line-height:25px;color:var(--ink2)}
+.acts{display:flex;gap:20px;align-items:center;margin-top:20px}
+.btn{height:46px;padding:0 20px;border-radius:4px;border:0;background:var(--ink);color:var(--paper);font:700 15px Archivo,sans-serif;cursor:pointer}
+.lnk{border:0;background:none;padding:6px 0;color:var(--ink);font:600 15px Archivo,sans-serif;text-decoration:underline;text-underline-offset:4px;text-decoration-thickness:1px;cursor:pointer}
+.btn:active{transform:translateY(1px)}
+
+.flow{margin-top:auto}
+.flow .hd{font-size:12px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--ink2);padding-bottom:8px;border-bottom:1px solid var(--rule)}
+.th{position:relative;display:flex;gap:14px;align-items:baseline;padding:13px 0;border-bottom:1px solid var(--rule);animation:in .6s both}
+.th .tx{flex:1;min-width:0}
+.th .t{font-family:"Source Serif 4",Georgia,serif;font-size:18px;font-weight:600;line-height:24px}
+.th .d{font-size:13.5px;color:var(--ink2);line-height:19px;margin-top:2px}
+.th .held{display:block;font-size:11.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--acc);margin-bottom:3px}
+.th button{flex:0 0 auto;border:0;background:none;color:var(--ink);font:700 14px Archivo,sans-serif;cursor:pointer;padding:4px 0;white-space:nowrap}
+.th button::after{content:" \2192"}
+.th .k{position:absolute;left:-22px;margin-top:9px;width:7px;height:7px;border-radius:50%;background:var(--ink)}
+@keyframes in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.leaving{animation:out .3s forwards}
+@keyframes out{to{opacity:0;transform:translateY(-10px)}}
+
+/* interruption band */
+.intr{position:absolute;left:0;right:0;top:0;z-index:5;background:var(--acc);color:var(--onacc);padding:52px 28px 22px;transform:translateY(-102%);transition:transform .45s cubic-bezier(.2,.9,.2,1)}
+.intr.on{transform:none}
+.screen.banding .sb{color:var(--onacc)} /* status bar icons follow the band */
+.intr .kind{color:var(--onacc);opacity:.8}
+.intr h2{font-family:"Source Serif 4",Georgia,serif;font-weight:600;font-size:27px;line-height:33px;margin:8px 0 0;letter-spacing:-.3px}
+.intr p{margin:10px 0 0;font-size:15px;line-height:22px;opacity:.92}
+.intr .acts{margin-top:16px}
+.intr .btn{background:var(--onacc);color:var(--acc)}
+.intr .lnk{color:var(--onacc)}
+.voice{display:flex;align-items:center;gap:8px;margin-top:12px;font:italic 15px "Source Serif 4",Georgia,serif;opacity:.95}
+.voice svg{flex:0 0 auto}
+.voice i{display:inline-block;width:3px;height:10px;background:currentColor;margin-right:2px;border-radius:1px;animation:vb .9s infinite ease-in-out}
+.voice i:nth-child(2){animation-delay:.15s}.voice i:nth-child(3){animation-delay:.3s}
+@keyframes vb{50%{transform:scaleY(1.8)}}
+.dist{display:flex;align-items:center;gap:12px;margin-top:14px;font:700 13px Archivo,sans-serif;letter-spacing:.5px}
+.dist .track{flex:1;height:3px;background:currentColor;opacity:.9;position:relative;background:linear-gradient(90deg,currentColor,currentColor) no-repeat;background-size:100% 100%;}
+.dist .track{background:none;border-top:3px dotted currentColor;height:0}
+.dist .track i{position:absolute;left:0;top:-6px;width:9px;height:9px;border-radius:50%;background:currentColor;transform:translateX(-4px)}
+.dist .track b{position:absolute;right:0;top:-9px;width:2px;height:15px;background:currentColor}
+
+.ask{position:absolute;left:28px;right:26px;bottom:34px;height:56px;display:flex;align-items:center;gap:12px;border-top:1.5px solid var(--ink);z-index:3}
+.ask span{flex:1;font-family:"Source Serif 4",Georgia,serif;font-style:italic;font-size:17px;color:var(--ink2)}
+.ask button{width:46px;height:46px;border-radius:50%;border:1.5px solid var(--ink);background:none;color:var(--ink);cursor:pointer;display:flex;align-items:center;justify-content:center}
+
+/* another app in front (Maps) with Meow arriving as a notification */
+.app{position:absolute;inset:0;z-index:6;background:#E9E7E1;display:none}
+.app.on{display:block}
+.app .navbar{position:absolute;left:12px;right:12px;top:48px;height:78px;border-radius:14px;background:#1F5B3A;color:#fff;display:flex;align-items:center;gap:14px;padding:0 18px;font:700 22px Archivo,sans-serif}
+.app .navbar small{display:block;font:500 14px Archivo,sans-serif;opacity:.85}
+.app .eta{position:absolute;left:0;right:0;bottom:0;height:96px;background:#fff;border-top:1px solid #d8d6d0;display:flex;align-items:center;padding:0 24px;font:700 20px Archivo,sans-serif;color:#1d1d1d}
+.app .eta small{font:500 14px Archivo,sans-serif;color:#5f5f5f;margin-left:10px}
+.notif{position:absolute;left:10px;right:10px;top:44px;z-index:8;border-radius:22px;background:#FBFBF9;color:#1C1B19;box-shadow:0 10px 30px rgba(0,0,0,.28);padding:14px 16px 12px;transform:translateY(-420px);visibility:hidden;transition:transform .45s cubic-bezier(.2,.9,.2,1),visibility 0s .45s}
+.notif.on{transform:none;visibility:visible;transition:transform .45s cubic-bezier(.2,.9,.2,1)}
+.notif .who{display:flex;align-items:center;gap:8px;font:600 12.5px Archivo,sans-serif;color:#5b5750}
+.notif .who b{width:18px;height:18px;border-radius:5px;background:var(--acc);display:inline-block}
+.notif .nt{font:700 16px Archivo,sans-serif;margin-top:6px;line-height:21px}
+.notif .nd{font:400 14px Archivo,sans-serif;color:#4a463f;margin-top:3px;line-height:19px}
+.notif .na{display:flex;gap:22px;margin-top:10px}
+.notif .na button{border:0;background:none;padding:6px 0;font:700 14px Archivo,sans-serif;color:var(--acc);cursor:pointer}
+.notif .voice{color:#4a463f;margin-top:8px}
+
+/* settings sheet */
+.scrim{position:absolute;inset:0;background:rgba(10,8,6,.35);opacity:0;pointer-events:none;transition:opacity .25s;z-index:9}
+.scrim.on{opacity:1;pointer-events:auto}
+.sheet{position:absolute;left:0;right:0;bottom:0;max-height:86%;overflow:auto;z-index:10;background:var(--paper);color:var(--ink);border-top:1.5px solid var(--ink);padding:18px 28px 30px;transform:translateY(102%);transition:transform .35s cubic-bezier(.2,.9,.2,1);scrollbar-width:none}
+.sheet.on{transform:none}
+.sheet h3{margin:0;font-family:"Source Serif 4",Georgia,serif;font-size:26px;font-weight:600;display:flex;justify-content:space-between;align-items:baseline}
+.sheet h3 button{font:700 14px Archivo,sans-serif;border:0;background:none;color:var(--ink);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.grp{margin-top:20px;padding-top:12px;border-top:1px solid var(--rule)}
+.grp .gh{font-size:12px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--ink2)}
+.grp .gs{font-size:13px;color:var(--ink2);margin-top:3px;line-height:18px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;font-size:15px;font-weight:600}
+.row small{display:block;font-weight:400;font-size:13px;color:var(--ink2)}
+.seg{display:flex;border:1.5px solid var(--ink);border-radius:4px;overflow:hidden}
+.seg button{border:0;background:none;color:var(--ink);font:600 13px Archivo,sans-serif;padding:8px 9px;white-space:nowrap;cursor:pointer;border-left:1px solid var(--rule)}
+.seg button:first-child{border-left:0}
+.seg button.on{background:var(--ink);color:var(--paper)}
+.tog{width:46px;height:26px;border-radius:13px;border:1.5px solid var(--ink);background:none;position:relative;cursor:pointer;flex:0 0 auto}
+.tog::after{content:"";position:absolute;top:3px;left:3px;width:17px;height:17px;border-radius:50%;background:var(--ink3);transition:transform .2s,background .2s}
+.tog.on{background:var(--ink)}.tog.on::after{transform:translateX(20px);background:var(--paper)}
+.sw{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+.sw button{width:52px;height:52px;border-radius:6px;cursor:pointer;border:1.5px solid var(--rule);position:relative;padding:0}
+.sw button.on{outline:2px solid var(--ink);outline-offset:2px}
+.sw button span{position:absolute;right:6px;bottom:6px;width:12px;height:12px;border-radius:50%}
+.sw label{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink2);margin-left:4px}
+.sw input{width:40px;height:30px;border:1.5px solid var(--rule);border-radius:4px;background:none;padding:0;cursor:pointer}
+.num{font:700 15px Archivo,sans-serif;min-width:22px;text-align:right}
+input[type=range]{accent-color:var(--ink);flex:1}
+.learn{margin-top:10px;font-size:13.5px;line-height:20px;color:var(--ink2)}
+.learn b{color:var(--ink)}
+
+/* page side */
+.side{flex:1 1 320px;max-width:470px}
+.side h2{margin:0;font-family:"Source Serif 4",Georgia,serif;font-size:40px;line-height:1.05;font-weight:600;letter-spacing:-.6px}
+.side p{color:#4A463F;font-size:15px;line-height:1.6;margin:12px 0 0}
+.day{margin-top:24px;border-top:1.5px solid #1C1B19}
+.day button{display:flex;align-items:baseline;gap:16px;width:100%;text-align:left;padding:11px 2px;border:0;border-bottom:1px solid #C8C0AF;background:none;color:#1C1B19;font:500 15px Archivo,sans-serif;cursor:pointer}
+.day button b{width:76px;font-weight:700;color:#8C877C;font-size:13px;letter-spacing:.4px}
+.day button em{font-style:normal;margin-left:auto;font-size:12px;font-weight:800;letter-spacing:1px;color:#C23B16}
+.day button.on{font-weight:700}.day button.on b{color:#1C1B19}
+.day button.on::before{content:"";width:6px;height:6px;border-radius:50%;background:#1C1B19;margin-right:-10px;align-self:center}
+.ctl{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:14px;color:#6B665C;font-size:13px}
+.ctl button{height:36px;padding:0 16px;border-radius:4px;border:1.5px solid #1C1B19;background:none;color:#1C1B19;font:700 13px Archivo,sans-serif;cursor:pointer}
+.ctl .pseg{display:flex;border:1.5px solid #1C1B19;border-radius:4px;overflow:hidden}
+.ctl .pseg button{border:0;border-radius:0;height:32px}
+.ctl .pseg button.on{background:#1C1B19;color:#F2EEE5}
+.noticed{margin-top:26px}
+.noticed h3{margin:0 0 6px;font-size:12px;letter-spacing:1.2px;color:#6B665C;font-weight:800}
+.noticed ul{margin:0;padding-left:18px}
+.noticed li{font-size:14px;line-height:1.6;color:#3A3731}
+.noticed .rule{margin-top:10px;font-family:"Source Serif 4",Georgia,serif;font-style:italic;font-size:16px;line-height:1.5}
+.noticed .sit{margin-top:8px;font-size:12.5px;color:#6B665C;line-height:1.5}
+.brain{margin-top:24px;padding:14px 16px;border:1.5px solid #1C1B19;border-radius:4px}
+.brain h3{margin:0 0 8px;font-size:12px;letter-spacing:1.2px;color:#6B665C;font-weight:800;display:flex;justify-content:space-between}
+.brain h3 span{letter-spacing:.4px;font-weight:700;color:#8C877C}
+.jd{display:grid;grid-template-columns:52px 1fr auto;gap:2px 10px;align-items:baseline;padding:7px 0;border-top:1px solid #D5CEBF;font-size:13.5px;line-height:1.4}
+.jd:first-of-type{border-top:0}
+.jd .ty{font:700 11px Archivo,sans-serif;letter-spacing:.8px;text-transform:uppercase;color:#8C877C}
+.jd .q{color:#3A3731}
+.jd .a{font-weight:700;white-space:nowrap;text-align:right}
+.jd .bar{grid-column:2/4;height:3px;background:#E3DCCD;position:relative}
+.jd .bar i{position:absolute;left:0;top:0;bottom:0;background:#1C1B19}
+.jd.code .ty{color:#C23B16}
+.brain small{display:block;margin-top:8px;color:#6B665C;font-size:12.5px;line-height:1.5}
+.rules{margin-top:26px;padding-top:14px;border-top:1px solid #C8C0AF;font-size:14px;line-height:1.6;color:#4A463F}
+.rules b{color:#1C1B19}
+@media (prefers-reduced-motion:reduce){.th{animation:none}.intr,.notif,.sheet{transition:none}.voice i{animation:none}}
+</style>
+
+<div class="wrap">
+  <div class="holder" id="holder"><div class="frame" id="frame"><div class="screen" id="scr">
+    <svg id="wires" viewBox="0 0 412 960"></svg>
+    <div class="sb"><span id="clock">9:40</span><span>5G&nbsp;&nbsp;<span class="bat"></span></span></div>
+    <div class="stream">
+      <div class="dl" id="dl"></div>
+      <div class="now" id="now"></div>
+      <div class="flow" id="flow"></div>
+    </div>
+    <div class="intr" id="intr" role="alert"></div>
+    <div class="ask"><span>Ask, or tell me what you're doing…</span><button aria-label="Talk"><svg width="18" height="22" viewBox="0 0 18 22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="5" y="1" width="8" height="13" rx="4"/><path d="M1.5 10.5a7.5 7.5 0 0 0 15 0M9 18v3"/></svg></button></div>
+
+    <div class="app" id="app">
+      <svg viewBox="0 0 412 960" style="position:absolute;inset:0">
+        <rect width="412" height="960" fill="#E9E7E1"/>
+        <g stroke="#FFFFFF" stroke-width="14" fill="none"><path d="M-10 300 H430"/><path d="M-10 620 H430"/><path d="M90 0 V960"/><path d="M320 0 V960"/></g>
+        <g fill="#D6E6CF"><rect x="110" y="330" width="190" height="270" rx="6"/><rect x="-10" y="640" width="88" height="200" rx="6"/></g>
+        <path d="M206 900 V640 Q206 620 226 620 H320 V120" stroke="#2B6BE0" stroke-width="10" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <rect x="334" y="410" width="54" height="34" rx="5" fill="#C9483B"/><text x="361" y="432" font-family="Archivo" font-weight="700" font-size="11" fill="#fff" text-anchor="middle">Parts</text>
+        <text x="236" y="612" font-family="Archivo" font-weight="600" font-size="12" fill="#6B6B66">Main St</text>
+        <circle cx="206" cy="820" r="11" fill="#fff" stroke="#2B6BE0" stroke-width="4"/>
+      </svg>
+      <div class="navbar"><span style="font-size:30px">↱</span><div>Right onto Main St<small>then 0.8 mi to Hardware store</small></div></div>
+      <div class="eta">6 min<small>1.9 mi · arrive 5:04</small></div>
+    </div>
+    <div class="notif" id="notif"></div>
+
+    <div class="scrim" id="scrim"></div>
+    <section class="sheet" id="sheet" aria-label="Meow Flow settings"></section>
+  </div></div></div>
+
+  <aside class="side">
+    <h2>Meow Flow</h2>
+    <p>Meow Flow has no avatar and no fixed layout. Meow notices unfinished intentions from what you say and do, like "the rear light is out" or "finish the heat fix". It follows them across apps, places and hours, and brings each one forward when it's useful. Work comes first. When a chance is about to pass, it interrupts: out loud, on the home screen, or as a notification if you're in another app. You decide how often.</p>
+    <div class="day" id="day"></div>
+    <div class="ctl"><button id="play">Pause</button><button id="openset">Settings &amp; colours</button></div>
+    <div class="ctl"><span>During the drive the phone shows</span><span class="pseg" id="where"><button class="on" data-w="home">Meow</button><button data-w="maps">Maps</button></span></div>
+    <div class="noticed"><h3>WHAT MEOW NOTICED</h3><ul id="sig"></ul><div class="rule" id="rule"></div><div class="sit" id="sit"></div></div>
+    <div class="brain"><h3>HOW MEOW DECIDED <span id="engine">Laya · this phone</span></h3><div id="brain"></div><small id="brainnote"></small></div>
+    <div class="rules"><b>Built on Codex's 600-situation catalogue.</b> Every item is an offer, not an action taken for you. Meow keeps confirmed facts, predictions and unknowns separate: it never claims something is in stock unless that was checked. When nothing useful survives the timing and evidence checks, it shows nothing new.</div>
+  </aside>
+</div>
+
+<script>
+/* ── colour themes: each has a day and an after-work look ── */
+const THEMES = {
+  paper:    { name: 'Paper',     day: ['#F2EEE5', '#1C1B19', '#56524A', '#8C877C', '#D5CEBF', '#C23B16'], night: ['#1E1C19', '#EDE6D6', '#B7AF9F', '#8A8376', '#3A362F', '#E8794F'] },
+  linen:    { name: 'Linen',     day: ['#F4F1EA', '#16233B', '#4A5568', '#8791A3', '#D9D4C8', '#1F4FBF'], night: ['#131A26', '#E6E9F0', '#AEB6C6', '#7D879A', '#2B3445', '#86A6FF'] },
+  stone:    { name: 'Stone',     day: ['#EEEFEA', '#1B211C', '#4E574F', '#8A928A', '#D3D7CF', '#2F7A3E'], night: ['#171B18', '#E4E9E2', '#AAB3AA', '#7E877E', '#2F3630', '#7CCB8A'] },
+  sand:     { name: 'Sand',      day: ['#F3ECE2', '#231A20', '#5A4C55', '#948690', '#DCD0C4', '#8A2E5C'], night: ['#1D171B', '#EFE5EA', '#BBAAB4', '#8C7C86', '#3A2F36', '#E08AB4'] },
+  white:    { name: 'White',     day: ['#FAFAF7', '#111111', '#4D4D4D', '#8A8A8A', '#E2E2DC', '#B54708'], night: ['#141414', '#F0F0EC', '#B5B5B0', '#80807C', '#2E2E2C', '#F2A93B'] },
+  graphite: { name: 'Graphite',  day: ['#1B1B1A', '#ECECEA', '#B3B3AF', '#80807C', '#343432', '#F2A93B'], night: ['#121211', '#E6E6E3', '#ABABA7', '#7A7A76', '#2C2C2A', '#F2A93B'] }
+};
+const SET = { theme: 'paper', accent: null, evening: 'auto', voice: true, notify: true, perDay: 3, gap: 60, level: 2, learnEnd: true, engine: 'phone', jev: false };
+let interruptsToday = 1, lastInterruptMin = 11 * 60 + 52;  // the Play email this morning
+
+function lum(hex) { const n = parseInt(hex.slice(1), 16), c = [n >> 16, n >> 8 & 255, n & 255].map((v) => { v /= 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; }); return .2126 * c[0] + .7152 * c[1] + .0722 * c[2]; }
+function applyTheme() {
+  const S = DAY[cur], night = SET.evening === 'night' || (SET.evening === 'auto' && S.night);
+  const v = THEMES[SET.theme][night ? 'night' : 'day'], acc = SET.accent || v[5];
+  const st = $('scr').style;
+  ['--paper', '--ink', '--ink2', '--ink3', '--rule'].forEach((k, i) => st.setProperty(k, v[i]));
+  st.setProperty('--acc', acc);
+  // on-accent text: whichever of dark/light has the higher contrast against the accent
+  const cr = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + .05) / (Math.min(x, y) + .05); };
+  st.setProperty('--onacc', cr('#161513', acc) >= cr('#FFF8F0', acc) ? '#161513' : '#FFF8F0');
+}
+
+/* ── one simulated day ── */
+const DAY = [
+  { time: '7:52', ap: 'AM', label: 'Driving in',
+    ctx: [['loc', 'Driving, 14 min out'], ['cal', 'First meeting 10:00'], ['mail', '6 overnight emails']],
+    main: { kind: 'Work', from: ['cal', 'loc'], title: 'Nothing needs you before ten.', why: "You'll be at your desk by 8:10. I'm holding the emails until you park; none of them are urgent.", acts: ['Read me the summary', 'OK'] },
+    flow: [{ from: ['mail'], t: 'Sam replied overnight', d: 'About the voice button. It can wait.', b: 'Later' }],
+    sig: ['Moving at driving speed, car connected', 'Calendar clear until 10:00', '6 emails, none from a key contact or with a deadline'],
+    rule: 'Driving, so it shows one line and asks for no reading.', brain: [["noul", "Does anything need the user before 10:00?", "no", 0.06], ["choice", "Best way to handle 6 new emails right now", "hold until parked", 0.88], ["noul", "Is any email from a key contact or time-critical?", "no", 0.09]], sit: [26, 165] },
+
+  { time: '9:40', ap: 'AM', label: 'Deep work',
+    ctx: [['loc', 'Office'], ['app', 'Android Studio · Meowmba'], ["cal", "Free till noon"]],
+    main: { kind: 'Work', from: ['app'], title: 'The idle heat fix is ready to hand off.', why: 'You opened Meowmba. The branch has nine changed files and every test passes. Codex does the builds.', acts: ['Hand off to Codex', 'Not now'] },
+    flow: [
+      { from: ['app'], t: "A tester note about the screen you're in", d: 'Sam: "the voice button is hard to find."', b: 'Show' },
+      { from: ['cal'], t: 'Quiet until noon', d: 'Two notifications are held for you.', b: 'See' }],
+    sig: ['Android Studio in front for 25 minutes, project Meowmba', 'Branch has passing, uncommitted changes', 'No meetings until noon'],
+    rule: "You're focused, so only things tied to what's on screen get through.", brain: [["noul", "Is the heat-fix handoff relevant to what is open?", "yes", 0.91], ["noul", "Does the tester note concern the open screen?", "yes", 0.84], ["choice", "Urgency of the handoff", "worth it", 0.72], ["noul", "Should anything interrupt focus now?", "no", 0.08]], sit: [161, 162, 163, 165] },
+
+  { time: '11:52', ap: 'AM', label: 'An email lands',
+    ctx: [['loc', 'Office'], ['app', 'Android Studio'], ['mail', 'New from Google Play', 1]],
+    main: { kind: 'Work · due Oct 5', urgent: 1, from: ['mail'], title: 'Google Play wants the data safety form by October 5.', why: 'It just arrived. It blocks your production application on the 28th, so it goes to the top.', acts: ['Start the form', 'Remind me at 2'] },
+    flow: [
+      { from: ['app'], t: 'Heat fix handed off', d: 'Codex has it, waiting on a build slot.', b: 'Track' },
+      { from: ['loc'], t: 'Lunch is free, twelve to one', d: 'The taco place you liked is six minutes away.', b: 'Directions' }],
+    sig: ['New email from Play Console with a date in it', 'That date falls before a milestone in your plan', 'Almost noon, calendar free'],
+    rule: 'A deadline that blocks a milestone gets through even during focus time.', brain: [["noul", "Does the new email carry a deadline?", "yes", 0.96], ["noul", "Does that deadline block a milestone in the plan?", "yes", 0.81], ["choice", "Urgency", "urgent", 0.77], ["code", "Focus policy: urgent and blocks a milestone, so it goes through", "pass", 1]], sit: [169, 596] },
+
+  { time: '3:12', ap: 'PM', label: 'Before a call',
+    ctx: [['loc', 'Office'], ['cal', 'Call in 18 min', 1], ['app', 'Gmail']],
+    main: { kind: 'People', from: ['cal'], title: 'Your call with Sam is at 3:30.', why: "I've pulled their three notes. The main one is the voice button, which is on today's fix list.", acts: ['Open notes', 'Join at 3:30'] },
+    flow: [
+      { from: ['app'], t: 'Card payment, $412, due tomorrow', d: 'Paying from checking leaves $5,828.', b: 'Pay' },
+      { from: ['cal', 'loc'], t: 'Leave by 4:45 for your pickup', d: 'USB-C dock at the hardware store. They close at 5:30.', b: 'Remind me' }],
+    sig: ['Call with Sam on the calendar at 3:30', 'Gmail open, statement email found', 'Pickup order ready; store hours known'],
+    rule: 'Someone is about to be waiting on you, so they come first.', brain: [["choice", "Urgency of the 3:30 call", "urgent", 0.83], ["noul", "Are the saved notes relevant to this call?", "yes", 0.88], ["noul", "Is a bill due within 48 hours?", "yes", 0.93]], sit: [171, 177] },
+
+  { time: '4:58', ap: 'PM', label: 'Driving past a store', flag: 'INTERRUPT',
+    ctx: [['loc', 'Main St'], ['cal', 'Pickup 5:10'], ['need', 'Rear light out']],
+    main: { kind: 'On the way', from: ['cal', 'loc'], title: 'Hardware store in six minutes.', why: 'Your dock is at the front counter. Parking is on the side street.', acts: ['Navigate', 'OK'] },
+    flow: [{ from: ['need'], t: 'Fix the rear brake light', d: 'You said on Sunday the rear light was out. Your car takes a 7443 bulb.', b: 'Details' }],
+    interrupt: { after: 1800, feet: 600, from: 'need', level: 2, kind: 'Stop here? · Worth it',
+      title: 'Main Street Auto Parts is on your right. They usually carry the brake-light bulb you need.',
+      why: "You said the rear light was out; your car takes a 7443 bulb. I can't check their stock, so I can call ahead if you like. The stop adds about 4 minutes and you'll still make your 5:10 pickup.",
+      say: '"Auto parts store on your right usually carries your brake-light bulb. Want to stop? It adds about four minutes."',
+      short: 'Main Street Auto Parts usually carries your 7443 bulb · adds 4 min' },
+    sig: ['Driving; a parts store is 600 ft ahead on your route', 'Open intention from Sunday: "the rear light is out" → your car takes 7443', 'Store is open and usually carries the part (stock not checked); the stop still fits before your 5:10 pickup'],
+    rule: "A chance about to pass, tied to something you said you needed, and it fits your time. Worth interrupting, if your settings allow it.", brain: [["noul", "Sunday: did \"the rear light is out again\" express a need?", "yes", 0.95], ["noul", "Is this store likely to sell that part?", "yes", 0.94], ["code", "Stock is not checked in v1, so Meow says it usually carries it, never that it is in stock", "unknown", 1], ["noul", "Will the chance be gone within about 10 minutes?", "yes", 0.92], ["choice", "Urgency", "worth it", 0.74], ["code", "The 4-minute detour fits the 12-minute buffer, and your settings allow it", "pass", 1], ["choice", "Channel while driving", "speak + show", 0.81]], sit: [17, 22, 23, 37, 592] },
+
+  { time: '6:05', ap: 'PM', label: 'Working late',
+    ctx: [['loc', 'Office'], ['app', 'Android Studio · typing'], ['cal', 'Usually done by 6', 1]],
+    main: { kind: 'Work', from: ['app'], title: 'Build 156 passed on your phone.', why: "You're past your usual finish, but you're still working, so evening ideas stay held until you stop.", acts: ['See results', 'OK'] },
+    flow: [{ from: ['cal'], t: 'Evening ideas are waiting', d: "I'll bring them out once you close up.", b: 'Peek' }],
+    sig: ['Learned schedule: weekdays you usually stop around 6:00 (3 weeks of evidence)', 'Still typing in Android Studio in the last 2 minutes; office Wi-Fi connected', 'No "done for the day" signal yet'],
+    rule: 'Your schedule says done, but what you are doing says working. What you are doing wins.', brain: [["noul", "Has the user finished work for the day?", "no", 0.18], ["code", "The learned schedule alone would say", "done 0.80", 1], ["noul", "Should evening suggestions show now?", "no", 0.11]], sit: [163, 240, 587] },
+
+  { time: '6:40', ap: 'PM', label: 'Work wraps', night: 1,
+    ctx: [['loc', 'Home'], ['app', 'Laptop closed'], ['cal', 'Nothing tonight']],
+    main: { kind: 'Work · done', from: ['app'], title: "You're done for today. One thing for tomorrow.", why: 'Planning build 157 at nine. The agenda is ready, and nothing is due tonight.', acts: ['See agenda', 'Done'] },
+    flow: [
+      { from: ['loc'], t: 'Sunset walk, Riverside Trail', d: 'Sunset at 7:08. Twelve minutes away, 72°.', b: 'Go' },
+      { from: ['app'], t: 'New album from an artist you played 14 times', d: 'Out today, about 38 minutes.', b: 'Play' },
+      { from: ['cal'], t: 'Your show, series 2 episode 7', d: 'You stopped at episode 6.', b: 'Resume' }],
+    sig: ['Laptop closed at 6:32, left the office at 6:35, home at 6:38', 'No work apps for 8 minutes, matching how your workdays usually end', 'Clear sky with sunset soon; music you played this week'],
+    rule: 'Several signals agree that work has stopped. Close out work first, then turn to what you enjoy.', brain: [["noul", "Has the user finished work for the day?", "yes", 0.93], ["noul", "Is anything due tonight?", "no", 0.04], ["choice", "Which evening idea fits best right now", "walk", 0.41], ["code", "Close call: walk 0.41, album 0.33, show 0.26, so all three are shown in order", "rank", 1]], sit: [239, 241, 251] },
+
+  { time: '9:30', ap: 'PM', label: 'Winding down', night: 1,
+    ctx: [['loc', 'Home'], ['app', 'TV on'], ['cal', 'Usually asleep by 11']],
+    main: { kind: 'Tonight', from: ['app', 'cal'], title: 'There is time for a film.', why: "Three picks under two hours, close to what you've rated highly this month.", acts: ['Show picks', 'Not tonight'] },
+    flow: [
+      { from: ['cal'], t: 'Tomorrow at nine: plan build 157', d: 'The agenda is ready. Nothing to do tonight.', b: 'OK' },
+      { from: ['cal'], t: 'Quiet from 10:30 until 7', d: 'Only calls from favourites get through.', b: 'Change' }],
+    sig: ['TV connected in the living room', 'Your usual bedtime is 11:00', 'Nothing due before 9:00 tomorrow'],
+    rule: 'Evening, so work shrinks to a single reassuring line.', brain: [["noul", "Is the user winding down?", "yes", 0.86], ["choice", "Film or episode for the time left", "film", 0.64], ["noul", "Does tomorrow need anything tonight?", "no", 0.07]], sit: [241, 248, 250] }
+];
+
+const $ = (id) => document.getElementById(id);
+const scr = $('scr'), wires = $('wires'), NS = 'http://www.w3.org/2000/svg';
+let cur = 0, playing = true, where = 'home', timer, itimer, ticker;
+
+function pos(el) { let x = 0, y = 0, n = el; while (n && n !== scr) { x += n.offsetLeft; y += n.offsetTop; n = n.offsetParent; } return { x, y, w: el.offsetWidth, h: el.offsetHeight }; }
+function travel(d, ms) {
+  const p = document.createElementNS(NS, 'path'); p.setAttribute('d', d); p.style.opacity = 0; wires.appendChild(p);
+  const c = document.createElementNS(NS, 'circle'); c.setAttribute('r', 2.4); wires.appendChild(c);
+  const L = p.getTotalLength(), t0 = performance.now();
+  requestAnimationFrame(function f(now) { const k = Math.min(1, (now - t0) / ms), pt = p.getPointAtLength(L * k); c.setAttribute('cx', pt.x); c.setAttribute('cy', pt.y); if (k < 1) requestAnimationFrame(f); else { p.remove(); c.remove(); } });
+}
+function fitDateline() {
+  const sig = scr.querySelector('.dl .sig'); if (!sig) return;
+  let fs = 12; sig.style.fontSize = fs + 'px'; sig.style.letterSpacing = '';
+  while (sig.scrollWidth > sig.clientWidth + 1 && fs > 10) { fs -= .5; sig.style.fontSize = fs + 'px'; sig.style.letterSpacing = '.5px'; }
+}
+function wire() {
+  wires.innerHTML = '';
+  const src = {}; scr.querySelectorAll('.dl .s').forEach((s, n) => { const p = pos(s); src[s.dataset.k] = { x: p.x + Math.min(14, p.w / 2), y: p.y + p.h - 2, lane: 11 + n * 4, hot: s.classList.contains('new') }; });
+  scr.querySelectorAll('.stream [data-from]').forEach((t, i) => {
+    const a = pos(t.querySelector('.k, .kind')); const tx = t.classList.contains('th') ? a.x + 3 : a.x - 6, ty = a.y + a.h / 2;
+    t.dataset.from.split(',').forEach((k, j) => { const s = src[k]; if (!s) return;
+      const d = `M${s.x} ${s.y} L${s.x} ${s.y + 8} Q${s.x} ${s.y + 16} ${s.x - 8} ${s.y + 16} L${s.lane + 6} ${s.y + 16} Q${s.lane} ${s.y + 16} ${s.lane} ${s.y + 22} L${s.lane} ${ty - 6} Q${s.lane} ${ty} ${s.lane + 6} ${ty} L${tx} ${ty}`;
+      const path = document.createElementNS(NS, 'path'); path.setAttribute('d', d); if (s.hot) path.classList.add('hot'); wires.appendChild(path);
+      const L = path.getTotalLength(); path.style.strokeDasharray = L; path.style.strokeDashoffset = L; path.style.transition = `stroke-dashoffset .8s ${.12 * i + .08 * j}s ease-out`;
+      requestAnimationFrame(() => requestAnimationFrame(() => path.style.strokeDashoffset = 0));
+      setTimeout(() => travel(d, 900), 120 * i + 80 * j + 300);
+    });
+  });
+}
+
+function render(i) {
+  cur = i; const S = DAY[i];
+  applyTheme();
+  $('clock').textContent = S.time;
+  $('dl').innerHTML = `<div class="top"><span class="d">Tue 22 Sept · ${S.time} ${S.ap}</span><button class="adj" data-set>Adjust</button></div><span class="sig">` + S.ctx.map(([k, t, fresh]) => `<span class="s${fresh ? ' new' : ''}" data-k="${k}">${t}</span>`).join('<span class="sep">/</span>') + '</span>'; fitDateline();
+  const m = S.main;
+  $('now').innerHTML = `<div data-from="${m.from}"><div class="kind${m.urgent ? ' urgent' : ''}">${m.kind}</div><h1>${m.title}</h1><div class="why">${m.why}</div>
+    <div class="acts"><button class="btn" data-done>${m.acts[0]}</button><button class="lnk" data-done>${m.acts[1]}</button></div></div>`;
+  const night = SET.evening === 'night' || (SET.evening === 'auto' && S.night);
+  $('flow').innerHTML = `<div class="hd">${S.night ? 'If you feel like it' : 'Also for you'}</div>` + S.flow.map((f, j) => `<div class="th" data-from="${f.from}" style="animation-delay:${.2 + j * .1}s"><span class="k"></span><div class="tx">${f.held ? `<span class="held">${f.held}</span>` : ''}<div class="t">${f.t}</div><div class="d">${f.d}</div></div><button data-done>${f.b}</button></div>`).join('');
+  $('day').querySelectorAll('button').forEach((b, j) => b.classList.toggle('on', j === i));
+  $('sig').innerHTML = S.sig.map((s) => `<li>${s}</li>`).join('');
+  $('rule').textContent = S.rule;
+  $('engine').textContent = 'Laya · this phone';
+  $('brain').innerHTML = (S.brain || []).map(([ty, q, a, pr]) => ty === 'code'
+    ? `<div class="jd code"><span class="ty">rule</span><span class="q">${q}</span><span class="a">${a}</span></div>`
+    : `<div class="jd"><span class="ty">${ty}</span><span class="q">${q}</span><span class="a">${ty === 'noul' ? `P(yes) ${pr.toFixed(2)} → ${a}` : `${a} ${pr.toFixed(2)}`}</span><span class="bar"><i style="width:${pr * 100}%"></i></span></div>`).join('');
+  $('brainnote').textContent = `Laya answers each typed question in one pass (about 33 ms on a GPU). Plain rules in code handle facts, your settings and limits. ${SET.jev ? 'Low-confidence or long cases go to Jev in the cloud.' : 'Jev (cloud) is off, so low-confidence cases wait or ask you one short question.'} The numbers are illustrative.`;
+  $('sit').textContent = `Matches situations ${S.sit.map((n) => '#' + n).join(', ')} in the catalogue.`;
+  hideInterrupt(true);
+  $('app').classList.toggle('on', !!S.interrupt && where === 'maps');
+  requestAnimationFrame(wire);
+  if (S.interrupt) itimer = setTimeout(() => maybeInterrupt(S), S.interrupt.after);
+}
+
+/* ── the interruption, gated by the user's settings ── */
+const LEVELS = ['', 'Useful', 'Worth it', 'Urgent'];
+function maybeInterrupt(S) {
+  const I = S.interrupt, nowMin = (+S.time.split(':')[0] + (S.ap === 'PM' && S.time[0] !== '1' ? 12 : 0)) * 60 + +S.time.split(':')[1];
+  let why = null;
+  if (I.level < SET.level) why = `Held: this is "${LEVELS[I.level]}", and you only allow "${LEVELS[SET.level]}" to interrupt.`;
+  else if (interruptsToday >= SET.perDay) why = `Held: you've had ${interruptsToday} of your ${SET.perDay} interruptions today.`;
+  else if (nowMin - lastInterruptMin < SET.gap) why = `Held: less than ${SET.gap} minutes since the last interruption.`;
+  scr.querySelector(`.dl .s[data-k="${I.from}"]`)?.classList.add('new');
+  if (why) { // doesn't interrupt; quietly joins the flow instead
+    S.flow = [{ from: [I.from], held: why, t: I.short, d: 'Waiting quietly in the flow.', b: 'Stop' }, ...S.flow.filter((f) => !f.held)];
+    $('flow').innerHTML = ''; render2(S); return;
+  }
+  interruptsToday++; lastInterruptMin = nowMin;
+  const voice = SET.voice ? `<div class="voice"><span><i></i><i></i><i></i></span>Speaking: ${I.say}</div>` : '';
+  if (where === 'maps') { // in another app: arrives as a notification (if allowed)
+    if (!SET.notify) { $('notif').classList.remove('on'); if (SET.voice) { $('notif').innerHTML = `<div class="who"><b></b>Meow · voice only</div>${voice}`; $('notif').classList.add('on'); } return; }
+    $('notif').innerHTML = `<div class="who"><b></b>Meow · now</div><div class="nt">${I.title}</div><div class="nd">Usually carries it · adds 4 min · still on time for 5:10</div>${voice}<div class="na"><button id="nstop">Add the stop</button><button id="nskip">Not today</button><button id="nopen">Open Meow</button></div>`;
+    $('notif').classList.add('on');
+    $('nstop').onclick = () => { stop(); $('notif').innerHTML = `<div class="who"><b></b>Meow</div><div class="nt">Stop added. Turn right in 300 ft.</div>`; setTimeout(() => $('notif').classList.remove('on'), 2400); };
+    $('nskip').onclick = () => { stop(); $('notif').classList.remove('on'); };
+    $('nopen').onclick = () => { stop(); $('notif').classList.remove('on'); $('app').classList.remove('on'); showBand(S, voice); };
+    return;
+  }
+  showBand(S, voice);
+}
+function render2(S) { const i = cur; const keep = S.interrupt; S.interrupt = null; render(i); S.interrupt = keep; }
+function showBand(S, voice) {
+  const I = S.interrupt, el = $('intr');
+  el.innerHTML = `<div class="kind">${I.kind}</div><h2>${I.title}</h2><p>${I.why}</p>${voice}
+    <div class="dist"><span id="ft">${I.feet} ft</span><span class="track"><i id="car"></i><b></b></span><span>store</span></div>
+    <div class="acts"><button class="btn" id="stop">Add the stop</button><button class="lnk" id="skip">Not today</button></div>`;
+  el.classList.add('on'); scr.classList.add('banding'); push(el.offsetHeight + 14);
+  let ft = I.feet;
+  ticker = setInterval(() => { ft -= 25; $('ft').textContent = ft > 0 ? `${ft} ft` : 'passed'; $('car').style.left = `${100 * (1 - ft / I.feet)}%`;
+    if (ft <= 0) { clearInterval(ticker); resolveBand("You've passed it. I'll bring it up when you're near another parts store."); } }, 450);
+  $('stop').onclick = () => { stop(); resolveBand('Stop added. Turn right in 300 ft. You’ll still be at the hardware store by 5:10.'); };
+  $('skip').onclick = () => { stop(); resolveBand("OK. I'll keep it in mind for another trip."); };
+}
+function resolveBand(msg) {
+  clearInterval(ticker);
+  const el = $('intr'); el.querySelector('.dist')?.remove(); el.querySelector('.acts')?.remove(); el.querySelector('.voice')?.remove(); el.querySelector('p').textContent = msg; push(el.offsetHeight + 14);
+  setTimeout(() => hideInterrupt(), 2600);
+}
+function hideInterrupt(silent) { clearTimeout(itimer); clearInterval(ticker); $('notif').classList.remove('on'); if ($('intr').classList.contains('on')) { $('intr').classList.remove('on'); scr.classList.remove('banding'); push(52); } }
+function push(top) { const st = scr.querySelector('.stream'); st.style.top = top + 'px'; st.classList.toggle('pushed', top > 60); wires.innerHTML = ''; setTimeout(wire, 480); }
+
+/* ── settings sheet (on the phone) ── */
+function settingsHTML() {
+  const seg = (key, opts) => `<div class="seg">${opts.map(([v, l]) => `<button data-k="${key}" data-v="${v}" class="${SET[key] == v ? 'on' : ''}">${l}</button>`).join('')}</div>`;
+  const tog = (key) => `<button class="tog${SET[key] ? ' on' : ''}" data-t="${key}" aria-pressed="${SET[key]}"></button>`;
+  return `<h3>Settings <button data-close>Done</button></h3>
+  <div class="grp"><div class="gh">Colour</div>
+    <div class="sw">${Object.entries(THEMES).map(([k, t]) => `<button data-theme="${k}" class="${SET.theme === k ? 'on' : ''}" title="${t.name}" style="background:${t.day[0]}"><span style="background:${t.day[5]}"></span></button>`).join('')}
+    <label>Accent <input type="color" id="accent" value="${SET.accent || THEMES[SET.theme].day[5]}"></label></div>
+    <div class="row">After work look ${seg('evening', [['auto', 'Auto'], ['day', 'Day'], ['night', 'Night']])}</div></div>
+  <div class="grp"><div class="gh">Interruptions</div><div class="gs">When something can't wait. Everything else waits quietly in the flow.</div>
+    <div class="row"><span>How many a day<small>Most interruptions per day</small></span><span class="num" id="pdv">${SET.perDay}</span></div>
+    <div class="row"><input type="range" min="0" max="10" value="${SET.perDay}" id="perDay"></div>
+    <div class="row"><span>How often<small>Minimum time between</small></span>${seg('gap', [[15, '15m'], [30, '30m'], [60, '1h'], [120, '2h']])}</div>
+    <div class="row"><span>How urgent<small>Least urgent that can interrupt</small></span>${seg('level', [[3, 'Urgent'], [2, 'Worth it'], [1, 'Useful']])}</div></div>
+  <div class="grp"><div class="gh">How it reaches you</div>
+    <div class="row"><span>Speak out loud<small>Say interruptions aloud, hands-free in the car</small></span>${tog('voice')}</div>
+    <div class="row"><span>Notify in other apps<small>Show as a notification when Meow isn't on screen</small></span>${tog('notify')}</div></div>
+  <div class="grp"><div class="gh">Thinking</div><div class="gs">Meow's decisions come from Laya, an open model that runs on this phone. Your context stays on the device.</div>
+        <div class="row"><span>Ask Jev on hard cases<small>Sends a trimmed summary to TypeSafe's cloud</small></span>${tog('jev')}</div></div>
+  <div class="grp"><div class="gh">Work hours</div>
+    <div class="learn">Learned so far: <b>weekdays, about 8:30 to 6:00</b>, usually at the office. From 3 weeks of your days.</div>
+    <div class="row"><span>Detect when work ends<small>Use what you're doing, not just the clock</small></span>${tog('learnEnd')}</div></div>`;
+}
+function openSettings() { stop(); $('sheet').innerHTML = settingsHTML(); $('sheet').classList.add('on'); $('scrim').classList.add('on'); }
+function closeSettings() { $('sheet').classList.remove('on'); $('scrim').classList.remove('on'); }
+$('scrim').onclick = closeSettings; $('openset').onclick = openSettings;
+$('sheet').addEventListener('click', (e) => {
+  const t = e.target.closest('button'); if (!t) return;
+  if (t.dataset.close !== undefined) return closeSettings();
+  if (t.dataset.theme) { SET.theme = t.dataset.theme; SET.accent = null; }
+  if (t.dataset.k) SET[t.dataset.k] = isNaN(t.dataset.v) ? t.dataset.v : +t.dataset.v;
+  if (t.dataset.t) SET[t.dataset.t] = !SET[t.dataset.t];
+  applyTheme(); if (t.dataset.k === 'engine' || t.dataset.t === 'jev') refreshBrain(); const y = $('sheet').scrollTop; $('sheet').innerHTML = settingsHTML(); $('sheet').scrollTop = y;
+});
+$('sheet').addEventListener('input', (e) => {
+  if (e.target.id === 'accent') { SET.accent = e.target.value; applyTheme(); }
+  if (e.target.id === 'perDay') { SET.perDay = +e.target.value; $('pdv').textContent = SET.perDay; }
+});
+
+function refreshBrain() { const keep = DAY[cur].interrupt; DAY[cur].interrupt = null; const open = $('sheet').classList.contains('on'); render(cur); DAY[cur].interrupt = keep; }
+
+/* ── handling items ── */
+scr.addEventListener('click', (e) => {
+  if (e.target.closest('[data-set]')) return openSettings();
+  const b = e.target.closest('.stream [data-done]'); if (!b) return;
+  stop(); const S = DAY[cur], th = b.closest('.th');
+  S._orig = S._orig || { main: S.main, flow: [...S.flow] };
+  if (th) { th.classList.add('leaving'); const idx = [...$('flow').querySelectorAll('.th')].indexOf(th); setTimeout(() => { S.flow = S.flow.filter((_, j) => j !== idx); render2(S); }, 300); return; }
+  const nx = S.flow[0]; if (!nx) return;
+  $('now').firstElementChild.classList.add('leaving');
+  setTimeout(() => { S.main = { kind: S.main.kind.split(' ·')[0], from: nx.from, title: nx.t, why: nx.d, acts: [nx.b, 'Later'] }; S.flow = S.flow.slice(1); render2(S); }, 300);
+});
+
+/* ── day player ── */
+$('day').innerHTML = DAY.map((d) => `<button><b>${d.time} ${d.ap}</b>${d.label}${d.flag ? `<em>${d.flag}</em>` : ''}</button>`).join('');
+$('day').querySelectorAll('button').forEach((b, i) => b.onclick = () => { stop(); reset(i); render(i); });
+$('where').querySelectorAll('button').forEach((b) => b.onclick = () => { where = b.dataset.w; $('where').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); stop(); const i = DAY.findIndex((d) => d.interrupt); interruptsToday = 1; reset(i); render(i); });
+function reset(i) { const S = DAY[i]; if (S._orig) { S.main = S._orig.main; S.flow = [...S._orig.flow]; delete S._orig; } S.flow = S.flow.filter((f) => !f.held); if (S.interrupt) { interruptsToday = 1; lastInterruptMin = 11 * 60 + 52; } }
+function stop() { playing = false; clearTimeout(timer); $('play').textContent = 'Play'; }
+function schedule() { clearTimeout(timer); timer = setTimeout(() => { const n = (cur + 1) % DAY.length; reset(n); render(n); schedule(); }, DAY[cur].interrupt ? 16000 : 8000); }
+function start() { playing = true; $('play').textContent = 'Pause'; schedule(); }
+$('play').onclick = () => playing ? stop() : start();
+
+function fit() { const h = $('holder'), s = Math.min(1, h.clientWidth / 432); $('frame').style.transform = `scale(${s})`; h.style.height = 980 * s + 'px'; }
+addEventListener('resize', fit); fit();
+render(1); start();
+</script>

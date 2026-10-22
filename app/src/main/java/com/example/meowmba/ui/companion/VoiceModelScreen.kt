@@ -1,5 +1,9 @@
 package com.example.meowmba.ui.companion
 
+import com.example.meowmba.ui.theme.Button
+import com.example.meowmba.ui.theme.OutlinedButton
+import com.example.meowmba.ui.theme.Card
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -27,7 +31,7 @@ import com.example.meowmba.core.audio.AsrBackend
 import com.example.meowmba.core.audio.AsrBackendStatus
 
 /**
- * Hardware → Voice Recognition.
+ * LLM → Voice Recognition.
  *
  * Picks which speech-to-text engine hears the user. Styling deliberately
  * mirrors [ModelManagerScreen] (same dark palette, monospace title, card
@@ -44,6 +48,10 @@ fun VoiceModelScreen(
     onSelectBackend: (AsrBackend) -> Unit = {},
     onDownloadWhisper: () -> Unit,
     onRepairStreamingModel: () -> Unit,
+    onDownloadLocalVoices: () -> Unit,
+    onSelectLocalVoice: (String) -> Unit,
+    onPreviewLocalVoice: (String) -> Unit,
+    onUseSystemVoice: () -> Unit,
     onClose: () -> Unit,
 ) {
     val statuses = state.asrBackendStatuses.ifEmpty {
@@ -55,7 +63,7 @@ fun VoiceModelScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Voice Recognition", fontFamily = FontFamily.Monospace) },
+                title = { Text("Voice & Conversation", fontFamily = FontFamily.Monospace) },
                 navigationIcon = {
                     TextButton(onClick = onClose) {
                         Text("Back", color = MaterialTheme.colorScheme.primary, fontSize = 13.sp)
@@ -75,12 +83,40 @@ fun VoiceModelScreen(
                 .padding(24.dp)
                 .verticalScroll(rememberScrollState()),
         ) {
+            Text("Speaking voice", style = MaterialTheme.typography.titleLarge)
+            Text("Four distinct neural voices. Once downloaded, speech is generated entirely on this phone. No voice API or server.",
+                style = MaterialTheme.typography.bodySmall)
+            if (!state.localVoicesReady) {
+                Button(onClick = onDownloadLocalVoices, enabled = state.localVoiceProgress == null) {
+                    Text("Download & enable offline voices · 349 MB")
+                }
+                Text("Needs 1.2 GB free during installation. Keep this screen open until complete.", style = MaterialTheme.typography.bodySmall)
+            }
+            state.localVoiceProgress?.let { LinearProgressIndicator(progress = { it }, modifier = Modifier.fillMaxWidth()) }
+            state.localVoiceMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+            val playbackError by com.example.meowmba.core.audio.LocalVoiceRuntime.lastError.collectAsState()
+            playbackError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            com.example.meowmba.core.audio.LocalVoices.all.forEach { voice ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(selected = state.localVoiceEnabled && state.localVoiceId == voice.id,
+                        enabled = state.localVoicesReady, onClick = { onSelectLocalVoice(voice.id) })
+                    Column(Modifier.weight(1f)) {
+                        Text("${voice.name} · ${voice.gender}")
+                        Text(voice.description, style = MaterialTheme.typography.bodySmall)
+                    }
+                    TextButton(enabled = state.localVoicesReady, onClick = { onPreviewLocalVoice(voice.id) }) { Text("Preview") }
+                }
+            }
+            TextButton(onClick = onUseSystemVoice) { Text("Use offline Android voice instead") }
+            Text("Kokoro neural voices · AI-generated speech, not human recordings. Preview to choose your preferred sound.", style = MaterialTheme.typography.bodySmall)
+            HorizontalDivider(Modifier.padding(vertical = 16.dp))
             Text(
-                "Which engine turns your speech into text",
+                "Listening · which engine turns your speech into text",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 12.sp,
             )
 
+            state.voiceRecognitionStatus?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Spacer(Modifier.height(20.dp))
 
             statuses.forEach { status ->
@@ -113,8 +149,8 @@ fun VoiceModelScreen(
             // than buried in a tooltip.
             if (state.asrBackend.isCloud) {
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1C1600)),
-                    border = BorderStroke(1.dp, Color(0xFFD29922)),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
@@ -123,28 +159,29 @@ fun VoiceModelScreen(
                             Icon(
                                 Icons.Default.Cloud,
                                 contentDescription = null,
-                                tint = Color(0xFFD29922),
+                                tint = MaterialTheme.colorScheme.tertiary,
                                 modifier = Modifier.size(18.dp),
                             )
                             Spacer(Modifier.width(8.dp))
                             Text(
                                 "Audio leaves this device",
-                                color = Color(0xFFD29922),
+                                color = MaterialTheme.colorScheme.tertiary,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 13.sp,
                             )
                         }
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            "Recorded speech is uploaded to OpenRouter and transcribed by " +
-                                "${state.asrCloudModel}. Wake-word detection stays on-device — " +
-                                "only the utterance after it is sent.",
+                            if (state.asrBackend == AsrBackend.OPENAI_CLOUD)
+                                "Recorded turns are sent to OpenAI's ${com.example.meowmba.core.audio.OpenAiAsrEngine.MODEL}. An OpenAI API key and paid API usage are required. In always-on mode, captured speech can be sent without a wake phrase."
+                            else "Recorded turns are sent to OpenRouter and transcribed by ${state.asrCloudModel}. " +
+                                "In always-on mode, captured speech can be sent without a wake phrase.",
                             // Deliberately NOT onSurfaceVariant: this card's container is a
                             // fixed dark amber, so a themed (near-black in Light mode) text
                             // colour measured ~1.9:1 against it — unreadable, on a privacy
                             // disclosure of all things. The card never flips brightness, so
                             // its text must not either. This cream reads ~13:1 on the amber.
-                            color = Color(0xFFF0DCC0),
+                            color = MaterialTheme.colorScheme.onTertiaryContainer,
                             fontSize = 12.sp,
                         )
                     }
@@ -184,7 +221,7 @@ private fun VoiceBackendCard(
     val accent = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
     Card(
         colors = CardDefaults.cardColors(
-            containerColor = if (selected) Color(0xFF10261A) else MaterialTheme.colorScheme.surface,
+            containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
         ),
         border = BorderStroke(1.dp, accent),
         shape = RoundedCornerShape(12.dp),
@@ -204,8 +241,8 @@ private fun VoiceBackendCard(
                 },
                 contentDescription = null,
                 tint = when {
-                    !enabled -> Color(0xFF6E7681)
-                    status.backend.isCloud -> Color(0xFFD29922)
+                    !enabled -> MaterialTheme.colorScheme.onSurfaceVariant
+                    status.backend.isCloud -> MaterialTheme.colorScheme.tertiary
                     else -> MaterialTheme.colorScheme.primary
                 },
                 modifier = Modifier.size(22.dp),
@@ -214,21 +251,21 @@ private fun VoiceBackendCard(
             Column(Modifier.weight(1f)) {
                 Text(
                     status.backend.displayName,
-                    color = if (enabled) MaterialTheme.colorScheme.onSurface else Color(0xFF6E7681),
+                    color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
                 )
                 Spacer(Modifier.height(3.dp))
                 Text(
                     status.backend.subtitle,
-                    color = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF545D68),
+                    color = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 11.sp,
                 )
                 if (!enabled && status.reason.isNotBlank()) {
                     Spacer(Modifier.height(5.dp))
                     Text(
                         status.reason,
-                        color = Color(0xFFD29922),
+                        color = MaterialTheme.colorScheme.tertiary,
                         fontSize = 11.sp,
                     )
                 }
@@ -249,7 +286,7 @@ private fun VoiceBackendCard(
                         )
                         Spacer(Modifier.width(3.dp))
                         Text(
-                            "IN USE",
+                            "SELECTED",
                             color = Color.Black,
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Bold,

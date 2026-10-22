@@ -12,6 +12,7 @@ import io.ktor.http.ContentType
 import io.ktor.http.contentLength
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -55,7 +56,9 @@ class RemoteMusicGenerator(
             val taskId = startGeneration(prompt, durationSec)
                 ?: return Result.failure(IllegalStateException("Music server did not return a task id"))
             pollUntilDone(taskId)
-        } catch (e: Throwable) {
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
             Result.failure(IllegalStateException("Music server unreachable: ${e.message ?: "network error"}"))
         } finally {
             client.close()

@@ -1,0 +1,6 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.meow.qa.release">
+    <uses-sdk android:minSdkVersion="31" android:targetSdkVersion="36" />
+    <application android:label="Meow disposable release QA" />
+    <instrumentation android:name="com.meow.qa.release.PlayReleaseInstrumentation"
+        android:targetPackage="com.meow.meowmba" android:functionalTest="true" />
+</manifest>

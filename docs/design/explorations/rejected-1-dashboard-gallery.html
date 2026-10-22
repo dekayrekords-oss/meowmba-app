@@ -1,0 +1,226 @@
+<title>Meow Workspace</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;800;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,1,0&display=block">
+<style>
+:root{color-scheme:dark;--bg:#182A32;--deep:#0F1D23;--surf:#213740;--card:#263E47;--var:#2B444C;--line:#718E91;--div:#36525A;--ink:#172D34;--paper:#F6F0DF;--mute:#BED0CD;--lime:#C6EB78;--onlime:#20351C;--sel:#354E36;--onsel:#E1F8BA;--aqua:#81D8CE;--aquac:#264F55;--onaquac:#C7F4ED;--amber:#FFC56F;--amberc:#55412C;--onamberc:#FFE2B5;--red:#F2B8B5;--redc:#5C2522;--onredc:#F9DEDC;--bubble:#F4EEDB}
+body{background:var(--deep);color:var(--paper);font-family:Roboto,"Google Sans",system-ui,sans-serif;padding-inline:16px;padding-block:32px 64px}
+.ms{font-family:"Material Symbols Outlined";font-weight:normal;font-style:normal;font-size:24px;line-height:1;display:inline-block;white-space:nowrap;letter-spacing:normal;text-transform:none;direction:ltr;font-feature-settings:"liga";-webkit-font-smoothing:antialiased;font-variation-settings:"FILL" 1,"wght" 400,"GRAD" 0,"opsz" 24;user-select:none}
+.intro{max-width:1180px;margin:0 auto 28px;display:flex;flex-wrap:wrap;gap:16px 32px;align-items:flex-end;justify-content:space-between}
+.intro h1{margin:0;font-size:clamp(28px,5vw,40px);line-height:1.1;font-weight:900;letter-spacing:-.5px;text-wrap:balance}
+.intro p{margin:6px 0 0;color:var(--mute);font-size:15px;line-height:1.5;max-width:60ch}
+.legend{display:flex;gap:8px;flex-wrap:wrap}
+.pill{height:28px;padding:0 10px;border-radius:8px;font-size:12px;font-weight:800;display:inline-flex;align-items:center;gap:6px;border:2px solid var(--line)}
+.gallery{max-width:1480px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:40px 28px;justify-items:center}
+figure{margin:0;display:flex;flex-direction:column;align-items:center;gap:12px;width:100%}
+figcaption{font-size:14px;font-weight:800;color:var(--mute);text-align:center}
+figcaption b{color:var(--paper);display:block;font-size:16px}
+.frame{width:330px;height:769px;position:relative;border-radius:40px;background:#050B0E;padding:10px;box-sizing:border-box;box-shadow:0 0 0 2px #2B444C,0 24px 60px rgba(0,0,0,.5);max-width:100%}
+.scaler{width:412px;height:960px;transform:scale(.7524);transform-origin:0 0;border-radius:36px;overflow:hidden;position:relative}
+.screen{position:absolute;inset:0;background:var(--bg);color:var(--paper);overflow:hidden}
+.sb{position:absolute;top:0;left:0;right:0;height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;font-size:14px;font-weight:700;color:var(--paper);opacity:.9}
+.hdr{position:absolute;top:40px;left:0;width:412px;height:64px;box-sizing:border-box;padding:0 12px 0 20px;display:flex;align-items:center;gap:4px}
+.hdr .t{flex:1;min-width:0;display:flex;flex-direction:column}
+.hdr h2{margin:0;font-size:24px;line-height:32px;font-weight:800;letter-spacing:-.3px}
+.hdr small{font-size:14px;line-height:20px;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ib{width:48px;height:48px;border-radius:24px;border:0;background:none;color:var(--paper);display:flex;align-items:center;justify-content:center;cursor:pointer}
+.body{position:absolute;top:104px;left:0;width:412px;bottom:128px;overflow-y:auto;scrollbar-width:none}
+.body.full{bottom:0}
+.body::-webkit-scrollbar{display:none}
+.col{padding:4px 20px 96px;display:flex;flex-direction:column;gap:12px}
+.card{background:var(--card);border:2px solid var(--line);border-radius:18px}
+.meow{background:var(--aquac);border:2px solid var(--line);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.h3{margin:0;padding-top:12px;font-size:16px;line-height:24px;font-weight:800;display:flex;align-items:center;justify-content:space-between}
+.h3 span{font-size:13px;color:var(--mute);font-weight:700}
+.btn{height:48px;box-sizing:border-box;border-radius:12px;border:2px solid var(--line);background:var(--lime);color:var(--onlime);box-shadow:0 3px 0 var(--ink);font:800 14px/20px Roboto,sans-serif;display:flex;align-items:center;justify-content:center;gap:8px;padding:0 16px;cursor:pointer;transition:transform 80ms,box-shadow 80ms}
+.btn:active{transform:translateY(2px);box-shadow:0 1px 0 var(--ink)}
+.btn.out{background:transparent;color:var(--lime);box-shadow:none}
+.btn.ton{background:var(--sel);color:var(--onsel)}
+.btn.grow{flex:1}
+.chips{display:flex;gap:8px;overflow-x:auto;margin:0 -20px;padding:0 20px 2px;scrollbar-width:none}
+.chip{flex-shrink:0;height:40px;box-sizing:border-box;padding:0 14px;border-radius:12px;border:2px solid var(--line);background:transparent;color:var(--mute);font:700 14px Roboto,sans-serif;display:flex;align-items:center;gap:6px;cursor:pointer}
+.chip[aria-pressed=true]{background:var(--sel);color:var(--onsel);padding-left:10px}
+.row{display:flex;align-items:center;gap:12px;min-height:64px;box-sizing:border-box;padding:10px 14px;border-top:1px solid var(--div)}
+.row:first-child{border-top:0}
+.icb{width:40px;height:40px;flex-shrink:0;border-radius:12px;background:var(--var);display:flex;align-items:center;justify-content:center}
+.tx{flex:1;min-width:0;display:flex;flex-direction:column}
+.tx b{font-size:14px;line-height:20px}
+.tx i{font-style:normal;font-size:13px;line-height:18px;color:var(--mute)}
+.v{font-size:14px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.tile{background:var(--card);border:2px solid var(--line);border-radius:18px;box-shadow:0 3px 0 var(--ink);padding:14px;display:flex;flex-direction:column;gap:8px;cursor:pointer}
+.tile .n{font-size:24px;line-height:28px;font-weight:800;font-variant-numeric:tabular-nums}
+.tile small{font-size:12px;line-height:16px;color:var(--mute)}
+.tag{height:26px;box-sizing:border-box;padding:0 10px;border-radius:8px;font-size:12px;font-weight:800;display:inline-flex;align-items:center;flex-shrink:0}
+.bar{height:8px;border-radius:4px;background:#1B3139;overflow:hidden}.bar i{display:block;height:100%;border-radius:4px}
+.nav{position:absolute;left:0;bottom:0;width:412px;height:128px;box-sizing:border-box;padding:10px 4px 0;background:var(--surf);border-top:2px solid var(--line);display:flex;justify-content:space-around;align-items:flex-start}
+.nav button{position:relative;width:80px;display:flex;flex-direction:column;align-items:center;gap:4px;background:none;border:0;color:var(--mute);font:500 12px/16px Roboto,sans-serif;cursor:pointer}
+.nav button .p{width:64px;height:32px;border-radius:16px;display:flex;align-items:center;justify-content:center}
+.nav button[aria-current=page]{color:var(--paper);font-weight:800}
+.nav button[aria-current=page] .p{background:var(--sel);color:var(--onsel)}
+.badge{position:absolute;top:-3px;left:46px;min-width:18px;height:18px;box-sizing:border-box;padding:0 5px;border-radius:9px;background:var(--red);color:#601410;border:2px solid var(--surf);font-size:11px;line-height:14px;font-weight:800}
+.cat{position:absolute;width:60px;height:50px;z-index:5;pointer-events:none;transition-property:left,top;transition-timing-function:linear}
+.cat svg{display:block;overflow:visible}
+.bub{position:absolute;bottom:56px;width:224px;box-sizing:border-box;padding:9px 12px 11px;background:var(--bubble);color:var(--ink);border:2px solid var(--ink);border-radius:16px;box-shadow:0 3px 0 var(--ink);font-size:13.5px;line-height:19px;font-weight:500;opacity:0;transform:translateY(6px);transition:opacity .2s,transform .2s}
+.bub.on{opacity:1;transform:none}
+.bub em{display:block;font-style:normal;font-size:11px;line-height:14px;font-weight:900;letter-spacing:.08em;color:#226268}
+.bub::after{content:"";position:absolute;bottom:-8px;left:var(--tail,40px);width:12px;height:12px;background:var(--bubble);border-right:2px solid var(--ink);border-bottom:2px solid var(--ink);transform:rotate(45deg)}
+@media (prefers-reduced-motion:reduce){.cat{transition:none}}
+</style>
+
+<header class="intro">
+  <div>
+    <h1>Meow Workspace</h1>
+    <p>The professional mode for Meow, drawn in the app’s own cartoon theme at Fold cover-screen size. Tap chips, tabs and the bottom bar inside each phone. Meowmba project facts are real; messages, money and orders are sample data.</p>
+  </div>
+  <div class="legend"><span class="pill" style="background:var(--sel);color:var(--onsel)">Real Meowmba data</span><span class="pill" style="background:var(--amberc);color:var(--onamberc)">Sample data</span></div>
+</header>
+<main class="gallery" id="gallery"></main>
+
+<script>
+const $ = (h) => { const t = document.createElement('template'); t.innerHTML = h.trim(); return t.content.firstElementChild; };
+const ic = (n, c, s) => `<span class="ms" aria-hidden="true" style="${c ? 'color:' + c + ';' : ''}${s ? 'font-size:' + s + 'px' : ''}">${n}</span>`;
+const L='var(--lime)',A='var(--aqua)',M='var(--amber)',R='var(--red)';
+const rows = (list) => `<section class="card" style="overflow:hidden">${list.map(r => `<div class="row"><span class="icb">${ic(r[0], r[1])}</span><span class="tx"><b>${r[2]}</b><i>${r[3]}</i></span>${r[4] ? `<span class="v" style="color:${r[5] || 'var(--paper)'}">${r[4]}</span>` : ''}</div>`).join('')}</section>`;
+const hdr = (t, s, back, trail = '') => `<div class="hdr">${back ? `<button class="ib" data-go="today" aria-label="Back to Today" style="margin-left:-12px">${ic('arrow_back')}</button>` : ''}<div class="t"><h2>${t}</h2><small>${s}</small></div>${trail}</div>`;
+const chipRow = (key, opts, cur) => `<div class="chips" role="group">${opts.map(o => `<button class="chip" data-set="${key}" data-val="${o[0]}" aria-pressed="${o[0] === cur}">${o[0] === cur ? ic('check', '', 18) : ''}${o[1]}</button>`).join('')}</div>`;
+const NAV = [['today','Today','space_dashboard'],['project','Projects','folder'],['inbox','Inbox','inbox'],['money','Money','account_balance_wallet'],['ideas','Ideas','lightbulb']];
+const nav = (active) => `<nav class="nav" aria-label="Workspace">${NAV.map(n => `<button data-go="${n[0]}" ${n[0] === active ? 'aria-current="page"' : ''}><span class="p">${ic(n[2])}</span>${n[1]}${n[0] === 'inbox' ? '<span class="badge">3</span>' : ''}</button>`).join('')}</nav>`;
+
+const ROLES = {
+  engineer: { label:'Engineer', icon:'code', work:['Engineering','Meowmba · live from your repo','LIVE',[[L,'Latest build','1.3.99 (155) · 2,730 tests pass'],[M,'Play Console','Alpha 11 in review · day 9 of 14'],[R,'P0 backlog','Idle frame pacing first'],[L,'Last commit · Sep 21','Character scenes and song ID']]],
+    brief:[['rocket_launch',M,'Play is still reviewing Alpha 11 (build 152). You’re on tester day 9 of 14 for production access.'],['bug_report',R,'Build 155 passes all 2,730 tests. Next P0: idle frame pacing, then the clock overlap.'],['credit_card',A,'A card payment is due tomorrow, and the headphones return closes Thursday.']],
+    agenda:[['3:30','PM','Tester check-in call','20 min · video',L],['5:00','PM','Pick up hardware order','On your way home',A],['9:00','AM','Plan build 156','Tomorrow · focus block',M]],
+    proj:['rocket_launch',L,'9/14','tester days to production'], idea:['rate_review','Tester pulse','One-tap feedback after a chat. The answers double as evidence for production access.'],
+    say:['Afternoon! Play is still reviewing build 152.','Tester call at 3:30. I pulled their last notes.','Card payment due tomorrow. Schedule it?','Idea: one-tap tester feedback.'] },
+  artist: { label:'Artist', icon:'brush', work:['Studio','Commissions, shows and shop','EXAMPLE',[[R,'Commissions','3 active · 1 due Friday'],[M,'Open calls','Gallery deadline Oct 3'],[L,'Print shop','4 orders ready to ship'],[L,'Next post','Thursday · 6:00 PM']]],
+    brief:[['brush',M,'The [Client] commission is due Friday. Sketches approved; the color pass is left.'],['event',R,'The gallery open call closes October 3. Your portfolio is two pieces short.'],['local_shipping',A,'Four print orders are ready to ship.']],
+    agenda:[['1:00','PM','Studio block','3 hours · notifications muted',L],['4:30','PM','Framer pickup','Two frames ready',A],['10:00','AM','Commission delivery','Friday · video call',M]],
+    proj:['palette',M,'12/30','pieces for the show'], idea:['collections','Sketchbook prints','A numbered run of sketchbook pages gives collectors an easy first purchase.'],
+    say:['Commission due Friday. Color pass next?','Studio block 1 to 4. Notifications muted.','The print shop paid out this morning.','Idea: a numbered sketchbook print run.'] },
+  pm: { label:'Project manager', icon:'assignment', work:['Delivery','Milestones, risks and people','EXAMPLE',[[L,'Milestones','3 of 5 on track'],[R,'Risks','2 red · 3 amber'],[M,'Team load','Design at 110%'],[R,'Decisions','2 waiting on you']]],
+    brief:[['flag',M,'Launch gate review is Thursday. Three of five exit criteria are met.'],['warning',R,'Two risks turned red overnight: vendor API quota and QA coverage.'],['description',A,'I drafted Friday’s stakeholder update from this week’s changes.']],
+    agenda:[['3:00','PM','Risk review','30 min · 6 people',L],['4:00','PM','1:1 with design lead','Capacity check',A],['10:00','AM','Launch gate','Thursday · go or no-go',M]],
+    proj:['flag',L,'3/5','exit criteria met'], idea:['grid_view','Risk heat map','Show how each risk moved week over week in the Friday update.'],
+    say:['Launch gate Thursday: 3 of 5 met.','Your 1:1 with design is at 4.','Two stakeholders asked for the timeline.','Idea: a risk heat map.'] },
+  musician: { label:'Musician', icon:'music_note', work:['Music','Releases, gigs and royalties','EXAMPLE',[[R,'Release','Single out in 12 days'],[M,'Gigs','Saturday · load-in 6 PM'],[R,'Royalties','1 split sheet to sign'],[L,'Streams','Acoustic version trending up']]],
+    brief:[['album',M,'Your single releases in 12 days. Artwork and credits are still missing.'],['mic_external_on',R,'Saturday gig: load-in at 6 PM, and the set list isn’t locked yet.'],['draw',A,'The collaboration split sheet is waiting on one signature.']],
+    agenda:[['4:00','PM','Rehearsal','2 hours · full band',L],['7:30','PM','Mix notes call','Engineer · 30 min',A],['6:00','PM','Load-in','Saturday · [Venue]',M]],
+    proj:['album',L,'12','days to release'], idea:['graphic_eq','Teaser loop','Cut a 15-second loop from the bridge for release-week posts.'],
+    say:['Your single drops in 12 days.','Rehearsal at 4. Set list sent.','A royalty payout landed overnight.','Idea: a teaser loop from the bridge.'] },
+  carpenter: { label:'Carpenter', icon:'carpenter', work:['Jobs','Sites, materials and quotes','EXAMPLE',[[L,'Job site','Kitchen remodel · day 3 of 8'],[M,'Materials','6 sheets of 3/4 in birch ply'],[R,'Quotes','2 to send · walnut table'],[R,'Invoices','1 overdue · 10 days']]],
+    brief:[['construction',M,'Kitchen remodel, day 3 of 8: cabinets arrive tomorrow at 8 AM.'],['request_quote',R,'Two quote requests came in. One is a walnut dining table for eight.'],['trending_up',A,'Birch plywood went up. Order before Friday to hold the price.']],
+    agenda:[['4:00','PM','Site walk · kitchen','Client on site',L],['5:30','PM','Supplier pickup','Hardware and hinges',A],['8:00','AM','Cabinet delivery','Tomorrow',M]],
+    proj:['construction',M,'3/8','days on the kitchen job'], idea:['texture','Finish samples','Send a small finish-sample board with every quote. It helps close jobs.'],
+    say:['Cabinets arrive tomorrow at 8.','Site walk with the client at 4.','One invoice is 10 days overdue.','Idea: a finish-sample board.'] }
+};
+const work = (r) => { const w = ROLES[r].work; const live = w[2] === 'LIVE';
+  return `<section class="card" style="padding:14px 16px;display:flex;flex-direction:column;gap:8px"><div style="display:flex;align-items:center;gap:12px"><span class="icb" style="background:var(--sel)">${ic(ROLES[r].icon, L)}</span><span class="tx"><b style="font-size:16px">${w[0]}</b><i style="font-size:12px">${w[1]}</i></span><span class="tag" style="background:${live ? 'var(--sel)' : 'var(--amberc)'};color:${live ? 'var(--onsel)' : 'var(--onamberc)'}">${w[2]}</span></div>${w[3].map(x => `<div style="display:flex;align-items:center;gap:12px;min-height:41px;border-top:1px solid var(--div)"><span style="width:8px;height:8px;border-radius:4px;background:${x[0]}"></span><span class="tx"><i style="font-size:12px">${x[1]}</i><b>${x[2]}</b></span></div>`).join('')}</section>`; };
+
+const SCREENS = {
+  menu: { title:'Memba menu', note:'New Workspace tile — the way in', floor:866, say:()=>['New: your Workspace tile. Tap it.','Everything else stays where it was.','Tap Avatar to come back to me.'],
+    render(){ const tiles=[['space_dashboard',L,'Workspace'],['computer',L,'Computer'],['terminal',L,'Memory'],['folder_open',A,'Files'],['storefront',M,'Vending'],['memory',L,'LLM'],['hub',A,'Brain'],['android',M,'Robot'],['folder',L,'Projects'],['build',A,'Tools'],['smart_toy',M,'Agents'],['security',L,'Privacy'],['book',L,'Notes'],['directions_car',A,'Auto'],['wb_sunny',M,'Weather'],['settings',M,'Settings']];
+      return `<div style="position:absolute;inset:0;background:#0C171C"></div><div style="position:absolute;left:156px;top:52px;height:30px;padding:0 12px;border-radius:15px;background:rgba(33,55,64,.6);font-size:14px;font-weight:700;line-height:30px">3:40 PM</div><div style="position:absolute;inset:0;background:rgba(0,0,0,.8)"></div>
+      <section style="position:absolute;left:16px;top:136px;width:380px;height:680px;box-sizing:border-box;padding:16px;background:var(--bg);border:2px solid var(--line);border-radius:24px;display:flex;flex-direction:column"><div style="display:flex;align-items:center"><h2 style="margin:0;flex:1;font-size:28px;line-height:36px;font-weight:800">Memba</h2><button class="btn out" style="height:40px">Avatar</button></div><span style="font-size:12px;color:var(--mute);padding:4px 0 16px">Your companion, tools &amp; settings</span>
+      <div class="body" style="position:static;width:auto;flex:1;display:grid;grid-template-columns:1fr 1fr;gap:12px;align-content:start">${tiles.map((t,i)=>`<button ${i===0?'data-go="today"':''} style="position:relative;padding:14px 8px;background:var(--surf);border:2px solid ${i===0?'var(--lime)':'var(--line)'};border-radius:18px;${i===0?'box-shadow:0 3px 0 var(--ink);':''}display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--paper);font:800 14px/20px Roboto,sans-serif;cursor:pointer"><span class="icb" style="width:42px;height:42px">${ic(t[0],t[1],26)}</span>${t[2]}${i===0?'<span style="position:absolute;top:8px;right:8px;height:20px;padding:0 7px;border-radius:6px;background:var(--lime);color:var(--onlime);font-size:11px;font-weight:900;line-height:20px">NEW</span>':''}</button>`).join('')}</div></section>`; } },
+  today: { title:'Today', note:'Tap a role chip to re-arrange the day', say:(s)=>ROLES[s.role].say,
+    render(s){ const r = ROLES[s.role];
+      return hdr('Today','Tuesday, September 22',false,`<button class="ib" data-go="roles" aria-label="Change how you work">${ic('tune')}</button><button class="btn out" data-go="menu" style="height:40px;padding:0 14px 0 10px">${ic('face','',20)}Avatar</button>`)+
+      `<div class="body"><div class="col">${chipRow('role',Object.keys(ROLES).map(k=>[k,ROLES[k].label]),s.role)}
+      <section class="meow"><div style="display:flex;align-items:center;gap:10px"><span style="width:10px;height:10px;border-radius:5px;background:var(--lime);box-shadow:0 0 0 4px rgba(198,235,120,.18)"></span><b style="flex:1;font-size:16px;color:var(--onaquac)">Meow's brief</b><small style="font-weight:700;color:var(--onaquac);opacity:.8">3:38 PM</small></div>
+      ${r.brief.map(b=>`<div style="display:flex;gap:12px"><span style="width:32px;height:32px;flex-shrink:0;border-radius:10px;background:#1B3A40;display:flex;align-items:center;justify-content:center">${ic(b[0],b[1],20)}</span><span style="font-size:14px;line-height:21px;padding-top:5px">${b[2]}</span></div>`).join('')}
+      <div style="display:flex;gap:10px;padding-top:4px"><button class="btn grow">${ic('auto_awesome','',20)}Plan my afternoon</button><button class="btn ton" aria-label="Read aloud" style="width:48px;padding:0">${ic('volume_up')}</button></div></section>
+      <div class="h3">Next up <span>3 events</span></div>
+      <section class="card" style="overflow:hidden">${r.agenda.map(e=>`<div class="row"><span style="width:50px;display:flex;flex-direction:column"><b style="font-size:16px;font-variant-numeric:tabular-nums">${e[0]}</b><small style="font-size:11px;font-weight:700;color:var(--mute)">${e[1]}</small></span><span style="width:4px;height:36px;border-radius:2px;background:${e[4]}"></span><span class="tx"><b>${e[2]}</b><i>${e[3]}</i></span>${ic('chevron_right','var(--mute)')}</div>`).join('')}</section>
+      <div class="h3">At a glance</div>
+      <div class="grid2">${[['inbox',A,'3','messages need you','inbox'],['payments',M,'$412','card due tomorrow','money'],[r.proj[0],r.proj[1],r.proj[2],r.proj[3],'project'],['local_shipping',A,'1','order arriving today','money']].map(g=>`<div class="tile" data-go="${g[4]}"><span class="icb">${ic(g[0],g[1])}</span><span class="n">${g[2]}</span><small>${g[3]}</small></div>`).join('')}</div>
+      <div class="h3">Your work</div>${work(s.role)}
+      <div class="h3">Idea of the day</div>
+      <section class="card" style="overflow:hidden"><div style="height:120px;background:var(--var);border-bottom:2px solid var(--line);display:flex;align-items:center;justify-content:center"><span style="width:76px;height:76px;border-radius:22px;background:var(--bubble);border:3px solid var(--ink);box-shadow:0 4px 0 var(--ink);display:flex;align-items:center;justify-content:center">${ic(r.idea[0],'var(--ink)',44)}</span></div><div style="padding:14px;display:flex;flex-direction:column;gap:8px"><small style="font-weight:800;letter-spacing:.4px;color:var(--lime)">MEOW SUGGESTS</small><b style="font-size:18px">${r.idea[1]}</b><span style="font-size:14px;line-height:21px;color:var(--mute)">${r.idea[2]}</span><div style="display:flex;gap:10px;padding-top:6px"><button class="btn grow">${ic('bookmark_add','',20)}Add to plan</button><button class="btn out" data-go="ideas">More ideas</button></div></div></section>
+      </div></div>`+nav('today'); } },
+  project: { title:'Meowmba project', note:'Real repo and Play data · try the tabs', say:()=>['Build 152 in review since Sep 19.','Five more tester days, then production.','2,730 tests, zero failures. Nice.','No ads yet. Want a draft for day 14?'],
+    render(s){ const days=[...Array(14)].map((_,i)=>`<span style="height:14px;border-radius:4px;background:${i<9?'var(--lime)':'#1B3139'};border:1.5px solid var(--ink)"></span>`).join('');
+      const tabs = { ov: `<div class="grid2">${[['science',L,'1.3.99 (155)','2,730 tests pass'],['paid',M,'$0','revenue · closed testing'],['campaign',A,'None','ads running'],['language',A,'Live','website · release 152']].map(k=>`<div class="card" style="padding:14px;display:flex;flex-direction:column;gap:6px">${ic(k[0],k[1])}<b style="font-size:20px">${k[2]}</b><small style="color:var(--mute)">${k[3]}</small></div>`).join('')}</div>
+          <div class="h3">Open bugs</div>${rows([['bug_report',R,'Idle redraws at 40 fps','P0 · fix ready for review'],['bug_report',R,'Clock overlaps Reflex badge','P0 · home layout'],['battery_alert',M,'All-day heat run not done','Release gate'],['music_note',M,'Song ID needs an AudD key','P1']])}
+          <div class="h3">Latest fixes</div>${rows([['commit',L,'Character scenes and song ID','637697f · Sep 21'],['commit',L,'Idle baseline and speech echo','f193215 · Sep 21'],['commit',L,'First-run permission choices','039da2c · Sep 19']])}`,
+        bd: `${rows([['commit',L,'Character scenes and song ID','637697f · Sep 21'],['commit',L,'Music awareness, Needle status','f193215 · Sep 21'],['commit',L,'Permission choices honored','039da2c · Sep 19'],['commit',L,'Lint blockers fixed','ff936b2 · Sep 19'],['commit',L,'Cloud audio cancels safely','e764083 · Sep 19']])}<section class="meow"><b>Idle heat trace · today</b><span style="font-size:14px;line-height:21px;color:var(--onaquac)">55% of one core at idle and 40 fps of redraws from two clocks out of step. The fix is on branch perf/idle-heat-20260922.</span></section>`,
+        pl: `<div class="h3">Now</div>${rows([['thermostat',R,'Align frame clocks','Biggest heat win'],['group',M,'Finish tester streak','Day 9 of 14']])}<div class="h3">Next</div>${rows([['view_in_ar',A,'Prop placement and workshop','Feature queue 1'],['dns',A,'Glasses and Meow Server','Feature queue 2']])}<div class="h3">Later</div>${rows([['workspace_premium',L,'Meow Pro workspace','First paid tier'],['campaign',L,'Public launch and ads','After production access']])}` };
+      return hdr('Meowmba','Android companion · closed testing',true,`<button class="ib" aria-label="More">${ic('more_vert')}</button>`)+`<div class="body"><div class="col">
+      <section class="card" style="padding:16px;display:flex;flex-direction:column;gap:12px"><div style="display:flex;gap:14px;align-items:center"><span style="width:56px;height:56px;border-radius:14px;border:2px solid var(--line);background:#0E1D23;display:flex;align-items:center;justify-content:center">${ic('pets',L,32)}</span><span class="tx"><b style="font-size:20px;line-height:26px">Alpha release 11</b><i>1.3.96 (152) · submitted Sep 19</i></span><span class="tag" style="background:var(--amberc);color:var(--onamberc)">In review</span></div>
+      <small style="font-weight:800;letter-spacing:.4px;color:var(--mute)">PRODUCTION ACCESS · DAY 9 OF 14</small><div style="display:grid;grid-template-columns:repeat(14,1fr);gap:4px">${days}</div><small style="font-size:13px;color:var(--mute)">12 testers opted in · 5 qualifying days to go</small>
+      <div style="display:flex;gap:10px"><button class="btn grow">${ic('rocket_launch','',20)}Play status</button><button class="btn out">Tester update</button></div></section>
+      ${chipRow('tab',[['ov','Overview'],['bd','Build'],['pl','Masterplan']],s.tab)}${tabs[s.tab]}</div></div>`+nav('project'); } },
+  inbox: { title:'Inbox', note:'Sorted by what needs you · filters work', say:()=>['Three things need you. Two replies drafted.','The missed call left no voicemail.','Your friend asked about Thursday.','I folded 9 app alerts into one summary.'],
+    render(s){ const k={text:['chat',A],email:['mail',M],call:['call',R],app:['notifications',L]};
+      const g=(arr)=>{const f=arr.filter(m=>s.f==='all'||m[0]===s.f); return f.length?rows(f.map(m=>[k[m[0]][0],k[m[0]][1],m[1],m[2],m[3],'var(--mute)'])):'<p style="margin:0;color:var(--mute);font-size:14px">Nothing here.</p>';};
+      return hdr('Inbox','26 new · sample messages',false,`<button class="ib" aria-label="Clear the easy ones">${ic('done_all')}</button>`)+`<div class="body"><div class="col">${chipRow('f',[['all','All 26'],['text','Texts 4'],['email','Email 12'],['call','Calls 1'],['app','Apps 9']],s.f)}
+      <section class="meow"><b style="font-size:16px;color:var(--onaquac)">3 need you · 2 replies drafted</b><div style="background:var(--bubble);color:var(--ink);border:2px solid var(--ink);border-radius:14px;padding:12px;font-size:14px;line-height:21px"><b>To the tester:</b> Thanks for flagging this! The voice button is easy to miss. I’ve logged it for the next build.</div><div style="display:flex;gap:10px"><button class="btn grow">${ic('send','',20)}Send</button><button class="btn out">Edit</button></div></section>
+      <div class="h3">Needs you</div>${g([['email','Tester · Meowmba','Voice button is hard to find','2:02'],['call','Missed call','Unknown number · no voicemail','2:14'],['text','Friend','Still on for dinner Thursday?','1:40']])}
+      <div class="h3">FYI</div>${g([['app','Play Console','Alpha 11: changes in review','11:20'],['email','Bank','Card payment $412 due tomorrow','10:05'],['app','Deliveries','USB-C dock out for delivery','9:48']])}
+      <div class="h3">Can wait</div>${g([['email','Store returns','Return label for headphones','Mon'],['email','Dev newsletter','This week in Compose','Mon']])}</div></div>`+nav('inbox'); } },
+  money: { title:'Money', note:'Personal and business · sample figures', say:()=>['Checking is fine until payday.','Card payment due tomorrow. Schedule it?','The headphones return closes Thursday.','Two AI keys went unused this month.'],
+    render(s){ const acc=[['personal','account_balance',A,'Checking','Paycheck in 4 days','$3,420'],['personal','savings',L,'Savings','+$150 this month','$2,210'],['personal','credit_card',R,'Credit card','$412 due tomorrow','−$612',R],['business','store',M,'Business','Meowmba $0 · closed test','$610']];
+      return hdr('Money','September · sample figures',false,`<button class="ib" aria-label="Hide balances">${ic('visibility')}</button>`)+`<div class="body"><div class="col">${chipRow('v',[['all','All'],['personal','Personal'],['business','Business']],s.v)}
+      <section class="card" style="padding:16px;display:flex;flex-direction:column;gap:6px"><small style="font-size:13px;color:var(--mute)">Cash across 3 accounts</small><b style="font-size:36px;line-height:44px;font-variant-numeric:tabular-nums">$6,240</b><svg width="336" height="56" viewBox="0 0 336 56" aria-hidden="true"><path d="M0 44 L48 38 L96 42 L144 28 L192 32 L240 20 L288 24 L336 10 L336 56 L0 56 Z" fill="rgba(198,235,120,.14)"/><path d="M0 44 L48 38 L96 42 L144 28 L192 32 L240 20 L288 24 L336 10" fill="none" stroke="#C6EB78" stroke-width="3" stroke-linejoin="round"/><circle cx="333" cy="11" r="4" fill="#C6EB78"/></svg><span class="tag" style="align-self:flex-start;background:var(--sel);color:var(--onsel)">+$475 this month</span></section>
+      <div class="h3">Accounts</div>${rows(acc.filter(a=>s.v==='all'||a[0]===s.v).map(a=>a.slice(1)))}
+      <div class="h3">Bills and subscriptions</div>${rows([['event',R,'Credit card payment','Tomorrow','$412',R],['phone_android',M,'Phone plan','Sep 28','$85'],['memory',A,'AI model APIs','Oct 1','$38'],['language',A,'Website hosting','Oct 3','$12']])}
+      <div class="h3">Bought and returning</div>${rows([['local_shipping',A,'USB-C dock','Arriving today','$64'],['keyboard_return',R,'Headphones','Return by Thursday','$129'],['storefront',M,'Hardware order','Ready for pickup','$47']])}
+      <section class="meow"><small style="font-weight:800;letter-spacing:.4px;color:var(--lime)">MEOW NOTICED</small><span style="font-size:14px;line-height:21px">Two AI API keys had no calls in September. Pausing them saves about $14 a month.</span><button class="btn">Review keys</button></section></div></div>`+nav('money'); } },
+  ideas: { title:'Ideas', note:'Meow’s suggestions with example art', say:()=>['Tester pulse is the quickest win.','Nap mode makes the heat fix visible.','Meow Pro needs a price from you.','Clips could grow your tester list.'],
+    render(s){ const all={app:[['rate_review','var(--aquac)','Tester pulse','One-tap feedback after a chat. It doubles as production-access evidence.','SMALL EFFORT · HIGH IMPACT',L],['widgets','var(--var)','Home-screen brief','A widget with Meow’s brief and your next event.','MEDIUM EFFORT · MEDIUM IMPACT',M],['bedtime','var(--surf)','Cool-down nap','When the phone runs warm, Meow curls up instead of just pausing.','SMALL EFFORT · MEDIUM IMPACT',M]],growth:[['share','var(--aquac)','Share a moment','Testers save a six-second Lumen clip. Every share is free promotion.','MEDIUM EFFORT · HIGH IMPACT',L],['workspace_premium','var(--amberc)','Meow Pro','This workspace as the first paid tier. Price: [YOUR PRICE].','LARGE EFFORT · HIGH IMPACT',L],['verified','var(--var)','Crash-free badge','Show Play stability on the Meow page once vitals connect.','SMALL EFFORT · MEDIUM IMPACT',M]]};
+      return hdr('Ideas','Meow’s suggestions for Meowmba')+`<div class="body"><div class="col"><div style="display:flex;align-items:center;gap:8px;height:56px;box-sizing:border-box;padding:0 6px 0 14px;border:2px solid var(--line);border-radius:12px;background:var(--surf)">${ic('auto_awesome',L)}<input aria-label="Ask for ideas" placeholder="Ideas for… a launch post" style="flex:1;min-width:0;border:0;outline:0;background:transparent;color:var(--paper);font:16px Roboto,sans-serif"><button class="btn" aria-label="Get ideas" style="width:44px;height:44px;padding:0;box-shadow:none">${ic('send')}</button></div>
+      ${chipRow('k',[['app','For the app'],['growth','For growth']],s.k)}
+      ${all[s.k].map(i=>`<article class="card" style="overflow:hidden"><div style="height:120px;background:${i[1]};border-bottom:2px solid var(--line);display:flex;align-items:center;justify-content:center"><span style="width:76px;height:76px;border-radius:22px;background:var(--bubble);border:3px solid var(--ink);box-shadow:0 4px 0 var(--ink);display:flex;align-items:center;justify-content:center">${ic(i[0],'var(--ink)',44)}</span></div><div style="padding:14px;display:flex;flex-direction:column;gap:8px"><b style="font-size:18px">${i[2]}</b><span style="font-size:14px;line-height:21px;color:var(--mute)">${i[3]}</span><small style="font-weight:800;color:${i[5]}">${i[4]}</small><button class="btn">${ic('bookmark_add','',20)}Add to masterplan</button></div></article>`).join('')}</div></div>`+nav('ideas'); } },
+  roles: { title:'How do you work?', note:'Pick a role; preview updates live', full:true, floor:862, say:()=>['Pick one. Change it any time.','Every layout keeps inbox and money.','Engineers get builds, bugs and servers.'],
+    render(s){ return hdr('How do you work?','Meow arranges Today around it',true)+`<div class="body full"><div class="col">${Object.keys(ROLES).map(k=>{const on=k===s.role,r=ROLES[k];return `<button data-set="role" data-val="${k}" aria-pressed="${on}" style="text-align:left;min-height:76px;box-sizing:border-box;padding:12px 14px;border-radius:18px;border:2px solid ${on?'var(--lime)':'var(--line)'};background:${on?'var(--sel)':'var(--card)'};color:var(--paper);display:flex;align-items:center;gap:14px;cursor:pointer;font-family:inherit"><span class="icb" style="width:44px;height:44px">${ic(r.icon,L)}</span><span class="tx"><b style="font-size:16px">${r.label}</b><i>${r.work[1]}</i></span>${ic(on?'radio_button_checked':'radio_button_unchecked',on?L:'var(--mute)')}</button>`;}).join('')}
+      <div class="h3">Your work panel will look like this</div>${work(s.role)}<button class="btn" data-go="today" style="margin-top:8px">Use this layout</button></div></div>`; } }
+};
+
+const CAT = `<svg width="60" height="50" viewBox="0 0 60 50" aria-hidden="true"><defs><radialGradient id="SC" cx=".38" cy=".32" r=".75"><stop offset="0" stop-color="#F7F9F2"/><stop offset=".55" stop-color="#D9E6E2"/><stop offset="1" stop-color="#7E9A9B"/></radialGradient><radialGradient id="IR" cx=".5" cy=".6" r=".6"><stop offset="0" stop-color="#C9FFD9"/><stop offset=".45" stop-color="#4DFF85"/><stop offset=".8" stop-color="#1D7A55"/><stop offset="1" stop-color="#0A2330"/></radialGradient></defs>
+<ellipse cx="30" cy="47" rx="17" ry="2.6" fill="#050D10" opacity=".5"/><g class="tail"><path d="M16 31 C7.5 30 4.5 20.5 9.5 13" fill="none" stroke="#4F7079" stroke-width="5.6" stroke-linecap="round"/><path d="M16 31 C7.5 30 4.5 20.5 9.5 13" fill="none" stroke="#0E1D23" stroke-width="3.8" stroke-linecap="round"/></g>
+<g class="la"><path d="M20.5 36 L20.5 44.5" stroke="#4F7079" stroke-width="5.4" stroke-linecap="round"/><path d="M20.5 36 L20.5 44.5" stroke="#0E1D23" stroke-width="3.6" stroke-linecap="round"/></g><g class="lb"><path d="M25.5 37 L25.5 45" stroke="#4F7079" stroke-width="5.4" stroke-linecap="round"/><path d="M25.5 37 L25.5 45" stroke="#0E1D23" stroke-width="3.6" stroke-linecap="round"/></g>
+<g class="bd"><ellipse cx="28" cy="33" rx="13.2" ry="8.8" fill="#0E1D23" stroke="#4F7079" stroke-width="1.3"/><g class="lc"><path d="M33.5 37.5 L33.5 45" stroke="#4F7079" stroke-width="5.4" stroke-linecap="round"/><path d="M33.5 37.5 L33.5 45" stroke="#0E1D23" stroke-width="3.6" stroke-linecap="round"/></g><g class="ld"><path d="M38.5 36.5 L38.5 44.6" stroke="#4F7079" stroke-width="5.4" stroke-linecap="round"/><path d="M38.5 36.5 L38.5 44.6" stroke="#0E1D23" stroke-width="3.6" stroke-linecap="round"/></g>
+<path d="M31.6 13.6 L33.3 3.6 L38.8 10.3 Z" fill="#0E1D23" stroke="#4F7079" stroke-width="1.3" stroke-linejoin="round"/><path d="M42.2 10 L47.9 4 L49.4 14.2 Z" fill="#0E1D23" stroke="#4F7079" stroke-width="1.3" stroke-linejoin="round"/><path d="M33.5 11.4 L34.4 6.4 L37.1 9.9 Z" fill="#2C4A52"/><path d="M43.8 10.2 L47.1 6.8 L47.8 12.1 Z" fill="#2C4A52"/>
+<circle cx="40.5" cy="21.5" r="12.8" fill="#0E1D23" stroke="#4F7079" stroke-width="1.3"/><ellipse cx="33.4" cy="27.2" rx="2" ry="1.1" fill="#F2B8C8" opacity=".3"/><ellipse cx="47.6" cy="27.2" rx="2" ry="1.1" fill="#F2B8C8" opacity=".3"/>
+<g class="eyes"><circle cx="35.6" cy="21.8" r="5.7" fill="url(#SC)" stroke="#07131A" stroke-width=".7"/><circle cx="45.4" cy="21.8" r="5.7" fill="url(#SC)" stroke="#07131A" stroke-width=".7"/><circle cx="35.9" cy="22.2" r="4.1" fill="url(#IR)"/><circle cx="45.7" cy="22.2" r="4.1" fill="url(#IR)"/><circle cx="35.9" cy="22.3" r="2.05" fill="#020A14"/><circle cx="45.7" cy="22.3" r="2.05" fill="#020A14"/><circle cx="34.3" cy="20" r="1.2" fill="#fff"/><circle cx="44.1" cy="20" r="1.2" fill="#fff"/><circle cx="37.3" cy="23.6" r=".5" fill="#fff" opacity=".85"/><circle cx="47.1" cy="23.6" r=".5" fill="#fff" opacity=".85"/></g>
+<path d="M39.5 27.6 L41.5 27.6 L40.5 28.9 Z" fill="#F2B8C8"/><path d="M38.9 29.5 Q39.7 30.4 40.5 29.5 Q41.3 30.4 42.1 29.5" fill="none" stroke="#BED0CD" stroke-width=".7" stroke-linecap="round"/><path d="M35 28.2 L28.4 27.4 M35.2 29.3 L28.9 30.4 M46 28.2 L52.6 27.4 M45.8 29.3 L52.1 30.4" stroke="#BED0CD" stroke-width=".55" stroke-linecap="round" opacity=".7"/></g></svg>`;
+
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+function makeCat(screenEl, getLines, floorY) {
+  const cat = $(`<div class="cat"><div class="bub" role="status"><em>Meow</em><span></span></div><div class="flip">${CAT}</div></div>`);
+  screenEl.appendChild(cat);
+  const bub = cat.querySelector('.bub'), txt = bub.querySelector('span'), flip = cat.querySelector('.flip'), svg = cat.querySelector('svg');
+  const q = (c) => svg.querySelector('.' + c);
+  const xs = [26, 300, 150, 330]; let i = 0, x = xs[0], walking = false, frame = 0, tick = 0;
+  const place = (ms) => { cat.style.transitionDuration = ms + 'ms'; cat.style.left = x + 'px'; cat.style.top = floorY + 'px'; };
+  const say = () => { const lines = getLines(); txt.textContent = lines[i % lines.length]; const gl = Math.max(10, Math.min(412 - 234, x - 70)); bub.style.left = (gl - x) + 'px'; bub.style.setProperty('--tail', Math.max(16, Math.min(194, x + 24 - gl)) + 'px'); bub.classList.add('on'); };
+  const pose = () => { const a = walking ? (frame ? 22 : -22) : 0; const rot = (el, deg, cx, cy) => el.setAttribute('transform', `rotate(${deg} ${cx} ${cy})`);
+    rot(q('la'), a, 20.5, 36); rot(q('ld'), a, 38.5, 36.5); rot(q('lb'), -a, 25.5, 37); rot(q('lc'), -a, 33.5, 37.5);
+    q('bd').setAttribute('transform', `translate(0 ${walking && frame ? -1.2 : 0})`);
+    rot(q('tail'), walking ? (frame ? 8 : -6) : (tick % 2 ? 10 : -4), 16, 31); };
+  place(0); say(); pose();
+  setInterval(() => { if (walking) { frame ^= 1; pose(); } }, 110);
+  setInterval(() => { if (walking) return; tick++; pose(); if (tick % 9 === 0) { q('eyes').setAttribute('transform', 'translate(40.5 21.8) scale(1 .12) translate(-40.5 -21.8)'); setTimeout(() => q('eyes').removeAttribute('transform'), 150); } }, 520);
+  const step = () => { bub.classList.remove('on'); i++; const nx = xs[i % xs.length]; const ms = reduce ? 0 : Math.max(700, Math.abs(nx - x) / 120 * 1000); flip.style.transform = `scaleX(${nx < x ? -1 : 1})`; x = nx; walking = true; place(ms);
+    setTimeout(() => { walking = false; frame = 0; pose(); say(); setTimeout(step, 5200); }, ms); };
+  setTimeout(step, 4000 + Math.random() * 3000);
+  return { refresh: () => bub.classList.contains('on') && say() };
+}
+
+// Each phone is an independent prototype that starts on its own screen.
+const START = ['menu','today','project','inbox','money','ideas','roles'];
+const gallery = document.getElementById('gallery');
+START.forEach((id) => {
+  const s = { screen: id, role: 'engineer', tab: 'ov', f: 'all', v: 'all', k: 'app' };
+  const fig = $(`<figure><div class="frame"><div class="scaler"><div class="screen"></div></div></div><figcaption><b>${SCREENS[id].title}</b>${SCREENS[id].note}</figcaption></figure>`);
+  gallery.appendChild(fig);
+  const scr = fig.querySelector('.screen'); let cat;
+  const draw = () => { const sc = SCREENS[s.screen]; const keep = scr.querySelector('.cat');
+    scr.innerHTML = `<div class="sb"><span>3:40</span><span>${ic('signal_cellular_alt','',18)} ${ic('battery_5_bar','',18)}</span></div>` + sc.render(s);
+    const floor = sc.floor || 787;
+    if (keep && keep.dataset.floor == floor) { scr.appendChild(keep); cat && cat.refresh(); } else { cat = makeCat(scr, () => SCREENS[s.screen].say(s), floor); scr.querySelector('.cat').dataset.floor = floor; } };
+  scr.addEventListener('click', (e) => { const b = e.target.closest('[data-go],[data-set]'); if (!b) return;
+    if (b.dataset.go) { s.screen = b.dataset.go; } else { s[b.dataset.set] = b.dataset.val; }
+    const body = scr.querySelector('.body'), y = b.dataset.set ? (body ? body.scrollTop : 0) : 0; draw(); const nb = scr.querySelector('.body'); if (nb) nb.scrollTop = y; });
+  draw();
+});
+</script>

@@ -5,12 +5,20 @@ import com.example.meowmba.core.agent.tools.RiskLevel
 import com.example.meowmba.core.agent.tools.ToolRegistry
 import com.example.meowmba.core.agent.tools.ToolResult
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import com.example.meowmba.core.agent.tools.ToolOutcome
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -53,7 +61,8 @@ class AgentOrchestrator(
     // the phone was in their pocket, and the task then reported "Denied by
     // user" for a decision they never made. Five minutes, and the timeout now
     // says what actually happened.
-    private val approvalTimeoutMs: Long = 300_000
+    private val approvalTimeoutMs: Long = 300_000,
+    private val journal: TaskJournal? = null,
 ) {
     private val _tasks = MutableStateFlow<List<AgentTask>>(emptyList())
     val tasks: StateFlow<List<AgentTask>> = _tasks.asStateFlow()
@@ -70,9 +79,67 @@ class AgentOrchestrator(
     /** Approval requests surface one at a time; the rest wait in order. */
     private val approvalQueue = java.util.concurrent.ConcurrentLinkedQueue<ApprovalRequest>()
 
+    private val historyReady = CompletableDeferred<Unit>()
+    private val journalLock = Mutex()
+    private var historyReadable = true
+    private val _historyProblem = MutableStateFlow<String?>(null)
+    val historyProblem: StateFlow<String?> = _historyProblem.asStateFlow()
+
+    init {
+        if (journal == null) historyReady.complete(Unit)
+        else scope.launch {
+            try {
+                val history = journalLock.withLock {
+                    val records = journal.read()
+                    records.map { TaskHistory.recover(it, System.currentTimeMillis()) }.also { recovered ->
+                        records.zip(recovered).filter { !it.first.isTerminal }.forEach { journal.write(it.second) }
+                    }
+                }
+                _tasks.update { live -> (live + history.filter { old -> live.none { it.id == old.id } }).sortedByDescending { it.createdAt } }
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) {
+                historyReadable = false
+                _historyProblem.value = "Saved work could not be read. No new tool action will run until history is available. Reopen Meow to retry."
+            } finally { historyReady.complete(Unit) }
+        }
+    }
+
+    /** Persist the current revision under one writer; an old queued save cannot overwrite cancellation. */
+    private suspend fun checkpoint(id: String): Boolean {
+        if (journal == null) return true
+        historyReady.await()
+        if (!historyReadable) return false
+        return try {
+            journalLock.withLock { _tasks.value.firstOrNull { it.id == id }?.let { journal.write(it) } }
+            true
+        } catch (e: CancellationException) { throw e }
+        catch (_: Exception) {
+            _historyProblem.value = "Some work could not be saved. Check the result before closing Meow or repeating the action."
+            false
+        }
+    }
+
+    fun removeSavedTask(id: String) {
+        if (_tasks.value.firstOrNull { it.id == id }?.isTerminal == false) return
+        scope.launch {
+            historyReady.await()
+            try {
+                journalLock.withLock {
+                    journal?.remove(id)
+                    _tasks.update { tasks -> tasks.filterNot { it.id == id } }
+                }
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) { _historyProblem.value = "This saved result could not be removed. Please try again." }
+        }
+    }
+
+    private fun saveSoon(id: String) { if (journal != null) scope.launch { checkpoint(id) } }
+
     // ── Submission ──────────────────────────────────────────────────────────
 
-    fun submit(agentId: String, toolId: String, args: Map<String, String>, title: String): SubmitResult {
+    fun submit(agentId: String, toolId: String, args: Map<String, String>, title: String,
+        projectId: Long? = com.example.meowmba.core.work.ProjectExecutionContext.projectId,
+        conversationId: Long? = com.example.meowmba.core.work.ProjectExecutionContext.conversationId): SubmitResult {
         val agent = AgentRegistry.byId(agentId)
             ?: return SubmitResult.Rejected("Unknown agent '$agentId'")
         if (!agent.available) {
@@ -84,8 +151,17 @@ class AgentOrchestrator(
         val tool = toolRegistry.byId(toolId)
             ?: return SubmitResult.Rejected("Tool '$toolId' is not installed")
 
-        val task = AgentTask(agentId = agentId, toolId = toolId, title = title, args = args)
-        _tasks.value = listOf(task) + _tasks.value
+        // A desktop goal reserves one slot for its approved child action.
+        // A second parent waiting on approval would otherwise occupy that slot.
+        val desktopGoals = setOf("desktop.run_goal", "logic.run_goal")
+        if (toolId in desktopGoals && _tasks.value.any { it.toolId in desktopGoals && !it.isTerminal }) {
+            return SubmitResult.Rejected("Another desktop goal is active. Stop or finish it first.")
+        }
+
+        val task = AgentTask(agentId = agentId, toolId = toolId, title = title, args = args,
+            projectId = projectId, conversationId = conversationId)
+        _tasks.update { listOf(task) + it }
+        saveSoon(task.id)
 
         val running = runningCount(agentId)
         return if (running < agent.maxConcurrentTasks) {
@@ -111,13 +187,18 @@ class AgentOrchestrator(
     // ── Cancellation ────────────────────────────────────────────────────────
 
     fun cancel(taskId: String) {
-        val task = _tasks.value.find { it.id == taskId } ?: return
-        if (task.isTerminal) return
-        approvals.remove(taskId)?.complete(false)
+        cancelTask(taskId, cancelJob = true)
+    }
+
+    /** Cancellation can originate in a tool, a UI control, or the parent scope. */
+    private fun cancelTask(taskId: String, cancelJob: Boolean) {
+        // Mark terminal before waking/cancelling work: an immediate dispatcher
+        // can otherwise report a denied approval or late success over Cancelled.
+        val task = finishTask(taskId, TaskStatus.CANCELLED, null) ?: return
+        if (cancelJob) jobs.remove(taskId)?.cancel()
+        approvals.remove(taskId)?.cancel()
         approvalQueue.removeAll { it.taskId == taskId }
         if (_pendingApproval.value?.taskId == taskId) showNextApproval()
-        jobs.remove(taskId)?.cancel()
-        updateTask(taskId) { it.copy(status = TaskStatus.CANCELLED, completedAt = System.currentTimeMillis()) }
         audit("task.cancelled", task.agentId, taskId, task.title)
         drainQueue(task.agentId)
     }
@@ -128,16 +209,32 @@ class AgentOrchestrator(
         // Reserve the slot before dispatch: multiple submits can happen before
         // the dispatcher runs the first coroutine (and otherwise exceed the limit).
         updateTask(task.id) { it.copy(status = TaskStatus.RUNNING, startedAt = System.currentTimeMillis()) }
-        jobs[task.id] = scope.launch {
+        // Register the job before it can run on Main.immediate. Its completion
+        // callback also handles cancellation before the coroutine body starts.
+        val job = scope.launch(com.example.meowmba.core.work.ProjectExecutionContext.element(task.projectId, task.conversationId),
+            start = CoroutineStart.LAZY) {
             try {
                 runTask(task)
-            } finally {
-                jobs.remove(task.id)
+            } catch (cancelled: CancellationException) {
+                cancelTask(task.id, cancelJob = false)
+                throw cancelled
             }
         }
+        jobs[task.id] = job
+        job.invokeOnCompletion { cause ->
+            jobs.remove(task.id, job)
+            if (cause is CancellationException) cancelTask(task.id, cancelJob = false)
+        }
+        job.start()
     }
 
     private suspend fun runTask(task: AgentTask) {
+        historyReady.await()
+        if (_tasks.value.firstOrNull { it.id == task.id }?.isTerminal != false) return
+        if (!checkpoint(task.id)) {
+            failTask(task, "Could not save this task, so its tool was not run. Check saved work and try again.")
+            return
+        }
         val tool = toolRegistry.byId(task.toolId) ?: run {
             failTask(task, "Tool '${task.toolId}' disappeared")
             return
@@ -149,13 +246,17 @@ class AgentOrchestrator(
         // Approval gate: risky tools wait for the user's explicit decision
         if (tool.definition.confirmationPolicy == ConfirmationPolicy.ALWAYS) {
             updateTask(task.id) { it.copy(status = TaskStatus.WAITING_APPROVAL) }
-            val argsSummary = task.args.entries.joinToString(", ") { "${it.key}=${it.value.take(40)}" }
+            val argsSummary = task.args.entries.joinToString("\n") {
+                val limit = if (task.toolId in setOf("logic.edit", "logic.act")) 1000 else if (task.toolId == "project.plan") 8000 else if (task.toolId == "desktop.control" && it.key in setOf("value", "text")) 8000 else if (it.key == "goal") 3000 else 160
+                "${it.key}=${it.value.take(limit)}${if (it.value.length > limit) " … (truncated; review before approving)" else ""}"
+            }
             val request = ApprovalRequest(
                 taskId = task.id,
                 toolId = task.toolId,
                 title = task.title,
                 riskLevel = tool.definition.riskLevel,
-                detail = "${tool.definition.description}\n$argsSummary"
+                detail = (task.projectId?.let { "Project #$it · Files/projects/project-$it\nThis approval stays with that project even if another is open.\n\n" } ?: "") +
+                    "${tool.definition.description}\n$argsSummary"
             )
             val decision = kotlinx.coroutines.CompletableDeferred<Boolean>()
             approvals[task.id] = decision
@@ -191,6 +292,16 @@ class AgentOrchestrator(
             updateTask(task.id) { it.copy(status = TaskStatus.RUNNING) }
         }
 
+        // Write ahead of the external call. Recovery displays uncertainty and never replays a write.
+        val dispatch = updateTask(task.id) { it.copy(executionStarted = true) } ?: return
+        if (dispatch.isTerminal) return
+        if (!checkpoint(task.id)) {
+            updateTask(task.id) { it.copy(executionStarted = false) }
+            failTask(task, "Could not save the action checkpoint, so the tool was not run.")
+            return
+        }
+        if (_tasks.value.firstOrNull { it.id == task.id }?.isTerminal != false) return
+
         // Execute with the tool's own timeout.
         //
         // A tool that THROWS rather than returning ToolResult.Failure used to
@@ -202,12 +313,12 @@ class AgentOrchestrator(
         // app (several parse model-authored arguments), so the boundary belongs
         // here rather than in each of the two dozen implementations.
         //
-        // CancellationException is deliberately not caught: swallowing it would
-        // break the timeout above and leave tasks un-cancellable.
+        // Cancellation propagates to launchTask, which releases the task slot
+        // and approval state. An ordinary tool timeout remains a failed task.
         val result = try {
             withTimeoutOrNull(tool.definition.timeoutMs) {
                 tool.execute(task.args)
-            } ?: ToolResult.Failure("Tool timed out after ${tool.definition.timeoutMs}ms")
+            } ?: ToolResult.Failure("Tool timed out after ${tool.definition.timeoutMs}ms. Check the destination before repeating it.", ToolOutcome.UNCONFIRMED)
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Throwable) {
@@ -215,36 +326,51 @@ class AgentOrchestrator(
                 android.util.Log.w("AgentOrchestrator", "tool ${tool.definition.id} threw", e)
             }
             ToolResult.Failure(
-                "${tool.definition.displayName} failed: ${e.message ?: e::class.java.simpleName}"
+                "${tool.definition.displayName} failed: ${e.message ?: e::class.java.simpleName}. Its outcome could not be confirmed.", ToolOutcome.UNCONFIRMED
             )
         }
 
         when (result) {
-            is ToolResult.Success -> completeTask(task, result.output)
-            is ToolResult.Failure -> failTask(task, result.error)
+            is ToolResult.Success -> if (result.output.isBlank()) failTask(task, "The tool returned no result. Completion could not be confirmed.", ToolOutcome.UNCONFIRMED) else completeTask(task, result.output, result.outcome)
+            is ToolResult.Failure -> failTask(task, result.error, result.outcome)
         }
     }
 
-    private fun completeTask(task: AgentTask, output: String) {
-        val finalTask = updateTask(task.id) {
-            it.copy(status = TaskStatus.COMPLETED, result = output, completedAt = System.currentTimeMillis())
-        }
+    private suspend fun completeTask(task: AgentTask, output: String, outcome: ToolOutcome) {
+        val finalTask = finishTask(task.id, TaskStatus.COMPLETED, output, outcome) ?: return
+        checkpoint(task.id)
         audit("task.complete", task.agentId, task.id, output.take(120))
-        finalTask?.let { onTaskCompleted?.invoke(it) }
+        onTaskCompleted?.invoke(finalTask)
         drainQueue(task.agentId)
     }
 
-    private fun failTask(task: AgentTask, error: String) {
-        val finalTask = updateTask(task.id) {
-            it.copy(status = TaskStatus.FAILED, result = error, completedAt = System.currentTimeMillis())
-        }
+    private suspend fun failTask(task: AgentTask, error: String, outcome: ToolOutcome = ToolOutcome.RESULT) {
+        val finalTask = finishTask(task.id, TaskStatus.FAILED, error, outcome) ?: return
+        checkpoint(task.id)
         audit("task.fail", task.agentId, task.id, error.take(120))
-        finalTask?.let { onTaskCompleted?.invoke(it) }
+        onTaskCompleted?.invoke(finalTask)
         drainQueue(task.agentId)
+    }
+
+    /** The first terminal result owns audit/callback/queue cleanup; late work cannot resurrect it. */
+    private fun finishTask(id: String, status: TaskStatus, result: String?, outcome: ToolOutcome = ToolOutcome.RESULT): AgentTask? {
+        while (true) {
+            val before = _tasks.value
+            val task = before.find { it.id == id } ?: return null
+            if (task.isTerminal) return null
+            val finished = task.copy(status = status, result = result, completedAt = System.currentTimeMillis(),
+                outcome = if (status == TaskStatus.CANCELLED && task.executionStarted) ToolOutcome.UNCONFIRMED else outcome,
+                log = (task.log + status.name.lowercase().replace('_', ' ')).takeLast(12))
+            if (_tasks.compareAndSet(before, before.map { if (it.id == id) finished else it })) {
+                saveSoon(id)
+                return finished
+            }
+        }
     }
 
     /** Start the oldest queued task when a concurrency slot frees up. */
     private fun drainQueue(agentId: String) {
+        if (!scope.isActive) return
         val agent = AgentRegistry.byId(agentId) ?: return
         if (runningCount(agentId) >= agent.maxConcurrentTasks) return
         val next = _tasks.value
@@ -265,15 +391,15 @@ class AgentOrchestrator(
     }
 
     private fun updateTask(id: String, transform: (AgentTask) -> AgentTask): AgentTask? {
-        var updated: AgentTask? = null
-        _tasks.value = _tasks.value.map { task ->
-            if (task.id == id) {
-                transform(task).also { updated = it }
-            } else {
-                task
+        while (true) {
+            val before = _tasks.value
+            val task = before.firstOrNull { it.id == id } ?: return null
+            if (task.isTerminal) return task
+            val next = transform(task).let { changed ->
+                if (changed.status != task.status) changed.copy(log = (task.log + changed.status.name.lowercase().replace('_', ' ')).takeLast(12)) else changed
             }
+            if (_tasks.compareAndSet(before, before.map { if (it.id == id) next else it })) { saveSoon(id); return next }
         }
-        return updated
     }
 
     /** Fire-and-forget audit emission; never blocks or throws into callers. */

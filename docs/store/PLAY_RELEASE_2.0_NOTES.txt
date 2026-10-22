@@ -1,0 +1,6 @@
+<en-US>
+Introducing Meow Assistant 2.0: expressive avatars and Desk rooms, Flow and North Stars, memory correction and pinning, projects, Files, and configured Computer tools.
+Connect a compatible Bluetooth smart ring and try local, on-demand battery, steps and supported wellness sensor tests.
+Import selected files with Android pickers. Optional Flow location works only while Meow is visible.
+Includes voice and Computer fixes. Ring cross-app gesture controls are not part of the Play edition.
+</en-US>

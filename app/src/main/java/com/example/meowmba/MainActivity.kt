@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.meowmba.core.audio.AudioStreamingManager
 import com.example.meowmba.core.audio.SpeechService
@@ -55,32 +57,26 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private val requestPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { isGranted: Boolean ->
-        if (isGranted) {
-            // Permission granted
-        }
-    }
-
-    /**
-     * Asks for everything the companion needs in ONE prompt: microphone, location, camera.
-     *
-     * Location was previously never requested at runtime, only declared in the manifest —
-     * so weather and navigation silently had nothing to work with. Camera was requested
-     * lazily on first "look", which is still fine, but including it here means the user
-     * grants once instead of being interrupted later.
-     */
+    /** Only the two sensors explained by the setup permission page. */
     private val corePermissionsLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { granted ->
+        granted[Manifest.permission.RECORD_AUDIO]?.let { companionViewModel?.onMicrophonePermissionResult(it) }
         granted[Manifest.permission.CAMERA]?.let { companionViewModel?.onCameraPermissionResult(it) }
     }
+
+    private val microphonePermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted -> companionViewModel?.onMicrophonePermissionResult(granted) }
 
     private val cameraPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
         companionViewModel?.onCameraPermissionResult(isGranted)
+    }
+    private val qrScannerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        companionViewModel?.onQrScanResult(if (result.resultCode == RESULT_OK) result.data?.getStringExtra(com.example.meowmba.core.vision.QrScannerActivity.EXTRA_VALUE) else null,
+            result.data?.getStringExtra(com.example.meowmba.core.vision.QrScannerActivity.EXTRA_ERROR))
     }
 
     private val locationPermissionLauncher = registerForActivityResult(
@@ -104,6 +100,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching { com.example.meowmba.core.workflows.WorkflowRuntime.get(applicationContext).recover() }
+            runCatching { com.example.meowmba.core.agentic.AgenticScheduler.recover(applicationContext) }
+                .onFailure { android.util.Log.w("BusinessAgents", "Saved workflows could not be resumed; data was preserved") }
+        }
         enableEdgeToEdge()
         // Transparent window so the Godot face + glow float over wallpaper.
         // Keep the window touchable — FLAG_NOT_TOUCHABLE must never be set.
@@ -115,6 +116,11 @@ class MainActivity : ComponentActivity() {
         speechService = SpeechService(this)
         ttsManager = TextToSpeechManager(this)
         secureStorage = SecureStorageManager(this)
+        if (!com.example.meowmba.core.setup.SetupWiring.isOnboardingDone(this)) {
+            com.example.meowmba.core.setup.SetupDeviceScan.applyDefaults(
+                com.example.meowmba.core.setup.SetupDeviceScan.profile(this), secureStorage)
+        }
+        com.example.meowmba.core.audio.MicrophonePrivacy.initializeForFirstRun(secureStorage)
         audioStreamingManager = AudioStreamingManager(this)
         visionManager = com.example.meowmba.core.vision.VisionManager(this, this)
         notificationHelper = NotificationHelper(this)
@@ -125,7 +131,8 @@ class MainActivity : ComponentActivity() {
         val workspaceRoot = java.io.File(filesDir, "memba_workspace")
         val modelsDir = java.io.File(filesDir, "models")
 
-        checkPermissions()
+        // Do not present a wall of permission prompts before first-run guidance.
+        // The wizard offers an explicit, explained permission-review action.
 
         setContent {
                 val viewModel: CompanionViewModel = viewModel(
@@ -154,10 +161,14 @@ class MainActivity : ComponentActivity() {
                                 glassesController = com.example.meowmba.core.glasses.MetaGlassesController(this@MainActivity)
                             ).also {
                                 companionViewModel = it
+                                if (pendingAvatarHome) { pendingAvatarHome = false; it.returnToAvatar() }
+                                if (pendingChargingAvatar) { pendingChargingAvatar = false; it.openTool("Show avatar") }
+                if (pendingBusinessAgents) { pendingBusinessAgents = false; it.openBusinessAgents() }
                                 // onResume often runs before first composition assigns
                                 // the VM — arm always-on / wake here so the face mic
                                 // is not left dead until the next resume.
                                 it.reclaimWakeMicForForeground()
+                                it.resumeFaceTrackingIfEnabled()
                                 if (pendingRoutineId >= 0) {
                                     it.onRoutineIntent(pendingRoutineId)
                                     pendingRoutineId = -1L
@@ -171,20 +182,70 @@ class MainActivity : ComponentActivity() {
                     }
                 )
 
+                // The factory is skipped when Android retains the ViewModel across a
+                // configuration change. Bind this Activity and drain shares on every
+                // committed composition so a recreated Activity cannot lose its input.
+                androidx.compose.runtime.SideEffect {
+                    companionViewModel = viewModel
+                    deliverPendingSharedScreen(viewModel)
+                    pendingFlowComment?.let { id -> pendingFlowComment = null; viewModel.openFlowComment(id) }
+                }
                 val uiState by viewModel.uiState.collectAsState()
+                androidx.compose.runtime.LaunchedEffect(viewModel) {
+                    com.example.meowmba.core.ring.SmartRing.commands.pending.collect { request ->
+                        if (request != null) {
+                            val driver = com.example.meowmba.core.ring.SmartRing.driver
+                            val power = getSystemService(android.os.PowerManager::class.java)
+                            val keyguard = getSystemService(android.app.KeyguardManager::class.java)
+                            if (driver != null && power.isInteractive && !keyguard.isKeyguardLocked) {
+                                com.example.meowmba.core.ring.SmartRing.commands.take(request, driver.state.value,
+                                    android.os.SystemClock.elapsedRealtime())?.let { text ->
+                                    viewModel.openChat()
+                                    viewModel.onUserTextSubmitted(text)
+                                }
+                            } else com.example.meowmba.core.ring.SmartRing.commands.clear()
+                        }
+                    }
+                }
+                val qrRequested by viewModel.qrScannerRequested.collectAsState()
+                androidx.compose.runtime.LaunchedEffect(qrRequested) {
+                    if (qrRequested) {
+                        viewModel.consumeQrScannerRequest()
+                        qrScannerLauncher.launch(Intent(this@MainActivity, com.example.meowmba.core.vision.QrScannerActivity::class.java))
+                    }
+                }
                 MeowmbaTheme(
                     darkTheme = uiState.appearanceMode.isDark(androidx.compose.foundation.isSystemInDarkTheme()),
                     dynamicColor = false,
                     professional = uiState.appTheme == com.example.meowmba.ui.companion.AppTheme.PROFESSIONAL,
                 ) {
+                val sharedScreen by viewModel.screenHelp.collectAsState()
+                sharedScreen?.let {
+                    com.example.meowmba.ui.flow.ScreenHelpSheet(it, viewModel::askAboutSharedScreen, viewModel::closeScreenHelp)
+                }
 
                 // First-launch onboarding gate: computed once from persisted prefs.
                 var needsOnboarding by remember {
                     mutableStateOf(com.example.meowmba.core.setup.SetupWiring.needsOnboarding(this@MainActivity))
                 }
+                // Peek Terminal during setup without marking onboarding done.
+                var pauseWizardForTerminal by remember { mutableStateOf(false) }
                 // On-demand wizard opened from the Settings "Connect your AI" button.
                 val showOnboarding by viewModel.showOnboarding.collectAsState()
-                val wizardVisible = needsOnboarding || showOnboarding
+                val wizardVisible = (needsOnboarding || showOnboarding) && !pauseWizardForTerminal
+
+                if (!wizardVisible) {
+                    com.example.meowmba.ui.companion.BackupSafetyNotice {
+                        if (!uiState.showSettings) viewModel.toggleSettings()
+                    }
+                }
+
+                // When the user closes Chat after an OpenCode peek, return to the wizard.
+                androidx.compose.runtime.LaunchedEffect(uiState.isChatExpanded, pauseWizardForTerminal) {
+                    if (pauseWizardForTerminal && !uiState.isChatExpanded) {
+                        pauseWizardForTerminal = false
+                    }
+                }
 
                 // Watch mode: launch the system MediaProjection consent when requested.
                 val watchConsent by viewModel.screenWatchConsentRequested.collectAsState()
@@ -212,6 +273,14 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
+                // Ask only for microphone access after an explicit voice action,
+                // including when the user chose Explore first during setup.
+                androidx.compose.runtime.LaunchedEffect(uiState.microphonePermissionRequested) {
+                    if (uiState.microphonePermissionRequested) {
+                        microphonePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                    }
+                }
+
                 // Vision: the VM asks for CAMERA only when a look needs it
                 androidx.compose.runtime.LaunchedEffect(uiState.cameraPermissionRequested) {
                     if (uiState.cameraPermissionRequested) {
@@ -228,9 +297,9 @@ class MainActivity : ComponentActivity() {
 
                 androidx.compose.runtime.LaunchedEffect(uiState.mediaPermissionRequested) {
                     if (uiState.mediaPermissionRequested) {
-                        mediaPermissionLauncher.launch(
-                            com.example.meowmba.core.cleanup.PhoneCleanup.mediaPermissions(),
-                        )
+                        val permissions = com.example.meowmba.core.cleanup.PhoneCleanup.mediaPermissions()
+                        if (permissions.isNotEmpty()) mediaPermissionLauncher.launch(permissions)
+                        else viewModel.onMediaPermissionResult(false)
                     }
                 }
 
@@ -257,7 +326,8 @@ class MainActivity : ComponentActivity() {
                         uiState.showAgentsScreen || uiState.showBackgroundScreen ||
                         uiState.showWeatherScreen || uiState.showNavScreen ||
                         uiState.showProjectsScreen || uiState.showToolsScreen ||
-                        uiState.showAppDrawer || uiState.showBrowser
+                        uiState.showAppDrawer || uiState.showBrowser ||
+                        (uiState.appTheme == com.example.meowmba.ui.companion.AppTheme.FLOW && uiState.features.flowReturnTheme != null)
                 ) {
                     when {
                         wizardVisible -> {
@@ -281,33 +351,103 @@ class MainActivity : ComponentActivity() {
                         uiState.showNavScreen -> viewModel.toggleNavScreen()
                         uiState.isChatExpanded -> viewModel.toggleChat()
                         uiState.showTiles -> viewModel.onAvatarZoneClick(com.example.meowmba.ui.companion.AvatarZone.BACKGROUND)
+                        else -> viewModel.closeFlow()
                     }
                 }
 
                 androidx.compose.foundation.layout.Box(
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    CompanionScreen(
-                        viewModel = viewModel,
-                        secureStorage = secureStorage
-                    )
+                    // One frame phase for the avatar and background clocks, so their
+                    // redraws land on the same vsync instead of alternating.
+                    androidx.compose.runtime.CompositionLocalProvider(
+                        com.example.meowmba.ui.companion.LocalSharedFramePhase provides
+                            remember { com.example.meowmba.ui.companion.SharedFramePhase() },
+                    ) {
+                        CompanionScreen(
+                            viewModel = viewModel,
+                            secureStorage = secureStorage,
+                            onboardingVisible = wizardVisible,
+                        )
+                    }
+                    // Retain the current step while the user peeks at Terminal.
+                    val wizardState = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
                     // Onboarding wizard: full-screen overlay above everything.
                     if (wizardVisible) {
+                        wizardState.SaveableStateProvider("setup") {
                         com.example.meowmba.ui.onboarding.SetupWizardRoute(
+                            onEnablePermissions = { checkPermissions() },
+                            onSkipPermissions = viewModel::skipOnboardingPermissions,
                             onFinished = {
                                 com.example.meowmba.core.setup.SetupWiring.markOnboardingDone(this@MainActivity)
+                                wizardState.removeState("setup")
                                 viewModel.reloadSetupConfiguration()
                                 needsOnboarding = false
+                                pauseWizardForTerminal = false
                                 if (showOnboarding) viewModel.toggleSetupWizard()
+                            },
+                            onOpenChat = {
+                                com.example.meowmba.core.setup.SetupWiring.markOnboardingDone(this@MainActivity)
+                                wizardState.removeState("setup")
+                                viewModel.reloadSetupConfiguration()
+                                needsOnboarding = false
+                                pauseWizardForTerminal = false
+                                if (showOnboarding) viewModel.toggleSetupWizard()
+                                viewModel.openChat()
+                            },
+                            onOpenTerminal = {
+                                com.example.meowmba.core.setup.SetupWiring.markOnboardingDone(this@MainActivity)
+                                wizardState.removeState("setup")
+                                viewModel.reloadSetupConfiguration()
+                                needsOnboarding = false
+                                pauseWizardForTerminal = false
+                                if (showOnboarding) viewModel.toggleSetupWizard()
+                                viewModel.openCompanionTerminalFromOnboarding()
+                            },
+                            onOpenConnectionsSetup = {
+                                wizardState.removeState("setup")
+                                viewModel.reloadSetupConfiguration()
+                                needsOnboarding = false
+                                pauseWizardForTerminal = false
+                                if (showOnboarding) viewModel.toggleSetupWizard()
+                                viewModel.openBrainPairingFromInfo()
+                            },
+                            onOpenNeuralSetup = {
+                                wizardState.removeState("setup")
+                                viewModel.reloadSetupConfiguration()
+                                needsOnboarding = false
+                                pauseWizardForTerminal = false
+                                if (showOnboarding) viewModel.toggleSetupWizard()
+                                viewModel.openNeuralSettingsFromInfo()
+                            },
+                            onStartOpenCode = {
+                                pauseWizardForTerminal = true
+                                viewModel.startOpenCodeInCompanionTerminal(finishWizard = false)
+                            },
+                            onAnimalPicked = viewModel::setAvatarAnimal,
+                            onAvatarSized = viewModel::setAvatarScale,
+                            onAvatarPicked = { style ->
+                                viewModel.setAvatarStyle(style)
+                            },
+                            onBackgroundPicked = { selection ->
+                                viewModel.setBackground(selection)
+                            },
+                            onGitHubTokenSaved = { token ->
+                                viewModel.saveServiceKey(
+                                    com.example.meowmba.core.setup.GitHubProjectSetup.STORAGE_KEY,
+                                    token,
+                                )
                             },
                             modifier = Modifier.fillMaxSize(),
                         )
+                        }
                     }
                 }
             }
         }
 
         consumeWakeCommand(intent)
+        consumeSharedScreen(intent)
     }
 
     // ── Background wake-word handoff (Phase 2.5) ────────────────────────────
@@ -322,6 +462,16 @@ class MainActivity : ComponentActivity() {
             companionViewModel?.noteScreenTouch()
         }
         return super.dispatchTouchEvent(ev)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        com.example.meowmba.core.context.live.ContextSensing.setAppVisible(this, true)
+    }
+
+    override fun onStop() {
+        com.example.meowmba.core.context.live.ContextSensing.setAppVisible(this, false)
+        super.onStop()
     }
 
     override fun onResume() {
@@ -362,7 +512,8 @@ class MainActivity : ComponentActivity() {
         // LISTENING: right after opening an app the state is still SPEAKING the
         // acknowledgement, and gating on LISTENING dropped the follow-up unheard.
         val awaitingReply = companionViewModel?.isConversationLive() == true
-        if (awaitingReply && micGranted) {
+        val micEnabled = com.example.meowmba.core.audio.MicrophonePrivacy.isEnabled(secureStorage)
+        if (awaitingReply && micGranted && micEnabled) {
             // Mid-conversation background hop: the in-app recognizer goes deaf the
             // moment we lose the foreground, so hand the turn to the mic-exempt
             // foreground service instead of letting the follow-up die unheard.
@@ -378,7 +529,7 @@ class MainActivity : ComponentActivity() {
             startFollowUpNow()
         } else {
             companionViewModel?.releaseWakeMicForBackground()
-            if (wakeOn && backgroundOn && micGranted) {
+            if (wakeOn && backgroundOn && micGranted && micEnabled) {
                 // See the follow-up branch: synchronous onPause start so the mic FGS
                 // is created while the activity is still eligible, not after it stops.
                 startWakeStandbyNow()
@@ -389,6 +540,7 @@ class MainActivity : ComponentActivity() {
     /** Follow-up hand-off: the app just went to the background mid-conversation. */
     private fun startFollowUpNow() {
         if (isFinishing || isChangingConfigurations) return
+        if (!com.example.meowmba.core.audio.MicrophonePrivacy.isEnabled(secureStorage)) return
         val micGranted = ContextCompat.checkSelfPermission(
             this, Manifest.permission.RECORD_AUDIO
         ) == PackageManager.PERMISSION_GRANTED
@@ -400,6 +552,7 @@ class MainActivity : ComponentActivity() {
     /** Background wake standby, started while the activity is still eligible. */
     private fun startWakeStandbyNow() {
         if (isFinishing || isChangingConfigurations) return
+        if (!com.example.meowmba.core.audio.MicrophonePrivacy.isEnabled(secureStorage)) return
         val wakeOn = secureStorage.getBooleanPreference("wake_word_enabled", false)
         val backgroundOn = secureStorage.getBooleanPreference(WakeWordService.PREF_KEY, false)
         val micGranted = ContextCompat.checkSelfPermission(
@@ -414,12 +567,78 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         consumeWakeCommand(intent)
+        consumeSharedScreen(intent)
     }
 
     /** Wake command arriving before the ViewModel exists (cold launch). */
+    private var pendingAvatarHome = false
+    private var pendingChargingAvatar = false
+    private var pendingFlowComment: String? = null
     private var pendingWakeCommand: String? = null
+    private var pendingBusinessAgents = false
+    private var pendingSharedText: String? = null
+    private var pendingSharedImage: android.net.Uri? = null
+    private var pendingSharedAt: Long = 0
+
+    private fun deliverPendingSharedScreen(vm: CompanionViewModel) {
+        val text = pendingSharedText ?: return
+        val image = pendingSharedImage
+        val at = pendingSharedAt.takeIf { it > 0 } ?: System.currentTimeMillis()
+        pendingSharedText = null
+        pendingSharedImage = null
+        pendingSharedAt = 0
+        vm.onExternalScreenShare(text, image, at)
+    }
+
+    private fun consumeSharedScreen(source: Intent?) {
+        if (source?.action != Intent.ACTION_SEND) return
+        val text = source.getStringExtra(Intent.EXTRA_TEXT)?.take(4000)
+        val image = source.getParcelableExtra<android.net.Uri>(Intent.EXTRA_STREAM)?.takeIf { it.scheme == "content" }
+        val observedAt = if (image?.authority == "$packageName.fileprovider")
+            source.getLongExtra(com.example.meowmba.core.screen.ScreenCaptureOnceService.EXTRA_CAPTURED_AT, System.currentTimeMillis())
+            else System.currentTimeMillis()
+        if (text == null && image == null) return
+        val vm = companionViewModel
+        if (vm == null) {
+            pendingSharedText = text ?: ""
+            pendingSharedImage = image
+            pendingSharedAt = observedAt
+        } else {
+            vm.onExternalScreenShare(text ?: "", image, observedAt)
+        }
+        source.action = null
+    }
+
+    fun showWirelessAvatar() {
+        if (companionViewModel?.showOnboarding?.value == true) return
+        companionViewModel?.openTool("Show avatar") ?: run { pendingChargingAvatar = true }
+        (getSystemService(INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager)
+            ?.hideSoftInputFromWindow(window.decorView.windowToken, 0)
+    }
 
     private fun consumeWakeCommand(source: Intent?) {
+        if (source?.action == com.example.meowmba.core.setup.WirelessAvatarMonitor.ACTION) {
+            showWirelessAvatar()
+            source.action = null
+        }
+        source?.getStringExtra(com.example.meowmba.core.flow.delivery.AndroidFlowNotifier.EXTRA_COMMENT_FLOW)?.let { id ->
+            companionViewModel?.openFlowComment(id) ?: run { pendingFlowComment = id }
+            source.removeExtra(com.example.meowmba.core.flow.delivery.AndroidFlowNotifier.EXTRA_COMMENT_FLOW)
+        }
+        if (source?.hasExtra(com.example.meowmba.core.flow.delivery.AndroidFlowNotifier.EXTRA_OPEN_FLOW) == true) {
+            secureStorage.savePreference("app_theme", "flow")
+            companionViewModel?.setAppTheme(com.example.meowmba.ui.companion.AppTheme.FLOW)
+            source.removeExtra(com.example.meowmba.core.flow.delivery.AndroidFlowNotifier.EXTRA_OPEN_FLOW)
+        }
+        if (com.example.meowmba.ui.companion.isAvatarHomeIntent(source?.action, source?.categories)) {
+            companionViewModel?.returnToAvatar() ?: run { pendingAvatarHome = true }
+            (getSystemService(INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager)
+                ?.hideSoftInputFromWindow(window.decorView.windowToken, 0)
+        }
+        if (source?.getBooleanExtra(com.example.meowmba.core.workflows.BusinessNotifications.OPEN_TEAM, false) == true) {
+            source.removeExtra(com.example.meowmba.core.workflows.BusinessNotifications.OPEN_TEAM)
+            companionViewModel?.openBusinessAgents() ?: run { pendingBusinessAgents = true }
+        }
         val command = source?.getStringExtra(WakeWordService.EXTRA_WAKE_COMMAND)
         if (command != null) {
             source.removeExtra(WakeWordService.EXTRA_WAKE_COMMAND)
@@ -449,43 +668,27 @@ class MainActivity : ComponentActivity() {
     private var pendingRoutineId: Long = -1L
 
     private fun checkPermissions() {
-        // Mic, location and camera together. Anything already granted is dropped, so a
-        // returning user is not re-prompted for what they have already allowed.
-        val core = listOf(
-            Manifest.permission.RECORD_AUDIO,
-            Manifest.permission.ACCESS_FINE_LOCATION,
-            Manifest.permission.ACCESS_COARSE_LOCATION,
-            Manifest.permission.CAMERA,
-            // Declared in the manifest is not enough — querying CalendarProvider2 without
-            // the runtime grant threw SecurityException and killed the app.
-            Manifest.permission.READ_CALENDAR,
-            Manifest.permission.WRITE_CALENDAR,
-            // Auto-connect to a paired LOOI base requires reading bonded devices.
-            Manifest.permission.BLUETOOTH_CONNECT,
-            // FINDING a base requires BLUETOOTH_SCAN as well, and declaring it
-            // in the manifest is not the same as holding it: it is a runtime
-            // permission on Android 12+. Without the grant every startScan
-            // throws SecurityException, so "Find base (scan)" silently listed
-            // only already-bonded devices — which never includes an unpaired
-            // LOOI, making the base look undiscoverable.
-            Manifest.permission.BLUETOOTH_SCAN,
-        ).filter {
-            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        companionViewModel?.prepareOnboardingPermissions()
+        val core = listOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA).filter {
+            val granted = ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
+            if (granted) {
+                if (it == Manifest.permission.RECORD_AUDIO) companionViewModel?.onMicrophonePermissionResult(true)
+                else companionViewModel?.onCameraPermissionResult(true)
+            }
+            !granted
         }
         if (core.isNotEmpty()) {
             corePermissionsLauncher.launch(core.toTypedArray())
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(
-                this, Manifest.permission.POST_NOTIFICATIONS
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        // VisionManager owns a single-thread executor plus a 10 Hz watchdog that
+        // nothing cancelled while tracking was on, so without this every Activity
+        // recreate leaks a live thread and a scheduled wakeup. CameraX is unbound
+        // asynchronously; we never block here on the provider.
+        if (::visionManager.isInitialized) visionManager.close()
         speechService.destroy()
         ttsManager.shutdown()
     }

@@ -13,6 +13,7 @@ import java.util.UUID
  */
 
 /** Lifecycle of one agent task. */
+@kotlinx.serialization.Serializable
 enum class TaskStatus {
     QUEUED,
     RUNNING,
@@ -39,8 +40,9 @@ data class AgentDefinition(
 )
 
 /** One unit of work owned by an agent. */
+@kotlinx.serialization.Serializable
 data class AgentTask(
-    val id: String = UUID.randomUUID().toString().take(8),
+    val id: String = UUID.randomUUID().toString(),
     val agentId: String,
     val toolId: String,
     val title: String,
@@ -51,7 +53,16 @@ data class AgentTask(
     val startedAt: Long? = null,
     val completedAt: Long? = null,
     val result: String? = null,
-    val log: List<String> = emptyList()
+    val log: List<String> = emptyList(),
+    /** Captured at submission; changing projects never reassigns in-flight work. */
+    val projectId: Long? = null,
+    val conversationId: Long? = null,
+    val outcome: com.example.meowmba.core.agent.tools.ToolOutcome = com.example.meowmba.core.agent.tools.ToolOutcome.RESULT,
+    /** Written before dispatch. An interrupted call may have changed an external system. */
+    val executionStarted: Boolean = false,
+    /** Restored history is displayed quietly, never replayed or spoken as a new result. */
+    val recovered: Boolean = false,
+    val resultTruncated: Boolean = false,
 ) {
     val isTerminal: Boolean
         get() = status == TaskStatus.COMPLETED || status == TaskStatus.FAILED ||
@@ -74,7 +85,11 @@ object AgentRegistry {
             // orchestrator's check with "Meow isn't allowed to use vault.note.*".
             allowedTools = setOf(
                 "task.list",
+                "brain.models", "brain.select_model",
+                "business.agents", "business.start", "business.jobs", "business.open",
                 "avatar.animate",
+                "avatar.invent",
+                "avatar.form",
                 "avatar.describe_animation",
                 "vault.note.list",
                 "vault.note.read",
@@ -88,7 +103,7 @@ object AgentRegistry {
         AgentDefinition(
             id = "file", name = "Shelve",
             purpose = "Organizes the workspace: read, write, and delete files (sandboxed).",
-            allowedTools = setOf("file.read", "file.write", "file.delete", "file.list")
+            allowedTools = setOf("file.read", "file.write", "file.delete", "file.list", "file.browser", "file.search", "file.cleanup", "file.move", "file.trash", "file.restore")
         ),
         AgentDefinition(
             id = "memory", name = "Keeper",
@@ -98,12 +113,12 @@ object AgentRegistry {
         AgentDefinition(
             id = "project", name = "Builder",
             purpose = "Creates and organizes project folders and manifests.",
-            allowedTools = setOf("project.create", "file.write", "file.read", "file.list")
+            allowedTools = setOf("project.create", "project.overview", "project.plan", "file.write", "file.read", "file.list", "file.search", "file.move")
         ),
         AgentDefinition(
             id = "coding", name = "Forge",
             purpose = "Helps write, edit, and debug code inside projects.",
-            allowedTools = setOf("file.read", "file.write", "file.list", "project.create")
+            allowedTools = setOf("file.read", "file.write", "file.list", "project.create", "file.search")
         ),
         AgentDefinition(
             id = "research", name = "Scout",
@@ -132,12 +147,12 @@ object AgentRegistry {
         AgentDefinition(
             id = "calendar", name = "Planner",
             purpose = "Manages the calendar: lists upcoming events and creates new ones.",
-            allowedTools = setOf("calendar.list_events", "calendar.create_event")
+            allowedTools = setOf("calendar.list_events", "calendar.create_event", "calendar.cancel_event")
         ),
         AgentDefinition(
-            id = "computer", name = "Bridge",
-            purpose = "Controls paired computers through the desktop bridge.",
-            allowedTools = setOf("desktop.write_file", "desktop.run_build", "desktop.run_script", "desktop.control")
+            id = "computer", name = "Computer",
+            purpose = "OpenCode is the default task workspace in Computer. Paired desktop controls remain available through the desktop bridge.",
+            allowedTools = setOf("desktop.write_file", "desktop.run_build", "desktop.run_script", "desktop.control", "desktop.run_goal", "desktop.blender_scene", "logic.inspect", "logic.edit", "logic.receipt", "logic.verify_audio", "logic.screen", "logic.act", "logic.cancel", "logic.run_goal")
         ),
         AgentDefinition(
             id = "phone", name = "Paws",
@@ -148,13 +163,18 @@ object AgentRegistry {
                 "phone.dnd", "phone.battery", "phone.set_volume", "phone.take_photo",
                 "phone.compose_sms", "phone.dial_call", "phone.media_control", "phone.set_brightness",
                 "phone.cleanup",
+                "phone.bluetooth_devices", "phone.bluetooth_setup",
+                "nav.find_places", "nav.navigate", "nav.save_place", "nav.list_saved_places",
+                "shopping.store_deals",
+                "car.status", "car.drive_mode", "car.trip", "car.eta", "car.help",
+                "car.vehicle", "car.obd", "car.obd_connect", "car.cameras",
             )
         ),
         AgentDefinition(
             id = "phone_control", name = "Claw",
             purpose = "Operates accessible app screens through taps, typing and navigation. Requires Accessibility and a working model; some app screens cannot be controlled.",
             allowedTools = setOf(
-                "ui.automate", "phone.launch_app", "phone.list_apps"
+                "ui.automate", "phone.launch_app", "phone.list_apps", "phone.run_goal"
             ),
             maxConcurrentTasks = 1
         ),
@@ -164,9 +184,14 @@ object AgentRegistry {
             allowedTools = setOf("media.generate_image", "media.generate_video", "media.generate_audio")
         ),
         AgentDefinition(
-            id = "robot", name = "Robot base",
-            purpose = "Moves an attached robot base: drive, turn, neck, headlight.",
+            id = "robot", name = "LOOI",
+            purpose = "Controls only LOOI: drive, turn, neck, headlight. Never controls Cozmo.",
             allowedTools = setOf("robot.move")
+        ),
+        AgentDefinition(
+            id = "cozmo", name = "Cozmo",
+            purpose = "Controls only Cozmo: short moves, head, lift, expressions, lights and status. Never controls LOOI.",
+            allowedTools = setOf("cozmo.control")
         ),
         AgentDefinition(
             id = "studio", name = "Ink",
@@ -176,6 +201,18 @@ object AgentRegistry {
             allowedTools = setOf(
                 "studio.save_character", "studio.get_character",
                 "studio.create_comic", "studio.write_script"
+            )
+        ),
+        AgentDefinition(
+            id = "car", name = "Cruise",
+            purpose = "In-car assistant: drive mode, trip/ETA, vehicle Bluetooth awareness, " +
+                "OBD-II diagnostics, and car cameras. Media/phone use phone.* tools " +
+                "(MediaSession / dialer) — not full Apple CarPlay ownership.",
+            allowedTools = setOf(
+                "car.status", "car.drive_mode", "car.trip", "car.eta", "car.help",
+                "car.vehicle", "car.obd", "car.obd_connect", "car.cameras",
+                "phone.media_control", "phone.set_volume", "phone.dial_call",
+                "phone.play_music",
             )
         ),
         AgentDefinition(
