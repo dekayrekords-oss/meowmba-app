@@ -1,5 +1,22 @@
 # MEOWMBA MASTER PLAN
 
+## September 15, 2026 — Epic P2 / Slice D: Vending Machine (props + avatar workshop)
+
+Branch: `feat/epic-p2-vending-machine` (from `feat/epic-p1-connections-invent-launcher` @ `751d508`). Preview package `com.example.meowmba`. Flags `lumen_reflex_v2` / `agentic_runtime_v1` remain default **OFF**. No FlyWire.
+
+### Done (Slice D)
+- [x] Replace Studio Memba tile with **Vending** → `VendingMachineScreen` hub.
+- [x] Avatar lanes: simple Become-anything (existing invent) + **Workshop** (structured look/parts/style/freeform → invent/refine + InventReasonLevel).
+- [x] Prop dispenser parallel to avatar invent (`PropInventor` + `GeneratedPropStore` under `filesDir/companion_props`).
+- [x] Prop library UI; OOM/timeout hardening mirrors avatar invent.
+- [x] Former Studio comics/characters kept as a vending lane (not hard-deleted).
+
+### Still queued after Slice D
+- [ ] Deep Tamagotchi care overhaul (Slice E)
+- [ ] Background art motion (Slice F)
+- [ ] Files cleanup local vs all-phone (Slice F)
+- [ ] Computer agentic P1 workspace file tools (from Computer P0 notes)
+
 ## September 14, 2026 — Epic P1: Connections / Invent / Launcher
 
 Branch: `feat/epic-p1-connections-invent-launcher` (from `codex/computer-p0-build120` @ invent-OOM lineage). Preview package `com.example.meowmba`. Flags `lumen_reflex_v2` / `agentic_runtime_v1` remain default **OFF**. No FlyWire.
@@ -15,9 +32,9 @@ Branch: `feat/epic-p1-connections-invent-launcher` (from `codex/computer-p0-buil
 - [x] Launcher: most-used panel (~top 2 rows), remove / never-frequent, long-press controls, list/grid toggle.
 - [x] Drawer search: subsequence letter matching across query tokens.
 
-### Queued / out of scope (document only — not in this PR)
-- Studio → vending machine for props+avatars workshop
-- Prop generation machine
+### Queued / out of scope for P1 (Slice D shipped on epic-p2)
+- ~~Studio → vending machine for props+avatars workshop~~ → Slice D
+- ~~Prop generation machine~~ → Slice D
 - Deep Tamagotchi care overhaul
 - Background art motion
 - Files cleanup local vs all-phone

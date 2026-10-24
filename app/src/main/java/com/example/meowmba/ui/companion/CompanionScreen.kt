@@ -577,7 +577,7 @@ fun CompanionScreen(
                     "Brain" -> viewModel.toggleNeuralInfo()
                     "Privacy" -> viewModel.togglePrivacyDashboard()
                     "Memory" -> viewModel.toggleMemoryScreen()
-                    "Studio" -> viewModel.toggleStudioScreen()
+                    "Vending" -> viewModel.toggleStudioScreen()
                     "Files" -> viewModel.toggleAssetBrowser()
                     "NAV" -> viewModel.toggleNavScreen()
                     "Weather" -> viewModel.toggleWeatherScreen()
@@ -1039,7 +1039,7 @@ fun CompanionScreen(
         }
 
         if (uiState.showStudioScreen) {
-            StudioScreen(
+            VendingMachineScreen(
                 viewModel = viewModel,
                 onClose = { viewModel.toggleStudioScreen() }
             )

@@ -646,6 +646,12 @@ class CompanionViewModel(
     private val generatedAvatarStore: GeneratedAvatarStore? by lazy {
         secureStorage?.context?.filesDir?.let { GeneratedAvatarStore(File(it, "avatar_forms")) }
     }
+    private val generatedPropStore: GeneratedPropStore? by lazy {
+        secureStorage?.context?.filesDir?.let { GeneratedPropStore(File(it, "companion_props")) }
+    }
+    private var propInventGeneration = 0L
+    private var propInventStop = com.example.meowmba.core.agent.LocalInferenceCancellation()
+    private var propInventWork: Job? = null
     private val performanceRotation = PerformanceRotation()
     private val expressionPlanner = ConversationExpressionPlanner { System.nanoTime() / 1_000_000L }
     private val idlePerformanceSelector = IdlePerformanceSelector(
@@ -1413,6 +1419,7 @@ class CompanionViewModel(
                     storage.getPreference("generated_avatar_id")?.let { generatedAvatarStore?.load(it) }
                 }.getOrNull(),
                 savedGeneratedForms = runCatching { generatedAvatarStore?.list().orEmpty() }.getOrDefault(emptyList()),
+                savedProps = runCatching { generatedPropStore?.list().orEmpty() }.getOrDefault(emptyList()),
                 appTheme = AppTheme.fromKey(storage.getPreference("app_theme")),
                 appearanceMode = AppearanceMode.fromKey(storage.getPreference("appearance_mode")),
                 avatarFeatureColor = AvatarColors.parse(storage.getPreference("avatar_feature_color"), 0xFFE8D5B9L),
@@ -10434,6 +10441,157 @@ class CompanionViewModel(
         } catch (_: Exception) { avatarFormFailure("Could not remove this saved form. Try again.") }
     }
 
+    fun inventProp(
+        prompt: String,
+        category: String,
+        detail: String,
+        reasonLevel: InventReasonLevel = InventReasonLevel.BALANCED,
+    ) {
+        cancelPropInvent()
+        secureStorage?.savePreference(KEY_INVENT_REASON, reasonLevel.name)
+        viewModelScope.launch {
+            generateProp(prompt.trim(), category, detail.trim(), reasonLevel)
+        }
+    }
+
+    fun cancelPropInvent() {
+        propInventGeneration++
+        propInventStop.requestStop()
+        propInventWork?.cancel()
+        propInventWork = null
+        if (_uiState.value.propInventGenerating) {
+            val message = "Prop invent cancelled. Nothing new was saved."
+            _uiState.value = _uiState.value.copy(
+                propInventGenerating = false,
+                propInventMessage = message,
+                propInventError = false,
+            )
+        }
+    }
+
+    fun deleteProp(id: String) {
+        try {
+            val store = generatedPropStore ?: error("Prop storage unavailable")
+            store.delete(id)
+            _uiState.value = _uiState.value.copy(
+                savedProps = store.list(),
+                propInventMessage = "Removed prop from library.",
+                propInventError = false,
+            )
+        } catch (error: Exception) {
+            val reason = error.message?.filterNot { it.isISOControl() }?.take(120)
+            _uiState.value = _uiState.value.copy(
+                propInventMessage = reason ?: "Could not remove that prop.",
+                propInventError = true,
+            )
+        }
+    }
+
+    private fun propInventFailure(message: String) {
+        _uiState.value = _uiState.value.copy(
+            propInventGenerating = false,
+            propInventMessage = message,
+            propInventError = true,
+        )
+    }
+
+    private suspend fun generateProp(
+        prompt: String,
+        category: String,
+        detail: String,
+        reasonLevel: InventReasonLevel,
+    ) = withContext(Dispatchers.Main.immediate) {
+        kotlinx.coroutines.coroutineScope {
+            propInventGeneration++
+            val generation = propInventGeneration
+            val stop = com.example.meowmba.core.agent.LocalInferenceCancellation().also { propInventStop = it }
+            propInventWork = kotlinx.coroutines.currentCoroutineContext()[Job]
+            val status = "Dispensing your prop…"
+            _uiState.value = _uiState.value.copy(
+                propInventGenerating = true,
+                propInventError = false,
+                propInventMessage = status,
+            )
+            fun ensureOwner() {
+                if (generation != propInventGeneration || stop.isStopRequested || appInBackground)
+                    throw kotlinx.coroutines.CancellationException("Prop invent superseded")
+            }
+            try {
+                require(prompt.isNotBlank() && prompt.length <= GeneratedPropForms.MAX_REQUEST) {
+                    "Describe one prop in 1–${GeneratedPropForms.MAX_REQUEST} characters."
+                }
+                val store = generatedPropStore
+                    ?: return@coroutineScope propInventFailure("Prop storage is unavailable.")
+                val saved = withContext(ioDispatcher) { store.find(prompt) }
+                ensureOwner()
+                if (saved != null) {
+                    _uiState.value = _uiState.value.copy(
+                        propInventGenerating = false,
+                        savedProps = store.list(),
+                        propInventMessage = "Already in library: ${saved.name}.",
+                        propInventError = false,
+                    )
+                    return@coroutineScope
+                }
+                val selected = currentProvider ?: return@coroutineScope propInventFailure(
+                    "Choose a working AI model in LLM settings to invent props.")
+                val composed = com.example.meowmba.core.agent.tools.PropInventor.composeRequest(prompt, category, detail)
+                val inventPrefer = preferredFastRouteId() ?: preferredChatRouteId()
+                val provider = if (selected is com.example.meowmba.core.agent.OmniRoute)
+                    selected.plan(composed, preferRouteId = inventPrefer).firstOrNull()?.provider
+                        ?: selected.plan(composed, preferRouteId = preferredChatRouteId()).firstOrNull()?.provider
+                        ?: return@coroutineScope propInventFailure("No AI model is configured for prop invent. Check LLM settings.")
+                    else selected
+                val inventor = com.example.meowmba.core.agent.tools.PropInventor { input ->
+                    if (provider is LiteRtProvider) provider.generateStructured(input) else provider.generate(input)
+                }
+                val timeoutMs = when (reasonLevel) {
+                    InventReasonLevel.FAST -> 60_000L
+                    InventReasonLevel.BALANCED -> 75_000L
+                    InventReasonLevel.THOROUGH -> 100_000L
+                }
+                val form = withContext(ioDispatcher + stop) {
+                    withTimeout(timeoutMs) {
+                        inventor.invent(prompt, reasonLevel, categoryHint = category, detail = detail)
+                    }
+                }
+                kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                ensureOwner()
+                store.save(form, prompt)
+                _uiState.value = _uiState.value.copy(
+                    propInventGenerating = false,
+                    savedProps = store.list(),
+                    propInventMessage = "Dispensed ${form.name}. Saved to prop library.",
+                    propInventError = false,
+                )
+            } catch (_: kotlinx.coroutines.TimeoutCancellationException) {
+                ensureOwner()
+                propInventFailure("Prop invent timed out. Try a simpler description.")
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: OutOfMemoryError) {
+                ensureOwner()
+                System.gc()
+                propInventFailure("That prop was too complex for memory. Try fewer details.")
+            } catch (error: Exception) {
+                ensureOwner()
+                val reason = error.message?.filterNot { it.isISOControl() }?.take(120)?.takeIf { it.isNotBlank() }
+                propInventFailure(
+                    if (reason != null) "Could not invent that prop: $reason"
+                    else "Could not invent and save that prop. Check your AI model or free a library slot.",
+                )
+            } finally {
+                if (generation == propInventGeneration) {
+                    propInventWork = null
+                    if (_uiState.value.propInventGenerating) {
+                        _uiState.value = _uiState.value.copy(propInventGenerating = false)
+                    }
+                }
+            }
+        }
+    }
+
+
     fun setAppTheme(theme: AppTheme) {
         _uiState.value = _uiState.value.copy(appTheme = theme)
         secureStorage?.savePreference("app_theme", theme.key)
@@ -11390,9 +11548,12 @@ class CompanionViewModel(
         val opening = !_uiState.value.showStudioScreen
         _uiState.value = _uiState.value.copy(showStudioScreen = opening)
         if (opening) {
-            // Fresh reads each open so comics/scripts saved by tools since the
+            // Fresh reads each open so comics/scripts and props saved since the
             // last visit show up without an app restart.
             _studioArtifacts.value = listStudioArtifacts()
+            _uiState.value = _uiState.value.copy(
+                savedProps = runCatching { generatedPropStore?.list().orEmpty() }.getOrDefault(emptyList()),
+            )
         }
     }
 

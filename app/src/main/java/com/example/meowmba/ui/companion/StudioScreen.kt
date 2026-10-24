@@ -20,10 +20,9 @@ import androidx.compose.ui.unit.sp
 import java.io.File
 
 /**
- * Studio screen (opened from the Studio tile): saved recurring characters and
- * every comic/script/ad the agent has made. Tapping an artifact opens it in
- * the browser panel — same display path a finished tool call takes, so what
- * you proofread here is exactly what was shown when it was created.
+ * Legacy Studio archive UI. The Memba tile now opens [VendingMachineScreen];
+ * comics/characters remain reachable from the machine's "Comics & characters"
+ * lane (same content as this screen). Kept for direct/test reuse.
  */
 @Composable
 fun StudioScreen(

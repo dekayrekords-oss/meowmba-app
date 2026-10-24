@@ -131,6 +131,11 @@ data class CompanionState(
     val avatarFormGenerating: Boolean = false,
     val avatarFormMessage: String? = null,
     val avatarFormError: Boolean = false,
+    /** Vending-machine companion props (filesDir/companion_props). */
+    val savedProps: List<GeneratedPropForm> = emptyList(),
+    val propInventGenerating: Boolean = false,
+    val propInventMessage: String? = null,
+    val propInventError: Boolean = false,
     /** Temporary costume from an explicit performance; never persisted over the user's choice. */
     val performanceAnimal: AvatarAnimal? = null,
     val appTheme: AppTheme = AppTheme.COMPANION,
