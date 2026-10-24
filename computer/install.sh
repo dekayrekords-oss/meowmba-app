@@ -3,11 +3,39 @@
 # Runs as the SSH user that invoked it. Safe to re-run.
 set -euo pipefail
 
+# Port 18766 avoids Desktop Bridge UDP discovery on 8766.
+# Bind defaults to 127.0.0.1 (Fold cannot hit that). Options:
+#   MEOW_COMPUTER_HOST=100.77.97.236 bash computer/install.sh
+#   bash computer/install.sh --bind 100.77.97.236 --port 18766
+# Or keep localhost + SSH local-forward from the phone/Termux:
+#   ssh -L 18766:127.0.0.1:18766 user@meow
+# Day-to-day preferred path: SSH ConnectionProfile (not HTTPS_RUNTIME).
+
+
 MEOW_LABEL="meow-computer"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 log() { printf '[%s] %s\n' "$MEOW_LABEL" "$*"; }
 warn() { printf '[%s] WARN: %s\n' "$MEOW_LABEL" "$*" >&2; }
+
+# Optional: --bind HOST --port PORT (also MEOW_COMPUTER_HOST / MEOW_COMPUTER_PORT)
+MEOW_COMPUTER_HOST="${MEOW_COMPUTER_HOST:-127.0.0.1}"
+MEOW_COMPUTER_PORT="${MEOW_COMPUTER_PORT:-18766}"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --bind|--host)
+      MEOW_COMPUTER_HOST="${2:-}"; shift 2 || true ;;
+    --port)
+      MEOW_COMPUTER_PORT="${2:-}"; shift 2 || true ;;
+    -h|--help)
+      printf 'Usage: [MEOW_COMPUTER_HOST=..] [MEOW_COMPUTER_PORT=..] %s [--bind HOST] [--port PORT]\n' "$0"
+      exit 0 ;;
+    *)
+      warn "unknown arg: $1 (ignored)"; shift ;;
+  esac
+done
+export MEOW_COMPUTER_HOST MEOW_COMPUTER_PORT
+log "bind=${MEOW_COMPUTER_HOST} port=${MEOW_COMPUTER_PORT}"
 
 # Prefer /opt when writable; else $HOME
 if [[ -w /opt ]] || mkdir -p /opt/meow-computer 2>/dev/null; then
@@ -83,7 +111,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 HOST = os.environ.get("MEOW_COMPUTER_HOST", "127.0.0.1")
-PORT = int(os.environ.get("MEOW_COMPUTER_PORT", "8766"))
+PORT = int(os.environ.get("MEOW_COMPUTER_PORT", "18766"))
 ROOT = Path(os.environ.get("MEOW_COMPUTER_HOME", str(Path.home() / "meow-computer")))
 WORK = ROOT / "workspace"
 LOGS = ROOT / "logs"
@@ -240,8 +268,8 @@ After=network.target
 Type=simple
 WorkingDirectory=$WORKSPACE
 Environment=MEOW_COMPUTER_HOME=$WORKSPACE
-Environment=MEOW_COMPUTER_HOST=127.0.0.1
-Environment=MEOW_COMPUTER_PORT=8766
+Environment=MEOW_COMPUTER_HOST=$MEOW_COMPUTER_HOST
+Environment=MEOW_COMPUTER_PORT=$MEOW_COMPUTER_PORT
 ExecStart=/usr/bin/env python3 $WORKSPACE/bin/meow-computer-worker.py
 Restart=on-failure
 RestartSec=3
@@ -280,11 +308,11 @@ services:
       - ./:/opt/meow-computer
     environment:
       MEOW_COMPUTER_HOME: /opt/meow-computer
-      MEOW_COMPUTER_HOST: 0.0.0.0
-      MEOW_COMPUTER_PORT: "8766"
+      MEOW_COMPUTER_HOST: "0.0.0.0"
+      MEOW_COMPUTER_PORT: "$MEOW_COMPUTER_PORT"
     command: ["python3", "/opt/meow-computer/bin/meow-computer-worker.py"]
     ports:
-      - "8766:8766"
+      - "$MEOW_COMPUTER_PORT:$MEOW_COMPUTER_PORT"
     restart: unless-stopped
 COMPOSE
   log "docker-compose.yml written"
@@ -302,7 +330,9 @@ write_marker() {
   "ok": true,
   "service": "meow-computer",
   "workspace": "$WORKSPACE",
-  "health": "http://127.0.0.1:8766/health",
+  "health": "http://$MEOW_COMPUTER_HOST:$MEOW_COMPUTER_PORT/health",
+  "bind": "$MEOW_COMPUTER_HOST",
+  "port": $MEOW_COMPUTER_PORT,
   "installedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "user": "$(id -un)"
 }
@@ -325,17 +355,29 @@ write_systemd_unit
 write_marker
 
 # Start worker if nothing listening yet
-if ! curl -fsS --max-time 2 http://127.0.0.1:8766/health >/dev/null 2>&1; then
-  nohup python3 "$WORKSPACE/bin/meow-computer-worker.py" \
+HEALTH_URL="http://${MEOW_COMPUTER_HOST}:${MEOW_COMPUTER_PORT}/health"
+# When bind is 0.0.0.0, probe via 127.0.0.1
+PROBE_URL="$HEALTH_URL"
+if [[ "$MEOW_COMPUTER_HOST" == "0.0.0.0" ]]; then
+  PROBE_URL="http://127.0.0.1:${MEOW_COMPUTER_PORT}/health"
+fi
+if ! curl -fsS --max-time 2 "$PROBE_URL" >/dev/null 2>&1; then
+  nohup env MEOW_COMPUTER_HOME="$WORKSPACE" \
+    MEOW_COMPUTER_HOST="$MEOW_COMPUTER_HOST" \
+    MEOW_COMPUTER_PORT="$MEOW_COMPUTER_PORT" \
+    python3 "$WORKSPACE/bin/meow-computer-worker.py" \
     >"$WORKSPACE/logs/worker.out" 2>&1 &
   echo $! >"$WORKSPACE/logs/worker.pid"
   sleep 1
 fi
 
-if curl -fsS --max-time 3 http://127.0.0.1:8766/health; then
+if curl -fsS --max-time 3 "$PROBE_URL"; then
   echo
-  log "READY — health OK"
+  log "READY — health OK at $PROBE_URL"
+  if [[ "$MEOW_COMPUTER_HOST" == "127.0.0.1" || "$MEOW_COMPUTER_HOST" == "localhost" ]]; then
+    log "localhost-only: Fold cannot reach this. Use SSH -L ${MEOW_COMPUTER_PORT}:127.0.0.1:${MEOW_COMPUTER_PORT} or --bind <NetBird-IP>."
+  fi
 else
-  warn "worker not responding yet; start: python3 $WORKSPACE/bin/meow-computer-worker.py"
+  warn "worker not responding yet; start: MEOW_COMPUTER_HOST=$MEOW_COMPUTER_HOST MEOW_COMPUTER_PORT=$MEOW_COMPUTER_PORT python3 $WORKSPACE/bin/meow-computer-worker.py"
 fi
 log "install complete workspace=$WORKSPACE"

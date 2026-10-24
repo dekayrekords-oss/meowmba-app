@@ -148,7 +148,9 @@ fun NeuralSettingsSection(
                 style = MaterialTheme.typography.bodySmall,
             )
             Text(
-                "• Chat can use Computer when Agentic is on.",
+                "• Chat can use Computer when Agentic is on (auto-ticks until done / blocked / " +
+                    "needs approval; cancel stops further ticks). Preview maturity — same idea as " +
+                    "a cloud computer agent.",
                 style = MaterialTheme.typography.bodySmall,
             )
             Text(

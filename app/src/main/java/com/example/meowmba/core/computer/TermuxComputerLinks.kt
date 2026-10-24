@@ -60,7 +60,18 @@ object TermuxComputerLinks {
 
     const val SERVER_HOWTO_SHORT =
         "Optional: enter a Linux host, port, username, and password or key. " +
-            "Tap Test connection, then Install Computer to upload and run install.sh over SSH."
+            "SSH is the day-to-day path. Tap Test connection, then Install Computer " +
+            "to upload and run install.sh over SSH."
+
+    const val HTTPS_RUNTIME_HINT =
+        "HTTPS runtime is optional / advanced. The Fold cannot reach 127.0.0.1 on meow — " +
+            "use an SSH profile, or set Host to a full URL the phone can reach " +
+            "(e.g. http://100.77.97.236:18766 on NetBird) or ssh -L 18766:127.0.0.1:18766. " +
+            "Worker port is 18766 (Desktop Bridge discovery stays on 8766)."
+
+    const val MATURITY_PREVIEW_NOTE =
+        "Same idea as a cloud computer agent: a real Linux workspace the app can use. " +
+            "Maturity is preview — expect rough edges; agentic + Computer stay behind flags."
 
     const val INSTALL_PROMPT =
         "Install Meow Computer on this server? This adds a persistent Linux workspace " +

@@ -13,7 +13,13 @@ object ComputerProfileMarks {
     const val DEFAULT_REMOTE_WORKSPACE = "/opt/meow-computer"
     const val DEFAULT_REMOTE_WORKSPACE_HOME = "~/meow-computer"
     const val WORKER_HEALTH_PATH = "/health"
-    const val WORKER_PORT = 8766
+    /**
+     * Meow Computer HTTP worker port. Intentionally **not** 8766 — Desktop Bridge
+     * UDP discovery uses 8766 ([com.example.meowmba.core.bridge.BridgeDiscovery]).
+     */
+    const val WORKER_PORT = 18766
+    /** Example NetBird IP on meow (operator LAN); use with http://HOST:WORKER_PORT. */
+    const val EXAMPLE_NETBIRD_HOST = "100.77.97.236"
 
     fun isComputer(profile: ConnectionProfile, storage: SecureStorageManager?): Boolean {
         val markedId = storage?.getPreference(PREF_PROFILE_ID)
@@ -28,6 +34,21 @@ object ComputerProfileMarks {
 
     fun clear(storage: SecureStorageManager) {
         storage.savePreference(PREF_PROFILE_ID, "")
+    }
+
+    /** Honest reachability hint when HTTPS_RUNTIME points at loopback. */
+    fun httpsReachabilityHint(hostOrUrl: String, port: Int = WORKER_PORT): String {
+        val raw = hostOrUrl.trim().lowercase()
+        val loopback = raw.contains("127.0.0.1") || raw.contains("localhost") ||
+            raw == "0.0.0.0" || raw.endsWith("://0.0.0.0")
+        return if (loopback) {
+            "Fold cannot reach 127.0.0.1 on meow. Prefer SSH day-to-day, or " +
+                "ssh -L $port:127.0.0.1:$port user@meow, or bind the worker to a " +
+                "NetBird IP (e.g. http://$EXAMPLE_NETBIRD_HOST:$port)."
+        } else {
+            "HTTPS_RUNTIME needs a URL the phone can reach (NetBird IP or SSH " +
+                "-L). Worker default port is $WORKER_PORT (not Bridge 8766)."
+        }
     }
 }
 

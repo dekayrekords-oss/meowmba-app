@@ -95,7 +95,7 @@ fun YourComputerSettingsSection(
         displayName = displayName.trim().ifBlank { "My Computer" },
         type = profileType,
         host = host.trim(),
-        port = port.toIntOrNull() ?: if (profileType == ConnectionProfileType.HTTPS_RUNTIME) 8766 else 22,
+        port = port.toIntOrNull() ?: if (profileType == ConnectionProfileType.HTTPS_RUNTIME) ComputerProfileMarks.WORKER_PORT else 22,
         username = username.trim().ifBlank { "user" },
         credentialRef = credentialRef.trim().ifBlank { "computer_main" },
         workspaceRoot = workspacePath.trim().ifBlank { null },
@@ -116,6 +116,11 @@ fun YourComputerSettingsSection(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Text("Your Computer", style = MaterialTheme.typography.titleLarge)
+        Text(
+            TermuxComputerLinks.MATURITY_PREVIEW_NOTE,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         Text(
             TermuxComputerLinks.HOWTO_PHONE_SHORT,
             style = MaterialTheme.typography.bodyMedium,
@@ -194,7 +199,20 @@ fun YourComputerSettingsSection(
             OutlinedTextField(
                 value = host,
                 onValueChange = { host = it },
-                label = { Text("Host") },
+                label = {
+                    Text(
+                        if (profileType == ConnectionProfileType.HTTPS_RUNTIME) {
+                            "Host or base URL"
+                        } else {
+                            "Host"
+                        },
+                    )
+                },
+                placeholder = {
+                    if (profileType == ConnectionProfileType.HTTPS_RUNTIME) {
+                        Text("http://${ComputerProfileMarks.EXAMPLE_NETBIRD_HOST}:${ComputerProfileMarks.WORKER_PORT}")
+                    }
+                },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -252,8 +270,9 @@ fun YourComputerSettingsSection(
                 OutlinedButton(
                     onClick = {
                         profileType = ConnectionProfileType.SSH
+                        if (port == ComputerProfileMarks.WORKER_PORT.toString()) port = "22"
                     },
-                ) { Text(if (profileType == ConnectionProfileType.SSH) "SSH ✓" else "SSH") }
+                ) { Text(if (profileType == ConnectionProfileType.SSH) "SSH ✓ (preferred)" else "SSH (preferred)") }
                 OutlinedButton(
                     onClick = {
                         profileType = ConnectionProfileType.HTTPS_RUNTIME
@@ -264,10 +283,22 @@ fun YourComputerSettingsSection(
                         if (profileType == ConnectionProfileType.HTTPS_RUNTIME) {
                             "HTTPS runtime ✓"
                         } else {
-                            "HTTPS runtime"
+                            "HTTPS runtime (advanced)"
                         },
                     )
                 }
+            }
+            if (profileType == ConnectionProfileType.HTTPS_RUNTIME) {
+                Text(
+                    TermuxComputerLinks.HTTPS_RUNTIME_HINT,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    "Host may be a full base URL (http://100.77.97.236:${ComputerProfileMarks.WORKER_PORT}).",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
 
             Row(

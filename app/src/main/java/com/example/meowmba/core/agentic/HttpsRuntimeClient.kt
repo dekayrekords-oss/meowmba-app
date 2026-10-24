@@ -24,9 +24,10 @@ import java.nio.charset.StandardCharsets
  * Auth: optional Bearer token from profile [ConnectionProfile.credentialRef]
  * (resolved via [CredentialResolver] — never logged).
  *
- * Base URL comes from profile.host (full URL, e.g. `https://worker.example:8443`)
- * or `http(s)://{host}:{port}` when host has no scheme. Port defaults to 8443
- * for HTTPS_RUNTIME when not using a full URL.
+ * Base URL comes from profile.host (full URL, e.g. `http://100.77.97.236:18766`)
+ * or `http(s)://{host}:{port}` when host has no scheme. Meow Computer worker
+ * default port is [com.example.meowmba.core.computer.ComputerProfileMarks.WORKER_PORT]
+ * (18766, HTTP). Port 8443/443 still imply HTTPS.
  *
  * The worker itself is **not** packaged inside the APK (impossible / out of
  * scope for on-device); this client talks to an operator-hosted stub.
@@ -112,7 +113,11 @@ class HttpsRuntimeClient(
         return try {
             val health = health()
             if (!health.ok) {
-                return SshExecResult.Error("HTTPS_RUNTIME health failed: ${health.detail.take(160)}")
+                val hint = com.example.meowmba.core.computer.ComputerProfileMarks
+                    .httpsReachabilityHint(baseUrl)
+                return SshExecResult.Error(
+                    "HTTPS_RUNTIME health failed: ${health.detail.take(120)}. $hint",
+                )
             }
             val started = startJob(argv, cwd = cwd, jobTimeoutMs = overallTimeoutMs)
             val deadline = System.currentTimeMillis() + overallTimeoutMs.coerceAtLeast(1_000L)
@@ -186,8 +191,16 @@ class HttpsRuntimeClient(
             ) {
                 return raw.trimEnd('/')
             }
-            val port = if (profile.port > 0) profile.port else 8443
-            val scheme = if (port == 80) "http" else "https"
+            val workerPort = com.example.meowmba.core.computer.ComputerProfileMarks.WORKER_PORT
+            val port = when {
+                profile.port > 0 -> profile.port
+                else -> workerPort
+            }
+            // Meow Computer worker is plain HTTP; classic HTTPS workers use 443/8443.
+            val scheme = when (port) {
+                443, 8443 -> "https"
+                else -> "http"
+            }
             return "$scheme://${raw.trimEnd('/')}:$port"
         }
 
